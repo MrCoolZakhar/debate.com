@@ -40,6 +40,8 @@ import { useGavelCue, type GavelCue } from '@/lib/useGavelCue';
 import NotificationStack, { type NotificationExtra } from '@/components/notifications/NotificationStack';
 import GlassToast from '@/components/notifications/GlassToast';
 import GavelDeviceBanner from '@/components/GavelDeviceBanner';
+import ChairDeviceKickModal from '@/components/ChairDeviceKickModal';
+import { useChairDeviceLock } from '@/lib/useChairDeviceLock';
 import { getGavelDeviceId, deriveGavelRole, markResumeClaim, clearResumeClaim, resumeClaimIsMine } from '@/lib/gavelDevice';
 import {
   notify,
@@ -1517,7 +1519,21 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const pin = gavelPinRef.current;
     return pin && Date.now() < pin.until ? pin.device : null;
   };
-  const gavelRoleOf = (c: Committee | null | undefined) => deriveGavelRole(c, myChairName, gavelDeviceId, gavelPinNow());
+  // One device per signed-in ACCOUNT (src/lib/useChairDeviceLock.ts). Supersedes the
+  // same-name rule for accounts: the older device is kicked out, not demoted. While kicked
+  // it derives Commenter (so every Moderator-only effect and write stops), never claims
+  // the gavel, and renders only ChairDeviceKickModal. Anonymous chairs: inert.
+  const deviceLock = useChairDeviceLock({
+    code,
+    committeeId: committee?.id,
+    userId: user?.id,
+    accessToken: session?.access_token,
+    enabled: accessState === 'allowed' && !!committee?.id && !committee?.endedAt,
+  });
+  const gavelRoleOf = (c: Committee | null | undefined) => {
+    const role = deriveGavelRole(c, myChairName, gavelDeviceId, gavelPinNow());
+    return deviceLock.kicked ? { ...role, heldElsewhere: false, isModerator: false } : role;
+  };
   // Gavel chip: live presence dots + the transient handover toast.
   const [onlineChairs, setOnlineChairs] = useState<Set<string>>(new Set());
   const [headOffline, setHeadOffline] = useState(false);
@@ -1964,6 +1980,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   useEffect(() => {
     if (!committee?.id || accessState !== 'allowed' || !myChairName) return;
     if (committee.endedAt) return;                    // read-only: never write
+    if (deviceLock.kicked) return;                    // this account is chairing on another device
     // Already ours. The pin is NOT cleared here: this value may be our own optimistic write,
     // and the stale refetch the pin exists for can still arrive. It expires on its own.
     if (committee.dbHeadChairDevice === gavelDeviceId) { gavelLoadClaimDoneRef.current = true; return; }
@@ -1975,7 +1992,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     if (gavelPinNow() === gavelDeviceId) return;             // our claim is already in flight
     claimGavelForThisDevice(committee, role.head ?? myChairName);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [committee?.id, committee?.dbHeadChair, committee?.dbHeadChairDevice, committee?.chairNames, committee?.endedAt, accessState, myChairName, gavelDeviceId]);
+  }, [committee?.id, committee?.dbHeadChair, committee?.dbHeadChairDevice, committee?.chairNames, committee?.endedAt, accessState, myChairName, gavelDeviceId, deviceLock.kicked]);
 
   useEffect(() => {
     const role = gavelRoleOf(committee);
@@ -1990,7 +2007,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     if (prev === null || prev === next) return;       // first settle, or nothing changed
     setRoleFlip({ lost: next, at: Date.now(), device: next && role.heldElsewhere });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [committee?.dbHeadChair, committee?.dbHeadChairDevice, committee?.chairNames, committee?.id, myChairName, accessState, gavelPinTick]);
+  }, [committee?.dbHeadChair, committee?.dbHeadChairDevice, committee?.chairNames, committee?.id, myChairName, accessState, gavelPinTick, deviceLock.kicked]);
 
   // Agenda: a conference committee with 2+ topics opens on the topic the Moderator picks
   // (src/components/AgendaPicker.tsx). Inert for standalone sessions and 0/1 topics.
@@ -2020,7 +2037,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     localUpdateTime.current = 0;
 
     const newHead = committee?.dbHeadChair || committee?.chairNames?.[0] || '';
-    setGavelToast({
+    // Kicked by the account rule: the modal says it, a toast under it would only linger.
+    if (!deviceLock.kicked) setGavelToast({
       tone: lost ? 'lost' : 'gained',
       // Routed through translations: this fires at the exact moment control changes
       // hands, so it is the worst possible place to fall back to English.
@@ -3072,6 +3090,28 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           <p className="text-[#1C1410] text-xl font-bold mb-4">{t('session_not_found')}</p>
           <Link href="/create" className="bg-[#1B3828] text-white px-6 py-3 rounded-xl font-semibold hover:bg-[#2A5A3C] transition-colors">{t('session_create_committee')}</Link>
         </div>
+      </div>
+    );
+  }
+
+  // This account took the committee on another device. Nothing interactive renders, so no
+  // panel, autosave or control can write from here. "Use this device instead" moves the
+  // account back and, when this chair's name holds the gavel, the gavel with it.
+  if (deviceLock.kicked) {
+    const takeBackDevice = async () => {
+      const ok = await deviceLock.takeBack();
+      if (ok && !committee.endedAt && myChairName) {
+        const role = deriveGavelRole(committee, myChairName, gavelDeviceId, null);
+        if (role.nameHolds && committee.dbHeadChairDevice !== gavelDeviceId) claimGavelForThisDevice(committee, role.head ?? myChairName);
+      }
+      return ok;
+    };
+    return (
+      <div className="min-h-screen" style={{ backgroundColor: '#EDE7D8' }}>
+        <ChairDeviceKickModal
+          onUseThisDevice={takeBackDevice}
+          onLeave={() => router.push(committee.sessionOrigin === 'conference' ? '/my-conferences' : '/join')}
+        />
       </div>
     );
   }

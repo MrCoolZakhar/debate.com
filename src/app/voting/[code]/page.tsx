@@ -19,6 +19,8 @@ import { useSettingsStore, DEFAULT_SETTINGS, impliedSettings, type CommitteeSett
 import { VotingRulesPanel, VotingRulesPopover, computeVoteOutcome, isVetoDelegation } from '@/components/VotingRulesPanel';
 import { useAuth } from '@/components/AuthProvider';
 import { detectConferenceSession, verifyConferenceAccess } from '@/lib/conferenceAccess';
+import ChairDeviceKickModal from '@/components/ChairDeviceKickModal';
+import { useChairDeviceLock } from '@/lib/useChairDeviceLock';
 import { sponsorLabel } from '@/lib/committeeFlags';
 import { docName } from '@/lib/docNames';
 import { SettingsPanel } from '@/components/SettingsPanel';
@@ -540,6 +542,17 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   const accessGranted = confAccess === 'allowed' || (confAccess === 'standalone' && chairGate === 'allowed');
 
+  // One device per signed-in account (src/lib/useChairDeviceLock.ts). Same device token as
+  // the chair page, so opening voting on the SAME device never kicks the chair page, while
+  // a second device does. Anonymous chairs: inert.
+  const deviceLock = useChairDeviceLock({
+    code,
+    committeeId: committee?.id,
+    userId: user?.id,
+    accessToken: session?.access_token,
+    enabled: accessGranted && !!committee?.id && !committee?.endedAt,
+  });
+
   // Post-access side effects. Deliberately NOT in the loader:
   //  • mirroring `chairJoinSuffix` into the settings store there would hand the gate
   //    its own answer on the next load (and is only needed so SettingsPanel does not
@@ -849,6 +862,18 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             Go Home
           </Link>
         </div>
+      </div>
+    );
+  }
+
+  // This account took the committee on another device: nothing interactive renders here.
+  if (deviceLock.kicked) {
+    return (
+      <div className="min-h-screen" style={{ backgroundColor: '#EDE7D8' }}>
+        <ChairDeviceKickModal
+          onUseThisDevice={deviceLock.takeBack}
+          onLeave={() => router.push(committee.sessionOrigin === 'conference' ? '/my-conferences' : '/join')}
+        />
       </div>
     );
   }

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useCommitteeStore } from '@/lib/store';
 import { getCommitteeByCode, addChairName, updateCommitteeHeadChairInDB } from '@/lib/committeeService';
 import { getGavelDeviceId } from '@/lib/gavelDevice';
+import { chairActiveElsewhere } from '@/lib/chairDeviceClaims';
 import { Committee } from '@/lib/types';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { Emoji } from '@/components/Emoji';
@@ -188,6 +189,19 @@ function JoinPageInner() {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [foundCommittee?.id, mode]);
+
+  // One device per signed-in account on the chair page (src/lib/chairDeviceClaims.ts). Not a
+  // block, newest wins; this only warns that joining here moves the account off the device
+  // it is chairing from. Read-only RPC, answers for the caller only.
+  const [chairElsewhere, setChairElsewhere] = useState(false);
+  useEffect(() => {
+    const token = session?.access_token;
+    if (!foundCommittee || mode !== 'chair' || !token || foundCommittee.endedAt) { setChairElsewhere(false); return; }
+    let cancelled = false;
+    chairActiveElsewhere(foundCommittee.code, token).then((v) => { if (!cancelled) setChairElsewhere(v); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [foundCommittee?.code, foundCommittee?.endedAt, mode, user?.id]);
 
   function doLookup(upper: string, currentMode: JoinMode = mode) {
     setLookingUp(true);
@@ -737,6 +751,11 @@ function JoinPageInner() {
             );
           })()}
 
+          {foundCommittee && mode === 'chair' && chairElsewhere && (
+            <p role="status" className="mb-4 px-4 py-3 rounded-xl text-sm" style={{ color: '#1B3828', backgroundColor: 'rgba(238,217,138,0.35)', border: '1px solid rgba(182,135,31,0.35)', fontFamily: "'Outfit', sans-serif" }}>
+              {t('join_chair_active_elsewhere')}
+            </p>
+          )}
           {/* Conference chair: use their profile name (no manual entry). */}
           {foundCommittee && mode === 'chair' && isConferenceSession && !openPath && (
             <div className="mb-4 px-4 py-3 rounded-xl" style={{ backgroundColor: 'rgba(27,56,40,0.05)', border: '1px solid rgba(27,56,40,0.15)' }}>

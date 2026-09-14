@@ -1,6 +1,7 @@
 # GAVELLING — TRANSLATIONS AGENT BRIEFING
 ## Up-to-date guide for adding a new language to Gavelling
 
+**Last counted 14 Sep 2026, after one device per chair account:** **1056 keys per locale**, identical in all four.  
 **Removed 14 Sep 2026 (side panel):** 3 keys × 4 locales, `rollcall_az`, `rollcall_queue` (the A-Z / QUEUE toggle is gone; the panel is always the queue, plain A-Z only during roll call) and `rollcall_seat_claimed_title` (the claimed-seat phone icon is gone). The tutorial step `sidebar-view-toggle` and its four hand-written locale bubbles in `TutorialOverlay.tsx` went with the toggle. Counted after this removal and a concurrent seat change that added 3 `delegate_seat_*` keys: **1041 keys per locale**, identical in all four.  
 **Last updated after:** seat gating review fixes — 2026-09-11 (EN/ES/FR/AR; ar = RTL; **1041 keys per locale**). Added 1 key, `delegate_seat_switch_account`, the reserved-seat screen's button when the wrong account is signed in. See "Recent changes" at the bottom.  
 **Previously:** open conference seats and one person per seat — 2026-09-11 (EN/ES/FR/AR; ar = RTL; **1040 keys per locale**). Added 21 keys: 7 `join_seat_*` for the join-page seat picker, 10 `delegate_seat_*` for the delegate page's seat-guard screens, 4 `rollcall_seat_*` for the chair's Free seat control. See "Recent changes" at the bottom.  
@@ -37,7 +38,7 @@
 
 | File | Purpose |
 |------|---------|
-| `src/lib/translations.ts` | Full EN/ES/FR/AR dictionary (1041 keys per locale). New language block goes here. `Language` type is also here. |
+| `src/lib/translations.ts` | Full EN/ES/FR/AR dictionary (1056 keys per locale). New language block goes here. `Language` type is also here. |
 | `src/lib/delegateTips.ts` | `selectDelegateTips()` — picks which `delegate_tip_*` keys a delegate sees, and fills their `{wp}` / `{dr}` / `{mod}` / `{unmod}` / `{tour}` / `{end}` / `{source}` vars. The ONLY consumer of that corpus. |
 | `src/contexts/LanguageContext.tsx` | `LanguageProvider`, `useLanguage()`, `useT()` hooks, localStorage persistence. |
 | `src/app/layout.tsx` | Wrapped in `LanguageProvider`. |
@@ -404,6 +405,17 @@ for f in "src/app/chair/[code]/page.tsx" "src/app/delegate/[code]/page.tsx" \
 ---
 
 ## RECENT CHANGES
+
+### 2026-09-14 — one device per signed-in chair account (`feature/conferences-auth`) — 1050 → 1056 keys
+
+**Added, 6 keys × 4 locales**, directly after `gavel_use_this_device` in every locale. Counted after this change: **1056 keys per locale**, identical key sets in all four (0 missing / 0 extra).
+- `chair_device_kick_title` (EN *You opened this committee on another device*, ES *Abriste este comité en otro dispositivo*, FR *Vous avez ouvert ce comité sur un autre appareil*, AR *فتحت هذه اللجنة على جهاز آخر*): heading of the blocking modal on `/chair/[code]` and `/voting/[code]` (`src/components/ChairDeviceKickModal.tsx`).
+- `chair_device_kick_body`: why (one account chairs from one device at a time).
+- `chair_device_kick_use_here` (EN *Use this device instead*): the take-back button. Separate from `gavel_use_this_device` on purpose: this one moves the whole account, not only the gavel.
+- `chair_device_kick_leave` (EN *Leave*, ES *Salir*, FR *Quitter*, AR *مغادرة*).
+- `chair_device_kick_failed`: shown in the modal when the take-back RPC fails.
+- `join_chair_active_elsewhere`: the join page's chair-tab notice when `chair_device_status` says this account is chairing the committee on another live device.
+- Terminology held: device = ES *dispositivo*, FR *appareil*, AR *جهاز*; committee = ES *comité*, FR *comité*, AR *اللجنة*.
 
 ### 2026-09-14 — extra time capped to the caucus (`feature/conferences-auth`) — +1 key
 
