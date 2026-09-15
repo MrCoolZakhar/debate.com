@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { SlidersHorizontal } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { useT } from '@/contexts/LanguageContext';
 import type { CommitteeSettings } from '@/lib/settingsStore';
@@ -602,8 +603,13 @@ export function VotingRulesPanel({
 
 // ── Header trigger + portalled popover ──────────────────────────────────────
 
-export function VotingRulesPopover(props: VotingRulesPanelProps & { triggerLabel?: string }) {
-  const { triggerLabel, ...panelProps } = props;
+export function VotingRulesPopover(props: VotingRulesPanelProps & {
+  triggerLabel?: string;
+  /** `icon`: the voting header's quiet round button (sliders icon, label beside it on wide
+   *  screens). `pill`: the original text chip. */
+  trigger?: 'pill' | 'icon';
+}) {
+  const { triggerLabel, trigger = 'pill', ...panelProps } = props;
   const t = useT();
   const label = triggerLabel ?? t('voting_rules_trigger');
   const [open, setOpen] = useState(false);
@@ -646,6 +652,27 @@ export function VotingRulesPopover(props: VotingRulesPanelProps & { triggerLabel
 
   return (
     <>
+      {trigger === 'icon' ? (
+        <button
+          ref={btnRef}
+          type="button"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-label={t('voting_rules_title')}
+          title={t('voting_rules_title')}
+          onClick={() => setOpen((o) => !o)}
+          className="inline-flex items-center gap-2 h-10 min-w-10 justify-center xl:ps-3 xl:pe-3.5 rounded-full text-[13px] font-bold shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,color,transform] duration-150 active:scale-[0.96] motion-reduce:transition-none"
+          style={{
+            backgroundColor: open ? '#1B3828' : 'transparent',
+            color: open ? '#EED98A' : '#4A3F33',
+          }}
+          onMouseEnter={(e) => { if (!open) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.08)'; }}
+          onMouseLeave={(e) => { if (!open) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+        >
+          <SlidersHorizontal size={17} strokeWidth={2.25} aria-hidden />
+          <span className="hidden xl:inline">{t('voting_rules_title')}</span>
+        </button>
+      ) : (
       <button
         ref={btnRef}
         type="button"
@@ -664,6 +691,7 @@ export function VotingRulesPopover(props: VotingRulesPanelProps & { triggerLabel
       >
         {label}
       </button>
+      )}
       {open && pos && (
         <Portal>
           <div

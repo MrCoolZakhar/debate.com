@@ -6,7 +6,7 @@ import { NEU, OUTFIT } from '@/components/neu';
 import type { ChatConvKey, ChatEntryKind } from '@/lib/chatConversations';
 import type { ChatMessage } from '@/lib/types';
 import { ChatAvatar } from './ChatAvatar';
-import { CHAT, displayContent, formatListTime, type TFn } from './chatTokens';
+import { CHAT, previewContent, formatListTime, type TFn } from './chatTokens';
 
 export interface ConvRow {
   key: ChatConvKey;
@@ -134,7 +134,7 @@ const Row = memo(function Row({ row, active, onSelect, t, locale }: {
 }) {
   const { last, unread } = row;
   const preview = last
-    ? `${row.lastSenderLabel ? `${row.lastSenderLabel}: ` : ''}${displayContent(last.content)}`
+    ? `${row.lastSenderLabel ? `${row.lastSenderLabel}: ` : ''}${previewContent(last.content, t)}`
     : row.idleLine;
   const showBadge = unread > 0 && !active;
   return (

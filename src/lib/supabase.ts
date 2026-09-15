@@ -2,11 +2,16 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 let _client: SupabaseClient | null = null;
 
+/** Public project URL and publishable (anon) key. Exported for the few callers that talk to
+ *  the REST endpoints directly (chat attachments upload through XHR for progress + abort). */
+export const SUPABASE_URL = 'https://luruhkwrgisytejswlas.supabase.co';
+export const SUPABASE_ANON_KEY = 'sb_publishable_k7NdduzaXK358z8ew18ZKA_vBSieDlV';
+
 function getClient(): SupabaseClient {
   if (!_client) {
     _client = createClient(
-      'https://luruhkwrgisytejswlas.supabase.co',
-      'sb_publishable_k7NdduzaXK358z8ew18ZKA_vBSieDlV',
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY,
       {
         auth: {
           persistSession: false,

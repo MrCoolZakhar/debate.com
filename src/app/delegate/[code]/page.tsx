@@ -41,6 +41,7 @@ import {
 import { serverNow } from '@/lib/serverClock';
 import { useAuth } from '@/components/AuthProvider';
 import { claimDelegateSeat, leaveDelegateSeat, seatKey } from '@/lib/seatClaims';
+import { seatKickTopic } from '@/lib/sessionParticipants';
 import { useDelegateIdleLogout, markDelegateActivity } from '@/lib/delegateIdle';
 import DelegateIdleWarning from '@/components/delegate/DelegateIdleWarning';
 import { safeStorageKey } from '@/lib/storageKey';
@@ -811,7 +812,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // allocated to; 'signin' = a reserved seat and nobody signed in; 'error' = could not ask;
   // 'elsewhere' = this ACCOUNT holds the seat on another device, which opened it more
   // recently (one account, one device: see the re-verify effect below).
-  const [accessState, setAccessState] = useState<'checking' | 'allowed' | 'denied' | 'signin' | 'taken' | 'elsewhere' | 'error'>('checking');
+  // 'kicked' = a chair removed this device from the seat (Settings → People,
+  // kick_delegate_seat); the server refuses it this seat for 10 minutes.
+  const [accessState, setAccessState] = useState<'checking' | 'allowed' | 'denied' | 'signin' | 'taken' | 'elsewhere' | 'kicked' | 'error'>('checking');
   const [seatRetry, setSeatRetry] = useState(0);
   // The last claim answered 'no_seat' (this country is not on the roster yet). When the
   // chair adds it, the re-verify effect claims it at once instead of up to 30 s later.
@@ -1018,6 +1021,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       // signin / reserved for it before it looks at the roster.
       if (res.ok || res.reason === 'no_seat' || res.reason === 'not_found') setAccessState('allowed');
       else if (res.reason === 'taken') setAccessState('taken');
+      else if (res.reason === 'kicked') setAccessState('kicked');
       else if (res.reason === 'other_device') setAccessState('elsewhere');
       else if (res.reason === 'signin') setAccessState('signin');
       else if (res.reason === 'reserved') setAccessState('denied');
@@ -1067,6 +1071,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // per-second work.
   const seatAllowed = accessState === 'allowed';
   const hasMySeatRow = !!committee?.delegates.some((d) => seatKey(d.country) === seatKey(country));
+  const seatCommitteeId = committee?.id ?? null;
   // Idle: once the delegate has done nothing for the idle threshold this stops refreshing
   // the claim's last_seen_at, so the server lets the seat go even if the logout never runs.
   const idleIsIdle = idle.isIdle;
@@ -1081,6 +1086,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       busy = false;
       if (!alive) return;
       if (res.reason === 'taken') setAccessState('taken');
+      else if (res.reason === 'kicked') setAccessState('kicked');
       else if (res.reason === 'other_device') setAccessState('elsewhere');
       else if (res.reason === 'reserved') setAccessState('denied');
       else if (res.reason === 'signin') setAccessState('signin');
@@ -1094,12 +1100,23 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     const id = setInterval(() => check(), 30_000);
     const onVisible = () => { if (document.visibilityState === 'visible') check(); };
     document.addEventListener('visibilitychange', onVisible);
+    // A chair removed a seat (Settings → People): re-verify now instead of within 30 s. The
+    // broadcast is only a hint and is never trusted: the page stops only if the server
+    // answers 'kicked' for THIS device, so a forged message costs one RPC and removes nobody.
+    const kickChannel = seatCommitteeId
+      ? supabase.channel(seatKickTopic(seatCommitteeId))
+          .on('broadcast', { event: 'kicked' }, ({ payload }) => {
+            if ((payload as { c?: unknown } | null)?.c === seatKey(country)) check();
+          })
+          .subscribe()
+      : null;
     return () => {
       alive = false;
       clearInterval(id);
       document.removeEventListener('visibilitychange', onVisible);
+      if (kickChannel) void supabase.removeChannel(kickChannel);
     };
-  }, [seatAllowed, sessionEnded, authLoading, code, country, hasMySeatRow, seatNoSeat, idleLoggedOut, idleIsIdle]);
+  }, [seatAllowed, sessionEnded, authLoading, code, country, hasMySeatRow, seatNoSeat, idleLoggedOut, idleIsIdle, seatCommitteeId]);
 
   // Browser title abbreviation
   useEffect(() => {
@@ -1385,6 +1402,18 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         body={t('delegate_seat_taken_body', { country: country ? getCountryDisplayName(country, language) : '' })}
         primaryLabel={t('delegate_seat_retry')} onPrimary={retrySeat}
         backLabel={t('delegate_seat_back')} onBack={backToJoin}
+      />
+    );
+  }
+
+  // A chair removed this device from the seat. The server refuses it this seat for 10
+  // minutes, so the only way on is the join page (another seat, or this one later).
+  if (accessState === 'kicked') {
+    return (
+      <SeatGateScreen
+        title={t('delegate_seat_kicked_title')}
+        body={t('delegate_seat_kicked_body', { country: country ? getCountryDisplayName(country, language) : '' })}
+        primaryLabel={t('delegate_seat_back')} onPrimary={backToJoin}
       />
     );
   }

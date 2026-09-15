@@ -116,8 +116,8 @@ const isVotableMotion = (m: PendingMotion) =>
  *  there is no database limit). Editing a motion already on the floor is always allowed. */
 export const MAX_FLOOR_MOTIONS = 15;
 /** Motions shown as normal ranked cards in the voting view: the one being voted on plus the
- *  queue column beside it. Everything ranked below scrolls in its own column. Five fits a
- *  1280x800 laptop without scrolling. */
+ *  queue column beside it. With more than this, the queue column scrolls in place (the modal
+ *  keeps its size). Five fits a 1280x800 laptop without scrolling. */
 const RANKED_VISIBLE = 5;
 
 
@@ -765,6 +765,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   const overflowRef = useRef<HTMLDivElement | null>(null);
   const [overflowFade, setOverflowFade] = useState<{ top: boolean; bottom: boolean }>({ top: false, bottom: false });
   const extrasCount = Math.max(0, order.length - RANKED_VISIBLE);
+  const scrolls = extrasCount > 0;
   const measureOverflow = useCallback(() => {
     const el = overflowRef.current;
     if (!el) return;
@@ -806,10 +807,9 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   }
 
   const primary = order[0];
-  const rest = order.slice(1, RANKED_VISIBLE);
-  // Never hidden: anything ranked below the visible cards scrolls in its own column. (This
-  // used to be slice(1, 5) with nothing after it, so a sixth motion was simply invisible.)
-  const extras = order.slice(RANKED_VISIBLE);
+  // Every motion below the primary lives in the right column. Nothing is ever hidden: past
+  // RANKED_VISIBLE the column scrolls in place instead of opening a side column.
+  const rest = order.slice(1);
   const floorFull = order.length >= MAX_FLOOR_MOTIONS;
 
   const renderCard = (m: PendingMotion, large: boolean, idx: number) => {
@@ -866,7 +866,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         </div>
         {/* Header: icon + type label + flag in top-right */}
         <div className="flex items-center gap-2">
-          <span className={`font-black text-[#1C1410] flex-1 min-w-0 ${large ? 'text-3xl' : idx >= RANKED_VISIBLE ? 'text-base' : 'text-lg'} flex items-center gap-1.5`}>
+          <span className={`font-black text-[#1C1410] flex-1 min-w-0 ${large ? 'text-3xl' : 'text-lg'} flex items-center gap-1.5`}>
             <span className="min-w-0 break-words">{cardLabel}</span>
             {!isPrimary && !isViewOnly && (
               <button
@@ -1018,31 +1018,52 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           </svg>
           <div className="flex-1 w-px" style={{ backgroundColor: '#C8BAA8' }} />
         </div>
-        {/* Right column, queued motions + Raise a Motion button */}
-        {/* pt-3 pe-4: give room for the badge that translates outside each card's top-right corner */}
-        <div className="w-72 flex flex-col pt-3 pe-4">
-          {rest.map((m, i) => (
-            <React.Fragment key={m.id}>
-              {renderCard(m, false, i + 1)}
-              {i < rest.length - 1 && (
-                <div className="flex items-center gap-2 px-2 pointer-events-none select-none" style={{ opacity: 0.35, height: '14px' }}>
-                  <div className="flex-1 h-px" style={{ backgroundColor: '#C8BAA8' }} />
-                  <svg width="16" height="10" viewBox="0 0 16 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="2"  cy="2" r="1.5" fill="#1C1410"/>
-                    <circle cx="8"  cy="2" r="1.5" fill="#1C1410"/>
-                    <circle cx="14" cy="2" r="1.5" fill="#1C1410"/>
-                    <circle cx="2"  cy="8" r="1.5" fill="#1C1410"/>
-                    <circle cx="8"  cy="8" r="1.5" fill="#1C1410"/>
-                    <circle cx="14" cy="8" r="1.5" fill="#1C1410"/>
-                  </svg>
-                  <div className="flex-1 h-px" style={{ backgroundColor: '#C8BAA8' }} />
+        {/* Right column, queued motions + Raise a Motion button. Past RANKED_VISIBLE motions
+            the queued cards scroll inside this same column (hidden scrollbar, edge fades), so
+            the modal never grows a side column or widens. Order, ranks and actions unchanged. */}
+        <div className="w-72 shrink-0 flex flex-col min-h-0">
+          <div className="relative min-h-0 flex flex-col">
+            <div
+              ref={overflowRef}
+              onScroll={scrolls ? measureOverflow : undefined}
+              tabIndex={scrolls ? 0 : undefined}
+              aria-label={scrolls ? t('motions_more_on_floor', { count: extrasCount }) : undefined}
+              className={`min-h-0 pt-3 pe-4 ${scrolls ? 'overflow-y-auto overscroll-contain pb-2 focus:outline-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden' : ''}`}
+            >
+              {rest.map((m, i) => (
+                <React.Fragment key={m.id}>
+                  {renderCard(m, false, i + 1)}
+                  {i < rest.length - 1 && (
+                    <div className="flex items-center gap-2 px-2 pointer-events-none select-none" style={{ opacity: 0.35, height: '14px' }}>
+                      <div className="flex-1 h-px" style={{ backgroundColor: '#C8BAA8' }} />
+                      <svg width="16" height="10" viewBox="0 0 16 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="2"  cy="2" r="1.5" fill="#1C1410"/>
+                        <circle cx="8"  cy="2" r="1.5" fill="#1C1410"/>
+                        <circle cx="14" cy="2" r="1.5" fill="#1C1410"/>
+                        <circle cx="2"  cy="8" r="1.5" fill="#1C1410"/>
+                        <circle cx="8"  cy="8" r="1.5" fill="#1C1410"/>
+                        <circle cx="14" cy="8" r="1.5" fill="#1C1410"/>
+                      </svg>
+                      <div className="flex-1 h-px" style={{ backgroundColor: '#C8BAA8' }} />
+                    </div>
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+            {scrolls && (
+              <>
+                <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-6 transition-opacity duration-150"
+                  style={{ opacity: overflowFade.top ? 1 : 0, background: 'linear-gradient(#FAF8F3, rgba(250,248,243,0))' }} />
+                <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-10 flex items-end justify-center pb-1 transition-opacity duration-150"
+                  style={{ opacity: overflowFade.bottom ? 1 : 0, background: 'linear-gradient(rgba(250,248,243,0), #FAF8F3 70%)' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="#6A5A4A" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 </div>
-              )}
-              {i === rest.length - 1 && <div style={{ height: '6px' }} />}
-            </React.Fragment>
-          ))}
+              </>
+            )}
+          </div>
+          {rest.length > 0 && <div className="shrink-0" style={{ height: '6px' }} />}
           {!isViewOnly && (
-            <>
+            <div className="shrink-0 pe-4">
               <button
                 onClick={onBack}
                 disabled={floorFull}
@@ -1056,35 +1077,9 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
                   {t('motions_floor_full', { n: MAX_FLOOR_MOTIONS })}
                 </p>
               )}
-            </>
+            </div>
           )}
         </div>
-        {/* Overflow column: motions ranked below the visible cards, in the same order and with
-            the same actions, scrolling on their own so the cards beside them never move. */}
-        {extras.length > 0 && (
-          <div className="w-64 shrink-0 flex flex-col min-h-0 ms-2 ps-3" style={{ borderInlineStart: '1px solid #E4DCCB' }}>
-            <p className="text-xs font-black uppercase tracking-wide shrink-0 pt-1 pb-1" style={{ color: '#6A5A4A' }}>
-              {t('motions_more_on_floor', { count: extras.length })}
-            </p>
-            <div className="relative flex-1 min-h-0">
-              <div
-                ref={overflowRef}
-                onScroll={measureOverflow}
-                tabIndex={0}
-                aria-label={t('motions_more_on_floor', { count: extras.length })}
-                className="h-full overflow-y-auto overscroll-contain pt-3 pe-4 pb-2 space-y-3 focus:outline-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              >
-                {extras.map((m, i) => renderCard(m, false, RANKED_VISIBLE + i))}
-              </div>
-              <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-6 transition-opacity duration-150"
-                style={{ opacity: overflowFade.top ? 1 : 0, background: 'linear-gradient(#FAF8F3, rgba(250,248,243,0))' }} />
-              <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-10 flex items-end justify-center pb-1 transition-opacity duration-150"
-                style={{ opacity: overflowFade.bottom ? 1 : 0, background: 'linear-gradient(rgba(250,248,243,0), #FAF8F3 70%)' }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="#6A5A4A" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -1164,8 +1159,6 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   const typeMeta = buildTypeMeta(motionNames);
   const pending = [...(committee.pendingMotions ?? [])].filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').sort((a, b) => rankMotion(b) - rankMotion(a));
   const floorFull = pending.length >= MAX_FLOOR_MOTIONS;
-  // A third column opens beside the ranked cards once motions spill past them.
-  const wide = pending.length > RANKED_VISIBLE;
   const [view, setView] = useState<ModalView>(pending.length === 0 && !isViewOnly ? 'raise' : 'vote');
   const [specialVoteMotion, setSpecialVoteMotion] = useState<PendingMotion | null>(null);
   // M-2: temp ids live in a module-level store keyed by committee, not modal state, so
@@ -1516,7 +1509,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       onClose={onClose}
       closeRef={animatedCloseRef}
       ariaLabel={t('tab_motions')}
-      panelClassName={`bg-[#FAF8F3] border border-[#DDD4C0] rounded-3xl w-full shadow-2xl overflow-hidden flex flex-col ${wide ? 'max-w-6xl' : 'max-w-5xl'}`}
+      panelClassName={`bg-[#FAF8F3] border border-[#DDD4C0] rounded-3xl w-full shadow-2xl overflow-hidden flex flex-col max-w-5xl`}
       panelStyle={{ height: '88%' }}
     >
       {(requestClose) => (<>

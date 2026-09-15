@@ -14,7 +14,7 @@ function focusablesIn(root: HTMLElement): HTMLElement[] {
 }
 
 /**
- * Focus trap shared by GrowDialog and LeftDrawer. Tab and Shift+Tab cycle inside the panel,
+ * Focus trap used by GrowDialog. Tab and Shift+Tab cycle inside the panel,
  * and focus that lands on the page underneath is pulled back in. A floating layer opened FROM
  * the dialog (DatePicker, a tooltip, a typeahead) portals into the same root AFTER the dialog,
  * so anything that follows the dialog's layer in document order counts as part of it.

@@ -162,6 +162,7 @@ export type SeatClaimReason =
   | 'claimed' | 'mine' | 'ended'                                           // ok
   | 'taken' | 'reserved' | 'signin' | 'no_seat' | 'no_token' | 'not_found' // refused
   | 'other_device'                                                         // refused: this account is in on another device
+  | 'kicked'                                                               // refused: a chair removed this holder from this seat < 10 min ago (Settings → People)
   | 'error';                                                               // could not ask
 export interface SeatClaimResult { ok: boolean; reason: SeatClaimReason }
 

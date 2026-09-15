@@ -27,7 +27,11 @@ import { dismissWhere, notifyKey } from '@/lib/sessionNotifications';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import ChatConversationList, { type ConvRow } from './chat/ChatConversationList';
 import ChatThread from './chat/ChatThread';
-import ChatComposer from './chat/ChatComposer';
+import ChatComposer, { type AttachmentDraft } from './chat/ChatComposer';
+import {
+  checkChatFile, encodeAttachment, readImageSize, uploadChatFile, type ChatAttachment, type UploadHandle,
+} from '@/lib/chatAttachments';
+import { useGifsEnabled, type GifItem } from '@/lib/gifClient';
 import NewGroupSheet, { type GroupCandidate } from './chat/NewGroupSheet';
 import { CHAT } from './chat/chatTokens';
 
@@ -93,6 +97,12 @@ export default function ChatPanel({
   const [groupError, setGroupError] = useState(false);
   // Groups created on this device whose definition row has not come back yet.
   const [pendingGroups, setPendingGroups] = useState<ChatMessage[]>([]);
+
+  // A photo or PDF picked in the composer (src/lib/chatAttachments.ts). One at a time.
+  const [draft, setDraft] = useState<AttachmentDraft | null>(null);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const uploadRef = useRef<{ id: string; handle: UploadHandle | null; attachment: ChatAttachment | null } | null>(null);
+  const gifsEnabled = useGifsEnabled();
 
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -218,12 +228,9 @@ export default function ChatPanel({
     if (!ok) markOutboxFailed(committee.id, entry.id);
   }, [committee.id, committee.code, chairSuffix]);
 
-  const handleSend = () => {
-    const content = msg.trim();
-    if (!content || readOnly || !activeEntry) return;
-    // Counts as activity for the delegate idle logout. A no-op on every other surface.
-    markDelegateActivity();
-
+  /** Queue one message into the outbox and deliver it to the active conversation. */
+  const sendContent = (content: string) => {
+    if (!activeEntry) return;
     let isPrivate = false;
     let recipient: string | undefined;
     if (activeKey === 'chairs') { isPrivate = true; recipient = 'Chairs'; }
@@ -240,8 +247,81 @@ export default function ChatPanel({
       status: 'sending',
     };
     addOutbox(committee.id, entry);
-    setMsg('');
     void deliver(entry);
+  };
+
+  const discardDraft = useCallback(() => {
+    uploadRef.current?.handle?.abort();
+    uploadRef.current = null;
+    setDraft((d) => { if (d?.localUrl) URL.revokeObjectURL(d.localUrl); return null; });
+  }, []);
+  // Abort an upload still running when the chat closes.
+  useEffect(() => () => { uploadRef.current?.handle?.abort(); }, []);
+
+  const handleSend = () => {
+    if (readOnly || !activeEntry) return;
+    const content = msg.trim();
+    const ready = draft?.status === 'ready' ? uploadRef.current?.attachment : null;
+    if (draft && !ready) return; // still uploading (or failed): Send stays disabled
+    if (!content && !ready) return;
+    // Counts as activity for the delegate idle logout. A no-op on every other surface.
+    markDelegateActivity();
+    if (ready) {
+      sendContent(encodeAttachment(ready));
+      uploadRef.current = null;
+      setDraft((d) => { if (d?.localUrl) URL.revokeObjectURL(d.localUrl); return null; });
+    }
+    // A caption goes as its own message right after the file.
+    if (content) sendContent(content);
+    setMsg('');
+    setAttachError(null);
+    requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }));
+  };
+
+  const handlePickFile = async (file: File) => {
+    if (readOnly) return;
+    markDelegateActivity();
+    const check = checkChatFile(file);
+    if (!check.ok) {
+      setAttachError(t(check.reason === 'size' ? 'chat_attach_too_big' : 'chat_attach_bad_type'));
+      return;
+    }
+    discardDraft();
+    setAttachError(null);
+    const id = newOutboxId();
+    const localUrl = check.kind === 'image' ? URL.createObjectURL(file) : undefined;
+    uploadRef.current = { id, handle: null, attachment: null };
+    setDraft({ id, kind: check.kind, name: file.name, size: file.size, localUrl, progress: 0, status: 'uploading' });
+
+    const dims = check.kind === 'image' ? await readImageSize(file) : null;
+    if (uploadRef.current?.id !== id) return; // removed while measuring
+    const handle = uploadChatFile(committee.id, file, (f) => {
+      if (uploadRef.current?.id !== id) return;
+      setDraft((d) => (d && d.id === id ? { ...d, progress: f } : d));
+    });
+    uploadRef.current.handle = handle;
+    const res = await handle.promise;
+    if (uploadRef.current?.id !== id) return; // removed or replaced meanwhile
+    if (!res) {
+      uploadRef.current.handle = null;
+      setDraft((d) => (d && d.id === id ? { ...d, status: 'failed' } : d));
+      return;
+    }
+    uploadRef.current.attachment = {
+      kind: check.kind, url: res.url, name: file.name,
+      mime: file.type || 'application/pdf', size: file.size,
+      width: dims?.width, height: dims?.height,
+    };
+    setDraft((d) => (d && d.id === id ? { ...d, progress: 1, status: 'ready' } : d));
+  };
+
+  const handleSendGif = (g: GifItem) => {
+    if (readOnly || !activeEntry) return;
+    markDelegateActivity();
+    sendContent(encodeAttachment({
+      kind: 'gif', url: g.original.url, preview: g.send.url, name: g.title || 'GIF',
+      width: g.send.width, height: g.send.height,
+    }));
     requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }));
   };
 
@@ -405,6 +485,13 @@ export default function ChatPanel({
             onSend={handleSend}
             readOnly={readOnly}
             t={t}
+            draft={draft}
+            onPickFile={(f) => { void handlePickFile(f); }}
+            onRemoveDraft={discardDraft}
+            attachError={attachError}
+            gifsEnabled={gifsEnabled}
+            onSendGif={handleSendGif}
+            lang={language}
           />
         </div>
       )}

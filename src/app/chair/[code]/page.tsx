@@ -9,7 +9,7 @@ import SpeakerControls, { FloorProgress, SpeakerClock } from '@/components/Speak
 import DraggablePopover from '@/components/DraggablePopover';
 import SpeakerStrip from '@/components/SpeakerStrip';
 import SessionCodePresenter from '@/components/SessionCodePresenter';
-import { Maximize2, MessageCircle, Settings, Trophy, X as XIcon } from 'lucide-react';
+import { Maximize2, MessageCircle, Settings, Trophy } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { CaucusState, Committee, Delegate, DelegateStatus } from '@/lib/types';
@@ -198,6 +198,9 @@ function abbrevCountry(name: string): string {
 }
 
 type CommitteeSetter = React.Dispatch<React.SetStateAction<Committee | null>>;
+/** The two floating floor panels. Independent: both may be open at once. */
+type FloorPopover = 'extraTime' | 'rightToReply';
+type FloorPopovers = Record<FloorPopover, boolean>;
 
 const localUpdateTime = { current: 0 };
 // R-1: bumped by EVERY optimistic local write (updateLocal, structural or not). Timer ticks
@@ -519,12 +522,27 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegat
   );
 }
 
+/** "Queue full": a short glass card in the top-right NotificationStack (owner, 15 Sep 2026),
+ *  not a flash in the sidebar or a message over the add bar. One key, so repeated refusals
+ *  restart the same card instead of stacking; urgent so it shows during a running speech
+ *  (a refusal the chair cannot see reads as a dead click). */
+function notifyCaucusQueueFull(t: ReturnType<typeof useT>) {
+  notify({
+    key: 'caucus-queue-full',
+    kind: 'info',
+    title: t('caucus_queue_full_title'),
+    body: t('caucus_queue_full_body'),
+    ttlMs: 3000,
+    urgent: true,
+  });
+}
+
 // ── Caucus Add Speaker Input ──────────────────────────────────────────────────
 function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, onAddLast, maxSpeakers, currentQueueLength, currentSpeakerCountry, onEndCaucus, onRecognise }: {
   committee: Committee; spokenCountries: string[]; onAdd: (id: string) => void;
-  /** Same as AddSpeakerInput. The bar is only rendered while the queue has room (isFull
-   *  swaps it for `caucus_queue_no_time`), and the add handlers use the same capacity, so a
-   *  recognised delegate is always queued. */
+  /** Same as AddSpeakerInput. Recognition runs only after the capacity check passed (a full
+   *  queue raises the queue-full notification instead), and the add handlers use the same
+   *  capacity, so a recognised delegate is always queued. */
   onRecognise?: (id: string) => void;
   onAddFirst?: (id: string) => void; onAddLast?: (id: string) => void;
   maxSpeakers?: number; currentQueueLength?: number;
@@ -552,21 +570,18 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
     onRecognise(d.id);
     return true;
   };
+  // Full: the bar stays in place and the refusal is a short top-right notification
+  // (notifyCaucusQueueFull), never a message that replaces the bar.
+  const refuseIfFull = () => { if (isFull) notifyCaucusQueueFull(t); return isFull; };
   const commit = (d: typeof topNotOnList) => {
-    if (!d || onList.has(d.id) || isFull || isCurrentSpeaker(d)) return;
+    if (!d || onList.has(d.id) || isCurrentSpeaker(d)) return;
+    if (refuseIfFull()) return;
     if (!recogniseIfAbsent(d)) return;
     onAdd(d.id); setQuery('');
   };
   return (
     <div className="flex gap-2">
       <div className="relative flex-1">
-      {isFull ? (
-        <div className="pointer-events-none flex items-center justify-center px-4 py-3 bg-[#FAF8F3] border border-[#B6871F]/30 rounded-xl">
-          <p className="text-sm text-amber-400 font-semibold text-center">
-            {t('caucus_queue_no_time')}
-          </p>
-        </div>
-      ) : (
       <>
       <div className="flex items-center bg-[#FAF8F3] border rounded-xl transition-colors border-[#DDD4C0] focus-within:border-[#1B3828]">
         <input ref={inputRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
@@ -605,13 +620,13 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
                 {isFirst && !spoke && (
                   <div className="flex items-center gap-1 shrink-0">
                     {onAddFirst && (
-                      <button onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); if (isFull || !recogniseIfAbsent(d)) return; onAddFirst(d.id); setQuery(''); }}
+                      <button onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); if (refuseIfFull() || !recogniseIfAbsent(d)) return; onAddFirst(d.id); setQuery(''); }}
                         className="text-[10px] px-1.5 py-0.5 rounded bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#B6871F] font-bold border border-[#C8BAA8] transition-colors gv-lift">
                         ↑ First
                       </button>
                     )}
                     {onAddLast && (
-                      <button onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); if (isFull || !recogniseIfAbsent(d)) return; onAddLast(d.id); setQuery(''); }}
+                      <button onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); if (refuseIfFull() || !recogniseIfAbsent(d)) return; onAddLast(d.id); setQuery(''); }}
                         className="text-[10px] px-1.5 py-0.5 rounded bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#B6871F] font-bold border border-[#C8BAA8] transition-colors gv-lift">
                         ↓ Last
                       </button>
@@ -625,7 +640,6 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
         </div>
       )}
       </>
-      )}
       </div>
       {onEndCaucus && (
         <button onClick={onEndCaucus}
@@ -686,7 +700,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
     return () => { if (cowIntervalRef.current) { clearInterval(cowIntervalRef.current); cowIntervalRef.current = null; } };
   }, [cowActive]);
   // Gavel knock for the CoW timer: a read-only side effect of its own state (RULES 3 and 4).
-  useGavelCue(cowRemaining, cowActive, gavelCue);
+  useGavelCue(cowRemaining, cowActive, gavelCue, cowSetSecs);
 
   // CoW open-floor speaker tracking — set who holds the floor by tapping a flag.
   // Database clock (T-1), and the start doubles as the turn key: one log per floor holder
@@ -984,20 +998,19 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
 function ModeratedCaucusMain({
   committee, setCommittee,
   speakerTimeRemaining, timerRunning, caucusSeconds,
-  activePopover, setActivePopover, extraTimeAdded,
+  openPopovers, setPopover, extraTimeAdded,
   handleToggleTimer, handleRestartTime, handleNextCaucusSpeaker, handleEndCaucus,
-  sessionEnded, isViewOnly = false, onRecognise, onRemoveCurrentSpeaker,
+  sessionEnded, isViewOnly = false, onRecognise,
 }: {
   committee: Committee; setCommittee: CommitteeSetter;
-  /** Take the speaker holding the caucus floor off it (speech logged, clocks paused). */
-  onRemoveCurrentSpeaker?: () => void;
   /** Marks an absent delegate Present before the typed bar queues them (see AddSpeakerInput). */
   onRecognise?: (id: string) => void;
   /** Live seconds on the TOTAL caucus clock, derived from the anchor by the page. */
   caucusSeconds: number;
   speakerTimeRemaining: number; timerRunning: boolean;
-  activePopover: 'extraTime' | 'rightToReply' | null;
-  setActivePopover: (v: 'extraTime' | 'rightToReply' | null) => void;
+  /** Add time and Right of Reply are independent: both may be open at once. */
+  openPopovers: FloorPopovers;
+  setPopover: (which: FloorPopover, open: boolean | 'toggle') => void;
   extraTimeAdded: boolean;
   handleToggleTimer: () => void;
   handleRestartTime: () => void;
@@ -1108,7 +1121,7 @@ function ModeratedCaucusMain({
   // controls never vanish when the floor empties. Next with nobody on the floor calls the
   // first delegate in the queue (handleNextCaucusSpeaker already does exactly that).
   const caucusHasSpeaker = !!committee.caucus?.currentSpeaker;
-  const toggleRtr = () => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply');
+  const toggleRtr = () => setPopover('rightToReply', 'toggle');
   const caucusControls = !sessionEnded && !isViewOnly ? (
     <SpeakerControls
       hasSpeaker={caucusHasSpeaker}
@@ -1121,10 +1134,10 @@ function ModeratedCaucusMain({
         blockedReason: queue.length === 0 ? t('speaker_ctl_queue_empty') : null,
         onClick: () => { void handleNextCaucusSpeaker(); },
       }}
-      onAddTime={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')}
-      addTimeActive={activePopover === 'extraTime'}
+      onAddTime={() => setPopover('extraTime', 'toggle')}
+      addTimeActive={openPopovers.extraTime}
       onRightOfReply={isTdT || caucusHasSpeaker ? undefined : toggleRtr}
-      rightOfReplyActive={activePopover === 'rightToReply'}
+      rightOfReplyActive={openPopovers.rightToReply}
     />
   ) : null;
 
@@ -1176,19 +1189,10 @@ function ModeratedCaucusMain({
                 style={{ boxShadow: FLOOR_FLAG_SHADOW }}
               />
             )}
-            <h1 className="font-black text-[#1C1410] text-center inline-flex items-center gap-2" style={{ fontSize: '1.8rem', margin: '8px 0' }}>
+            {/* No X beside the caucus speaker's name (owner, 15 Sep 2026): taking a delegation
+                off the caucus floor stays on its sidebar row. */}
+            <h1 className="font-black text-[#1C1410] text-center" style={{ fontSize: '1.8rem', margin: '8px 0' }}>
               {getCountryDisplayName(committee.caucus!.currentSpeaker!, language)}
-              {!sessionEnded && !isViewOnly && onRemoveCurrentSpeaker && (
-                <button
-                  type="button"
-                  onClick={() => onRemoveCurrentSpeaker()}
-                  aria-label={t('speaker_remove_current', { country: getCountryDisplayName(committee.caucus!.currentSpeaker!, language) })}
-                  title={t('speaker_remove_current', { country: getCountryDisplayName(committee.caucus!.currentSpeaker!, language) })}
-                  className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-[#DDD4C0] text-[#1C1410] hover:bg-[#8B2020] hover:text-white transition-colors active:scale-[0.92] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-                >
-                  <XIcon size={16} strokeWidth={3} aria-hidden />
-                </button>
-              )}
             </h1>
             <SpeakerClock
               running={timerRunning}
@@ -1202,7 +1206,7 @@ function ModeratedCaucusMain({
             <FloorProgress
               percent={caucusProgress}
               barClassName={caucusProgress > 20 ? 'bg-[#B6871F]' : 'bg-red-500'}
-              rtr={!sessionEnded && !isViewOnly && !isTdT ? { onClick: toggleRtr, active: activePopover === 'rightToReply' } : null}
+              rtr={!sessionEnded && !isViewOnly && !isTdT ? { onClick: toggleRtr, active: openPopovers.rightToReply } : null}
             />
           </div>
           {/* ZONE 3 — Action buttons locked just above bottom bar */}
@@ -1508,10 +1512,18 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [resumeError, setResumeError] = useState<string | null>(null);
   const [resumeStale, setResumeStale] = useState(false);
   // Only one of these can be open at a time
-  const [activePopover, setActivePopover] = useState<'extraTime' | 'rightToReply' | null>(null);
+  // Add time and Right of Reply are INDEPENDENT floating panels (owner, 15 Sep 2026): the
+  // chair may keep both open at once. Each has its own flag; nothing else closes one when
+  // the other opens.
+  const [openPopovers, setOpenPopovers] = useState<FloorPopovers>({ extraTime: false, rightToReply: false });
+  const setPopover = useCallback((which: FloorPopover, open: boolean | 'toggle') => {
+    setOpenPopovers((p) => {
+      const next = open === 'toggle' ? !p[which] : open;
+      return p[which] === next ? p : { ...p, [which]: next };
+    });
+  }, []);
   const [extraTimeSecs, setExtraTimeSecs] = useState('');
   const [extraTimeAdded, setExtraTimeAdded] = useState(false);
-  const [caucusMaxReachedMsg, setCaucusMaxReachedMsg] = useState(false);
   const [caucusLoading, setCaucusLoading] = useState(false);
   const [caucusPanelLocked, setCaucusPanelLocked] = useState(false);
   const [unmodLoading, setUnmodLoading] = useState(false);
@@ -1527,6 +1539,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // Isolated timer atom — ticks never touch the `committee` object, preventing
   // whole-tree re-renders every second.
   const [speakerTimeRemaining, setSpeakerTimeRemaining] = useState(90);
+  // Bumped on every seat of the speaker clock (never by a tick): the gavel knock's anchor
+  // identity, so a value that JUMPED below the mark is never read as a countdown step.
+  const [speakerClockEpoch, setSpeakerClockEpoch] = useState(0);
   // ── The speaker clock's ANCHOR, and the only thing the tick reads ────────────
   // This pair mirrors current_speaker.{time_remaining, started_at} exactly, so the
   // chair renders the SAME function of the SAME two numbers that every other surface
@@ -1545,6 +1560,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const safeBase = Number.isFinite(base) ? Math.max(0, Math.round(base)) : 0;
     speakerAnchorRef.current = { base: safeBase, startedAt: startedAt ?? null };
     setSpeakerTimeRemaining(speakerRemainingNow(safeBase, startedAt ?? null));
+    setSpeakerClockEpoch((n) => n + 1);
   }, []);
   const [isViewOnly, setIsViewOnly] = useState(false);
   const [headChairName, setHeadChairName] = useState<string | null>(null);
@@ -2080,7 +2096,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     // Stop owning the clock, and close anything that only makes sense while acting.
     setTimerRunning(false);
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-    setActivePopover(null);
+    setOpenPopovers({ extraTime: false, rightToReply: false });
     setRtrOpen(false);
     setRtrTimerActive(false);
     setCaucusLoading(false);
@@ -2141,7 +2157,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     return () => clearTimeout(id);
   }, [extraTimeCapMsg]);
 
-  // Handover toast — transient, 6s, same flash pattern as caucusMaxReachedMsg.
+  // Handover toast — transient, 6s flash.
   useEffect(() => {
     if (!gavelToast) return;
     const t = setTimeout(() => setGavelToast(null), 6000);
@@ -2485,7 +2501,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // needs logging here: the reply was logged when it was granted. Press-driven values only
   // (identities, the phase, the running BOOLEANS going false → true), never a per-second
   // value, and no setCommittee / updateLocal / localUpdateTime (RULES 3 and 4).
-  const rtrCloseKey = `${committee?.phase ?? ''}|${committee?.suspendedAt ?? ''}|${committee?.endedAt ?? ''}|${committee?.currentSpeaker?.delegateId ?? ''}|${committee?.caucus?.currentSpeaker ?? ''}|${committee?.caucus?.type ?? ''}`;
+  // The floor key: phase, suspend / end, the floor speaker (GSL and caucus) and the caucus
+  // itself (a motion accepted over a running caucus changes proposer / purpose / type).
+  const floorCloseKey = `${committee?.phase ?? ''}|${committee?.suspendedAt ?? ''}|${committee?.endedAt ?? ''}|${sessionSuspended ? 's' : ''}${sessionEnded ? 'e' : ''}|${committee?.currentSpeaker?.delegateId ?? ''}|${committee?.caucus?.currentSpeaker ?? ''}|${committee?.caucus?.type ?? ''}|${committee?.caucus?.proposedBy ?? ''}|${committee?.caucus?.purpose ?? ''}`;
+  const rtrCloseKey = floorCloseKey;
   const caucusClockRunning = !!committee?.caucus?.totalStartedAt;
   const prevRtrCloseRef = useRef<{ key: string; speaker: boolean; caucus: boolean } | null>(null);
   useEffect(() => {
@@ -2496,14 +2515,25 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       || (timerRunning && !prev.speaker)
       || (caucusClockRunning && !prev.caucus);
     if (!somethingStarted) return;
-    if (!rtrOpen && activePopover !== 'rightToReply') return;
-    setActivePopover((p) => (p === 'rightToReply' ? null : p));
+    if (!rtrOpen && !openPopovers.rightToReply) return;
+    setPopover('rightToReply', false);
     setRtrOpen(false);
     setRtrTimerActive(false);
     setRtrCountry('');
     setRtrTimeRemaining(rtrSeconds);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rtrCloseKey, timerRunning, caucusClockRunning]);
+
+  // Add time closes on the same floor events as Right of Reply (a motion or caucus starting,
+  // Suspend, End, any phase change, the floor speaker changing), but NOT when a clock starts:
+  // adding time to a running speech is exactly what it is for. Independent of the RTR panel.
+  const prevAddTimeCloseRef = useRef<string | null>(null);
+  useEffect(() => {
+    const prev = prevAddTimeCloseRef.current;
+    prevAddTimeCloseRef.current = floorCloseKey;
+    if (prev === null || prev === floorCloseKey) return;
+    setPopover('extraTime', false);
+  }, [floorCloseKey, setPopover]);
 
   // ── Gavel knock when time is nearly up ──────────────────────────────────────
   // A pure READ of the timer values above (RULES 3 and 4): no setCommittee, no
@@ -2529,13 +2559,16 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       && !isViewOnly && gavelRoleOf(committee).isModerator
       && !sessionEnded && !sessionSuspended && !committee.endedAt && committee.phase !== 'adjourned',
     atSeconds: gavelSettings?.gavelSoundAtSeconds ?? 15,
+    scope: committee?.code,
   };
   // One speaker clock serves the GSL, the moderated caucus and Tour de Table.
-  useGavelCue(speakerTimeRemaining, timerRunning, gavelCue);
+  // Each clock passes its anchor identity: the knock needs a continuous countdown step on
+  // one anchor (src/lib/useGavelCue.ts), never a reseat, a catch-up or a woken tab's jump.
+  useGavelCue(speakerTimeRemaining, timerRunning, gavelCue, speakerClockEpoch);
   // The unmoderated / Consultation total. The moderated caucus total is left out on
   // purpose: its speakers already knock, and two knocks at once would say nothing.
-  useGavelCue(caucusSeconds, committee?.caucus?.type === 'unmoderated' && !!caucusAnchor, gavelCue);
-  useGavelCue(rtrTimeRemaining, rtrTimerActive, gavelCue);
+  useGavelCue(caucusSeconds, committee?.caucus?.type === 'unmoderated' && !!caucusAnchor, gavelCue, `${caucusAnchor}|${caucusAnchoredRemaining}`);
+  useGavelCue(rtrTimeRemaining, rtrTimerActive, gavelCue, rtrCountry);
 
   // ── A speech starts → leave the Roll Call tab for the queue ─────────────────
   // The Roll Call tab (showSliders) sorts A-Z; the owner's rule is that any speech start
@@ -2794,7 +2827,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
   // Can the moderated-caucus queue take this delegate right now? The sidebar asks BEFORE it
   // marks an absent delegate Present, so a full queue never leaves someone Present but not
-  // queued; on "no" it flashes caucus_queue_no_time. Read through a ref, assigned every
+  // queued; on "no" it raises the queue-full notification (top right). Read through a ref, assigned every
   // render, so the memoised RollCallPanel always gets the live caucus and speaker clock
   // behind one stable callback. Same capacity rule as the main caucus view, read LIVE.
   const caucusRoomRef = useRef<(delegateId: string) => boolean>(() => true);
@@ -2811,8 +2844,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       c.currentSpeaker ? speakerRemainingNow(speakerAnchorRef.current.base, speakerAnchorRef.current.startedAt) : 0,
     );
     if (queue.length < cap) return true;
-    setCaucusMaxReachedMsg(true);
-    setTimeout(() => setCaucusMaxReachedMsg(false), 6000);
+    notifyCaucusQueueFull(t);
     return false;
   };
   const canAddToCaucusQueue = useCallback((delegateId: string) => caucusRoomRef.current(delegateId), []);
@@ -3591,7 +3623,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   };
 
   // Remove the speaker holding the floor, leaving NOBODY on it (the X on the top strip, a
-  // click on their sidebar row, the X beside the caucus speaker's name, or them going
+  // click on their sidebar row, or them going
   // absent). GSL and moderated caucus / Tour de Table alike. Moderator only, never ended or
   // suspended. Order on the current_speaker chain, like Next: pause at the live value in ONE
   // write (G-3), log the speech from the persisted anchor (floorSpeech.ts skips a 0 s turn and
@@ -3683,7 +3715,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const running = timerRunning;
     const { base: anchorBase, startedAt: anchorStarted } = speakerAnchorRef.current;
     const live = speakerRemainingNow(anchorBase, anchorStarted);
-    setActivePopover(null);
+    setPopover('extraTime', false);
     setExtraTimeSecs('');
     // In a moderated caucus (and Tour de Table) the total is speaking time, so a speaker can
     // never be given more than the caucus has left: the grant is capped to the room between
@@ -4175,7 +4207,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // the list; with a speaker and nobody queued it becomes Finish (G-1), except when
   // gslRequireNextSpeaker is on, which keeps the GSL from running dry.
   const gslHasSpeaker = !!committee.currentSpeaker;
-  const toggleGslRtr = () => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply');
+  const toggleGslRtr = () => setPopover('rightToReply', 'toggle');
   // The same reasons the Start button cannot start; the clickable countdown obeys them too.
   const gslStartBlockedReason = belowQuorum ? t('speaker_ctl_below_quorum') : gslRequireNextSpeaker && isLastGSLSpeaker ? t('gsl_never_empty_warning') : null;
   const gslListLen = committee.speakersList.length;
@@ -4199,10 +4231,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       startBlockedReason={gslStartBlockedReason}
       onRestart={handleRestartTime}
       next={gslNext}
-      onAddTime={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')}
-      addTimeActive={activePopover === 'extraTime'}
+      onAddTime={() => setPopover('extraTime', 'toggle')}
+      addTimeActive={openPopovers.extraTime}
       onRightOfReply={gslHasSpeaker ? undefined : toggleGslRtr}
-      rightOfReplyActive={activePopover === 'rightToReply'}
+      rightOfReplyActive={openPopovers.rightToReply}
       tutorialTargets
     />
   ) : null;
@@ -4277,11 +4309,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           })()}
         >
           {renderIdentityBadge(true)}
-          {caucusMaxReachedMsg && (
-            <div className="shrink-0 px-3 py-2 bg-amber-900/20 border-b border-amber-700/40 text-amber-300 text-xs text-center font-semibold">
-              {t('caucus_queue_no_time')}
-            </div>
-          )}
           {extraTimeCapMsg !== null && (
             <div role="status" className="shrink-0 px-3 py-2 bg-amber-900/20 border-b border-amber-700/40 text-amber-300 text-xs text-center font-semibold">
               {t('caucus_extra_time_capped', { n: extraTimeCapMsg })}
@@ -4616,7 +4643,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 committee={committee}
                 senderName={myChairName || 'Chair'}
                 isChair={true}
-                onClose={requestClose}
+                /* No onClose: ChatDialog draws the close button outside the panel's corner. */
                 readOnly={sessionEnded}
                 readCounts={chatReadCounts}
                 onReadCountsChange={setChatReadCounts}
@@ -4625,10 +4652,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           </ChatDialog>
         )}
         {!showChat && committee.phase === 'pre-session' && (
-          <div className="flex-1 flex items-center justify-center px-6 py-8">
-            <div className="w-full max-w-md rounded-2xl overflow-hidden relative" style={{ maxHeight: '680px', display: 'flex', flexDirection: 'column', backgroundColor: '#1B3828', border: '1.5px solid #3D7A52', boxShadow: '0 32px 80px rgba(27,56,40,0.40)' }}>
+          <div className="flex-1 flex items-center justify-center px-6 py-5 min-h-0">
+            {/* The full-screen roll call: wide and tall enough for projector-sized rows
+                (RollCallPanel isRollCallPhase). max-height is 100% of this box, never vh:
+                FitToScreen scales the page, so vh would overshoot the scaled layout. */}
+            <div className="w-full max-w-2xl rounded-3xl overflow-hidden relative" style={{ maxHeight: '100%', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#1B3828', border: '1.5px solid #3D7A52', boxShadow: '0 32px 80px rgba(27,56,40,0.40)' }}>
               <div className="pointer-events-none absolute inset-0 z-[1]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'overlay', opacity: 0.07 }} />
-              <div className="relative z-[2]">{identityBadge}</div>
+              <div className="relative z-[2] shrink-0">{identityBadge}</div>
+              <div className="flex-1 min-h-0">
               <RollCallPanel committee={committee}
                 hideIdentity
                 onListIds={gslListIds}
@@ -4641,6 +4672,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 showBulkActions={true}
                 isReadOnly={sessionEnded}
                 isViewOnly={isViewOnly} />
+              </div>
             </div>
           </div>
         )}
@@ -4722,8 +4754,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     speakerTimeRemaining={speakerTimeRemaining}
                     timerRunning={timerRunning}
                     caucusSeconds={caucusSeconds}
-                    activePopover={activePopover}
-                    setActivePopover={setActivePopover}
+                    openPopovers={openPopovers}
+                    setPopover={setPopover}
                     extraTimeAdded={extraTimeAdded}
                     handleToggleTimer={handleToggleTimer}
                     handleRestartTime={handleRestartTime}
@@ -4732,7 +4764,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     sessionEnded={sessionEnded}
                     isViewOnly={isViewOnly}
                     onRecognise={recogniseAbsentDelegate}
-                    onRemoveCurrentSpeaker={() => handleRemoveCurrentSpeaker()}
                   />
                 )
               )}
@@ -4831,7 +4862,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             <FloorProgress
                               percent={progress}
                               barClassName={progress > 20 ? 'bg-[#B6871F]' : 'bg-[#B8844A]'}
-                              rtr={!sessionEnded ? { onClick: toggleGslRtr, active: activePopover === 'rightToReply', tutorial: 'rtr-button' } : null}
+                              rtr={!sessionEnded ? { onClick: toggleGslRtr, active: openPopovers.rightToReply, tutorial: 'rtr-button' } : null}
                             />
                           </>
                         )}
@@ -4976,6 +5007,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           committee={committee}
           myChairName={myChairName}
           isViewOnly={isViewOnly}
+          onlineChairs={onlineChairs}
           onClose={() => setShowSettings(false)}
         />
       )}
@@ -4989,19 +5021,20 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       )}
       {/* EXTRA TIME OVERLAY: a movable panel (src/components/DraggablePopover.tsx), Portal +
           fixed, dragged by its handle, position remembered for this tab. */}
-      {!sessionEnded && !isViewOnly && activePopover === 'extraTime' && (
+      {!sessionEnded && !isViewOnly && openPopovers.extraTime && (
         <DraggablePopover
           id="add-time"
+          slot="upper"
           accent="rgba(10,51,80,0.22)"
           className="w-72"
           handleLabel={t('popover_drag_handle')}
           closeLabel={t('popover_close')}
-          onClose={() => setActivePopover(null)}
+          onClose={() => setPopover('extraTime', false)}
           title={<span className="text-xs font-black uppercase tracking-wide" style={{ color: '#1B3828' }}>{t('gsl_add_time_title')}</span>}
         >
             <div className="flex gap-2 mb-2">
               {[15, 30, 60].map((s) => (
-                <button key={s} onClick={() => { handleAddExtraTime(s); setActivePopover(null); }}
+                <button key={s} onClick={() => { handleAddExtraTime(s); }}
                   className="flex-1 py-2 bg-[#EDE7D8] hover:bg-[#1B3828] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1B3828] hover:text-[#EED98A] text-xs rounded-lg font-black uppercase tracking-wide transition-colors gv-lift">
                   +{s}s
                 </button>
@@ -5012,13 +5045,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 type="number"
                 value={extraTimeSecs}
                 onChange={(e) => setExtraTimeSecs(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { const n = parseInt(extraTimeSecs); if (n > 0) { handleAddExtraTime(n); setActivePopover(null); } } }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { const n = parseInt(extraTimeSecs); if (n > 0) { handleAddExtraTime(n); } } }}
                 placeholder={language === 'ar' ? 'ثوانٍ مخصصة...' : language === 'fr' ? 'Sec. personnalisées...' : language === 'es' ? 'Tiempo personalizado...' : 'Custom sec...'}
                 style={{ MozAppearance: 'textfield' } as React.CSSProperties}
                 className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 text-[#1C1410] text-xs focus:outline-none focus:border-[#1B3828] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
               <button
-                onClick={() => { const n = parseInt(extraTimeSecs); if (n > 0) { handleAddExtraTime(n); setActivePopover(null); } }}
+                onClick={() => { const n = parseInt(extraTimeSecs); if (n > 0) { handleAddExtraTime(n); } }}
                 disabled={!extraTimeSecs || parseInt(extraTimeSecs) <= 0}
                 className="px-2 py-1.5 bg-[#1B3828] hover:bg-[#2A5A3C] disabled:opacity-40 text-[#EED98A] text-xs rounded-lg font-black transition-colors gv-lift">
                 {t('gsl_add_time_btn')}
@@ -5040,15 +5073,16 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       {/* RTR OVERLAY: a movable panel through Portal (DraggablePopover), completely outside
           document flow, so it never affects the layout of the floor. Muted sand and deep
           brown, the same calm tone as the RTR button. */}
-      {!isViewOnly && activePopover === 'rightToReply' && (
+      {!isViewOnly && openPopovers.rightToReply && (
         <DraggablePopover
           id="right-of-reply"
+          slot="lower"
           accent="rgba(139,90,32,0.26)"
           className="w-72"
           handleLabel={t('popover_drag_handle')}
           closeLabel={t('popover_close')}
           onClose={() => {
-            setActivePopover(null);
+            setPopover('rightToReply', false);
             setRtrOpen(false);
             setRtrTimerActive(false);
             setRtrCountry('');
@@ -5126,7 +5160,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       setRtrOpen(false);
                       setRtrCountry('');
                       setRtrTimeRemaining(rtrSeconds);
-                      setActivePopover(null);
+                      setPopover('rightToReply', false);
                     }}
                     className="px-3 py-2 rounded-lg font-bold text-xs bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#6A5A4A] transition-colors gv-lift"
                   >

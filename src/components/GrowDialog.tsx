@@ -191,7 +191,7 @@ function GrowDialogInner({
     return () => { closeRef.current = null; };
   }, [closeRef, requestClose]);
 
-  // Focus trap and Escape: shared with LeftDrawer (src/components/dialogFocus.ts).
+  // Focus trap and Escape: src/components/dialogFocus.ts.
   useDialogFocusTrap(panelRef, layerRef, closingRef);
   useEscapeToClose(requestClose);
 

@@ -3,20 +3,23 @@
 import { use, useEffect, useRef, useState } from 'react';
 import FitToScreen from '@/components/FitToScreen';
 import Portal from '@/components/Portal';
-import SessionsHeaderLogo from '@/components/SessionsHeaderLogo';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
-import { Committee, Delegate, DelegateStatus } from '@/lib/types';
+import { Committee, Delegate, DelegateStatus, CommitteeDocument } from '@/lib/types';
 import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
-import { SeatFlag, SeatArtProvider } from '@/components/SeatFlag';
-import { sessionSeatArt } from '@/lib/sessionFlags';
+import { SeatArtProvider } from '@/components/SeatFlag';
+import { SeatCircleFlag } from '@/components/CircleFlag';
 import { Emoji } from '@/components/Emoji';
-import { Eye, EyeOff } from 'lucide-react';
+import { Check, CornerDownRight, Flag, Minus, ShieldAlert, SkipForward, Undo2, X } from 'lucide-react';
 import { PreVoteScreen } from '@/components/voting/PreVoteScreen';
+import { VotingHeader } from '@/components/voting/VotingHeader';
+import { ResolutionPicker, type PickCardState } from '@/components/voting/ResolutionPicker';
+import { VoterCarousel, type SeatMark as CarouselMark } from '@/components/voting/VoterCarousel';
+import { useCommitteeIdentity } from '@/components/voting/useCommitteeEmblem';
 import { serverNowIso } from '@/lib/serverClock';
 import { startSessionSync, rowFields } from '@/lib/sessionSync';
-import { getCommitteeByCodeWithRetry, setDelegateStatus as setDelegateStatusInDB, setDelegateObserver as setDelegateObserverInDB, updateDocumentStatus as updateDocumentStatusInDB, saveCommitteeSettings, endDebate as endDebateInDB } from '@/lib/committeeService';
+import { getCommitteeByCodeWithRetry, setDelegateStatus as setDelegateStatusInDB, setDelegateStatusesBulk, setDelegateObserver as setDelegateObserverInDB, updateDocumentStatus as updateDocumentStatusInDB, saveCommitteeSettings, endDebate as endDebateInDB } from '@/lib/committeeService';
 import { useSettingsStore, DEFAULT_SETTINGS, impliedSettings, stripNonHydratedSettings, type CommitteeSettings } from '@/lib/settingsStore';
 import { supabase } from '@/lib/supabase';
 import { deriveGavelRole, getGavelDeviceId } from '@/lib/gavelDevice';
@@ -34,7 +37,6 @@ import { useChairDeviceLock } from '@/lib/useChairDeviceLock';
 import { sponsorLabel } from '@/lib/committeeFlags';
 import { docName } from '@/lib/docNames';
 import { SettingsPanel } from '@/components/SettingsPanel';
-import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 
 /**
  * Device-local evidence that this browser has actually been a chair of `code`.
@@ -196,72 +198,6 @@ function VotingBanner({ tone, text, actionLabel, onAction, onDismiss }: {
   );
 }
 
-/** The recorded ballots, each correctable. Correcting one placard is a normal event in a
- *  roll-call vote ("Chair, point of order: we voted in favour"), and the only remedy used
- *  to be re-running the whole vote. */
-function VoteCorrections({ votes, allowAbstain, canAbstain, onCorrect, onClose }: {
-  votes: DelegateVote[];
-  allowAbstain: boolean;
-  /** Present-and-voting delegations may not abstain. */
-  canAbstain: (delegateId: string) => boolean;
-  onCorrect: (delegateId: string, choice: VoteChoice) => void;
-  onClose: () => void;
-}) {
-  const t = useT();
-  const { language } = useLanguage();
-  const choices: { value: VoteChoice; label: string }[] = [
-    { value: 'for', label: t('voting_correct_for') },
-    { value: 'for-rights', label: t('voting_correct_for_rights') },
-    ...(allowAbstain ? [{ value: 'abstain' as const, label: t('voting_correct_abstain') }] : []),
-    { value: 'against-rights', label: t('voting_correct_against_rights') },
-    { value: 'against', label: t('voting_correct_against') },
-  ];
-  const sorted = [...votes].sort((a, b) => compareCountryNames(a.country, b.country, language));
-  return (
-    <div className="w-full max-w-3xl rounded-xl border border-[#DDD4C0] bg-[#FAF8F3] px-3 py-2.5">
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-[11px] font-black uppercase tracking-widest text-[#6A5A4A]">{t('voting_correct_heading')}</p>
-        <button onClick={onClose} aria-label="Close" className="text-[#9A8A78] hover:text-[#1C1410] focus:outline-none">✕</button>
-      </div>
-      {sorted.length === 0 ? (
-        <p className="text-xs text-[#9A8A78] py-2">{t('voting_correct_none')}</p>
-      ) : (
-        <div className="max-h-[180px] overflow-y-auto space-y-1">
-          {sorted.map((v) => (
-            <div key={v.delegateId} className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-bold text-[#1C1410] min-w-[7rem] flex-1 truncate">
-                <SeatMark country={v.country} /> {getCountryDisplayName(v.country, language)}
-              </span>
-              <div className="flex gap-1 flex-wrap">
-                {choices.map((c) => {
-                  const on = v.choice === c.value;
-                  const disabled = c.value === 'abstain' && !on && !canAbstain(v.delegateId);
-                  return (
-                    <button
-                      key={c.value}
-                      disabled={disabled}
-                      onClick={() => { if (!on) onCorrect(v.delegateId, c.value); }}
-                      aria-pressed={on}
-                      className="text-[10px] font-black px-2 py-1 rounded-md focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
-                      style={{
-                        backgroundColor: on ? '#1B3828' : '#EDE7D8',
-                        color: on ? '#EED98A' : '#6A5A4A',
-                        border: '1px solid #DDD4C0',
-                      }}
-                    >
-                      {c.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /** An observer write that the DB never confirmed. Portaled above the roll call
  *  modal so it is visible whether or not that modal is still open. */
 function ObserverWriteFailedBanner({ onDismiss }: { onDismiss: () => void }) {
@@ -280,98 +216,43 @@ function ObserverWriteFailedBanner({ onDismiss }: { onDismiss: () => void }) {
   );
 }
 
-// ── Header ────────────────────────────────────────────────────────────────────
-// Declared at module scope (like PreVoteScreen) so React keeps the same element
-// type across renders. Nested inside VotingPage it was a brand-new component type
-// on every render, which remounted the whole bar — killing CSS transitions and
-// resetting any state a header child owns (e.g. the open voting-rules popover).
-function VotingHeader({ committeeName, onBack, onEndDebate, onOpenSettings, rules, children, isViewOnly = false, backBusy = false }: {
-  committeeName: string;
-  onBack: () => void;
-  onEndDebate: () => void;
-  onOpenSettings: () => void;
-  rules?: React.ReactNode;
-  children?: React.ReactNode;
-  /** Commenter (or a same-name second device): UI gate only, like the chair page. */
-  isViewOnly?: boolean;
-  backBusy?: boolean;
+/** The ballot buttons. Colour carries the direction, an icon repeats it for anyone who
+ *  cannot tell red from green, and "with rights" is a second line, never a separate hue.
+ *  `recorded` marks the choice already on record for this delegation (after Back). */
+function BallotButton({ tone, icon, label, sub, onClick, disabled, recorded, wide }: {
+  tone: 'for' | 'against' | 'neutral';
+  icon: React.ReactNode;
+  label: string;
+  sub?: string;
+  onClick: () => void;
+  disabled?: boolean;
+  recorded?: boolean;
+  wide?: boolean;
 }) {
-  const t = useT();
-  return (
-    <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-4 shrink-0">
-      <SessionsHeaderLogo />
-      <div className="flex-1 min-w-0 flex items-center gap-2">
-        <span className="text-sm font-bold text-[#1C1410] truncate">{abbreviateCommitteeName(committeeName)}</span>
-        {isViewOnly && (
-          <span
-            className="text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0"
-            style={{ backgroundColor: 'rgba(139,32,32,0.10)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.28)' }}
-          >
-            {t('voting_view_only_badge')}
-          </span>
-        )}
-      </div>
-      <button
-        onClick={onBack}
-        disabled={backBusy}
-        className="text-xs px-3 py-1.5 rounded-lg font-black transition-colors shrink-0 gv-lift focus:outline-none disabled:opacity-60"
-        style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-      >
-        {t('voting_back_to_session')}
-      </button>
-      {!isViewOnly && (
-        <button
-          onClick={onEndDebate}
-          className="text-xs px-3 py-1.5 rounded-lg font-black transition-colors shrink-0 gv-lift focus:outline-none"
-          style={{ backgroundColor: '#8B2020', color: 'white' }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#A03030'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
-        >
-          {t('voting_end_debate')}
-        </button>
-      )}
-      {rules}
-      <button onClick={onOpenSettings} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors shrink-0 text-2xl focus:outline-none">⚙</button>
-      {children}
-    </header>
-  );
-}
-
-/** Inline 1em mark beside a delegation name. A component rather than the old
- *  `getFlag()` call so it can read the seat's crest off <SeatArtProvider>. */
-function SeatMark({ country }: { country: string }) {
-  return (
-    <SeatFlag
-      country={country}
-      className="inline-block object-contain"
-      style={{ width: '1em', height: '1em' }}
-      fallback={<UnknownSeatIcon size={16} style={{ width: '1em', height: '1em' }} />}
-    />
-  );
-}
-
-/** Show / hide the running tally. Both icons stay mounted and cross-fade, so the
- *  switch reads as one control changing state rather than a button swap. */
-function TallyToggle({ hidden, onToggle }: { hidden: boolean; onToggle: () => void }) {
-  const t = useT();
-  const icon = 'absolute inset-0 m-auto transition-[opacity,transform,filter] duration-200 [transition-timing-function:cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none';
-  const off = { opacity: 0, transform: 'scale(0.25)', filter: 'blur(4px)' };
-  const on = { opacity: 1, transform: 'scale(1)', filter: 'blur(0px)' };
+  const palette = tone === 'for'
+    ? { bg: '#2F6B45', hover: '#3A7F53', fg: '#FFFFFF', sub: 'rgba(238,217,138,0.95)', shadow: 'rgba(27,56,40,0.28)' }
+    : tone === 'against'
+    ? { bg: '#8B2020', hover: '#A02C2C', fg: '#FFFFFF', sub: 'rgba(255,222,190,0.95)', shadow: 'rgba(90,20,20,0.26)' }
+    : { bg: '#FAF8F3', hover: '#FFFFFF', fg: '#1C1410', sub: '#6A5A4A', shadow: 'rgba(27,56,40,0.12)' };
   return (
     <button
       type="button"
-      onClick={onToggle}
-      aria-pressed={hidden}
-      className="inline-flex items-center gap-2 h-10 ps-3 pe-4 rounded-full text-[13px] font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,color,transform] duration-150 active:scale-[0.96] motion-reduce:transition-none"
-      style={{ backgroundColor: hidden ? '#1B3828' : 'rgba(27,56,40,0.07)', color: hidden ? '#EED98A' : '#6A5A4A' }}
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={recorded || undefined}
+      className={`gv-ballot relative ${wide ? 'flex-[1.25]' : 'flex-1'} min-w-0 min-h-[92px] rounded-[22px] px-3 py-3 flex flex-col items-center justify-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F6F1E9] disabled:cursor-not-allowed disabled:opacity-40`}
+      style={{
+        ['--gv-b-bg' as string]: palette.bg,
+        ['--gv-b-hover' as string]: palette.hover,
+        color: palette.fg,
+        boxShadow: `${tone === 'neutral' ? '0 0 0 1px rgba(27,56,40,0.12), ' : ''}0 2px 4px ${palette.shadow}, 0 10px 24px ${palette.shadow}${recorded ? ', 0 0 0 3px #F6F1E9, 0 0 0 6px #D9B44A' : ''}`,
+      }}
     >
-      <span className="relative w-4 h-4 shrink-0" aria-hidden>
-        <Eye size={16} className={icon} style={hidden ? off : on} />
-        <EyeOff size={16} className={icon} style={hidden ? on : off} />
+      <span className="flex items-center gap-2 text-[19px] font-black leading-none">
+        <span aria-hidden className="shrink-0">{icon}</span>
+        {label}
       </span>
-      {hidden ? t('voting_show_tally') : t('voting_hide_tally')}
+      {sub && <span className="text-[13px] font-bold leading-none" style={{ color: palette.sub }}>{sub}</span>}
     </button>
   );
 }
@@ -382,51 +263,27 @@ function VoteScale({ forCount, againstCount, totalVoted }: {
   const t = useT();
   const forPct = totalVoted > 0 ? (forCount / totalVoted) * 50 : 0;
   const againstPct = totalVoted > 0 ? (againstCount / totalVoted) * 50 : 0;
+  // The bar is physical (against on the left, for on the right) in every language, and so
+  // are its labels, so the picture and the words always agree.
   return (
-    <div className="w-full px-0">
-      <div className="relative h-7 bg-[#EDE7D8] rounded-full overflow-hidden border border-[#DDD4C0]">
+    <div className="w-full px-0" dir="ltr">
+      <div className="relative h-3 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(27,56,40,0.09)' }}>
         <div
-          className="absolute right-1/2 top-0 bottom-0 bg-red-500/70 transition-all duration-300"
-          style={{ width: `${againstPct}%` }}
+          className="absolute right-1/2 top-0 bottom-0 rounded-l-full transition-[width] duration-500 [transition-timing-function:cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none"
+          style={{ width: `${againstPct}%`, backgroundColor: '#8B2020' }}
         />
         <div
-          className="absolute left-1/2 top-0 bottom-0 bg-green-500/70 transition-all duration-300"
-          style={{ width: `${forPct}%` }}
+          className="absolute left-1/2 top-0 bottom-0 rounded-r-full transition-[width] duration-500 [transition-timing-function:cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none"
+          style={{ width: `${forPct}%`, backgroundColor: '#2F6B45' }}
         />
-        <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-[#9A8A78] -translate-x-px" />
+        <div className="absolute left-1/2 -top-px -bottom-px w-[3px] -translate-x-1/2 rounded-full" style={{ backgroundColor: '#F6F1E9' }} />
       </div>
-      <div className="flex justify-between mt-1.5 text-xs font-bold">
-        <span className="text-red-400">{t('voting_against_bar').replace('{n}', String(againstCount))}</span>
-        <span className="text-[#9A8A78] text-[10px] font-normal">{t('voting_voted_count').replace('{n}', String(totalVoted))}</span>
-        <span className="text-green-400">{t('voting_for_bar').replace('{n}', String(forCount))}</span>
+      <div className="flex justify-between mt-2 text-[13px] font-black tabular-nums">
+        <span style={{ color: '#8B2020' }}>{t('voting_against_bar').replace('{n}', String(againstCount))}</span>
+        <span className="text-[12px] font-semibold" style={{ color: '#6A5A4A' }}>{t('voting_voted_count').replace('{n}', String(totalVoted))}</span>
+        <span style={{ color: '#2F6B45' }}>{t('voting_for_bar').replace('{n}', String(forCount))}</span>
       </div>
     </div>
-  );
-}
-
-function PieChart({ forVotes, against, abstain }: { forVotes: number; against: number; abstain: number }) {
-  const total = forVotes + against + abstain;
-  if (total === 0) return null;
-  const cx = 60, cy = 60, r = 50;
-  const slice = (startAngle: number, value: number, color: string) => {
-    if (value === 0) return null;
-    const pct = value / total;
-    const angle = pct * 2 * Math.PI;
-    const x1 = cx + r * Math.sin(startAngle);
-    const y1 = cy - r * Math.cos(startAngle);
-    const x2 = cx + r * Math.sin(startAngle + angle);
-    const y2 = cy - r * Math.cos(startAngle + angle);
-    const large = angle > Math.PI ? 1 : 0;
-    return <path key={color} d={`M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2} Z`} fill={color} />;
-  };
-  const forAngle = (forVotes / total) * 2 * Math.PI;
-  const againstAngle = (against / total) * 2 * Math.PI;
-  return (
-    <svg width="120" height="120" viewBox="0 0 120 120" className="shrink-0">
-      {slice(0, forVotes, '#4ade80')}
-      {slice(forAngle, against, '#f87171')}
-      {slice(forAngle + againstAngle, abstain, '#9A8A78')}
-    </svg>
   );
 }
 
@@ -576,15 +433,15 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const savedSeqRef = useRef<Record<string, number>>({});
   const [voteSaveError, setVoteSaveError] = useState<null | { docId: string; kind: 'denied' | 'error' | 'stale' }>(null);
   /** A verdict whose documents.status write did not land (V2). */
-  const [resultSaveError, setResultSaveError] = useState<null | { docId: string; result: 'passed' | 'failed' }>(null);
+  const [resultSaveError, setResultSaveError] = useState<null | { docId: string; result: 'passed' | 'failed' | 'introduced' }>(null);
   const [rightsSpeakerTime, setRightsSpeakerTime] = useState(60);
   const [rightsRunning, setRightsRunning] = useState(false);
   const rightsTimerRef = useRef<NodeJS.Timeout | null>(null);
-  /** Roll call confirmed at least once on this screen (the ballot then reads its statuses). */
-  const [rollCallDone, setRollCallDone] = useState(false);
-  /** Explicit open/close of the roll call modal. null = default: open until confirmed,
-   *  except when a vote is already open (a reload mid-vote goes straight back to it). */
-  const [rollCallOpen, setRollCallOpen] = useState<boolean | null>(null);
+  /** The roll call opened on its own (resolution list, roster notice), with no vote to start. */
+  const [rollCallOpen, setRollCallOpen] = useState(false);
+  /** The draft resolution a new vote is about to open on. Choosing one (or Vote again) opens
+   *  the roll call; confirming it starts the ballot. Every new ballot passes through it. */
+  const [pendingDocId, setPendingDocId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   // Local delegate statuses for roll call modal (mirrors committee.delegates)
   const [rollCallStatuses, setRollCallStatuses] = useState<Record<string, DelegateStatus>>({});
@@ -602,11 +459,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   });
   const setHideVotes = (next: boolean) => {
     setHideVotesState(next);
-    if (next) setShowCorrections(false);   // the correction list shows every placard
     try { localStorage.setItem(`gavelling-hide-tally:${code.toUpperCase()}`, next ? '1' : '0'); } catch { /* storage unavailable */ }
   };
-  /** The recorded-votes list used to correct one placard. */
-  const [showCorrections, setShowCorrections] = useState(false);
   /** A follower (view-only) tracks the live vote unless they picked a document themselves. */
   const [followLive, setFollowLive] = useState(true);
   const dragIndexRef = useRef<number | null>(null);
@@ -620,6 +474,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   /** Latest role for async continuations (a queued vote save outliving a gavel handover). */
   const isViewOnlyRef = useRef(isViewOnly);
   useEffect(() => { isViewOnlyRef.current = isViewOnly; }, [isViewOnly]);
+  // The committee's emblem and acronym for the header (same resolution as the chair masthead).
+  const identity = useCommitteeIdentity(code, committee?.name, committee?.sessionOrigin === 'conference', language);
 
   const followDocId = isViewOnly && followLive
     ? (Object.entries(voteStates)
@@ -649,7 +505,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const [newSeatIds, setNewSeatIds] = useState<string[]>([]);
   /** Verdicts this screen has already recorded, re-applied after every refetch so a
    *  refetch racing the write cannot revert a result that is already on screen. */
-  const docResultPatchRef = useRef<Record<string, 'passed' | 'failed'>>({});
+  const docResultPatchRef = useRef<Record<string, 'passed' | 'failed' | 'introduced'>>({});
   /** Optimistic observer placards awaiting confirmation from the refetched row. */
   const observerWriteRef = useRef<Record<string, { value: boolean; at: number }>>({});
   const [observerOverrides, setObserverOverrides] = useState<Record<string, boolean>>({});
@@ -1111,9 +967,11 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const seatStatus = (d: Delegate): DelegateStatus => rollCallStatuses[d.id] ?? d.status;
 
   // The live room. Used directly whenever no ballot is open, and it is what a new
-  // ballot is frozen from.
+  // ballot is frozen from. `seatStatus` is the DB row except where this chair set a status on
+  // this screen (the roll call every new ballot passes through), so it is always the room
+  // as the roll call left it.
   const livePresent = committee.delegates
-    .filter((d) => !isObserverSeat(d) && (rollCallDone ? seatStatus(d) : d.status) !== 'absent')
+    .filter((d) => !isObserverSeat(d) && seatStatus(d) !== 'absent')
     .sort((a, b) => compareCountryNames(a.country, b.country, language));
   const livePresentAndPv = committee.delegates.filter((d) => !isObserverSeat(d) && seatStatus(d) !== 'absent');
   const liveVotable = committee.delegates.filter((d) => !isObserverSeat(d));
@@ -1199,10 +1057,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   const { vetoBlocked: p5Veto, unanFail: unanimousFail, outcome } = evaluate(settings);
   const totalDecisive = outcome.denominator;
-  const thresholdMet = outcome.thresholdMet;
   const passed = outcome.passed;
 
-  const persistResult = (docId: string, result: 'passed' | 'failed') => {
+  const persistResult = (docId: string, result: 'passed' | 'failed' | 'introduced') => {
     if (isViewOnly) return;
     // Recorded so every refetch re-applies it: a fetch already in flight still
     // carries the pre-vote status and would otherwise revert the verdict on screen.
@@ -1395,7 +1252,6 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const startNewVote = (docId: string) => {
     if (isViewOnly) return;
     setSelectedDocId(docId);
-    setShowCorrections(false);
     // Freeze the room as it stands right now. "Vote again" comes through here too,
     // so a re-vote is judged against the room as it is at that moment.
     commitVote(docId, () => ({
@@ -1419,35 +1275,77 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     setRollCallOpen(false);
   };
 
+  // ── Casting, passing and moving back ───────────────────────────────────────
+  // Invariants the pass round depends on (it is derived: the delegation voting in the pass
+  // round is `passedIds[number of passedIds that have a vote]`):
+  //   • in the MAIN round a delegation has either a vote or a Pass, never both. A vote cast
+  //     after Back drops its Pass; a Pass after Back drops its vote.
+  //   • `passedIds` stays in ballot order, so a Pass recorded after Back still comes back in
+  //     the pass round at its own place.
+  //   • the pass-round votes are always a prefix of `passedIds`, so Back in the pass round
+  //     removes the last of them and that delegation is asked again.
+  // Every step is one `updateVote`, so `seq` grows and `vote_state` stays authoritative.
+  const inBallotOrder = (prev: VoteStateV1, ids: string[]) => {
+    const pos = new Map(prev.order.map((s, i) => [s.id, i]));
+    return [...ids].sort((a, b) => (pos.get(a) ?? Infinity) - (pos.get(b) ?? Infinity));
+  };
+
   const castVoteAndAdvance = (delegateId: string, country: string, choice: VoteChoice) => {
     updateVote((prev) => {
+      const mainRound = prev.currentVoterIndex < prev.order.length;
       const existing = prev.votes.find((v) => v.delegateId === delegateId);
       const nextVotes = existing
         ? prev.votes.map((v) => (v.delegateId === delegateId ? { ...v, choice } : v))
         : [...prev.votes, { delegateId, country, choice }];
-      return { votes: nextVotes, currentVoterIndex: prev.currentVoterIndex + 1 };
+      return {
+        votes: nextVotes,
+        passedIds: mainRound ? prev.passedIds.filter((id) => id !== delegateId) : prev.passedIds,
+        currentVoterIndex: prev.currentVoterIndex + 1,
+      };
     });
-  };
-
-  /** Correct one placard without re-running the whole vote. On the result screen the
-   *  verdict is re-evaluated and the document's stored status follows it. */
-  const correctVote = (delegateId: string, choice: VoteChoice) => {
-    if (isViewOnly || !vote || !selectedDoc) return;
-    const nextVotes = vote.votes.map((v) => (v.delegateId === delegateId ? { ...v, choice } : v));
-    if (phase === 'result') {
-      const nextPassed = evaluate(settings, nextVotes).outcome.passed;
-      if (nextPassed !== passed) persistResult(selectedDoc.id, nextPassed ? 'passed' : 'failed');
-      updateVote(() => ({ votes: nextVotes, result: nextPassed ? 'passed' : 'failed' }));
-    } else {
-      updateVote(() => ({ votes: nextVotes }));
-    }
   };
 
   const handlePass = (delegateId: string) => {
     updateVote((prev) => ({
-      passedIds: prev.passedIds.includes(delegateId) ? prev.passedIds : [...prev.passedIds, delegateId],
+      passedIds: prev.passedIds.includes(delegateId) ? prev.passedIds : inBallotOrder(prev, [...prev.passedIds, delegateId]),
+      votes: prev.votes.filter((v) => v.delegateId !== delegateId),
       currentVoterIndex: prev.currentVoterIndex + 1,
     }));
+  };
+
+  /** After Back: leave this delegation's recorded vote (or Pass) as it is and move on. */
+  const keepAndAdvance = () => {
+    updateVote((prev) => ({ currentVoterIndex: prev.currentVoterIndex + 1 }));
+  };
+
+  /**
+   * Back: one step towards the start of the vote, as many times as needed.
+   *   result or rights speakers (at the first speaker) → the ballot, all votes kept, verdict
+   *     cleared (and the paper's status put back to introduced until the vote is finished again)
+   *   rights speakers → the previous rights speaker
+   *   pass round → the last delegation that voted in it is asked again
+   *   main round → the previous delegation, whose recorded choice is shown and can be kept
+   */
+  const stepBack = () => {
+    if (isViewOnly || !vote || !selectedDoc) return;
+    const docId = selectedDoc.id;
+    if (vote.status === 'result') {
+      const docStatus = committee.documents.find((d) => d.id === docId)?.status;
+      if (docStatus === 'passed' || docStatus === 'failed' || vote.result) persistResult(docId, 'introduced');
+    }
+    updateVote((prev) => {
+      if (prev.status === 'rights-speakers' && prev.rightsIndex > 0) return { rightsIndex: prev.rightsIndex - 1 };
+      if (prev.status !== 'voting') return { status: 'voting', result: null, rightsOrder: [], rightsIndex: 0 };
+      const n = prev.order.length;
+      const idx = Math.min(prev.currentVoterIndex, n);
+      if (idx >= n) {
+        const votedInPassRound = prev.passedIds.filter((id) => prev.votes.some((v) => v.delegateId === id));
+        const last = votedInPassRound[votedInPassRound.length - 1];
+        if (last) return { votes: prev.votes.filter((v) => v.delegateId !== last), currentVoterIndex: n };
+      }
+      if (idx > 0) return { currentVoterIndex: idx - 1 };
+      return {};
+    });
   };
 
   const finishWithResult = () => {
@@ -1511,14 +1409,18 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   // VotingHeader lives at module scope so it never remounts; the rules popover it
   // hosts therefore keeps its open state while votes are being cast.
+  const drPlural = docName(committee, 'draft-resolution', 'plural', t('documents_draft_resolutions_tab'));
+  const drSingular = docName(committee, 'draft-resolution', 'singular', t('documents_draft_resolution_type'));
   const headerProps = {
-    committeeName: committee.name,
-    onBack: handleBackToSession,
+    identity,
+    onBack: () => { void handleBackToSession(); },
+    backBusy,
     onEndDebate: () => { setEndDebateState('idle'); setShowEndDebateConfirm(true); },
     onOpenSettings: () => setShowSettings(true),
-    rules: <VotingRulesPopover {...rulesProps} />,
+    rules: <VotingRulesPopover {...rulesProps} trigger="icon" />,
+    tally: { hidden: hideVotes, onToggle: () => setHideVotes(!hideVotes) },
     isViewOnly,
-    backBusy,
+    headName: gavelRole.head,
   };
 
   // ── Pre-vote screen: roll call + rules (blocks until confirmed) ──────────
@@ -1554,11 +1456,40 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     .map((id) => committee.delegates.find((d) => d.id === id))
     .filter((d): d is Delegate => !!d);
 
-  // The roll call modal and the failure banner are shared by the document-selection
-  // screen and the ballot screens, so a chair can seat a late arrival or see a
-  // refused write without abandoning a vote in progress. Commenters never get it: it
-  // writes delegate statuses.
-  const showRollCall = !isViewOnly && (rollCallOpen ?? (!rollCallDone && !anyOpenVote));
+  /** All present / All P+V for every voting seat. One RPC (`set_delegate_statuses`, the
+   *  chair page's bulk path), per-row only when the RPC is missing; a refused bulk write
+   *  gives the rows back to the DB values. */
+  const setAllRollCallStatuses = (status: 'present' | 'present-voting') => {
+    if (isViewOnly) return;
+    const seats = committee.delegates.filter((d) => !isObserverSeat(d));
+    if (seats.length === 0) return;
+    seats.forEach((d) => touchedStatusRef.current.add(d.id));
+    setRollCallStatuses((prev) => {
+      const next = { ...prev };
+      seats.forEach((d) => { next[d.id] = status; });
+      return next;
+    });
+    const ids = seats.map((d) => d.id);
+    void setDelegateStatusesBulk(committee.id, status, ids, committee.code, suffix).then((r) => {
+      if (r === 'unavailable') { ids.forEach((id) => setDelegateStatusInDB(id, status, committee.code, suffix)); return; }
+      if (r !== null) return;
+      seats.forEach((d) => touchedStatusRef.current.delete(d.id));
+      setRollCallStatuses((prev) => {
+        const next = { ...prev };
+        seats.forEach((d) => { next[d.id] = d.status; });
+        return next;
+      });
+    });
+  };
+
+  // The roll call and the failure banner are shared by the document-selection screen and
+  // the ballot screens, so a chair can seat a late arrival or see a refused write without
+  // abandoning a vote in progress. Commenters never get it: it writes delegate statuses.
+  // It opens for a chosen document (`pendingDocId`: confirming starts that ballot) or on its
+  // own (`rollCallOpen`: confirming just closes it).
+  const pendingDoc = pendingDocId ? allDRs.find((d) => d.id === pendingDocId) ?? null : null;
+  const showRollCall = !isViewOnly && (rollCallOpen || !!pendingDoc);
+  const closeRollCall = () => { setRollCallOpen(false); setPendingDocId(null); };
   const rollCallModal = showRollCall ? (
     <PreVoteScreen
       delegates={committee.delegates}
@@ -1566,7 +1497,15 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       isObserverSeat={isObserverSeat}
       onToggleObserver={toggleObserverSeat}
       onSetStatus={setRollCallStatus}
-      onConfirm={() => { setRollCallDone(true); setRollCallOpen(false); setNewSeatIds([]); }}
+      onBulkStatus={setAllRollCallStatuses}
+      onClose={closeRollCall}
+      doc={pendingDoc ? { code: pendingDoc.docCode, title: pendingDoc.title } : null}
+      onConfirm={() => {
+        const docId = pendingDoc?.id ?? null;
+        closeRollCall();
+        setNewSeatIds([]);
+        if (docId) startNewVote(docId);
+      }}
       settings={settings}
       onRulesChange={applyRules}
       onVetoModeChange={changeVetoMode}
@@ -1635,24 +1574,24 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const endDebateModal = showEndDebateConfirm && !isViewOnly ? (
     <Portal><div
       className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'rgba(5,4,3,0.80)', backdropFilter: 'blur(6px)' }}
+      style={{ background: 'rgba(20,24,18,0.55)', backdropFilter: 'blur(6px)' }}
       onClick={() => { if (endDebateState !== 'working') setShowEndDebateConfirm(false); }}
     >
       <div
-        role="dialog"
+        role="alertdialog"
         aria-modal="true"
-        className="rounded-2xl w-full max-w-sm mx-4 shadow-2xl flex flex-col overflow-hidden"
-        style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
+        aria-labelledby="gv-end-debate-title"
+        className="rounded-[28px] w-full max-w-md mx-4 flex flex-col overflow-hidden"
+        style={{ backgroundColor: '#FAF8F3', boxShadow: '0 0 0 1px rgba(27,56,40,0.08), 0 24px 64px rgba(20,24,18,0.35)' }}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => { if (e.key === 'Escape' && endDebateState !== 'working') setShowEndDebateConfirm(false); }}
       >
-        <div className="px-6 pt-6 pb-4" style={{ borderBottom: '1px solid #EDE7D8' }}>
-          <div className="flex items-center gap-3 mb-1">
-            <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-xl" style={{ backgroundColor: '#8B2020' }}>
-              🔨
-            </div>
-            <h2 className="text-lg font-black text-[#1C1410]">{t('voting_end_debate_title')}</h2>
+        <div className="px-7 pt-7 pb-2">
+          <div className="w-12 h-12 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: 'rgba(139,32,32,0.10)', color: '#8B2020' }} aria-hidden>
+            <Flag size={22} strokeWidth={2.25} />
           </div>
-          <p className="text-sm text-[#6A5A4A] leading-relaxed mt-2">
+          <h2 id="gv-end-debate-title" className="text-[22px] font-black leading-tight text-[#1C1410]">{t('voting_end_debate_title')}</h2>
+          <p className="text-[15px] text-[#6A5A4A] leading-relaxed mt-2 [text-wrap:pretty]">
             {t('voting_end_debate_body')}
           </p>
           {endDebateState === 'failed' && (
@@ -1661,20 +1600,21 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             </p>
           )}
         </div>
-        <div className="px-6 py-4 flex gap-3">
+        <div className="px-7 pt-5 pb-7 flex gap-3">
           <button
+            autoFocus
             onClick={() => setShowEndDebateConfirm(false)}
             disabled={endDebateState === 'working'}
-            className="flex-1 py-3 rounded-xl font-bold text-sm transition-colors gv-lift focus:outline-none disabled:opacity-50"
-            style={{ backgroundColor: '#EDE7D8', color: '#1C1410', border: '1.5px solid #DDD4C0' }}
+            className="flex-1 h-12 rounded-2xl font-black text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] disabled:opacity-50"
+            style={{ backgroundColor: '#EDE7D8', color: '#1C1410' }}
           >
             {t('voting_cancel')}
           </button>
           <button
             onClick={() => { void handleEndDebate(); }}
             disabled={endDebateState === 'working'}
-            className="flex-1 py-3 rounded-xl font-black text-sm transition-colors gv-lift focus:outline-none disabled:opacity-60"
-            style={{ backgroundColor: '#8B2020', color: 'white' }}
+            className="flex-1 h-12 rounded-2xl font-black text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] disabled:opacity-60"
+            style={{ backgroundColor: '#8B2020', color: 'white', boxShadow: '0 2px 4px rgba(90,20,20,0.2), 0 8px 20px rgba(90,20,20,0.22)' }}
           >
             {endDebateState === 'working' ? t('voting_end_debate_working') : endDebateState === 'failed' ? t('voting_save_retry') : t('voting_confirm_end')}
           </button>
@@ -1685,109 +1625,63 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   // ── Doc selection screen ──────────────────────────────────────────────────
   if (!selectedDoc || !vote) {
+    // The page's decision per card. Moderator: start a vote (through the roll call), resume
+    // an unfinished one exactly where it stopped, or reopen a finished one with its stored
+    // ballots (Back from the result corrects a placard). Commenter: only a vote that exists.
+    const cardState = (doc: CommitteeDocument): PickCardState => {
+      const stored = voteStates[doc.id] ?? null;
+      // V2: a stored result counts as voted even when the documents.status write was lost,
+      // so a reload can never offer "start a vote" over a recorded result.
+      const isVoted = doc.status === 'passed' || doc.status === 'failed' || stored?.status === 'result';
+      const canOpen = isViewOnly ? !!stored : true;
+      if (stored && isVoteOpen(stored)) return { kind: 'live', vote: stored, canOpen };
+      if (isVoted) {
+        const result = stored?.result ?? (doc.status === 'failed' ? 'failed' : 'passed');
+        return { kind: 'voted', result, vote: stored, canOpen: !!stored };
+      }
+      return { kind: 'ready', canOpen };
+    };
+    const openCard = (doc: CommitteeDocument) => {
+      const st = cardState(doc);
+      if (!st.canOpen) return;
+      const stored = voteStates[doc.id] ?? null;
+      if (isViewOnly) { setFollowLive(false); setSelectedDocId(doc.id); return; }
+      if (st.kind === 'live') { resumeVote(doc.id); return; }
+      if (st.kind === 'voted' && stored) {
+        resumeVote(doc.id);
+        // The stored verdict is the truth; re-record a status write that was lost.
+        if (stored.result && doc.status !== stored.result) persistResult(doc.id, stored.result);
+        return;
+      }
+      // Not voted yet (or a result recorded before votes were stored): the roll call first.
+      setPendingDocId(doc.id);
+    };
     return (
-      <div className="min-h-screen bg-[#F6F1E9] flex flex-col">
-        <VotingHeader {...headerProps} />
+      <SeatArtProvider delegates={committee.delegates}>
+      <div className="h-[100dvh] bg-[#EDE7D8] flex flex-col overflow-hidden">
+        <VotingHeader {...headerProps} docsLabel={drPlural} />
         {rollCallModal}
         {observerFailBanner}
-        {rosterNotice}
-        {statusBanners}
         {endDebateModal}
         {showSettings && <SettingsPanel committee={committee} onClose={() => setShowSettings(false)} isViewOnly={isViewOnly} myChairName={urlChairName} />}
-        <div className="flex-1 flex items-center justify-center px-4">
-          <div className="w-full max-w-sm space-y-3">
-            <p className="text-xs font-mono text-[#9A8A78] text-center mb-5 tracking-widest">
-              {t('voting_select_doc', { doc: docName(committee, 'draft-resolution', 'singular', t('documents_draft_resolution_type')).toUpperCase() })}
-            </p>
-            {allDRs.length === 0 ? (
-              <p className="text-sm text-[#9A8A78] text-center py-8">
-                {t('voting_no_introduced_docs', { doc: docName(committee, 'draft-resolution', 'plural', t('documents_type_dr')) })}
-              </p>
-            ) : (
-              allDRs.map((doc) => {
-                const stored = voteStates[doc.id] ?? null;
-                // V2: a stored result counts as voted even when the documents.status write
-                // was lost, so a reload can never offer "start a vote" over a recorded result.
-                const isVoted = doc.status === 'passed' || doc.status === 'failed' || stored?.status === 'result';
-                const open = isVoteOpen(stored);
-                // Moderator: start a vote, resume an unfinished one exactly where it stopped,
-                // or reopen a finished one (with its stored ballots) to correct a placard.
-                // Commenter: only look at a vote that exists (live or finished).
-                const canOpen = isViewOnly ? !!stored : (open || !isVoted || !!stored);
-                const onOpen = () => {
-                  if (!canOpen) return;
-                  if (isViewOnly) { setFollowLive(false); setSelectedDocId(doc.id); return; }
-                  if (open) { resumeVote(doc.id); return; }
-                  if (isVoted && stored) {
-                    resumeVote(doc.id);
-                    // The stored verdict is the truth; re-record a status write that was lost.
-                    if (stored.result && doc.status !== stored.result) persistResult(doc.id, stored.result);
-                    return;
-                  }
-                  startNewVote(doc.id);
-                };
-                return (
-                  <button
-                    key={doc.id}
-                    onClick={onOpen}
-                    disabled={!canOpen}
-                    className={`w-full text-start px-4 py-4 rounded-xl border transition-colors focus:outline-none ${
-                      !canOpen
-                        ? 'border-[#DDD4C0] bg-[#F6F1E9] opacity-60 cursor-not-allowed'
-                        : 'border-[#DDD4C0] bg-[#EDE7D8] text-[#6A5A4A] hover:border-[#1B3828]/60 hover:bg-[#1B3828]/10'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2 mb-0.5">
-                      <span className="text-xs font-mono font-bold text-[#1B3828]">{doc.docCode}</span>
-                      {open && (
-                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
-                          {isViewOnly
-                            ? t('voting_vote_live_badge', { cast: stored!.votes.length, total: stored!.order.length })
-                            : t('voting_resume_vote', { cast: stored!.votes.length, total: stored!.order.length })}
-                        </span>
-                      )}
-                      {doc.status === 'passed' && (
-                        <span className="text-[10px] font-bold text-green-400 bg-green-950/40 border border-green-800/40 px-2 py-0.5 rounded-full">✓ PASSED</span>
-                      )}
-                      {doc.status === 'failed' && (
-                        <span className="text-[10px] font-bold text-red-400 bg-red-950/40 border border-red-800/40 px-2 py-0.5 rounded-full">✗ FAILED</span>
-                      )}
-                    </div>
-                    <span className="text-base font-bold text-[#1C1410] block">{doc.title}</span>
-                    {doc.sponsors.length > 0 && (
-                      <span className="text-xs text-[#9A8A78] block mt-1">{sponsorLabel(committee, t('voting_sponsors'))}: {doc.sponsors.join(', ')}</span>
-                    )}
-                  </button>
-                );
-              })
-            )}
-            {/* Roll call was a one-way latch with no way back, so a delegation that
-                arrived after it was confirmed could never be seated from here. */}
-            {!isViewOnly && (
-              <div className="pt-2 text-center">
-                <button
-                  onClick={() => setRollCallOpen(true)}
-                  className="text-xs font-semibold underline transition-colors focus:outline-none"
-                  style={{ color: '#6A5A4A' }}
-                >
-                  {t('voting_roll_call_heading')}
-                </button>
-              </div>
-            )}
-            {isViewOnly && !followLive && anyOpenVote && (
-              <div className="pt-2 text-center">
-                <button
-                  onClick={() => { setFollowLive(true); setSelectedDocId(null); }}
-                  className="text-xs font-semibold underline transition-colors focus:outline-none"
-                  style={{ color: '#1B3828' }}
-                >
-                  {t('voting_follow_live')}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+        <ResolutionPicker
+          docs={[...allDRs].sort((a, b) => a.docCode.localeCompare(b.docCode, undefined, { numeric: true }))}
+          stateOf={cardState}
+          onOpen={openCard}
+          isViewOnly={isViewOnly}
+          hideTally={hideVotes}
+          docSingular={drSingular}
+          docPlural={drPlural}
+          sponsorWord={sponsorLabel(committee, t('voting_sponsors'))}
+          onOpenRollCall={isViewOnly ? undefined : () => setRollCallOpen(true)}
+          onFollowLive={isViewOnly && !followLive && anyOpenVote ? () => { setFollowLive(true); setSelectedDocId(null); } : undefined}
+          onBackToSession={() => { void handleBackToSession(); }}
+        >
+          {rosterNotice}
+          {statusBanners}
+        </ResolutionPicker>
       </div>
+      </SeatArtProvider>
     );
   }
 
@@ -1805,538 +1699,454 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     return null;
   })();
 
-  const upcomingDelegates = (() => {
-    if (!mainRoundComplete) return presentDelegates.slice(currentVoterIndex + 1, currentVoterIndex + 6);
-    if (inPassRound) {
-      return passedIds
-        .slice(passVoterIndex + 1, passVoterIndex + 6)
-        .map(id => committee.delegates.find(d => d.id === id)!)
-        .filter(Boolean);
-    }
-    return [];
-  })();
+  // The line the carousel draws: the ballot order in the main round, the delegations that
+  // passed in the pass round. Resolved to live rows by id (a new crest still flows through).
+  const passRoundSeats: Delegate[] = passedIds.map((id) => liveSeatById.get(id) ?? { id, country: vote.order.find((s) => s.id === id)?.country ?? '', status: 'present' as DelegateStatus });
+  const carouselSeats = inPassRound ? passRoundSeats : presentDelegates;
+  const carouselIndex = inPassRound ? passVoterIndex : Math.min(currentVoterIndex, Math.max(0, presentDelegates.length - 1));
+  const markOf = (id: string): CarouselMark => {
+    const cast = votes.find((v) => v.delegateId === id);
+    if (cast) return cast.choice;
+    return !inPassRound && passedIds.includes(id) ? 'pass' : null;
+  };
+  // After Back, the delegation on screen may already have a choice on record (main round).
+  const recordedMark: CarouselMark = currentDelegate && !mainRoundComplete ? markOf(currentDelegate.id) : null;
+  const choiceLabel = (m: Exclude<CarouselMark, null>) => t(
+    m === 'for' ? 'voting_choice_for'
+      : m === 'for-rights' ? 'voting_choice_for_rights'
+      : m === 'abstain' ? 'voting_choice_abstain'
+      : m === 'against-rights' ? 'voting_choice_against_rights'
+      : m === 'against' ? 'voting_choice_against'
+      : 'voting_choice_pass',
+  );
+  const canStepBack = !isViewOnly && (phase !== 'voting' || currentVoterIndex > 0 || passVoterIndex > 0);
+
+  const stage = phase === 'result' ? t('voting_stage_result')
+    : phase === 'rights-speakers' ? t('voting_stage_rights')
+    : inPassRound ? t('voting_stage_pass')
+    : !currentDelegate ? t('voting_stage_tallied')
+    : t('voting_stage_voting');
+
+  const summaryLine = settings.substantiveThreshold === 'consensus'
+    ? t('voting_summary_counted_consensus', { counted: totalDecisive })
+    : t('voting_summary_counted', { counted: totalDecisive, needed: outcome.needed });
+
+  /** The quiet Back control, shared by every stage of the vote. */
+  const backButton = (label: string) => (
+    <button
+      type="button"
+      onClick={stepBack}
+      disabled={!canStepBack}
+      title={t('voting_step_back_title')}
+      className="inline-flex items-center gap-2 h-12 ps-4 pe-5 rounded-full text-[15px] font-black focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,transform,opacity] duration-150 active:scale-[0.96] motion-reduce:transition-none disabled:opacity-35 disabled:cursor-not-allowed enabled:hover:bg-[rgba(27,56,40,0.13)]"
+      style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: '#1B3828' }}
+    >
+      <Undo2 size={18} strokeWidth={2.5} aria-hidden style={{ transform: language === 'ar' ? 'scaleX(-1)' : undefined }} />
+      {label}
+    </button>
+  );
+
+  const bigCount = (value: number, label: string, color: string) => (
+    <div className="text-center min-w-[88px]">
+      <div className="text-[48px] font-black leading-none tabular-nums" style={{ color }}>{value}</div>
+      <div className="text-[14px] font-bold mt-2" style={{ color: '#6A5A4A' }}>{label}</div>
+    </div>
+  );
 
   return (
     <FitToScreen>
     <SeatArtProvider delegates={committee.delegates}>
-    <div className="h-full w-full bg-[#F6F1E9] flex flex-col overflow-hidden">
-      <VotingHeader {...headerProps}>
-        <span className="text-xs font-mono font-bold text-[#1B3828] bg-[#DDD4C0] px-2 py-0.5 rounded shrink-0">
-          {selectedDoc.docCode}
-        </span>
-        <span className="text-sm font-bold text-[#1C1410] truncate hidden sm:block">{selectedDoc.title}</span>
-        <span className="text-xs text-[#9A8A78] shrink-0 tabular-nums">
-          {t('voting_voted_of', { cast: votes.length, total: presentDelegates.length })}
-        </span>
-        <button
-          onClick={() => { setSelectedDocId(null); if (isViewOnly) setFollowLive(false); }}
-          className="text-xs text-[#9A8A78] hover:text-[#6A5A4A] transition-colors shrink-0 focus:outline-none"
-        >
-          {t('voting_back_docs', { doc: docName(committee, 'draft-resolution', 'plural', t('documents_draft_resolutions_tab')) })}
-        </button>
-      </VotingHeader>
+    <div className="gv-ballot-screen h-full w-full bg-[#F6F1E9] flex flex-col overflow-hidden">
+      <style>{`
+        @keyframes gvNameIn { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
+        .gv-ballot-screen .gv-name-in { animation: gvNameIn 360ms cubic-bezier(0.2,0,0,1) backwards }
+        .gv-ballot-screen .gv-ballot { background-color: var(--gv-b-bg); transition: background-color 150ms, transform 150ms cubic-bezier(0.2,0,0,1), box-shadow 200ms }
+        .gv-ballot-screen .gv-ballot:not(:disabled):hover { background-color: var(--gv-b-hover); transform: translateY(-2px) }
+        .gv-ballot-screen .gv-ballot:not(:disabled):active { transform: scale(0.96) }
+        @media (prefers-reduced-motion: reduce) {
+          .gv-ballot-screen .gv-name-in { animation: none }
+          .gv-ballot-screen .gv-ballot { transition: none }
+          .gv-ballot-screen .gv-ballot:not(:disabled):hover, .gv-ballot-screen .gv-ballot:not(:disabled):active { transform: none }
+        }
+      `}</style>
+      <VotingHeader
+        {...headerProps}
+        docsLabel={drPlural}
+        onDocs={() => { setSelectedDocId(null); if (isViewOnly) setFollowLive(false); }}
+        doc={{ code: selectedDoc.docCode, title: selectedDoc.title }}
+        progress={{ stage, cast: votes.length, total: presentDelegates.length }}
+      />
       {rollCallModal}
       {observerFailBanner}
       {rosterNotice}
       {statusBanners}
 
-      {/* ── Active voting: one delegate at a time ── */}
+      {/* ── Active voting: one delegation at a time ── */}
       {phase === 'voting' && currentDelegate && (
-        <div className="flex-1 flex flex-col items-center py-6 px-4 overflow-hidden">
-          {inPassRound && (
-            <div className="w-full max-w-3xl mb-2 flex items-center justify-center gap-2 py-1 px-3 rounded-xl"
-              style={{ backgroundColor: 'rgba(182,135,31,0.15)', border: '1px solid rgba(182,135,31,0.35)' }}>
-              <span className="text-[10px] font-black text-amber-400 font-mono tracking-widest">
+        <div className="flex-1 min-h-0 flex flex-col items-center px-8 pt-4 pb-6">
+          <div className="h-9 shrink-0 flex items-center">
+            {inPassRound ? (
+              <span className="inline-flex items-center gap-2 h-9 ps-3 pe-4 rounded-full text-[13px] font-black" style={{ backgroundColor: 'rgba(182,135,31,0.16)', color: '#6A4A0A' }}>
+                <SkipForward size={15} strokeWidth={2.5} aria-hidden />
                 {t('voting_pass_round')}
+                <span className="font-semibold tabular-nums">· {t('voting_pass_round_sub', { current: passVoterIndex + 1, total: passedIds.length })}</span>
               </span>
-              <span className="text-[10px] text-[#9A8A78] font-mono">
-                {t('voting_pass_round_sub')
-                  .replace('{current}', String(passVoterIndex + 1))
-                  .replace('{total}', String(passedIds.length))}
+            ) : (
+              <span className="text-[15px] font-bold tabular-nums" style={{ color: '#6A5A4A' }}>
+                {currentVoterIndex + 1} / {presentDelegates.length}
               </span>
-            </div>
-          )}
-          {/* Current voter */}
-          <div className="flex-1 flex flex-col items-center justify-center min-h-0">
-            <div className="select-none mb-3 flex items-center justify-center">
-              {(() => {
-                const art = sessionSeatArt(currentDelegate);
-                const size = '220px';
-                return art.kind !== 'none' ? (
-                  <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 0 0 3.75px rgba(28,20,16,0.22)', flexShrink: 0 }}>
-                    <SeatFlag
-                      seat={currentDelegate}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                    />
-                  </div>
-                ) : (
-                  <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 0 0 3.75px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative', backgroundColor: 'rgba(221,212,192,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <UnknownSeatIcon size={120} bare />
-                  </div>
-                );
-              })()}
-            </div>
+            )}
+          </div>
+
+          {/* The line of delegations, voting now in the centre */}
+          <div className="flex-1 min-h-0 w-full flex flex-col items-center justify-center">
+            <VoterCarousel seats={carouselSeats} current={carouselIndex} markOf={markOf} hideTally={hideVotes} />
             <h1
-              style={{ fontSize: '40px' }}
-              className="font-black text-[#1C1410] text-center leading-tight mb-1"
+              key={currentDelegate.id}
+              className="gv-name-in text-[46px] font-black text-[#1C1410] text-center leading-[1.05] mt-3 max-w-4xl [text-wrap:balance]"
+              aria-live="polite"
             >
               {getCountryDisplayName(currentDelegate.country, language)}
             </h1>
-            <p className="text-[#9A8A78] text-sm">
-              {currentVoterIndex + 1} / {presentDelegates.length}
-            </p>
+            <div className="h-8 mt-2 flex items-center">
+              {recordedMark && (
+                <span className="inline-flex items-center gap-2 h-8 px-3.5 rounded-full text-[14px] font-bold" style={{ backgroundColor: 'rgba(182,135,31,0.16)', color: '#6A4A0A' }}>
+                  {hideVotes && recordedMark !== 'pass' ? t('voting_recorded_hidden') : t('voting_recorded_choice', { choice: choiceLabel(recordedMark) })}
+                </span>
+              )}
+            </div>
           </div>
 
-          {/* Vote buttons — wrap into a grid on small screens (up to 6 options
-              won't fit a single non-wrapping row on a phone). */}
           {isViewOnly ? (
-            <p className="w-full max-w-3xl mb-4 text-center text-sm font-semibold text-[#6A5A4A]">
+            <p className="shrink-0 w-full max-w-3xl my-6 text-center text-[16px] font-semibold text-[#6A5A4A]">
               {t('voting_follower_waiting', { name: gavelRole.head ?? '' })}
             </p>
           ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex gap-3 w-full max-w-3xl mb-4">
-            <button
-              onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'for')}
-              className="flex-1 bg-[#2A7A3C] hover:bg-[#3D8A52] border border-[#2A7A3C] text-white font-black text-base py-6 rounded-2xl transition-colors gv-lift"
-            >
-              {t('voting_in_favour')}
-            </button>
-            <button
-              onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'for-rights')}
-              className="flex-1 bg-[#1B5C2E] hover:bg-[#2A7A3C] border border-[#3D7A52] text-[#EED98A] font-black text-sm py-6 rounded-2xl transition-colors leading-snug gv-lift"
-            >
-              {t('voting_in_favour')}<br />{t('voting_with_rights_label')}
-            </button>
-            {settings.allowAbstentions && (
-              (rollCallStatuses[currentDelegate.id] ?? currentDelegate.status) === 'present' ? (
-                <button
-                  onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'abstain')}
-                  className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] text-[#6A5A4A] font-black text-base py-6 rounded-2xl transition-colors gv-lift"
-                >
-                  {t('voting_abstain')}
-                </button>
-              ) : (
-                <button disabled className="flex-1 bg-[#EDE7D8] border border-[#DDD4C0] text-[#9A8A78] font-black text-base py-6 rounded-2xl opacity-40 cursor-not-allowed gv-lift">
-                  {t('voting_abstain_pv')}
-                </button>
-              )
-            )}
-            {!inPassRound && (
-              <button
-                onClick={() => handlePass(currentDelegate.id)}
-                className="flex-1 bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] text-[#6A5A4A] font-black text-sm py-6 rounded-2xl transition-colors gv-lift"
-              >
-                {t('voting_pass')}
-              </button>
-            )}
-            <button
-              onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'against-rights')}
-              className="flex-1 bg-[#7A2020] hover:bg-[#8B3030] border border-[#7A2020] text-[#EED98A] font-black text-sm py-6 rounded-2xl transition-colors leading-snug gv-lift"
-            >
-              {t('voting_against')}<br />{t('voting_with_rights_label')}
-            </button>
-            <button
-              onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'against')}
-              className="flex-1 bg-[#8B2020] hover:bg-[#A03030] border border-[#8B2020] text-white font-black text-base py-6 rounded-2xl transition-colors gv-lift"
-            >
-              {t('voting_against')}
-            </button>
-          </div>
-          )}
-
-          {/* Tally. "Hide tally" removes it from the screen entirely: no bar, no counts,
-              nothing blurred that a projector could still give away. */}
-          <div className="mb-4 w-full max-w-3xl">
-            <div className="flex justify-end mb-1.5">
-              <TallyToggle hidden={hideVotes} onToggle={() => setHideVotes(!hideVotes)} />
-            </div>
-            {!hideVotes && (
-              <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
-            )}
-          </div>
-
-          {!isViewOnly && !hideVotes && votes.length > 0 && (
-            showCorrections ? (
-              <div className="w-full max-w-3xl mb-3 flex justify-center">
-                <VoteCorrections
-                  votes={votes}
-                  allowAbstain={settings.allowAbstentions}
-                  canAbstain={(id) => { const d = liveSeatById.get(id); return !d || seatStatus(d) === 'present'; }}
-                  onCorrect={correctVote}
-                  onClose={() => setShowCorrections(false)}
+            <div className="shrink-0 w-full max-w-[1080px] flex flex-col gap-3 mt-3">
+              <div className="flex gap-3">
+                <BallotButton
+                  tone="for" wide icon={<Check size={22} strokeWidth={3} />} label={t('voting_in_favour')}
+                  recorded={!hideVotes && recordedMark === 'for'}
+                  onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'for')}
+                />
+                <BallotButton
+                  tone="for" icon={<Check size={20} strokeWidth={3} />} label={t('voting_in_favour')} sub={t('voting_with_rights_label')}
+                  recorded={!hideVotes && recordedMark === 'for-rights'}
+                  onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'for-rights')}
+                />
+                {settings.allowAbstentions && (
+                  seatStatus(currentDelegate) === 'present' ? (
+                    <BallotButton
+                      tone="neutral" icon={<Minus size={20} strokeWidth={3} />} label={t('voting_abstain')}
+                      recorded={!hideVotes && recordedMark === 'abstain'}
+                      onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'abstain')}
+                    />
+                  ) : (
+                    <BallotButton tone="neutral" icon={<Minus size={20} strokeWidth={3} />} label={t('voting_abstain_pv')} disabled onClick={() => {}} />
+                  )
+                )}
+                {!inPassRound && (
+                  <BallotButton
+                    tone="neutral" icon={<SkipForward size={20} strokeWidth={2.75} />} label={t('voting_pass')}
+                    recorded={recordedMark === 'pass'}
+                    onClick={() => handlePass(currentDelegate.id)}
+                  />
+                )}
+                <BallotButton
+                  tone="against" icon={<X size={20} strokeWidth={3} />} label={t('voting_against')} sub={t('voting_with_rights_label')}
+                  recorded={!hideVotes && recordedMark === 'against-rights'}
+                  onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'against-rights')}
+                />
+                <BallotButton
+                  tone="against" wide icon={<X size={22} strokeWidth={3} />} label={t('voting_against')}
+                  recorded={!hideVotes && recordedMark === 'against'}
+                  onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'against')}
                 />
               </div>
-            ) : (
-              <button
-                onClick={() => setShowCorrections(true)}
-                className="mb-3 text-xs font-semibold underline text-[#6A5A4A] hover:text-[#1C1410] transition-colors focus:outline-none"
-              >
-                {t('voting_correct_open', { n: votes.length })}
-              </button>
-            )
-          )}
-
-          {/* Upcoming voters — fixed height, invisible when empty so layout never shifts */}
-          <div className={`mt-4 w-full max-w-2xl h-[110px] shrink-0 ${upcomingDelegates.length === 0 ? 'invisible' : ''}`}>
-            <p className="text-[10px] text-[#9A8A78] font-mono text-center mb-2 tracking-widest">{t('voting_up_next')}</p>
-            <div className="flex items-center justify-center gap-4 h-[80px]">
-              {upcomingDelegates.map((d, i) => {
-                const qArt = sessionSeatArt(d);
-                const qHeight = i === 0 ? 52 : Math.max(20, 38 - i * 5);
-                const qWidth = Math.round(qHeight * 1.5);
-                const qRadius = i === 0 ? 8 : 5;
-                const qShadow = `0 0 0 ${i === 0 ? 2.5 : 1.5}px rgba(28,20,16,0.22)`;
-                return (
-                  <div key={d.id} className="flex flex-col items-center gap-1" style={{ opacity: Math.max(0.2, 1 - i * 0.18) }}>
-                    {qArt.kind !== 'none' ? (
-                      <div style={{ width: qWidth, height: qHeight, borderRadius: qRadius, overflow: 'hidden', boxShadow: qShadow, flexShrink: 0 }}>
-                        <SeatFlag seat={d} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                      </div>
-                    ) : (
-                      <div style={{ width: qWidth, height: qHeight, borderRadius: qRadius, overflow: 'hidden', boxShadow: qShadow, flexShrink: 0, position: 'relative', backgroundColor: 'rgba(221,212,192,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <UnknownSeatIcon size={Math.round(qHeight * 0.95)} bare />
-                      </div>
-                    )}
-                    <span className="text-[9px] text-[#9A8A78] text-center max-w-[52px] truncate">{getCountryDisplayName(d.country, language)}</span>
+              <div className="flex items-center justify-between gap-4">
+                {backButton(t('voting_step_back'))}
+                {!hideVotes && (
+                  <div className="flex-1 max-w-xl">
+                    <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
                   </div>
-                );
-              })}
+                )}
+                {recordedMark ? (
+                  <button
+                    type="button"
+                    onClick={keepAndAdvance}
+                    className="inline-flex items-center gap-2 h-12 ps-4 pe-5 rounded-full text-[15px] font-black focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] motion-reduce:transition-none"
+                    style={{ backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 4px rgba(27,56,40,0.2), 0 8px 18px rgba(27,56,40,0.2)' }}
+                  >
+                    <CornerDownRight size={18} strokeWidth={2.5} aria-hidden style={{ transform: language === 'ar' ? 'scaleX(-1)' : undefined }} />
+                    {t('voting_keep_vote')}
+                  </button>
+                ) : (
+                  <span className="w-[120px] shrink-0" aria-hidden />
+                )}
+              </div>
             </div>
-          </div>
+          )}
+          {isViewOnly && !hideVotes && (
+            <div className="shrink-0 w-full max-w-xl">
+              <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+            </div>
+          )}
         </div>
       )}
 
-      {/* ── All voted — proceed screen ── */}
+      {/* ── All voted: proceed ── */}
       {phase === 'voting' && !currentDelegate && (
-        <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6">
-          <h2 className="text-4xl font-black text-[#1C1410]">
-            {t('voting_all_voted').replace('{n}', String(presentDelegates.length))}
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-8 gap-7">
+          <span className="w-16 h-16 rounded-full flex items-center justify-center" style={{ backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 8px 22px rgba(27,56,40,0.25)' }} aria-hidden>
+            <Check size={30} strokeWidth={3} />
+          </span>
+          <h2 className="text-[40px] font-black text-[#1C1410] text-center leading-tight [text-wrap:balance] -mt-2">
+            {t('voting_all_voted', { n: presentDelegates.length })}
           </h2>
-          <TallyToggle hidden={hideVotes} onToggle={() => setHideVotes(!hideVotes)} />
-          {!hideVotes && (<>
-          <div className="flex gap-10 text-center">
-            <div>
-              <div className="text-4xl font-black text-green-400">{forCount}</div>
-              <div className="text-[#6A5A4A] text-sm mt-1">{t('voting_for_label')}</div>
-            </div>
-            <div>
-              <div className="text-4xl font-black text-red-400">{againstCount}</div>
-              <div className="text-[#6A5A4A] text-sm mt-1">{t('voting_against_label')}</div>
-            </div>
-            {abstainCount > 0 && (
-              <div>
-                <div className="text-4xl font-black text-[#6A5A4A]">{abstainCount}</div>
-                <div className="text-[#9A8A78] text-sm mt-1">{t('voting_abstain_label')}</div>
-              </div>
-            )}
-            {withRights.length > 0 && (
-              <div>
-                <div className="text-4xl font-black text-amber-400">{withRights.length}</div>
-                <div className="text-[#6A5A4A] text-sm mt-1">{t('voting_with_rights_label')}</div>
-              </div>
-            )}
-          </div>
-          <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
-          <p className="text-xs text-[#6A5A4A] tabular-nums -mt-2">
-            {settings.substantiveThreshold === 'consensus'
-              ? `${totalDecisive} counted · no votes against allowed`
-              : `${totalDecisive} counted · ${outcome.needed} needed to pass`}
-            {outcome.quorumNeeded > 0 && ` · quorum ${presentAndPvDelegates.length}/${outcome.quorumNeeded}`}
-          </p>
-          {!isViewOnly && votes.length > 0 && (
-            showCorrections ? (
-              <VoteCorrections
-                votes={votes}
-                allowAbstain={settings.allowAbstentions}
-                canAbstain={(id) => { const d = liveSeatById.get(id); return !d || seatStatus(d) === 'present'; }}
-                onCorrect={correctVote}
-                onClose={() => setShowCorrections(false)}
-              />
-            ) : (
-              <button
-                onClick={() => setShowCorrections(true)}
-                className="text-xs font-semibold underline text-[#6A5A4A] hover:text-[#1C1410] transition-colors focus:outline-none"
-              >
-                {t('voting_correct_open', { n: votes.length })}
-              </button>
-            )
-          )}
-          </>)}
-          {isViewOnly ? (
-            <p className="text-sm font-semibold text-[#6A5A4A]">{t('voting_follower_waiting', { name: gavelRole.head ?? '' })}</p>
+          {hideVotes ? (
+            <p className="text-[16px] font-semibold text-[#6A5A4A]">{t('voting_tally_hidden')}</p>
           ) : (
-            <button
-              onClick={handleFinishVoting}
-              className="bg-[#1B3828] hover:bg-[#2A5A3C] text-white px-12 py-4 rounded-2xl font-black text-lg transition-colors mt-2 gv-lift focus:outline-none"
-            >
-              {/* A hidden tally reveals nothing here either, not even whether anyone voted with rights. */}
-              {hideVotes
-                ? t('voting_continue')
-                : withRights.length > 0
-                  ? t('voting_proceed_rights').replace('{n}', String(withRights.length))
-                  : t('voting_see_result')}
-            </button>
+            <div className="w-full max-w-2xl flex flex-col items-center gap-6">
+              <div className="flex gap-10">
+                {bigCount(forCount, t('voting_for_label'), '#2F6B45')}
+                {bigCount(againstCount, t('voting_against_label'), '#8B2020')}
+                {abstainCount > 0 && bigCount(abstainCount, t('voting_abstain_label'), '#6A5A4A')}
+                {withRights.length > 0 && bigCount(withRights.length, t('voting_with_rights_label'), '#8A6414')}
+              </div>
+              <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+              <p className="text-[14px] font-semibold text-[#6A5A4A] tabular-nums -mt-2">
+                {summaryLine}
+                {outcome.quorumNeeded > 0 && ` · ${t('voting_summary_quorum', { present: presentAndPvDelegates.length, needed: outcome.quorumNeeded })}`}
+              </p>
+            </div>
+          )}
+          {isViewOnly ? (
+            <p className="text-[16px] font-semibold text-[#6A5A4A]">{t('voting_follower_waiting', { name: gavelRole.head ?? '' })}</p>
+          ) : (
+            <div className="flex items-center gap-3">
+              {backButton(t('voting_step_back'))}
+              <button
+                type="button"
+                onClick={handleFinishVoting}
+                className="h-14 px-10 rounded-2xl font-black text-[18px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 transition-transform duration-150 active:scale-[0.96] motion-reduce:transition-none"
+                style={{ backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 4px rgba(27,56,40,0.22), 0 12px 32px rgba(27,56,40,0.26)' }}
+              >
+                {/* A hidden tally reveals nothing here either, not even whether anyone voted with rights. */}
+                {hideVotes
+                  ? t('voting_continue')
+                  : withRights.length > 0
+                    ? t('voting_proceed_rights', { n: withRights.length })
+                    : t('voting_see_result')}
+              </button>
+            </div>
           )}
         </div>
       )}
 
       {/* ── Rights speakers ── */}
-      {phase === 'rights-speakers' && orderedRights.length > rightsIndex && (
-        <div className="flex-1 flex flex-col items-center justify-between py-8 px-8 overflow-hidden">
-          <div className="flex-1 flex flex-col items-center justify-center min-h-0">
-            <p className="text-xs text-amber-400 font-mono tracking-widest mb-6">
-              {t('voting_rights_header').replace('{current}', String(rightsIndex + 1)).replace('{total}', String(orderedRights.length))}
-            </p>
-            <div className="select-none mb-3 flex items-center justify-center">
-              {(() => {
-                const rightsSeat = committee.delegates.find((d) => d.id === orderedRights[rightsIndex].delegateId)
-                  ?? { country: orderedRights[rightsIndex].country };
-                const art = sessionSeatArt(rightsSeat);
-                const size = '196px';
-                return art.kind !== 'none' ? (
-                  <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 0 0 3.75px rgba(28,20,16,0.22)', flexShrink: 0 }}>
-                    <SeatFlag
-                      seat={rightsSeat}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                    />
+      {phase === 'rights-speakers' && orderedRights.length > rightsIndex && (() => {
+        const speaker = orderedRights[rightsIndex];
+        const rightsSeat = committee.delegates.find((d) => d.id === speaker.delegateId) ?? { country: speaker.country };
+        return (
+          <div className="flex-1 min-h-0 flex gap-8 px-10 py-6">
+            <div className="flex-1 min-w-0 flex flex-col items-center justify-center">
+              <p className="text-[13px] font-black uppercase tracking-[0.16em] mb-5" style={{ color: '#8A6414' }}>
+                {t('voting_rights_header', { current: rightsIndex + 1, total: orderedRights.length })}
+              </p>
+              <span key={speaker.delegateId} className="gv-name-in rounded-full" style={{ boxShadow: '0 0 0 7px #F6F1E9, 0 0 0 12px #D9B44A, 0 18px 40px rgba(27,56,40,0.25)' }}>
+                <SeatCircleFlag seat={rightsSeat} size={168} decorative />
+              </span>
+              <h1 key={`n-${speaker.delegateId}`} className="gv-name-in text-[40px] font-black text-[#1C1410] text-center mt-6 leading-tight [text-wrap:balance]">
+                {getCountryDisplayName(speaker.country, language)}
+              </h1>
+              <p className="text-[16px] font-bold mt-1" style={{ color: '#8A6414' }}>
+                {hideVotes
+                  ? t('voting_with_rights_label')
+                  : speaker.choice === 'for-rights' ? t('voting_rights_for') : t('voting_rights_against')}
+              </p>
+              {/* The rights clock runs on the driving device only (nothing per-second is ever
+                  written), so a Commenter does not get a clock that would sit still. */}
+              {!isViewOnly && (
+                <>
+                  <div
+                    className="text-[72px] font-black mt-4 tabular-nums leading-none"
+                    style={{ color: rightsSpeakerTime <= 10 ? '#8B2020' : rightsSpeakerTime <= 20 ? '#8A6414' : '#1C1410' }}
+                  >
+                    {Math.floor(rightsSpeakerTime / 60)}:{String(rightsSpeakerTime % 60).padStart(2, '0')}
                   </div>
-                ) : (
-                  <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 0 0 3.75px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative', backgroundColor: 'rgba(221,212,192,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <UnknownSeatIcon size={120} bare />
+                  <div className="flex gap-2 mt-4 flex-wrap justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setRightsRunning((r) => !r)}
+                      className="h-11 px-6 rounded-full font-black text-[14px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96]"
+                      style={{ backgroundColor: rightsRunning ? '#8A6414' : '#2F6B45', color: '#FFFFFF' }}
+                    >
+                      {rightsRunning ? t('voting_pause') : t('voting_start')}
+                    </button>
+                    {[30, 45, 60, 90, 120].map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => updateVote(() => ({ rightsTimerLimit: s }))}
+                        aria-pressed={rightsTimerLimit === s}
+                        className="h-11 min-w-11 px-3 rounded-full font-bold text-[13px] tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,transform] duration-150 active:scale-[0.96]"
+                        style={{ backgroundColor: rightsTimerLimit === s ? '#1B3828' : 'rgba(27,56,40,0.07)', color: rightsTimerLimit === s ? '#EED98A' : '#4A3F33' }}
+                      >
+                        {s}s
+                      </button>
+                    ))}
                   </div>
-                );
-              })()}
+                </>
+              )}
             </div>
-            <h1
-              style={{ fontSize: '32px' }}
-              className="font-black text-[#1C1410] text-center mb-2"
-            >
-              {getCountryDisplayName(orderedRights[rightsIndex].country, language)}
-            </h1>
-            <p className="text-amber-400 font-semibold">
-              {hideVotes
-                ? `★ ${t('voting_with_rights_label')}`
-                : orderedRights[rightsIndex].choice === 'for-rights' ? t('voting_rights_for') : t('voting_rights_against')}
-            </p>
-            {/* Rights speaker countdown timer */}
-            {/* The rights clock runs on the driving device only (nothing per-second is ever
-                written), so a Commenter does not get a clock that would sit still. */}
-            {!isViewOnly && (
-            <div className={`text-6xl font-black font-mono mt-4 tabular-nums ${rightsSpeakerTime <= 10 ? 'text-red-500' : rightsSpeakerTime <= 20 ? 'text-yellow-500' : 'text-[#1C1410]'}`}>
-              {Math.floor(rightsSpeakerTime / 60)}:{String(rightsSpeakerTime % 60).padStart(2, '0')}
-            </div>
-            )}
-            {!isViewOnly && (
-            <div className="flex gap-2 mt-3 flex-wrap justify-center">
-              <button
-                onClick={() => setRightsRunning((r) => !r)}
-                className={`gv-lift px-6 py-2.5 rounded-xl font-bold text-sm transition-colors ${rightsRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}
-              >
-                {rightsRunning ? t('voting_pause') : t('voting_start')}
-              </button>
-              {[30, 45, 60, 90, 120].map((s) => (
-                <button key={s} onClick={() => updateVote(() => ({ rightsTimerLimit: s }))}
-                  className={`gv-lift px-3 py-2.5 rounded-xl font-bold text-xs transition-colors ${rightsTimerLimit === s ? 'bg-[#1B3828] text-white' : 'bg-[#DDD4C0] text-[#6A5A4A] hover:bg-[#C8BAA8]'}`}>
-                  {s}s
-                </button>
-              ))}
-            </div>
-            )}
-          </div>
 
-          <div className="w-full max-w-md space-y-1 mb-4 mt-6 overflow-y-auto" style={{ maxHeight: '220px' }}>
-            {orderedRights.slice(rightsIndex).map((v, relIdx) => {
-              const absIdx = rightsIndex + relIdx;
-              const isCurrent = relIdx === 0;
-              return (
-                <div
-                  key={v.delegateId}
-                  draggable={!isCurrent && !isViewOnly}
-                  onDragStart={() => { dragIndexRef.current = absIdx; }}
-                  onDragOver={(e) => { if (!isCurrent) e.preventDefault(); }}
-                  onDrop={() => {
-                    const from = dragIndexRef.current;
-                    if (from === null || from === absIdx || from <= rightsIndex || absIdx <= rightsIndex) return;
-                    updateVote((prev) => {
-                      const arr = [...prev.rightsOrder];
-                      const [item] = arr.splice(from, 1);
-                      arr.splice(absIdx, 0, item);
-                      return { rightsOrder: arr };
-                    });
-                    dragIndexRef.current = null;
-                  }}
-                  className={`flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition-all ${
-                    isCurrent
-                      ? 'bg-[#1B3828] border border-[#3D7A52] text-[#EED98A]'
-                      : 'bg-[#FAF8F3] border border-[#DDD4C0] text-[#1C1410] opacity-80 cursor-grab'
-                  }`}
-                >
-                  {!isCurrent && <span className="text-[#9A8A78] text-xs">⠿</span>}
-                  <span className="text-xs w-5 font-mono text-end opacity-60">{absIdx + 1}</span>
-                  <span><SeatMark country={v.country} /> {getCountryDisplayName(v.country, language)}</span>
-                  <span className={`ms-auto text-xs font-semibold ${
-                    isCurrent ? 'text-[#EED98A]' :
-                    hideVotes ? 'text-[#6A5A4A]' :
-                    v.choice === 'for-rights' ? 'text-[#2A7A3C]' : 'text-[#8B2020]'
-                  }`}>
-                    {isCurrent ? t('voting_speaking') : hideVotes ? t('voting_with_rights_label') : v.choice === 'for-rights' ? t('voting_for_rights_list') : t('voting_against_rights_list')}
-                  </span>
+            <div className="w-[380px] shrink-0 flex flex-col gap-3 min-h-0">
+              <div className="flex-1 min-h-0 overflow-y-auto rounded-[24px] p-2 space-y-1" style={{ backgroundColor: '#FAF8F3', boxShadow: '0 0 0 1px rgba(27,56,40,0.07), 0 10px 28px rgba(27,56,40,0.08)' }}>
+                {orderedRights.map((v, absIdx) => {
+                  const done = absIdx < rightsIndex;
+                  const isCurrent = absIdx === rightsIndex;
+                  const movable = !isCurrent && !done && !isViewOnly;
+                  return (
+                    <div
+                      key={v.delegateId}
+                      draggable={movable}
+                      onDragStart={() => { dragIndexRef.current = absIdx; }}
+                      onDragOver={(e) => { if (movable) e.preventDefault(); }}
+                      onDrop={() => {
+                        const from = dragIndexRef.current;
+                        if (from === null || from === absIdx || from <= rightsIndex || absIdx <= rightsIndex) return;
+                        updateVote((prev) => {
+                          const arr = [...prev.rightsOrder];
+                          const [item] = arr.splice(from, 1);
+                          arr.splice(absIdx, 0, item);
+                          return { rightsOrder: arr };
+                        });
+                        dragIndexRef.current = null;
+                      }}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-2xl transition-[background-color,opacity] duration-200 ${movable ? 'cursor-grab' : ''}`}
+                      style={{ backgroundColor: isCurrent ? '#1B3828' : 'transparent', opacity: done ? 0.45 : 1 }}
+                    >
+                      <span className="text-[12px] w-5 font-bold text-end tabular-nums" style={{ color: isCurrent ? 'rgba(238,217,138,0.8)' : '#9A8A78' }}>{absIdx + 1}</span>
+                      <SeatCircleFlag country={v.country} size={30} decorative ring={!isCurrent} />
+                      <span className="flex-1 min-w-0 truncate text-[15px] font-bold" style={{ color: isCurrent ? '#FFFFFF' : '#1C1410' }}>{getCountryDisplayName(v.country, language)}</span>
+                      <span className="text-[12px] font-bold shrink-0" style={{
+                        color: isCurrent ? '#EED98A' : hideVotes ? '#6A5A4A' : v.choice === 'for-rights' ? '#2F6B45' : '#8B2020',
+                      }}>
+                        {isCurrent ? t('voting_speaking') : hideVotes ? t('voting_with_rights_label') : v.choice === 'for-rights' ? t('voting_for_rights_list') : t('voting_against_rights_list')}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              {!isViewOnly && (
+                <div className="shrink-0 flex items-center gap-2">
+                  {backButton(t('voting_step_back'))}
+                  <button
+                    type="button"
+                    onClick={() => { setRightsRunning(false); handleNextRightsSpeaker(); }}
+                    className="flex-1 h-12 rounded-full font-black text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96]"
+                    style={{ backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 4px rgba(27,56,40,0.2), 0 8px 18px rgba(27,56,40,0.2)' }}
+                  >
+                    {rightsIndex + 1 < orderedRights.length ? t('voting_next_rights') : t('voting_see_result')}
+                  </button>
                 </div>
-              );
-            })}
+              )}
+            </div>
           </div>
-
-          {!isViewOnly && (
-          <button
-            onClick={() => { setRightsRunning(false); handleNextRightsSpeaker(); }}
-            className="w-full max-w-md bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-4 rounded-2xl font-black text-lg transition-colors gv-lift focus:outline-none"
-          >
-            {rightsIndex + 1 < orderedRights.length ? t('voting_next_rights') : t('voting_see_result')}
-          </button>
-          )}
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Final result ── */}
-      {phase === 'result' && (
-        <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6">
-          <p className="text-xs font-mono text-[#9A8A78] tracking-widest uppercase">
-            {t('voting_final_result').replace('{code}', selectedDoc.docCode)}
-          </p>
-
-          {/* Main result bubble */}
-          <div
-            className="rounded-3xl px-16 py-12 text-center w-full max-w-xl"
-            style={{
-              backgroundColor: passed ? '#1B3828' : '#8B2020',
-              boxShadow: passed
-                ? '0 24px 64px rgba(27,56,40,0.30)'
-                : '0 24px 64px rgba(139,32,32,0.30)',
-            }}
-          >
-            <div className="text-6xl font-black mb-3" style={{ color: passed ? '#EED98A' : '#FFD0D0' }}>
-              {passed ? t('voting_passed') : t('voting_failed')}
-            </div>
-            <p className="text-xl font-bold mb-6" style={{ color: passed ? 'rgba(238,217,138,0.75)' : 'rgba(255,208,208,0.75)' }}>
-              {selectedDoc.title}
+      {phase === 'result' && (() => {
+        const soft = passed ? 'rgba(238,217,138,0.72)' : 'rgba(255,222,210,0.78)';
+        return (
+          <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-8 gap-6">
+            <p className="text-[13px] font-black uppercase tracking-[0.16em]" style={{ color: '#8A6414' }}>
+              {t('voting_final_result', { code: selectedDoc.docCode })}
             </p>
-            <div className="flex justify-center gap-10">
-              <div className="text-center">
-                <div className="text-4xl font-black" style={{ color: '#6EE7A0' }}>{forCount}</div>
-                <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>{t('voting_for_label')}</div>
+
+            <div
+              className="gv-name-in rounded-[32px] px-12 py-9 text-center w-full max-w-2xl"
+              style={{
+                backgroundColor: passed ? '#1B3828' : '#8B2020',
+                boxShadow: passed ? '0 2px 4px rgba(27,56,40,0.2), 0 24px 64px rgba(27,56,40,0.30)' : '0 2px 4px rgba(90,20,20,0.2), 0 24px 64px rgba(139,32,32,0.30)',
+              }}
+            >
+              <div className="flex items-center justify-center gap-4">
+                <span className="w-14 h-14 rounded-full flex items-center justify-center" style={{ backgroundColor: passed ? '#EED98A' : '#FFE1D6', color: passed ? '#1B3828' : '#8B2020' }} aria-hidden>
+                  {passed ? <Check size={30} strokeWidth={3.25} /> : <X size={30} strokeWidth={3.25} />}
+                </span>
+                <span className="text-[60px] font-black leading-none" style={{ color: passed ? '#EED98A' : '#FFFFFF' }}>
+                  {passed ? t('voting_pick_status_passed') : t('voting_pick_status_failed')}
+                </span>
               </div>
-              <div className="text-center">
-                <div className="text-4xl font-black" style={{ color: '#FCA5A5' }}>{againstCount}</div>
-                <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>{t('voting_against_label')}</div>
+              <p className="text-[20px] font-bold mt-4 mb-6 [text-wrap:balance]" style={{ color: soft }}>
+                {selectedDoc.title}
+              </p>
+              <div className="flex justify-center gap-10">
+                {[
+                  { n: forCount, label: t('voting_for_label'), color: '#9BE3B4', show: true },
+                  { n: againstCount, label: t('voting_against_label'), color: '#FFB4A8', show: true },
+                  { n: abstainCount, label: t('voting_abstain_label'), color: 'rgba(255,255,255,0.7)', show: abstainCount > 0 },
+                  { n: withRights.length, label: t('voting_with_rights_label'), color: '#F3D98A', show: withRights.length > 0 },
+                ].filter((c) => c.show).map((c) => (
+                  <div key={c.label} className="text-center">
+                    <div className="text-[44px] font-black leading-none tabular-nums" style={{ color: c.color }}>{c.n}</div>
+                    <div className="text-[14px] font-bold mt-2" style={{ color: soft }}>{c.label}</div>
+                  </div>
+                ))}
               </div>
-              {abstainCount > 0 && (
-                <div className="text-center">
-                  <div className="text-4xl font-black" style={{ color: 'rgba(255,255,255,0.5)' }}>{abstainCount}</div>
-                  <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>{t('voting_abstain_label')}</div>
-                </div>
-              )}
-              {withRights.length > 0 && (
-                <div className="text-center">
-                  <div className="text-4xl font-black" style={{ color: '#FCD34D' }}>{withRights.length}</div>
-                  <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>{t('voting_with_rights_label')}</div>
-                </div>
-              )}
+              <div className="mt-5 space-y-1.5 text-[14px] font-semibold tabular-nums" style={{ color: '#FFFFFF' }}>
+                {p5Veto && (
+                  <p className="flex items-center gap-1.5 justify-center"><ShieldAlert size={16} strokeWidth={2.5} aria-hidden /> {settings.vetoMode === 'custom' ? t('voting_veto_exercised') : t('voting_p5_veto')}</p>
+                )}
+                {unanimousFail && <p>{t('voting_unanimous_fail')}</p>}
+                {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'supermajority-2-3' && (
+                  <p style={{ color: soft }}>{t('voting_supermajority', { for: forCount, total: totalDecisive, pct: totalDecisive > 0 ? Math.round(forCount / totalDecisive * 100) : 0 })}</p>
+                )}
+                {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'consensus' && (
+                  <p style={{ color: soft }}>{t('voting_consensus', { against: againstCount })}</p>
+                )}
+                {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'simple' && (
+                  <p style={{ color: soft }}>{t('voting_result_simple', { for: forCount, total: totalDecisive, needed: outcome.needed })}</p>
+                )}
+                {!outcome.quorumMet && (
+                  <p>{t('voting_result_quorum_not_met', { present: presentAndPvDelegates.length, needed: outcome.quorumNeeded })}</p>
+                )}
+                {outcome.countsAbstentions && abstainCount > 0 && (
+                  <p className="text-[13px]" style={{ color: soft }}>{t('voting_result_abst_counted')}</p>
+                )}
+              </div>
             </div>
-            {p5Veto && (
-              <p className="text-sm mt-4 font-semibold flex items-center gap-1 justify-center" style={{ color: '#FCA5A5' }}>
-                <Emoji size="1em">🛡️</Emoji> {settings.vetoMode === 'custom' ? t('voting_veto_exercised') : t('voting_p5_veto')}
-              </p>
-            )}
-            {unanimousFail && (
-              <p className="text-sm mt-4 font-semibold" style={{ color: '#FCA5A5' }}>
-                {t('voting_unanimous_fail')}
-              </p>
-            )}
-            {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'supermajority-2-3' && (
-              <p className="text-sm mt-3 font-semibold" style={{ color: thresholdMet ? '#6EE7A0' : '#FCA5A5' }}>
-                {t('voting_supermajority').replace('{for}', String(forCount)).replace('{total}', String(totalDecisive)).replace('{pct}', String(totalDecisive > 0 ? Math.round(forCount / totalDecisive * 100) : 0))}
-              </p>
-            )}
-            {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'consensus' && (
-              <p className="text-sm mt-3 font-semibold" style={{ color: thresholdMet ? '#6EE7A0' : '#FCA5A5' }}>
-                {t('voting_consensus').replace('{against}', String(againstCount))}
-              </p>
-            )}
-            {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'simple' && (
-              <p className="text-sm mt-3 font-semibold tabular-nums" style={{ color: thresholdMet ? '#6EE7A0' : '#FCA5A5' }}>
-                Simple majority · {forCount}/{totalDecisive} in favour, {outcome.needed} needed
-              </p>
-            )}
-            {!outcome.quorumMet && (
-              <p className="text-sm mt-3 font-semibold tabular-nums" style={{ color: '#FCA5A5' }}>
-                Quorum not met · {presentAndPvDelegates.length} present, {outcome.quorumNeeded} required
-              </p>
-            )}
-            {outcome.countsAbstentions && abstainCount > 0 && (
-              <p className="text-xs mt-2" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>
-                Abstentions counted toward the total
-              </p>
+
+            <div className="w-full max-w-2xl">
+              <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+            </div>
+
+            {!isViewOnly && (
+              <div className="flex gap-3 flex-wrap justify-center items-center">
+                {backButton(t('voting_step_back_to_ballot'))}
+                <button
+                  type="button"
+                  onClick={() => setPendingDocId(selectedDoc.id)}
+                  className="h-12 px-6 rounded-full font-black text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,transform] duration-150 active:scale-[0.96] hover:bg-white"
+                  style={{ backgroundColor: '#FAF8F3', color: '#1B3828', boxShadow: '0 0 0 1px rgba(27,56,40,0.14), 0 2px 6px rgba(27,56,40,0.08)' }}
+                >
+                  {t('voting_vote_again')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDocId(null)}
+                  className="h-12 px-7 rounded-full font-black text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 transition-transform duration-150 active:scale-[0.96]"
+                  style={{ backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 4px rgba(27,56,40,0.22), 0 10px 26px rgba(27,56,40,0.24)' }}
+                >
+                  {t('voting_next_doc', { doc: docName(committee, 'draft-resolution', 'singular', t('documents_draft_resolution')) })}
+                </button>
+              </div>
             )}
           </div>
-
-          <div className="flex items-center justify-center gap-6">
-            <PieChart forVotes={forCount} against={againstCount} abstain={abstainCount} />
-            <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
-          </div>
-
-          {!isViewOnly && votes.length > 0 && (
-            showCorrections ? (
-              <VoteCorrections
-                votes={votes}
-                allowAbstain={settings.allowAbstentions}
-                canAbstain={(id) => { const d = liveSeatById.get(id); return !d || seatStatus(d) === 'present'; }}
-                onCorrect={correctVote}
-                onClose={() => setShowCorrections(false)}
-              />
-            ) : (
-              <button
-                onClick={() => setShowCorrections(true)}
-                className="text-xs font-semibold underline text-[#6A5A4A] hover:text-[#1C1410] transition-colors focus:outline-none"
-              >
-                {t('voting_correct_open', { n: votes.length })}
-              </button>
-            )
-          )}
-
-          {/* Action buttons */}
-          {!isViewOnly && (
-          <div className="flex gap-3 flex-wrap justify-center">
-            <button
-              onClick={() => startNewVote(selectedDoc.id)}
-              className="py-3 px-6 rounded-xl font-bold transition-colors gv-lift"
-              style={{ backgroundColor: '#DDD4C0', color: '#1B3828', border: '1.5px solid #C8BAA8' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#C8BAA8'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#DDD4C0'; }}
-            >
-              {t('voting_vote_again')}
-            </button>
-            <button
-              onClick={() => setSelectedDocId(null)}
-              className="py-3 px-6 rounded-xl font-black transition-colors"
-              style={{ backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 4px 16px rgba(27,56,40,0.25)' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-            >
-              {t('voting_next_doc', { doc: docName(committee, 'draft-resolution', 'singular', t('documents_draft_resolution')) })}
-            </button>
-            <button
-              onClick={() => { setEndDebateState('idle'); setShowEndDebateConfirm(true); }}
-              className="py-3 px-6 rounded-xl font-bold transition-colors gv-lift"
-              style={{ backgroundColor: '#8B2020', color: 'white', border: '1.5px solid #A03030' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#A03030'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
-            >
-              {t('voting_end_debate')}
-            </button>
-          </div>
-          )}
-        </div>
-      )}
+        );
+      })()}
       {showSettings && <SettingsPanel committee={committee} onClose={() => setShowSettings(false)} isViewOnly={isViewOnly} myChairName={urlChairName} />}
 
       {endDebateModal}

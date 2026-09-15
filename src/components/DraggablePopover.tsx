@@ -16,6 +16,11 @@
 //   blocked, and the popover then simply opens in its default place.
 // - Always clamped inside the viewport, on open, on drag and on resize.
 //
+// - Several may be open at once (Add time and Right of Reply, 15 Sep 2026). Each opens in
+//   its own default slot (`slot`: upper or lower half of the inline-end edge), a panel that
+//   would open on top of another open one (a remembered spot) is moved clear of it, and
+//   the one last pressed comes to the front.
+//
 // Purely presentational: it never touches committee state (RULES 3 to 5).
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -25,7 +30,25 @@ import Portal from '@/components/Portal';
 
 type Pos = { x: number; y: number };
 const MARGIN = 8;
+const GAP = 12;
 const storageKey = (id: string) => `gavelling-popover-pos:${id}`;
+/** Open panels, so a new one can open clear of the others. */
+const openPanels = new Map<string, HTMLDivElement>();
+/** The pressed panel sits one layer above the other open ones (z 51 vs 50, never higher,
+ *  so it can never climb over a modal). Set on the node, outside React's style prop. */
+function raise(el: HTMLDivElement | null) {
+  if (!el) return;
+  for (const other of openPanels.values()) other.style.zIndex = other === el ? '51' : '50';
+}
+
+type Rect = { x: number; y: number; w: number; h: number };
+const overlaps = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+function rectOf(el: HTMLDivElement): Rect | null {
+  const x = parseFloat(el.style.left);
+  const y = parseFloat(el.style.top);
+  if (!Number.isFinite(x) || !Number.isFinite(y) || el.style.visibility === 'hidden') return null;
+  return { x, y, w: el.offsetWidth, h: el.offsetHeight };
+}
 
 function readPos(id: string): Pos | null {
   try {
@@ -57,6 +80,7 @@ export default function DraggablePopover({
   closeLabel,
   accent,
   className = '',
+  slot = 'center',
   children,
 }: {
   /** Stable id; the remembered position is keyed on it. */
@@ -70,6 +94,9 @@ export default function DraggablePopover({
   /** Hairline colour of the panel edge. */
   accent: string;
   className?: string;
+  /** Default spot on the inline-end edge when nothing is remembered: vertically centred, or
+   *  just above / below the middle so two panels open side by side without overlapping. */
+  slot?: 'center' | 'upper' | 'lower';
   children: ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -78,6 +105,7 @@ export default function DraggablePopover({
   const posRef = useRef<Pos | null>(null);
   const drag = useRef<{ pointerId: number; sx: number; sy: number; ox: number; oy: number; scale: number } | null>(null);
   const [dragging, setDragging] = useState(false);
+  const bringToFront = () => raise(panelRef.current);
 
   const clamp = useCallback((p: Pos): Pos => {
     const el = panelRef.current;
@@ -104,24 +132,43 @@ export default function DraggablePopover({
   const attachPanel = useCallback((el: HTMLDivElement | null) => {
     roRef.current?.disconnect();
     roRef.current = null;
+    if (panelRef.current && openPanels.get(id) === panelRef.current) openPanels.delete(id);
     panelRef.current = el;
     if (!el) return;
     const { w, h } = space();
     const rtl = document.documentElement.dir === 'rtl';
-    apply(readPos(id) ?? { x: rtl ? 32 : w - el.offsetWidth - 32, y: (h - el.offsetHeight) / 2 }, false);
+    const pw = el.offsetWidth;
+    const ph = el.offsetHeight;
+    const defaultY = slot === 'upper' ? h / 2 - ph - GAP / 2 : slot === 'lower' ? h / 2 + GAP / 2 : (h - ph) / 2;
+    let p = readPos(id) ?? { x: rtl ? 32 : w - pw - 32, y: defaultY };
+    // Open clear of any panel already on screen: below it, else above it.
+    for (const [otherId, other] of openPanels) {
+      if (otherId === id) continue;
+      const r = rectOf(other);
+      if (!r || !overlaps({ x: p.x, y: p.y, w: pw, h: ph }, r)) continue;
+      const below = r.y + r.h + GAP;
+      p = { x: p.x, y: below + ph + MARGIN <= h ? below : Math.max(MARGIN, r.y - ph - GAP) };
+    }
+    openPanels.set(id, el);
+    raise(el);
+    apply(p, false);
     // Keep it on screen when its own content grows (the RTR setup view becomes the timer).
     if (typeof ResizeObserver !== 'undefined') {
       roRef.current = new ResizeObserver(() => { if (posRef.current) apply(posRef.current, false); });
       roRef.current.observe(el);
     }
-  }, [apply, id]);
+  }, [apply, id, slot]);
 
   // Keep it on screen when the window (and so the fit-root) changes size.
   useEffect(() => {
     const onResize = () => { if (posRef.current) apply(posRef.current, false); };
     window.addEventListener('resize', onResize);
-    return () => { window.removeEventListener('resize', onResize); roRef.current?.disconnect(); };
-  }, [apply]);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      roRef.current?.disconnect();
+      if (panelRef.current && openPanels.get(id) === panelRef.current) openPanels.delete(id);
+    };
+  }, [apply, id]);
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0 || !posRef.current) return;
@@ -161,6 +208,8 @@ export default function DraggablePopover({
       <div
         ref={attachPanel}
         className={`fixed z-50 rounded-2xl bg-[#EDE7D8] ${className}`}
+        onPointerDownCapture={bringToFront}
+        onFocusCapture={bringToFront}
         style={{
           left: pos?.x ?? 0,
           top: pos?.y ?? 0,

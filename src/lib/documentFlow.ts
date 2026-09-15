@@ -3,12 +3,12 @@
  * and a checked submit (V-6). Kept apart from committeeService.ts so the paper workflow
  * has one home.
  *
- * - `documents.intro_state` (jsonb, nullable) = `{stage, base, startedAt}`. The stage clock
- *   is anchor-based like every other clock in a session: live remaining is
- *   `base - (serverNow() - startedAt)`, `startedAt` null = paused. Stamp and read it on the
- *   database clock (src/lib/serverClock.ts), never Date.now(). It is written only at structural
- *   moments (start, pause, reset, stage change, finish), never per second, so a reload or
- *   another chair device resumes the stage at the right second.
+ * - `documents.intro_state` (jsonb, nullable) = `{stage, base, startedAt}`. RETIRED as a
+ *   writer target (15 Sep 2026): the card's Resume / Pass / Fail were removed, so nothing reads
+ *   a persisted stage any more and DocumentsModal only ever writes it back to null (on
+ *   confirming the timings, on finishing, on skipping). The column and `parseIntroState` stay
+ *   so existing rows still load. The on-screen stage clock is still anchor-based
+ *   (`introRemainingNow`, database clock, `startedAt` null = paused), held in modal state.
  * - `documents.doc_code` is assigned by the BEFORE INSERT trigger `documents_assign_doc_code`
  *   under a per-(committee, type) advisory lock. The value a client sends is ignored, so the
  *   code shown in the submit form is a preview and the saved row's code is the truth.

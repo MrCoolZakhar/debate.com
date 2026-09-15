@@ -6,6 +6,7 @@ import GrowDialog from '@/components/GrowDialog';
 import { portalFrame } from '@/components/chat/chatTokens';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
+import { Ban, BadgeCheck, Check, CircleDot, FileText, Presentation, Vote, X, type LucideIcon } from 'lucide-react';
 import { Committee, CommitteeDocument, DocIntroState, DocumentType, DocumentStatus } from '@/lib/types';
 import { serverNow, serverNowIso } from '@/lib/serverClock';
 import { introRemainingNow, requireDocApproval as readRequireDocApproval, updateDocumentFlow, deleteDocumentChecked } from '@/lib/documentFlow';
@@ -28,16 +29,38 @@ type PresentationStage = 'setup' | 'reading' | 'presentation' | 'qa' | null;
 type TimedStage = DocIntroState['stage'];
 const STAGE_ORDER: TimedStage[] = ['reading', 'presentation', 'qa'];
 
-const STATUS_META: Record<DocumentStatus, { label: string; color: string }> = {
-  submitted:   { label: 'Submitted',  color: 'bg-[#1B3828]/20 text-[#1B3828] border-[#1B3828]/30' },
-  'on-floor':  { label: 'On Floor',   color: 'bg-transparent text-[#B8844A] border-[#B8844A]/50' },
-  introduced:  { label: 'Introduced', color: 'bg-transparent text-[#B8844A] border-[#B8844A]/50' },
-  passed:      { label: 'Passed',     color: 'bg-[#1B3828] text-[#EED98A] border-[#1B3828]' },
-  failed:      { label: 'Failed',     color: 'bg-red-950/40 text-red-500 border-red-800/40' },
+/** One pill vocabulary for a paper's lifecycle and its approval. Same shape for every state
+ *  (icon + label, tinted fill, hairline ring drawn as an inset shadow, never a border); the
+ *  colour moves from neutral ink to forest to gold as the paper advances, and only the two
+ *  verdicts are strong. Every text colour is AA (>= 4.5:1) on its own fill over the card. */
+type PillTone = { bg: string; fg: string; ring: string; Icon: LucideIcon };
+const STATUS_PILL: Record<DocumentStatus, PillTone> = {
+  submitted:  { bg: 'rgba(28,20,16,0.06)',   fg: '#4A3F35', ring: 'rgba(28,20,16,0.10)',   Icon: FileText },
+  'on-floor': { bg: 'rgba(27,56,40,0.08)',   fg: '#1B3828', ring: 'rgba(27,56,40,0.18)',   Icon: CircleDot },
+  introduced: { bg: 'rgba(238,217,138,0.60)', fg: '#5C4410', ring: 'rgba(160,120,30,0.30)', Icon: Presentation },
+  passed:     { bg: '#1B3828',               fg: '#EED98A', ring: 'rgba(27,56,40,0.00)',   Icon: Check },
+  failed:     { bg: 'rgba(139,32,32,0.10)',  fg: '#7A1C1C', ring: 'rgba(139,32,32,0.22)',  Icon: X },
+};
+const APPROVAL_PILL: Record<'approved' | 'rejected', PillTone> = {
+  approved: { bg: 'transparent', fg: '#1B3828', ring: 'rgba(27,56,40,0.30)',  Icon: BadgeCheck },
+  rejected: { bg: 'transparent', fg: '#7A1C1C', ring: 'rgba(139,32,32,0.30)', Icon: Ban },
 };
 
+function Pill({ tone, label }: { tone: PillTone; label: string }) {
+  const { Icon } = tone;
+  return (
+    <span
+      className="inline-flex items-center gap-1 h-[22px] ps-1.5 pe-2 rounded-full text-[11.5px] font-semibold leading-none whitespace-nowrap select-none"
+      style={{ backgroundColor: tone.bg, color: tone.fg, boxShadow: `inset 0 0 0 1px ${tone.ring}`, fontFamily: "'Outfit', sans-serif" }}
+    >
+      <Icon size={12} strokeWidth={2.4} aria-hidden className="shrink-0" />
+      {label}
+    </span>
+  );
+}
+
 const STATUS_NEXT: Partial<Record<DocumentStatus, DocumentStatus>> = {
-  submitted: 'introduced', 'on-floor': 'introduced', introduced: 'passed',
+  submitted: 'introduced', 'on-floor': 'introduced',
 };
 
 function getStatusLabel(status: DocumentStatus, t: (key: TranslationKey) => string): string {
@@ -53,8 +76,7 @@ function getStatusLabel(status: DocumentStatus, t: (key: TranslationKey) => stri
 
 function StatusBadge({ status }: { status: DocumentStatus }) {
   const t = useT();
-  const meta = STATUS_META[status];
-  return <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${meta.color}`}>{getStatusLabel(status, t)}</span>;
+  return <Pill tone={STATUS_PILL[status] ?? STATUS_PILL.submitted} label={getStatusLabel(status, t)} />;
 }
 
 function CountryChip({ country, onRemove }: { country: string; onRemove: () => void }) {
@@ -623,16 +645,14 @@ function TimingSetup({ doc, committee, onStart, onSkip }: {
 }
 
 // ── Doc Card ──────────────────────────────────────────────────────────────────
-function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation, onResumeIntroduction, requireApproval, onApprovalChange, isViewOnly }: {
+function DocCard({ doc, committee, onRemove, onStartPresentation, requireApproval, onApprovalChange, isViewOnly }: {
   doc: CommitteeDocument; committee: Committee;
-  onStatusChange: (docId: string, status: DocumentStatus) => void;
   onRemove: (docId: string) => void;
   onStartPresentation: (doc: CommitteeDocument) => void;
-  onResumeIntroduction: (doc: CommitteeDocument) => void;
   requireApproval: boolean;
   onApprovalChange: (docId: string, approval: 'approved' | 'rejected') => void;
-  /** D-10: a Commenter sees the card but gets no approve / reject / introduce / pass /
-   *  fail / resume / delete. UI gate only (RULE 15), like every other isViewOnly. */
+  /** D-10: a Commenter sees the card but gets no approve / reject / introduce / delete.
+   *  UI gate only (RULE 15), like every other isViewOnly. */
   isViewOnly: boolean;
 }) {
   const t = useT();
@@ -641,18 +661,11 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
   const [expanded, setExpanded] = useState(false);
   const [showPdf, setShowPdf] = useState(false);
   const nextStatus = STATUS_NEXT[doc.status];
-  const needsPresentation = nextStatus === 'introduced';
   // Approval gate: while the setting is on and this doc isn't approved yet, offer Approve/Reject
   // (also lets a chair reverse a rejection) and hold back Introduce until approved. Once the doc has
   // been introduced/passed/failed the gate is moot.
   const canDecide = requireApproval && doc.approval !== 'approved' && (doc.status === 'submitted' || doc.status === 'on-floor');
   const approvalBlocksIntroduce = requireApproval && doc.approval !== 'approved';
-
-  const handleAdvance = () => {
-    if (!nextStatus) return;
-    if (needsPresentation) onStartPresentation(doc);
-    else onStatusChange(doc.id, nextStatus);
-  };
 
   return (
     <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl overflow-hidden">
@@ -694,12 +707,8 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
               <p className="text-base font-black text-[#1C1410] leading-snug">{doc.title}</p>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <StatusBadge status={doc.status} />
-                {doc.approval === 'approved' && (
-                  <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-[#1B3828]/15 text-[#1B3828] border-[#1B3828]/40">{t('documents_status_approved')}</span>
-                )}
-                {doc.approval === 'rejected' && (
-                  <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-[#8B2020]/10 text-[#8B2020] border-[#8B2020]/40">{t('documents_status_rejected')}</span>
-                )}
+                {doc.approval === 'approved' && <Pill tone={APPROVAL_PILL.approved} label={t('documents_status_approved')} />}
+                {doc.approval === 'rejected' && <Pill tone={APPROVAL_PILL.rejected} label={t('documents_status_rejected')} />}
               </div>
             </div>
             {!isViewOnly && !confirmDelete && (
@@ -793,33 +802,15 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
             </div>
           )}
 
-          {/* Introduce / advance button, withheld until approved when approval is required */}
-          {!isViewOnly && nextStatus && doc.status !== 'passed' && doc.status !== 'failed' && doc.status !== 'introduced' && !approvalBlocksIntroduce && (
-            <button onClick={handleAdvance}
+          {/* Introduce, withheld until approved when approval is required. A working paper
+              whose introduction was closed before Q&A finished is still "introduced" and
+              offers Introduce again (setup prefilled with its saved times), so it can always
+              reach its automatic pass. An introduced draft resolution goes to the voting page. */}
+          {!isViewOnly && ((nextStatus === 'introduced' && !approvalBlocksIntroduce) || (doc.status === 'introduced' && doc.type === 'working-paper')) && (
+            <button onClick={() => onStartPresentation(doc)}
               className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none gv-lift">
-              {needsPresentation ? `${t('documents_introduce')} →` : `${t('documents_advance')}${getStatusLabel(nextStatus, t)}`}
+              {`${t('documents_introduce')} →`}
             </button>
-          )}
-
-          {/* V-5: an introduced paper is never stuck. The introduction screen can be closed,
-              the page reloaded or the gavel handed over mid-stage; the card always offers
-              Pass, Fail, and Resume (which reopens the persisted stage at the right second). */}
-          {!isViewOnly && doc.status === 'introduced' && (
-            <div className="flex gap-2">
-              <button onClick={() => onResumeIntroduction(doc)}
-                className="flex-1 bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#1B3828]/40 text-[#1B3828] py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none gv-lift">
-                {t('documents_resume_intro')}
-              </button>
-              <button onClick={() => onStatusChange(doc.id, 'passed')}
-                className="px-4 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none gv-lift">
-                {t('documents_pass')}
-              </button>
-              <button onClick={() => onStatusChange(doc.id, 'failed')}
-                className="px-4 py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none gv-lift"
-                style={{ backgroundColor: '#8B2020', color: '#EDE7D8' }}>
-                {t('documents_fail')}
-              </button>
-            </div>
           )}
 
         </div>
@@ -904,11 +895,6 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
     update((c) => ({ ...c, documents: [...(c.documents ?? []), doc] }));
   };
 
-  const handleStatusChange = (docId: string, status: DocumentStatus) => {
-    // A decided paper has no introduction in progress any more.
-    writeFlow(docId, status === 'passed' || status === 'failed' ? { status, introState: null } : { status });
-  };
-
   const handleApprovalChange = (docId: string, approval: 'approved' | 'rejected') => {
     patchDocLocal(docId, { approval });
     updateDocumentApprovalInDB(docId, approval, committee.code, suffix);
@@ -929,6 +915,9 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
 
   const closeFlow = () => { setStage(null); setActiveDocSnap(null); };
 
+  const goToVoting = () =>
+    router.push(`/voting/${committee.code}${chairName ? `?chairName=${encodeURIComponent(chairName)}` : ''}`);
+
   const handleStartPresentation = (doc: CommitteeDocument) => {
     setActiveDocSnap(doc);
     setStage('setup');
@@ -937,12 +926,11 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
 
   const stageMinutes = (s: TimedStage, tm = timings) => tm[s];
 
-  /** Enter a timed stage with a fresh, paused clock, and persist it. */
-  const enterStage = (doc: CommitteeDocument, s: TimedStage, tm = timings) => {
-    const next: DocIntroState = { stage: s, base: stageMinutes(s, tm) * 60, startedAt: null };
-    setClock({ base: next.base, startedAt: null });
+  /** Enter a timed stage with a fresh, paused clock. The stage lives only on this screen:
+   *  there is no Resume from the card any more, so it is not persisted. */
+  const enterStage = (s: TimedStage, tm = timings) => {
+    setClock({ base: stageMinutes(s, tm) * 60, startedAt: null });
     setStage(s);
-    writeFlow(doc.id, { introState: next });
   };
 
   const finishIntroduction = (doc: CommitteeDocument) => {
@@ -956,13 +944,12 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
     const tm = { reading: readingMins, presentation: presentationMins, qa: qaMins };
     setTimings(tm);
     const first = STAGE_ORDER.find((s) => tm[s] > 0);
-    // One write: timings, status and the first stage together, so there is never an
-    // "introduced" row with no stage to resume.
-    const introState: DocIntroState | null = first ? { stage: first, base: tm[first] * 60, startedAt: null } : null;
+    // One write: timings and status together. `introState: null` also clears a stage left by
+    // the retired Resume flow, so no row keeps a stale introduction.
     writeFlow(activeDoc.id, {
       readingMinutes: readingMins, presentationMinutes: presentationMins, qaMinutes: qaMins,
       status: first || activeDoc.type !== 'working-paper' ? 'introduced' : 'passed',
-      introState,
+      introState: null,
     });
     if (first) { setClock({ base: tm[first] * 60, startedAt: null }); setStage(first); }
     else closeFlow();
@@ -971,7 +958,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
   const advanceFromStage = (from: TimedStage) => {
     if (!activeDoc) return;
     const after = STAGE_ORDER.slice(STAGE_ORDER.indexOf(from) + 1).find((s) => timings[s] > 0);
-    if (after) enterStage(activeDoc, after);
+    if (after) enterStage(after);
     else finishIntroduction(activeDoc);
   };
 
@@ -980,30 +967,13 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
   const backFromStage = (from: TimedStage) => {
     if (!activeDoc) return;
     const before = STAGE_ORDER.slice(0, STAGE_ORDER.indexOf(from)).reverse().find((s) => timings[s] > 0);
-    if (before) enterStage(activeDoc, before);
+    if (before) enterStage(before);
     else setStage('setup');
   };
 
   const handleClockChange = (next: { base: number; startedAt: string | null }) => {
     if (!activeDoc || !stage || stage === 'setup') return;
     setClock(next);
-    writeFlow(activeDoc.id, { introState: { stage, base: next.base, startedAt: next.startedAt } });
-  };
-
-  /** Resume an introduced paper from the card: the persisted stage and clock when there is
-   *  one, otherwise the setup screen with the saved times. */
-  const handleResumeIntroduction = (doc: CommitteeDocument) => {
-    const tm = { reading: doc.readingMinutes ?? 0, presentation: doc.presentationMinutes ?? 0, qa: doc.qaMinutes ?? 0 };
-    setTimings(tm);
-    setActiveDocSnap(doc);
-    setShowDocContent(false);
-    const st = doc.introState;
-    if (st) {
-      setClock({ base: st.base, startedAt: st.startedAt });
-      setStage(st.stage);
-    } else {
-      setStage('setup');
-    }
   };
 
   const handleSkipToVote = () => {
@@ -1034,7 +1004,8 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
               </span>
             ))}
           </div>
-          {/* Closing keeps the persisted stage; the card's Resume brings it back. */}
+          {/* Closing leaves the paper introduced. A working paper's card offers Introduce
+              again; a draft resolution goes to the voting page. */}
           <button onClick={() => { closeFlow(); onClose(); }} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl">✕</button>
         </div>
         {flowErrorBanner}
@@ -1093,6 +1064,21 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
                 </button>
               );
             })}
+            {/* Straight to the voting page, which picks the draft resolution and runs the roll
+                call. Carries ?chairName= like Go to voting. Moderator only (UI gate, RULE 15). */}
+            {!isViewOnly && (
+              <button
+                type="button"
+                onClick={goToVoting}
+                title={t('documents_vote_title')}
+                aria-label={t('documents_vote_title')}
+                className="shrink-0 inline-flex items-center gap-1.5 px-3 rounded-xl font-bold text-sm bg-[#EED98A] hover:bg-[#E6CD6E] text-[#1B3828] transition-[background-color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]/40"
+                style={{ fontFamily: "'Outfit', sans-serif" }}
+              >
+                <Vote size={15} strokeWidth={2.2} aria-hidden />
+                {t('documents_vote_btn')}
+              </button>
+            )}
           </div>
         )}
 
@@ -1104,7 +1090,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
               {flowErrorBanner}
               {tab === 'draft-resolution' && (committee.documents ?? []).some((d) => d.type === 'draft-resolution' && d.status === 'introduced') && (
                 <button
-                  onClick={() => router.push(`/voting/${committee.code}${chairName ? `?chairName=${encodeURIComponent(chairName)}` : ''}`)}
+                  onClick={goToVoting}
                   className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] border border-[#1B3828] text-[#EED98A] py-3 rounded-xl font-black text-sm transition-colors"
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 24px rgba(27,56,40,0.25)'; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
@@ -1120,9 +1106,8 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
               ) : (
                 docs.map((doc) => (
                   <DocCard key={doc.id} doc={doc} committee={committee}
-                    onStatusChange={handleStatusChange} onRemove={handleRemove}
+                    onRemove={handleRemove}
                     onStartPresentation={handleStartPresentation}
-                    onResumeIntroduction={handleResumeIntroduction}
                     requireApproval={requireDocApproval} onApprovalChange={handleApprovalChange}
                     isViewOnly={isViewOnly} />
                 ))

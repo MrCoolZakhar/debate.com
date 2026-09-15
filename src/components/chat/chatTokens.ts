@@ -5,6 +5,7 @@ import { NEU } from '@/components/neu';
 import type { ChatMessage } from '@/lib/types';
 import type { OutboxMsg } from '@/lib/chatOutbox';
 import type { TranslationKey } from '@/lib/translations';
+import { parseAttachment, attachmentPreview, type ChatAttachment } from '@/lib/chatAttachments';
 
 /** The app's translation function, shared by every chat component. */
 export type TFn = (key: TranslationKey, vars?: Record<string, string | number>) => string;
@@ -51,6 +52,12 @@ export function displayContent(content: string): string {
   return content.startsWith('[🎙️] ') ? content.slice(5) : content;
 }
 
+/** One-line preview for the conversation list: an attachment reads "📷 Photo", "📄 name.pdf" or "GIF". */
+export function previewContent(content: string, t: TFn): string {
+  const a = parseAttachment(content);
+  return a ? attachmentPreview(a, t('chat_photo')) : displayContent(content);
+}
+
 export function formatTime(ts: Date | string, locale?: string): string {
   return new Date(ts).toLocaleTimeString(locale ? [locale] : [], { hour: '2-digit', minute: '2-digit' });
 }
@@ -88,6 +95,8 @@ export interface ChatItem {
   delivery: DeliveryState;
   /** Present only for outbox items, so a failed bubble can be retried or dismissed. */
   outboxId?: string;
+  /** A photo, PDF or GIF (src/lib/chatAttachments.ts); null for a text message. */
+  attachment: ChatAttachment | null;
 }
 
 export interface ChatGroup {
@@ -123,6 +132,7 @@ export function buildChatRows(
     content: displayContent(m.content),
     timestamp: new Date(m.timestamp),
     delivery: 'sent' as DeliveryState,
+    attachment: parseAttachment(m.content),
   }));
 
   // Outbox entries are always the newest thing in the thread — they have not landed yet.
@@ -134,6 +144,7 @@ export function buildChatRows(
       timestamp: new Date(o.timestamp),
       delivery: o.status,
       outboxId: o.id,
+      attachment: parseAttachment(o.content),
     });
   }
 

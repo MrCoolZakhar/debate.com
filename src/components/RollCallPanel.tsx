@@ -24,39 +24,38 @@ export function FlagCircle({ country, size = 'md' }: { country: string; size?: '
 }
 
 // ── 3-state slider ────────────────────────────────────────────────────────────
-function StatusSlider({ status, onCycle, isObserver = false }: { status: DelegateStatus; onCycle: () => void; isObserver?: boolean }) {
+function StatusSlider({ status, onCycle, isObserver = false, large = false }: { status: DelegateStatus; onCycle: () => void; isObserver?: boolean; large?: boolean }) {
   // Observers can only be Absent or Present, no present-voting (PV) segment.
-  if (isObserver) {
-    const thumbStart = status === 'absent' ? '2px' : '32px';
-    const thumbColor = status === 'absent' ? 'bg-[#8B2020]' : 'bg-[#3D7A52]';
-    return (
-      <button
-        onClick={(e) => { e.stopPropagation(); onCycle(); }}
-        className="relative w-[60px] h-[30px] rounded-full cursor-pointer shrink-0 select-none transition-all" style={{ backgroundColor: 'rgba(255,255,255,0.10)', border: '1.5px solid rgba(255,255,255,0.22)' }}
-        title="Tap to cycle: Absent → Present"
-      >
-        <div className="absolute inset-0 grid grid-cols-2 items-center pointer-events-none">
-          <span className={`text-[10px] font-bold text-center ${status === 'absent' ? 'text-white' : 'text-white/40'}`}>A</span>
-          <span className={`text-[10px] font-bold text-center ${status !== 'absent' ? 'text-white' : 'text-white/40'}`}>P</span>
-        </div>
-        <div className={`absolute top-[2px] w-[26px] h-[22px] rounded-full transition-all duration-200 shadow-sm ${thumbColor}`} style={{ insetInlineStart: thumbStart }} />
-      </button>
-    );
-  }
-  const thumbStart = status === 'absent' ? '2px' : status === 'present' ? '32px' : '62px';
-  const thumbColor = status === 'absent' ? 'bg-[#8B2020]' : status === 'present' ? 'bg-[#3D7A52]' : 'bg-[#B6871F]';
+  // `large`: the full-screen roll call (pre-session and the resume roll call), sized for a
+  // projector and a finger: 44px tall, 44px per segment. The mid-session Roll Call tab in
+  // the sidebar keeps the compact 30px slider.
+  const seg = large ? 44 : 30;       // width of one segment
+  const h = large ? 44 : 30;         // track height (incl. the 1.5px border)
+  const thumbW = large ? 40 : 26;
+  const thumbH = large ? 36 : 22;
+  const labelCls = large ? 'text-[13.5px] font-extrabold' : 'text-[10px] font-bold';
+  const segments: { key: string; on: boolean }[] = isObserver
+    ? [{ key: 'A', on: status === 'absent' }, { key: 'P', on: status !== 'absent' }]
+    : [{ key: 'A', on: status === 'absent' }, { key: 'P', on: status === 'present' }, { key: 'PV', on: status === 'present-voting' }];
+  const index = status === 'absent' ? 0 : isObserver || status === 'present' ? 1 : 2;
+  const thumbColor = status === 'absent' ? 'bg-[#8B2020]' : status === 'present' || isObserver ? 'bg-[#3D7A52]' : 'bg-[#B6871F]';
   return (
     <button
+      type="button"
       onClick={(e) => { e.stopPropagation(); onCycle(); }}
-      className="relative w-[90px] h-[30px] rounded-full cursor-pointer shrink-0 select-none transition-all" style={{ backgroundColor: 'rgba(255,255,255,0.10)', border: '1.5px solid rgba(255,255,255,0.22)' }}
-      title="Tap to cycle: Absent → Present → PV"
+      className="relative rounded-full cursor-pointer shrink-0 select-none transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/80"
+      style={{ width: seg * segments.length, height: h, backgroundColor: 'rgba(255,255,255,0.10)', border: '1.5px solid rgba(255,255,255,0.22)' }}
+      title={isObserver ? 'Tap to cycle: Absent → Present' : 'Tap to cycle: Absent → Present → PV'}
     >
-      <div className="absolute inset-0 grid grid-cols-3 items-center pointer-events-none">
-        <span className={`text-[10px] font-bold text-center ${status === 'absent' ? 'text-white' : 'text-white/40'}`}>A</span>
-        <span className={`text-[10px] font-bold text-center ${status === 'present' ? 'text-white' : 'text-white/40'}`}>P</span>
-        <span className={`text-[10px] font-bold text-center ${status === 'present-voting' ? 'text-white' : 'text-white/40'}`}>PV</span>
+      <div className="absolute inset-0 grid items-center pointer-events-none" style={{ gridTemplateColumns: `repeat(${segments.length}, 1fr)` }}>
+        {segments.map((s) => (
+          <span key={s.key} className={`${labelCls} text-center relative z-[1] ${s.on ? 'text-white' : 'text-white/40'}`}>{s.key}</span>
+        ))}
       </div>
-      <div className={`absolute top-[2px] w-[26px] h-[22px] rounded-full transition-all duration-200 shadow-sm ${thumbColor}`} style={{ insetInlineStart: thumbStart }} />
+      <div
+        className={`absolute rounded-full transition-all duration-200 shadow-sm ${thumbColor}`}
+        style={{ top: (h - 3 - thumbH) / 2, width: thumbW, height: thumbH, insetInlineStart: 2 + index * seg }}
+      />
     </button>
   );
 }
@@ -80,7 +79,7 @@ export function recognisedStatus(
 }
 
 // ── Add country input ─────────────────────────────────────────────────────────
-function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Committee; onAdd: (country: string) => void; onQueryChange?: (q: string) => void }) {
+function AddCountryInput({ committee, onAdd, onQueryChange, large = false }: { committee: Committee; onAdd: (country: string) => void; onQueryChange?: (q: string) => void; large?: boolean }) {
   const t = useT();
   const { language } = useLanguage();
   const [query, setQuery] = useState('');
@@ -127,7 +126,7 @@ function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Commi
             if (e.key === 'Escape') updateQuery('');
           }}
           placeholder={t('rollcall_filter_placeholder')}
-          className="flex-1 min-w-0 bg-transparent px-3 py-2.5 text-[15px] focus:outline-none placeholder:text-[rgba(237,231,216,0.55)]" style={{ color: '#EDE7D8' }}
+          className={`flex-1 min-w-0 bg-transparent focus:outline-none ${large ? 'px-4 py-3.5 text-[17px]' : 'px-3 py-2.5 text-[15px]'} placeholder:text-[rgba(237,231,216,0.55)]`} style={{ color: '#EDE7D8' }}
         />
         {query && (topKnown || trimmed) && (
           <span className="text-[11px] px-2 truncate max-w-[96px]" style={{ color: 'rgba(237,231,216,0.7)' }}>
@@ -346,8 +345,8 @@ function RollCallPanelInner({
   onJoinRequestResolved?: (country: string) => void;
   /**
    * Asked BEFORE an absent delegate is recognised: can the list take them right now? The
-   * caucus queue answers with caucusQueueCapacity and shows `caucus_queue_no_time` itself
-   * when it cannot. Without it a click marked the delegate Present and then the add was
+   * caucus queue answers with caucusQueueCapacity and raises the queue-full notification
+   * (top right) itself when it cannot. Without it a click marked the delegate Present and then the add was
    * silently refused. Omitted = the list always has room (the GSL).
    */
   canAddToList?: (delegateId: string) => boolean;
@@ -770,6 +769,11 @@ function RollCallPanelInner({
     if (next) onReorderList(next);
   };
 
+  // Bulk roll-call buttons: projector and finger sized in the full-screen roll call.
+  const bulkBtnCls = `font-bold uppercase tracking-wide transition-colors gv-lift-dark focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70 ${
+    isRollCallPhase ? 'text-[13.5px] px-3 py-3.5 min-h-[48px] rounded-xl' : 'text-[11px] px-2 py-2 rounded-lg'
+  }`;
+
   return (
     <div className="flex flex-col h-full overflow-hidden"
       onWheel={(e) => {
@@ -785,7 +789,7 @@ function RollCallPanelInner({
           this block keeps only the roll-call bulk actions. No divider: the masthead's own
           tone ends where the list begins. */}
       {(!hideIdentity || showBulkActions) && (
-      <div className={`px-4 ${hideIdentity ? 'pt-2.5' : 'pt-4'} pb-2.5 shrink-0 relative z-10`}>
+      <div className={`${isRollCallPhase ? 'px-5' : 'px-4'} ${hideIdentity ? 'pt-2.5' : 'pt-4'} pb-2.5 shrink-0 relative z-10`}>
         {!hideIdentity && (
           <>
             <p className="text-lg font-black leading-tight truncate mb-0.5" style={{ color: '#EED98A' }}>{getCommitteeDisplayName(committee.name, language)}</p>
@@ -802,10 +806,10 @@ function RollCallPanelInner({
           </>
         )}
         {showBulkActions && (
-          <div className={`grid grid-cols-3 gap-2 ${hideIdentity ? '' : 'mt-2'}`}>
-            <button onClick={handleClear} className="text-[11px] font-bold uppercase tracking-wide px-2 py-2 rounded-lg transition-colors gv-lift-dark focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70" style={{ backgroundColor: 'rgba(139,32,32,0.30)', color: '#F6B4B4' }}>{t('rollcall_clear_all')}</button>
-            <button onClick={handleAllPresent} className="text-[11px] font-bold uppercase tracking-wide px-2 py-2 rounded-lg transition-colors gv-lift-dark focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70" style={{ backgroundColor: 'rgba(61,122,82,0.40)', color: '#EDE7D8' }}>{t('rollcall_all_present')}</button>
-            <button onClick={handleAllPresentVoting} className="text-[11px] font-bold uppercase tracking-wide px-2 py-2 rounded-lg transition-colors gv-lift-dark focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70" style={{ backgroundColor: 'rgba(182,135,31,0.30)', color: '#EED98A' }}>{t('rollcall_all_pv')}</button>
+          <div className={`grid grid-cols-3 ${isRollCallPhase ? 'gap-2.5' : 'gap-2'} ${hideIdentity ? '' : 'mt-2'}`}>
+            <button onClick={handleClear} className={bulkBtnCls} style={{ backgroundColor: 'rgba(139,32,32,0.30)', color: '#F6B4B4' }}>{t('rollcall_clear_all')}</button>
+            <button onClick={handleAllPresent} className={bulkBtnCls} style={{ backgroundColor: 'rgba(61,122,82,0.40)', color: '#EDE7D8' }}>{t('rollcall_all_present')}</button>
+            <button onClick={handleAllPresentVoting} className={bulkBtnCls} style={{ backgroundColor: 'rgba(182,135,31,0.30)', color: '#EED98A' }}>{t('rollcall_all_pv')}</button>
           </div>
         )}
       </div>
@@ -818,7 +822,7 @@ function RollCallPanelInner({
         ref={listRef}
         tabIndex={0}
         aria-label={t('rollcall_list_label')}
-        className="relative flex-1 overflow-y-auto overscroll-contain px-2 pt-1.5 space-y-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#EED98A]/50"
+        className={`relative flex-1 min-h-0 overflow-y-auto overscroll-contain pt-1.5 ${isRollCallPhase ? 'px-3 space-y-1.5' : 'px-2 space-y-1'} [scrollbar-width:none] [&::-webkit-scrollbar]:hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#EED98A]/50`}
         style={{
           paddingBottom: 48,
           msOverflowStyle: 'none',
@@ -904,6 +908,10 @@ function RollCallPanelInner({
           // The status slider (roll call, Roll Call tab) takes ~120px of the row, so that mode
           // runs a size down to keep names readable at the sidebar's minimum width.
           const sliderMode = isRollCallPhase || showStatusSliders;
+          // The full-screen roll call (pre-session and the resume roll call) is the one people
+          // read off a projector: bigger flags, names, slider and observer toggle. The
+          // mid-session Roll Call tab (sidebar) stays compact.
+          const bigRoll = !!isRollCallPhase;
           // Present vs Present-and-Voting is colour-coded ONLY while taking roll (sliderMode).
           // Outside it both read the same neutral tint; absent stays clear and says so.
           const rowBg = !matchesSearch ? 'transparent'
@@ -921,7 +929,7 @@ function RollCallPanelInner({
             : effectiveStatus === 'present' ? 'rgba(61,122,82,0.40)'
             : 'rgba(182,135,31,0.32)';
           // Round flags, 5% up from 48 / 34 / 40 (15 Sep 2026).
-          const flagPx = isUpNext ? 50 : sliderMode ? 36 : 42;
+          const flagPx = isUpNext ? 50 : bigRoll ? 54 : sliderMode ? 34 : 42;
 
           return (
             <div
@@ -951,7 +959,7 @@ function RollCallPanelInner({
                   if (e.target !== e.currentTarget) return;
                   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleRowClick(); }
                 } : undefined}
-                className={`group/seat flex items-center ${sliderMode ? 'gap-2' : 'gap-3'} px-2.5 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/80 transition-[background-color,box-shadow,opacity] duration-150 motion-reduce:transition-none bg-[var(--row-bg)] hover:bg-[var(--row-bg-hover)] ${
+                className={`group/seat flex items-center ${bigRoll ? 'gap-3.5 px-3 rounded-2xl' : sliderMode ? 'gap-2 px-2.5 rounded-xl' : 'gap-3 px-2.5 rounded-xl'} focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/80 transition-[background-color,box-shadow,opacity] duration-150 motion-reduce:transition-none bg-[var(--row-bg)] hover:bg-[var(--row-bg-hover)] ${
                   !matchesSearch ? 'opacity-25' : ''
                 } ${
                   (!isRollCallPhase && !showStatusSliders && onAddToList && (!isAbsent || (canRecognise && !isViewOnly))) || isRollCallPhase || showStatusSliders
@@ -963,8 +971,8 @@ function RollCallPanelInner({
                 style={{
                   ['--row-bg' as string]: rowBg,
                   ['--row-bg-hover' as string]: rowBgHover,
-                  minHeight: isUpNext ? 64 : sliderMode ? 48 : 54,
-                  paddingBlock: 6,
+                  minHeight: isUpNext ? 64 : bigRoll ? 70 : sliderMode ? 48 : 54,
+                  paddingBlock: bigRoll ? 8 : 6,
                   // A lit edge, not a border: the speaker's row reads at a distance.
                   boxShadow: isLifted
                     ? '0 10px 28px rgba(0,0,0,0.38), 0 2px 6px rgba(0,0,0,0.25), inset 0 0 0 1.5px rgba(238,217,138,0.55)'
@@ -995,32 +1003,10 @@ function RollCallPanelInner({
                       }}
                     />
                   )}
-                  {/* Observer placard toggle (the megaphone), a small badge touching the flag at its
-                      bottom inline-end edge (15 Sep 2026; it used to sit at the row's end). Its own
-                      button: the click stops at it, and a pointerdown on a button never starts the
-                      row drag (startPointerDrag). Gold when the delegation is an observer; faint
-                      until the row is hovered otherwise, always shown while taking roll. A
-                      Commenter or an ended session sees it as a plain badge on observer rows only. */}
-                  {!(isReadOnly || isViewOnly) ? (
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); toggleObserver(d.id, isObserver); }}
-                      onKeyDown={(e) => e.stopPropagation()}
-                      title={isObserver ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
-                      aria-label={isObserver ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
-                      aria-pressed={isObserver}
-                      className={`absolute -bottom-1 -end-1.5 w-[21px] h-[21px] rounded-full flex items-center justify-center transition-[opacity,transform,background-color] duration-150 active:scale-[0.9] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A] focus-visible:opacity-100 before:absolute before:-inset-1.5 before:content-[''] ${
-                        isObserver || sliderMode ? '' : 'opacity-45 group-hover/seat:opacity-100 [@media(hover:none)]:opacity-80'
-                      }`}
-                      style={{
-                        backgroundColor: isObserver ? '#EED98A' : '#2A5A3C',
-                        color: isObserver ? '#1B3828' : 'rgba(237,231,216,0.85)',
-                        boxShadow: '0 0 0 1.5px #1B3828, 0 1px 3px rgba(0,0,0,0.3)',
-                      }}
-                    >
-                      <Megaphone size={11} strokeWidth={2.5} aria-hidden />
-                    </button>
-                  ) : (!sliderMode && isObserver) ? (
+                  {/* Observer badge (the megaphone) outside roll call: ONLY on observer rows, a
+                      status indicator with a tooltip, never a control. Observer status is set in
+                      roll call, from the megaphone beside the status slider (below). */}
+                  {!sliderMode && isObserver && (
                     <span
                       role="img"
                       aria-label={t('rollcall_observer')}
@@ -1030,7 +1016,7 @@ function RollCallPanelInner({
                     >
                       <Megaphone size={11} strokeWidth={2.5} aria-hidden />
                     </span>
-                  ) : null}
+                  )}
                   {/* Queue position, or a microphone for the speaker holding the floor. Omitted
                       for a Room Order Tour de Table, where the number already IS the disc. */}
                   {queuePos !== null && !isRoomOrderTdT && (
@@ -1048,7 +1034,7 @@ function RollCallPanelInner({
                   <span
                     className="truncate"
                     style={{
-                      fontSize: isUpNext ? 19.5 : sliderMode ? 15.5 : 17,
+                      fontSize: isUpNext ? 19.5 : bigRoll ? 21 : sliderMode ? 15.5 : 17,
                       fontWeight: isUpNext ? 800 : isAbsent ? 500 : 600,
                       lineHeight: 1.2,
                       color: isAbsent ? 'rgba(237,231,216,0.72)' : '#F4EFE3',
@@ -1062,9 +1048,7 @@ function RollCallPanelInner({
                     </span>
                   )}
                 </div>
-                {isObserver && sliderMode && (
-                  <span className="text-[10.5px] shrink-0 font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md" style={{ backgroundColor: 'rgba(238,217,138,0.16)', color: '#EED98A' }}>{t('rollcall_observer')}</span>
-                )}
+{/* In roll call the observer state is the gold megaphone beside the slider. */}
                 {/* Absent says so in words outside roll call. Present and Present-and-Voting are
                     deliberately NOT told apart here (no PV tag, no tint): the slider carries that
                     distinction while taking roll. */}
@@ -1089,9 +1073,35 @@ function RollCallPanelInner({
                     <GripVertical size={17} aria-hidden />
                   </button>
                 )}
-                {(isRollCallPhase || showStatusSliders) && (
-                  <div onClick={(e) => e.stopPropagation()} className={`shrink-0 ${(isReadOnly || isViewOnly) ? 'pointer-events-none opacity-50' : ''}`}>
-                    <StatusSlider status={effectiveStatus} onCycle={() => cycleStatus(d.id, effectiveStatus)} isObserver={isObserver} />
+                {sliderMode && (
+                  <div onClick={(e) => e.stopPropagation()} className={`shrink-0 flex items-center ${bigRoll ? 'gap-2.5' : 'gap-1'} ${(isReadOnly || isViewOnly) ? 'pointer-events-none opacity-50' : ''}`}>
+                    {/* Observer toggle: the megaphone right next to the slider, on every row while
+                        taking roll. Gold = observer, faint = not. Making an observer drops PV to P
+                        (toggleObserver). Read-only / Commenter: inert, like the slider. */}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); toggleObserver(d.id, isObserver); }}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      disabled={isReadOnly || isViewOnly}
+                      title={isObserver ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
+                      aria-label={`${isObserver ? t('rollcall_observer_remove') : t('rollcall_observer_make')}: ${getCountryDisplayName(d.country, language)}`}
+                      aria-pressed={isObserver}
+                      className="rounded-full flex items-center justify-center shrink-0 transition-[background-color,color,transform,box-shadow] duration-150 active:scale-[0.92] motion-reduce:transition-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/80 hover:brightness-125"
+                      style={{
+                        width: bigRoll ? 44 : 26,
+                        height: bigRoll ? 44 : 26,
+                        backgroundColor: isObserver ? '#EED98A' : 'rgba(237,231,216,0.06)',
+                        color: isObserver ? '#1B3828' : 'rgba(237,231,216,0.42)',
+                        boxShadow: isObserver ? '0 1px 3px rgba(0,0,0,0.3)' : 'inset 0 0 0 1.5px rgba(237,231,216,0.14)',
+                      }}
+                    >
+                      <Megaphone size={bigRoll ? 19 : 13} strokeWidth={2.4} aria-hidden />
+                    </button>
+                    {/* Fixed 3-segment width, so an observer's shorter A/P slider never shifts
+                        the megaphone column out of line with the rows around it. */}
+                    <div className="flex justify-start" style={{ width: bigRoll ? 132 : 90 }}>
+                      <StatusSlider status={effectiveStatus} onCycle={() => cycleStatus(d.id, effectiveStatus)} isObserver={isObserver} large={bigRoll} />
+                    </div>
                   </div>
                 )}
               </div>
@@ -1100,13 +1110,17 @@ function RollCallPanelInner({
         })}
       </div>
 
-      <div className="px-3 py-3 space-y-2 shrink-0 overflow-visible relative z-10" style={{ backgroundColor: 'rgba(0,0,0,0.14)' }}>
-        <AddCountryInput committee={committee} onAdd={handleAddDelegate} onQueryChange={setSearch} />
+      {/* Full-screen roll call: the add field and Begin Session share one row (wraps when
+          narrow), so the list keeps the height for its bigger rows. */}
+      <div className={`${isRollCallPhase ? 'px-4 py-3.5 flex flex-wrap items-stretch gap-2.5' : 'px-3 py-3 space-y-2'} shrink-0 overflow-visible relative z-10`} style={{ backgroundColor: 'rgba(0,0,0,0.14)' }}>
+        <div className={isRollCallPhase ? 'flex-1 min-w-[240px]' : undefined}>
+          <AddCountryInput committee={committee} onAdd={handleAddDelegate} onQueryChange={setSearch} large={!!isRollCallPhase} />
+        </div>
         {(committee.phase === 'pre-session' || committee.phase === 'roll-call') && (
           <button
             onClick={handleBeginSession}
             disabled={present < 1}
-            className="w-full disabled:opacity-40 disabled:cursor-not-allowed py-3 rounded-xl text-sm font-black uppercase tracking-widest gv-lift-dark" style={{ backgroundColor: '#EDE7D8', color: '#1B3828' }} onMouseEnter={(e) => { if ((e.currentTarget as HTMLButtonElement).disabled) return; (e.currentTarget as HTMLElement).style.backgroundColor = '#DDD4C0'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; }}
+            className={`disabled:opacity-40 disabled:cursor-not-allowed ${isRollCallPhase ? 'flex-1 min-w-[220px] px-5 py-3.5 text-[15px] leading-tight' : 'w-full py-3 text-sm'} rounded-xl font-black uppercase tracking-widest gv-lift-dark`} style={{ backgroundColor: '#EDE7D8', color: '#1B3828' }} onMouseEnter={(e) => { if ((e.currentTarget as HTMLButtonElement).disabled) return; (e.currentTarget as HTMLElement).style.backgroundColor = '#DDD4C0'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; }}
           >
             {/* With delegates in the room but none marked present, the blocker is the
                 roll call, not the roster — "Add at least 1 delegate" was simply wrong. */}

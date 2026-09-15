@@ -2,6 +2,7 @@
 
 import { NEU, OUTFIT } from '@/components/neu';
 import { ChatAvatar } from './ChatAvatar';
+import ChatAttachmentView from './ChatAttachmentView';
 import { CHAT, formatTime, type ChatGroup, type TFn } from './chatTokens';
 
 /**
@@ -61,6 +62,45 @@ export default function ChatMessageGroup({
           const S = 6;
           return (
             <div key={it.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`} style={{ marginTop: isFirst ? 0 : 2, maxWidth: '100%' }}>
+              {it.attachment ? (
+                <div
+                  style={{
+                    position: 'relative',
+                    padding: it.attachment.kind === 'pdf' ? '6px 6px 4px' : 3,
+                    borderRadius: R,
+                    borderEndStartRadius: !isMe ? S : R,
+                    borderEndEndRadius: isMe ? S : R,
+                    backgroundColor: isMe ? CHAT.bubbleOut : CHAT.bubbleIn,
+                    color: isMe ? '#F6F1E4' : NEU.ink,
+                    boxShadow: failed
+                      ? `inset 0 0 0 1.5px ${CHAT.danger}`
+                      : isMe ? '0 1px 1px rgba(27,56,40,0.22)' : '0 1px 1px rgba(28,20,16,0.08), 0 0 0 0.5px rgba(28,20,16,0.06)',
+                    opacity: sending ? 0.7 : 1,
+                    transition: 'opacity 160ms ease-out',
+                    maxWidth: '100%',
+                  }}
+                >
+                  <ChatAttachmentView
+                    a={it.attachment}
+                    isMe={isMe}
+                    t={t}
+                    timeSlot={(
+                      <span
+                        style={{
+                          position: 'absolute', insetInlineEnd: 8, bottom: it.attachment.kind === 'pdf' ? 0 : 6,
+                          padding: it.attachment.kind === 'pdf' ? 0 : '2px 6px', borderRadius: 8,
+                          background: it.attachment.kind === 'pdf' ? 'transparent' : 'rgba(5,8,20,0.5)',
+                          fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 500, lineHeight: 1.2, whiteSpace: 'nowrap',
+                          fontVariantNumeric: 'tabular-nums',
+                          color: it.attachment.kind !== 'pdf' ? '#fff' : isMe ? 'rgba(246,241,228,0.72)' : 'color-mix(in srgb, var(--gv-on-surface, #1C1410) 55%, white)',
+                        }}
+                      >
+                        {sending ? t('chat_sending') : formatTime(it.timestamp, locale)}
+                      </span>
+                    )}
+                  />
+                </div>
+              ) : (
               <div
                 style={{
                   position: 'relative',
@@ -102,6 +142,7 @@ export default function ChatMessageGroup({
                   {sending ? t('chat_sending') : formatTime(it.timestamp, locale)}
                 </span>
               </div>
+              )}
 
               {failed && it.outboxId && (
                 <button

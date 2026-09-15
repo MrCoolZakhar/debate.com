@@ -13,6 +13,14 @@
 //     started writes nothing, and the click that follows a drag is swallowed.
 // The dragged row is tracked by delegate id, not by index, so a realtime refresh during a
 // drag cannot move the wrong flag; if the dragged delegate disappears the drag is dropped.
+// "Sometimes a drag does not move anything" (15 Sep 2026) had three causes, all fixed here:
+//   - the drop animated the flag back from where it was released (a 180ms transform
+//     transition), so a second press made within that window landed on the neighbour or
+//     on empty space. The flag now lands instantly;
+//   - pressing the X / grip corner of a flag never started a drag (the X covers the flag's
+//     top corner). A press there now arms the drag too; a plain tap still removes;
+//   - the pointer was tracked by capture on the flag's own node, which a re-render that
+//     replaced the node ended silently. It is tracked on window listeners now.
 // Keyboard: each queued flag has a grip button; Arrow Left / Right move it one place.
 //
 // Removal: every flag has an X (on hover, always visible on touch screens). On the speaker
@@ -20,7 +28,7 @@
 // the speech, pause, clear the floor".
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { GripHorizontal, X } from 'lucide-react';
 import { useT } from '@/contexts/LanguageContext';
 import { SeatCircleFlag } from '@/components/CircleFlag';
@@ -111,33 +119,67 @@ export default function SpeakerStrip({
     onReorder(next);
   };
 
+  // The pointer is followed on WINDOW listeners, not through element pointer capture. Capture
+  // lived on the flag's own node, so anything that replaced that node mid-drag (a realtime
+  // refresh re-rendering the queue, the floor switching branch when the speaker changes)
+  // silently ended the drag, and a press on the X or grip corner never started one. The
+  // listeners read the latest list through refs, so a drop always lands against the list on
+  // screen at release, never the one from the press.
+  const listLatest = useRef(list);
+  const commitLatest = useRef(commit);
+  const insertionLatest = useRef(insertionIndex);
+  useLayoutEffect(() => {
+    listLatest.current = list;
+    commitLatest.current = commit;
+    insertionLatest.current = insertionIndex;
+  });
+  const detachRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => { detachRef.current?.(); }, []);
+
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>, id: string) => {
-    if (!onReorder || e.button !== 0) return;
-    if ((e.target as HTMLElement).closest('[data-strip-remove]')) return;
-    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
-    setDragBoth({ id, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, dx: 0, dy: 0, active: false, insertAt: null });
-  };
+    if (!onReorder || e.button !== 0 || !e.isPrimary) return;
+    detachRef.current?.();
+    const pointerId = e.pointerId;
+    setDragBoth({ id, pointerId, startX: e.clientX, startY: e.clientY, dx: 0, dy: 0, active: false, insertAt: null });
 
-  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const d = dragRef.current;
-    if (!d || d.pointerId !== e.pointerId) return;
-    const dx = e.clientX - d.startX;
-    const dy = e.clientY - d.startY;
-    const active = d.active || Math.hypot(dx, dy) >= PICKUP_PX;
-    if (!active) return;
-    e.preventDefault();
-    setDragBoth({ ...d, dx, dy, active, insertAt: insertionIndex(e.clientX, d.id) });
-  };
-
-  const endDrag = (e: React.PointerEvent<HTMLDivElement>, cancelled: boolean) => {
-    const d = dragRef.current;
-    if (!d || d.pointerId !== e.pointerId) return;
-    try { if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
-    setDragBoth(null);
-    if (!d.active) return;
-    suppressClick.current = true;
-    setTimeout(() => { suppressClick.current = false; }, 0);
-    if (!cancelled && d.insertAt !== null) commit(d.id, d.insertAt);
+    const onMove = (ev: PointerEvent) => {
+      const d = dragRef.current;
+      if (!d || d.pointerId !== ev.pointerId) return;
+      if (!listLatest.current.some((s) => s.delegateId === d.id)) { finish(true); return; }
+      const dx = ev.clientX - d.startX;
+      const dy = ev.clientY - d.startY;
+      const active = d.active || Math.hypot(dx, dy) >= PICKUP_PX;
+      if (!active) return;
+      ev.preventDefault();
+      setDragBoth({ ...d, dx, dy, active, insertAt: insertionLatest.current(ev.clientX, d.id) });
+    };
+    const onUp = (ev: PointerEvent) => {
+      if (dragRef.current?.pointerId !== ev.pointerId) return;
+      finish(ev.type === 'pointercancel');
+    };
+    const finish = (cancelled: boolean) => {
+      const d = dragRef.current;
+      detach();
+      setDragBoth(null);
+      if (!d?.active) return;
+      // The click that follows a real drag is swallowed wherever the pointer was released
+      // (on another flag, its X, or the big clock under the strip, which would toggle Start).
+      suppressClick.current = true;
+      const swallow = (ce: MouseEvent) => { ce.stopPropagation(); ce.preventDefault(); };
+      window.addEventListener('click', swallow, { capture: true, once: true });
+      setTimeout(() => { suppressClick.current = false; window.removeEventListener('click', swallow, { capture: true }); }, 0);
+      if (!cancelled && d.insertAt !== null) commitLatest.current(d.id, d.insertAt);
+    };
+    const detach = () => {
+      window.removeEventListener('pointermove', onMove, true);
+      window.removeEventListener('pointerup', onUp, true);
+      window.removeEventListener('pointercancel', onUp, true);
+      if (detachRef.current === detach) detachRef.current = null;
+    };
+    window.addEventListener('pointermove', onMove, { capture: true, passive: false });
+    window.addEventListener('pointerup', onUp, true);
+    window.addEventListener('pointercancel', onUp, true);
+    detachRef.current = detach;
   };
 
   const moveByKey = (id: string, delta: number) => {
@@ -176,15 +218,10 @@ export default function SpeakerStrip({
                 touchAction: movable ? 'none' : undefined,
                 transform: dragging ? `translate(${drag!.dx}px, ${drag!.dy * 0.35}px) scale(1.06)` : undefined,
                 zIndex: dragging ? 20 : undefined,
-                transition: dragging ? 'none' : 'transform 180ms cubic-bezier(0.22,1,0.36,1)',
-                filter: dragging ? 'drop-shadow(0 10px 18px rgba(27,56,40,0.28))' : undefined,
+                                filter: dragging ? 'drop-shadow(0 10px 18px rgba(27,56,40,0.28))' : undefined,
               }}
               onDragStart={(e) => e.preventDefault()}
               onPointerDown={movable ? (e) => onPointerDown(e, s.delegateId) : undefined}
-              onPointerMove={movable ? onPointerMove : undefined}
-              onPointerUp={movable ? (e) => endDrag(e, false) : undefined}
-              onPointerCancel={movable ? (e) => endDrag(e, true) : undefined}
-              onLostPointerCapture={movable ? (e) => { if (dragRef.current?.pointerId === e.pointerId) setDragBoth(null); } : undefined}
             >
               {barBeforeId === s.delegateId && (
                 <span aria-hidden className="absolute rounded-full" style={{ insetInlineStart: -8, top: -2, height: 52, width: 4, backgroundColor: '#B6871F', boxShadow: '0 0 0 3px rgba(182,135,31,0.22)' }} />
