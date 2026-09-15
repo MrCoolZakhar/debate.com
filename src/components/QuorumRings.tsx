@@ -18,8 +18,9 @@
 // each one reads as part of the list rather than a box floating above it. The whole row is
 // ~40px tall, which is what moved the list up.
 //
-// The optional quorum pill appears only when Settings -> Voting -> Quorum is set, on the
-// same row, at the inline end.
+// The three tabs are spread evenly across the sidebar (justify-evenly), not packed at the
+// start. The optional quorum pill appears only when Settings -> Voting -> Quorum is set, on
+// its own line above the tabs at the inline end, so it never squeezes the spacing.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { Check, TriangleAlert } from 'lucide-react';
@@ -84,9 +85,23 @@ export default function QuorumRings({
       role="group"
       aria-label={t('identity_quorum_group')}
       title={t('identity_observers_excluded')}
-      className="flex items-end gap-2"
+      className="flex flex-col"
     >
-      <ul className="flex items-end m-0 p-0 list-none" style={{ gap: FLARE + 2, paddingInline: FLARE }}>
+      {/* The quorum pill sits on its own line above the tabs, at the inline end, so the three
+          tabs keep the full width to themselves and stay evenly spaced (15 Sep 2026). */}
+      {quorumNeeded !== null && (
+        <p
+          className="flex items-center justify-end gap-1 m-0 mb-1.5 self-end min-w-0 text-end"
+          style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, lineHeight: 1.15, color: quorumMet ? '#9FD3AE' : '#F2C77E', textWrap: 'balance' }}
+        >
+          {quorumMet ? <Check size={11} strokeWidth={3} aria-hidden className="shrink-0" /> : <TriangleAlert size={11} strokeWidth={2.5} aria-hidden className="shrink-0" />}
+          <span>{quorumMet ? t('identity_quorum_met') : t('identity_quorum_needs', { n: quorumNeeded })}</span>
+        </p>
+      )}
+      {/* Evenly distributed across the whole width (space-evenly: the same gap between the
+          tabs and at both edges), so they spread as the sidebar is resized. The inline
+          padding keeps each tab's foot flare inside the masthead. */}
+      <ul className="flex items-end justify-evenly m-0 p-0 list-none w-full" style={{ paddingInline: FLARE }}>
         {cells.map((c) => (
           <li
             key={c.key}
@@ -109,15 +124,6 @@ export default function QuorumRings({
           </li>
         ))}
       </ul>
-      {quorumNeeded !== null && (
-        <p
-          className="flex items-center justify-end gap-1 m-0 ms-auto min-w-0 text-end self-center"
-          style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, lineHeight: 1.15, color: quorumMet ? '#9FD3AE' : '#F2C77E', textWrap: 'balance' }}
-        >
-          {quorumMet ? <Check size={11} strokeWidth={3} aria-hidden className="shrink-0" /> : <TriangleAlert size={11} strokeWidth={2.5} aria-hidden className="shrink-0" />}
-          <span>{quorumMet ? t('identity_quorum_met') : t('identity_quorum_needs', { n: quorumNeeded })}</span>
-        </p>
-      )}
     </div>
   );
 }

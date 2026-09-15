@@ -48,6 +48,12 @@ import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 const OUTFIT = "'Outfit', sans-serif";
 const RING_DEFAULT = 'rgba(28,20,16,0.14)';
 
+/** Initials disc for a custom seat in the forest chair sidebar (expanded rows): gold on a
+ *  lifted forest, about 5.3:1. */
+export const SIDEBAR_MONOGRAM = { bg: '#2F6045', fg: '#EED98A' } as const;
+/** The same disc in the collapsed rail, which floats on the ivory page: gold on forest, about 8.7:1. */
+export const RAIL_MONOGRAM = { bg: '#1B3828', fg: '#EED98A' } as const;
+
 export interface CircleFlagProps {
   /** ISO 3166-1 alpha-2. Wins over `country`. */
   code?: string | null;
@@ -71,6 +77,8 @@ export interface CircleFlagProps {
   logoFit?: 'cover' | 'contain';
   /** Replaces the monogram when there is no crest and no flag. Rendered centred inside the disc. */
   fallback?: ReactNode;
+  /** Colours of the monogram disc (no crest, no flag). Default ivory ground, forest letters. */
+  monogramColors?: { bg: string; fg: string };
   /** `lazy` by default. Use `eager` for an above-the-fold hero. */
   loading?: 'lazy' | 'eager';
   className?: string;
@@ -97,6 +105,7 @@ export function CircleFlag({
   ring = true,
   logoFit = 'cover',
   fallback,
+  monogramColors,
   loading = 'lazy',
   className = '',
   style,
@@ -148,7 +157,7 @@ export function CircleFlag({
         overflow: 'hidden',
         verticalAlign: 'middle',
         lineHeight: 0,
-        backgroundColor: isCrest ? '#FAF8F3' : src ? 'transparent' : '#E6DFCE',
+        backgroundColor: isCrest ? '#FAF8F3' : src ? 'transparent' : (monogramColors?.bg ?? '#E6DFCE'),
         ...style,
       }}
     >
@@ -175,7 +184,7 @@ export function CircleFlag({
           aria-hidden
           style={{
             position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontFamily: OUTFIT, fontWeight: 800, color: '#1B3828',
+            fontFamily: OUTFIT, fontWeight: 800, color: monogramColors?.fg ?? '#1B3828',
             fontSize: Math.max(7, Math.round(px * (px < 20 ? 0.5 : 0.36))), letterSpacing: '0.02em',
             lineHeight: 1,
           }}
@@ -201,13 +210,19 @@ export function CircleFlag({
  * the nearest `<SeatArtProvider>` (or the Delegate you pass), then its flag,
  * then the unknown-user glyph (UnknownSeatIcon) for a seat that is not a country.
  * Same precedence as `sessionSeatArt`.
+ *
+ * `fallback="initials"`: the chair sidebar (expanded rows and the collapsed rail) draws
+ * the seat's initials instead of the glyph ("European Commission" -> "EC"), in
+ * `monogramColors` when given. Every other surface keeps the glyph.
  */
 export function SeatCircleFlag({
   seat,
   country,
   logoUrl,
   ...rest
-}: Omit<CircleFlagProps, 'art' | 'code' | 'country' | 'logoUrl'> & {
+}: Omit<CircleFlagProps, 'art' | 'code' | 'country' | 'logoUrl' | 'fallback'> & {
+  /** Replaces the unknown-user glyph; `'initials'` draws the seat name's monogram. */
+  fallback?: ReactNode | 'initials';
   /** The delegate, when the call site has one. Wins over `country`/`logoUrl`. */
   seat?: SessionSeat | null;
   /** The seat's country name, when that is all the call site has. */
@@ -219,6 +234,6 @@ export function SeatCircleFlag({
   const art = useSeatArt(name, seat ? seat.logoUrl : logoUrl);
   // A session seat that is not a country and has no crest (a custom speaker) draws the
   // unknown-user glyph, not a monogram (15 Sep 2026). Callers can still pass their own.
-  const fallback = rest.fallback ?? <UnknownSeatIcon size={rest.size ?? 24} bare />;
+  const fallback = rest.fallback === 'initials' ? undefined : (rest.fallback ?? <UnknownSeatIcon size={rest.size ?? 24} bare />);
   return <CircleFlag {...rest} art={art} label={rest.label ?? name} fallback={fallback} />;
 }

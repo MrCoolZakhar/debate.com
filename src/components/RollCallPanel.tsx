@@ -3,7 +3,7 @@
 import React, { useRef, useState, useEffect, useCallback, useLayoutEffect } from 'react';
 import { Committee, DelegateStatus } from '@/lib/types';
 import { getFlagUrl, getCountryDisplayName, UN_COUNTRIES, matchesCountryQuery, startsWithCountryQuery, compareCountryNames } from '@/lib/countries';
-import { SeatCircleFlag } from '@/components/CircleFlag';
+import { SeatCircleFlag, SIDEBAR_MONOGRAM } from '@/components/CircleFlag';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import {
   beginSessionAfterRollCall,
@@ -11,7 +11,7 @@ import {
   resolveJoinRequestsOnAdmit,
 } from '@/lib/committeeService';
 import { liveCaucus } from '@/components/FeedbackLogPanel';
-import { GripVertical, Megaphone, Mic, X } from 'lucide-react';
+import { GripVertical, Megaphone, Mic } from 'lucide-react';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 
@@ -288,7 +288,8 @@ function RollCallPanelInner({
   onRemoveCurrentSpeaker,
 }: {
   /**
-   * Take the speaker holding the floor off it (their row click and a small X on their row).
+   * Take the speaker holding the floor off it (a click on their row; there is no X on the
+   * row any more, 15 Sep 2026: the floor's speaker strip keeps its own X).
    * The chair page logs the speech, pauses and clears the floor. Must be a STABLE callback:
    * it is part of the memo comparator. Omitted = the speaker's row does nothing.
    */
@@ -980,6 +981,9 @@ function RollCallPanelInner({
                       country={d.country}
                       size={flagPx}
                       decorative
+                      // A custom seat with no crest shows its initials here, not the glyph.
+                      fallback="initials"
+                      monogramColors={SIDEBAR_MONOGRAM}
                       ring={isSpeakingRow ? false : 'rgba(255,255,255,0.18)'}
                       style={{
                         // A soft lift so the disc sits above the forest ground, not in it.
@@ -991,6 +995,42 @@ function RollCallPanelInner({
                       }}
                     />
                   )}
+                  {/* Observer placard toggle (the megaphone), a small badge touching the flag at its
+                      bottom inline-end edge (15 Sep 2026; it used to sit at the row's end). Its own
+                      button: the click stops at it, and a pointerdown on a button never starts the
+                      row drag (startPointerDrag). Gold when the delegation is an observer; faint
+                      until the row is hovered otherwise, always shown while taking roll. A
+                      Commenter or an ended session sees it as a plain badge on observer rows only. */}
+                  {!(isReadOnly || isViewOnly) ? (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); toggleObserver(d.id, isObserver); }}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      title={isObserver ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
+                      aria-label={isObserver ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
+                      aria-pressed={isObserver}
+                      className={`absolute -bottom-1 -end-1.5 w-[21px] h-[21px] rounded-full flex items-center justify-center transition-[opacity,transform,background-color] duration-150 active:scale-[0.9] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A] focus-visible:opacity-100 before:absolute before:-inset-1.5 before:content-[''] ${
+                        isObserver || sliderMode ? '' : 'opacity-45 group-hover/seat:opacity-100 [@media(hover:none)]:opacity-80'
+                      }`}
+                      style={{
+                        backgroundColor: isObserver ? '#EED98A' : '#2A5A3C',
+                        color: isObserver ? '#1B3828' : 'rgba(237,231,216,0.85)',
+                        boxShadow: '0 0 0 1.5px #1B3828, 0 1px 3px rgba(0,0,0,0.3)',
+                      }}
+                    >
+                      <Megaphone size={11} strokeWidth={2.5} aria-hidden />
+                    </button>
+                  ) : (!sliderMode && isObserver) ? (
+                    <span
+                      role="img"
+                      aria-label={t('rollcall_observer')}
+                      title={t('rollcall_observer')}
+                      className="absolute -bottom-1 -end-1.5 w-[21px] h-[21px] rounded-full flex items-center justify-center"
+                      style={{ backgroundColor: '#EED98A', color: '#1B3828', boxShadow: '0 0 0 1.5px #1B3828, 0 1px 3px rgba(0,0,0,0.3)' }}
+                    >
+                      <Megaphone size={11} strokeWidth={2.5} aria-hidden />
+                    </span>
+                  ) : null}
                   {/* Queue position, or a microphone for the speaker holding the floor. Omitted
                       for a Room Order Tour de Table, where the number already IS the disc. */}
                   {queuePos !== null && !isRoomOrderTdT && (
@@ -1022,44 +1062,9 @@ function RollCallPanelInner({
                     </span>
                   )}
                 </div>
-                {holdsFloor && onRemoveCurrentSpeaker && (
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); onRemoveCurrentSpeaker(d.id); }}
-                    aria-label={t('speaker_remove_current', { country: getCountryDisplayName(d.country, language) })}
-                    title={t('speaker_remove_current', { country: getCountryDisplayName(d.country, language) })}
-                    className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-full transition-[background-color,transform] duration-150 hover:bg-[rgba(139,32,32,0.55)] active:scale-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/80"
-                    style={{ color: '#EED98A', backgroundColor: 'rgba(237,231,216,0.10)' }}
-                  >
-                    <X size={14} strokeWidth={3} aria-hidden />
-                  </button>
-                )}
                 {isObserver && sliderMode && (
                   <span className="text-[10.5px] shrink-0 font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md" style={{ backgroundColor: 'rgba(238,217,138,0.16)', color: '#EED98A' }}>{t('rollcall_observer')}</span>
                 )}
-                {/* Observer placard toggle (the megaphone). While taking roll it sits beside the
-                    Observer tag and the slider. Outside roll call (15 Sep 2026) it is the ONLY
-                    per-row control: no tag, no slider, just the megaphone, gold when the
-                    delegation is an observer, faint otherwise. A Commenter or an ended session
-                    sees it as a plain icon on observer rows only. */}
-                {!(isReadOnly || isViewOnly) ? (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); toggleObserver(d.id, isObserver); }}
-                    title={isObserver ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
-                    aria-label={isObserver ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
-                    aria-pressed={isObserver}
-                    className={`shrink-0 p-1 rounded-md transition-[opacity,transform,color] active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70 ${
-                      isObserver || sliderMode ? '' : 'opacity-45 group-hover/seat:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-80'
-                    }`}
-                    style={{ color: isObserver ? '#EED98A' : 'rgba(237,231,216,0.6)' }}
-                  >
-                    <Megaphone size={15} />
-                  </button>
-                ) : (!sliderMode && isObserver) ? (
-                  <span role="img" aria-label={t('rollcall_observer')} title={t('rollcall_observer')} className="shrink-0 p-1" style={{ color: '#EED98A' }}>
-                    <Megaphone size={15} aria-hidden />
-                  </span>
-                ) : null}
                 {/* Absent says so in words outside roll call. Present and Present-and-Voting are
                     deliberately NOT told apart here (no PV tag, no tint): the slider carries that
                     distinction while taking roll. */}

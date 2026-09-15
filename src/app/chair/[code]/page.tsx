@@ -41,6 +41,7 @@ import { isViewingChatConversation } from '@/lib/chatViewing';
 import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
 import ChairSidebarShell from '@/components/ChairSidebarShell';
 import SidebarFlagRail from '@/components/SidebarFlagRail';
+import FloorBarExtent from '@/components/FloorBarExtent';
 import { SIDEBAR_DEFAULT_WIDTH, loadSidebarWidth, saveSidebarWidth, loadSidebarCollapsed, saveSidebarCollapsed } from '@/lib/sidebarWidth';
 import { startSessionSync, rowFields, withCurrentSpeaker, withLists, ALL_SYNC_SLICES, COALESCE_MS, type ConnectionState, type SessionSync, type FetchMeta } from '@/lib/sessionSync';
 import { endModeratedCaucusIfAnchorUnchanged } from '@/lib/caucusExpiryWrite';
@@ -1241,7 +1242,9 @@ function ModeratedCaucusMain({
       )}
 
       {!sessionEnded && (
-        <div className="border-t border-[#DDD4C0] px-6 py-2" style={{ backgroundColor: '#F6F1E9' }}>
+        // Same full-width treatment as the GSL add bar (FloorBarExtent). Not for a Commenter:
+        // their comment dock sits under this bar, so it is not flush with the page bottom.
+        <FloorBarExtent active={!isViewOnly} className="border-t border-[#DDD4C0] px-6 py-2" style={{ backgroundColor: '#F6F1E9' }}>
           {/* Total timer bar — hidden for Tour de Table */}
           {!isTdT && (
             <div className="flex items-center gap-3 mb-4">
@@ -1304,7 +1307,7 @@ function ModeratedCaucusMain({
             onEndCaucus={isTdT ? handleEndCaucus : undefined}
             onRecognise={onRecognise}
           />}
-        </div>
+        </FloorBarExtent>
       )}
     </>
   );
@@ -4228,7 +4231,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   return (
     <FitToScreen>
     <SeatArtProvider delegates={committee.delegates}>
-    <div className="h-full w-full flex overflow-hidden relative" style={{ backgroundColor: '#EDE7D8' }}>
+    <div data-chair-root className="h-full w-full flex overflow-hidden relative" style={{ backgroundColor: '#EDE7D8' }}>
       <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
       {/* The roster sidebar runs the FULL height of the screen, from the very top, with
           the top bar starting at its edge. ChairSidebarShell owns the slot, the forest panel,
@@ -4255,6 +4258,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   : committee}
                 emblem={{ src: committeeEmblem.logoUrl ?? matchPresetEmblem(rawName, committeeEmblem.abbreviation), monogram: emblemMonogram(primary), alt: primary }}
                 onExpand={() => toggleSidebarCollapsed(false)}
+                // Reorder from the collapsed column: the same handler the expanded list uses
+                // (none in an unmoderated caucus, whose panel has none either). Moderator only.
+                onReorderList={isViewOnly || sessionEnded ? undefined
+                  : (caucusPanelLocked || committee.caucus?.type === 'moderated') ? handleReorderCaucusQueue
+                  : (committee.phase === 'unmoderated-caucus' && committee.caucus) ? undefined
+                  : handleReorderSpeakersList}
               />
             );
           })()}
@@ -4858,7 +4867,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   )}
                 </div>
                 {!sessionEnded && !isViewOnly && (
-                <div className="border-t border-[#DDD4C0] px-6 py-2 shrink-0" style={{ backgroundColor: '#F6F1E9' }}>
+                // FloorBarExtent publishes this bar's height: the collapsed sidebar column
+                // continues its ground under itself so the bar runs the full page width.
+                <FloorBarExtent className="border-t border-[#DDD4C0] px-6 py-2 shrink-0" style={{ backgroundColor: '#F6F1E9' }}>
                   {!isViewOnly && <div className="flex items-center gap-3 mb-2">
                     <span className="text-xs text-[#9A8A78] font-mono shrink-0">{t('gsl_time')}</span>
                     <div className="flex gap-1.5">
@@ -4896,7 +4907,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     <AddSpeakerInput committee={committee} onAdd={belowQuorum ? () => {} : handleAddToSpeakersList} onRecognise={belowQuorum ? undefined : recogniseAbsentDelegate} />
                   </div>
                   )}
-                </div>
+                </FloorBarExtent>
                 )}
                 </>
               )}
