@@ -30,6 +30,7 @@ import {
   caucusQueueCapacity,
 } from '@/lib/committeeService';
 import { serverNow, serverNowIso } from '@/lib/serverClock';
+import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 
 type ModalView = 'list' | 'raise' | 'vote';
 type TypeMeta = Record<PendingMotionType, { icon: string; label: string; sub: string }>;
@@ -347,7 +348,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries, optional
                   }`}>
                   {isChair
                     ? <span className="text-base leading-none">🪑</span>
-                    : <SeatFlag country={country} size={20} className="object-contain inline-block" fallback={<Emoji size="1.125rem">🌐</Emoji>} />}
+                    : <SeatFlag country={country} size={20} className="object-contain inline-block" fallback={<UnknownSeatIcon size={20} />} />}
                   <span className="text-sm flex-1">{dName(country)}</span>
                   {isBlocked
                     ? <span className="text-xs text-[#B8844A] shrink-0 font-semibold">{t('motions_motion_on_floor')}</span>
@@ -1574,7 +1575,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                               <div className="flex items-center gap-1.5 mt-1">
                                 {m.proposedBy === CHAIR_KEY
                                   ? <span className="text-base leading-none">🪑</span>
-                                  : <SeatFlag country={m.proposedBy} size={20} className="object-contain inline-block" fallback={<Emoji size="1rem">🌐</Emoji>} />}
+                                  : <SeatFlag country={m.proposedBy} size={20} className="object-contain inline-block" fallback={<UnknownSeatIcon size={20} />} />}
                                 <span className="text-sm font-semibold text-[#1C1410]">{m.proposedBy === CHAIR_KEY ? chairDisplayName(language) : getCountryDisplayName(m.proposedBy, language)}</span>
                               </div>
                             )}

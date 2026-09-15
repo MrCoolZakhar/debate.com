@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { getFlagUrl } from '@/lib/countries';
-import { Emoji } from '@/components/Emoji';
+import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 
 interface FlagImgProps {
   code: string;
@@ -40,7 +40,8 @@ export function FlagImg({ code, size = 24, className = '', logoUrl, label, style
       </span>
     );
   }
-  if (!code) return <Emoji size={`${size}px`}>🌐</Emoji>;
+  // Not a country (a custom speaker, a press seat): the unknown-user badge, never a globe.
+  if (!code) return <UnknownSeatIcon size={size} className={className} />;
   return (
     <img
       src={getFlagUrl(code)}

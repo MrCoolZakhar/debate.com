@@ -2,39 +2,35 @@
 
 /**
  * The draggable divider between the chair console's roster sidebar and the
- * main floor view.
+ * main floor view. Mounted by ChairSidebarShell, at the inline-end edge of the
+ * sidebar slot, in both the expanded and the collapsed state.
  *
- * ── WHY IT WRITES TO THE DOM DURING THE DRAG ──────────────────────────────
+ * ── WHY IT NEVER RENDERS DURING THE DRAG ──────────────────────────────────
  * AGENTS.md RULE 3 exists because 1-second timer ticks that went through React
  * state re-rendered the whole 4,000-line chair page. A pointer drag fires far
- * faster than 1 Hz, so routing every mousemove through `setState` would be the
- * same mistake with a worse duty cycle. Instead the drag mutates
- * `asideRef.current.style.width` directly and commits ONE `setState` on
- * pointerup.
+ * faster than 1 Hz, so routing every pointermove through `setState` would be the
+ * same mistake with a worse duty cycle. Instead every move calls `onLive(raw)`,
+ * which the shell paints straight onto the DOM, and ONE `onRelease(raw)` lands on
+ * pointerup. The raw width is NOT clamped to the minimum: below it the shell
+ * previews the fold, and a release below SIDEBAR_COLLAPSE_AT collapses.
  *
  * Nothing here goes anywhere near the committee object: no `updateLocal`, no
  * `setCommittee`, and therefore RULE 4's `localUpdateTime` debounce clock is
- * never touched. A resize must never be mistaken for a structural write, or
- * delegate views would stop seeing the head chair's changes for 3 s.
+ * never touched.
  *
  * ── ACCESSIBILITY ─────────────────────────────────────────────────────────
  * `role="separator"` + `aria-orientation="vertical"` + `aria-valuenow/min/max`,
- * focusable, and driven by ←/→ (plus Home/End for the two extremes). The
- * keyboard path commits state per keypress — that is a handful of renders on
- * deliberate input, not a per-frame stream.
- *
- * `prefers-reduced-motion` removes the settle transition entirely; the width
- * still changes, it just does not animate.
+ * focusable. ←/→ resize by SIDEBAR_KEY_STEP; shrinking at the minimum collapses,
+ * growing while collapsed expands. Home = minimum, End = maximum, Enter toggles.
  *
  * ── LAYOUT ────────────────────────────────────────────────────────────────
- * Zero layout width (15 Sep 2026). It used to be a 10px forest gutter between the
- * aside and the floor. Now an 8px strip centred on the edge takes the pointer, and a
+ * Zero layout width. An 8px strip centred on the edge takes the pointer, and a
  * small grip pill appears just outside the sidebar on hover, focus or drag.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_KEY_STEP, clampSidebarWidth,
+  SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_RAIL_WIDTH, SIDEBAR_KEY_STEP, clampSidebarWidth,
 } from '@/lib/sidebarWidth';
 import { GripVertical } from 'lucide-react';
 
@@ -43,16 +39,25 @@ const HIT = 8;
 
 export default function SidebarResizer({
   width,
-  targetRef,
+  collapsed,
+  onLive,
+  onRelease,
   onCommit,
+  onCollapsedChange,
   label = 'Resize the delegates sidebar',
 }: {
   /** The committed width, in px. Source of truth between drags. */
   width: number;
-  /** The <aside> being resized. Mutated directly while dragging. */
-  targetRef: React.RefObject<HTMLElement | null>;
-  /** Called once per gesture with the final clamped width. */
+  /** The sidebar is folded to its flag column. */
+  collapsed: boolean;
+  /** Every pointer move: the raw width under the pointer (never below the rail width). */
+  onLive: (raw: number) => void;
+  /** Pointer released: the raw width. The shell decides collapse / snap / commit. */
+  onRelease: (raw: number) => void;
+  /** A keyboard resize, already clamped. */
   onCommit: (width: number) => void;
+  /** A keyboard (or double-click) collapse / expand. */
+  onCollapsedChange: (collapsed: boolean) => void;
   label?: string;
 }) {
   const [dragging, setDragging] = useState(false);
@@ -63,25 +68,24 @@ export default function SidebarResizer({
   const liveRef = useRef(width);
   const startXRef = useRef(0);
   const startWRef = useRef(width);
+  const movedRef = useRef(false);
 
   const reduceMotion =
     typeof window !== 'undefined' &&
     typeof window.matchMedia === 'function' &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  const paint = useCallback((px: number) => {
-    const el = targetRef.current;
-    if (el) el.style.width = `${px}px`;
-  }, [targetRef]);
+  const shown = collapsed ? SIDEBAR_RAIL_WIDTH : width;
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     // Left button / touch / pen only; a right-click must not start a drag.
     if (e.button !== 0) return;
     e.preventDefault();
-    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    try { (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); } catch { /* gone */ }
     startXRef.current = e.clientX;
-    startWRef.current = width;
-    liveRef.current = width;
+    startWRef.current = shown;
+    liveRef.current = shown;
+    movedRef.current = false;
     setDragging(true);
   };
 
@@ -93,15 +97,21 @@ export default function SidebarResizer({
     const rtl = typeof document !== 'undefined'
       && getComputedStyle(document.documentElement).direction === 'rtl';
     const sign = rtl ? -1 : 1;
+    // The console is drawn inside FitToScreen's scale(): screen pixels are not layout pixels.
+    const root = document.getElementById('fit-root');
+    const scale = root ? (root.getBoundingClientRect().height / (root.offsetHeight || 1)) || 1 : 1;
 
     const move = (e: PointerEvent) => {
-      const next = clampSidebarWidth(startWRef.current + sign * (e.clientX - startXRef.current));
+      const dx = (e.clientX - startXRef.current) / scale;
+      if (!movedRef.current && Math.abs(dx) < 3) return;
+      movedRef.current = true;
+      const next = Math.round(Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_RAIL_WIDTH, startWRef.current + sign * dx)));
       liveRef.current = next;
-      paint(next);
+      onLive(next);
     };
     const up = () => {
       setDragging(false);
-      onCommit(liveRef.current);
+      if (movedRef.current) onRelease(liveRef.current);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
@@ -118,16 +128,29 @@ export default function SidebarResizer({
       document.body.style.userSelect = prevSelect;
       document.body.style.cursor = prevCursor;
     };
-  }, [dragging, onCommit, paint]);
+  }, [dragging, onLive, onRelease]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const rtl = typeof document !== 'undefined'
       && getComputedStyle(document.documentElement).direction === 'rtl';
     const grow = rtl ? 'ArrowLeft' : 'ArrowRight';
     const shrink = rtl ? 'ArrowRight' : 'ArrowLeft';
+    if (e.key === 'Enter') { e.preventDefault(); onCollapsedChange(!collapsed); return; }
+    if (collapsed) {
+      if (e.key === grow || e.key === 'End' || e.key === 'Home') {
+        e.preventDefault();
+        onCollapsedChange(false);
+        if (e.key === 'End') onCommit(SIDEBAR_MAX_WIDTH);
+        if (e.key === 'Home') onCommit(SIDEBAR_MIN_WIDTH);
+      }
+      return;
+    }
     let next: number | null = null;
     if (e.key === grow) next = width + SIDEBAR_KEY_STEP;
-    else if (e.key === shrink) next = width - SIDEBAR_KEY_STEP;
+    else if (e.key === shrink) {
+      if (width <= SIDEBAR_MIN_WIDTH) { e.preventDefault(); onCollapsedChange(true); return; }
+      next = width - SIDEBAR_KEY_STEP;
+    }
     else if (e.key === 'Home') next = SIDEBAR_MIN_WIDTH;
     else if (e.key === 'End') next = SIDEBAR_MAX_WIDTH;
     if (next === null) return;
@@ -138,18 +161,18 @@ export default function SidebarResizer({
   const lit = dragging || focused || hovered;
 
   return (
-    // Zero layout width: the floor starts flush at the sidebar's edge. The grabbable strip
-    // (HIT px, centred on the edge) and the grip pill just OUTSIDE the edge are absolutely
-    // positioned over both columns, so neither costs the floor view a pixel.
-    <div className="shrink-0 self-stretch relative z-30" style={{ width: 0 }}>
+    // Zero layout width, pinned to the slot's inline-end edge. The grabbable strip (HIT px,
+    // centred on the edge) and the grip pill just OUTSIDE the edge are absolutely positioned
+    // over both columns, so neither costs the floor view a pixel.
+    <div className="absolute inset-y-0 z-30" style={{ insetInlineEnd: 0, width: 0 }}>
       <div
         role="separator"
         aria-orientation="vertical"
         aria-label={label}
-        aria-valuenow={width}
-        aria-valuemin={SIDEBAR_MIN_WIDTH}
+        aria-valuenow={shown}
+        aria-valuemin={SIDEBAR_RAIL_WIDTH}
         aria-valuemax={SIDEBAR_MAX_WIDTH}
-        aria-valuetext={`${width} pixels`}
+        aria-valuetext={`${shown} pixels`}
         tabIndex={0}
         onPointerDown={onPointerDown}
         onKeyDown={onKeyDown}
@@ -157,7 +180,7 @@ export default function SidebarResizer({
         onBlur={() => setFocused(false)}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        onDoubleClick={() => onCommit(clampSidebarWidth(SIDEBAR_MIN_WIDTH))}
+        onDoubleClick={() => (collapsed ? onCollapsedChange(false) : onCommit(clampSidebarWidth(SIDEBAR_MIN_WIDTH)))}
         title={label}
         className="absolute inset-y-0 focus:outline-none"
         style={{
@@ -174,7 +197,7 @@ export default function SidebarResizer({
           style={{
             insetInlineStart: HIT / 2 - 1,
             width: 2,
-            backgroundColor: lit ? '#EED98A' : 'transparent',
+            backgroundColor: lit ? (collapsed ? 'rgba(27,56,40,0.35)' : '#EED98A') : 'transparent',
             opacity: dragging ? 1 : 0.7,
             transition: reduceMotion ? 'none' : 'background-color 160ms ease, opacity 160ms ease',
           }}

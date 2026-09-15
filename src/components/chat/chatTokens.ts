@@ -10,16 +10,38 @@ import type { TranslationKey } from '@/lib/translations';
 export type TFn = (key: TranslationKey, vars?: Record<string, string | number>) => string;
 
 // ─── Chat-local surfaces ────────────────────────────────────────────────────
-// Everything else comes from NEU (neu.tsx). These two are the incoming-bubble surface and
-// the hairline rule used across the chat, defined ONCE here so no component re-hardcodes
-// them. They sit between NEU.surface and white in the same ivory family.
+// Everything else comes from NEU (neu.tsx) and the notification glass. Defined ONCE here so
+// no component re-hardcodes them.
 export const CHAT = {
-  bubbleIn: '#FAF8F3',
-  hairline: '#DDD4C0',
-  // Failed-delivery accent. neu.tsx has no red — the forest/ivory system never needed one —
-  // so it lives here rather than being re-typed inside a component.
+  /** Thread canvas: the ivory page with the faintest forest wash, so white bubbles lift off it. */
+  canvas: 'color-mix(in srgb, var(--gv-bg, #EDE7D8) 94%, var(--gv-main, #1B3828))',
+  /** Incoming bubble. */
+  bubbleIn: '#FFFDF8',
+  /** Outgoing bubble: forest, ivory ink. */
+  bubbleOut: 'var(--gv-main, #1B3828)',
+  hairline: 'rgba(28,20,16,0.09)',
+  /** Selected row in the conversation list. */
+  rowActive: 'color-mix(in srgb, var(--gv-main, #1B3828) 9%, transparent)',
+  rowHover: 'color-mix(in srgb, var(--gv-main, #1B3828) 5%, transparent)',
+  /** The glass-look bars (list header, thread header, composer). Opaque on purpose: a real
+   *  backdrop-filter inside a dialog that scales in is re-blurred on every animation frame. */
+  bar: 'linear-gradient(180deg, color-mix(in srgb, var(--gv-surface, #FAF8F3) 97%, white) 0%, color-mix(in srgb, var(--gv-surface, #FAF8F3) 94%, var(--gv-main, #1B3828)) 100%)',
+  barShadow: 'inset 0 1px 0 rgba(255,255,255,0.8), 0 1px 0 rgba(28,20,16,0.06)',
+  // Failed-delivery accent. neu.tsx has no red, so it lives here.
   danger: '#B4432F',
 } as const;
+
+/** "14:05" today, "Yesterday", a weekday within the week, else a short date. For list rows. */
+export function formatListTime(ts: number, t: TFn, locale: string): string {
+  const d = new Date(ts);
+  const day = startOfDay(d);
+  const today = startOfDay(new Date());
+  const oneDay = 24 * 60 * 60 * 1000;
+  if (day === today) return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  if (day === today - oneDay) return t('chat_yesterday');
+  if (today - day < 6 * oneDay) return d.toLocaleDateString(locale, { weekday: 'short' });
+  return d.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+}
 
 /** 3 minutes — consecutive messages from one sender inside this window form a group. */
 export const GROUP_WINDOW_MS = 3 * 60 * 1000;
@@ -29,8 +51,8 @@ export function displayContent(content: string): string {
   return content.startsWith('[🎙️] ') ? content.slice(5) : content;
 }
 
-export function formatTime(ts: Date | string): string {
-  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+export function formatTime(ts: Date | string, locale?: string): string {
+  return new Date(ts).toLocaleTimeString(locale ? [locale] : [], { hour: '2-digit', minute: '2-digit' });
 }
 
 function startOfDay(d: Date): number {

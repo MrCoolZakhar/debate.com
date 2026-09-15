@@ -1,10 +1,11 @@
 'use client';
 
+import { Megaphone, Gavel, Users } from 'lucide-react';
 import { SeatCircleFlag } from '@/components/CircleFlag';
-import { NEU, NEU_GRADIENTS, OUTFIT } from '@/components/neu';
-import { CHAT } from './chatTokens';
+import { NEU, OUTFIT } from '@/components/neu';
+import type { ChatEntryKind } from '@/lib/chatConversations';
 
-export type AvatarKind = 'everyone' | 'dais' | 'chair' | 'delegate';
+export type AvatarKind = ChatEntryKind;
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -14,104 +15,69 @@ function initials(name: string): string {
 }
 
 /**
- * One avatar rule for the whole chat.
+ * One avatar rule for the whole chat. `size` is the DIAMETER of the disc.
  *
- * - delegate → the country's flag, resolved Delegate.country → getCountryByName(...)?.code →
- *   FlagImg, exactly as the chair page Waiting Room does it.
- * - chair → forest gradient disc with initials (chairs have no flag).
- * - everyone → announce glyph for the public thread.
+ * - delegate → the seat's round flag (crest → flag → monogram) through SeatCircleFlag
+ * - chair    → forest disc with gold initials (chairs have no flag)
+ * - everyone → gold disc, megaphone
+ * - dais     → forest disc, gavel (the delegate-side "Chairs" thread, the dais as a whole)
+ * - group    → sage disc, people glyph
+ *
+ * Flat discs with a hairline, no neumorphic shadow: a list of forty of these re-rasterises
+ * every time the dialog animates, and a soft shadow on each one is what made it expensive.
  */
 export function ChatAvatar({
   kind,
   name,
-  size = 22,
+  size = 40,
 }: {
   kind: AvatarKind;
-  /** Country name for a delegate, chair name for a chair. Unused for 'everyone'. */
+  /** Country name for a delegate, chair name for a chair. Unused for the rest. */
   name?: string;
-  /** Flag/glyph size. The surrounding disc is sized from it. */
   size?: number;
 }) {
-  const disc = Math.round(size * 1.55);
   const base: React.CSSProperties = {
-    width: disc,
-    height: disc,
+    width: size,
+    height: size,
     borderRadius: 999,
     flexShrink: 0,
+    boxShadow: 'inset 0 0 0 1px rgba(28,20,16,0.08)',
   };
+  const icon = Math.round(size * 0.46);
 
-  if (kind === 'everyone') {
-    return (
-      <span
-        className="inline-flex items-center justify-center"
-        style={{
-          ...base,
-          background: `linear-gradient(135deg, ${NEU_GRADIENTS.gold[0]}, ${NEU_GRADIENTS.gold[1]})`,
-          boxShadow: NEU.outSm,
-          fontSize: Math.round(size * 0.72),
-          lineHeight: 1,
-        }}
-        aria-hidden
-      >
-        📢
-      </span>
-    );
-  }
-
-  if (kind === 'dais') {
-    // The delegate-side "Chairs" thread — the dais collectively, not one named chair.
-    return (
-      <span
-        className="inline-flex items-center justify-center"
-        style={{
-          ...base,
-          background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-          boxShadow: NEU.outSm,
-          fontSize: Math.round(size * 0.66),
-          lineHeight: 1,
-        }}
-        aria-hidden
-      >
-        🪑
-      </span>
-    );
+  if (kind === 'delegate') {
+    return <SeatCircleFlag country={name ?? ''} size={size} decorative />;
   }
 
   if (kind === 'chair') {
     return (
       <span
+        aria-hidden
         className="inline-flex items-center justify-center"
         style={{
           ...base,
-          background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-          boxShadow: NEU.outSm,
+          background: `linear-gradient(135deg, ${NEU.forest}, ${NEU.green})`,
           color: NEU.gold,
           fontFamily: OUTFIT,
-          fontWeight: 900,
-          fontSize: Math.round(size * 0.55),
+          fontWeight: 800,
+          fontSize: Math.max(10, Math.round(size * 0.36)),
           letterSpacing: '0.02em',
         }}
-        aria-hidden
       >
         {initials(name ?? '')}
       </span>
     );
   }
 
-  // The flag fills the whole disc (square round-flag artwork); a seat with no
-  // flag shows its monogram on the same disc.
-  return (
-    <SeatCircleFlag
-      country={name ?? ''}
-      size={disc}
-      decorative
-      style={{ boxShadow: NEU.outSm, backgroundColor: CHAT.bubbleIn }}
-    />
-  );
-}
+  const tone = kind === 'everyone'
+    ? { bg: `linear-gradient(135deg, ${NEU.gold}, ${NEU.deepGold})`, fg: NEU.forest, Icon: Megaphone }
+    : kind === 'dais'
+      ? { bg: `linear-gradient(135deg, ${NEU.forest}, ${NEU.green})`, fg: NEU.gold, Icon: Gavel }
+      : { bg: 'linear-gradient(135deg, #CFDCCB, #A9C2A6)', fg: NEU.forest, Icon: Users };
 
-export function avatarKindFor(key: string, chairNames: string[]): AvatarKind {
-  if (key === 'everyone') return 'everyone';
-  if (key === 'chairs') return 'dais';
-  return chairNames.includes(key) ? 'chair' : 'delegate';
+  return (
+    <span aria-hidden className="inline-flex items-center justify-center" style={{ ...base, background: tone.bg, color: tone.fg }}>
+      <tone.Icon size={icon} strokeWidth={2.2} />
+    </span>
+  );
 }

@@ -19,7 +19,6 @@ import { getCountryByName, getCountryDisplayName, matchesCountryQuery } from '@/
 import { SeatFlag, SeatArtProvider } from '@/components/SeatFlag';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import { supabase } from '@/lib/supabase';
-import { Emoji } from '@/components/Emoji';
 import CowDelegationBoard from '@/components/CowDelegationBoard';
 import ChatDisabledNotice from '@/components/ChatDisabledNotice';
 import { getCommitteeFlags, sponsorLabel, motionNames } from '@/lib/committeeFlags';
@@ -45,6 +44,7 @@ import { claimDelegateSeat, leaveDelegateSeat, seatKey } from '@/lib/seatClaims'
 import { useDelegateIdleLogout, markDelegateActivity } from '@/lib/delegateIdle';
 import DelegateIdleWarning from '@/components/delegate/DelegateIdleWarning';
 import { safeStorageKey } from '@/lib/storageKey';
+import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function abbreviateCommitteeName(name: string): string {
@@ -134,7 +134,7 @@ function SeatMark({ country }: { country: string }) {
       country={country}
       className="inline-block object-contain"
       style={{ width: '1em', height: '1em' }}
-      fallback={<Emoji size="1em">🌐</Emoji>}
+      fallback={<UnknownSeatIcon size={16} style={{ width: '1em', height: '1em' }} />}
     />
   );
 }
@@ -2368,14 +2368,14 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         {chatDisabled ? (
           <ChatDisabledNotice />
         ) : (
-          // Full-bleed inside the sheet: ChatPanel's conversation rail is a fixed 280px,
-          // so every pixel of sheet padding comes straight off the thread pane.
+          // Full-bleed inside the sheet. ChatPanel measures its own width: one pane (list, then
+          // thread with a back button) on a phone, two panes when the sheet is wide.
           <div className="flex overflow-hidden" style={{ height: '62vh', minHeight: 320, margin: '0 -16px -24px', borderRadius: 0 }}>
             <ChatPanel
               committee={committee}
               senderName={country}
               isChair={false}
-              onClose={() => setSheet(null)}
+              embedded
               readCounts={chatReadCounts}
               onReadCountsChange={setChatReadCounts}
               readOnly={sessionEnded}

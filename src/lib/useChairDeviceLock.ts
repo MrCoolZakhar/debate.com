@@ -4,7 +4,8 @@
 // One device per signed-in account per session, on /chair/[code] and /voting/[code].
 // Contract and RPCs: src/lib/chairDeviceClaims.ts.
 //
-//   • On load (enabled + signed in) the page claims WITH takeover: opening the page is a
+//   • On load (enabled + signed in, first activation for this account + committee per
+//     mount) the page claims WITH takeover: opening the page is a
 //     deliberate choice to chair from here, so the newest device wins. When that moved
 //     the claim ('claimed'), it broadcasts `taken` on `chair-device-<committeeId>`.
 //   • Every other check is WITHOUT takeover and can only ever report 'other_device':
@@ -62,6 +63,12 @@ export function useChairDeviceLock(opts: {
   // Until one claim WITH takeover has succeeded, this device never claimed at all, so a
   // retry must take over too; otherwise a failed first claim would read as "kicked".
   const claimedOnceRef = useRef(false);
+  // The key the refs above describe. Re-activating for the SAME key (the page's `enabled`
+  // flickered: an access re-check, the committee briefly unloaded) is NOT opening the page:
+  // it keeps what this mount already knows and re-verifies without takeover. Resetting here
+  // made every flicker a fresh takeover, so one device's hourly token refresh (which used to
+  // flip the chair page's access state) kicked the same account's other device.
+  const refsKeyRef = useRef<string | null>(null);
 
   const active = enabled && !!userId && !!committeeId && !!code;
 
@@ -92,8 +99,12 @@ export function useChairDeviceLock(opts: {
     if (!active || !committeeId || !userId) return;
     let alive = true;
     // A new account or committee has not claimed anything yet.
-    claimedOnceRef.current = false;
-    kickedRef.current = false;
+    const sameKey = refsKeyRef.current === lockKey;
+    if (!sameKey) {
+      refsKeyRef.current = lockKey;
+      claimedOnceRef.current = false;
+      kickedRef.current = false;
+    }
     const deviceId = getGavelDeviceId(code);
     Promise.all([shortTag(userId), shortTag(deviceId)]).then(([u, d]) => {
       if (!alive) return;
@@ -123,7 +134,14 @@ export function useChairDeviceLock(opts: {
 
     // The load claim: newest device wins. Deferred a microtask so no state is set from the
     // effect body itself.
-    void Promise.resolve().then(() => { if (alive) check(true, lockKey); });
+    // Only the first activation for this key per mount takes over; a re-activation re-verifies
+    // (check() still takes over while no claim has ever succeeded, so a failed first RPC
+    // never reads as kicked), and a kicked device never claims until "Use this device".
+    void Promise.resolve().then(() => {
+      if (!alive) return;
+      if (!sameKey) check(true, lockKey);
+      else if (!kickedRef.current) check(false, lockKey);
+    });
 
     const reverify = () => { if (alive && !kickedRef.current) check(false, lockKey); };
     const id = setInterval(reverify, REVERIFY_MS);

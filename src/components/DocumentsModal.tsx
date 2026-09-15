@@ -14,9 +14,9 @@ import { docName, docCount, docLimit, docLimitReached } from '@/lib/docNames';
 import { TranslationKey } from '@/lib/translations';
 import { getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import { SeatFlag } from '@/components/SeatFlag';
-import { Emoji } from '@/components/Emoji';
 import { supabase } from '@/lib/supabase';
 import { safeStorageKey } from '@/lib/storageKey';
+import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 import {
   addDocument as addDocumentInDB,
   updateDocumentApproval as updateDocumentApprovalInDB,
@@ -61,7 +61,7 @@ function CountryChip({ country, onRemove }: { country: string; onRemove: () => v
   const { language } = useLanguage();
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#DDD4C0] border border-[#DDD4C0] rounded-full text-xs text-[#1C1410]">
-      <SeatFlag country={country} size={16} className="object-contain inline-block me-1" fallback={'🌐'} />{getCountryDisplayName(country, language)}
+      <SeatFlag country={country} size={16} className="object-contain inline-block me-1" fallback={<UnknownSeatIcon size={16} className="me-1" />} />{getCountryDisplayName(country, language)}
       <button onClick={onRemove} className="text-[#9A8A78] hover:text-red-500 ms-0.5 leading-none">✕</button>
     </span>
   );
@@ -158,7 +158,7 @@ function SponsorSelect({ candidates, selected, onChange, committee }: {
                 return (
                   <button key={c} onMouseDown={(e) => { e.preventDefault(); add(c); }}
                     className={`w-full flex items-center gap-2 px-3 py-2 text-start transition-colors ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
-                    <SeatFlag country={c} size={20} className="object-contain inline-block" fallback={<span>🌐</span>} />
+                    <SeatFlag country={c} size={20} className="object-contain inline-block" fallback={<UnknownSeatIcon size={20} />} />
                     <span className="text-sm">{getCountryDisplayName(c, language)}</span>
                   </button>
                 );
@@ -179,7 +179,7 @@ function SponsorSelect({ candidates, selected, onChange, committee }: {
                   country={c}
                   className="rounded"
                   style={{ width: 40, height: 28, objectFit: 'cover', border: '1.5px solid rgba(28,20,16,0.15)' }}
-                  fallback={<span className="text-2xl">🌐</span>}
+                  fallback={<UnknownSeatIcon size={28} />}
                 />
                 <span className="absolute inset-0 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity text-xs font-bold text-white"
                   style={{ backgroundColor: 'rgba(139,32,32,0.7)' }}>✕</span>

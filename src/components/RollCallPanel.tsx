@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useLayoutEffect } from 'react';
 import { Committee, DelegateStatus } from '@/lib/types';
 import { getFlagUrl, getCountryDisplayName, UN_COUNTRIES, matchesCountryQuery, startsWithCountryQuery, compareCountryNames } from '@/lib/countries';
 import { SeatCircleFlag } from '@/components/CircleFlag';
@@ -13,6 +13,7 @@ import {
 import { liveCaucus } from '@/components/FeedbackLogPanel';
 import { GripVertical, Megaphone, Mic, X } from 'lucide-react';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
+import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 
 // ── FlagCircle ────────────────────────────────────────────────────────────────
 export function FlagCircle({ country, size = 'md' }: { country: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'hero' }) {
@@ -158,7 +159,7 @@ function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Commi
               onMouseDown={(e) => { e.preventDefault(); commit(trimmed); }}
               className="w-full flex items-center gap-2.5 px-3 py-2.5 text-start transition-colors text-[#1C1410] hover:bg-[#DDD4C0] border-t border-[#DDD4C0]"
             >
-              <span className="text-base">🌐</span>
+              <UnknownSeatIcon size={20} />
               <span className="text-sm flex-1">{trimmed}</span>
               <span className="text-[10px] text-[#1B3828] shrink-0 font-semibold">Add custom</span>
             </button>
@@ -365,6 +366,8 @@ function RollCallPanelInner({
   const dragRef = useRef<{
     id: string; pointerId: number; startY: number; startScroll: number; lastY: number;
     active: boolean; slot: number; el: HTMLElement | null; raf: number;
+    /** Screen px per layout px (FitToScreen's scale). */ scale: number;
+    /** Pointer travel before the row lifts: 4 on the grip, 6 on the row (a click stays a click). */ slop: number;
   } | null>(null);
   // A drag must never end in a row click (add / remove / recognise): true for 400 ms after one.
   const justDraggedRef = useRef(false);
@@ -620,24 +623,43 @@ function RollCallPanelInner({
     return next.every((s, i) => s.delegateId === list[i]?.delegateId) ? null : next;
   };
 
-  const paintDrag = () => {
+  // ── Pointer drag ─────────────────────────────────────────────────────────────
+  // A queued row can be picked up from ANYWHERE on it with a mouse or pen (it lifts after
+  // ROW_SLOP px, so a plain click still adds / removes), and from the grip with any pointer,
+  // touch included (the grip is touch-action: none; the row is not, so a finger still
+  // scrolls the list). Moves and the release are read from WINDOW listeners, so the drag
+  // never depends on pointer capture or on the pointer staying over the row it started on.
+  // That dependency is why the queue "was not draggable" (15 Sep 2026): only the faint
+  // 28px grip could start a drag, and nothing on the row itself did.
+  // The console is drawn inside FitToScreen's scale(), so every screen distance is divided
+  // by the list's scale before it is compared with layout offsets.
+  const latestRef = useRef({ reorderIds, reorderedList, onReorderList });
+  useEffect(() => { latestRef.current = { reorderIds, reorderedList, onReorderList }; });
+
+  const paintDrag = useCallback(() => {
     const st = dragRef.current;
     const list = listRef.current;
     if (!st || !st.active || !list) return;
-    if (st.el) st.el.style.transform = `translateY(${st.lastY - st.startY + (list.scrollTop - st.startScroll)}px)`;
-    const y = st.lastY - list.getBoundingClientRect().top + list.scrollTop;
+    if (st.el) st.el.style.transform = `translateY(${(st.lastY - st.startY) / st.scale + (list.scrollTop - st.startScroll)}px)`;
+    const y = (st.lastY - list.getBoundingClientRect().top) / st.scale + list.scrollTop;
     let slot = 0;
-    for (const id of reorderIds) {
+    for (const id of latestRef.current.reorderIds) {
       if (id === st.id) continue;
       const row = list.querySelector<HTMLElement>(`[data-reorder-id="${CSS.escape(id)}"]`);
       if (row && y > row.offsetTop + row.offsetHeight / 2) slot++;
     }
     if (slot !== st.slot) { st.slot = slot; setDrag({ id: st.id, slot }); }
-  };
+  }, []);
 
-  const endDrag = (commit: boolean) => {
+  // The pointer id of a pointerdown that may become a drag. While set, window listeners
+  // are attached (layout effect: attached in the same flush as the pointerdown, so even a
+  // very fast click's pointerup is seen). Cleared by endDrag.
+  const [armedPointer, setArmedPointer] = useState<number | null>(null);
+
+  const endDrag = useCallback((commit: boolean) => {
     const st = dragRef.current;
     dragRef.current = null;
+    setArmedPointer(null);
     if (!st) return;
     cancelAnimationFrame(st.raf);
     if (st.el) st.el.style.transform = '';
@@ -645,12 +667,56 @@ function RollCallPanelInner({
     justDraggedRef.current = true;
     setTimeout(() => { justDraggedRef.current = false; }, 400);
     setDrag(null);
-    if (!commit || !onReorderList) return;
-    const others = reorderIds.filter((x) => x !== st.id);
-    const next = reorderedList(st.id, others[st.slot] ?? null);
+    const { reorderIds: ids, reorderedList: build, onReorderList: commitList } = latestRef.current;
+    if (!commit || !commitList) return;
+    const others = ids.filter((x) => x !== st.id);
+    const next = build(st.id, others[st.slot] ?? null);
     // Optimistic + chained write, owned by the parent (reorderSpeakersList).
-    if (next) onReorderList(next);
-  };
+    if (next) commitList(next);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (armedPointer === null) return;
+    const onMove = (e: PointerEvent) => {
+      const st = dragRef.current;
+      const list = listRef.current;
+      if (!st || st.pointerId !== e.pointerId || !list) return;
+      st.lastY = e.clientY;
+      if (!st.active) {
+        if (Math.abs(e.clientY - st.startY) / st.scale < st.slop) return;
+        st.active = true;
+        window.getSelection()?.removeAllRanges();
+        st.el = list.querySelector<HTMLElement>(`[data-reorder-id="${CSS.escape(st.id)}"]`);
+        st.slot = latestRef.current.reorderIds.indexOf(st.id);
+        setDrag({ id: st.id, slot: st.slot });
+        // Edge auto-scroll while held near the top or bottom of the list.
+        const tick = () => {
+          const cur = dragRef.current;
+          const l = listRef.current;
+          if (!cur || !l) return;
+          const r = l.getBoundingClientRect();
+          const edge = 44 * cur.scale;
+          const dy = cur.lastY < r.top + edge ? -Math.ceil((r.top + edge - cur.lastY) / 4)
+            : cur.lastY > r.bottom - edge ? Math.ceil((cur.lastY - (r.bottom - edge)) / 4) : 0;
+          if (dy !== 0) { l.scrollTop += dy; paintDrag(); }
+          cur.raf = requestAnimationFrame(tick);
+        };
+        st.raf = requestAnimationFrame(tick);
+      }
+      if (e.cancelable) e.preventDefault();
+      paintDrag();
+    };
+    const onUp = (e: PointerEvent) => { if (dragRef.current?.pointerId === e.pointerId) endDrag(true); };
+    const onCancel = (e: PointerEvent) => { if (dragRef.current?.pointerId === e.pointerId) endDrag(false); };
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+    };
+  }, [armedPointer, paintDrag, endDrag]);
 
   // While a row is lifted the whole page shows the grabbing cursor and selects no text; the
   // cleanup also covers an unmount mid-drag.
@@ -664,47 +730,28 @@ function RollCallPanelInner({
     body.style.userSelect = 'none';
     return () => { body.style.cursor = prevCursor; body.style.userSelect = prevSelect; };
   }, [dragging]);
-  useEffect(() => () => {
-    const st = dragRef.current;
-    if (st) cancelAnimationFrame(st.raf);
-  }, []);
+  // Unmount mid-drag: stop the auto-scroll loop (the layout effect removes the listeners).
+  useEffect(() => () => { const st = dragRef.current; if (st) cancelAnimationFrame(st.raf); }, []);
 
-  const gripPointerDown = (e: React.PointerEvent<HTMLElement>, id: string) => {
-    if (e.button !== 0 || !listRef.current) return;
-    e.stopPropagation();
-    e.preventDefault();
-    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
+  const startPointerDrag = (e: React.PointerEvent<HTMLElement>, id: string, fromGrip: boolean) => {
+    if (e.button !== 0 || !listRef.current || dragRef.current) return;
+    if (!fromGrip) {
+      // The row: mouse and pen only (a finger scrolls), and never from a button inside it.
+      if (e.pointerType === 'touch') return;
+      const hit = (e.target as HTMLElement).closest('button, input, a, [role="switch"]');
+      if (hit && hit !== e.currentTarget) return;
+    } else {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    const list = listRef.current;
+    const scale = (list.getBoundingClientRect().height / (list.offsetHeight || 1)) || 1;
     dragRef.current = {
       id, pointerId: e.pointerId, startY: e.clientY, lastY: e.clientY,
-      startScroll: listRef.current.scrollTop, active: false, slot: -1, el: null, raf: 0,
+      startScroll: list.scrollTop, active: false, slot: -1, el: null, raf: 0,
+      scale, slop: fromGrip ? 4 : 6,
     };
-  };
-  const gripPointerMove = (e: React.PointerEvent<HTMLElement>) => {
-    const st = dragRef.current;
-    const list = listRef.current;
-    if (!st || st.pointerId !== e.pointerId || !list) return;
-    st.lastY = e.clientY;
-    if (!st.active) {
-      if (Math.abs(e.clientY - st.startY) < 4) return;
-      st.active = true;
-      st.el = list.querySelector<HTMLElement>(`[data-reorder-id="${CSS.escape(st.id)}"]`);
-      st.slot = reorderIds.indexOf(st.id);
-      setDrag({ id: st.id, slot: st.slot });
-      // Edge auto-scroll while held near the top or bottom of the list.
-      const tick = () => {
-        const cur = dragRef.current;
-        const l = listRef.current;
-        if (!cur || !l) return;
-        const r = l.getBoundingClientRect();
-        const edge = 44;
-        const dy = cur.lastY < r.top + edge ? -Math.ceil((r.top + edge - cur.lastY) / 4)
-          : cur.lastY > r.bottom - edge ? Math.ceil((cur.lastY - (r.bottom - edge)) / 4) : 0;
-        if (dy !== 0) { l.scrollTop += dy; paintDrag(); }
-        cur.raf = requestAnimationFrame(tick);
-      };
-      st.raf = requestAnimationFrame(tick);
-    }
-    paintDrag();
+    setArmedPointer(e.pointerId);
   };
 
   // Keyboard: ArrowUp / ArrowDown on the grip moves the delegation one place.
@@ -872,7 +919,8 @@ function RollCallPanelInner({
             : !sliderMode ? 'rgba(237,231,216,0.12)'
             : effectiveStatus === 'present' ? 'rgba(61,122,82,0.40)'
             : 'rgba(182,135,31,0.32)';
-          const flagPx = isUpNext ? 48 : sliderMode ? 34 : 40;
+          // Round flags, 5% up from 48 / 34 / 40 (15 Sep 2026).
+          const flagPx = isUpNext ? 50 : sliderMode ? 36 : 42;
 
           return (
             <div
@@ -894,6 +942,7 @@ function RollCallPanelInner({
               <div
                 data-matches={matchesSearch ? 'true' : 'false'}
                 onClick={handleRowClick}
+                onPointerDown={isReorderable ? (e) => startPointerDrag(e, d.id, false) : undefined}
                 role={rowActionable ? 'button' : undefined}
                 tabIndex={rowActionable ? 0 : undefined}
                 aria-current={isSpeakingRow ? 'true' : undefined}
@@ -985,24 +1034,32 @@ function RollCallPanelInner({
                     <X size={14} strokeWidth={3} aria-hidden />
                   </button>
                 )}
-                {isObserver && (
+                {isObserver && sliderMode && (
                   <span className="text-[10.5px] shrink-0 font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md" style={{ backgroundColor: 'rgba(238,217,138,0.16)', color: '#EED98A' }}>{t('rollcall_observer')}</span>
                 )}
-                {/* Observer placard toggle: ONLY while taking roll (pre-session roll call and the
-                    mid-session Roll Call tab), where status is being set anyway. Outside roll
-                    call the row shows the Observer tag and nothing to change it with. */}
-                {sliderMode && !(isReadOnly || isViewOnly) && (
+                {/* Observer placard toggle (the megaphone). While taking roll it sits beside the
+                    Observer tag and the slider. Outside roll call (15 Sep 2026) it is the ONLY
+                    per-row control: no tag, no slider, just the megaphone, gold when the
+                    delegation is an observer, faint otherwise. A Commenter or an ended session
+                    sees it as a plain icon on observer rows only. */}
+                {!(isReadOnly || isViewOnly) ? (
                   <button
                     onClick={(e) => { e.stopPropagation(); toggleObserver(d.id, isObserver); }}
                     title={isObserver ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
                     aria-label={isObserver ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
                     aria-pressed={isObserver}
-                    className="shrink-0 p-1 rounded-md transition-[opacity,transform] active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70"
+                    className={`shrink-0 p-1 rounded-md transition-[opacity,transform,color] active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70 ${
+                      isObserver || sliderMode ? '' : 'opacity-45 group-hover/seat:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-80'
+                    }`}
                     style={{ color: isObserver ? '#EED98A' : 'rgba(237,231,216,0.6)' }}
                   >
                     <Megaphone size={15} />
                   </button>
-                )}
+                ) : (!sliderMode && isObserver) ? (
+                  <span role="img" aria-label={t('rollcall_observer')} title={t('rollcall_observer')} className="shrink-0 p-1" style={{ color: '#EED98A' }}>
+                    <Megaphone size={15} aria-hidden />
+                  </span>
+                ) : null}
                 {/* Absent says so in words outside roll call. Present and Present-and-Voting are
                     deliberately NOT told apart here (no PV tag, no tint): the slider carries that
                     distinction while taking roll. */}
@@ -1018,11 +1075,7 @@ function RollCallPanelInner({
                     title={t('rollcall_reorder_hint')}
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e) => gripKeyDown(e, d.id)}
-                    onPointerDown={(e) => gripPointerDown(e, d.id)}
-                    onPointerMove={gripPointerMove}
-                    onPointerUp={(e) => { if (dragRef.current?.pointerId === e.pointerId) endDrag(true); }}
-                    onPointerCancel={() => endDrag(false)}
-                    onLostPointerCapture={() => { if (dragRef.current) endDrag(true); }}
+                    onPointerDown={(e) => startPointerDrag(e, d.id, true)}
                     className={`shrink-0 -me-1 w-7 h-9 flex items-center justify-center rounded-md transition-opacity duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70 focus-visible:opacity-100 group-hover/seat:opacity-100 [@media(hover:none)]:opacity-80 ${
                       isLifted ? 'opacity-100 cursor-grabbing' : 'opacity-45 cursor-grab'
                     }`}

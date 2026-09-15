@@ -23,14 +23,12 @@
 import { useRef, useState } from 'react';
 import { GripHorizontal, X } from 'lucide-react';
 import { useT } from '@/contexts/LanguageContext';
-import { SeatFlag } from '@/components/SeatFlag';
-import { Emoji } from '@/components/Emoji';
-import { getCountryByName } from '@/lib/countries';
+import { SeatCircleFlag } from '@/components/CircleFlag';
 
 type Entry = { delegateId: string; country: string };
 
-// Flags that are square (non-rectangular): no outline.
-const SQUARE_FLAGS = new Set(['CH', 'NP']);
+// Round seat flags (crest, flag, monogram), like the sidebar and the speaker card.
+const CHIP_PX = 52;
 const PICKUP_PX = 6;
 const VISIBLE = 7;
 
@@ -166,7 +164,6 @@ export default function SpeakerStrip({
         {visible.map((s, i) => {
           const isCurrent = !!currentSpeakerDelegateId && s.delegateId === currentSpeakerDelegateId;
           const movable = !isCurrent && !!onReorder;
-          const flagCountry = getCountryByName(s.country);
           const dragging = drag?.active && drag.id === s.delegateId;
           const name = formatName(s.country);
           const removeHandler = isCurrent ? onRemoveCurrent : onRemove ? () => onRemove(s.delegateId) : undefined;
@@ -200,12 +197,21 @@ export default function SpeakerStrip({
                   <span className="text-2xl font-black" style={{ color: '#1B3828' }}>{i + 2}</span>
                 </div>
               ) : (
-                <div style={{ width: 60, height: 45, borderRadius: 8, position: 'relative', boxShadow: isCurrent ? '0 0 0 3px #B6871F' : flagCountry && SQUARE_FLAGS.has(flagCountry.code) ? 'none' : '0 0 0 1.5px rgba(28,20,16,0.20)', backgroundColor: '#F0EBE1', flexShrink: 0 }}>
-                  <SeatFlag country={s.country} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8, display: 'block', pointerEvents: 'none' }} fallback={<Emoji size="1.5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>} />
-                </div>
+                <SeatCircleFlag
+                  country={s.country}
+                  size={CHIP_PX}
+                  decorative
+                  loading="eager"
+                  style={{
+                    pointerEvents: 'none',
+                    boxShadow: isCurrent
+                      ? '0 0 0 3px #EDE7D8, 0 0 0 5.5px #B6871F'
+                      : '0 1px 2px rgba(27,56,40,0.10), 0 3px 8px rgba(27,56,40,0.14)',
+                  }}
+                />
               )}
               {!isRoomOrderTdT && (
-                <span className="line-clamp-2 break-words whitespace-normal leading-tight max-w-[64px] text-xs font-semibold text-center" style={{ color: '#1C1410' }}>{name}</span>
+                <span className="line-clamp-2 break-words whitespace-normal leading-tight max-w-[80px] text-xs font-semibold text-center" style={{ color: '#1C1410' }}>{name}</span>
               )}
               {isCurrent && <span className="text-sm font-semibold" style={{ color: '#8B5A20' }}>{t('gsl_speaking')}</span>}
               {!isCurrent && i === 0 && <span className="text-xs font-semibold" style={{ color: '#8B5A20' }}>{t('gsl_up_next')}</span>}

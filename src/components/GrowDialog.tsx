@@ -2,7 +2,8 @@
 
 /**
  * A modal that GROWS out of the control that opened it into the centre of the screen, and
- * settles back towards it when it closes. Used by MotionsModal and DocumentsModal.
+ * settles back towards it when it closes. Used by MotionsModal, DocumentsModal, the chat and
+ * the scoreboard.
  *
  * Why it is built this way:
  *  - Nothing here waits on the network. The shell renders on the first commit with whatever
@@ -24,6 +25,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import Portal from '@/components/Portal';
 import { portalFrame } from '@/components/chat/chatTokens';
+import { useDialogFocusTrap, useEscapeToClose } from '@/components/dialogFocus';
 
 const OPEN_MS = 280;
 const CLOSE_MS = 180;
@@ -31,17 +33,6 @@ const FADE_MS = 160;
 const EASE_OUT = 'cubic-bezier(0.32, 0.72, 0, 1)';
 const EASE_IN = 'cubic-bezier(0.4, 0, 1, 1)';
 const START_SCALE = 0.18;
-const FOCUSABLE = [
-  'a[href]', 'area[href]', 'button:not([disabled])', 'input:not([disabled]):not([type="hidden"])',
-  'select:not([disabled])', 'textarea:not([disabled])', 'iframe', 'summary',
-  '[tabindex]:not([tabindex="-1"])', '[contenteditable="true"]',
-].join(',');
-
-function focusablesIn(root: HTMLElement): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE))
-    .filter((el) => el.tabIndex >= 0 && el.getClientRects().length > 0 && !el.closest('[inert]'));
-}
-
 function prefersReducedMotion() {
   return typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 }
@@ -59,6 +50,9 @@ type GrowDialogProps = {
   /** Filled with the animated close while mounted (null otherwise), for callers that close
    *  from handlers outside the render prop. */
   closeRef?: React.MutableRefObject<(() => void) | null>;
+  /** Called once the open animation has finished (at once under reduced motion). Callers use
+   *  it to hold back work that would re-render a large tree mid-animation (a fetched result). */
+  onOpened?: () => void;
 };
 
 /** Portal renders nothing on its first pass, so the measuring layout effect has to live in a
@@ -68,7 +62,7 @@ export default function GrowDialog(props: GrowDialogProps) {
 }
 
 function GrowDialogInner({
-  originSelector, onClose, panelClassName, panelStyle, backdropStyle, ariaLabel, children, closeRef,
+  originSelector, onClose, panelClassName, panelStyle, backdropStyle, ariaLabel, children, closeRef, onOpened,
 }: GrowDialogProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const layerRef = useRef<HTMLDivElement | null>(null);
@@ -80,6 +74,8 @@ function GrowDialogInner({
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const onCloseRef = useRef(onClose);
   useLayoutEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+  const onOpenedRef = useRef(onOpened);
+  useLayoutEffect(() => { onOpenedRef.current = onOpened; }, [onOpened]);
   // Captured at the moment of opening, before the dialog takes focus.
   const openerRef = useRef<HTMLElement | null>(null);
 
@@ -94,7 +90,8 @@ function GrowDialogInner({
 
     const active = typeof document !== 'undefined' ? document.activeElement as HTMLElement | null : null;
     const origin = (originSelector ? document.querySelector<HTMLElement>(originSelector) : null)
-      ?? (active && active !== document.body ? active : null);
+      // Never the dialog itself: StrictMode re-runs this effect after the panel took focus.
+      ?? (active && active !== document.body && !layerRef.current?.contains(active) ? active : null);
     openerRef.current = origin;
 
     // Measure the panel at rest: a previous run (React StrictMode re-runs layout effects in
@@ -120,21 +117,44 @@ function GrowDialogInner({
     backdrop.style.opacity = '0';
     panel.style.transform = reduced ? 'none' : `translate3d(${dx}px, ${dy}px, 0) scale(${START_SCALE})`;
     panel.style.willChange = 'transform, opacity';
-    // Commit the start frame, then transition to rest.
-    void panel.offsetWidth;
-    panel.style.transition = reduced
-      ? `opacity ${FADE_MS}ms ease-out`
-      : `transform ${OPEN_MS}ms ${EASE_OUT}, opacity ${FADE_MS}ms ease-out`;
-    backdrop.style.transition = `opacity ${reduced ? FADE_MS : 220}ms ease-out`;
-    panel.style.transform = 'none';
-    panel.style.opacity = '1';
-    backdrop.style.opacity = '1';
-    later(() => { if (!closingRef.current && panelRef.current) panelRef.current.style.willChange = ''; }, OPEN_MS + 40);
+
+    // Start the motion only once the content has been painted (two frames later). The first
+    // commit of a dialog is its most expensive frame: every child mounts, lays out and
+    // rasterises. Starting the transition in that same frame is what made the grow stutter
+    // on first open (its opening frames were eaten by that work). Waiting two rAFs puts the
+    // cost BEFORE the motion (the panel is invisible meanwhile), so every animated frame
+    // after it only composites an already-rasterised layer.
+    // Fallback: rAF is paused or throttled in a hidden or occluded page; never leave the panel
+    // invisible waiting for frames that do not come.
+    let started = false;
+    let raf2 = 0;
+    const start = (fn: () => void) => () => { if (started) return; started = true; fn(); };
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => run());
+    });
+    const run = start(() => {
+      if (closingRef.current || !panelRef.current || !backdropRef.current) return;
+      const p = panelRef.current;
+      const b = backdropRef.current;
+      p.style.transition = reduced
+        ? `opacity ${FADE_MS}ms ease-out`
+        : `transform ${OPEN_MS}ms ${EASE_OUT}, opacity ${FADE_MS}ms ease-out`;
+      b.style.transition = `opacity ${reduced ? FADE_MS : 220}ms ease-out`;
+      p.style.transform = 'none';
+      p.style.opacity = '1';
+      b.style.opacity = '1';
+      later(() => {
+        if (closingRef.current || !panelRef.current) return;
+        panelRef.current.style.willChange = '';
+        onOpenedRef.current?.();
+      }, reduced ? FADE_MS : OPEN_MS + 40);
+    });
+    const fallback = setTimeout(run, 120);
 
     panel.focus({ preventScroll: true });
 
     const timers = timersRef.current;
-    return () => { timers.forEach(clearTimeout); };
+    return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); clearTimeout(fallback); timers.forEach(clearTimeout); };
   // Runs once per mount: the origin is where it was opened from.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -171,55 +191,9 @@ function GrowDialogInner({
     return () => { closeRef.current = null; };
   }, [closeRef, requestClose]);
 
-  // Focus trap. Tab and Shift+Tab cycle inside the panel, and focus that lands on the page
-  // underneath is pulled back in. A floating layer opened FROM the dialog (DatePicker, a
-  // tooltip, a typeahead) portals into the same root AFTER this dialog, so anything that
-  // follows the dialog's layer in document order counts as part of it and is left alone.
-  useEffect(() => {
-    const inDialogLayer = (el: Node | null) => {
-      const layer = layerRef.current;
-      if (!layer || !el) return false;
-      if (layer.contains(el)) return true;
-      return !!(layer.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab' || e.defaultPrevented || closingRef.current) return;
-      const panel = panelRef.current;
-      if (!panel) return;
-      const active = document.activeElement as HTMLElement | null;
-      // Inside a nested floating layer: that layer owns its own Tab order.
-      if (active && !panel.contains(active) && inDialogLayer(active)) return;
-      const items = focusablesIn(panel);
-      if (items.length === 0) { e.preventDefault(); panel.focus({ preventScroll: true }); return; }
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (!active || !panel.contains(active)) {
-        e.preventDefault();
-        (e.shiftKey ? last : first).focus({ preventScroll: true });
-        return;
-      }
-      if (e.shiftKey && (active === first || active === panel)) {
-        e.preventDefault();
-        last.focus({ preventScroll: true });
-      } else if (!e.shiftKey && active === last) {
-        e.preventDefault();
-        first.focus({ preventScroll: true });
-      }
-    };
-    const onFocusIn = (e: FocusEvent) => {
-      if (closingRef.current) return;
-      const panel = panelRef.current;
-      const target = e.target as Node | null;
-      if (!panel || !target || target === document.body || inDialogLayer(target)) return;
-      panel.focus({ preventScroll: true });
-    };
-    document.addEventListener('keydown', onKey);
-    document.addEventListener('focusin', onFocusIn);
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.removeEventListener('focusin', onFocusIn);
-    };
-  }, []);
+  // Focus trap and Escape: shared with LeftDrawer (src/components/dialogFocus.ts).
+  useDialogFocusTrap(panelRef, layerRef, closingRef);
+  useEscapeToClose(requestClose);
 
   // An unmount that skipped the animated close (session ended, parent unmounted) still hands
   // focus back to the opener, when focus was in the dialog or has fallen to the body.
@@ -232,18 +206,6 @@ function GrowDialogInner({
     }
   }, []);
 
-  // Escape closes, unless a field or a nested control already used the key.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented) return;
-      const el = e.target as HTMLElement | null;
-      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
-      requestClose();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [requestClose]);
-
   return (
     <>
       <div ref={layerRef} className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -251,7 +213,9 @@ function GrowDialogInner({
           ref={backdropRef}
           aria-hidden
           className="absolute inset-0"
-          style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)', ...backdropStyle }}
+          /* No backdrop-filter: a blur under a layer whose opacity animates is recomputed over
+             the whole cockpit on every frame of the open and the close. */
+          style={{ background: 'rgba(5, 8, 20, 0.88)', ...backdropStyle }}
           onMouseDown={(e) => { if (e.target === e.currentTarget) requestClose(); }}
         />
         <div

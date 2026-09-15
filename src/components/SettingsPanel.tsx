@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Portal from '@/components/Portal';
+import LeftDrawer from '@/components/LeftDrawer';
 import { portalFrame } from '@/components/chat/chatTokens';
 import { Globe, Volume2 } from 'lucide-react';
 import { clampGavelSeconds, primeGavelAudio, playGavelKnock, GAVEL_MIN_SECONDS, GAVEL_MAX_SECONDS, GAVEL_DEFAULT_SECONDS } from '@/lib/gavelSound';
@@ -819,11 +820,14 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
   ];
 
   return (
-    <Portal><div
-      className="fixed inset-0 z-[60] bg-black/40 flex justify-end"
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    // Slides in from the left edge and is dragged back out towards it (src/components/LeftDrawer.tsx).
+    <LeftDrawer
+      onClose={onClose}
+      ariaLabel={t('settings_session_settings')}
+      panelClassName="w-full max-w-md flex flex-col overflow-hidden"
+      panelStyle={{ backgroundColor: '#FAF8F3' }}
     >
-      <div className="w-full max-w-md flex flex-col h-full shadow-2xl overflow-hidden" style={{ backgroundColor: '#FAF8F3', borderLeft: '1px solid #DDD4C0' }}>
+      {(requestClose) => (<>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: '1px solid #DDD4C0', backgroundColor: '#1B3828' }}>
           <h2 className="text-xl font-black" style={{ color: '#EED98A' }}>{t('settings_session_settings')}</h2>
@@ -864,7 +868,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
                 </>
               )}
             </div>
-            <button onClick={onClose} className="text-xl leading-none transition-colors focus:outline-none" style={{ color: 'rgba(238,217,138,0.6)' }}
+            <button onClick={requestClose} aria-label={t('sb_close')} className="inline-flex items-center justify-center w-10 h-10 -me-2 rounded-full text-xl leading-none transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]" style={{ color: 'rgba(238,217,138,0.6)' }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#EED98A'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'rgba(238,217,138,0.6)'; }}>✕</button>
           </div>
@@ -1314,7 +1318,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
             {isViewOnly ? t('settings_view_only') : t('settings_changes_apply')}
           </p>
         </div>
-      </div>
-    </div></Portal>
+      </>)}
+    </LeftDrawer>
   );
 }

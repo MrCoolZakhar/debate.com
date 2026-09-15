@@ -43,6 +43,7 @@ import { getCircleFlagUrl, getCountryByName } from '@/lib/countries';
 import type { SlotArt } from '@/lib/slotGroups';
 import { useSeatArt } from '@/components/SeatFlag';
 import type { SessionSeat } from '@/lib/sessionFlags';
+import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 
 const OUTFIT = "'Outfit', sans-serif";
 const RING_DEFAULT = 'rgba(28,20,16,0.14)';
@@ -198,7 +199,8 @@ export function CircleFlag({
 /**
  * The live-session twin of `<SeatFlag>`, round. Resolves the seat's crest from
  * the nearest `<SeatArtProvider>` (or the Delegate you pass), then its flag,
- * then a monogram of the seat name. Same precedence as `sessionSeatArt`.
+ * then the unknown-user glyph (UnknownSeatIcon) for a seat that is not a country.
+ * Same precedence as `sessionSeatArt`.
  */
 export function SeatCircleFlag({
   seat,
@@ -215,5 +217,8 @@ export function SeatCircleFlag({
 }) {
   const name = seat?.country ?? country ?? '';
   const art = useSeatArt(name, seat ? seat.logoUrl : logoUrl);
-  return <CircleFlag {...rest} art={art} label={rest.label ?? name} />;
+  // A session seat that is not a country and has no crest (a custom speaker) draws the
+  // unknown-user glyph, not a monogram (15 Sep 2026). Callers can still pass their own.
+  const fallback = rest.fallback ?? <UnknownSeatIcon size={rest.size ?? 24} bare />;
+  return <CircleFlag {...rest} art={art} label={rest.label ?? name} fallback={fallback} />;
 }

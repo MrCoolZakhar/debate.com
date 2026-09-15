@@ -1,10 +1,18 @@
 'use client';
 
-import { forwardRef } from 'react';
-import { NEU, OUTFIT, EASE } from '@/components/neu';
+import { forwardRef, useLayoutEffect, useRef } from 'react';
+import { ArrowUp, Eye } from 'lucide-react';
+import { NEU, OUTFIT } from '@/components/neu';
 import { CHAT, useKeyboardInset, type TFn } from './chatTokens';
 
-const ChatComposer = forwardRef<HTMLInputElement, {
+const MAX_H = 132;
+
+/**
+ * The composer, pinned to the bottom of the thread. A rounded field that grows to five lines
+ * (Enter sends, Shift+Enter breaks the line) and a round forest send button that only lights
+ * up when there is something to send. Read-only (session ended) swaps it for a one-line notice.
+ */
+const ChatComposer = forwardRef<HTMLTextAreaElement, {
   value: string;
   onChange: (v: string) => void;
   onSend: () => void;
@@ -12,75 +20,82 @@ const ChatComposer = forwardRef<HTMLInputElement, {
   t: TFn;
 }>(function ChatComposer({ value, onChange, onSend, readOnly, t }, ref) {
   // The delegate chat lives inside FitToScreen's scaled root; on iOS the keyboard shrinks the
-  // visual viewport without changing window.innerHeight, so absorb the overlap as bottom
-  // padding to keep the input above the keyboard.
+  // visual viewport without changing window.innerHeight, so absorb the overlap as padding.
   const keyboardInset = useKeyboardInset();
   const canSend = value.trim().length > 0;
+  const localRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Auto-grow: one read and one write, only when the text changes (never per frame).
+  useLayoutEffect(() => {
+    const el = localRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(MAX_H, el.scrollHeight)}px`;
+  }, [value]);
 
   return (
     <div
-      className="px-4 pt-3 shrink-0"
+      className="shrink-0 px-3 pt-2.5"
       style={{
-        paddingBottom: 14 + keyboardInset,
-        borderTop: `1px solid ${CHAT.hairline}`,
-        backgroundColor: NEU.surface,
-        transition: `padding-bottom 160ms ${EASE}`,
+        paddingBottom: 12 + keyboardInset,
+        background: CHAT.bar,
+        boxShadow: `inset 0 1px 0 ${CHAT.hairline}`,
       }}
     >
       {readOnly ? (
-        <p className="text-center py-2" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted }}>
+        <p className="flex items-center justify-center gap-2 py-2" style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.inkSoft }}>
+          <Eye size={15} strokeWidth={2} aria-hidden />
           {t('chat_view_only')}
         </p>
       ) : (
-        <div className="flex items-center gap-2">
-          <input
-            ref={ref}
-            type="text"
+        <div className="flex items-end gap-2">
+          <textarea
+            ref={(el) => {
+              localRef.current = el;
+              if (typeof ref === 'function') ref(el);
+              else if (ref) ref.current = el;
+            }}
+            rows={1}
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); } }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); onSend(); }
+            }}
             placeholder={t('chat_placeholder')}
+            aria-label={t('chat_placeholder')}
             enterKeyHint="send"
             autoComplete="off"
-            className="flex-1 min-w-0 focus:outline-none"
+            className="flex-1 min-w-0 resize-none focus:outline-none"
             style={{
-              padding: '10px 15px',
-              borderRadius: 999,
-              // Pressed-in well.
-              backgroundColor: NEU.base,
-              boxShadow: NEU.inSm,
+              padding: '10px 16px',
+              borderRadius: 22,
+              backgroundColor: '#FFFDF8',
+              boxShadow: 'inset 0 0 0 1px rgba(28,20,16,0.10), 0 1px 2px rgba(28,20,16,0.04)',
               border: 'none',
-              fontFamily: OUTFIT, color: NEU.ink,
-              /* 16px is a hard floor, not a style choice, and it applies at every
-                 width. iOS Safari auto-zooms the viewport on focus for ANY input
-                 under 16px — that is the "zooms into the message field and cuts
-                 off the right side" report; the page scales up and never scales
-                 back. The other fix, maximum-scale=1 on the viewport, is banned
-                 because it disables pinch zoom for everyone. Kept uniform rather
-                 than mobile-only: a composer at 16px reads fine on desktop, and a
-                 breakpoint here would be one more thing to get wrong. */
+              fontFamily: OUTFIT, color: NEU.ink, lineHeight: 1.35,
+              maxHeight: MAX_H,
+              /* 16px is a hard floor: iOS Safari zooms the viewport on focus for any field under
+                 16px, and the page never zooms back. maximum-scale=1 is banned (kills pinch zoom). */
               fontSize: 16,
             }}
           />
           <button
+            type="button"
             onClick={onSend}
             disabled={!canSend}
             aria-label={t('chat_send')}
-            className="shrink-0 inline-flex items-center justify-center focus:outline-none"
+            className="shrink-0 inline-flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] enabled:active:scale-[0.96]"
             style={{
-              width: 36, height: 36, borderRadius: 999, border: 'none',
-              background: canSend ? `linear-gradient(135deg, ${NEU.forest}, ${NEU.green})` : CHAT.hairline,
-              color: canSend ? NEU.gold : NEU.muted,
-              boxShadow: canSend ? `0 4px 10px rgba(27,56,40,0.30), ${NEU.outSm}` : 'none',
+              width: 44, height: 44, borderRadius: 999, border: 'none',
+              background: canSend ? `linear-gradient(135deg, ${NEU.forest}, ${NEU.green})` : 'rgba(28,20,16,0.08)',
+              color: canSend ? NEU.gold : 'rgba(28,20,16,0.35)',
+              boxShadow: canSend ? '0 2px 6px rgba(27,56,40,0.28)' : 'none',
               cursor: canSend ? 'pointer' : 'default',
-              fontSize: 15, lineHeight: 1,
-              transition: `background 160ms ${EASE}, box-shadow 160ms ${EASE}, transform 160ms ${EASE}`,
+              transitionProperty: 'background-color, color, transform',
+              transitionDuration: '160ms',
             }}
-            onPointerDown={(e) => { if (canSend) (e.currentTarget as HTMLElement).style.transform = 'scale(0.94)'; }}
-            onPointerUp={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
-            onPointerLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
           >
-            <span className="inline-block rtl:-scale-x-100">↑</span>
+            <ArrowUp size={20} strokeWidth={2.6} aria-hidden />
           </button>
         </div>
       )}

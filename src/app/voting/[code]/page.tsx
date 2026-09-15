@@ -27,12 +27,14 @@ import {
 } from '@/lib/voteState';
 import { VotingRulesPopover, computeVoteOutcome, isVetoDelegation } from '@/components/VotingRulesPanel';
 import { useAuth } from '@/components/AuthProvider';
-import { detectConferenceSession, verifyConferenceAccess } from '@/lib/conferenceAccess';
+import type { ConferenceAccess } from '@/lib/conferenceAccess';
+import { useSessionAccess } from '@/lib/useSessionAccess';
 import ChairDeviceKickModal from '@/components/ChairDeviceKickModal';
 import { useChairDeviceLock } from '@/lib/useChairDeviceLock';
 import { sponsorLabel } from '@/lib/committeeFlags';
 import { docName } from '@/lib/docNames';
 import { SettingsPanel } from '@/components/SettingsPanel';
+import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 
 /**
  * Device-local evidence that this browser has actually been a chair of `code`.
@@ -345,7 +347,7 @@ function SeatMark({ country }: { country: string }) {
       country={country}
       className="inline-block object-contain"
       style={{ width: '1em', height: '1em' }}
-      fallback={<Emoji size="1em">🌐</Emoji>}
+      fallback={<UnknownSeatIcon size={16} style={{ width: '1em', height: '1em' }} />}
     />
   );
 }
@@ -455,6 +457,8 @@ function GavelLoader() {
   );
 }
 
+const isVotingAccessKind = (kind: ConferenceAccess['kind']) => kind === 'chair' || kind === 'organizer';
+
 export default function VotingPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
   const router = useRouter();
@@ -468,7 +472,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const settingsMap = useSettingsStore((s) => s.settings);
   const updateSetting = useSettingsStore((s) => s.updateSetting);
   const { user, session, loading: authLoading } = useAuth();
-  const [confAccess, setConfAccess] = useState<'checking' | 'standalone' | 'allowed' | 'denied' | 'signin'>('checking');
+  const votingAccess = useSessionAccess({ code, gate: 'dais', allow: isVotingAccessKind });
+  const confAccess = votingAccess.state;
   const hydrateSettings = useSettingsStore((s) => s.hydrateSettings);
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [loading, setLoading] = useState(true);
@@ -497,23 +502,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   // Conference-session access guard (#8). A conference session requires a signed-in
   // verified member of THIS committee's conference; a standalone session falls
-  // through to the chair-code gate below.
-  useEffect(() => {
-    let cancelled = false;
-    async function guard() {
-      if (authLoading) return;
-      const isConf = await detectConferenceSession(code);
-      if (cancelled) return;
-      if (!isConf) { setConfAccess('standalone'); return; }
-      if (!session || !user) { setConfAccess('signin'); return; }
-      const access = await verifyConferenceAccess(code, session.access_token, user.id);
-      if (cancelled) return;
-      setConfAccess(access.kind === 'chair' || access.kind === 'organizer' ? 'allowed' : 'denied');
-    }
-    setConfAccess('checking');
-    guard();
-    return () => { cancelled = true; };
-  }, [code, authLoading, session?.access_token, user?.id]);
+  // through to the chair-code gate below. useSessionAccess is keyed on the user id (a token
+  // refresh used to flash the loader over an open ballot) and turns a failed check into an
+  // inline retry instead of a verdict.
 
   // Standalone gate — DERIVED, not state. It is a pure function of the committee row
   // plus the credentials this device already held at first render, so there is no
@@ -960,6 +951,18 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>You don&apos;t chair this committee</h1>
           <p className="mb-6" style={{ color: '#6A5A4A' }}>The voting screen is part of the chair session. Only the committee&apos;s chair can open it.</p>
           <Link href="/sessions" className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>BACK TO HOME</Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (confAccess === 'error') {
+    return (
+      <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
+        <div className="text-center max-w-sm" role="alert">
+          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>{t('session_access_error_title')}</h1>
+          <p className="mb-6" style={{ color: '#6A5A4A' }}>{t('session_access_error_body')}</p>
+          <button onClick={votingAccess.retry} className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>{t('delegate_seat_retry')}</button>
         </div>
       </div>
     );
@@ -1844,7 +1847,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   </div>
                 ) : (
                   <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 0 0 3.75px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative', backgroundColor: 'rgba(221,212,192,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Emoji size="5rem">🌐</Emoji>
+                    <UnknownSeatIcon size={120} bare />
                   </div>
                 );
               })()}
@@ -1967,7 +1970,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                       </div>
                     ) : (
                       <div style={{ width: qWidth, height: qHeight, borderRadius: qRadius, overflow: 'hidden', boxShadow: qShadow, flexShrink: 0, position: 'relative', backgroundColor: 'rgba(221,212,192,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Emoji size={`${Math.round(qHeight * 0.65)}px`}>🌐</Emoji>
+                        <UnknownSeatIcon size={Math.round(qHeight * 0.95)} bare />
                       </div>
                     )}
                     <span className="text-[9px] text-[#9A8A78] text-center max-w-[52px] truncate">{getCountryDisplayName(d.country, language)}</span>
@@ -2075,7 +2078,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   </div>
                 ) : (
                   <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 0 0 3.75px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative', backgroundColor: 'rgba(221,212,192,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Emoji size="5rem">🌐</Emoji>
+                    <UnknownSeatIcon size={120} bare />
                   </div>
                 );
               })()}

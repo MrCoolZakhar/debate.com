@@ -14,7 +14,8 @@ import { mergeMessagesById } from '@/lib/chatConversations';
 import { startSessionSync, rowFields, withCurrentSpeaker, withLists, type ConnectionState } from '@/lib/sessionSync';
 import ConnectionPill from '@/components/ConnectionPill';
 import { useAuth } from '@/components/AuthProvider';
-import { isConferenceSession, verifyConferenceAccess } from '@/lib/conferenceAccess';
+import type { ConferenceAccess } from '@/lib/conferenceAccess';
+import { useSessionAccess } from '@/lib/useSessionAccess';
 import { getCommitteeFlags, motionNames } from '@/lib/committeeFlags';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { Committee } from '@/lib/types';
@@ -248,12 +249,15 @@ function NormalDelegateCard({ delegate, committee, onSelect }: { delegate: Commi
   );
 }
 
+const isAdvisorAccessKind = (kind: ConferenceAccess['kind']) => kind === 'advisor' || kind === 'organizer';
+
 export default function AdvisorPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
   const { language } = useLanguage();
   const t = useT();
-  const { user, session, loading: authLoading } = useAuth();
-  const [accessState, setAccessState] = useState<'checking' | 'allowed' | 'denied' | 'signin'>('checking');
+  const { loading: authLoading } = useAuth();
+  const advisorAccess = useSessionAccess({ code, gate: 'origin', allow: isAdvisorAccessKind });
+  const accessState = advisorAccess.state === 'standalone' ? 'allowed' : advisorAccess.state;
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -291,25 +295,10 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
 
   // Conference-session access guard (#8 / #4). Standalone sessions stay anonymous; a
   // conference session requires an advisor/observer or organizer (conference-wide).
-  // Gated on session_origin, NOT on detectConferenceSession(): that one now answers "is
-  // the dais gated", and an open dais must not open this view (it can nudge delegates)
-  // to anyone holding the session code. isConferenceSession fails closed.
-  useEffect(() => {
-    let cancelled = false;
-    async function guard() {
-      if (authLoading) return;
-      const isConf = await isConferenceSession(code);
-      if (cancelled) return;
-      if (!isConf) { setAccessState('allowed'); return; }
-      if (!session || !user) { setAccessState('signin'); return; }
-      const access = await verifyConferenceAccess(code, session.access_token, user.id);
-      if (cancelled) return;
-      setAccessState(access.kind === 'advisor' || access.kind === 'organizer' ? 'allowed' : 'denied');
-    }
-    setAccessState('checking');
-    guard();
-    return () => { cancelled = true; };
-  }, [code, authLoading, session?.access_token, user?.id]);
+  // Gated on session_origin ('origin'), NOT on the dais: an open dais must not open this
+  // view (it can nudge delegates) to anyone holding the session code. useSessionAccess
+  // is keyed on the user id (a token refresh used to flash the loader over the room) and
+  // turns a failed check into an inline retry instead of a verdict.
 
   useEffect(() => {
     const upperCode = code.toUpperCase();
@@ -382,6 +371,18 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
           <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>Not associated with your account</h1>
           <p className="mb-6" style={{ color: '#6A5A4A' }}>The advisor view is for advisors, observers, and organizers of this conference. Please contact your conference organisers.</p>
           <Link href="/sessions" className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>BACK TO HOME</Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (accessState === 'error') {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-6" style={{ backgroundColor: '#EDE7D8' }}>
+        <div className="text-center max-w-sm" role="alert">
+          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>{t('session_access_error_title')}</h1>
+          <p className="mb-6" style={{ color: '#6A5A4A' }}>{t('session_access_error_body')}</p>
+          <button onClick={advisorAccess.retry} className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>{t('delegate_seat_retry')}</button>
         </div>
       </div>
     );

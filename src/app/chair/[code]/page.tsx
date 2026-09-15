@@ -3,9 +3,10 @@ import { use, useEffect, useState, useRef, useCallback, useMemo, Suspense } from
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import FitToScreen from '@/components/FitToScreen';
 import GavelChip from '@/components/GavelChip';
-import CommitteeIdentityBadge from '@/components/CommitteeIdentityBadge';
+import CommitteeIdentityBadge, { emblemMonogram } from '@/components/CommitteeIdentityBadge';
 import { TopBarTab, TopBarIconButton } from '@/components/ChairTopBar';
-import SpeakerControls from '@/components/SpeakerControls';
+import SpeakerControls, { FloorProgress, SpeakerClock } from '@/components/SpeakerControls';
+import DraggablePopover from '@/components/DraggablePopover';
 import SpeakerStrip from '@/components/SpeakerStrip';
 import SessionCodePresenter from '@/components/SessionCodePresenter';
 import { Maximize2, MessageCircle, Settings, Trophy, X as XIcon } from 'lucide-react';
@@ -19,26 +20,28 @@ import { logFloorSpeech, logTimedSpeech, cowTurnKey, floorSpeechSeconds } from '
 import DocumentsModal from '@/components/DocumentsModal';
 import { getCountryByName, getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import { SeatFlag, SeatArtProvider } from '@/components/SeatFlag';
+import { SeatCircleFlag } from '@/components/CircleFlag';
 import { getCommitteeDisplayName, committeeDisplayName, deriveCommitteeAcronym, matchPresetEmblem } from '@/lib/presetNames';
-import { Emoji } from '@/components/Emoji';
 import { SettingsPanel } from '@/components/SettingsPanel';
 import ScoreboardPanel from '@/components/ScoreboardPanel';
 import FeedbackLogPanel, { liveCaucus } from '@/components/FeedbackLogPanel';
 import CowDelegationBoard from '@/components/CowDelegationBoard';
 import { useSettingsStore, stripNonHydratedSettings } from '@/lib/settingsStore';
 import { useAuth } from '@/components/AuthProvider';
-import { detectConferenceSession, verifyConferenceAccess } from '@/lib/conferenceAccess';
+import { useSessionAccess } from '@/lib/useSessionAccess';
+import type { ConferenceAccess } from '@/lib/conferenceAccess';
 import { resolveChairAwardsHref } from '@/lib/sessionAwardsLink';
 import { supabase } from '@/lib/supabase';
 import ChatPanel from '@/components/ChatPanel';
+import ChatDialog from '@/components/chat/ChatDialog';
 import ChatDisabledNotice from '@/components/ChatDisabledNotice';
 import { getCommitteeFlags } from '@/lib/committeeFlags';
 import { chatUnreadTotal, mergeMessagesById, chatConvKeyForMessage } from '@/lib/chatConversations';
 import { isViewingChatConversation } from '@/lib/chatViewing';
 import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
-import SidebarResizer from '@/components/SidebarResizer';
+import ChairSidebarShell from '@/components/ChairSidebarShell';
+import SidebarFlagRail from '@/components/SidebarFlagRail';
 import { SIDEBAR_DEFAULT_WIDTH, loadSidebarWidth, saveSidebarWidth, loadSidebarCollapsed, saveSidebarCollapsed } from '@/lib/sidebarWidth';
-import { PanelLeftOpen } from 'lucide-react';
 import { startSessionSync, rowFields, withCurrentSpeaker, withLists, ALL_SYNC_SLICES, COALESCE_MS, type ConnectionState, type SessionSync, type FetchMeta } from '@/lib/sessionSync';
 import { endModeratedCaucusIfAnchorUnchanged } from '@/lib/caucusExpiryWrite';
 import ConnectionPill from '@/components/ConnectionPill';
@@ -113,9 +116,12 @@ import {
 import { serverNow, serverNowIso } from '@/lib/serverClock';
 import SaveStatusToast from '@/components/notifications/SaveStatusToast';
 import ClockSkewHint from '@/components/ClockSkewHint';
+import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 
 /** Who holds the floor, as a stable key (delegate id, or the country for a Room-Order
  *  placeholder). Two different keys = the floor changed hands. */
+const isChairAccessKind = (kind: ConferenceAccess['kind']) => kind === 'chair' || kind === 'organizer';
+
 function speakerTurnKey(c: Committee | null | undefined): string | null {
   const s = c?.currentSpeaker;
   return s ? (s.delegateId || s.country || null) : null;
@@ -325,7 +331,7 @@ function AddSpeakerInput({ committee, onAdd, onRecognise }: { committee: Committ
               return (
                 <div key={d.id} className="w-full flex items-center gap-3 px-4 py-2.5 opacity-40">
                   <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
-                  <SeatFlag country={d.country} size={20} className="object-contain" fallback={<Emoji size="1.125rem">🌐</Emoji>} />
+                  <SeatFlag country={d.country} size={20} className="object-contain" fallback={<UnknownSeatIcon size={20} />} />
                 </span>
                   <span className="text-sm flex-1 text-[#9A8A78]">{getCountryDisplayName(d.country, language)}</span>
                   <span className="text-xs text-[#9A8A78]">already on list</span>
@@ -337,7 +343,7 @@ function AddSpeakerInput({ committee, onAdd, onRecognise }: { committee: Committ
               <button key={d.id} onMouseDown={(e) => { e.preventDefault(); commit(d); }}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 text-start transition-colors ${isFirst ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
-                  <SeatFlag country={d.country} size={20} className="object-contain" fallback={<Emoji size="1.125rem">🌐</Emoji>} />
+                  <SeatFlag country={d.country} size={20} className="object-contain" fallback={<UnknownSeatIcon size={20} />} />
                 </span>
                 <span className="text-sm">{getCountryDisplayName(d.country, language)}</span>
                 {d.status === 'absent' && <span className="text-[10px] text-[#B6871F] shrink-0">{t('rollcall_absent')}</span>}
@@ -405,7 +411,7 @@ function RtrCountryInput({
                 className={`w-full flex items-center gap-2 px-3 py-2 text-start text-xs transition-colors ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}
               >
                 <span className="shrink-0 w-5 h-5 inline-flex items-center justify-center">
-                <SeatFlag country={d.country} size={16} className="object-contain" fallback={<Emoji size="0.875rem">🌐</Emoji>} />
+                <SeatFlag country={d.country} size={16} className="object-contain" fallback={<UnknownSeatIcon size={16} />} />
               </span>
                 <span className="flex-1">{getCountryDisplayName(d.country, language)}</span>
                 {i === 0 && <span className="text-[#9A8A78] shrink-0">Enter ↵</span>}
@@ -419,6 +425,11 @@ function RtrCountryInput({
 }
 
 // ── Draggable GSL Speakers Queue ──────────────────────────────────────────────
+/** The speaker holding the floor (GSL, moderated caucus, Tour de Table): a round seat flag
+ *  (crest, then flag, then monogram) with a soft forest-tinted lift. */
+const FLOOR_FLAG_PX = 164;
+const FLOOR_FLAG_SHADOW = '0 0 0 4px #F0EBDD, 0 2px 6px rgba(27,56,40,0.12), 0 12px 28px rgba(27,56,40,0.20)';
+
 function DraggableSpeakersQueue({ list, onReorder, onRemove, onRemoveCurrent, lastSpeakerDelegateId, currentSpeakerDelegateId, isRoomOrderTdT }: {
   list: { delegateId: string; country: string }[];
   onReorder?: (newList: { delegateId: string; country: string }[]) => void;
@@ -487,7 +498,7 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegat
               >
                 <span className="text-xs text-[#9A8A78] font-mono w-5 text-end shrink-0">{i + 1}</span>
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
-                  <SeatFlag country={s.country} size={20} className="object-contain" fallback={<Emoji size="1.125rem">🌐</Emoji>} />
+                  <SeatFlag country={s.country} size={20} className="object-contain" fallback={<UnknownSeatIcon size={20} />} />
               </span>
                 <span className="flex-1 text-sm text-[#1C1410] line-clamp-2 break-words whitespace-normal leading-tight">{getCountryDisplayName(s.country, language)}</span>
                 {lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && (
@@ -572,7 +583,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
               return (
                 <div key={d.id} className="w-full flex items-center gap-3 px-4 py-2.5 opacity-40">
                   <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
-                    <SeatFlag country={d.country} size={20} className="object-contain" fallback={<Emoji size="1.125rem">🌐</Emoji>} />
+                    <SeatFlag country={d.country} size={20} className="object-contain" fallback={<UnknownSeatIcon size={20} />} />
                 </span>
                   <span className="text-sm flex-1 text-[#9A8A78]">{getCountryDisplayName(d.country, language)}</span>
                   <span className="text-xs text-[#9A8A78]">{isCurrent ? 'currently speaking' : 'already on list'}</span>
@@ -584,7 +595,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
               <button key={d.id} onMouseDown={(e) => { e.preventDefault(); commit(d); }}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 text-start transition-colors ${isFirst ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
-                  <SeatFlag country={d.country} size={20} className="object-contain" fallback={<Emoji size="1.125rem">🌐</Emoji>} />
+                  <SeatFlag country={d.country} size={20} className="object-contain" fallback={<UnknownSeatIcon size={20} />} />
                 </span>
                 <span className="text-sm flex-1">{getCountryDisplayName(d.country, language)}</span>
                 {d.status === 'absent' && <span className="text-[10px] text-[#B6871F] shrink-0">{t('rollcall_absent')}</span>}
@@ -1095,6 +1106,7 @@ function ModeratedCaucusMain({
   // controls never vanish when the floor empties. Next with nobody on the floor calls the
   // first delegate in the queue (handleNextCaucusSpeaker already does exactly that).
   const caucusHasSpeaker = !!committee.caucus?.currentSpeaker;
+  const toggleRtr = () => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply');
   const caucusControls = !sessionEnded && !isViewOnly ? (
     <SpeakerControls
       hasSpeaker={caucusHasSpeaker}
@@ -1109,7 +1121,7 @@ function ModeratedCaucusMain({
       }}
       onAddTime={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')}
       addTimeActive={activePopover === 'extraTime'}
-      onRightOfReply={isTdT ? undefined : () => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
+      onRightOfReply={isTdT || caucusHasSpeaker ? undefined : toggleRtr}
       rightOfReplyActive={activePopover === 'rightToReply'}
     />
   ) : null;
@@ -1154,13 +1166,13 @@ function ModeratedCaucusMain({
                 })()}</span>
               </div>
             ) : (
-              <div style={{ width: '165px', height: '110px', borderRadius: '12px', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative' }}>
-                <SeatFlag
-                  country={committee.caucus!.currentSpeaker!}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px', display: 'block' }}
-                  fallback={<Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>}
-                />
-              </div>
+              <SeatCircleFlag
+                country={committee.caucus!.currentSpeaker!}
+                size={FLOOR_FLAG_PX}
+                decorative
+                loading="eager"
+                style={{ boxShadow: FLOOR_FLAG_SHADOW }}
+              />
             )}
             <h1 className="font-black text-[#1C1410] text-center inline-flex items-center gap-2" style={{ fontSize: '1.8rem', margin: '8px 0' }}>
               {getCountryDisplayName(committee.caucus!.currentSpeaker!, language)}
@@ -1176,13 +1188,20 @@ function ModeratedCaucusMain({
                 </button>
               )}
             </h1>
-            <div className={`font-black font-mono tabular-nums ${speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'}`} style={{ fontSize: '5rem', margin: '8px 0' }}>
+            <SpeakerClock
+              running={timerRunning}
+              onToggle={!sessionEnded && !isViewOnly ? handleToggleTimer : undefined}
+              className={`font-black font-mono tabular-nums ${speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'}`}
+              style={{ fontSize: '5rem', margin: '4px 0', lineHeight: 1.15 }}
+            >
               {formatTime(speakerTimeRemaining)}
               {extraTimeAdded && <span className="text-base ms-2 font-normal text-[#1C1410]">{t('gsl_plus_time')}</span>}
-            </div>
-            <div className="w-full max-w-2xl h-2 bg-[#DDD4C0] rounded-full overflow-hidden" style={{ marginBottom: '6px' }}>
-              <div className={`h-full rounded-full transition-all ${caucusProgress > 50 ? 'bg-[#B6871F]' : caucusProgress > 20 ? 'bg-[#B6871F]' : 'bg-red-500'}`} style={{ width: `${caucusProgress}%` }} />
-            </div>
+            </SpeakerClock>
+            <FloorProgress
+              percent={caucusProgress}
+              barClassName={caucusProgress > 20 ? 'bg-[#B6871F]' : 'bg-red-500'}
+              rtr={!sessionEnded && !isViewOnly && !isTdT ? { onClick: toggleRtr, active: activePopover === 'rightToReply' } : null}
+            />
           </div>
           {/* ZONE 3 — Action buttons locked just above bottom bar */}
           {caucusControls}
@@ -1386,29 +1405,17 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   }, [urlChairName, code]);
   const myChairName = urlChairName || rejoinChairName;
   const { user, session, loading: authLoading } = useAuth();
-  const [accessState, setAccessState] = useState<'checking' | 'allowed' | 'denied' | 'signin'>('checking');
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Conference-session access guard (Phase 2 #8). Standalone sessions stay anonymous
   // ('allowed'); a conference session requires a signed-in user who is a chair of THIS
   // committee, so a crafted /chair/CODE url can't drop a non-chair into the chair view.
-  useEffect(() => {
-    let cancelled = false;
-    async function guard() {
-      if (authLoading) return;
-      const isConf = await detectConferenceSession(code);
-      if (cancelled) return;
-      if (!isConf) { setAccessState('allowed'); return; }
-      if (!session || !user) { setAccessState('signin'); return; }
-      const access = await verifyConferenceAccess(code, session.access_token, user.id);
-      if (cancelled) return;
-      setAccessState(access.kind === 'chair' || access.kind === 'organizer' ? 'allowed' : 'denied');
-    }
-    setAccessState('checking');
-    guard();
-    return () => { cancelled = true; };
-  }, [code, authLoading, session?.access_token, user?.id]);
+  // useSessionAccess: keyed on the user id (an hourly token refresh used to flash the
+  // loader over the live room), keeps a settled page on screen during a re-check, and turns
+  // a failed check into an inline retry instead of a verdict.
+  const chairAccess = useSessionAccess({ code, gate: 'dais', allow: isChairAccessKind });
+  const accessState = chairAccess.state === 'standalone' ? 'allowed' : chairAccess.state;
 
   // Committee emblem for the sidebar. The sessions `committees` table has no logo column,
   // so the artwork is resolved in this order:
@@ -1464,12 +1471,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
    * AGENTS.md RULE 3/4: this is its own isolated atom, exactly like
    * speakerTimeRemaining. It never enters the committee object, so it can
    * never call updateLocal and can never move `localUpdateTime`. The drag
-   * itself does not even come through here — SidebarResizer paints
-   * `sidebarRef.current.style.width` per frame and commits once on release.
+   * itself does not even come through here — ChairSidebarShell paints the slot and
+   * panel straight onto the DOM per frame and commits once on release.
    */
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
-  const sidebarRef = useRef<HTMLElement | null>(null);
-  /** The sidebar folded away to its slim rail (per reader, localStorage). Same isolation as the width. */
+  /** The sidebar folded to its floating flag column (per reader, localStorage). Same isolation as the width. */
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showSliders, setShowSliders] = useState(false);
   const [showMotions, setShowMotions] = useState(false);
@@ -2578,7 +2584,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const caucusRollCallCommittee = useMemo(
     () => committee ? { ...committee, speakersList: committee.caucusQueue ?? [], currentSpeaker: null } : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [committee?.caucusQueue, committee?.delegates, committee?.phase]
+    // caucus / pendingMotions / endedAt too: RollCallPanel's memo compares all three, and a
+    // snapshot missing them kept the OLD caucus speaker at #1 of the sidebar queue.
+    [committee?.caucusQueue, committee?.delegates, committee?.phase, committee?.caucus, committee?.pendingMotions, committee?.endedAt]
   );
 
   // ── Stable callbacks (must be before early returns — Rules of Hooks) ──────────
@@ -3101,13 +3109,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       if (m.sender === '__system__' || m.content.startsWith('__log__:')) continue;
       if (!myChairName || m.sender === myChairName) continue;   // never our own
       // Addressed to this dais: public, to the chairs thread, or a DM to this chair.
-      const forMe = !m.isPrivate || m.recipient === 'Chairs' || m.recipient === myChairName;
+      // A group message (`group:<id>`) is resolved below: null unless this chair is a member.
+      const forMe = !m.isPrivate || m.recipient === 'Chairs' || m.recipient === myChairName || !!m.recipient?.startsWith('group:');
       if (!forMe) continue;
       // The thread this message lands in. Suppress ONLY when that exact thread is on screen
       // (published by ChatPanel, src/lib/chatViewing.ts). This used to be `if (showChat)`,
       // which silenced a DM while the chair was reading Everyone and still let a card raised
       // a moment before opening the chat sit over the thread it was about.
-      const convKey = chatConvKeyForMessage(m, myChairName, true, committee?.chairNames ?? []);
+      const convKey = chatConvKeyForMessage(m, myChairName, true, committee?.chairNames ?? [], chatMessages);
       if (convKey == null) continue;                   // lands in no thread this chair can open
       if (isViewingChatConversation(committeeId, convKey)) continue;
 
@@ -3368,6 +3377,26 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     );
   }
 
+  // The access check could not be answered (connection dropped, token expired mid-sleep).
+  // Only reachable on a first load: a settled room stays on screen (src/lib/useSessionAccess.ts).
+  if (accessState === 'error') {
+    return (
+      <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
+        <div className="text-center max-w-sm" role="alert">
+          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>{t('session_access_error_title')}</h1>
+          <p className="mb-6" style={{ color: '#6A5A4A' }}>{t('session_access_error_body')}</p>
+          <button
+            onClick={chairAccess.retry}
+            className="font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none gv-lift"
+            style={{ backgroundColor: '#1B3828' }}
+          >
+            {t('delegate_seat_retry')}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!committee) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE7D8' }}>
@@ -3416,11 +3445,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   /** Delegations the quorum rule needs, for the sidebar masthead. Null = no rule. */
   const quorumNeeded = quorumFraction > 0 && totalCount > 0 ? Math.ceil(quorumFraction * totalCount) : null;
   // Where the full-height roster sidebar shows: the same states it showed in before it moved
-  // out of the floor row. Hidden in pre-session (roll call is the centred card), while chat
-  // covers the floor, and on the End View / Suspend View tabs.
+  // out of the floor row. Hidden in pre-session (roll call is the centred card) and on the
+  // End View / Suspend View tabs. (Chat used to cover the floor; it is a dialog now.)
   const sidebarVisible = showRollCall
     && committee.phase !== 'pre-session'
-    && !(showChat && !sessionEnded)
     && !(sessionEnded && endedTab === 'ended')
     && !(!sessionEnded && sessionSuspended && suspendTab === 'suspend');
 
@@ -4111,6 +4139,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // the list; with a speaker and nobody queued it becomes Finish (G-1), except when
   // gslRequireNextSpeaker is on, which keeps the GSL from running dry.
   const gslHasSpeaker = !!committee.currentSpeaker;
+  const toggleGslRtr = () => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply');
+  // The same reasons the Start button cannot start; the clickable countdown obeys them too.
+  const gslStartBlockedReason = belowQuorum ? t('speaker_ctl_below_quorum') : gslRequireNextSpeaker && isLastGSLSpeaker ? t('gsl_never_empty_warning') : null;
   const gslListLen = committee.speakersList.length;
   const gslNext = gslHasSpeaker
     ? (gslListLen === 0 && !gslRequireNextSpeaker
@@ -4129,12 +4160,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       hasSpeaker={gslHasSpeaker}
       timerRunning={timerRunning}
       onToggleTimer={handleToggleTimer}
-      startBlockedReason={belowQuorum ? t('speaker_ctl_below_quorum') : gslRequireNextSpeaker && isLastGSLSpeaker ? t('gsl_never_empty_warning') : null}
+      startBlockedReason={gslStartBlockedReason}
       onRestart={handleRestartTime}
       next={gslNext}
       onAddTime={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')}
       addTimeActive={activePopover === 'extraTime'}
-      onRightOfReply={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
+      onRightOfReply={gslHasSpeaker ? undefined : toggleGslRtr}
       rightOfReplyActive={activePopover === 'rightToReply'}
       tutorialTargets
     />
@@ -4166,17 +4197,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     setShowChat(false);
     setShowRollCall(true);
   };
-  const handleToggleChat = () => {
-    const newShow = !showChat;
-    setShowChat(newShow);
-    if (!newShow) {
-      setShowRollCall(true);
-    }
-    if (newShow) {
-      setShowRollCall(false);
-      setShowSliders(false);
-    }
-  };
+  // Chat is a dialog over the cockpit now, so opening it no longer hides the roster.
+  const handleToggleChat = () => setShowChat((v) => !v);
 
   return (
     <FitToScreen>
@@ -4184,34 +4206,33 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     <div className="h-full w-full flex overflow-hidden relative" style={{ backgroundColor: '#EDE7D8' }}>
       <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
       {/* The roster sidebar runs the FULL height of the screen, from the very top, with
-          the top bar starting at its edge. Width is inline and user-set (default 352px,
-          the SSR value); SidebarResizer is the divider. It shows exactly where it did
-          before the move: not in pre-session, not while chat covers the floor, and not
-          on the End View or Suspend View tabs (sidebarVisible). */}
-      {/* Collapsed: a slim full-height forest rail that IS the reopen button (Mod+\ also
-          toggles). It carries the tutorial target while the sidebar is folded, so a
-          spotlight step never loses its anchor; expanded, the <aside> carries it. */}
-      {sidebarVisible && sidebarCollapsed && (
-        <button
-          type="button"
-          data-tutorial="speakers-sidebar"
-          onClick={() => toggleSidebarCollapsed(false)}
-          aria-label={t('sidebar_expand')}
-          aria-expanded={false}
-          title={t('sidebar_expand')}
-          className="group/rail shrink-0 self-stretch flex flex-col items-center pt-3 gap-2 transition-colors hover:bg-[#244A35] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#EED98A]/70"
-          style={{ width: 22, backgroundColor: '#1B3828', color: 'rgba(237,231,216,0.7)' }}
-        >
-          <PanelLeftOpen size={15} aria-hidden className="rtl:-scale-x-100 transition-colors group-hover/rail:text-[#EED98A]" />
-          <span aria-hidden className="block w-[3px] h-9 rounded-full mt-auto mb-auto transition-colors bg-[rgba(237,231,216,0.25)] group-hover/rail:bg-[#EED98A]" />
-        </button>
-      )}
-      {sidebarVisible && !sidebarCollapsed && (
-        <aside
-          ref={sidebarRef}
-          data-tutorial="speakers-sidebar"
-          className="flex flex-col overflow-hidden shrink-0"
-          style={{ width: sidebarWidth, backgroundColor: '#1B3828' }}
+          the top bar starting at its edge. ChairSidebarShell owns the slot, the forest panel,
+          the collapsed flag column (SidebarFlagRail) and the divider, and animates between
+          them with transforms only. Width and collapsed state are per reader (localStorage).
+          It shows exactly where it did before: not in pre-session, not while chat covers the
+          floor, and not on the End View or Suspend View tabs (sidebarVisible). The floor
+          column below MUST stay the shell's next sibling: the shell animates it. */}
+      {sidebarVisible && (
+        <ChairSidebarShell
+          width={sidebarWidth}
+          collapsed={sidebarCollapsed}
+          onWidthChange={handleSidebarResize}
+          onCollapsedChange={toggleSidebarCollapsed}
+          resizeLabel={t('rollcall_resize_sidebar')}
+          rail={(() => {
+            const rawName = committee.name;
+            const acronym = deriveCommitteeAcronym(rawName, committeeEmblem.abbreviation);
+            const primary = committeeDisplayName(getCommitteeDisplayName(rawName, language), acronym);
+            return (
+              <SidebarFlagRail
+                committee={(caucusPanelLocked || committee.caucus?.type === 'moderated')
+                  ? (caucusRollCallCommittee ?? { ...committee, speakersList: committee.caucusQueue ?? [], currentSpeaker: null })
+                  : committee}
+                emblem={{ src: committeeEmblem.logoUrl ?? matchPresetEmblem(rawName, committeeEmblem.abbreviation), monogram: emblemMonogram(primary), alt: primary }}
+                onExpand={() => toggleSidebarCollapsed(false)}
+              />
+            );
+          })()}
         >
           {renderIdentityBadge(true)}
           {caucusMaxReachedMsg && (
@@ -4285,15 +4306,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               isViewOnly={isViewOnly} />
           )}
           </div>
-        </aside>
-      )}
-      {sidebarVisible && !sidebarCollapsed && (
-        <SidebarResizer
-          width={sidebarWidth}
-          targetRef={sidebarRef}
-          onCommit={handleSidebarResize}
-          label={t('rollcall_resize_sidebar')}
-        />
+        </ChairSidebarShell>
       )}
       {/* Everything right of the sidebar: the top bar, the banners and the floor. The
           sidebar runs the full height of the screen, so this column starts at its edge. */}
@@ -4377,7 +4390,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             </TopBarIconButton>
           );
         })()}
-        <TopBarIconButton onClick={() => setShowScoreboard(true)} label={t('chair_hdr_scoreboard')}>
+        <TopBarIconButton tutorial="tab-scoreboard" onClick={() => setShowScoreboard(true)} label={t('chair_hdr_scoreboard')}>
           <Trophy size={21} strokeWidth={2} aria-hidden />
         </TopBarIconButton>
         {/* Once the gavel has fallen, a conference chair's next job is the award slate: a
@@ -4469,7 +4482,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               let delegateId = '';
               let desiredStatus: 'present' | 'present-voting' = 'present';
               try { const parsed = JSON.parse(m.topic); delegateId = parsed.delegateId; desiredStatus = parsed.desiredStatus; } catch {}
-              const flagEl = <SeatFlag country={m.proposedBy} size={20} className="object-contain inline-block" fallback={<Emoji size="1.125rem">🌐</Emoji>} />;
+              const flagEl = <SeatFlag country={m.proposedBy} size={20} className="object-contain inline-block" fallback={<UnknownSeatIcon size={20} />} />;
               return (
                 <div key={m.id} className="flex items-center gap-2.5 text-sm rounded-xl px-2.5 py-1" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
                   <span className="font-mono text-lg">{flagEl}</span>
@@ -4550,22 +4563,24 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         </div>
       ) : (
       <div className="relative flex-1 flex overflow-hidden min-h-0">
+        {/* Chat is a dialog that grows out of the chat icon (src/components/chat/ChatDialog.tsx);
+            it portals, so where it sits in this tree does not matter. */}
         {showChat && !sessionEnded && (
-          <div className="absolute inset-0 z-40 flex overflow-hidden min-h-0" style={{ backgroundColor: '#EDE7D8' }}>
-            {getCommitteeFlags(committee).disableChat ? (
-              <ChatDisabledNotice onClose={() => { setShowChat(false); setShowRollCall(true); }} />
+          <ChatDialog onClose={() => setShowChat(false)}>
+            {(requestClose) => getCommitteeFlags(committee).disableChat ? (
+              <ChatDisabledNotice onClose={requestClose} />
             ) : (
               <ChatPanel
                 committee={committee}
                 senderName={myChairName || 'Chair'}
                 isChair={true}
-                onClose={() => { setShowChat(false); setShowRollCall(true); }}
+                onClose={requestClose}
                 readOnly={sessionEnded}
                 readCounts={chatReadCounts}
                 onReadCountsChange={setChatReadCounts}
               />
             )}
-          </div>
+          </ChatDialog>
         )}
         {!showChat && committee.phase === 'pre-session' && (
           <div className="flex-1 flex items-center justify-center px-6 py-8">
@@ -4746,13 +4761,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       </div>
                       {/* ZONE 2 — Flag + name + timer + progress: compresses as viewport shrinks */}
                       <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-4 py-1">
-                        <div style={{ width: '165px', height: '110px', borderRadius: '12px', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative' }}>
-                          <SeatFlag
-                            country={committee.currentSpeaker.country}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px', display: 'block' }}
-                            fallback={<Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>}
-                          />
-                        </div>
+                        <SeatCircleFlag
+                          country={committee.currentSpeaker.country}
+                          size={FLOOR_FLAG_PX}
+                          decorative
+                          loading="eager"
+                          style={{ boxShadow: FLOOR_FLAG_SHADOW }}
+                        />
                         <h1 className="font-black text-[#1C1410] text-center" style={{ fontSize: '1.8rem', margin: '8px 0' }}>{getCountryDisplayName(committee.currentSpeaker.country, language)}</h1>
                         {isViewOnly ? (
                           <div className="font-bold text-[#6A5A4A] text-center" style={{ fontSize: '1.5rem', marginBottom: '8px' }}>
@@ -4760,13 +4775,22 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           </div>
                         ) : (
                           <>
-                            <div data-tutorial="timer" className={`font-black font-mono tabular-nums ${speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'}`} style={{ fontSize: '5rem', marginBottom: '8px' }}>
+                            <SpeakerClock
+                              tutorial="timer"
+                              running={timerRunning}
+                              onToggle={!sessionEnded ? handleToggleTimer : undefined}
+                              blockedReason={gslStartBlockedReason}
+                              className={`font-black font-mono tabular-nums ${speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'}`}
+                              style={{ fontSize: '5rem', marginBottom: '4px', lineHeight: 1.15 }}
+                            >
                               {formatTime(speakerTimeRemaining)}
                               {extraTimeAdded && <span className="text-base ms-2 font-normal text-[#1C1410]">{t('gsl_plus_time')}</span>}
-                            </div>
-                            <div className="w-full max-w-2xl h-2 bg-[#DDD4C0] rounded-full overflow-hidden" style={{ marginBottom: '6px' }}>
-                              <div className={`h-full rounded-full transition-all ${progress > 20 ? 'bg-[#B6871F]' : 'bg-[#B8844A]'}`} style={{ width: `${progress}%` }} />
-                            </div>
+                            </SpeakerClock>
+                            <FloorProgress
+                              percent={progress}
+                              barClassName={progress > 20 ? 'bg-[#B6871F]' : 'bg-[#B8844A]'}
+                              rtr={!sessionEnded ? { onClick: toggleGslRtr, active: activePopover === 'rightToReply', tutorial: 'rtr-button' } : null}
+                            />
                           </>
                         )}
                         {gslRequireNextSpeaker && isLastGSLSpeaker && (
@@ -4919,17 +4943,18 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           isViewOnly={isViewOnly}
         />
       )}
-      {/* EXTRA TIME OVERLAY — fixed position, same anchor as RTR overlay */}
+      {/* EXTRA TIME OVERLAY: a movable panel (src/components/DraggablePopover.tsx), Portal +
+          fixed, dragged by its handle, position remembered for this tab. */}
       {!sessionEnded && !isViewOnly && activePopover === 'extraTime' && (
-        <div
-          className="fixed z-50"
-          style={{ top: '50%', right: '2rem', transform: 'translateY(-50%)' }}
+        <DraggablePopover
+          id="add-time"
+          accent="rgba(10,51,80,0.22)"
+          className="w-72"
+          handleLabel={t('popover_drag_handle')}
+          closeLabel={t('popover_close')}
+          onClose={() => setActivePopover(null)}
+          title={<span className="text-xs font-black uppercase tracking-wide" style={{ color: '#1B3828' }}>{t('gsl_add_time_title')}</span>}
         >
-          <div className="bg-[#EDE7D8] border border-[#3D7A52]/40 rounded-xl p-3 w-72 shadow-2xl">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#1B3828' }}>{t('gsl_add_time_title')}</span>
-              <button onClick={() => setActivePopover(null)} className="text-[#1C1410] hover:text-[#8B2020] text-sm font-bold">✕</button>
-            </div>
             <div className="flex gap-2 mb-2">
               {[15, 30, 60].map((s) => (
                 <button key={s} onClick={() => { handleAddExtraTime(s); setActivePopover(null); }}
@@ -4955,12 +4980,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 {t('gsl_add_time_btn')}
               </button>
             </div>
-          </div>
-        </div>
+        </DraggablePopover>
       )}
-      {/* RTR OVERLAY — fixed position, completely outside document flow.
-          Never render this inside any flex/grid container — it must not
-          affect the layout of the GSL centre column in any way. */}
       {/* Exactly ONE per surface — this host owns the interval that advances every
           notification's TTL, so a second mount would halve every countdown. */}
       {agenda.picker}
@@ -4972,22 +4993,25 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           onEnd={() => setShowTutorial(false)}
         />
       )}
+      {/* RTR OVERLAY: a movable panel through Portal (DraggablePopover), completely outside
+          document flow, so it never affects the layout of the floor. Muted sand and deep
+          brown, the same calm tone as the RTR button. */}
       {!isViewOnly && activePopover === 'rightToReply' && (
-        <div
-          className="fixed z-50"
-          style={{ top: '50%', right: '2rem', transform: 'translateY(-50%)' }}
+        <DraggablePopover
+          id="right-of-reply"
+          accent="rgba(139,90,32,0.26)"
+          className="w-72"
+          handleLabel={t('popover_drag_handle')}
+          closeLabel={t('popover_close')}
+          onClose={() => {
+            setActivePopover(null);
+            setRtrOpen(false);
+            setRtrTimerActive(false);
+            setRtrCountry('');
+            setRtrTimeRemaining(rtrSeconds);
+          }}
+          title={<span className="text-xs font-black uppercase tracking-wide" style={{ color: '#8B5A20' }}>{t('gsl_right_to_reply_popover')}</span>}
         >
-          <div className="bg-[#EDE7D8] border border-[#B8844A]/30 rounded-xl p-4 w-72 shadow-2xl">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#B8844A' }}>{t('gsl_right_to_reply_popover')}</span>
-              <button onClick={() => {
-                setActivePopover(null);
-                setRtrOpen(false);
-                setRtrTimerActive(false);
-                setRtrCountry('');
-                setRtrTimeRemaining(rtrSeconds);
-              }} className="text-[#1C1410] hover:text-[#8B2020] text-sm font-bold">✕</button>
-            </div>
             {!rtrOpen ? (
               // ── Setup view ────────────────────────────────────
               <>
@@ -5003,8 +5027,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       onClick={() => setRtrSeconds(s)}
                       className={`gv-lift flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-colors border ${
                         rtrSeconds === s
-                          ? 'bg-[#B8844A] border-[#B8844A] text-[#1C1410]'
-                          : 'bg-[#EDE7D8] border-[#DDD4C0] text-[#6A5A4A] hover:border-[#B8844A]/50'
+                          ? 'bg-[#EBD3B6] border-[#C99A6B] text-[#5A3413]'
+                          : 'bg-[#EDE7D8] border-[#DDD4C0] text-[#6A5A4A] hover:border-[#C99A6B]/60'
                       }`}
                     >
                       {s}s
@@ -5020,7 +5044,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     setRtrOpen(true);
                   }}
                   disabled={!rtrCountry}
-                  className="w-full py-2 bg-[#B8844A] hover:bg-[#B8844A]/80 disabled:opacity-40 disabled:cursor-not-allowed text-[#1C1410] text-xs rounded-lg font-black uppercase tracking-wide transition-colors gv-lift"
+                  className="w-full py-2 bg-[#E2C6A4] hover:bg-[#D9B891] disabled:opacity-40 disabled:cursor-not-allowed text-[#5A3413] text-xs rounded-lg font-black uppercase tracking-wide transition-colors gv-lift"
                 >
                   {t('gsl_grant')}
                 </button>
@@ -5029,18 +5053,17 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               // ── Active timer view ──────────────────────────────
               <>
                 <div className="flex items-center gap-2 mb-3 px-1">
-                  <SeatFlag country={rtrCountry} size={24} className="object-contain inline-block" fallback={<Emoji size="1.25rem">🌐</Emoji>} />
+                  <SeatFlag country={rtrCountry} size={24} className="object-contain inline-block" fallback={<UnknownSeatIcon size={24} />} />
                   <span className="text-sm text-[#1C1410] font-bold flex-1">{rtrCountry}</span>
-                  <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#B8844A' }}>{t('gsl_right_to_reply_popover')}</span>
                 </div>
                 <div className={`text-5xl font-black font-mono text-center mb-3 tabular-nums ${
-                  rtrTimeRemaining <= 5 ? 'text-red-500' : rtrTimeRemaining <= 10 ? 'text-[#B6871F]' : 'text-[#B8844A]'
+                  rtrTimeRemaining <= 5 ? 'text-[#8B2020]' : rtrTimeRemaining <= 10 ? 'text-[#8B5A20]' : 'text-[#5A3413]'
                 }`}>
                   {Math.floor(rtrTimeRemaining / 60)}:{String(rtrTimeRemaining % 60).padStart(2, '0')}
                 </div>
                 <div className="w-full h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden mb-3">
                   <div
-                    className={`h-full rounded-full transition-all ${rtrTimeRemaining / rtrSeconds > 0.5 ? 'bg-[#B8844A]' : rtrTimeRemaining / rtrSeconds > 0.2 ? 'bg-[#B6871F]' : 'bg-red-500'}`}
+                    className={`h-full rounded-full transition-all ${rtrTimeRemaining / rtrSeconds > 0.5 ? 'bg-[#C99A6B]' : rtrTimeRemaining / rtrSeconds > 0.2 ? 'bg-[#B6871F]' : 'bg-[#B84A3A]'}`}
                     style={{ width: `${(rtrTimeRemaining / rtrSeconds) * 100}%` }}
                   />
                 </div>
@@ -5048,7 +5071,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   <button
                     onClick={() => setRtrTimerActive((r) => !r)}
                     className={`gv-lift flex-1 py-2 rounded-lg font-bold text-xs transition-colors ${
-                      rtrTimerActive ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'
+                      rtrTimerActive ? 'bg-[#F2C230] hover:bg-[#E5B21C] text-[#1C1410]' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'
                     }`}
                   >
                     {rtrTimerActive ? t('rtr_pause') : t('rtr_start')}
@@ -5068,8 +5091,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 </div>
               </>
             )}
-          </div>
-        </div>
+        </DraggablePopover>
       )}
       </div>
     </div>

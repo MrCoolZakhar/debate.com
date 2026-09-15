@@ -4,6 +4,7 @@ import { Committee } from '@/lib/types';
 import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 import { SeatFlag, useSeatArt } from '@/components/SeatFlag';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 
 // A flag tile with a VISIBLE globe fallback (not display:none).
 function FlagTile({ country, active, spoken }: { country: string; active: boolean; spoken: boolean }) {
@@ -22,7 +23,7 @@ function FlagTile({ country, active, spoken }: { country: string; active: boolea
         {hasArt ? (
           <SeatFlag country={country} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : null}
-        <span style={{ display: hasArt ? 'none' : 'flex', position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🌐</span>
+        <span style={{ display: hasArt ? 'none' : 'flex', position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center' }}><UnknownSeatIcon size={30} bare /></span>
         {spoken && !active && (
           <span style={{ position: 'absolute', top: 3, right: 3, width: 7, height: 7, borderRadius: '50%', backgroundColor: '#3D7A52', boxShadow: '0 0 0 1.5px #FAF8F3' }} />
         )}

@@ -32,8 +32,8 @@
 //   3. the CSV exported only the objective total. It now carries both.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useMemo, useState } from 'react';
-import Portal from '@/components/Portal';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import GrowDialog from '@/components/GrowDialog';
 import { SeatFlag } from '@/components/SeatFlag';
 import { NEU, NeuPill, OUTFIT } from '@/components/neu';
 import { SOFT, RED, CARD_BORDER_COLOR } from '@/components/scoreboardTokens';
@@ -72,13 +72,29 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
   const [awardNote, setAwardNote] = useState('');
   const [deduct, setDeduct] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackEntry[]>([]);
+  // The board opens with a grow animation. The feedback read usually lands inside it, and
+  // applying it then rebuilds and re-rasterises the whole table mid-motion (the "occasional
+  // lag"). A result that arrives before the dialog has finished opening is held and applied
+  // on `onOpened` instead.
+  const openedRef = useRef(false);
+  const heldFeedback = useRef<FeedbackEntry[] | null>(null);
 
   // Re-reads on every realtime `feedback` event, so notes and ratings written by another
   // chair appear while the scoreboard is open. This was mount-only, which meant the board
   // silently went stale the moment a second chair wrote anything.
   useEffect(() => {
-    getFeedbackForCommittee(committee.id).then(setFeedback);
+    let cancelled = false;
+    getFeedbackForCommittee(committee.id).then((rows) => {
+      if (cancelled) return;
+      if (openedRef.current) setFeedback(rows);
+      else heldFeedback.current = rows;
+    });
+    return () => { cancelled = true; };
   }, [committee.id, feedbackVersion]);
+  const handleOpened = () => {
+    openedRef.current = true;
+    if (heldFeedback.current) { setFeedback(heldFeedback.current); heldFeedback.current = null; }
+  };
 
   // Awards are decided on the conference page, never here — this is only a signpost, and
   // it exists ONLY for conference-linked sessions. An anonymous standalone session renders
@@ -306,17 +322,21 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
   };
 
   return (
-    <Portal>
-      <style>{`@keyframes sbFade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}`}</style>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(28,20,16,0.45)' }} onClick={onClose}>
-        {/* Height is capped as a % of the overlay, NEVER in vh: this modal is portalled into
-            #fit-root, which is scale()d, so vh resolves against the real viewport while the
-            overlay's own box is only FitToScreen's BASE_H. On tall screens 88vh overflowed
-            that box and the header/footer were pushed off-screen (and unreachable, because a
-            centred flex item overflows in both directions). % matches Motions/Documents. */}
-        <div className="w-full max-w-3xl max-h-[92%] rounded-2xl overflow-hidden flex flex-col"
-          style={{ backgroundColor: NEU.surface, border: `1px solid ${CARD_BORDER_COLOR}`, boxShadow: NEU.out, fontFamily: OUTFIT }}
-          onClick={(e) => e.stopPropagation()}>
+    // Grows out of the trophy in the top bar, like Motions and Documents.
+    <GrowDialog
+      originSelector='[data-tutorial="tab-scoreboard"]'
+      onClose={onClose}
+      onOpened={handleOpened}
+      ariaLabel={t('sb_title')}
+      /* Height is capped as a % of the overlay, NEVER in vh: this modal is portalled into
+         #fit-root, which is scale()d, so vh resolves against the real viewport while the
+         overlay's own box is only FitToScreen's BASE_H. % matches Motions/Documents. */
+      panelClassName="w-full max-w-3xl max-h-[92%] rounded-2xl overflow-hidden flex flex-col"
+      panelStyle={{ backgroundColor: NEU.surface, border: `1px solid ${CARD_BORDER_COLOR}`, boxShadow: NEU.out, fontFamily: OUTFIT }}
+      backdropStyle={{ background: 'rgba(28,20,16,0.45)' }}
+    >
+      {(requestClose) => (<>
+          <style>{`@keyframes sbFade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}`}</style>
           {/* Header */}
           <div className="px-5 py-3 flex items-center gap-3 shrink-0 sticky top-0 z-10" style={{ backgroundColor: NEU.forest }}>
             <div className="w-1 h-4 rounded-full" style={{ backgroundColor: NEU.gold }} />
@@ -331,7 +351,7 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
                 </button>
               )}
               <button onClick={exportCsv} className="text-xs font-bold px-3 py-1.5 rounded-lg gv-lift" style={{ backgroundColor: NEU.gold, color: NEU.forest }}>{t('sb_export_csv')}</button>
-              <button onClick={onClose} className="text-[#EDE7D8] hover:text-white text-lg leading-none" aria-label={t('sb_close')}>✕</button>
+              <button onClick={requestClose} className="inline-flex items-center justify-center w-9 h-9 rounded-full text-[#EDE7D8] hover:text-white hover:bg-[rgba(238,217,138,0.12)] text-lg leading-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]" aria-label={t('sb_close')}>✕</button>
             </div>
           </div>
 
@@ -468,8 +488,7 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
               </div>
             )}
           </div>
-        </div>
-      </div>
-    </Portal>
+      </>)}
+    </GrowDialog>
   );
 }

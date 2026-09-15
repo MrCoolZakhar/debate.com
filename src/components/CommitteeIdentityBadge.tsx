@@ -19,9 +19,10 @@
 //     max. On a conference committee with 2+ topics a separate small "switch topic"
 //     control (`onSwitchAgenda`) opens the agenda picker, so the text edits and the
 //     picker stays one click away.
-//   • QuorumRings: present, two thirds, simple majority, labelled, plus the quorum
-//     pill when a quorum rule is set. Passed in as `present`/`total`; omit
-//     `present` to hide the rings.
+//   • QuorumRings: three bookmark tabs (Present, 2/3, 1/2+1) with half-circle gauges,
+//     flush on the masthead's bottom edge so they grow out of the list, plus the quorum
+//     pill when a quorum rule is set. Passed in as `present`/`total`; omit `present`
+//     to hide them. The topic is clamped to 3 lines with the full text in a tooltip.
 //
 // Contrast on #1B3828: body ivory #EDE7D8 is 11:1; the full name at 78% ivory and
 // the topic at 84% gold both clear 4.5:1. Committee artwork is arbitrary (the UN
@@ -43,7 +44,13 @@ const EMBLEM = 84;
 const FLOAT_FILTER =
   'drop-shadow(0 0 0.75px rgba(255,255,255,0.55)) drop-shadow(0 3px 7px rgba(0,0,0,0.32))';
 
-function Emblem({ src, monogram, alt }: { src: string | null; monogram: string; alt: string }) {
+/** The committee emblem with its fallback chain. Also drawn, smaller, at the top of the
+ *  collapsed sidebar column (SidebarFlagRail). */
+export function CommitteeEmblem({ src, monogram, alt, size = EMBLEM, onLight = false }: {
+  src: string | null; monogram: string; alt: string; size?: number;
+  /** Drawn on the ivory page (the collapsed column), not on forest: an ink shadow, no glow. */
+  onLight?: boolean;
+}) {
   // Failures remembered per URL, so a later logo (the conference row arriving) gets a try.
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
   const chain = [src, DEFAULT_EMBLEM].filter((s): s is string => !!s && !failed.has(s));
@@ -51,42 +58,47 @@ function Emblem({ src, monogram, alt }: { src: string | null; monogram: string; 
   return (
     <span
       className="relative shrink-0 flex items-center justify-center"
-      style={{ width: EMBLEM, height: EMBLEM }}
+      style={{ width: size, height: size }}
     >
-      <span
+      {!onLight && <span
         aria-hidden
         className="pointer-events-none absolute rounded-full"
         style={{
-          inset: -10,
+          inset: -Math.round(size / 8.4),
           background: 'radial-gradient(circle at 50% 45%, rgba(237,231,216,0.16) 0%, rgba(237,231,216,0.06) 45%, rgba(237,231,216,0) 70%)',
         }}
-      />
+      />}
       {shown ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           key={shown}
           src={shown}
           alt={alt}
-          width={EMBLEM}
-          height={EMBLEM}
+          width={size}
+          height={size}
           decoding="async"
           draggable={false}
           onError={() => setFailed((prev) => { const n = new Set(prev); n.add(shown); return n; })}
           className="relative block"
-          style={{ width: '100%', height: '100%', objectFit: 'contain', filter: FLOAT_FILTER }}
+          style={{ width: '100%', height: '100%', objectFit: 'contain', filter: onLight ? 'drop-shadow(0 1px 1.5px rgba(27,56,40,0.35)) drop-shadow(0 3px 8px rgba(27,56,40,0.18))' : FLOAT_FILTER }}
         />
       ) : (
         <span
           role="img"
           aria-label={alt}
           className="relative"
-          style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 26, letterSpacing: '0.02em', color: NEU.gold }}
+          style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: Math.round(size * 0.31), letterSpacing: '0.02em', color: onLight ? NEU.forest : NEU.gold }}
         >
           {monogram}
         </span>
       )}
     </span>
   );
+}
+
+/** Gold initials for an emblem that cannot load: up to three letters of the label. */
+export function emblemMonogram(primary: string): string {
+  return primary.replace(/[^\p{L}\p{N}]/gu, '').slice(0, 3).toUpperCase() || '?';
 }
 
 export default function CommitteeIdentityBadge({
@@ -136,7 +148,7 @@ export default function CommitteeIdentityBadge({
   /** Delegations the quorum rule needs, or null when there is no rule. */
   quorumNeeded?: number | null;
 }) {
-  const monogram = primary.replace(/[^\p{L}\p{N}]/gu, '').slice(0, 3).toUpperCase() || '?';
+  const monogram = emblemMonogram(primary);
   const longPrimary = primary.length > 12;
 
   const [editing, setEditing] = useState(false);
@@ -176,9 +188,9 @@ export default function CommitteeIdentityBadge({
 
   const topicStyle: React.CSSProperties = {
     fontFamily: OUTFIT,
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: 500,
-    lineHeight: 1.3,
+    lineHeight: 1.28,
     color: 'rgba(238,217,138,0.86)',
     margin: 0,
     textWrap: 'pretty',
@@ -197,7 +209,7 @@ export default function CommitteeIdentityBadge({
       <textarea
         ref={fieldRef}
         value={draft}
-        rows={2}
+        rows={3}
         maxLength={topicMaxLength}
         aria-label={labels?.field}
         onChange={(e) => setDraft(e.target.value.replace(/\n/g, ' '))}
@@ -215,8 +227,8 @@ export default function CommitteeIdentityBadge({
       <button
         type="button"
         onClick={startEdit}
-        title={labels?.edit}
-        className="group/topic line-clamp-2 w-full text-start rounded-md cursor-text mt-0.5 transition-colors hover:bg-[rgba(238,217,138,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70"
+        title={topic ? `${topic}\n${labels?.edit ?? ''}`.trim() : labels?.edit}
+        className="group/topic line-clamp-3 w-full text-start rounded-md cursor-text mt-0.5 transition-colors hover:bg-[rgba(238,217,138,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70"
         style={{ ...topicStyle, padding: '1px 4px', marginInlineStart: -4, color: topic ? topicStyle.color : 'rgba(238,217,138,0.6)' }}
       >
         {topicBody ?? labels?.add}
@@ -225,14 +237,15 @@ export default function CommitteeIdentityBadge({
     );
   } else if (topicBody) {
     topicNode = (
-      <p className="line-clamp-2 mt-0.5" title={topic ?? undefined} style={topicStyle}>
+      <p className="line-clamp-3 mt-0.5" title={topic ?? undefined} style={topicStyle}>
         {topicBody}
       </p>
     );
   }
 
   return (
-    <div className="shrink-0 relative" style={{ padding: '18px 16px 10px', backgroundColor: 'rgba(255,255,255,0.035)' }}>
+    // With the quorum tabs the bottom padding is 0: the tabs sit flush on the list below.
+    <div className="shrink-0 relative" style={{ padding: typeof present === 'number' ? '14px 16px 0' : '14px 16px 12px', backgroundColor: 'rgba(255,255,255,0.035)' }}>
       {onCollapse && (
         <button
           type="button"
@@ -246,7 +259,7 @@ export default function CommitteeIdentityBadge({
         </button>
       )}
       <div className="flex items-start gap-3.5">
-        <Emblem src={logoSrc} monogram={monogram} alt={secondary ?? primary} />
+        <CommitteeEmblem src={logoSrc} monogram={monogram} alt={secondary ?? primary} />
         <div className="min-w-0 flex-1 flex flex-col gap-1" style={{ minHeight: EMBLEM, justifyContent: 'center', paddingInlineEnd: onCollapse ? 18 : 0 }}>
           <h2
             className={longPrimary ? 'line-clamp-2' : 'truncate'}
@@ -293,7 +306,7 @@ export default function CommitteeIdentityBadge({
         </div>
       </div>
       {typeof present === 'number' && (
-        <div className="mt-2.5">
+        <div className="mt-2">
           <QuorumRings present={present} total={total} quorumNeeded={quorumNeeded} />
         </div>
       )}

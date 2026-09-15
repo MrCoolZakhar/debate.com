@@ -46,6 +46,22 @@ export const SIDEBAR_DEFAULT_WIDTH = 352; // the historical w-[22rem]
 export const SIDEBAR_MIN_WIDTH = 288;
 export const SIDEBAR_MAX_WIDTH = Math.round(SIDEBAR_DEFAULT_WIDTH * 1.2); // 422
 
+/**
+ * Collapsed: the sidebar folds to a floating column of round flags (the queue in order)
+ * under the committee emblem, with no panel behind it. This is its layout width.
+ */
+export const SIDEBAR_RAIL_WIDTH = 64;
+
+/**
+ * Dragging the divider narrower than MIN previews the fold (the panel slides away under
+ * the pointer); released below this width it collapses, above it it snaps back to MIN.
+ * Dragging out from the collapsed column past it expands. Halfway between the rail and MIN.
+ */
+export const SIDEBAR_COLLAPSE_AT = Math.round((SIDEBAR_RAIL_WIDTH + SIDEBAR_MIN_WIDTH) / 2); // 176
+
+/** Collapse / expand animation length. Reduced motion = instant. */
+export const SIDEBAR_ANIM_MS = 240;
+
 /** Arrow-key step on the focused separator. */
 export const SIDEBAR_KEY_STEP = 16;
 
