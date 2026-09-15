@@ -20,8 +20,8 @@ import { Check, TriangleAlert } from 'lucide-react';
 import { useT } from '@/contexts/LanguageContext';
 
 const OUTFIT = "'Outfit', sans-serif";
-const RING = 40;
-const STROKE = 4.5;
+const RING = 30;
+const STROKE = 3.5;
 
 function Ring({ fill, color, value }: { fill: number; color: string; value: number }) {
   const r = (RING - STROKE) / 2;
@@ -38,7 +38,7 @@ function Ring({ fill, color, value }: { fill: number; color: string; value: numb
       </svg>
       <span
         className="relative tabular-nums"
-        style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: value > 99 ? 12.5 : 15, color: '#F4EFE3', lineHeight: 1 }}
+        style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: value > 99 ? 9.5 : 11.5, color: '#F4EFE3', lineHeight: 1 }}
       >
         {value}
       </span>
@@ -73,17 +73,17 @@ export default function QuorumRings({
       role="group"
       aria-label={t('identity_quorum_group')}
       title={t('identity_observers_excluded')}
-      className="rounded-2xl"
-      style={{ backgroundColor: 'rgba(0,0,0,0.16)', padding: '10px 6px 9px' }}
+      className="rounded-xl"
+      style={{ backgroundColor: 'rgba(0,0,0,0.16)', padding: '7px 6px 6px' }}
     >
       <ul className="grid grid-cols-3 gap-1 m-0 p-0 list-none">
         {cells.map((c) => (
-          <li key={c.key} className="flex flex-col items-center gap-1.5 min-w-0" aria-label={c.aria}>
+          <li key={c.key} className="flex flex-col items-center gap-1 min-w-0" aria-label={c.aria}>
             <Ring fill={c.fill} color={c.color} value={c.value} />
             <span
               aria-hidden
               className="truncate max-w-full"
-              style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 600, lineHeight: 1.1, color: 'rgba(237,231,216,0.8)' }}
+              style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 600, lineHeight: 1.1, color: 'rgba(237,231,216,0.8)' }}
             >
               {c.label}
             </span>
@@ -92,10 +92,10 @@ export default function QuorumRings({
       </ul>
       {quorumNeeded !== null && (
         <p
-          className="flex items-center justify-center gap-1.5 m-0 mt-2"
-          style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, lineHeight: 1.2, color: quorumMet ? '#9FD3AE' : '#F2C77E' }}
+          className="flex items-center justify-center gap-1.5 m-0 mt-1.5"
+          style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, lineHeight: 1.2, color: quorumMet ? '#9FD3AE' : '#F2C77E' }}
         >
-          {quorumMet ? <Check size={13} strokeWidth={3} aria-hidden /> : <TriangleAlert size={13} strokeWidth={2.5} aria-hidden />}
+          {quorumMet ? <Check size={12} strokeWidth={3} aria-hidden /> : <TriangleAlert size={12} strokeWidth={2.5} aria-hidden />}
           {quorumMet ? t('identity_quorum_met') : t('identity_quorum_needs', { n: quorumNeeded })}
         </p>
       )}

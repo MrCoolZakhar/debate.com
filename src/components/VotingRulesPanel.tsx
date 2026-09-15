@@ -17,131 +17,14 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import Portal from '@/components/Portal';
 import { useT } from '@/contexts/LanguageContext';
 import type { CommitteeSettings } from '@/lib/settingsStore';
-import { UN_COUNTRIES, getCountryByName, COUNTRY_NAME_ALIASES } from '@/lib/countries';
+import type { Delegate } from '@/lib/types';
+import { VetoCountryPicker } from '@/components/voting/VetoCountryPicker';
+import { unmatchedVetoEntries } from '@/lib/vetoMatch';
+import { anchorBox, place } from '@/components/voting/anchorPosition';
 
-// ── Veto matching by country identity ───────────────────────────────────────
-// A veto list holds free text ("Russia"), and so does a delegation name — which
-// a chair imports from a roster in whatever spelling their conference uses. A
-// raw `vetoList.includes(delegation)` therefore MISSES "Russian Federation",
-// "United States of America", "USA" and "UK", and a vetoed resolution is silently
-// recorded as PASSED. Both sides are resolved to an ISO-3166 alpha-2 identity
-// first, and only fall back to string equality when neither side is a country
-// (crisis cabinets, corporations, custom delegations).
-
-/** Lowercase, de-accent, and reduce to single-spaced ASCII words. Non-Latin
- *  scripts reduce to '' — callers fall back to the raw string for those. */
-function normalizeDelegation(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-}
-
-/** Spellings that are NOT the canonical UN_COUNTRIES name but mean the same seat.
- *  Keys are pre-normalization; they are normalized when the lookup map is built. */
-const DELEGATION_ALIASES: Record<string, string> = {
-  // P5 — the ones that actually decide a veto.
-  // (alpha-3 forms too — some conferences import rosters as RUS/USA/GBR/CHN/FRA)
-  'russian federation': 'RU', 'the russian federation': 'RU', 'rus': 'RU',
-  'gbr': 'GB', 'chn': 'CN', 'fra': 'FR',
-  'soviet union': 'RU', 'ussr': 'RU', 'union of soviet socialist republics': 'RU',
-  'united states of america': 'US', 'the united states': 'US', 'the united states of america': 'US',
-  'usa': 'US', 'u s a': 'US', 'u s': 'US', 'america': 'US', 'united states of america usa': 'US',
-  'united kingdom of great britain and northern ireland': 'GB', 'the united kingdom': 'GB',
-  'uk': 'GB', 'u k': 'GB', 'great britain': 'GB', 'britain': 'GB', 'england': 'GB',
-  "people's republic of china": 'CN', 'peoples republic of china': 'CN', 'prc': 'CN',
-  'mainland china': 'CN', 'china prc': 'CN',
-  'french republic': 'FR', 'the french republic': 'FR',
-  // Common roster spellings elsewhere — the same resolver serves custom veto lists.
-  'republic of korea': 'KR', 'korea republic of': 'KR', 'rok': 'KR',
-  "democratic people's republic of korea": 'KP', 'democratic peoples republic of korea': 'KP', 'dprk': 'KP',
-  'democratic republic of the congo': 'CD', 'democratic republic of congo': 'CD', 'drc': 'CD',
-  'republic of the congo': 'CG', 'congo brazzaville': 'CG',
-  'islamic republic of iran': 'IR', 'iran islamic republic of': 'IR',
-  'syrian arab republic': 'SY', 'uae': 'AE', 'the netherlands': 'NL', 'holland': 'NL',
-  'turkiye': 'TR', 'czechia': 'CZ', 'burma': 'MM', 'cape verde': 'CV',
-  'swaziland': 'SZ', 'macedonia': 'MK', 'vatican city': 'VA', 'vatican': 'VA',
-  'ivory coast': 'CI', "cote d'ivoire": 'CI', 'cote divoire': 'CI',
-  'bolivarian republic of venezuela': 'VE', 'state of palestine': 'PS',
-  'united republic of tanzania': 'TZ', 'viet nam': 'VN', 'laos pdr': 'LA',
-};
-
-/** Every spelling this panel understands, normalized → ISO code.
- *
- *  Three layers, lowest precedence first:
- *   1. the canonical UN_COUNTRIES names
- *   2. the app-wide COUNTRY_NAME_ALIASES from countries.ts — the single home
- *      for "Turkey", "Czechia", "DRC", "UK", "Viet Nam" and friends, so a
- *      spelling taught to the search boxes is understood by the veto check too
- *   3. this file's DELEGATION_ALIASES, which stay because they carry forms the
- *      shared table deliberately does not (alpha-3 codes, "U.S.A." with dots —
- *      normalizeDelegation strips punctuation, `fold` does not)
- *  Later layers overwrite earlier ones, so a local entry always wins. */
-const DELEGATION_IDENTITY = (() => {
-  const map = new Map<string, string>();
-  const codeOf = (name: string) => UN_COUNTRIES.find((c) => c.name === name)?.code;
-  for (const c of UN_COUNTRIES) map.set(normalizeDelegation(c.name), c.code);
-  for (const [alias, canonical] of Object.entries(COUNTRY_NAME_ALIASES)) {
-    const key = normalizeDelegation(alias);
-    const code = codeOf(canonical);
-    if (key && code) map.set(key, code);
-  }
-  for (const [alias, code] of Object.entries(DELEGATION_ALIASES)) {
-    const key = normalizeDelegation(alias);
-    if (key) map.set(key, code);
-  }
-  return map;
-})();
-
-/**
- * Resolve a free-text delegation name to an ISO-3166 alpha-2 code, or null when
- * it is not a country (custom delegation, crisis character, corporation).
- */
-export function delegationIdentity(value: string | null | undefined): string | null {
-  const raw = (value ?? '').trim();
-  if (!raw) return null;
-  // Shared resolver first: canonical name or app-wide alias, folded so accents
-  // and case never matter ("türkiye", "Turkey", "TURKIYE" are one seat).
-  const exact = getCountryByName(raw);
-  if (exact) return exact.code;
-  const key = normalizeDelegation(raw);
-  if (!key) return null;
-  const hit = DELEGATION_IDENTITY.get(key);
-  if (hit) return hit;
-  // A roster imported as bare ISO codes ("US", "GB", "CN").
-  if (/^[a-z]{2}$/.test(key)) {
-    const byCode = UN_COUNTRIES.find((c) => c.code.toLowerCase() === key);
-    if (byCode) return byCode.code;
-  }
-  return null;
-}
-
-/** Case/spacing-insensitive key used when neither side resolves to a country.
- *  Falls back to the raw lowercased string for non-Latin names. */
-function looseKey(value: string): string {
-  return normalizeDelegation(value) || value.trim().toLowerCase();
-}
-
-/** True when a veto-list entry and a delegation name are the same seat. */
-export function vetoEntryMatches(entry: string, delegation: string): boolean {
-  const a = delegationIdentity(entry);
-  const b = delegationIdentity(delegation);
-  if (a && b) return a === b;
-  return looseKey(entry) === looseKey(delegation);
-}
-
-/** True when any of `delegations` is a veto holder under `vetoList`. */
-export function isVetoDelegation(vetoList: string[], delegation: string): boolean {
-  return vetoList.some((entry) => vetoEntryMatches(entry, delegation));
-}
-
-/** Veto entries that match NO delegation in the room. A silent no-match is exactly
- *  how a missing veto hides, so the panel surfaces these. */
-export function unmatchedVetoEntries(vetoList: string[], delegations: string[]): string[] {
-  return vetoList.filter((entry) => entry.trim() && !delegations.some((d) => vetoEntryMatches(entry, d)));
-}
+// Veto matching by country identity lives in src/lib/vetoMatch.ts (re-exported here for
+// existing importers); the floating-layer maths in src/components/voting/anchorPosition.ts.
+export { delegationIdentity, vetoEntryMatches, isVetoDelegation, unmatchedVetoEntries } from '@/lib/vetoMatch';
 
 // ── Rule maths ──────────────────────────────────────────────────────────────
 
@@ -233,45 +116,6 @@ export function computeVoteOutcome({
     countsAbstentions,
     passed: !vetoBlocked && !unanimousFail && thresholdMet && quorumMet,
   };
-}
-
-// ── Positioning helper ──────────────────────────────────────────────────────
-// Portal renders into `#fit-root` when FitToScreen is mounted. That element is
-// `transform: scale(...)`, which makes it the containing block for `position:
-// fixed` children — so raw getBoundingClientRect() screen pixels would be off by
-// the scale factor. Convert the trigger box (and the usable bounds) into the
-// same space the portalled fixed layer lives in.
-function anchorBox(el: HTMLElement) {
-  const root = typeof document !== 'undefined' ? document.getElementById('fit-root') : null;
-  const r = el.getBoundingClientRect();
-  if (!root) {
-    return {
-      top: r.top, bottom: r.bottom, left: r.left, right: r.right,
-      viewW: window.innerWidth, viewH: window.innerHeight,
-    };
-  }
-  const rr = root.getBoundingClientRect();
-  const scale = root.offsetWidth > 0 && rr.width > 0 ? rr.width / root.offsetWidth : 1;
-  const s = scale || 1;
-  return {
-    top: (r.top - rr.top) / s,
-    bottom: (r.bottom - rr.top) / s,
-    left: (r.left - rr.left) / s,
-    right: (r.right - rr.left) / s,
-    viewW: root.offsetWidth,
-    viewH: root.offsetHeight,
-  };
-}
-
-/** Clamp a floating layer into view, flipping above the trigger when it would
- *  overflow the bottom edge. */
-function place(box: ReturnType<typeof anchorBox>, w: number, h: number, align: 'start' | 'end') {
-  const M = 8;
-  const rawLeft = align === 'end' ? box.right - w : box.left;
-  const left = Math.min(Math.max(M, rawLeft), Math.max(M, box.viewW - w - M));
-  const below = box.bottom + 8;
-  const flip = below + h > box.viewH - M && box.top - 8 - h > M;
-  return { left, top: flip ? box.top - 8 - h : below };
 }
 
 // ── Hover explainer ─────────────────────────────────────────────────────────
@@ -497,6 +341,13 @@ export interface VotingRulesPanelProps {
   delegationNames?: string[];
   /** Commenter view: the rules are shown but cannot be changed (UI gate, like the chair page). */
   readOnly?: boolean;
+  /** Delegations a custom veto can be given to (non-observers). With `onVetoCountriesChange`
+   *  the custom list is edited here with the "+" picker. */
+  vetoRoster?: Delegate[];
+  onVetoCountriesChange?: (next: string[]) => void;
+  /** "Hide tally" is on and no result is showing: no counts, no verdict, nothing a
+   *  projector could read the running result from. */
+  hideTally?: boolean;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -505,7 +356,8 @@ export function VotingRulesPanel({
   rules, onChange, vetoMode, onVetoModeChange,
   tally, outcome, votesCast, eligible, presentCount, totalCount,
   resultShown, vetoBlocked, unanimousFail,
-  vetoEntries = [], delegationNames = [], readOnly = false, className = '', style,
+  vetoEntries = [], delegationNames = [], readOnly = false,
+  vetoRoster = [], onVetoCountriesChange, hideTally = false, className = '', style,
 }: VotingRulesPanelProps) {
   const t = useT();
   const consensus = rules.substantiveThreshold === 'consensus';
@@ -518,6 +370,9 @@ export function VotingRulesPanel({
   const seatedVetoCount = vetoActive ? vetoEntries.length - missingVetoSeats.length : 0;
 
   const verdict = (() => {
+    if (hideTally) {
+      return { text: t('voting_tally_hidden').toUpperCase(), fg: 'rgba(255,255,255,0.62)', bg: 'rgba(255,255,255,0.10)' };
+    }
     if (resultShown) {
       return outcome.passed
         ? { text: t('voting_rules_verdict_passed'), fg: '#0F2A18', bg: '#6EE7A0' }
@@ -531,7 +386,9 @@ export function VotingRulesPanel({
       : { text: t('voting_rules_verdict_on_track_fail'), fg: '#FCA5A5', bg: 'rgba(252,165,165,0.14)' };
   })();
 
-  const blockedNote = vetoBlocked
+  const blockedNote = hideTally
+    ? (!outcome.quorumMet ? t('voting_rules_blocked_quorum', { present: presentCount, needed: outcome.quorumNeeded }) : null)
+    : vetoBlocked
     ? t('voting_rules_blocked_veto')
     : unanimousFail
     ? t('voting_rules_blocked_unanimous')
@@ -560,7 +417,9 @@ export function VotingRulesPanel({
           </span>
         </div>
 
-        {/* Live derived numbers — these are what the rules below actually change. */}
+        {/* Live derived numbers — these are what the rules below actually change.
+            Not rendered at all while the tally is hidden. */}
+        {!hideTally && (<>
         <div className="grid grid-cols-3 gap-1.5">
           <Stat label={t('voting_rules_stat_cast')} value={`${votesCast}/${eligible}`} />
           <Stat label={t('voting_rules_stat_counted')} value={String(outcome.denominator)} tone="muted" />
@@ -578,6 +437,7 @@ export function VotingRulesPanel({
             ? t('voting_rules_abstentions_counted', { n: tally.abstainCount })
             : t('voting_rules_abstentions_excluded', { n: tally.abstainCount })}
         </p>
+        </>)}
         {blockedNote && (
           <p className="text-[10.5px] mt-2 font-semibold leading-snug" style={{ color: '#FCA5A5' }}>
             {blockedNote}
@@ -636,7 +496,7 @@ export function VotingRulesPanel({
               }}
             />
           </div>
-          {!rules.allowAbstentions && tally.abstainCount > 0 && (
+          {!hideTally && !rules.allowAbstentions && tally.abstainCount > 0 && (
             <p className="text-[10px] mt-1 leading-snug" style={{ color: '#EED98A' }}>
               {tally.abstainCount === 1
                 ? t('voting_rules_abstentions_kept_one')
@@ -660,15 +520,19 @@ export function VotingRulesPanel({
               { value: 'none', label: t('voting_rules_veto_off'), title: t('settings_veto_none_label') },
               { value: 'p5', label: 'P5', title: t('settings_veto_p5_label') },
               { value: 'unanimous', label: t('voting_rules_veto_unanimous_short'), title: t('settings_veto_unanimous_label') },
-              ...(vetoMode === 'custom'
-                ? [{ value: 'custom' as const, label: t('voting_rules_veto_custom_short'), title: t('settings_veto_custom_label') }]
-                : []),
+              { value: 'custom', label: t('voting_rules_veto_custom_short'), title: t('settings_veto_custom_label') },
             ]}
           />
-          {vetoMode === 'custom' && (
-            <p className="text-[10px] mt-1.5 leading-snug" style={{ color: 'rgba(255,255,255,0.42)' }}>
-              {t('voting_rules_veto_custom_note')}
-            </p>
+          {vetoMode === 'custom' && onVetoCountriesChange && (
+            <div className="mt-2">
+              <VetoCountryPicker
+                tone="dark"
+                selected={vetoEntries}
+                roster={vetoRoster}
+                readOnly={readOnly}
+                onChange={onVetoCountriesChange}
+              />
+            </div>
           )}
           {vetoActive && vetoEntries.length > 0 && (
             missingVetoSeats.length > 0 ? (
@@ -678,21 +542,21 @@ export function VotingRulesPanel({
               >
                 <p className="text-[10.5px] font-black leading-snug" style={{ color: '#EED98A' }}>
                   {missingVetoSeats.length === 1
-                    ? '1 veto seat is not in this committee'
-                    : `${missingVetoSeats.length} veto seats are not in this committee`}
+                    ? t('voting_veto_unseated_one')
+                    : t('voting_veto_unseated_other', { n: missingVetoSeats.length })}
                 </p>
                 <p className="text-[10px] mt-0.5 leading-snug" style={{ color: 'rgba(255,255,255,0.66)' }}>
-                  {missingVetoSeats.join(', ')} — no delegation on the roster matches, so
-                  {missingVetoSeats.length === 1 ? ' it' : ' they'} can never block a vote.
-                  {seatedVetoCount > 0
-                    ? ` ${seatedVetoCount} veto seat${seatedVetoCount === 1 ? '' : 's'} still active.`
-                    : ' No veto is in force.'}
+                  {t('voting_veto_unseated_body', { names: missingVetoSeats.join(', ') })}
+                  {' '}
+                  {seatedVetoCount > 0 ? t('voting_veto_active_count', { n: seatedVetoCount }) : t('voting_veto_none_seated')}
                 </p>
               </div>
             ) : (
-              <p className="text-[10px] mt-1.5 leading-snug" style={{ color: 'rgba(255,255,255,0.42)' }}>
-                {seatedVetoCount} veto seat{seatedVetoCount === 1 ? '' : 's'} seated: {vetoEntries.join(', ')}
-              </p>
+              vetoMode === 'p5' && (
+                <p className="text-[10px] mt-1.5 leading-snug" style={{ color: 'rgba(255,255,255,0.42)' }}>
+                  {t('voting_veto_seated_list', { n: seatedVetoCount, names: vetoEntries.join(', ') })}
+                </p>
+              )
             )
           )}
         </div>

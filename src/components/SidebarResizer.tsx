@@ -25,12 +25,21 @@
  *
  * `prefers-reduced-motion` removes the settle transition entirely; the width
  * still changes, it just does not animate.
+ *
+ * ── LAYOUT ────────────────────────────────────────────────────────────────
+ * Zero layout width (15 Sep 2026). It used to be a 10px forest gutter between the
+ * aside and the floor. Now an 8px strip centred on the edge takes the pointer, and a
+ * small grip pill appears just outside the sidebar on hover, focus or drag.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_KEY_STEP, clampSidebarWidth,
 } from '@/lib/sidebarWidth';
+import { GripVertical } from 'lucide-react';
+
+/** Grabbable width of the edge strip, centred on the sidebar's edge. */
+const HIT = 8;
 
 export default function SidebarResizer({
   width,
@@ -129,57 +138,72 @@ export default function SidebarResizer({
   const lit = dragging || focused || hovered;
 
   return (
-    <div
-      role="separator"
-      aria-orientation="vertical"
-      aria-label={label}
-      aria-valuenow={width}
-      aria-valuemin={SIDEBAR_MIN_WIDTH}
-      aria-valuemax={SIDEBAR_MAX_WIDTH}
-      aria-valuetext={`${width} pixels`}
-      tabIndex={0}
-      onPointerDown={onPointerDown}
-      onKeyDown={onKeyDown}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onDoubleClick={() => onCommit(clampSidebarWidth(SIDEBAR_MIN_WIDTH))}
-      title={label}
-      className="shrink-0 self-stretch relative focus:outline-none"
-      style={{
-        // 10px of grabbable width so it is a real target (the visible hairline
-        // inside it is 2px). Sits between the aside and <main>, so widening the
-        // handle costs the floor view 10px once, not per state.
-        width: 10,
-        cursor: 'col-resize',
-        touchAction: 'none',
-        backgroundColor: '#1B3828',
-        borderInlineEnd: '1px solid #3D7A52',
-        transition: reduceMotion ? 'none' : 'background-color 180ms ease',
-      }}
-    >
-      {/* The grip. Gold when live, otherwise a faint rule — decoration only,
-          never the sole carrier of information, so the 4.5:1 rule does not
-          bind it. */}
-      <span
-        aria-hidden
-        className="absolute top-1/2"
+    // Zero layout width: the floor starts flush at the sidebar's edge. The grabbable strip
+    // (HIT px, centred on the edge) and the grip pill just OUTSIDE the edge are absolutely
+    // positioned over both columns, so neither costs the floor view a pixel.
+    <div className="shrink-0 self-stretch relative z-30" style={{ width: 0 }}>
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={label}
+        aria-valuenow={width}
+        aria-valuemin={SIDEBAR_MIN_WIDTH}
+        aria-valuemax={SIDEBAR_MAX_WIDTH}
+        aria-valuetext={`${width} pixels`}
+        tabIndex={0}
+        onPointerDown={onPointerDown}
+        onKeyDown={onKeyDown}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onDoubleClick={() => onCommit(clampSidebarWidth(SIDEBAR_MIN_WIDTH))}
+        title={label}
+        className="absolute inset-y-0 focus:outline-none"
         style={{
-          insetInlineStart: 4, width: 2, height: 34, marginTop: -17, borderRadius: 2,
-          backgroundColor: lit ? '#EED98A' : 'rgba(237,231,216,0.28)',
-          transition: reduceMotion ? 'none' : 'background-color 180ms ease',
+          insetInlineStart: -HIT / 2,
+          width: HIT,
+          cursor: 'col-resize',
+          touchAction: 'none',
         }}
-      />
-      {/* A visible focus ring for keyboard users — the grip alone is too subtle
-          to serve as one. */}
-      {focused && (
+      >
+        {/* The edge itself: a 2px rule that lights gold while live. Decoration only. */}
         <span
           aria-hidden
-          className="absolute inset-0"
-          style={{ boxShadow: 'inset 0 0 0 2px #EED98A' }}
+          className="absolute inset-y-0 pointer-events-none"
+          style={{
+            insetInlineStart: HIT / 2 - 1,
+            width: 2,
+            backgroundColor: lit ? '#EED98A' : 'transparent',
+            opacity: dragging ? 1 : 0.7,
+            transition: reduceMotion ? 'none' : 'background-color 160ms ease, opacity 160ms ease',
+          }}
         />
-      )}
+        {/* The grip, just outside the sidebar, on the floor side. Shown while hovered,
+            focused or dragging; it is part of the separator, so it can be grabbed too. */}
+        <span
+          aria-hidden
+          className="absolute top-1/2 flex items-center justify-center rounded-full"
+          style={{
+            insetInlineStart: HIT / 2 + 3,
+            width: 16,
+            height: 40,
+            marginTop: -20,
+            backgroundColor: dragging ? '#EED98A' : '#1B3828',
+            color: dragging ? '#1B3828' : '#EED98A',
+            boxShadow: focused
+              ? '0 0 0 2px #EED98A, 0 2px 8px rgba(27,56,40,0.35)'
+              : '0 1px 2px rgba(27,56,40,0.3), 0 3px 10px rgba(27,56,40,0.22)',
+            opacity: lit ? 1 : 0,
+            // Invisible = not there: never swallow a click on the floor's edge.
+            pointerEvents: lit ? 'auto' : 'none',
+            transform: lit ? 'scale(1)' : 'scale(0.9)',
+            transition: reduceMotion ? 'none' : 'opacity 160ms ease, transform 160ms cubic-bezier(0.2,0,0,1), background-color 160ms ease',
+          }}
+        >
+          <GripVertical size={12} strokeWidth={2.5} />
+        </span>
+      </div>
     </div>
   );
 }

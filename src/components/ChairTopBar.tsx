@@ -6,7 +6,9 @@
 // Layout (owned by the chair page, which keeps every handler): the forest sidebar
 // runs the full height of the screen, and this ivory bar starts at its inline-end
 // edge. There is no product logo. Inline-start: the three primary controls
-// (Roll Call, Motions, Documents) as TopBarTab. Inline-end: the session code, then
+// (Roll Call, Motions, Documents) as TopBarTab, each an EQUAL share of the space left of
+// the icon cluster (flex-1, basis 0) with its label centred, as the tabs were before the
+// redesign. Inline-end: the session code (click to present it full screen), then
 // small TopBarIconButtons for Chat (with its unread count), Scoreboard and Settings.
 //
 // No separators and no borders: the active tab is a forest wash plus a gold
@@ -61,7 +63,7 @@ export function TopBarTab({
       onClick={onClick}
       aria-pressed={active}
       aria-label={count > 0 && countLabel ? countLabel : undefined}
-      className="group relative h-full min-w-0 flex items-center gap-2 px-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#B6871F] rounded-lg transition-[background-color,color] duration-150 hover:bg-[rgba(27,56,40,0.05)] active:scale-[0.98] motion-reduce:transition-none"
+      className="group relative h-full min-w-0 flex-1 basis-0 flex items-center justify-center gap-2 px-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#B6871F] rounded-lg transition-[background-color,color] duration-150 hover:bg-[rgba(27,56,40,0.05)] active:scale-[0.98] motion-reduce:transition-none"
       style={{
         fontFamily: OUTFIT,
         fontSize: 17,

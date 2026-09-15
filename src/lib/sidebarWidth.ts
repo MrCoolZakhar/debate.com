@@ -92,3 +92,29 @@ export function saveSidebarWidth(reader: SidebarReader, width: number): void {
     window.localStorage.setItem(sidebarWidthStorageKey(reader), String(clampSidebarWidth(width)));
   } catch {}
 }
+
+// ── Collapsed ────────────────────────────────────────────────────────────────
+// Whether the chair folded the sidebar away to its slim rail. Same reader key shape as
+// the width, for the same reason: two chairs on one dais laptop keep their own layout.
+
+export function sidebarCollapsedStorageKey(reader: SidebarReader): string {
+  const identity = (reader.identity ?? '').trim();
+  return `gavelling-sidebar-collapsed-${reader.role}:${identity || ANONYMOUS}`;
+}
+
+export function loadSidebarCollapsed(reader: SidebarReader): boolean | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(sidebarCollapsedStorageKey(reader));
+    return raw === null ? null : raw === '1';
+  } catch {
+    return null;
+  }
+}
+
+export function saveSidebarCollapsed(reader: SidebarReader, collapsed: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(sidebarCollapsedStorageKey(reader), collapsed ? '1' : '0');
+  } catch {}
+}

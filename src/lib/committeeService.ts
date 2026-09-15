@@ -2053,6 +2053,29 @@ export async function updateCommitteeAgendaInDB(
   return data === true;
 }
 
+/** The longest topic the chair's inline editor accepts (masthead, CommitteeIdentityBadge). */
+export const COMMITTEE_TOPIC_MAX = 150;
+
+// The Moderator rewording the room's topic inline (sidebar masthead). Writes `committees.topic`
+// ONLY: `settings.agendaTopicIndex` is untouched, so on a conference committee the stored pick
+// survives. (The organiser's CommitteeEditorModal re-sync keeps the room's text only while it
+// still equals one of the conference topics; a custom wording is replaced by the topic the
+// stored index points at on the organiser's next save.) Conditional on `ended_at is null`,
+// counted with `.select('id')` because an RLS refusal resolves with error null and zero rows.
+// Not retried: the caller rolls its optimistic topic back on false, so a retry landing later
+// would contradict the screen.
+export async function updateCommitteeTopicInDB(committeeId: string, topic: string, code: string, chairSuffix?: string): Promise<boolean> {
+  const next = topic.trim().slice(0, COMMITTEE_TOPIC_MAX);
+  if (!next) return false;
+  const r = await runWrite(`${committeeId}:topic`, async () => {
+    const { data, error } = await sessionClient(code, chairSuffix).from('committees')
+      .update({ topic: next }).eq('id', committeeId).is('ended_at', null).select('id');
+    if (error) { console.error('Error updating topic:', error); return 'failed'; }
+    return rowsOf(data) > 0 ? 'ok' : 'failed';
+  }, { retry: false, rerunnable: false });
+  return r !== 'failed';
+}
+
 // Persist the scoring config into the committee settings jsonb so it reaches
 // delegates / FAs / Commenters on other devices (localStorage never syncs across devices).
 // Key-level patch: only `scoring` changes. The scoring object itself is one value, so two

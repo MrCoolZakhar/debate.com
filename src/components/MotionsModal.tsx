@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Portal from '@/components/Portal';
+import GrowDialog from '@/components/GrowDialog';
 import { portalFrame } from '@/components/chat/chatTokens';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
@@ -106,6 +107,18 @@ const motionIdentity = (m: PendingMotion) =>
 const isFloorMotion = (m: PendingMotion) =>
   (m.type as string) !== 'join-request' && (m.type as string) !== 'gsl-request' && m.type !== 'custom';
 
+/** Every motion the chair votes on (floor motions AND Custom), never join / GSL requests. */
+const isVotableMotion = (m: PendingMotion) =>
+  (m.type as string) !== 'join-request' && (m.type as string) !== 'gsl-request';
+
+/** The most motions that may wait on the floor at once. Enforced when raising (client only:
+ *  there is no database limit). Editing a motion already on the floor is always allowed. */
+export const MAX_FLOOR_MOTIONS = 15;
+/** Motions shown as normal ranked cards in the voting view: the one being voted on plus the
+ *  queue column beside it. Everything ranked below scrolls in its own column. Five fits a
+ *  1280x800 laptop without scrolling. */
+const RANKED_VISIBLE = 5;
+
 
 function requiredVotes(type: PendingMotionType, present: number): { needed: number; fraction: string } {
   if (type === 'consultation' || type === 'tour') return { needed: Math.ceil((present * 2) / 3), fraction: '2/3 majority' };
@@ -114,12 +127,11 @@ function requiredVotes(type: PendingMotionType, present: number): { needed: numb
 
 function DisruptivenessBadge({ type }: { type: PendingMotionType }) {
   const t = useT();
-  const { language } = useLanguage();
   const labels: Record<PendingMotionType, string> = {
     'end-debate': t('motions_badge_ends'), 'suspend-debate': t('motions_badge_suspends'),
     consultation: t('motions_badge_most'), tour: t('motions_badge_very'),
     unmoderated: t('motions_badge_disruptive'), moderated: t('motions_badge_least'),
-    custom: informationalLabel(language),
+    custom: '',
   };
   const colors: Record<PendingMotionType, string> = {
     'end-debate': 'bg-[#8B2020]/20 text-[#8B2020] border-[#8B2020]/40',
@@ -130,26 +142,20 @@ function DisruptivenessBadge({ type }: { type: PendingMotionType }) {
     moderated: 'bg-[#1B3828]/30 text-[#EED98A] border-[#1B3828]/40',
     custom: 'bg-[#9A8A78]/12 text-[#6A5A4A] border-[#C5B9A8]',
   };
+  // A Custom motion carries no badge: it has no place in the disruptiveness ranking.
+  if (!labels[type]) return null;
   return <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${colors[type]}`}>{labels[type]}</span>;
 }
-
-const informationalLabel = (language: string) =>
-  language === 'ar' ? 'للعلم فقط' : language === 'fr' ? 'Informatif' : language === 'es' ? 'Informativo' : 'Informational';
-
-const noOpCopy = (language: string) => language === 'ar'
-  ? { head: 'قبول هذا الاقتراح لا يغير الجلسة', body: 'الاقتراح المخصص هو سجل فقط. عند قبوله يختفي من قائمة الاقتراحات ولا يتغير شيء آخر: تبقى المرحلة وقائمة المتحدثين والمتحدث الحالي كما هي، ويستمر النقاش من حيث توقف.' }
-  : language === 'fr' ? { head: "Accepter ne change rien à la séance", body: "Une motion personnalisée n'est qu'une trace écrite. À l'acceptation elle quitte le plancher et rien d'autre ne bouge : la phase, la liste des orateurs et l'orateur en cours restent identiques, le débat reprend exactement où il en était." }
-  : language === 'es' ? { head: 'Aceptarla no cambia la sesión', body: 'Una moción personalizada es solo un registro. Al aceptarla desaparece del pleno y nada más cambia: la fase, la lista de oradores y el orador actual siguen igual, y el debate continúa donde estaba.' }
-  : { head: 'Accepting this will not change the session', body: 'A Custom motion is a record only. Accepting it clears it from the floor and nothing else moves: the phase, the speakers list, the caucus queue and the current speaker all stay exactly as they are, and debate carries on where it left off.' };
 
 /** Informational "i" affordance. Opens on HOVER and on FOCUS (never on click),
  *  per the house UI rules, and is portaled at fixed viewport coordinates with
  *  edge flipping so a scrollable modal body can never clip it. */
-function InfoHint({ head, body }: { head: string; body: string }) {
+function InfoHint({ label, text }: { label: string; text: string }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number; flipped: boolean } | null>(null);
+  const tipId = React.useId();
 
   const WIDTH = 288;
   // Portal mounts into the transformed `#fit-root`, so the fixed layer is positioned in that
@@ -189,17 +195,18 @@ function InfoHint({ head, body }: { head: string; body: string }) {
   return (
     <>
       <button
-        ref={btnRef} type="button" tabIndex={0} aria-label={head}
+        ref={btnRef} type="button" tabIndex={0} aria-label={label} aria-describedby={open ? tipId : undefined}
         onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}
         onClick={(e) => e.preventDefault()}
-        className="shrink-0 w-[15px] h-[15px] rounded-full inline-flex items-center justify-center text-[10px] font-black leading-none transition-colors focus:outline-none gv-lift"
-        style={{ border: '1px solid #C5B9A8', color: '#6A5A4A', backgroundColor: '#FAF8F3' }}
+        className="shrink-0 w-[18px] h-[18px] rounded-full inline-flex items-center justify-center text-[11px] font-black leading-none transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A] gv-lift"
+        style={{ border: '1px solid #C5B9A8', color: '#6A5A4A', backgroundColor: '#FAF8F3', fontFamily: 'Georgia, serif' }}
       >
         i
       </button>
       {open && pos && (
         <Portal>
           <div
+            id={tipId} role="tooltip"
             onMouseEnter={show} onMouseLeave={hide}
             className="fixed z-[70] rounded-2xl px-4 py-3"
             style={{
@@ -209,27 +216,11 @@ function InfoHint({ head, body }: { head: string; body: string }) {
               boxShadow: '0 10px 30px rgba(28,20,16,0.18), 0 2px 6px rgba(28,20,16,0.08)',
             }}
           >
-            <p className="text-xs font-black mb-1" style={{ color: '#1B3828' }}>{head}</p>
-            <p className="text-xs leading-relaxed" style={{ color: '#6A5A4A' }}>{body}</p>
+            <p className="text-xs leading-relaxed font-semibold" style={{ color: '#1B3828' }}>{text}</p>
           </div>
         </Portal>
       )}
     </>
-  );
-}
-
-/** The strip that makes it unmistakable a Custom motion is informational. */
-function CustomNoOpNotice({ compact = false }: { compact?: boolean }) {
-  const { language } = useLanguage();
-  const copy = noOpCopy(language);
-  return (
-    <div
-      className={`flex items-center gap-2 rounded-xl ${compact ? 'px-2.5 py-1' : 'px-3 py-1.5'}`}
-      style={{ backgroundColor: '#EDE7D8', border: '1px dashed #C5B9A8' }}
-    >
-      <span className={compact ? 'text-[10px]' : 'text-xs'} style={{ color: '#6A5A4A', fontWeight: 600 }}>{copy.head}</span>
-      <span className="ms-auto flex items-center"><InfoHint head={copy.head} body={copy.body} /></span>
-    </div>
   );
 }
 
@@ -375,7 +366,7 @@ const optionalProposerPlaceholder = (language: string) =>
   language === 'ar' ? 'اختياري — اتركه فارغًا' : language === 'fr' ? 'Facultatif — laisser vide' : language === 'es' ? 'Opcional — dejar en blanco' : 'Optional — leave blank';
 
 // ── Raise Motion Form ─────────────────────────────────────────────────────────
-function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion, belowQuorum = false, isViewOnly = false }: {
+function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion, belowQuorum = false, isViewOnly = false, floorFull = false }: {
   committee: Committee;
   typeMeta: TypeMeta;
   onBack: () => void;
@@ -383,11 +374,14 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
   editingMotion?: PendingMotion | null;
   belowQuorum?: boolean;
   isViewOnly?: boolean;
+  /** MAX_FLOOR_MOTIONS are already waiting. Raising is refused; editing one is not. */
+  floorFull?: boolean;
 }) {
   const t = useT();
   const { language } = useLanguage();
   const { getSettings } = useSettingsStore();
   const s = getSettings(committee.code);
+  const raiseBlocked = floorFull && !editingMotion;
   // Custom always sits last: it is the least disruptive motion there is.
   const DEFAULT_ORDER: PendingMotionType[] = ['moderated', 'unmoderated', 'tour', 'consultation', 'custom'];
   const enabledTypes = DEFAULT_ORDER.filter((motionType) => {
@@ -521,7 +515,6 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
             {/* Custom motion: optional free-text name, then optional proposer. */}
             {type === 'custom' && (
               <>
-                <CustomNoOpNotice />
                 <div>
                   <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">
                     {customNameLabel(language)} <span className="text-[#9A8A78] text-sm font-normal">({t('motions_optional')})</span>
@@ -718,9 +711,14 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
               ⚠️ {t('motions_quorum_warning')}
             </div>
           )}
+          {raiseBlocked && (
+            <p role="status" className="mb-3 p-3 rounded-xl text-sm font-semibold" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.25)' }}>
+              {t('motions_floor_full', { n: MAX_FLOOR_MOTIONS })}
+            </p>
+          )}
           {error && <p className="text-[#8B2020] text-sm font-medium mb-3">{error}</p>}
           {!isViewOnly && (
-            <button onClick={submit} disabled={!canSubmit() || belowQuorum}
+            <button onClick={submit} disabled={!canSubmit() || belowQuorum || raiseBlocked}
               className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-5 rounded-2xl text-base font-black transition-colors focus:outline-none gv-lift" style={{ letterSpacing: '0.05em' }}>
               {editingMotion ? t('motions_edit_btn') : t('motions_raise_btn')}
             </button>
@@ -761,6 +759,19 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
 
   const [order, setOrder] = useState<PendingMotion[]>(initialSorted);
   const dragIndexRef = useRef<number | null>(null);
+  // Fades on the overflow column say "there is more" without a visible scrollbar. Updated
+  // only when a value actually flips, so scrolling does not re-render the modal per frame.
+  const overflowRef = useRef<HTMLDivElement | null>(null);
+  const [overflowFade, setOverflowFade] = useState<{ top: boolean; bottom: boolean }>({ top: false, bottom: false });
+  const extrasCount = Math.max(0, order.length - RANKED_VISIBLE);
+  const measureOverflow = useCallback(() => {
+    const el = overflowRef.current;
+    if (!el) return;
+    const top = el.scrollTop > 2;
+    const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - 2;
+    setOverflowFade((prev) => (prev.top === top && prev.bottom === bottom ? prev : { top, bottom }));
+  }, []);
+  useEffect(() => { measureOverflow(); }, [extrasCount, measureOverflow]);
 
   // Keep order in sync when motions are removed externally
   const motionIdKey = (committee.pendingMotions ?? []).map((m) => m.id).join(',');
@@ -794,7 +805,11 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   }
 
   const primary = order[0];
-  const rest = order.slice(1, 5);
+  const rest = order.slice(1, RANKED_VISIBLE);
+  // Never hidden: anything ranked below the visible cards scrolls in its own column. (This
+  // used to be slice(1, 5) with nothing after it, so a sixth motion was simply invisible.)
+  const extras = order.slice(RANKED_VISIBLE);
+  const floorFull = order.length >= MAX_FLOOR_MOTIONS;
 
   const renderCard = (m: PendingMotion, large: boolean, idx: number) => {
     const meta = typeMeta[m.type];
@@ -850,7 +865,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         </div>
         {/* Header: icon + type label + flag in top-right */}
         <div className="flex items-center gap-2">
-          <span className={`font-black text-[#1C1410] flex-1 min-w-0 ${large ? 'text-3xl' : 'text-lg'} flex items-center gap-1.5`}>
+          <span className={`font-black text-[#1C1410] flex-1 min-w-0 ${large ? 'text-3xl' : idx >= RANKED_VISIBLE ? 'text-base' : 'text-lg'} flex items-center gap-1.5`}>
             <span className="min-w-0 break-words">{cardLabel}</span>
             {!isPrimary && !isViewOnly && (
               <button
@@ -871,17 +886,9 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
             : <SeatFlag country={m.proposedBy} style={{ width: large ? 56 : 32, height: large ? 40 : 24, borderRadius: '8px', border: f && SQUARE_FLAGS.has(f.code) ? 'none' : '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className="inline-block" fallback={null} />}
         </div>
 
-        {/* Custom motions: badge line + the informational no-op strip */}
-        {isCustom && (
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2 flex-wrap">
-              <DisruptivenessBadge type="custom" />
-              {!m.proposedBy && (
-                <span className={`${large ? 'text-sm' : 'text-xs'} font-semibold`} style={{ color: '#9A8A78' }}>{noProposerLabel(language)}</span>
-              )}
-            </div>
-            <CustomNoOpNotice compact={!large} />
-          </div>
+        {/* Custom motion with no proposer: say so, since there is no flag */}
+        {isCustom && !m.proposedBy && (
+          <span className={`${large ? 'text-sm' : 'text-xs'} font-semibold`} style={{ color: '#9A8A78' }}>{noProposerLabel(language)}</span>
         )}
 
         {/* Topic inline — a Custom motion's `topic` IS its title, already rendered above */}
@@ -984,11 +991,12 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
 
   return (
     <div className="px-7 pb-7 space-y-3 flex flex-col h-full overflow-hidden">
-      <div className="flex items-center shrink-0">
+      <div className="flex items-center gap-2.5 shrink-0">
         <h2 className="text-3xl font-black" style={{ color: '#1B3828' }}>{t('motions_vote_heading')}</h2>
-      </div>
-      <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs shrink-0 font-semibold" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
-        <span>{t('motions_drag_hint')}</span>
+        <InfoHint label={t('motions_drag_hint_label')} text={t('motions_drag_hint')} />
+        <span className="ms-auto text-xs font-bold tabular-nums" style={{ color: floorFull ? '#8B2020' : '#9A8A78' }}>
+          {order.length}/{MAX_FLOOR_MOTIONS}
+        </span>
       </div>
       <div className="flex flex-1 min-h-0">
         {/* Left column, primary motion being voted on */}
@@ -1033,15 +1041,49 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
             </React.Fragment>
           ))}
           {!isViewOnly && (
-            <button
-              onClick={onBack}
-              className="w-full bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-3 rounded-2xl font-black text-sm transition-colors shrink-0 focus:outline-none gv-lift"
-              style={{ letterSpacing: '0.05em' }}
-            >
-              {t('motions_raise_motion_btn')}
-            </button>
+            <>
+              <button
+                onClick={onBack}
+                disabled={floorFull}
+                className="w-full bg-[#2A5A3C] hover:bg-[#3D7A52] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] disabled:cursor-not-allowed text-white py-3 rounded-2xl font-black text-sm transition-colors shrink-0 focus:outline-none gv-lift"
+                style={{ letterSpacing: '0.05em' }}
+              >
+                {t('motions_raise_motion_btn')}
+              </button>
+              {floorFull && (
+                <p role="status" className="mt-2 text-xs font-semibold text-center" style={{ color: '#8B2020' }}>
+                  {t('motions_floor_full', { n: MAX_FLOOR_MOTIONS })}
+                </p>
+              )}
+            </>
           )}
         </div>
+        {/* Overflow column: motions ranked below the visible cards, in the same order and with
+            the same actions, scrolling on their own so the cards beside them never move. */}
+        {extras.length > 0 && (
+          <div className="w-64 shrink-0 flex flex-col min-h-0 ms-2 ps-3" style={{ borderInlineStart: '1px solid #E4DCCB' }}>
+            <p className="text-xs font-black uppercase tracking-wide shrink-0 pt-1 pb-1" style={{ color: '#6A5A4A' }}>
+              {t('motions_more_on_floor', { count: extras.length })}
+            </p>
+            <div className="relative flex-1 min-h-0">
+              <div
+                ref={overflowRef}
+                onScroll={measureOverflow}
+                tabIndex={0}
+                aria-label={t('motions_more_on_floor', { count: extras.length })}
+                className="h-full overflow-y-auto overscroll-contain pt-3 pe-4 pb-2 space-y-3 focus:outline-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
+                {extras.map((m, i) => renderCard(m, false, RANKED_VISIBLE + i))}
+              </div>
+              <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-6 transition-opacity duration-150"
+                style={{ opacity: overflowFade.top ? 1 : 0, background: 'linear-gradient(#FAF8F3, rgba(250,248,243,0))' }} />
+              <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-10 flex items-end justify-center pb-1 transition-opacity duration-150"
+                style={{ opacity: overflowFade.bottom ? 1 : 0, background: 'linear-gradient(rgba(250,248,243,0), #FAF8F3 70%)' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="#6A5A4A" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1120,6 +1162,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     (type === 'custom' ? 0 : (motionRankBase[type] ?? 1_000_000) + totalTime);
   const typeMeta = buildTypeMeta(motionNames);
   const pending = [...(committee.pendingMotions ?? [])].filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').sort((a, b) => rankMotion(b) - rankMotion(a));
+  const floorFull = pending.length >= MAX_FLOOR_MOTIONS;
+  // A third column opens beside the ranked cards once motions spill past them.
+  const wide = pending.length > RANKED_VISIBLE;
   const [view, setView] = useState<ModalView>(pending.length === 0 && !isViewOnly ? 'raise' : 'vote');
   const [specialVoteMotion, setSpecialVoteMotion] = useState<PendingMotion | null>(null);
   // M-2: temp ids live in a module-level store keyed by committee, not modal state, so
@@ -1127,9 +1172,15 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   const pendingIds = useTempMotionIds(committee.id);
   const [editingMotionId, setEditingMotionId] = useState<string | null>(null);
   const update = (updater: (c: Committee) => Committee) => onCommitteeUpdate?.(updater);
+  // The dialog's animated close while it is mounted; the fullscreen Suspend / End screen
+  // replaces the dialog, so there it falls back to closing at once.
+  const animatedCloseRef = useRef<(() => void) | null>(null);
+  const close = () => (animatedCloseRef.current ?? onClose)();
 
   const handleRaised = (motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => {
     const existing = committee.pendingMotions ?? [];
+    // Backstop for the disabled Raise button: the floor holds MAX_FLOOR_MOTIONS at most.
+    if (existing.filter(isVotableMotion).length >= MAX_FLOOR_MOTIONS) return;
     if (motion.type === 'custom') {
       // Custom motions don't take a delegation's floor slot, so several may be
       // queued at once. Only a byte-identical one (same proposer AND same name)
@@ -1448,12 +1499,19 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   }
 
   return (
-    <Portal><div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-[#FAF8F3] border border-[#DDD4C0] rounded-3xl w-full shadow-2xl overflow-hidden flex flex-col max-w-5xl" style={{ height: '88%' }}>
+    // Grows out of the Motions tab. Rendered from the committee already in memory: nothing
+    // here waits on the network, so a slow connection cannot delay or stutter the opening.
+    <GrowDialog
+      originSelector='[data-tutorial="tab-motions"]'
+      onClose={onClose}
+      closeRef={animatedCloseRef}
+      ariaLabel={t('tab_motions')}
+      panelClassName={`bg-[#FAF8F3] border border-[#DDD4C0] rounded-3xl w-full shadow-2xl overflow-hidden flex flex-col ${wide ? 'max-w-6xl' : 'max-w-5xl'}`}
+      panelStyle={{ height: '88%' }}
+    >
+      {(requestClose) => (<>
         <div className="flex items-center justify-end px-7 pt-6 pb-0 shrink-0">
-          <button onClick={onClose} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl leading-none">✕</button>
+          <button onClick={requestClose} aria-label={t('sb_close')} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl leading-none focus:outline-none">✕</button>
         </div>
         <div className="flex-1 min-h-0 pt-2 flex flex-col">
           {view === 'raise' && (
@@ -1465,6 +1523,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               editingMotion={editingMotionId ? ((committee.pendingMotions ?? []).find((m) => m.id === editingMotionId) ?? null) : null}
               belowQuorum={belowQuorum}
               isViewOnly={isViewOnly}
+              floorFull={floorFull}
             />
           )}
           {view === 'vote' && (
@@ -1472,7 +1531,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               committee={committee}
               typeMeta={typeMeta}
               onAccepted={handleMotionAccepted}
-              onAllDone={() => { setView('list'); onClose(); }}
+              onAllDone={close}
               onRemove={handleRemove}
               onBack={() => setView('raise')}
               onEdit={(motionId) => { setEditingMotionId(motionId); setView('raise'); }}
@@ -1522,8 +1581,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                             {rowIsCustom && !m.proposedBy && (
                               <p className="text-sm font-semibold mt-1" style={{ color: '#9A8A78' }}>{noProposerLabel(language)}</p>
                             )}
-                            {rowIsCustom && <div className="mt-2"><CustomNoOpNotice compact /></div>}
-                            {m.topic && !rowIsCustom && <p className="text-sm text-[#6A5A4A] mt-1 font-medium">"{m.topic}"</p>}
+                            {m.topic && !rowIsCustom && <p className="text-sm text-[#6A5A4A] mt-1 font-medium">&ldquo;{m.topic}&rdquo;</p>}
                             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                               {m.type !== 'tour' && m.totalTime > 0 && (
                                 <span className="text-xs font-bold text-[#1B3828] bg-[#FAF8F3] border border-[#DDD4C0] px-2 py-0.5 rounded-md">
@@ -1558,8 +1616,8 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                 </div>
               )}
               <div className="flex gap-3 pt-2">
-                <button onClick={() => setView('raise')}
-                  className="flex-1 bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-all gv-lift">
+                <button onClick={() => setView('raise')} disabled={floorFull}
+                  className="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-all gv-lift">
                   {t('motions_raise_list_btn')}
                 </button>
                 {pending.length > 0 && (
@@ -1572,7 +1630,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
             </div>
           )}
         </div>
-      </div>
-    </div></Portal>
+      </>)}
+    </GrowDialog>
   );
 }

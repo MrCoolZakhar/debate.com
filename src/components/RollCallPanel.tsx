@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { Committee, DelegateStatus } from '@/lib/types';
 import { getFlagUrl, getCountryDisplayName, UN_COUNTRIES, matchesCountryQuery, startsWithCountryQuery, compareCountryNames } from '@/lib/countries';
 import { SeatCircleFlag } from '@/components/CircleFlag';
@@ -11,7 +11,7 @@ import {
   resolveJoinRequestsOnAdmit,
 } from '@/lib/committeeService';
 import { liveCaucus } from '@/components/FeedbackLogPanel';
-import { Megaphone, Mic } from 'lucide-react';
+import { GripVertical, Megaphone, Mic, X } from 'lucide-react';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 
 // ── FlagCircle ────────────────────────────────────────────────────────────────
@@ -284,7 +284,14 @@ function RollCallPanelInner({
   speechRunning = false,
   onJoinRequestResolved,
   canAddToList,
+  onRemoveCurrentSpeaker,
 }: {
+  /**
+   * Take the speaker holding the floor off it (their row click and a small X on their row).
+   * The chair page logs the speech, pauses and clears the floor. Must be a STABLE callback:
+   * it is part of the memo comparator. Omitted = the speaker's row does nothing.
+   */
+  onRemoveCurrentSpeaker?: (delegateId: string) => void;
   committee: Committee;
   onAddToList?: (delegateId: string) => void;
   onListIds?: Set<string>;
@@ -350,8 +357,17 @@ function RollCallPanelInner({
   const [localStatuses, setLocalStatuses] = useState<Record<string, DelegateStatus>>({});
   const [localObservers, setLocalObservers] = useState<Record<string, boolean>>({});
   const listRef = useRef<HTMLDivElement>(null);
-  const dragIndexRef = useRef<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  // ── Queue reorder (pointer drag on the grip, or arrow keys on it) ──────────
+  // `drag` renders the lifted row and the drop line; it changes only when the drag starts,
+  // ends, or the drop SLOT changes. Per-move work (the row following the pointer) writes the
+  // DOM directly through dragRef, never React state, and never committee state (RULES 3/4).
+  const [drag, setDrag] = useState<{ id: string; slot: number } | null>(null);
+  const dragRef = useRef<{
+    id: string; pointerId: number; startY: number; startScroll: number; lastY: number;
+    active: boolean; slot: number; el: HTMLElement | null; raf: number;
+  } | null>(null);
+  // A drag must never end in a row click (add / remove / recognise): true for 400 ms after one.
+  const justDraggedRef = useRef(false);
   // Every optimistic status override, with the value we set and when we set it.
   // Mutated synchronously on click so rapid taps cycle off the latest value
   // rather than the one baked into the last render.
@@ -405,17 +421,6 @@ function RollCallPanelInner({
   }, [committee.delegates, reconcileTick]);
 
   const present = committee.delegates.filter((d) => (localStatuses[d.id] ?? d.status) !== 'absent').length;
-  // The PV tag only earns its place when the room is MIXED. In the usual case every voting
-  // delegation is Present and Voting, and a tag on every row is noise, not information.
-  const statusesMixed = (() => {
-    let p = false, pv = false;
-    for (const d of committee.delegates) {
-      if ((localObservers[d.id] ?? d.isObserver) === true) continue;
-      const st = localStatuses[d.id] ?? d.status;
-      if (st === 'present') p = true; else if (st === 'present-voting') pv = true;
-    }
-    return p && pv;
-  })();
   const total = committee.delegates.length;
   const caucus = liveCaucus(committee);
 
@@ -561,6 +566,162 @@ function RollCallPanelInner({
     firstMatch?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [search]);
 
+  // ── Scroll edge fade ────────────────────────────────────────────────────────
+  // The scrollbar is hidden; a soft fade at an edge that has more rows beyond it says the
+  // list scrolls. CSS variables written straight to the node on scroll: no React render.
+  const updateFade = useCallback(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const top = Math.max(0, Math.min(28, el.scrollTop));
+    const bottom = Math.max(0, Math.min(28, el.scrollHeight - el.clientHeight - el.scrollTop));
+    el.style.setProperty('--fade-top', `${top}px`);
+    el.style.setProperty('--fade-bottom', `${bottom}px`);
+  }, []);
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    updateFade();
+    el.addEventListener('scroll', updateFade, { passive: true });
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateFade) : null;
+    ro?.observe(el);
+    return () => { el.removeEventListener('scroll', updateFade); ro?.disconnect(); };
+  }, [updateFade]);
+  // Rows added or removed change the scroll height without resizing the box.
+  useEffect(() => { updateFade(); });
+
+  // ── Queue reorder ───────────────────────────────────────────────────────────
+  // Only the queued delegations behind the floor: the speaker at #1 is never draggable and
+  // never a drop target (slot 0 is directly beneath them). Only in the queue view, with a
+  // reorder handler, for a chair who can write.
+  const canReorder = !!onReorderList && isQueueView && !isViewOnly && !isReadOnly && !committee.endedAt;
+  const delegateIds = new Set(committee.delegates.map((d) => d.id));
+  const reorderIds = canReorder
+    ? (committee.speakersList ?? []).map((s) => s.delegateId).filter((id) => id !== speakerAtTop?.id && delegateIds.has(id))
+    : [];
+  const reorderable = new Set(reorderIds);
+
+  // The full list with `id` placed in front of `beforeId` (or after the last reorderable row
+  // when null). Null when the order would not change.
+  const reorderedList = (id: string, beforeId: string | null) => {
+    const list = committee.speakersList ?? [];
+    const moved = list.find((s) => s.delegateId === id);
+    if (!moved) return null;
+    const rest = list.filter((s) => s.delegateId !== id);
+    let at: number;
+    if (beforeId) {
+      at = rest.findIndex((s) => s.delegateId === beforeId);
+      if (at < 0) return null;
+    } else {
+      const others = reorderIds.filter((x) => x !== id);
+      const last = others.length ? rest.findIndex((s) => s.delegateId === others[others.length - 1]) : -1;
+      at = last >= 0 ? last + 1 : rest.length;
+    }
+    const next = [...rest.slice(0, at), moved, ...rest.slice(at)];
+    return next.every((s, i) => s.delegateId === list[i]?.delegateId) ? null : next;
+  };
+
+  const paintDrag = () => {
+    const st = dragRef.current;
+    const list = listRef.current;
+    if (!st || !st.active || !list) return;
+    if (st.el) st.el.style.transform = `translateY(${st.lastY - st.startY + (list.scrollTop - st.startScroll)}px)`;
+    const y = st.lastY - list.getBoundingClientRect().top + list.scrollTop;
+    let slot = 0;
+    for (const id of reorderIds) {
+      if (id === st.id) continue;
+      const row = list.querySelector<HTMLElement>(`[data-reorder-id="${CSS.escape(id)}"]`);
+      if (row && y > row.offsetTop + row.offsetHeight / 2) slot++;
+    }
+    if (slot !== st.slot) { st.slot = slot; setDrag({ id: st.id, slot }); }
+  };
+
+  const endDrag = (commit: boolean) => {
+    const st = dragRef.current;
+    dragRef.current = null;
+    if (!st) return;
+    cancelAnimationFrame(st.raf);
+    if (st.el) st.el.style.transform = '';
+    if (!st.active) return;
+    justDraggedRef.current = true;
+    setTimeout(() => { justDraggedRef.current = false; }, 400);
+    setDrag(null);
+    if (!commit || !onReorderList) return;
+    const others = reorderIds.filter((x) => x !== st.id);
+    const next = reorderedList(st.id, others[st.slot] ?? null);
+    // Optimistic + chained write, owned by the parent (reorderSpeakersList).
+    if (next) onReorderList(next);
+  };
+
+  // While a row is lifted the whole page shows the grabbing cursor and selects no text; the
+  // cleanup also covers an unmount mid-drag.
+  const dragging = drag !== null;
+  useEffect(() => {
+    if (!dragging) return;
+    const body = document.body;
+    const prevCursor = body.style.cursor;
+    const prevSelect = body.style.userSelect;
+    body.style.cursor = 'grabbing';
+    body.style.userSelect = 'none';
+    return () => { body.style.cursor = prevCursor; body.style.userSelect = prevSelect; };
+  }, [dragging]);
+  useEffect(() => () => {
+    const st = dragRef.current;
+    if (st) cancelAnimationFrame(st.raf);
+  }, []);
+
+  const gripPointerDown = (e: React.PointerEvent<HTMLElement>, id: string) => {
+    if (e.button !== 0 || !listRef.current) return;
+    e.stopPropagation();
+    e.preventDefault();
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
+    dragRef.current = {
+      id, pointerId: e.pointerId, startY: e.clientY, lastY: e.clientY,
+      startScroll: listRef.current.scrollTop, active: false, slot: -1, el: null, raf: 0,
+    };
+  };
+  const gripPointerMove = (e: React.PointerEvent<HTMLElement>) => {
+    const st = dragRef.current;
+    const list = listRef.current;
+    if (!st || st.pointerId !== e.pointerId || !list) return;
+    st.lastY = e.clientY;
+    if (!st.active) {
+      if (Math.abs(e.clientY - st.startY) < 4) return;
+      st.active = true;
+      st.el = list.querySelector<HTMLElement>(`[data-reorder-id="${CSS.escape(st.id)}"]`);
+      st.slot = reorderIds.indexOf(st.id);
+      setDrag({ id: st.id, slot: st.slot });
+      // Edge auto-scroll while held near the top or bottom of the list.
+      const tick = () => {
+        const cur = dragRef.current;
+        const l = listRef.current;
+        if (!cur || !l) return;
+        const r = l.getBoundingClientRect();
+        const edge = 44;
+        const dy = cur.lastY < r.top + edge ? -Math.ceil((r.top + edge - cur.lastY) / 4)
+          : cur.lastY > r.bottom - edge ? Math.ceil((cur.lastY - (r.bottom - edge)) / 4) : 0;
+        if (dy !== 0) { l.scrollTop += dy; paintDrag(); }
+        cur.raf = requestAnimationFrame(tick);
+      };
+      st.raf = requestAnimationFrame(tick);
+    }
+    paintDrag();
+  };
+
+  // Keyboard: ArrowUp / ArrowDown on the grip moves the delegation one place.
+  const gripKeyDown = (e: React.KeyboardEvent<HTMLElement>, id: string) => {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!onReorderList) return;
+    const i = reorderIds.indexOf(id);
+    if (i < 0) return;
+    const others = reorderIds.filter((x) => x !== id);
+    const slot = e.key === 'ArrowUp' ? i - 1 : i + 1;
+    if (slot < 0 || slot > others.length) return;
+    const next = reorderedList(id, others[slot] ?? null);
+    if (next) onReorderList(next);
+  };
+
   return (
     <div className="flex flex-col h-full overflow-hidden"
       onWheel={(e) => {
@@ -602,21 +763,51 @@ function RollCallPanelInner({
       </div>
       )}
 
-      <div ref={listRef} className="flex-1 overflow-y-auto px-2 py-1.5 space-y-1" style={{ scrollbarColor: 'rgba(237,231,216,0.28) transparent', scrollbarWidth: 'thin' }}>
-        {filtered.map((d, idx) => {
+      {/* Scrollbar hidden in every engine (scrollbar-width, ::-webkit-scrollbar); wheel, touch
+          and keyboard still scroll. Generous bottom padding so the last row never sits flush
+          against the add bar, and an edge fade (updateFade) where more rows are hidden. */}
+      <div
+        ref={listRef}
+        tabIndex={0}
+        aria-label={t('rollcall_list_label')}
+        className="relative flex-1 overflow-y-auto overscroll-contain px-2 pt-1.5 space-y-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#EED98A]/50"
+        style={{
+          paddingBottom: 48,
+          msOverflowStyle: 'none',
+          WebkitMaskImage: 'linear-gradient(to bottom, transparent 0, #000 var(--fade-top, 0px), #000 calc(100% - var(--fade-bottom, 0px)), transparent 100%)',
+          maskImage: 'linear-gradient(to bottom, transparent 0, #000 var(--fade-top, 0px), #000 calc(100% - var(--fade-bottom, 0px)), transparent 100%)',
+        } as React.CSSProperties}
+      >
+        {filtered.map((d) => {
           const effectiveStatus = localStatuses[d.id] ?? d.status;
           const isOnList = onListIds?.has(d.id) ?? false;
           const isAbsent = effectiveStatus === 'absent';
           const isObserver = (localObservers[d.id] ?? d.isObserver) === true;
           const queuePos = queuePositionMap.get(d.id) ?? null;
           const matchesSearch = !search || matchesCountryQuery(d.country, search, language);
-          const isDraggable = isQueueView && queuePositionMap.has(d.id);
+          const isReorderable = reorderable.has(d.id);
+          const isLifted = drag?.id === d.id;
+          // Drop line: before this row, or after it when it is the last reorderable row. Never
+          // shown for the slot the row came from (dropping there changes nothing).
+          let dropLine: 'before' | 'after' | null = null;
+          if (drag && isReorderable && !isLifted) {
+            const others = reorderIds.filter((x) => x !== drag.id);
+            const mine = others.indexOf(d.id);
+            const origin = reorderIds.indexOf(drag.id);
+            if (drag.slot !== origin) {
+              if (drag.slot === mine) dropLine = 'before';
+              else if (mine === others.length - 1 && drag.slot === others.length) dropLine = 'after';
+            }
+          }
           const isCurrentSpeaker = committee.currentSpeaker?.delegateId === d.id;
           const isCurrentSpeakerInPanel = queuePos === 1 && (
             committee.currentSpeaker?.delegateId === d.id ||
             caucus?.currentSpeaker === d.country
           );
           const isUpNext = isQueueView && isCurrentSpeakerInPanel;
+          // Removable from the floor from this row (chair page, onRemoveCurrentSpeaker).
+          const holdsFloor = !isRollCallPhase && !showStatusSliders && !isReadOnly && !isViewOnly && !committee.endedAt
+            && (isCurrentSpeaker || (!!caucus?.currentSpeaker && caucus.currentSpeaker === d.country));
           // Recognising an absent delegate: clicking them onto a list marks them Present
           // in the same action. Not in roll call and not in the mid-session Roll Call tab
           // (showStatusSliders): the slider owns status there, so an absent row is a status
@@ -625,7 +816,11 @@ function RollCallPanelInner({
 
           const handleRowClick = () => {
             if (isViewOnly) return;
+            if (drag || justDraggedRef.current) return;
             if (!onAddToList) return;
+            // The speaker holding the floor: a click takes them OFF it (the parent logs the
+            // speech, pauses and clears the floor), even when nobody else is queued.
+            if (holdsFloor && onRemoveCurrentSpeaker) { onRemoveCurrentSpeaker(d.id); return; }
             if (!isAbsent) {
               if (!isOnList) onAddToList(d.id);
               else if (onRemoveFromList) onRemoveFromList(d.id);
@@ -658,25 +853,43 @@ function RollCallPanelInner({
           const rowActionable = !!onAddToList && !isViewOnly && (!isAbsent || canRecognise);
           // The speaker holding the floor, in the queue view (#1) or the A-Z views.
           const isSpeakingRow = isUpNext || isCurrentSpeaker;
-          const rowBg = !matchesSearch ? 'transparent'
-            : isSpeakingRow ? 'rgba(238,217,138,0.14)'
-            : isAbsent ? 'transparent'
-            : effectiveStatus === 'present' ? 'rgba(61,122,82,0.26)'
-            : 'rgba(182,135,31,0.20)';
-          const rowBgHover = !matchesSearch ? 'transparent'
-            : isSpeakingRow ? 'rgba(238,217,138,0.20)'
-            : isAbsent ? 'rgba(237,231,216,0.06)'
-            : effectiveStatus === 'present' ? 'rgba(61,122,82,0.40)'
-            : 'rgba(182,135,31,0.32)';
           // The status slider (roll call, Roll Call tab) takes ~120px of the row, so that mode
           // runs a size down to keep names readable at the sidebar's minimum width.
           const sliderMode = isRollCallPhase || showStatusSliders;
+          // Present vs Present-and-Voting is colour-coded ONLY while taking roll (sliderMode).
+          // Outside it both read the same neutral tint; absent stays clear and says so.
+          const rowBg = !matchesSearch ? 'transparent'
+            : isLifted ? '#24503A'
+            : isSpeakingRow ? 'rgba(238,217,138,0.14)'
+            : isAbsent ? 'transparent'
+            : !sliderMode ? 'rgba(237,231,216,0.07)'
+            : effectiveStatus === 'present' ? 'rgba(61,122,82,0.26)'
+            : 'rgba(182,135,31,0.20)';
+          const rowBgHover = !matchesSearch ? 'transparent'
+            : isLifted ? '#24503A'
+            : isSpeakingRow ? 'rgba(238,217,138,0.20)'
+            : isAbsent ? 'rgba(237,231,216,0.06)'
+            : !sliderMode ? 'rgba(237,231,216,0.12)'
+            : effectiveStatus === 'present' ? 'rgba(61,122,82,0.40)'
+            : 'rgba(182,135,31,0.32)';
           const flagPx = isUpNext ? 48 : sliderMode ? 34 : 40;
 
           return (
-            <div key={d.id}>
-              {dragOverIndex === idx && dragOverIndex !== dragIndexRef.current && (
-                <div className="h-0.5 bg-[#EED98A] rounded-full mx-2 -mb-0.5" />
+            <div
+              key={d.id}
+              data-reorder-id={isReorderable ? d.id : undefined}
+              className="relative"
+              style={isLifted ? { zIndex: 20, willChange: 'transform' } : undefined}
+            >
+              {dropLine && (
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-x-1.5 flex items-center"
+                  style={dropLine === 'before' ? { top: -3.5, height: 3 } : { bottom: -3.5, height: 3 }}
+                >
+                  <span className="shrink-0 w-2 h-2 rounded-full" style={{ backgroundColor: '#EED98A', marginInlineStart: -1 }} />
+                  <span className="flex-1 h-[2.5px] rounded-full" style={{ backgroundColor: '#EED98A' }} />
+                </div>
               )}
               <div
                 data-matches={matchesSearch ? 'true' : 'false'}
@@ -688,27 +901,6 @@ function RollCallPanelInner({
                   if (e.target !== e.currentTarget) return;
                   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleRowClick(); }
                 } : undefined}
-                draggable={isDraggable}
-                onDragStart={() => { if (isDraggable) dragIndexRef.current = idx; }}
-                onDragOver={(e) => { e.preventDefault(); if (isQueueView) setDragOverIndex(idx); }}
-                onDrop={() => {
-                  const from = dragIndexRef.current;
-                  const to = idx;
-                  if (from === null || from === to || !onReorderList) { setDragOverIndex(null); return; }
-                  const gslItems = (committee.speakersList ?? []);
-                  const fromDelegateId = filtered[from]?.id;
-                  const toDelegateId = d.id;
-                  const fromIdx = gslItems.findIndex(s => s.delegateId === fromDelegateId);
-                  const toIdx = gslItems.findIndex(s => s.delegateId === toDelegateId);
-                  if (fromIdx < 0 || toIdx < 0) { setDragOverIndex(null); return; }
-                  const newList = [...gslItems];
-                  const [moved] = newList.splice(fromIdx, 1);
-                  newList.splice(toIdx, 0, moved);
-                  onReorderList(newList);
-                  dragIndexRef.current = null;
-                  setDragOverIndex(null);
-                }}
-                onDragEnd={() => { dragIndexRef.current = null; setDragOverIndex(null); }}
                 className={`group/seat flex items-center ${sliderMode ? 'gap-2' : 'gap-3'} px-2.5 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/80 transition-[background-color,box-shadow,opacity] duration-150 motion-reduce:transition-none bg-[var(--row-bg)] hover:bg-[var(--row-bg-hover)] ${
                   !matchesSearch ? 'opacity-25' : ''
                 } ${
@@ -717,14 +909,16 @@ function RollCallPanelInner({
                     : isAbsent && !isRollCallPhase && !showStatusSliders
                     ? 'cursor-not-allowed'
                     : ''
-                } ${isDraggable ? 'cursor-grab' : ''}`}
+                }`}
                 style={{
                   ['--row-bg' as string]: rowBg,
                   ['--row-bg-hover' as string]: rowBgHover,
                   minHeight: isUpNext ? 64 : sliderMode ? 48 : 54,
                   paddingBlock: 6,
                   // A lit edge, not a border: the speaker's row reads at a distance.
-                  boxShadow: matchesSearch && isSpeakingRow ? 'inset 0 0 0 1.5px rgba(238,217,138,0.6)' : undefined,
+                  boxShadow: isLifted
+                    ? '0 10px 28px rgba(0,0,0,0.38), 0 2px 6px rgba(0,0,0,0.25), inset 0 0 0 1.5px rgba(238,217,138,0.55)'
+                    : matchesSearch && isSpeakingRow ? 'inset 0 0 0 1.5px rgba(238,217,138,0.6)' : undefined,
                 } as React.CSSProperties}
               >
                 <div className="relative shrink-0">
@@ -739,7 +933,10 @@ function RollCallPanelInner({
                       decorative
                       ring={isSpeakingRow ? false : 'rgba(255,255,255,0.18)'}
                       style={{
-                        boxShadow: isSpeakingRow ? '0 0 0 2.5px #EED98A' : undefined,
+                        // A soft lift so the disc sits above the forest ground, not in it.
+                        boxShadow: isSpeakingRow
+                          ? '0 0 0 2.5px #EED98A, 0 2px 6px rgba(0,0,0,0.32)'
+                          : '0 1px 2px rgba(0,0,0,0.30), 0 2px 7px rgba(0,0,0,0.22)',
                         opacity: isAbsent ? 0.5 : 1,
                         filter: isAbsent ? 'grayscale(0.7)' : undefined,
                       }}
@@ -776,51 +973,63 @@ function RollCallPanelInner({
                     </span>
                   )}
                 </div>
+                {holdsFloor && onRemoveCurrentSpeaker && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onRemoveCurrentSpeaker(d.id); }}
+                    aria-label={t('speaker_remove_current', { country: getCountryDisplayName(d.country, language) })}
+                    title={t('speaker_remove_current', { country: getCountryDisplayName(d.country, language) })}
+                    className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-full transition-[background-color,transform] duration-150 hover:bg-[rgba(139,32,32,0.55)] active:scale-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/80"
+                    style={{ color: '#EED98A', backgroundColor: 'rgba(237,231,216,0.10)' }}
+                  >
+                    <X size={14} strokeWidth={3} aria-hidden />
+                  </button>
+                )}
                 {isObserver && (
                   <span className="text-[10.5px] shrink-0 font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md" style={{ backgroundColor: 'rgba(238,217,138,0.16)', color: '#EED98A' }}>{t('rollcall_observer')}</span>
                 )}
-                {/* Observer placard toggle. It used to be gated on
-                    `isRollCallPhase || showStatusSliders`, which meant that
-                    mid-session it existed only inside the ROLL CALL sidebar tab
-                    (`showSliders`, off by default) — so "you can't change delegates
-                    to observers" was true of every screen a chair actually stands
-                    on. The gate is now write-access alone. To keep the sidebar
-                    quiet it is revealed on hover/focus, except where it was always
-                    visible before (roll call, sliders) and on an existing observer,
-                    whose placard must stay one click away from coming off. */}
-                {!(isReadOnly || isViewOnly) && (
+                {/* Observer placard toggle: ONLY while taking roll (pre-session roll call and the
+                    mid-session Roll Call tab), where status is being set anyway. Outside roll
+                    call the row shows the Observer tag and nothing to change it with. */}
+                {sliderMode && !(isReadOnly || isViewOnly) && (
                   <button
                     onClick={(e) => { e.stopPropagation(); toggleObserver(d.id, isObserver); }}
                     title={isObserver ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
                     aria-label={isObserver ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
                     aria-pressed={isObserver}
-                    className={`shrink-0 p-1 rounded-md transition-[opacity,transform] active:scale-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70 ${
-                      (isRollCallPhase || showStatusSliders || isObserver)
-                        ? ''
-                        : 'opacity-0 group-hover/seat:opacity-100 group-focus-visible/seat:opacity-100 focus-visible:opacity-100'
-                    }`}
+                    className="shrink-0 p-1 rounded-md transition-[opacity,transform] active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70"
                     style={{ color: isObserver ? '#EED98A' : 'rgba(237,231,216,0.6)' }}
                   >
                     <Megaphone size={15} />
                   </button>
                 )}
-                {/* Status in words as well as colour, in the queue view (the roll-call views
-                    already show it on the slider). Absent always says so. PV is tagged only when
-                    the room mixes Present and Present-and-Voting (statusesMixed); an untagged
-                    row is then Present. */}
-                {!(isRollCallPhase || showStatusSliders) && matchesSearch && (
-                  isAbsent ? (
-                    <span className="text-[11px] shrink-0 font-bold uppercase tracking-wider" style={{ color: 'rgba(237,231,216,0.72)' }}>{t('rollcall_absent')}</span>
-                  ) : effectiveStatus === 'present-voting' && statusesMixed ? (
-                    <span
-                      className="text-[11px] shrink-0 font-black tracking-wide px-1.5 py-0.5 rounded-md"
-                      style={{ color: '#EED98A', boxShadow: 'inset 0 0 0 1.5px rgba(238,217,138,0.55)' }}
-                      title={t('rollcall_pv_full')}
-                    >
-                      <span aria-hidden>{t('rollcall_pv_tag')}</span>
-                      <span className="sr-only">{t('rollcall_pv_full')}</span>
-                    </span>
-                  ) : null
+                {/* Absent says so in words outside roll call. Present and Present-and-Voting are
+                    deliberately NOT told apart here (no PV tag, no tint): the slider carries that
+                    distinction while taking roll. */}
+                {!sliderMode && matchesSearch && isAbsent && (
+                  <span className="text-[11px] shrink-0 font-bold uppercase tracking-wider" style={{ color: 'rgba(237,231,216,0.72)' }}>{t('rollcall_absent')}</span>
+                )}
+                {/* Reorder grip: drag with a mouse, finger or pen, or ArrowUp / ArrowDown. Faint
+                    until the row is hovered; always visible on touch screens (no hover). */}
+                {isReorderable && (
+                  <button
+                    type="button"
+                    aria-label={t('rollcall_reorder_handle', { country: getCountryDisplayName(d.country, language) })}
+                    title={t('rollcall_reorder_hint')}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => gripKeyDown(e, d.id)}
+                    onPointerDown={(e) => gripPointerDown(e, d.id)}
+                    onPointerMove={gripPointerMove}
+                    onPointerUp={(e) => { if (dragRef.current?.pointerId === e.pointerId) endDrag(true); }}
+                    onPointerCancel={() => endDrag(false)}
+                    onLostPointerCapture={() => { if (dragRef.current) endDrag(true); }}
+                    className={`shrink-0 -me-1 w-7 h-9 flex items-center justify-center rounded-md transition-opacity duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70 focus-visible:opacity-100 group-hover/seat:opacity-100 [@media(hover:none)]:opacity-80 ${
+                      isLifted ? 'opacity-100 cursor-grabbing' : 'opacity-45 cursor-grab'
+                    }`}
+                    style={{ color: '#EDE7D8', touchAction: 'none' }}
+                  >
+                    <GripVertical size={17} aria-hidden />
+                  </button>
                 )}
                 {(isRollCallPhase || showStatusSliders) && (
                   <div onClick={(e) => e.stopPropagation()} className={`shrink-0 ${(isReadOnly || isViewOnly) ? 'pointer-events-none opacity-50' : ''}`}>
@@ -881,7 +1090,8 @@ const RollCallPanel = React.memo(RollCallPanelInner, (prev, next) => {
     prev.isTdT === next.isTdT &&
     prev.isRoomOrderTdT === next.isRoomOrderTdT &&
     prev.onListIds === next.onListIds &&
-    prev.onReorderList === next.onReorderList
+    prev.onReorderList === next.onReorderList &&
+    prev.onRemoveCurrentSpeaker === next.onRemoveCurrentSpeaker
   );
 });
 

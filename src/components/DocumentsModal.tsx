@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, KeyboardEvent } from 'react';
 import Portal from '@/components/Portal';
+import GrowDialog from '@/components/GrowDialog';
 import { portalFrame } from '@/components/chat/chatTokens';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
@@ -1064,13 +1065,18 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
   }
 
   return (
-    <Portal><div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden max-h-[92%] flex flex-col">
+    // Grows out of the Documents tab, rendered from the documents already on the committee:
+    // nothing waits on the network, so a slow connection cannot delay the opening.
+    <GrowDialog
+      originSelector='[data-tutorial="tab-documents"]'
+      onClose={onClose}
+      ariaLabel={t('documents_title')}
+      panelClassName="bg-[#EDE7D8] border border-[#DDD4C0] rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden max-h-[92%] flex flex-col"
+    >
+      {(requestClose) => (<>
         <div className="flex items-center justify-between px-7 pt-6 pb-4 shrink-0 border-b border-[#DDD4C0]">
           <h2 className="text-2xl font-black text-[#1C1410]">{t('documents_title')}</h2>
-          <button onClick={onClose} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl leading-none">✕</button>
+          <button onClick={requestClose} aria-label={t('sb_close')} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl leading-none focus:outline-none">✕</button>
         </div>
 
         {!showForm && (
@@ -1130,7 +1136,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
             </div>
           )}
         </div>
-      </div>
-    </div></Portal>
+      </>)}
+    </GrowDialog>
   );
 }

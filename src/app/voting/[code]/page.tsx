@@ -10,11 +10,10 @@ import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, Delegate, DelegateStatus } from '@/lib/types';
 import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 import { SeatFlag, SeatArtProvider } from '@/components/SeatFlag';
-import { SeatCircleFlag } from '@/components/CircleFlag';
 import { sessionSeatArt } from '@/lib/sessionFlags';
 import { Emoji } from '@/components/Emoji';
-import { Megaphone } from 'lucide-react';
-import { MajorityPie } from '@/components/RollCallPanel';
+import { Eye, EyeOff } from 'lucide-react';
+import { PreVoteScreen } from '@/components/voting/PreVoteScreen';
 import { serverNowIso } from '@/lib/serverClock';
 import { startSessionSync, rowFields } from '@/lib/sessionSync';
 import { getCommitteeByCode, setDelegateStatus as setDelegateStatusInDB, setDelegateObserver as setDelegateObserverInDB, updateDocumentStatus as updateDocumentStatusInDB, saveCommitteeSettings, endDebate as endDebateInDB } from '@/lib/committeeService';
@@ -26,7 +25,7 @@ import {
   loadVoteStates, saveVoteState, setVotingPhase, isVoteOpen,
   type VoteChoice, type DelegateVote, type VoteStateV1, type VoteStatus, type FrozenSeat,
 } from '@/lib/voteState';
-import { VotingRulesPanel, VotingRulesPopover, computeVoteOutcome, isVetoDelegation } from '@/components/VotingRulesPanel';
+import { VotingRulesPopover, computeVoteOutcome, isVetoDelegation } from '@/components/VotingRulesPanel';
 import { useAuth } from '@/components/AuthProvider';
 import { detectConferenceSession, verifyConferenceAccess } from '@/lib/conferenceAccess';
 import ChairDeviceKickModal from '@/components/ChairDeviceKickModal';
@@ -279,156 +278,8 @@ function ObserverWriteFailedBanner({ onDismiss }: { onDismiss: () => void }) {
   );
 }
 
-// ── Roll call modal — defined OUTSIDE VotingPage so React never remounts it ──
-// (defining it inside caused new function type each render → unmount/remount → no CSS transitions)
-function RollCallModal({
-  delegates,
-  rollCallStatuses,
-  isObserverSeat,
-  onToggleObserver,
-  onCycleStatus,
-  onConfirm,
-  side,
-}: {
-  delegates: Delegate[];
-  rollCallStatuses: Record<string, DelegateStatus>;
-  /** The placard as the page currently believes it, optimistic write included. */
-  isObserverSeat: (d: Delegate) => boolean;
-  onToggleObserver: (d: Delegate) => void;
-  onCycleStatus: (id: string) => void;
-  onConfirm: () => void;
-  /** Rendered immediately beside the roll call card (the voting-rules console). */
-  side?: React.ReactNode;
-}) {
-  const t = useT();
-  const { language } = useLanguage();
-  // Observers do not vote, so they are not part of the ballot roster — but they are
-  // listed below it. Filtering them out of the modal entirely (which this modal used
-  // to do) left no row to take a placard off, and no way to put one on, on the one
-  // screen a chair is standing on when the denominator looks wrong.
-  const votable = delegates.filter((d) => !isObserverSeat(d));
-  const observers = delegates.filter((d) => isObserverSeat(d));
-  const sorted = [...votable].sort((a, b) => compareCountryNames(a.country, b.country, language));
-  const sortedObservers = [...observers].sort((a, b) => compareCountryNames(a.country, b.country, language));
-  const observerButton = (d: Delegate, on: boolean) => (
-    <button
-      onClick={() => onToggleObserver(d)}
-      title={on ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
-      aria-label={on ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
-      aria-pressed={on}
-      className="shrink-0 p-1.5 rounded-md transition-all active:scale-90 focus:outline-none"
-      style={{ color: on ? 'rgba(238,217,138,0.9)' : 'rgba(255,255,255,0.4)' }}
-    >
-      <Megaphone size={16} />
-    </button>
-  );
-  const thumbPos = (status: DelegateStatus) =>
-    status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[32px]' : 'left-[62px]';
-  const thumbColor = (status: DelegateStatus) =>
-    status === 'absent' ? 'bg-[#8B2020]' : status === 'present' ? 'bg-[#3D7A52]' : 'bg-[#B6871F]';
-  const presentCount = votable.filter((d) => (rollCallStatuses[d.id] ?? d.status) !== 'absent').length;
-  return (
-    <Portal><div className="fixed inset-0 z-50 flex items-center justify-center gap-4 px-4" style={{ background: 'rgba(5,4,3,0.92)', backdropFilter: 'blur(4px)' }}>
-      <div className="rounded-2xl w-full max-w-md shadow-2xl flex flex-col" style={{ maxHeight: '85%', backgroundColor: '#1B3828', border: '1px solid rgba(255,255,255,0.12)' }}>
-        <div className="px-5 py-4 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
-          <div className="flex items-center justify-between mb-1">
-            <h2 className="text-base font-black text-white">{t('voting_roll_call_heading')}</h2>
-            <div className="flex gap-1.5">
-              <MajorityPie arcFill={1}     color="#2A5A3C" label={`${presentCount}`} />
-              <MajorityPie arcFill={2 / 3} color="#B6871F" label={`${Math.ceil(presentCount * 2 / 3)}`} />
-              <MajorityPie arcFill={0.5}   color="#8A7A6A" label={`${Math.floor(presentCount / 2) + 1}`} />
-            </div>
-          </div>
-          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>
-            {t('voting_roll_call_sub').replace('{present}', String(presentCount)).replace('{total}', String(votable.length))}
-          </p>
-        </div>
-        <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
-          {sorted.map((d) => {
-            const status = rollCallStatuses[d.id] ?? d.status;
-            return (
-              <div
-                key={d.id}
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all"
-                style={{
-                  backgroundColor: status === 'present' ? 'rgba(61,122,82,0.22)' : status === 'present-voting' ? 'rgba(182,135,31,0.18)' : 'transparent',
-                  opacity: status === 'absent' ? 0.4 : 1,
-                  border: status === 'present' ? '1px solid rgba(61,122,82,0.4)' : status === 'present-voting' ? '1px solid rgba(182,135,31,0.35)' : '1px solid transparent',
-                }}
-              >
-                <SeatCircleFlag seat={d} size={36} decorative />
-                <span className="flex-1 text-sm text-white truncate">{getCountryDisplayName(d.country, language)}</span>
-                {observerButton(d, false)}
-                <button
-                  onClick={() => onCycleStatus(d.id)}
-                  className="relative w-[90px] h-[30px] rounded-full cursor-pointer shrink-0 select-none"
-                  style={{ backgroundColor: 'rgba(255,255,255,0.10)', border: '1.5px solid rgba(255,255,255,0.22)' }}
-                  title="Tap to cycle: Absent → Present → PV"
-                >
-                  <div className="absolute inset-0 grid grid-cols-3 items-center pointer-events-none">
-                    <span className={`text-[10px] font-bold text-center ${status === 'absent' ? 'text-white' : 'text-white/40'}`}>A</span>
-                    <span className={`text-[10px] font-bold text-center ${status === 'present' ? 'text-white' : 'text-white/40'}`}>P</span>
-                    <span className={`text-[10px] font-bold text-center ${status === 'present-voting' ? 'text-white' : 'text-white/40'}`}>PV</span>
-                  </div>
-                  <div className={`absolute top-[2px] w-[26px] h-[22px] rounded-full transition-all duration-200 shadow-sm ${thumbPos(status)} ${thumbColor(status)}`} />
-                </button>
-              </div>
-            );
-          })}
-          {/* Observers, kept clearly apart from the ballot roster. The chair needs to
-              see WHY the denominator is smaller than the room, and needs one click to
-              take a placard back off. */}
-          {sortedObservers.length > 0 && (
-            <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.12)' }}>
-              <div className="px-3 pb-2">
-                <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: 'rgba(238,217,138,0.85)' }}>
-                  {t('voting_observers_heading', { n: sortedObservers.length })}
-                </p>
-                <p className="text-[11px] mt-0.5 leading-snug" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                  {t('voting_observers_note')}
-                </p>
-              </div>
-              {sortedObservers.map((d) => (
-                <div
-                  key={d.id}
-                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl"
-                  style={{ backgroundColor: 'rgba(238,217,138,0.08)', border: '1px solid rgba(238,217,138,0.22)', marginBottom: '2px' }}
-                >
-                  <SeatCircleFlag seat={d} size={36} decorative />
-                  <span className="flex-1 text-sm text-white truncate">{getCountryDisplayName(d.country, language)}</span>
-                  <span
-                    className="text-[9px] shrink-0 font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md"
-                    style={{ backgroundColor: 'rgba(238,217,138,0.15)', color: 'rgba(238,217,138,0.85)', border: '1px solid rgba(238,217,138,0.3)' }}
-                  >
-                    {t('rollcall_observer')}
-                  </span>
-                  {observerButton(d, true)}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="px-4 py-4 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.12)' }}>
-          <button
-            onClick={onConfirm}
-            disabled={presentCount === 0}
-            className="w-full py-3 rounded-xl font-black text-sm transition-colors"
-            style={{
-              backgroundColor: presentCount > 0 ? '#EDE7D8' : 'rgba(255,255,255,0.15)',
-              color: presentCount > 0 ? '#1C1410' : 'rgba(255,255,255,0.4)',
-            }}
-          >
-            {presentCount > 0 ? t('voting_start_btn').replace('{n}', String(presentCount)) : t('voting_mark_present')}
-          </button>
-        </div>
-      </div>
-      {side}
-    </div></Portal>
-  );
-}
-
 // ── Header ────────────────────────────────────────────────────────────────────
-// Declared at module scope (like RollCallModal) so React keeps the same element
+// Declared at module scope (like PreVoteScreen) so React keeps the same element
 // type across renders. Nested inside VotingPage it was a brand-new component type
 // on every render, which remounted the whole bar — killing CSS transitions and
 // resetting any state a header child owns (e.g. the open voting-rules popover).
@@ -496,6 +347,30 @@ function SeatMark({ country }: { country: string }) {
       style={{ width: '1em', height: '1em' }}
       fallback={<Emoji size="1em">🌐</Emoji>}
     />
+  );
+}
+
+/** Show / hide the running tally. Both icons stay mounted and cross-fade, so the
+ *  switch reads as one control changing state rather than a button swap. */
+function TallyToggle({ hidden, onToggle }: { hidden: boolean; onToggle: () => void }) {
+  const t = useT();
+  const icon = 'absolute inset-0 m-auto transition-[opacity,transform,filter] duration-200 [transition-timing-function:cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none';
+  const off = { opacity: 0, transform: 'scale(0.25)', filter: 'blur(4px)' };
+  const on = { opacity: 1, transform: 'scale(1)', filter: 'blur(0px)' };
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={hidden}
+      className="inline-flex items-center gap-2 h-10 ps-3 pe-4 rounded-full text-[13px] font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,color,transform] duration-150 active:scale-[0.96] motion-reduce:transition-none"
+      style={{ backgroundColor: hidden ? '#1B3828' : 'rgba(27,56,40,0.07)', color: hidden ? '#EED98A' : '#6A5A4A' }}
+    >
+      <span className="relative w-4 h-4 shrink-0" aria-hidden>
+        <Eye size={16} className={icon} style={hidden ? off : on} />
+        <EyeOff size={16} className={icon} style={hidden ? on : off} />
+      </span>
+      {hidden ? t('voting_show_tally') : t('voting_hide_tally')}
+    </button>
   );
 }
 
@@ -724,7 +599,18 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   /** Why phones are NOT in voting mode, or why leaving it failed. */
   const [phaseNotice, setPhaseNotice] = useState<null | 'closed' | 'enter_failed' | 'leave_failed'>(null);
   const [backBusy, setBackBusy] = useState(false);
-  const [hideVotes, setHideVotes] = useState(false);
+  /** "Hide tally": the running count is not on screen at all (no bar, no numbers, no
+   *  verdict chip) until the result. Per device, remembered per committee so a reload
+   *  on a projector never flashes the tally. localStorage only (a per-viewer preference). */
+  const [hideVotes, setHideVotesState] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try { return localStorage.getItem(`gavelling-hide-tally:${code.toUpperCase()}`) === '1'; } catch { return false; }
+  });
+  const setHideVotes = (next: boolean) => {
+    setHideVotesState(next);
+    if (next) setShowCorrections(false);   // the correction list shows every placard
+    try { localStorage.setItem(`gavelling-hide-tally:${code.toUpperCase()}`, next ? '1' : '0'); } catch { /* storage unavailable */ }
+  };
   /** The recorded-votes list used to correct one placard. */
   const [showCorrections, setShowCorrections] = useState(false);
   /** A follower (view-only) tracks the live vote unless they picked a document themselves. */
@@ -1410,13 +1296,17 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   // ── Live rule changes from the inline console ──────────────────────────────
   // Store (instant, this device) + a key-level patch of committees.settings (D-1), so
   // every chair device computes the identical verdict and no other setting is touched.
-  const applyRule = <K extends keyof CommitteeSettings>(key: K, value: CommitteeSettings[K]) => {
+  const applyRules = (patch: Partial<CommitteeSettings>) => {
     if (isViewOnly) return;   // V-7: UI gate, consistent with SettingsPanel's `upd`
-    updateSetting(committee.code, key, value);
-    const next: CommitteeSettings = { ...settings, [key]: value };
-    // ONLY the changed key. chairJoinSuffix, headChair, headChairDevice and
-    // agendaTopicIndex can no longer ride along (rules 12 and 13).
-    saveCommitteeSettings(committee.id, { [key]: value }, committee.code, suffix);
+    const keys = Object.keys(patch) as (keyof CommitteeSettings)[];
+    if (keys.length === 0) return;
+    for (const key of keys) updateSetting(committee.code, key, patch[key] as CommitteeSettings[typeof key]);
+    const next: CommitteeSettings = { ...settings, ...patch };
+    // ONLY the changed keys, in ONE patch, so two keys that belong together (a veto
+    // mode and its list) land together and the verdict below sees both.
+    // chairJoinSuffix, headChair, headChairDevice and agendaTopicIndex can never ride
+    // along (rules 12 and 13).
+    saveCommitteeSettings(committee.id, patch, committee.code, suffix);
     // Result already on screen: the verdict can flip, so the DR's stored status
     // has to follow it rather than keeping the value from the first evaluation.
     if (phase === 'result' && selectedDoc) {
@@ -1427,12 +1317,38 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       }
     }
   };
+  const applyRule = <K extends keyof CommitteeSettings>(key: K, value: CommitteeSettings[K]) =>
+    applyRules({ [key]: value } as Partial<CommitteeSettings>);
+
+  /** Veto seats a chair can pick: every non-observer delegation on the roster. */
+  const vetoRoster = committee.delegates.filter((d) => !isObserverSeat(d));
+
+  /** Switching the veto mode. Choosing Custom seeds the list only when this committee
+   *  has never stored one: from P5, the P5 seats that sit here (roster spelling);
+   *  otherwise empty. A list the chairs already chose is kept as it is. */
+  const changeVetoMode = (mode: CommitteeSettings['vetoMode']) => {
+    if (mode === settings.vetoMode) return;
+    const stored = (committee.dbSettings ?? {}) as Record<string, unknown>;
+    const hasStoredList = Array.isArray(stored.vetoCountries);
+    if (mode === 'custom' && !hasStoredList) {
+      const seeded = settings.vetoMode === 'p5'
+        ? vetoRoster.filter((d) => isVetoDelegation(vetoListFor(settings), d.country)).map((d) => d.country)
+        : [];
+      applyRules({ vetoMode: 'custom', vetoCountries: seeded });
+      return;
+    }
+    applyRules({ vetoMode: mode });
+  };
 
   const rulesProps = {
     rules: settings,
     onChange: applyRule,
     vetoMode: settings.vetoMode,
-    onVetoModeChange: (m: CommitteeSettings['vetoMode']) => applyRule('vetoMode', m),
+    onVetoModeChange: changeVetoMode,
+    vetoRoster,
+    onVetoCountriesChange: (next: string[]) => applyRules({ vetoCountries: next }),
+    // "Hide tally" hides the running count in the header console too, until the result.
+    hideTally: hideVotes && phase !== 'result',
     tally,
     outcome,
     votesCast: votes.length,
@@ -1578,18 +1494,13 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     backBusy,
   };
 
-  // ── Roll call modal (blocks until dismissed) ─────────────────────────────
-  const cycleRollCallStatus = (id: string) => {
+  // ── Pre-vote screen: roll call + rules (blocks until confirmed) ──────────
+  /** Set one seat's roll-call status directly (the pre-vote screen's segmented control). */
+  const setRollCallStatus = (id: string, next: DelegateStatus) => {
     if (isViewOnly) return;
-    // Remembered so the merge on refetch keeps this chair's value for this seat and
-    // lets every untouched seat follow the DB.
     touchedStatusRef.current.add(id);
-    setRollCallStatuses((prev) => {
-      const cur = prev[id] ?? 'absent';
-      const next: DelegateStatus = cur === 'absent' ? 'present' : cur === 'present' ? 'present-voting' : 'absent';
-      setDelegateStatusInDB(id, next, committee.code, suffix);
-      return { ...prev, [id]: next };
-    });
+    setRollCallStatuses((prev) => ({ ...prev, [id]: next }));
+    setDelegateStatusInDB(id, next, committee.code, suffix);
   };
 
   /** Hand out or take back an observer placard. Optimistic first, write
@@ -1622,20 +1533,18 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   // writes delegate statuses.
   const showRollCall = !isViewOnly && (rollCallOpen ?? (!rollCallDone && !anyOpenVote));
   const rollCallModal = showRollCall ? (
-    <RollCallModal
+    <PreVoteScreen
       delegates={committee.delegates}
       rollCallStatuses={rollCallStatuses}
       isObserverSeat={isObserverSeat}
       onToggleObserver={toggleObserverSeat}
-      onCycleStatus={cycleRollCallStatus}
+      onSetStatus={setRollCallStatus}
       onConfirm={() => { setRollCallDone(true); setRollCallOpen(false); setNewSeatIds([]); }}
-      side={
-        <VotingRulesPanel
-          {...rulesProps}
-          className="hidden md:flex w-[336px] shrink-0"
-          style={{ maxHeight: '85%', overflow: 'hidden' }}
-        />
-      }
+      settings={settings}
+      onRulesChange={applyRules}
+      onVetoModeChange={changeVetoMode}
+      vetoEntries={vetoListFor(settings)}
+      readOnly={isViewOnly}
     />
   ) : null;
 
@@ -2008,33 +1917,18 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           </div>
           )}
 
-          {/* Scale */}
-          <div className="mb-4 w-full max-w-3xl relative">
-            <div className={hideVotes ? 'blur-sm select-none pointer-events-none' : ''}>
-              <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+          {/* Tally. "Hide tally" removes it from the screen entirely: no bar, no counts,
+              nothing blurred that a projector could still give away. */}
+          <div className="mb-4 w-full max-w-3xl">
+            <div className="flex justify-end mb-1.5">
+              <TallyToggle hidden={hideVotes} onToggle={() => setHideVotes(!hideVotes)} />
             </div>
-            <button
-              onClick={() => setHideVotes((v) => !v)}
-              title={hideVotes ? 'Show vote count' : 'Hide vote count'}
-              className="absolute right-0 top-0 h-7 w-9 flex items-center justify-center rounded-r-full text-[#9A8A78] hover:text-[#1C1410] transition-colors focus:outline-none"
-              style={{ backgroundColor: 'rgba(221,212,192,0.85)', borderLeft: '1px solid #DDD4C0' }}>
-              {hideVotes ? (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/>
-                  <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
-                  <line x1="1" y1="1" x2="23" y2="23"/>
-                </svg>
-              ) : (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                  <circle cx="12" cy="12" r="3"/>
-                </svg>
-              )}
-            </button>
+            {!hideVotes && (
+              <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+            )}
           </div>
 
-
-          {!isViewOnly && votes.length > 0 && (
+          {!isViewOnly && !hideVotes && votes.length > 0 && (
             showCorrections ? (
               <div className="w-full max-w-3xl mb-3 flex justify-center">
                 <VoteCorrections
@@ -2091,6 +1985,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           <h2 className="text-4xl font-black text-[#1C1410]">
             {t('voting_all_voted').replace('{n}', String(presentDelegates.length))}
           </h2>
+          <TallyToggle hidden={hideVotes} onToggle={() => setHideVotes(!hideVotes)} />
+          {!hideVotes && (<>
           <div className="flex gap-10 text-center">
             <div>
               <div className="text-4xl font-black text-green-400">{forCount}</div>
@@ -2138,6 +2034,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               </button>
             )
           )}
+          </>)}
           {isViewOnly ? (
             <p className="text-sm font-semibold text-[#6A5A4A]">{t('voting_follower_waiting', { name: gavelRole.head ?? '' })}</p>
           ) : (
@@ -2314,7 +2211,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             </div>
             {p5Veto && (
               <p className="text-sm mt-4 font-semibold flex items-center gap-1 justify-center" style={{ color: '#FCA5A5' }}>
-                <Emoji size="1em">🛡️</Emoji> {t('voting_p5_veto')}
+                <Emoji size="1em">🛡️</Emoji> {settings.vetoMode === 'custom' ? t('voting_veto_exercised') : t('voting_p5_veto')}
               </p>
             )}
             {unanimousFail && (

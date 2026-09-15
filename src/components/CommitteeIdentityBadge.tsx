@@ -14,8 +14,11 @@
 //     never a broken image or an empty slot.
 //   • Beside it: the acronym big with the full name small beneath (AGENTS.md UI
 //     RULE, resolved by the caller via committeeDisplayName), and the topic. The
-//     topic is a button only when `onTopicClick` is set (the Moderator switching
-//     the agenda).
+//     topic is smaller than the name. For the Moderator (`onTopicSave`) a click turns
+//     it into an inline editor: Enter or blur saves, Escape cancels, 150 characters
+//     max. On a conference committee with 2+ topics a separate small "switch topic"
+//     control (`onSwitchAgenda`) opens the agenda picker, so the text edits and the
+//     picker stays one click away.
 //   • QuorumRings: present, two thirds, simple majority, labelled, plus the quorum
 //     pill when a quorum rule is set. Passed in as `present`/`total`; omit
 //     `present` to hide the rings.
@@ -27,7 +30,8 @@
 // light ones alone.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { ArrowLeftRight, PanelLeftClose, Pencil } from 'lucide-react';
 import { NEU, OUTFIT } from '@/components/neu';
 import QuorumRings from '@/components/QuorumRings';
 
@@ -91,17 +95,31 @@ export default function CommitteeIdentityBadge({
   secondary,
   topic,
   topicLabel,
-  onTopicClick,
-  topicActionTitle,
+  onTopicSave,
+  topicMaxLength = 150,
+  onSwitchAgenda,
+  switchAgendaLabel,
+  labels,
+  onCollapse,
+  collapseLabel,
   present,
   total = 0,
   quorumNeeded = null,
 }: {
-  /** When set, the topic becomes a button (the Moderator switching the agenda on a
-   *  conference committee with 2+ topics). */
-  onTopicClick?: () => void;
-  /** Tooltip for the topic button. */
-  topicActionTitle?: string;
+  /** When set, clicking the topic turns it into an inline editor (the Moderator, session
+   *  not ended). Resolves false when the write was refused; the caller has already rolled
+   *  its optimistic topic back, and the badge says so. */
+  onTopicSave?: (next: string) => Promise<boolean>;
+  topicMaxLength?: number;
+  /** When set, a small "switch topic" control opens the agenda picker (a conference
+   *  committee with 2+ topics). Separate from the text, which edits. */
+  onSwitchAgenda?: () => void;
+  switchAgendaLabel?: string;
+  /** Translated copy for the editor. */
+  labels?: { edit: string; add: string; field: string; failed: string };
+  /** When set, a collapse button folds the sidebar away (the chair sidebar only). */
+  onCollapse?: () => void;
+  collapseLabel?: string;
   /** Resolved emblem URL, or null for the UN emblem default. */
   logoSrc: string | null;
   /** Big label: the acronym for a long name, otherwise the name itself. */
@@ -121,15 +139,44 @@ export default function CommitteeIdentityBadge({
   const monogram = primary.replace(/[^\p{L}\p{N}]/gu, '').slice(0, 3).toUpperCase() || '?';
   const longPrimary = primary.length > 12;
 
-  const topicText = topic ? (
-    <>
-      {topicLabel && <span className="sr-only">{topicLabel} </span>}
-      {topic}
-    </>
-  ) : null;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [failed, setFailed] = useState(false);
+  const fieldRef = useRef<HTMLTextAreaElement>(null);
+  // Escape and Enter both end the edit, and the blur that follows must not save again.
+  const doneRef = useRef(false);
+
+  useEffect(() => {
+    if (!editing) return;
+    const el = fieldRef.current;
+    if (!el) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, [editing]);
+
+  // The editor's permission can go away mid-edit (gavel handed over, session ended): the
+  // editor simply stops rendering, and `startEdit` re-seeds the draft next time.
+  const isEditing = editing && !!onTopicSave;
+
+  const startEdit = () => {
+    if (!onTopicSave) return;
+    doneRef.current = false;
+    setFailed(false);
+    setDraft(topic ?? '');
+    setEditing(true);
+  };
+  const finish = (save: boolean) => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    setEditing(false);
+    const next = draft.replace(/\s+/g, ' ').trim().slice(0, topicMaxLength);
+    if (!save || !onTopicSave || !next || next === (topic ?? '').trim()) return;
+    void onTopicSave(next).then((ok) => setFailed(!ok));
+  };
+
   const topicStyle: React.CSSProperties = {
     fontFamily: OUTFIT,
-    fontSize: 13.5,
+    fontSize: 12,
     fontWeight: 500,
     lineHeight: 1.3,
     color: 'rgba(238,217,138,0.86)',
@@ -137,11 +184,70 @@ export default function CommitteeIdentityBadge({
     textWrap: 'pretty',
   };
 
+  const topicBody = topic ? (
+    <>
+      {topicLabel && <span className="sr-only">{topicLabel} </span>}
+      {topic}
+    </>
+  ) : null;
+
+  let topicNode: React.ReactNode = null;
+  if (isEditing) {
+    topicNode = (
+      <textarea
+        ref={fieldRef}
+        value={draft}
+        rows={2}
+        maxLength={topicMaxLength}
+        aria-label={labels?.field}
+        onChange={(e) => setDraft(e.target.value.replace(/\n/g, ' '))}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+          else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
+        }}
+        onBlur={() => finish(true)}
+        className="w-full resize-none rounded-md mt-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70"
+        style={{ ...topicStyle, padding: '2px 4px', marginInlineStart: -4, color: '#F4EFE3', backgroundColor: 'rgba(0,0,0,0.22)', boxShadow: 'inset 0 0 0 1px rgba(238,217,138,0.35)' }}
+      />
+    );
+  } else if (onTopicSave) {
+    topicNode = (
+      <button
+        type="button"
+        onClick={startEdit}
+        title={labels?.edit}
+        className="group/topic line-clamp-2 w-full text-start rounded-md cursor-text mt-0.5 transition-colors hover:bg-[rgba(238,217,138,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70"
+        style={{ ...topicStyle, padding: '1px 4px', marginInlineStart: -4, color: topic ? topicStyle.color : 'rgba(238,217,138,0.6)' }}
+      >
+        {topicBody ?? labels?.add}
+        <Pencil size={10} aria-hidden className="inline-block ms-1 align-[-1px] opacity-0 group-hover/topic:opacity-70 group-focus-visible/topic:opacity-70 transition-opacity" />
+      </button>
+    );
+  } else if (topicBody) {
+    topicNode = (
+      <p className="line-clamp-2 mt-0.5" title={topic ?? undefined} style={topicStyle}>
+        {topicBody}
+      </p>
+    );
+  }
+
   return (
-    <div className="shrink-0" style={{ padding: '18px 16px 12px', backgroundColor: 'rgba(255,255,255,0.035)' }}>
+    <div className="shrink-0 relative" style={{ padding: '18px 16px 10px', backgroundColor: 'rgba(255,255,255,0.035)' }}>
+      {onCollapse && (
+        <button
+          type="button"
+          onClick={onCollapse}
+          aria-label={collapseLabel}
+          title={collapseLabel}
+          className="absolute top-2 end-2 w-7 h-7 rounded-lg flex items-center justify-center transition-[background-color,color,scale] duration-150 active:scale-[0.96] hover:bg-[rgba(237,231,216,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70"
+          style={{ color: 'rgba(237,231,216,0.6)' }}
+        >
+          <PanelLeftClose size={16} aria-hidden className="rtl:-scale-x-100" />
+        </button>
+      )}
       <div className="flex items-start gap-3.5">
         <Emblem src={logoSrc} monogram={monogram} alt={secondary ?? primary} />
-        <div className="min-w-0 flex-1 flex flex-col gap-1" style={{ minHeight: EMBLEM, justifyContent: 'center' }}>
+        <div className="min-w-0 flex-1 flex flex-col gap-1" style={{ minHeight: EMBLEM, justifyContent: 'center', paddingInlineEnd: onCollapse ? 18 : 0 }}>
           <h2
             className={longPrimary ? 'line-clamp-2' : 'truncate'}
             // A `title` only when the label stands alone: with the full name ALSO
@@ -169,26 +275,25 @@ export default function CommitteeIdentityBadge({
               {secondary}
             </p>
           )}
-          {topicText && !onTopicClick && (
-            <p className="line-clamp-2 mt-0.5" title={topic ?? undefined} style={topicStyle}>
-              {topicText}
-            </p>
+          {topicNode}
+          {failed && !isEditing && labels?.failed && (
+            <p role="alert" className="m-0" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: '#F2C77E' }}>{labels.failed}</p>
           )}
-          {topicText && onTopicClick && (
+          {onSwitchAgenda && !isEditing && (
             <button
               type="button"
-              onClick={onTopicClick}
-              title={topicActionTitle ? `${topicActionTitle}: ${topic}` : topic ?? undefined}
-              className="line-clamp-2 w-full text-start rounded-md cursor-pointer mt-0.5 transition-colors hover:bg-[rgba(238,217,138,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70"
-              style={{ ...topicStyle, padding: '1px 4px', marginInlineStart: -4 }}
+              onClick={onSwitchAgenda}
+              className="self-start inline-flex items-center gap-1 rounded-md px-1 py-0.5 -ms-1 transition-colors hover:bg-[rgba(238,217,138,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70"
+              style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(238,217,138,0.72)' }}
             >
-              <span className="underline decoration-dotted decoration-[rgba(238,217,138,0.55)] underline-offset-[3px]">{topicText}</span>
+              <ArrowLeftRight size={11} aria-hidden />
+              {switchAgendaLabel}
             </button>
           )}
         </div>
       </div>
       {typeof present === 'number' && (
-        <div className="mt-3.5">
+        <div className="mt-2.5">
           <QuorumRings present={present} total={total} quorumNeeded={quorumNeeded} />
         </div>
       )}
