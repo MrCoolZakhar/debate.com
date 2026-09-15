@@ -2042,9 +2042,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               onClick={handleFinishVoting}
               className="bg-[#1B3828] hover:bg-[#2A5A3C] text-white px-12 py-4 rounded-2xl font-black text-lg transition-colors mt-2 gv-lift focus:outline-none"
             >
-              {withRights.length > 0
-                ? t('voting_proceed_rights').replace('{n}', String(withRights.length))
-                : t('voting_see_result')}
+              {/* A hidden tally reveals nothing here either, not even whether anyone voted with rights. */}
+              {hideVotes
+                ? t('voting_continue')
+                : withRights.length > 0
+                  ? t('voting_proceed_rights').replace('{n}', String(withRights.length))
+                  : t('voting_see_result')}
             </button>
           )}
         </div>
@@ -2084,7 +2087,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               {getCountryDisplayName(orderedRights[rightsIndex].country, language)}
             </h1>
             <p className="text-amber-400 font-semibold">
-              {orderedRights[rightsIndex].choice === 'for-rights' ? t('voting_rights_for') : t('voting_rights_against')}
+              {hideVotes
+                ? `★ ${t('voting_with_rights_label')}`
+                : orderedRights[rightsIndex].choice === 'for-rights' ? t('voting_rights_for') : t('voting_rights_against')}
             </p>
             {/* Rights speaker countdown timer */}
             {/* The rights clock runs on the driving device only (nothing per-second is ever
@@ -2144,9 +2149,10 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   <span><SeatMark country={v.country} /> {getCountryDisplayName(v.country, language)}</span>
                   <span className={`ms-auto text-xs font-semibold ${
                     isCurrent ? 'text-[#EED98A]' :
+                    hideVotes ? 'text-[#6A5A4A]' :
                     v.choice === 'for-rights' ? 'text-[#2A7A3C]' : 'text-[#8B2020]'
                   }`}>
-                    {isCurrent ? t('voting_speaking') : v.choice === 'for-rights' ? t('voting_for_rights_list') : t('voting_against_rights_list')}
+                    {isCurrent ? t('voting_speaking') : hideVotes ? t('voting_with_rights_label') : v.choice === 'for-rights' ? t('voting_for_rights_list') : t('voting_against_rights_list')}
                   </span>
                 </div>
               );

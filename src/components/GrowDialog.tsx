@@ -31,6 +31,16 @@ const FADE_MS = 160;
 const EASE_OUT = 'cubic-bezier(0.32, 0.72, 0, 1)';
 const EASE_IN = 'cubic-bezier(0.4, 0, 1, 1)';
 const START_SCALE = 0.18;
+const FOCUSABLE = [
+  'a[href]', 'area[href]', 'button:not([disabled])', 'input:not([disabled]):not([type="hidden"])',
+  'select:not([disabled])', 'textarea:not([disabled])', 'iframe', 'summary',
+  '[tabindex]:not([tabindex="-1"])', '[contenteditable="true"]',
+].join(',');
+
+function focusablesIn(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE))
+    .filter((el) => el.tabIndex >= 0 && el.getClientRects().length > 0 && !el.closest('[inert]'));
+}
 
 function prefersReducedMotion() {
   return typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -61,6 +71,7 @@ function GrowDialogInner({
   originSelector, onClose, panelClassName, panelStyle, backdropStyle, ariaLabel, children, closeRef,
 }: GrowDialogProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const layerRef = useRef<HTMLDivElement | null>(null);
   const backdropRef = useRef<HTMLDivElement | null>(null);
   /** Where the panel starts (and returns to), in fit-root local px, relative to its resting place. */
   const fromRef = useRef<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
@@ -160,6 +171,67 @@ function GrowDialogInner({
     return () => { closeRef.current = null; };
   }, [closeRef, requestClose]);
 
+  // Focus trap. Tab and Shift+Tab cycle inside the panel, and focus that lands on the page
+  // underneath is pulled back in. A floating layer opened FROM the dialog (DatePicker, a
+  // tooltip, a typeahead) portals into the same root AFTER this dialog, so anything that
+  // follows the dialog's layer in document order counts as part of it and is left alone.
+  useEffect(() => {
+    const inDialogLayer = (el: Node | null) => {
+      const layer = layerRef.current;
+      if (!layer || !el) return false;
+      if (layer.contains(el)) return true;
+      return !!(layer.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab' || e.defaultPrevented || closingRef.current) return;
+      const panel = panelRef.current;
+      if (!panel) return;
+      const active = document.activeElement as HTMLElement | null;
+      // Inside a nested floating layer: that layer owns its own Tab order.
+      if (active && !panel.contains(active) && inDialogLayer(active)) return;
+      const items = focusablesIn(panel);
+      if (items.length === 0) { e.preventDefault(); panel.focus({ preventScroll: true }); return; }
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (!active || !panel.contains(active)) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus({ preventScroll: true });
+        return;
+      }
+      if (e.shiftKey && (active === first || active === panel)) {
+        e.preventDefault();
+        last.focus({ preventScroll: true });
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus({ preventScroll: true });
+      }
+    };
+    const onFocusIn = (e: FocusEvent) => {
+      if (closingRef.current) return;
+      const panel = panelRef.current;
+      const target = e.target as Node | null;
+      if (!panel || !target || target === document.body || inDialogLayer(target)) return;
+      panel.focus({ preventScroll: true });
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('focusin', onFocusIn);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('focusin', onFocusIn);
+    };
+  }, []);
+
+  // An unmount that skipped the animated close (session ended, parent unmounted) still hands
+  // focus back to the opener, when focus was in the dialog or has fallen to the body.
+  useLayoutEffect(() => () => {
+    const opener = openerRef.current;
+    const active = document.activeElement;
+    if (!opener || !opener.isConnected) return;
+    if (!active || active === document.body || layerRef.current?.contains(active)) {
+      opener.focus({ preventScroll: true });
+    }
+  }, []);
+
   // Escape closes, unless a field or a nested control already used the key.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -174,7 +246,7 @@ function GrowDialogInner({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div ref={layerRef} className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
           ref={backdropRef}
           aria-hidden

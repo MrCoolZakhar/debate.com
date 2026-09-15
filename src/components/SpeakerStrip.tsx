@@ -236,7 +236,7 @@ export default function SpeakerStrip({
                   onClick={(e) => { e.stopPropagation(); removeHandler(); }}
                   aria-label={isCurrent ? t('speaker_remove_current', { country: name }) : t('gsl_remove_speaker', { country: name })}
                   title={isCurrent ? t('speaker_remove_current', { country: name }) : t('gsl_remove_speaker', { country: name })}
-                  className={`absolute -top-2 -end-2 w-6 h-6 rounded-full flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-opacity active:scale-[0.92] ${isCurrent ? 'bg-[#8B2020] text-white' : 'bg-[#EDE7D8] text-[#1C1410] hover:bg-[#8B2020] hover:text-white'}`}
+                  className={`absolute -top-2 -end-2 w-6 h-6 rounded-full flex items-center justify-center shadow-sm opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-opacity active:scale-[0.92] ${isCurrent ? 'bg-[#8B2020] text-white' : 'bg-[#EDE7D8] text-[#1C1410] hover:bg-[#8B2020] hover:text-white'}`}
                 >
                   <X size={13} strokeWidth={3} aria-hidden />
                 </button>

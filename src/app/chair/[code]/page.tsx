@@ -2730,14 +2730,20 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     if (!id) return '';
     return committee.delegates.find((d) => d.id === id)?.status === 'absent' ? id : '';
   })();
+  // Whether THIS render may take a speaker off the floor. Evaluated from this render's live
+  // values (not the handler's closure, which can predate a kick or a handover), and part of
+  // the deps, so the effect re-runs when this device becomes the Moderator later. A re-run
+  // after a removal finds `floorAbsentId` empty; a racing repeat is deduped by the turnKey.
+  const floorRemovalAllowed = !!committee && !deviceLock.kicked && !sessionEnded && !sessionSuspended
+    && !isViewOnly && gavelRoleOf(committee).isModerator;
   useEffect(() => {
-    if (!floorAbsentId || !committee) return;
+    if (!floorAbsentId || !committee || !floorRemovalAllowed) return;
     if (committee.phase === 'pre-session' || committee.phase === 'adjourned' || (committee.phase as string) === 'roll-call') return;
     // A laptop that just woke holds an old row: refetch first, re-run on catchUpTick.
     if (syncRef.current && !syncRef.current.isFresh()) return;
     removeCurrentSpeakerRef.current?.(floorAbsentId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [floorAbsentId, catchUpTick]);
+  }, [floorAbsentId, catchUpTick, floorRemovalAllowed]);
 
   // RollCallPanel recognised an absent delegate (clicked onto a list): drop that country's
   // waiting-room request from local state. The panel deletes the motion row itself, after
@@ -3324,6 +3330,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const id = setTimeout(() => setResumeStale(true), 12_000);
     return () => clearTimeout(id);
   }, [foreignResumeLatch]);
+
+  // Every early return below renders no controls, so no remove-speaker handler may survive
+  // from an earlier render (a kicked device kept the pre-kick one). Re-published below the
+  // returns, once this render reaches `handleRemoveCurrentSpeaker`.
+  removeCurrentSpeakerRef.current = null;
 
   if (loading || authLoading || accessState === 'checking') return <GavelLoader />;
 
