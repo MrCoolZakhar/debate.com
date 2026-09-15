@@ -27,6 +27,16 @@ export function getFlagUrl(code: string): string {
   return `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/${points}.svg`;
 }
 
+// SQUARE flag artwork for circles, bundled in public/flags/1x1/ (circle-flags by
+// HatScripts, MIT, see the README there). Twemoji flags are a 3:2 rectangle
+// floating in a transparent 36x36 box, so no object-fit can make one fill a
+// circle: it always shows bands. Use this through <CircleFlag>, never inline.
+// Rectangles keep using getFlagUrl.
+export function getCircleFlagUrl(code: string | null | undefined): string | null {
+  const c = (code ?? '').trim().toLowerCase();
+  return /^[a-z]{2}$/.test(c) ? `/flags/1x1/${c}.svg` : null;
+}
+
 // Twemoji URL for arbitrary non-flag emojis by their Unicode codepoint hex string.
 // e.g. getTwemojiUrl('1f3a4') for 🎙, getTwemojiUrl('1f3c1') for 🏁
 export function getTwemojiUrl(codepoint: string): string {
@@ -376,6 +386,12 @@ export const COUNTRY_NAME_ALIASES: Record<string, string> = {
   'chinese taipei': 'Taiwan',
   car: 'Central African Republic',
   png: 'Papua New Guinea',
+  // Formal and non-English names seen in real rosters.
+  'swiss confederation': 'Switzerland',
+  'italian republic': 'Italy',
+  'dpr korea': 'North Korea',
+  'lao people’s democratic republic': 'Laos',
+  'arabie saoudite': 'Saudi Arabia',
 };
 
 /** Canonical EN name → every folded alias key that points at it. Lets a

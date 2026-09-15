@@ -25,7 +25,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase as anonSupabase } from '@/lib/supabase';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
-import { sessionClient } from '@/lib/sessionClient';
 
 const TOKEN_PREFIX = 'gavelling-seat-token:';
 // Used only when localStorage is unavailable (private mode, blocked site data). The
@@ -201,16 +200,23 @@ export async function claimDelegateSeat(
 }
 
 /**
- * Chair only: free every place on a seat so the next person can take it (a dead phone,
- * the wrong person). Gated on is_session_chair, i.e. the x-chair-suffix header, the same
- * credential as every other chair write. True ONLY when the server confirmed it.
+ * Give up this account's or this device's own claim on a seat (the idle logout on
+ * /delegate). Never touches anyone else's claim: the server resolves the holder exactly
+ * like claim_delegate_seat. Best effort: an idle seat also expires on its own after
+ * SEAT_CLAIM_EXPIRY_MINUTES without a re-verify, so a failed call does not strand it.
  */
-export async function releaseDelegateSeat(code: string, country: string, chairSuffix?: string): Promise<boolean> {
-  if (!chairSuffix) return false;
+export async function leaveDelegateSeat(
+  code: string,
+  country: string,
+  accessToken?: string | null,
+): Promise<boolean> {
+  const token = peekSeatToken(code);
   try {
-    const { data, error } = await sessionClient(code, chairSuffix).rpc('release_delegate_seat', {
+    const client = await clientFor(accessToken);
+    const { data, error } = await client.rpc('leave_delegate_seat', {
       p_code: code.toUpperCase(),
       p_country: country,
+      p_token: token,
     });
     if (error) return false;
     return (data as { ok?: boolean } | null)?.ok === true;
@@ -218,3 +224,11 @@ export async function releaseDelegateSeat(code: string, country: string, chairSu
     return false;
   }
 }
+
+/**
+ * Server side (claim_delegate_seat, delegate_seat_availability): a claim whose
+ * last_seen_at is older than this no longer holds the seat, so another person can take
+ * it. Five minutes longer than the client's idle logout (src/lib/delegateIdle.ts), which
+ * stops re-verifying once the delegate goes idle. Documentation only: the SQL is the truth.
+ */
+export const SEAT_CLAIM_EXPIRY_MINUTES = 65;

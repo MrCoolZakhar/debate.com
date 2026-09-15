@@ -10,6 +10,7 @@ import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, Delegate, DelegateStatus } from '@/lib/types';
 import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 import { SeatFlag, SeatArtProvider } from '@/components/SeatFlag';
+import { SeatCircleFlag } from '@/components/CircleFlag';
 import { sessionSeatArt } from '@/lib/sessionFlags';
 import { Emoji } from '@/components/Emoji';
 import { Megaphone } from 'lucide-react';
@@ -355,9 +356,7 @@ function RollCallModal({
                   border: status === 'present' ? '1px solid rgba(61,122,82,0.4)' : status === 'present-voting' ? '1px solid rgba(182,135,31,0.35)' : '1px solid transparent',
                 }}
               >
-                <div className="w-9 h-9 rounded-full bg-[#DDD4C0] border border-[#C8BAA8] flex items-center justify-center shrink-0 overflow-hidden">
-                  <SeatFlag seat={d} size={24} className="object-contain" fallback={<Emoji size="1.25rem">🌐</Emoji>} />
-                </div>
+                <SeatCircleFlag seat={d} size={36} decorative />
                 <span className="flex-1 text-sm text-white truncate">{getCountryDisplayName(d.country, language)}</span>
                 {observerButton(d, false)}
                 <button
@@ -395,9 +394,7 @@ function RollCallModal({
                   className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl"
                   style={{ backgroundColor: 'rgba(238,217,138,0.08)', border: '1px solid rgba(238,217,138,0.22)', marginBottom: '2px' }}
                 >
-                  <div className="w-9 h-9 rounded-full bg-[#DDD4C0] border border-[#C8BAA8] flex items-center justify-center shrink-0 overflow-hidden">
-                    <SeatFlag seat={d} size={24} className="object-contain" fallback={<Emoji size="1.25rem">🌐</Emoji>} />
-                  </div>
+                  <SeatCircleFlag seat={d} size={36} decorative />
                   <span className="flex-1 text-sm text-white truncate">{getCountryDisplayName(d.country, language)}</span>
                   <span
                     className="text-[9px] shrink-0 font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md"

@@ -76,7 +76,11 @@ export default function GavelChip({
   onTakeGavel,
   onHandOver,
   heldElsewhere = false,
+  inline = false,
 }: {
+  /** Render in the flow (the chair top bar) instead of as a fixed chip under the header.
+   *  The popover is positioned from the trigger's rect either way. */
+  inline?: boolean;
   /** Every chair who has ever joined — `committee.chairNames`. Handover targets are limited to this. */
   chairNames: string[];
   /** Current gavel holder (already resolved: dbHeadChair ?? chairNames[0]). */
@@ -223,8 +227,8 @@ export default function GavelChip({
           the chip steps down below the cards and back up when they clear. See the
           positioning note at the top of NotificationStack.tsx. */}
       <div
-        className="fixed z-50"
-        style={{
+        className={inline ? 'relative shrink-0' : 'fixed z-50'}
+        style={inline ? { fontFamily: OUTFIT } : {
           top: 'calc(3.75rem + var(--dgn-stack-shift, 0px))', right: '0.85rem',
           fontFamily: OUTFIT, transition: 'top 240ms cubic-bezier(0.22,1,0.36,1)',
         }}
@@ -245,7 +249,7 @@ export default function GavelChip({
           onClick={() => setOpen((o) => !o)}
           aria-haspopup="menu"
           aria-expanded={open}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-full focus:outline-none"
+          className="flex items-center gap-2 px-3.5 py-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
           style={{
             ...chipStyle,
             transition: `box-shadow 180ms ${EASE}, transform 180ms ${EASE}`,

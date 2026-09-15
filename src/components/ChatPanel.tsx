@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useMemo, useCallback, useSyncExternalStore
 import { Committee } from '@/lib/types';
 import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 import { sendMessage as sendMessageToDB } from '@/lib/committeeService';
+import { markDelegateActivity } from '@/lib/delegateIdle';
 import {
   buildChatConversations,
   chatIncomingCount,
@@ -182,6 +183,8 @@ export default function ChatPanel({
   const handleSend = () => {
     const content = msg.trim();
     if (!content || readOnly) return;
+    // Counts as activity for the delegate idle logout. A no-op on every other surface.
+    markDelegateActivity();
 
     let isPrivate = false;
     let recipient: string | undefined;

@@ -1,6 +1,6 @@
 'use client';
 
-import { SeatFlag } from '@/components/SeatFlag';
+import { SeatCircleFlag } from '@/components/CircleFlag';
 import { NEU, NEU_GRADIENTS, OUTFIT } from '@/components/neu';
 import { CHAT } from './chatTokens';
 
@@ -98,18 +98,15 @@ export function ChatAvatar({
     );
   }
 
+  // The flag fills the whole disc (square round-flag artwork); a seat with no
+  // flag shows its monogram on the same disc.
   return (
-    <span
-      className="inline-flex items-center justify-center overflow-hidden"
-      style={{
-        ...base,
-        backgroundColor: CHAT.bubbleIn,
-        boxShadow: NEU.outSm,
-      }}
-      aria-hidden
-    >
-      <SeatFlag country={name ?? ''} size={size} />
-    </span>
+    <SeatCircleFlag
+      country={name ?? ''}
+      size={disc}
+      decorative
+      style={{ boxShadow: NEU.outSm, backgroundColor: CHAT.bubbleIn }}
+    />
   );
 }
 

@@ -45,6 +45,8 @@ function JoinPageInner() {
   const initialMode = (searchParams.get('mode') as JoinMode) ?? 'delegate';
   const [mode, setMode] = useState<JoinMode>(initialMode);
   const [code, setCode] = useState(searchParams.get('code') ?? '');
+  // Set when the delegate page signed this device out after an hour idle.
+  const idleCountry = (searchParams.get('idle') ?? '').trim().slice(0, 80);
   const [country, setCountry] = useState('');
   const [error, setError] = useState('');
   const [suffixError, setSuffixError] = useState('');
@@ -443,6 +445,18 @@ function JoinPageInner() {
           {/* Title */}
           <h1 className="text-5xl font-black text-center mb-0.5 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.01em' }}>{t('join_title')}</h1>
           <p className="text-center text-sm mb-4" style={{ color: '#9A8A78' }}>{t('join_subtitle')}</p>
+
+          {/* Idle logout notice: /delegate/[code] sends a delegate here with ?idle=<country>
+              after an hour without activity (src/lib/delegateIdle.ts). */}
+          {idleCountry && (
+            <p
+              role="status"
+              className="text-sm text-center font-semibold rounded-xl px-4 py-3 mb-4"
+              style={{ color: '#1B3828', backgroundColor: 'rgba(238,217,138,0.45)', border: '1px solid rgba(182,135,31,0.35)', textWrap: 'pretty' }}
+            >
+              {t('join_idle_signed_out', { country: getCountryDisplayName(idleCountry, language) })}
+            </p>
+          )}
 
           {/* Code input — always first */}
           <div className="mb-5">

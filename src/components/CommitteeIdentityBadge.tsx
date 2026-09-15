@@ -1,56 +1,89 @@
 'use client';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CommitteeIdentityBadge — the masthead at the top of the chair session
-// sidebar, and the ONE place the committee's identity is stated in that column.
+// CommitteeIdentityBadge: the masthead at the top of the chair's forest sidebar,
+// and the ONE place the committee's identity is stated in that column. The sidebar
+// now runs the full height of the viewport (the chair top bar starts at its right
+// edge), so this block is the first thing at the top-left of the chair screen.
 //
-// WHY IT LOOKS LIKE THIS
+// Anatomy, top to bottom, no hairlines anywhere:
+//   • The emblem, the hero of the column (EMBLEM px). Resolution is the caller's:
+//     conference committee logo, then the conference logo, then the preset match
+//     for the name, then the UN emblem (DEFAULT_EMBLEM). A logo that fails to load
+//     drops to the UN emblem, and that failing drops to gold initials, so there is
+//     never a broken image or an empty slot.
+//   • Beside it: the acronym big with the full name small beneath (AGENTS.md UI
+//     RULE, resolved by the caller via committeeDisplayName), and the topic. The
+//     topic is a button only when `onTopicClick` is set (the Moderator switching
+//     the agenda).
+//   • QuorumRings: present, two thirds, simple majority, labelled, plus the quorum
+//     pill when a quorum rule is set. Passed in as `present`/`total`; omit
+//     `present` to hide the rings.
 //
-// • Continuous, not stacked. It has no card of its own: no background fill, no
-//   border box, no radius. It is the same forest as the sidebar, lit from the
-//   top by a wash that dissolves to nothing before the bottom edge, so the
-//   badge reads as the panel catching light rather than a separate slab sitting
-//   on it. Its only seam is a gold hairline that fades out at BOTH ends — a
-//   badge underline, never a border between two cards. The panel below
-//   (RollCallPanel with `hideIdentity`) starts straight after it with no
-//   divider of its own, so the two read as one masthead.
-//
-// • The mark floats. `LogoDisc bare` with the circular clip explicitly turned
-//   off (borderRadius 0 / overflow visible), so nothing is a disc and nothing
-//   is cropped — including a wide wordmark, which just letterboxes inside the
-//   slot instead of losing its ends to a circle.
-//
-// • Contrast. Committee artwork is arbitrary: the UN emblem is bright cyan
-//   (#009EDC) and reads instantly on forest, but the ICJ seal is dark navy
-//   (#2A4B7C) and a conference upload can be anything. Floating them raw would
-//   let the dark ones sink into #1B3828. Two tight white `drop-shadow`s give
-//   the artwork a faint light rim, and because drop-shadow follows the ALPHA
-//   channel it hugs the real silhouette of a transparent PNG/SVG rather than
-//   boxing it. A third, darker, offset shadow grounds the mark so it reads as
-//   floating above the panel. Light marks are unaffected; dark marks gain an
-//   edge. That is the whole treatment — no disc, no plate, no chip.
-//
-// • Missing artwork. `fallbackTone="plain"`: gold initials on their own. The
-//   default LogoDisc monogram is a FOREST gradient disc, which on a forest
-//   sidebar is invisible.
-//
-// • Naming follows the AGENTS.md UI RULE: a long name shows its acronym big
-//   with the full name small beneath; a short name is shown ONCE with no
-//   redundant second line. The caller resolves both via
-//   `deriveCommitteeAcronym` + `committeeDisplayName`.
+// Contrast on #1B3828: body ivory #EDE7D8 is 11:1; the full name at 78% ivory and
+// the topic at 84% gold both clear 4.5:1. Committee artwork is arbitrary (the UN
+// mark is bright cyan, the ICJ seal dark navy), so the emblem sits on a soft ivory
+// glow and wears a light alpha-following rim, which lifts dark marks and leaves
+// light ones alone.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { LogoDisc } from '@/components/LogoDisc';
+import { useState } from 'react';
 import { NEU, OUTFIT } from '@/components/neu';
+import QuorumRings from '@/components/QuorumRings';
 
-/** Slot the mark is contained inside. Slightly wider than tall so a wordmark
- *  logo gets a little more room without a square emblem drifting off-axis. */
-const MARK_H = 38;
-const MARK_W = 46;
+export const DEFAULT_EMBLEM = '/logos/un.svg';
 
-/** Light rim (follows the artwork's alpha) + a grounding shadow. */
+const EMBLEM = 84;
+
+/** Light rim (follows the artwork's alpha) plus a grounding shadow. */
 const FLOAT_FILTER =
-  'drop-shadow(0 0 1px rgba(255,255,255,0.75)) drop-shadow(0 0 2.5px rgba(255,255,255,0.4)) drop-shadow(0 3px 5px rgba(0,0,0,0.38))';
+  'drop-shadow(0 0 0.75px rgba(255,255,255,0.55)) drop-shadow(0 3px 7px rgba(0,0,0,0.32))';
+
+function Emblem({ src, monogram, alt }: { src: string | null; monogram: string; alt: string }) {
+  // Failures remembered per URL, so a later logo (the conference row arriving) gets a try.
+  const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
+  const chain = [src, DEFAULT_EMBLEM].filter((s): s is string => !!s && !failed.has(s));
+  const shown = chain[0] ?? null;
+  return (
+    <span
+      className="relative shrink-0 flex items-center justify-center"
+      style={{ width: EMBLEM, height: EMBLEM }}
+    >
+      <span
+        aria-hidden
+        className="pointer-events-none absolute rounded-full"
+        style={{
+          inset: -10,
+          background: 'radial-gradient(circle at 50% 45%, rgba(237,231,216,0.16) 0%, rgba(237,231,216,0.06) 45%, rgba(237,231,216,0) 70%)',
+        }}
+      />
+      {shown ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={shown}
+          src={shown}
+          alt={alt}
+          width={EMBLEM}
+          height={EMBLEM}
+          decoding="async"
+          draggable={false}
+          onError={() => setFailed((prev) => { const n = new Set(prev); n.add(shown); return n; })}
+          className="relative block"
+          style={{ width: '100%', height: '100%', objectFit: 'contain', filter: FLOAT_FILTER }}
+        />
+      ) : (
+        <span
+          role="img"
+          aria-label={alt}
+          className="relative"
+          style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 26, letterSpacing: '0.02em', color: NEU.gold }}
+        >
+          {monogram}
+        </span>
+      )}
+    </span>
+  );
+}
 
 export default function CommitteeIdentityBadge({
   logoSrc,
@@ -60,141 +93,105 @@ export default function CommitteeIdentityBadge({
   topicLabel,
   onTopicClick,
   topicActionTitle,
+  present,
+  total = 0,
+  quorumNeeded = null,
 }: {
-  /** When set, the topic line becomes a button (the Moderator switching the agenda on a
-   *  conference committee with 2+ topics). Omitted, it renders exactly as before. */
+  /** When set, the topic becomes a button (the Moderator switching the agenda on a
+   *  conference committee with 2+ topics). */
   onTopicClick?: () => void;
   /** Tooltip for the topic button. */
   topicActionTitle?: string;
-  /** Resolved emblem URL, or null for the monogram fallback. */
+  /** Resolved emblem URL, or null for the UN emblem default. */
   logoSrc: string | null;
-  /** Big label — the acronym for a long name, otherwise the name itself. */
+  /** Big label: the acronym for a long name, otherwise the name itself. */
   primary: string;
   /** Full name, shown small beneath. Null when `primary` already IS the name. */
   secondary?: string | null;
   topic?: string | null;
-  /** Translated "Topic:" label. */
+  /** Translated "Topic:" label, read by screen readers only. */
   topicLabel?: string;
+  /** Voting delegations present. Omit to hide the quorum rings. */
+  present?: number;
+  /** Voting delegations on the roster. */
+  total?: number;
+  /** Delegations the quorum rule needs, or null when there is no rule. */
+  quorumNeeded?: number | null;
 }) {
-  const monogram = primary.replace(/[^A-Za-z0-9]/g, '').slice(0, 3) || '?';
-  return (
-    <div className="shrink-0 relative" style={{ padding: '11px 13px 10px' }}>
-      {/* Top-lit wash. Fades to fully transparent at the bottom, so the badge has
-          NO edge of its own — it bleeds into the stats row beneath it and the
-          two share the one seam that already closes RollCallPanel's header. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            'linear-gradient(180deg, rgba(61,122,82,0.34) 0%, rgba(61,122,82,0.15) 48%, rgba(61,122,82,0) 100%)',
-        }}
-      />
-      {/* Extruded top edge: the same "lit from above" cue the neumorphic system
-          uses on ivory, translated to forest. 1px, and it is not a divider —
-          it sits on the sidebar's outer edge, under the toolbar. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute"
-        style={{ left: 0, right: 0, top: 0, height: 1, background: 'rgba(255,255,255,0.07)' }}
-      />
+  const monogram = primary.replace(/[^\p{L}\p{N}]/gu, '').slice(0, 3).toUpperCase() || '?';
+  const longPrimary = primary.length > 12;
 
-      <div className="relative flex items-center gap-2.5">
-        <LogoDisc
-          src={logoSrc}
-          alt={primary}
-          size={MARK_H}
-          fallbackText={monogram}
-          bare
-          fallbackTone="plain"
-          style={{
-            // Override the circular clip: floating means never cropped.
-            width: MARK_W,
-            height: MARK_H,
-            borderRadius: 0,
-            overflow: 'visible',
-            filter: logoSrc ? FLOAT_FILTER : undefined,
-          }}
-        />
-        <div className="min-w-0 flex-1">
-          <p
-            className="truncate"
-            // Only when the acronym stands alone: a `title` becomes the element's
-            // accessible name, so setting it while the full name is ALSO rendered
-            // beneath made a screen reader announce that name twice.
+  const topicText = topic ? (
+    <>
+      {topicLabel && <span className="sr-only">{topicLabel} </span>}
+      {topic}
+    </>
+  ) : null;
+  const topicStyle: React.CSSProperties = {
+    fontFamily: OUTFIT,
+    fontSize: 13.5,
+    fontWeight: 500,
+    lineHeight: 1.3,
+    color: 'rgba(238,217,138,0.86)',
+    margin: 0,
+    textWrap: 'pretty',
+  };
+
+  return (
+    <div className="shrink-0" style={{ padding: '18px 16px 12px', backgroundColor: 'rgba(255,255,255,0.035)' }}>
+      <div className="flex items-start gap-3.5">
+        <Emblem src={logoSrc} monogram={monogram} alt={secondary ?? primary} />
+        <div className="min-w-0 flex-1 flex flex-col gap-1" style={{ minHeight: EMBLEM, justifyContent: 'center' }}>
+          <h2
+            className={longPrimary ? 'line-clamp-2' : 'truncate'}
+            // A `title` only when the label stands alone: with the full name ALSO
+            // rendered beneath, it would make a screen reader announce it twice.
             title={secondary ? undefined : primary}
             style={{
               fontFamily: OUTFIT,
               fontWeight: 900,
-              fontSize: 17,
-              lineHeight: 1.12,
-              letterSpacing: '-0.005em',
+              fontSize: longPrimary ? 20 : 27,
+              lineHeight: 1.05,
+              letterSpacing: longPrimary ? '-0.005em' : '0.005em',
               color: NEU.gold,
               margin: 0,
+              textWrap: 'balance',
             }}
           >
             {primary}
-          </p>
+          </h2>
           {secondary && (
             <p
-              className="truncate"
+              className="line-clamp-2"
               title={secondary}
-              style={{
-                fontFamily: OUTFIT,
-                fontSize: 10.5,
-                fontWeight: 500,
-                lineHeight: 1.25,
-                color: 'rgba(237,231,216,0.52)',
-                margin: '1px 0 0',
-              }}
+              style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 500, lineHeight: 1.25, color: 'rgba(237,231,216,0.78)', margin: 0, textWrap: 'balance' }}
             >
               {secondary}
             </p>
           )}
-          {topic && !onTopicClick && (
-            <p
-              className="line-clamp-2"
-              title={topic}
-              style={{
-                fontFamily: OUTFIT,
-                fontSize: 10.5,
-                lineHeight: 1.3,
-                color: 'rgba(238,217,138,0.55)',
-                margin: '2px 0 0',
-              }}
-            >
-              {topicLabel && (
-                <span style={{ fontWeight: 700, color: 'rgba(238,217,138,0.72)' }}>{topicLabel} </span>
-              )}
-              {topic}
+          {topicText && !onTopicClick && (
+            <p className="line-clamp-2 mt-0.5" title={topic ?? undefined} style={topicStyle}>
+              {topicText}
             </p>
           )}
-          {topic && onTopicClick && (
-            // Same typography as the plain line; only a hover wash and a focus ring say it
-            // can be clicked (the Moderator switching the agenda).
+          {topicText && onTopicClick && (
             <button
               type="button"
               onClick={onTopicClick}
-              title={topicActionTitle ? `${topicActionTitle}: ${topic}` : topic}
-              className="line-clamp-2 w-full text-start rounded-md cursor-pointer transition-colors hover:bg-[rgba(238,217,138,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/60"
-              style={{
-                fontFamily: OUTFIT,
-                fontSize: 10.5,
-                lineHeight: 1.3,
-                color: 'rgba(238,217,138,0.55)',
-                margin: '2px 0 0',
-                padding: '1px 3px',
-                marginInlineStart: -3,
-              }}
+              title={topicActionTitle ? `${topicActionTitle}: ${topic}` : topic ?? undefined}
+              className="line-clamp-2 w-full text-start rounded-md cursor-pointer mt-0.5 transition-colors hover:bg-[rgba(238,217,138,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70"
+              style={{ ...topicStyle, padding: '1px 4px', marginInlineStart: -4 }}
             >
-              {topicLabel && (
-                <span style={{ fontWeight: 700, color: 'rgba(238,217,138,0.72)' }}>{topicLabel} </span>
-              )}
-              <span className="underline decoration-dotted decoration-[rgba(238,217,138,0.45)] underline-offset-2">{topic}</span>
+              <span className="underline decoration-dotted decoration-[rgba(238,217,138,0.55)] underline-offset-[3px]">{topicText}</span>
             </button>
           )}
         </div>
       </div>
+      {typeof present === 'number' && (
+        <div className="mt-3.5">
+          <QuorumRings present={present} total={total} quorumNeeded={quorumNeeded} />
+        </div>
+      )}
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Committee, DelegateStatus } from '@/lib/types';
 import { getFlagUrl, getCountryDisplayName, UN_COUNTRIES, matchesCountryQuery, startsWithCountryQuery, compareCountryNames } from '@/lib/countries';
-import { SeatFlag, useSeatArt } from '@/components/SeatFlag';
+import { SeatCircleFlag } from '@/components/CircleFlag';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import {
   beginSessionAfterRollCall,
@@ -11,31 +11,15 @@ import {
   resolveJoinRequestsOnAdmit,
 } from '@/lib/committeeService';
 import { liveCaucus } from '@/components/FeedbackLogPanel';
-import { Megaphone, UserX } from 'lucide-react';
-import { releaseDelegateSeat, seatKey } from '@/lib/seatClaims';
+import { Megaphone, Mic } from 'lucide-react';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 
 // ── FlagCircle ────────────────────────────────────────────────────────────────
 export function FlagCircle({ country, size = 'md' }: { country: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'hero' }) {
-  // A seat's own crest wins over the national flag; both keep this circle's
-  // exact frame and 85% inset. Falls back to the flag outside a SeatArtProvider.
-  const art = useSeatArt(country);
-  const dim: Record<string, string> = {
-    xs:   'w-7 h-7',
-    sm:   'w-9 h-9',
-    md:   'w-12 h-12',
-    lg:   'w-14 h-14',
-    xl:   'w-20 h-20',
-    hero: 'w-60 h-60',
-  };
-  const box = dim[size];
-  return (
-    <div className={`relative ${box} rounded-full overflow-hidden shrink-0 flex items-center justify-center`} style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
-      {art.kind !== 'none'
-        ? <SeatFlag country={country} className="w-[85%] h-[85%] object-contain" style={{ width: '85%', height: '85%', border: '1.5px solid rgba(28,20,16,0.10)', borderRadius: 'inherit' }} />
-        : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>}
-    </div>
-  );
+  // Seat crest, then the round flag, then a monogram: <SeatCircleFlag> fills
+  // the whole circle (square artwork, see src/components/CircleFlag.tsx).
+  const px: Record<string, number> = { xs: 28, sm: 36, md: 48, lg: 56, xl: 80, hero: 240 };
+  return <SeatCircleFlag country={country} size={px[size]} decorative />;
 }
 
 // ── 3-state slider ────────────────────────────────────────────────────────────
@@ -127,7 +111,7 @@ function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Commi
 
   return (
     <div className="relative">
-      <div className="flex items-center rounded-xl overflow-hidden transition-all" style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }}>
+      <div className="flex items-center rounded-xl overflow-hidden transition-shadow focus-within:ring-2 focus-within:ring-[#EED98A]/60" style={{ backgroundColor: 'rgba(255,255,255,0.09)' }}>
         <input
           ref={inputRef}
           type="text"
@@ -142,10 +126,10 @@ function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Commi
             if (e.key === 'Escape') updateQuery('');
           }}
           placeholder={t('rollcall_filter_placeholder')}
-          className="flex-1 bg-transparent px-3 py-2.5 text-sm focus:outline-none placeholder-white/30" style={{ color: '#EDE7D8' }}
+          className="flex-1 min-w-0 bg-transparent px-3 py-2.5 text-[15px] focus:outline-none placeholder:text-[rgba(237,231,216,0.55)]" style={{ color: '#EDE7D8' }}
         />
         {query && (topKnown || trimmed) && (
-          <span className="text-[10px] text-[#9A8A78] px-2 truncate max-w-[80px]">
+          <span className="text-[11px] px-2 truncate max-w-[96px]" style={{ color: 'rgba(237,231,216,0.7)' }}>
             ↵ {topKnown ? getCountryDisplayName(topKnown.name, language) : trimmed}
           </span>
         )}
@@ -374,35 +358,6 @@ function RollCallPanelInner({
   const pendingStatusRef = useRef<Record<string, { value: DelegateStatus; at: number }>>({});
   const [reconcileTick, setReconcileTick] = useState(0);
 
-  // ── Free seat (one person per seat) ───────────────────────────────────────
-  // A chair can free a seat when a phone dies or the wrong person took it. The panel no
-  // longer knows WHICH seats are claimed (the phone icon and its 20 s availability poll
-  // were removed), so the control sits on every row, revealed on hover like the observer
-  // placard. Releasing an unclaimed seat is a harmless no-op in release_delegate_seat.
-  // Moderator only: hidden for a view-only Commenter and once the session has ended.
-  const canFreeSeats = !isReadOnly && !isViewOnly && !committee.endedAt;
-  const [freeArmed, setFreeArmed] = useState<string | null>(null);
-  const [freeBusy, setFreeBusy] = useState<string | null>(null);
-  const [freeError, setFreeError] = useState(false);
-
-  // Two taps to free: the first arms, the second releases. Disarms on its own.
-  useEffect(() => {
-    if (!freeArmed) return;
-    const id = setTimeout(() => setFreeArmed(null), 4000);
-    return () => clearTimeout(id);
-  }, [freeArmed]);
-
-  const freeSeat = async (country: string) => {
-    const k = seatKey(country);
-    if (freeBusy) return;
-    if (freeArmed !== k) { setFreeArmed(k); setFreeError(false); return; }
-    setFreeArmed(null);
-    setFreeBusy(k);
-    const ok = await releaseDelegateSeat(committee.code, country, committee.dbChairJoinSuffix ?? undefined);
-    setFreeBusy(null);
-    setFreeError(!ok);
-  };
-
   useEffect(() => {
     pendingStatusRef.current = {};
     setLocalStatuses({});
@@ -450,6 +405,17 @@ function RollCallPanelInner({
   }, [committee.delegates, reconcileTick]);
 
   const present = committee.delegates.filter((d) => (localStatuses[d.id] ?? d.status) !== 'absent').length;
+  // The PV tag only earns its place when the room is MIXED. In the usual case every voting
+  // delegation is Present and Voting, and a tag on every row is noise, not information.
+  const statusesMixed = (() => {
+    let p = false, pv = false;
+    for (const d of committee.delegates) {
+      if ((localObservers[d.id] ?? d.isObserver) === true) continue;
+      const st = localStatuses[d.id] ?? d.status;
+      if (st === 'present') p = true; else if (st === 'present-voting') pv = true;
+    }
+    return p && pv;
+  })();
   const total = committee.delegates.length;
   const caucus = liveCaucus(committee);
 
@@ -605,42 +571,38 @@ function RollCallPanelInner({
         }
       }}
     >
-      {/* hideIdentity: the surface above already states the committee (the chair
-          sidebar's CommitteeIdentityBadge). Repeating it here printed the name
-          twice, one line apart. The heading goes; the bottom border STAYS, and
-          it becomes the single seam under the whole masthead — badge and stats
-          row now sit inside one block instead of two bordered cards. */}
-      <div
-        className={`px-4 ${hideIdentity ? 'pt-1.5' : 'pt-4'} pb-3 shrink-0 relative z-10`}
-        style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}
-      >
+      {/* hideIdentity: the surface above already states the committee AND owns the quorum
+          rings (CommitteeIdentityBadge, in the chair sidebar and the pre-session card), so
+          this block keeps only the roll-call bulk actions. No divider: the masthead's own
+          tone ends where the list begins. */}
+      {(!hideIdentity || showBulkActions) && (
+      <div className={`px-4 ${hideIdentity ? 'pt-2.5' : 'pt-4'} pb-2.5 shrink-0 relative z-10`}>
         {!hideIdentity && (
           <>
             <p className="text-lg font-black leading-tight truncate mb-0.5" style={{ color: '#EED98A' }}>{getCommitteeDisplayName(committee.name, language)}</p>
             {committee.topic && (
-              <p className="text-xs leading-snug line-clamp-2 mb-2" style={{ color: 'rgba(238,217,138,0.55)' }}>
-                <span className="font-semibold" style={{ color: 'rgba(238,217,138,0.7)' }}>{t('rollcall_topic')} </span>{committee.topic}
+              <p className="text-xs leading-snug line-clamp-2 mb-2" style={{ color: 'rgba(238,217,138,0.85)' }}>
+                <span className="font-semibold">{t('rollcall_topic')} </span>{committee.topic}
               </p>
             )}
+            <div className="flex gap-1.5">
+              <MajorityPie arcFill={1} color="#2A5A3C" label={`${present}`} />
+              <MajorityPie arcFill={2 / 3} color="#B6871F" label={`${Math.ceil(present * 2 / 3)}`} />
+              <MajorityPie arcFill={0.5} color="#8A7A6A" label={`${Math.floor(present / 2) + 1}`} />
+            </div>
           </>
         )}
-        <div className="flex items-center justify-between">
-          <div className="flex gap-1.5">
-            <MajorityPie arcFill={1} color="#2A5A3C" label={`${present}`} />
-            <MajorityPie arcFill={2 / 3} color="#B6871F" label={`${Math.ceil(present * 2 / 3)}`} />
-            <MajorityPie arcFill={0.5} color="#8A7A6A" label={`${Math.floor(present / 2) + 1}`} />
-          </div>
-        </div>
         {showBulkActions && (
-          <div className="flex gap-1.5 mt-2">
-            <button onClick={handleClear} className="text-[10px] font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg transition-colors gv-lift-dark" style={{ backgroundColor: 'rgba(139,32,32,0.25)', color: '#F4A0A0', border: '1px solid rgba(139,32,32,0.4)' }}>{t('rollcall_clear_all')}</button>
-            <button onClick={handleAllPresent} className="text-[10px] font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg transition-colors gv-lift-dark" style={{ backgroundColor: 'rgba(61,122,82,0.3)', color: '#EDE7D8', border: '1px solid rgba(61,122,82,0.4)' }}>{t('rollcall_all_present')}</button>
-            <button onClick={handleAllPresentVoting} className="text-[10px] font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg transition-colors gv-lift-dark" style={{ backgroundColor: 'rgba(182,135,31,0.25)', color: '#EED98A', border: '1px solid rgba(182,135,31,0.35)' }}>{t('rollcall_all_pv')}</button>
+          <div className={`grid grid-cols-3 gap-2 ${hideIdentity ? '' : 'mt-2'}`}>
+            <button onClick={handleClear} className="text-[11px] font-bold uppercase tracking-wide px-2 py-2 rounded-lg transition-colors gv-lift-dark focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70" style={{ backgroundColor: 'rgba(139,32,32,0.30)', color: '#F6B4B4' }}>{t('rollcall_clear_all')}</button>
+            <button onClick={handleAllPresent} className="text-[11px] font-bold uppercase tracking-wide px-2 py-2 rounded-lg transition-colors gv-lift-dark focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70" style={{ backgroundColor: 'rgba(61,122,82,0.40)', color: '#EDE7D8' }}>{t('rollcall_all_present')}</button>
+            <button onClick={handleAllPresentVoting} className="text-[11px] font-bold uppercase tracking-wide px-2 py-2 rounded-lg transition-colors gv-lift-dark focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70" style={{ backgroundColor: 'rgba(182,135,31,0.30)', color: '#EED98A' }}>{t('rollcall_all_pv')}</button>
           </div>
         )}
       </div>
+      )}
 
-      <div ref={listRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
+      <div ref={listRef} className="flex-1 overflow-y-auto px-2 py-1.5 space-y-1" style={{ scrollbarColor: 'rgba(237,231,216,0.28) transparent', scrollbarWidth: 'thin' }}>
         {filtered.map((d, idx) => {
           const effectiveStatus = localStatuses[d.id] ?? d.status;
           const isOnList = onListIds?.has(d.id) ?? false;
@@ -655,8 +617,6 @@ function RollCallPanelInner({
             caucus?.currentSpeaker === d.country
           );
           const isUpNext = isQueueView && isCurrentSpeakerInPanel;
-          const seatK = seatKey(d.country);
-          const seatArmed = freeArmed === seatK;
           // Recognising an absent delegate: clicking them onto a list marks them Present
           // in the same action. Not in roll call and not in the mid-session Roll Call tab
           // (showStatusSliders): the slider owns status there, so an absent row is a status
@@ -693,14 +653,41 @@ function RollCallPanelInner({
             resolveJoinRequestsOnAdmit(committee.id, d.id, d.country, desired, committee.code, committee.dbChairJoinSuffix ?? undefined);
           };
 
+          // The row is the button: keyboard users get the same add / remove / recognise
+          // action as a click. Only when the click would do something for this chair.
+          const rowActionable = !!onAddToList && !isViewOnly && (!isAbsent || canRecognise);
+          // The speaker holding the floor, in the queue view (#1) or the A-Z views.
+          const isSpeakingRow = isUpNext || isCurrentSpeaker;
+          const rowBg = !matchesSearch ? 'transparent'
+            : isSpeakingRow ? 'rgba(238,217,138,0.14)'
+            : isAbsent ? 'transparent'
+            : effectiveStatus === 'present' ? 'rgba(61,122,82,0.26)'
+            : 'rgba(182,135,31,0.20)';
+          const rowBgHover = !matchesSearch ? 'transparent'
+            : isSpeakingRow ? 'rgba(238,217,138,0.20)'
+            : isAbsent ? 'rgba(237,231,216,0.06)'
+            : effectiveStatus === 'present' ? 'rgba(61,122,82,0.40)'
+            : 'rgba(182,135,31,0.32)';
+          // The status slider (roll call, Roll Call tab) takes ~120px of the row, so that mode
+          // runs a size down to keep names readable at the sidebar's minimum width.
+          const sliderMode = isRollCallPhase || showStatusSliders;
+          const flagPx = isUpNext ? 48 : sliderMode ? 34 : 40;
+
           return (
             <div key={d.id}>
               {dragOverIndex === idx && dragOverIndex !== dragIndexRef.current && (
-                <div className="h-0.5 bg-[#1B3828] rounded-full mx-2 -mb-0.5" />
+                <div className="h-0.5 bg-[#EED98A] rounded-full mx-2 -mb-0.5" />
               )}
               <div
                 data-matches={matchesSearch ? 'true' : 'false'}
                 onClick={handleRowClick}
+                role={rowActionable ? 'button' : undefined}
+                tabIndex={rowActionable ? 0 : undefined}
+                aria-current={isSpeakingRow ? 'true' : undefined}
+                onKeyDown={rowActionable ? (e) => {
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleRowClick(); }
+                } : undefined}
                 draggable={isDraggable}
                 onDragStart={() => { if (isDraggable) dragIndexRef.current = idx; }}
                 onDragOver={(e) => { e.preventDefault(); if (isQueueView) setDragOverIndex(idx); }}
@@ -722,16 +709,8 @@ function RollCallPanelInner({
                   setDragOverIndex(null);
                 }}
                 onDragEnd={() => { dragIndexRef.current = null; setDragOverIndex(null); }}
-                className={`group/seat flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all ${
-                  !matchesSearch
-                    ? 'opacity-20'
-                    : isCurrentSpeaker
-                    ? 'border-2'
-                    : isAbsent
-                    ? 'opacity-35'
-                    : effectiveStatus === 'present'
-                    ? 'border'
-                    : 'border'
+                className={`group/seat flex items-center ${sliderMode ? 'gap-2' : 'gap-3'} px-2.5 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/80 transition-[background-color,box-shadow,opacity] duration-150 motion-reduce:transition-none bg-[var(--row-bg)] hover:bg-[var(--row-bg-hover)] ${
+                  !matchesSearch ? 'opacity-25' : ''
                 } ${
                   (!isRollCallPhase && !showStatusSliders && onAddToList && (!isAbsent || (canRecognise && !isViewOnly))) || isRollCallPhase || showStatusSliders
                     ? 'cursor-pointer'
@@ -740,41 +719,65 @@ function RollCallPanelInner({
                     : ''
                 } ${isDraggable ? 'cursor-grab' : ''}`}
                 style={{
-                  backgroundColor: !matchesSearch ? 'transparent'
-                    : isCurrentSpeaker ? 'rgba(238,217,138,0.12)'
-                    : isAbsent ? 'transparent'
-                    : effectiveStatus === 'present' ? 'rgba(61,122,82,0.22)'
-                    : 'rgba(182,135,31,0.18)',
-                  borderColor: !matchesSearch ? 'transparent'
-                    : isCurrentSpeaker ? 'rgba(238,217,138,0.5)'
-                    : isAbsent ? 'transparent'
-                    : effectiveStatus === 'present' ? 'rgba(61,122,82,0.4)'
-                    : 'rgba(182,135,31,0.4)',
-                }}
-                onMouseEnter={(e) => { if (!isAbsent) (e.currentTarget as HTMLElement).style.backgroundColor = effectiveStatus === 'present' ? 'rgba(61,122,82,0.38)' : effectiveStatus === 'present-voting' ? 'rgba(182,135,31,0.32)' : 'rgba(238,217,138,0.08)'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = !matchesSearch ? 'transparent' : isCurrentSpeaker ? 'rgba(238,217,138,0.12)' : isAbsent ? 'transparent' : effectiveStatus === 'present' ? 'rgba(61,122,82,0.22)' : 'rgba(182,135,31,0.18)'; }}
+                  ['--row-bg' as string]: rowBg,
+                  ['--row-bg-hover' as string]: rowBgHover,
+                  minHeight: isUpNext ? 64 : sliderMode ? 48 : 54,
+                  paddingBlock: 6,
+                  // A lit edge, not a border: the speaker's row reads at a distance.
+                  boxShadow: matchesSearch && isSpeakingRow ? 'inset 0 0 0 1.5px rgba(238,217,138,0.6)' : undefined,
+                } as React.CSSProperties}
               >
                 <div className="relative shrink-0">
                   {isRoomOrderTdT && queuePos !== null ? (
-                    <div className={`${isUpNext ? 'w-12 h-12' : 'w-9 h-9'} rounded-full bg-[#DDD4C0] border border-[#C8BAA8] flex items-center justify-center`}>
-                      <span className={`font-black text-[#B6871F] ${isUpNext ? 'text-xl' : 'text-sm'}`}>{queuePos}</span>
+                    <div className="rounded-full bg-[#DDD4C0] flex items-center justify-center" style={{ width: flagPx, height: flagPx }}>
+                      <span className={`font-black text-[#8B5A20] tabular-nums ${isUpNext ? 'text-xl' : 'text-base'}`}>{queuePos}</span>
                     </div>
                   ) : (
-                    <FlagCircle country={d.country} size={isUpNext ? 'md' : 'sm'} />
+                    <SeatCircleFlag
+                      country={d.country}
+                      size={flagPx}
+                      decorative
+                      ring={isSpeakingRow ? false : 'rgba(255,255,255,0.18)'}
+                      style={{
+                        boxShadow: isSpeakingRow ? '0 0 0 2.5px #EED98A' : undefined,
+                        opacity: isAbsent ? 0.5 : 1,
+                        filter: isAbsent ? 'grayscale(0.7)' : undefined,
+                      }}
+                    />
                   )}
-                  {/* Queue position bubble, omitted when isRoomOrderTdT since position is already the primary display */}
+                  {/* Queue position, or a microphone for the speaker holding the floor. Omitted
+                      for a Room Order Tour de Table, where the number already IS the disc. */}
                   {queuePos !== null && !isRoomOrderTdT && (
-                    <div className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-0.5 rounded-full flex items-center justify-center font-black leading-none text-[10px]"
-                      style={{ backgroundColor: '#EDE7D8', color: '#1B3828', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }}>
-                      {isCurrentSpeakerInPanel ? '★' : queuePos <= 99 ? queuePos : '99+'}
+                    <div
+                      className="absolute -top-1 -end-1.5 min-w-[21px] h-[21px] px-1 rounded-full flex items-center justify-center font-black leading-none text-[11.5px] tabular-nums"
+                      style={{ backgroundColor: isCurrentSpeakerInPanel ? '#EED98A' : '#EDE7D8', color: '#1B3828', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }}
+                      aria-label={isCurrentSpeakerInPanel ? t('rollcall_speaking') : t('rollcall_queue_position', { n: queuePos })}
+                      role="img"
+                    >
+                      {isCurrentSpeakerInPanel ? <Mic size={11} strokeWidth={3} aria-hidden /> : queuePos <= 99 ? queuePos : '99+'}
                     </div>
                   )}
                 </div>
-                <span className={`flex-1 truncate ${isUpNext ? 'text-lg font-bold' : 'text-base'} ${!isAbsent ? 'font-medium' : 'opacity-50'}`} style={{ color: '#EDE7D8' }}>
-                  {getCountryDisplayName(d.country, language)}
-                </span>
+                <div className="flex-1 min-w-0 flex flex-col">
+                  <span
+                    className="truncate"
+                    style={{
+                      fontSize: isUpNext ? 19.5 : sliderMode ? 15.5 : 17,
+                      fontWeight: isUpNext ? 800 : isAbsent ? 500 : 600,
+                      lineHeight: 1.2,
+                      color: isAbsent ? 'rgba(237,231,216,0.72)' : '#F4EFE3',
+                    }}
+                  >
+                    {getCountryDisplayName(d.country, language)}
+                  </span>
+                  {isSpeakingRow && matchesSearch && !sliderMode && (
+                    <span className="truncate uppercase" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', lineHeight: 1.3, color: '#EED98A' }}>
+                      {t('rollcall_speaking')}
+                    </span>
+                  )}
+                </div>
                 {isObserver && (
-                  <span className="text-[9px] shrink-0 font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md" style={{ backgroundColor: 'rgba(238,217,138,0.15)', color: 'rgba(238,217,138,0.85)', border: '1px solid rgba(238,217,138,0.3)' }}>{t('rollcall_observer')}</span>
+                  <span className="text-[10.5px] shrink-0 font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md" style={{ backgroundColor: 'rgba(238,217,138,0.16)', color: '#EED98A' }}>{t('rollcall_observer')}</span>
                 )}
                 {/* Observer placard toggle. It used to be gated on
                     `isRollCallPhase || showStatusSliders`, which meant that
@@ -791,41 +794,33 @@ function RollCallPanelInner({
                     title={isObserver ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
                     aria-label={isObserver ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
                     aria-pressed={isObserver}
-                    className={`shrink-0 p-1 rounded-md transition-all active:scale-90 focus:outline-none ${
+                    className={`shrink-0 p-1 rounded-md transition-[opacity,transform] active:scale-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70 ${
                       (isRollCallPhase || showStatusSliders || isObserver)
                         ? ''
-                        : 'opacity-0 group-hover/seat:opacity-100 focus-visible:opacity-100'
+                        : 'opacity-0 group-hover/seat:opacity-100 group-focus-visible/seat:opacity-100 focus-visible:opacity-100'
                     }`}
-                    style={{ color: isObserver ? 'rgba(238,217,138,0.9)' : 'rgba(237,231,216,0.4)' }}
+                    style={{ color: isObserver ? '#EED98A' : 'rgba(237,231,216,0.6)' }}
                   >
                     <Megaphone size={15} />
                   </button>
                 )}
-                {/* Free seat: tap twice to release whoever joined on this seat (a dead
-                    phone, the wrong person). Revealed on hover/focus like the observer
-                    placard, and stays visible while armed. Moderator only: canFreeSeats
-                    hides it for a view-only Commenter and once the session has ended. */}
-                {canFreeSeats && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); freeSeat(d.country); }}
-                    disabled={freeBusy === seatK}
-                    title={seatArmed ? t('rollcall_seat_free_confirm') : t('rollcall_seat_free')}
-                    aria-label={seatArmed ? t('rollcall_seat_free_confirm') : t('rollcall_seat_free')}
-                    className={`shrink-0 flex items-center gap-1 px-1.5 py-1 rounded-md transition-all active:scale-90 focus:outline-none disabled:opacity-40 ${
-                      seatArmed || freeBusy === seatK ? '' : 'opacity-0 group-hover/seat:opacity-100 focus-visible:opacity-100'
-                    }`}
-                    style={{
-                      color: seatArmed ? '#F4A0A0' : 'rgba(237,231,216,0.4)',
-                      backgroundColor: seatArmed ? 'rgba(139,32,32,0.25)' : 'transparent',
-                      border: seatArmed ? '1px solid rgba(139,32,32,0.4)' : '1px solid transparent',
-                    }}
-                  >
-                    <UserX size={14} />
-                    {seatArmed && <span className="text-[10px] font-bold uppercase tracking-wide whitespace-nowrap">{t('rollcall_seat_free')}</span>}
-                  </button>
-                )}
-                {isAbsent && !(isRollCallPhase || showStatusSliders) && (
-                  <span className="text-[10px] shrink-0 font-mono ms-auto uppercase tracking-wide" style={{ color: 'rgba(237,231,216,0.35)' }}>{t('rollcall_absent')}</span>
+                {/* Status in words as well as colour, in the queue view (the roll-call views
+                    already show it on the slider). Absent always says so. PV is tagged only when
+                    the room mixes Present and Present-and-Voting (statusesMixed); an untagged
+                    row is then Present. */}
+                {!(isRollCallPhase || showStatusSliders) && matchesSearch && (
+                  isAbsent ? (
+                    <span className="text-[11px] shrink-0 font-bold uppercase tracking-wider" style={{ color: 'rgba(237,231,216,0.72)' }}>{t('rollcall_absent')}</span>
+                  ) : effectiveStatus === 'present-voting' && statusesMixed ? (
+                    <span
+                      className="text-[11px] shrink-0 font-black tracking-wide px-1.5 py-0.5 rounded-md"
+                      style={{ color: '#EED98A', boxShadow: 'inset 0 0 0 1.5px rgba(238,217,138,0.55)' }}
+                      title={t('rollcall_pv_full')}
+                    >
+                      <span aria-hidden>{t('rollcall_pv_tag')}</span>
+                      <span className="sr-only">{t('rollcall_pv_full')}</span>
+                    </span>
+                  ) : null
                 )}
                 {(isRollCallPhase || showStatusSliders) && (
                   <div onClick={(e) => e.stopPropagation()} className={`shrink-0 ${(isReadOnly || isViewOnly) ? 'pointer-events-none opacity-50' : ''}`}>
@@ -838,10 +833,7 @@ function RollCallPanelInner({
         })}
       </div>
 
-      <div className="px-3 py-3 space-y-2 shrink-0 overflow-visible relative z-10" style={{ borderTop: '1px solid rgba(61,122,82,0.3)' }}>
-        {freeError && (
-          <p className="text-[11px] font-semibold px-1" role="alert" style={{ color: '#F4A0A0' }}>{t('rollcall_seat_free_failed')}</p>
-        )}
+      <div className="px-3 py-3 space-y-2 shrink-0 overflow-visible relative z-10" style={{ backgroundColor: 'rgba(0,0,0,0.14)' }}>
         <AddCountryInput committee={committee} onAdd={handleAddDelegate} onQueryChange={setSearch} />
         {(committee.phase === 'pre-session' || committee.phase === 'roll-call') && (
           <button

@@ -2,9 +2,10 @@
 import { use, useEffect, useState, useRef, useCallback, useMemo, Suspense } from 'react';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import FitToScreen from '@/components/FitToScreen';
-import SessionsHeaderLogo from '@/components/SessionsHeaderLogo';
 import GavelChip from '@/components/GavelChip';
 import CommitteeIdentityBadge from '@/components/CommitteeIdentityBadge';
+import { TopBarTab, TopBarIconButton } from '@/components/ChairTopBar';
+import { Check, Copy, MessageCircle, Settings, Trophy } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { CaucusState, Committee, Delegate, DelegateStatus } from '@/lib/types';
@@ -16,7 +17,6 @@ import DocumentsModal from '@/components/DocumentsModal';
 import { getCountryByName, getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import { SeatFlag, SeatArtProvider } from '@/components/SeatFlag';
 import { getCommitteeDisplayName, committeeDisplayName, deriveCommitteeAcronym, matchPresetEmblem } from '@/lib/presetNames';
-import { getAuthedClient } from '@/lib/supabase-auth';
 import { Emoji } from '@/components/Emoji';
 import { SettingsPanel } from '@/components/SettingsPanel';
 import ScoreboardPanel from '@/components/ScoreboardPanel';
@@ -1448,34 +1448,38 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
   // Committee emblem for the sidebar. The sessions `committees` table has no logo column,
   // so the artwork is resolved in this order:
-  //   1. conference_committees.logo_url — a CONFERENCE-created session, where the organiser
-  //      uploaded custom artwork for this committee. Matched by session_code and readable to
-  //      anyone associated with it.
-  //   2. matchPresetEmblem(name) — the committee's OWN emblem, derived from the name the
-  //      chair typed. This is what makes a standalone "UN Security Council" session wear the
-  //      real UN mark; before this the fetch below was the only source, so every standalone
-  //      session fell through to a monogram no matter what it was called.
-  //   3. null → the monogram fallback, so there is never a broken image or an empty gap.
+  //   1. conference_committees.logo_url, then the CONFERENCE's logo_url: a conference-created
+  //      session (session_origin = 'conference'). Both tables have an anon `true` SELECT
+  //      policy ("Anyone can read ... by link"), so a chair who joined an open dais with the
+  //      code, signed out, gets the artwork too. Standalone sessions never run the query.
+  //   2. matchPresetEmblem(name): the committee's OWN emblem, derived from the name the
+  //      chair typed ("UN Security Council" wears the real UN mark).
+  //   3. null → CommitteeIdentityBadge's default, the UN emblem, then gold initials.
   const [committeeEmblem, setCommitteeEmblem] = useState<{ logoUrl: string | null; abbreviation: string | null }>({ logoUrl: null, abbreviation: null });
+  const isConferenceRoom = committee?.sessionOrigin === 'conference';
   useEffect(() => {
     let cancelled = false;
-    const token = session?.access_token;
-    if (!token) { setCommitteeEmblem({ logoUrl: null, abbreviation: null }); return; }
+    if (!isConferenceRoom) { setCommitteeEmblem({ logoUrl: null, abbreviation: null }); return; }
     (async () => {
       try {
-        const sb = getAuthedClient(token);
-        const { data } = await sb
+        const { data } = await supabase
           .from('conference_committees')
-          .select('logo_url, abbreviation')
+          .select('logo_url, abbreviation, conferences(logo_url)')
           .eq('session_code', code.toUpperCase())
+          .limit(1)
           .maybeSingle();
         if (cancelled || !data) return;
-        const row = data as { logo_url: string | null; abbreviation: string | null };
-        setCommitteeEmblem({ logoUrl: row.logo_url ?? null, abbreviation: row.abbreviation ?? null });
-      } catch { /* standalone session, or no read access — monogram fallback */ }
+        const row = data as unknown as {
+          logo_url: string | null;
+          abbreviation: string | null;
+          conferences: { logo_url: string | null } | { logo_url: string | null }[] | null;
+        };
+        const conf = Array.isArray(row.conferences) ? row.conferences[0] : row.conferences;
+        setCommitteeEmblem({ logoUrl: row.logo_url || conf?.logo_url || null, abbreviation: row.abbreviation ?? null });
+      } catch { /* no row or no read access: preset match, then the UN emblem */ }
     })();
     return () => { cancelled = true; };
-  }, [code, session?.access_token]);
+  }, [code, isConferenceRoom]);
   const [sessionSuspended, setSessionSuspended] = useState(false);
   const [sessionEnded, setSessionEnded] = useState(false);
   // Unexpired organiser broadcasts for THIS committee. Refetched on load and on every
@@ -3341,6 +3345,46 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const quorumMap: Record<string, number> = { 'none': 0, '1-4': 1 / 4, '1-3': 1 / 3, '1-2': 1 / 2 };
   const quorumFraction = quorumMap[settings.quorumThreshold ?? 'none'] ?? 0;
   const belowQuorum = quorumFraction > 0 && totalCount > 0 && (presentCount / totalCount) < quorumFraction;
+  /** Delegations the quorum rule needs, for the sidebar masthead. Null = no rule. */
+  const quorumNeeded = quorumFraction > 0 && totalCount > 0 ? Math.ceil(quorumFraction * totalCount) : null;
+  // Where the full-height roster sidebar shows: the same states it showed in before it moved
+  // out of the floor row. Hidden in pre-session (roll call is the centred card), while chat
+  // covers the floor, and on the End View / Suspend View tabs.
+  const sidebarVisible = showRollCall
+    && committee.phase !== 'pre-session'
+    && !(showChat && !sessionEnded)
+    && !(sessionEnded && endedTab === 'ended')
+    && !(!sessionEnded && sessionSuspended && suspendTab === 'suspend');
+
+  // The committee's identity, stated ONCE at the top of the roster column: emblem, name,
+  // topic and the quorum rings (CommitteeIdentityBadge). Used by the full-height sidebar
+  // and by the pre-session roll-call card, so RollCallPanel gets `hideIdentity` in both.
+  // Match and derive against the RAW stored name: the preset aliases are English, so a
+  // localised display name would never match them. A standalone session has no
+  // `abbreviation`, so the acronym is derived, or the acronym-plus-full-name UI RULE could
+  // never fire outside conferences.
+  const identityBadge = (() => {
+    const rawName = committee.name;
+    const fullName = getCommitteeDisplayName(rawName, language);
+    const acronym = deriveCommitteeAcronym(rawName, committeeEmblem.abbreviation);
+    const primary = committeeDisplayName(fullName, acronym);
+    const secondary = primary !== fullName ? fullName : null;
+    const logoSrc = committeeEmblem.logoUrl ?? matchPresetEmblem(rawName, committeeEmblem.abbreviation);
+    return (
+      <CommitteeIdentityBadge
+        logoSrc={logoSrc}
+        primary={primary}
+        secondary={secondary}
+        topic={committee.topic}
+        topicLabel={t('rollcall_topic')}
+        onTopicClick={agenda.canSwitch ? agenda.openPicker : undefined}
+        topicActionTitle={t('agenda_change_title')}
+        present={presentCount}
+        total={totalCount}
+        quorumNeeded={quorumNeeded}
+      />
+    );
+  })();
   const gslRequireNextSpeaker = settings.gslRequireNextSpeaker;
 
   // ── Optimistic action handlers ──────────────────────────────────────────────
@@ -3927,7 +3971,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // the GSL never disappears.
   const caucusPhaseWithoutCaucus =
     (committee.phase === 'moderated-caucus' || committee.phase === 'unmoderated-caucus') && !committee.caucus;
-  const showSpeakersListView = committee.phase === 'speakers-list' || caucusPhaseWithoutCaucus;
+  // An ended room is phase 'adjourned', which no floor branch rendered, so the End screen's
+  // Session View tab showed a blank floor. Show the speakers' list there; every control on
+  // it is already hidden once sessionEnded is true, so it is read-only.
+  const showSpeakersListView = committee.phase === 'speakers-list' || caucusPhaseWithoutCaucus
+    || (committee.phase === 'adjourned' && sessionEnded);
 
   // Blocked modal handler — only allow after roll call
   const handleMotionsClick = () => {
@@ -3957,87 +4005,181 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   return (
     <FitToScreen>
     <SeatArtProvider delegates={committee.delegates}>
-    <div className="h-full w-full flex flex-col overflow-hidden relative" style={{ backgroundColor: '#EDE7D8' }}>
+    <div className="h-full w-full flex overflow-hidden relative" style={{ backgroundColor: '#EDE7D8' }}>
       <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
-      <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-2" data-tutorial="topbar">
-        <SessionsHeaderLogo />
-
-        {committee.phase !== 'pre-session' && !sessionEnded ? (
-          <div className="flex flex-1 min-w-0 h-full items-center" style={{ overflow: 'visible' }}>
-            <button data-tutorial="tab-rollcall" onClick={() => { const opening = !showSliders; setShowSliders(opening); if (opening) setShowChat(false); setShowRollCall(true); }}
-              className="flex-1 text-[18px] font-bold px-3 relative h-full transition-all duration-200"
-              style={{ color: showSliders ? '#1B3828' : '#1C1410', backgroundColor: showSliders ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showSliders ? 900 : 700 }}
-              onMouseEnter={(e) => { if (!showSliders) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
-              onMouseLeave={(e) => { if (!showSliders) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
-              {t('tab_roll_call')}
-              <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: '2px', backgroundColor: '#B6871F', transform: showSliders ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
-            </button>
-            <div style={{ width: '1px', height: '28px', backgroundColor: 'rgba(28,20,16,0.2)', margin: '0 2px', flexShrink: 0 }} />
-            <button data-tutorial="tab-motions" onClick={handleMotionsClick}
-              className="flex-1 text-[18px] font-bold px-3 relative h-full transition-all duration-200"
-              style={{ color: showMotions ? '#1B3828' : '#1C1410', backgroundColor: showMotions ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showMotions ? 900 : 700 }}
-              onMouseEnter={(e) => { if (!showMotions) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
-              onMouseLeave={(e) => { if (!showMotions) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
-              {t('tab_motions')}
-              {(committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length > 0 && (
-                <span className="absolute top-1 right-1 z-10 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">
-                  {(committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length}
-                </span>
-              )}
-              <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: '2px', backgroundColor: '#B6871F', transform: showMotions ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
-            </button>
-            <div style={{ width: '1px', height: '28px', backgroundColor: 'rgba(28,20,16,0.2)', margin: '0 2px', flexShrink: 0 }} />
-            <button data-tutorial="tab-documents" onClick={handleDocumentsClick}
-              className="flex-1 text-[18px] font-bold px-3 relative h-full transition-all duration-200"
-              style={{ color: showDocuments ? '#1B3828' : '#1C1410', backgroundColor: showDocuments ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showDocuments ? 900 : 700 }}
-              onMouseEnter={(e) => { if (!showDocuments) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
-              onMouseLeave={(e) => { if (!showDocuments) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
-              {t('tab_documents')}
-              {(() => { const n = (committee.documents ?? []).filter((d) => d.status === 'submitted').length; return n > 0 ? <span className="absolute top-1 right-1 z-10 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">{n}</span> : null; })()}
-              <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: '2px', backgroundColor: '#B6871F', transform: showDocuments ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
-            </button>
-            <div style={{ width: '1px', height: '28px', backgroundColor: 'rgba(28,20,16,0.2)', margin: '0 2px', flexShrink: 0 }} />
-            <button data-tutorial="tab-chat" onClick={() => { if (!isPreSession) handleToggleChat(); }}
-              className="flex-1 text-[18px] font-bold px-3 relative h-full transition-all duration-200"
-              style={{ color: showChat ? '#1B3828' : '#1C1410', backgroundColor: showChat ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showChat ? 900 : 700 }}
-              onMouseEnter={(e) => { if (!showChat) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
-              onMouseLeave={(e) => { if (!showChat) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
-              {t('tab_chat')}
-              {(() => {
-                const totalUnread = chatUnreadTotal(committee.messages, myChairName || 'Chair', true, committee.chairNames ?? [], chatReadCounts);
-                return totalUnread > 0 && !showChat
-                  ? <span className="absolute top-1 right-1 z-10 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">{totalUnread}</span>
-                  : null;
-              })()}
-              <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: '2px', backgroundColor: '#B6871F', transform: showChat ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
-            </button>
+      {/* The roster sidebar runs the FULL height of the screen, from the very top, with
+          the top bar starting at its edge. Width is inline and user-set (default 352px,
+          the SSR value); SidebarResizer is the divider. It shows exactly where it did
+          before the move: not in pre-session, not while chat covers the floor, and not
+          on the End View or Suspend View tabs (sidebarVisible). */}
+      {sidebarVisible && (
+        <aside
+          ref={sidebarRef}
+          data-tutorial="speakers-sidebar"
+          className="flex flex-col overflow-hidden shrink-0"
+          style={{ width: sidebarWidth, backgroundColor: '#1B3828' }}
+        >
+          {identityBadge}
+          {caucusMaxReachedMsg && (
+            <div className="shrink-0 px-3 py-2 bg-amber-900/20 border-b border-amber-700/40 text-amber-300 text-xs text-center font-semibold">
+              {t('caucus_queue_no_time')}
+            </div>
+          )}
+          {extraTimeCapMsg !== null && (
+            <div role="status" className="shrink-0 px-3 py-2 bg-amber-900/20 border-b border-amber-700/40 text-amber-300 text-xs text-center font-semibold">
+              {t('caucus_extra_time_capped', { n: extraTimeCapMsg })}
+            </div>
+          )}
+          <div className="flex-1 min-h-0 overflow-hidden">
+          {(caucusPanelLocked || committee.caucus?.type === 'moderated') ? (
+            <RollCallPanel committee={caucusRollCallCommittee ?? { ...committee, speakersList: committee.caucusQueue ?? [], currentSpeaker: null }}
+              isTdT={committee.caucus?.purpose?.startsWith('Tour de Table') ?? false}
+              isRoomOrderTdT={committee.caucus?.purpose?.includes('Room Order') ?? false}
+              onAddToList={(delegateId) => {
+                const delegate = committee.delegates.find((d) => d.id === delegateId);
+                if (!delegate) return;
+                if (committee.caucus?.currentSpeaker === delegate.country) return;
+                // Same capacity rule as the main caucus view, read LIVE at the click
+                // (derived total and speaker clock), not off the stale anchor value.
+                // One check shared with the absent-row path (canAddToList below).
+                if (!canAddToCaucusQueue(delegateId)) return;
+                updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: [...(c.caucusQueue ?? []), { delegateId, country: delegate.country }] }), true);
+                addToCaucusListInDB(committee.id, delegateId, delegate.country, committee.code, committee.dbChairJoinSuffix ?? undefined, 'end');
+              }}
+              hideIdentity
+              speechRunning={timerRunning}
+              onJoinRequestResolved={handleJoinRequestResolved}
+              canAddToList={canAddToCaucusQueue}
+              onListIds={caucusQueueIds}
+              onRemoveFromList={(delegateId) => {
+                updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId) }), true);
+                removeFromCaucusListInDB(committee.id, delegateId, committee.code, committee.dbChairJoinSuffix ?? undefined);
+              }}
+              onReorderList={(newList) => {
+                updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }), true);
+                reorderSpeakersListInDB(committee.id, newList, committee.code, committee.dbChairJoinSuffix ?? undefined, 'caucus');
+              }}
+              onCycleStatus={handleCycleStatus}
+              onStatusChange={handleStatusChange}
+              onDelegateAdd={handleDelegateAdd}
+              showStatusSliders={showSliders}
+              isReadOnly={sessionEnded}
+              isViewOnly={isViewOnly} />
+          ) : (committee.phase === 'unmoderated-caucus' && committee.caucus) ? (
+            <RollCallPanel committee={committee}
+              hideIdentity
+              onCycleStatus={handleCycleStatus}
+              onStatusChange={handleStatusChange}
+              onDelegateAdd={handleDelegateAdd}
+              showStatusSliders={showSliders}
+              isReadOnly={sessionEnded}
+              isViewOnly={isViewOnly} />
+          ) : (
+            <RollCallPanel committee={committee}
+              hideIdentity
+              onAddToList={handleAddToSpeakersList}
+              onListIds={gslListIds}
+              onRemoveFromList={handleRemoveFromSpeakersList}
+              onCycleStatus={handleCycleStatus}
+              onStatusChange={handleStatusChange}
+              onPhaseChange={handlePhaseChange}
+              onDelegateAdd={handleDelegateAdd}
+              onReorderList={handleReorderSpeakersList}
+              showStatusSliders={showSliders}
+              speechRunning={timerRunning}
+              onJoinRequestResolved={handleJoinRequestResolved}
+              isReadOnly={sessionEnded}
+              isViewOnly={isViewOnly} />
+          )}
           </div>
+        </aside>
+      )}
+      {sidebarVisible && (
+        <SidebarResizer
+          width={sidebarWidth}
+          targetRef={sidebarRef}
+          onCommit={handleSidebarResize}
+          label={t('rollcall_resize_sidebar')}
+        />
+      )}
+      {/* Everything right of the sidebar: the top bar, the banners and the floor. The
+          sidebar runs the full height of the screen, so this column starts at its edge. */}
+      <div className="relative flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
+      <header className="bg-[#FAF8F3] ps-2 pe-3 h-11 flex items-center gap-1.5 shrink-0" data-tutorial="topbar">
+        {committee.phase !== 'pre-session' && !sessionEnded ? (
+          <nav aria-label={t('chair_hdr_controls')} className="flex flex-1 min-w-0 h-full items-center gap-1 py-1">
+            <TopBarTab
+              tutorial="tab-rollcall"
+              label={t('tab_roll_call')}
+              active={showSliders}
+              onClick={() => { const opening = !showSliders; setShowSliders(opening); if (opening) setShowChat(false); setShowRollCall(true); }}
+            />
+            {(() => {
+              const n = (committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length;
+              return (
+                <TopBarTab tutorial="tab-motions" label={t('tab_motions')} active={showMotions} onClick={handleMotionsClick}
+                  count={n} countLabel={t('chair_hdr_tab_count', { label: t('tab_motions'), n })} />
+              );
+            })()}
+            {(() => {
+              const n = (committee.documents ?? []).filter((d) => d.status === 'submitted').length;
+              return (
+                <TopBarTab tutorial="tab-documents" label={t('tab_documents')} active={showDocuments} onClick={handleDocumentsClick}
+                  count={n} countLabel={t('chair_hdr_tab_count', { label: t('tab_documents'), n })} />
+              );
+            })()}
+          </nav>
         ) : agenda.canSwitch ? (
           <button type="button" onClick={agenda.openPicker} title={t('agenda_change_title')}
-            className="text-[#9A8A78] text-xs hidden sm:block truncate flex-1 min-w-0 text-start rounded cursor-pointer transition-colors hover:text-[#1B3828] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]/60">
+            className="text-[#6A5A4A] text-sm hidden sm:block truncate flex-1 min-w-0 px-2 text-start rounded cursor-pointer transition-colors hover:text-[#1B3828] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]/60">
             {getCommitteeDisplayName(committee.name, language)}: <span className="underline decoration-dotted underline-offset-2">{committee.topic}</span>
           </button>
         ) : (
-          <span className="text-[#9A8A78] text-xs hidden sm:block truncate flex-1">{getCommitteeDisplayName(committee.name, language)}: {committee.topic}</span>
+          <span className="text-[#6A5A4A] text-sm hidden sm:block truncate flex-1 min-w-0 px-2">{getCommitteeDisplayName(committee.name, language)}: {committee.topic}</span>
         )}
 
-
-        <button onClick={() => { navigator.clipboard.writeText(committee.code); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+        {/* The gavel lives here, on the front page, not buried in Settings, and shows for
+            EVERY chair in BOTH states, so handover reads as a one-tap switch rather than an
+            error. A genuinely solo chair has nobody to hand to, so the affordance stays hidden,
+            but a view-only device always gets it, including the organiser's ?chairName=Secretariat
+            deep link, whose name may not be in chair_names yet. In the top bar now (`inline`),
+            so it no longer floats over the floor view. */}
+        {!sessionEnded && ((committee.chairNames?.length ?? 0) > 1 || isViewOnly) && (
+          <GavelChip
+            inline
+            chairNames={committee.chairNames ?? []}
+            headChairName={headChairName}
+            myChairName={myChairName}
+            onlineChairs={onlineChairs}
+            headOffline={headOffline}
+            heldElsewhere={gavelElsewhere}
+            onTakeGavel={() => handleSetHeadChair(myChairName)}
+            onHandOver={(name) => handleSetHeadChair(name)}
+          />
+        )}
+        <button type="button" onClick={() => { navigator.clipboard.writeText(committee.code); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
           data-tutorial="join-code"
-          className="text-xs font-mono bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] px-2.5 py-1 rounded-lg transition-colors shrink-0 gv-lift">
-          {copied ? '✓' : committee.code}
+          aria-label={copied ? t('chair_hdr_copied') : t('chair_hdr_copy_code', { code: committee.code })}
+          title={t('chair_hdr_copy_code', { code: committee.code })}
+          className="shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[#EDE7D8] hover:bg-[#E2DAC8] text-[#1C1410] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] active:scale-[0.96] ms-1 me-1"
+          style={{ fontFamily: "'Outfit', sans-serif", fontSize: 14, fontWeight: 800, letterSpacing: '0.08em' }}>
+          {copied ? <Check size={14} strokeWidth={3} aria-hidden /> : <Copy size={13} strokeWidth={2.4} aria-hidden style={{ opacity: 0.55 }} />}
+          <span className="tabular-nums">{committee.code}</span>
         </button>
-        <button onClick={() => setShowScoreboard(true)} title={t('chair_hdr_scoreboard')}
-          className="text-[#9A8A78] hover:text-[#1C1410] transition-colors shrink-0"
-          style={{ lineHeight: 0 }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
-            <path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
-            <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
-            <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
-          </svg>
-        </button>
-        {/* Once the gavel has fallen, a conference chair's next job is the award slate — a
+        {committee.phase !== 'pre-session' && !sessionEnded && (() => {
+          const totalUnread = showChat ? 0 : chatUnreadTotal(committee.messages, myChairName || 'Chair', true, committee.chairNames ?? [], chatReadCounts);
+          return (
+            <TopBarIconButton tutorial="tab-chat" onClick={() => { if (!isPreSession) handleToggleChat(); }} active={showChat}
+              count={totalUnread}
+              label={totalUnread > 0 ? t('chair_hdr_chat_unread', { n: totalUnread }) : t('tab_chat')}>
+              <MessageCircle size={21} strokeWidth={2} aria-hidden />
+            </TopBarIconButton>
+          );
+        })()}
+        <TopBarIconButton onClick={() => setShowScoreboard(true)} label={t('chair_hdr_scoreboard')}>
+          <Trophy size={21} strokeWidth={2} aria-hidden />
+        </TopBarIconButton>
+        {/* Once the gavel has fallen, a conference chair's next job is the award slate: a
             subtle second affordance beside the scoreboard trophy. Conference sessions ONLY;
             never rendered for a standalone session. */}
         {sessionEnded && committee.sessionOrigin === 'conference' && (
@@ -4048,32 +4190,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             style={{ backgroundColor: 'rgba(182,135,31,0.12)', color: '#8B5A20', border: '1px solid rgba(182,135,31,0.35)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.03em' }}
           />
         )}
-        <button data-tutorial="tab-settings" onClick={() => setShowSettings(true)} title={t('chair_hdr_settings')}
-          className="text-[#9A8A78] hover:text-[#1C1410] transition-colors shrink-0"
-          style={{ lineHeight: 0 }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-          </svg>
-        </button>
+        <TopBarIconButton tutorial="tab-settings" onClick={() => setShowSettings(true)} label={t('chair_hdr_settings')}>
+          <Settings size={21} strokeWidth={2} aria-hidden />
+        </TopBarIconButton>
       </header>
-      {/* The gavel lives here, on the front page — not buried in Settings — and shows for
-          EVERY chair in BOTH states, so handover reads as a one-tap switch rather than an
-          error. A genuinely solo chair has nobody to hand to, so the affordance stays hidden —
-          but a view-only device always gets it, including the organiser's ?chairName=Secretariat
-          deep link, whose name may not be in chair_names yet. */}
-      {!sessionEnded && ((committee.chairNames?.length ?? 0) > 1 || isViewOnly) && (
-        <GavelChip
-          chairNames={committee.chairNames ?? []}
-          headChairName={headChairName}
-          myChairName={myChairName}
-          onlineChairs={onlineChairs}
-          headOffline={headOffline}
-          heldElsewhere={gavelElsewhere}
-          onTakeGavel={() => handleSetHeadChair(myChairName)}
-          onHandOver={(name) => handleSetHeadChair(name)}
-        />
-      )}
       {!sessionEnded && gavelElsewhere && (
         <GavelDeviceBanner onUseThisDevice={() => committee && claimGavelForThisDevice(committee, headChairName || myChairName)} />
       )}
@@ -4250,7 +4370,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           <div className="flex-1 flex items-center justify-center px-6 py-8">
             <div className="w-full max-w-md rounded-2xl overflow-hidden relative" style={{ maxHeight: '680px', display: 'flex', flexDirection: 'column', backgroundColor: '#1B3828', border: '1.5px solid #3D7A52', boxShadow: '0 32px 80px rgba(27,56,40,0.40)' }}>
               <div className="pointer-events-none absolute inset-0 z-[1]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'overlay', opacity: 0.07 }} />
+              <div className="relative z-[2]">{identityBadge}</div>
               <RollCallPanel committee={committee}
+                hideIdentity
                 onListIds={gslListIds}
                 onCycleStatus={handleCycleStatus}
                 onStatusChange={handleStatusChange}
@@ -4266,131 +4388,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         )}
         {committee.phase !== 'pre-session' && (
           <>
-            {/* Sidebar width is now inline and user-set (was w-[22rem] = 352px,
-                which is still the default and the SSR value). `borderRight`
-                moved to SidebarResizer below: the divider IS the border now, so
-                keeping both would draw two rules side by side. The main column
-                is flex-1, so it reflows as this narrows or widens. */}
-            {showRollCall && (
-              <aside
-                ref={sidebarRef}
-                data-tutorial="speakers-sidebar"
-                className="flex flex-col overflow-hidden shrink-0"
-                style={{ width: sidebarWidth, backgroundColor: '#1B3828' }}
-              >
-                {/* The committee's identity, stated ONCE for this whole column. RollCallPanel
-                    below gets `hideIdentity` so it no longer prints the name and topic a
-                    second time, one line down and behind its own border. Compact on purpose:
-                    the badge is SHORTER than the two headings it replaced, so the speakers
-                    list beneath it gained height rather than losing it.
-                    Long names collapse to the acronym with the full name small beneath
-                    (UI RULE), via committeeDisplayName. */}
-                {(() => {
-                  // Match and derive against the RAW stored name: the preset aliases are
-                  // English, so a localised display name would never match them.
-                  const rawName = committee.name;
-                  const fullName = getCommitteeDisplayName(rawName, language);
-                  // A standalone session has no `abbreviation` column, so without a derived
-                  // acronym committeeDisplayName would always fall back to the full name and
-                  // the acronym-plus-subtitle UI RULE could never fire outside conferences.
-                  const acronym = deriveCommitteeAcronym(rawName, committeeEmblem.abbreviation);
-                  const primary = committeeDisplayName(fullName, acronym);
-                  const secondary = primary !== fullName ? fullName : null;
-                  const logoSrc = committeeEmblem.logoUrl ?? matchPresetEmblem(rawName, committeeEmblem.abbreviation);
-                  return (
-                    <CommitteeIdentityBadge
-                      logoSrc={logoSrc}
-                      primary={primary}
-                      secondary={secondary}
-                      topic={committee.topic}
-                      topicLabel={t('rollcall_topic')}
-                      onTopicClick={agenda.canSwitch ? agenda.openPicker : undefined}
-                      topicActionTitle={t('agenda_change_title')}
-                    />
-                  );
-                })()}
-                {caucusMaxReachedMsg && (
-                  <div className="shrink-0 px-3 py-2 bg-amber-900/20 border-b border-amber-700/40 text-amber-300 text-xs text-center font-semibold">
-                    {t('caucus_queue_no_time')}
-                  </div>
-                )}
-                {extraTimeCapMsg !== null && (
-                  <div role="status" className="shrink-0 px-3 py-2 bg-amber-900/20 border-b border-amber-700/40 text-amber-300 text-xs text-center font-semibold">
-                    {t('caucus_extra_time_capped', { n: extraTimeCapMsg })}
-                  </div>
-                )}
-                <div className="flex-1 min-h-0 overflow-hidden">
-                {(caucusPanelLocked || committee.caucus?.type === 'moderated') ? (
-                  <RollCallPanel committee={caucusRollCallCommittee ?? { ...committee, speakersList: committee.caucusQueue ?? [], currentSpeaker: null }}
-                    isTdT={committee.caucus?.purpose?.startsWith('Tour de Table') ?? false}
-                    isRoomOrderTdT={committee.caucus?.purpose?.includes('Room Order') ?? false}
-                    onAddToList={(delegateId) => {
-                      const delegate = committee.delegates.find((d) => d.id === delegateId);
-                      if (!delegate) return;
-                      if (committee.caucus?.currentSpeaker === delegate.country) return;
-                      // Same capacity rule as the main caucus view, read LIVE at the click
-                      // (derived total and speaker clock), not off the stale anchor value.
-                      // One check shared with the absent-row path (canAddToList below).
-                      if (!canAddToCaucusQueue(delegateId)) return;
-                      updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: [...(c.caucusQueue ?? []), { delegateId, country: delegate.country }] }), true);
-                      addToCaucusListInDB(committee.id, delegateId, delegate.country, committee.code, committee.dbChairJoinSuffix ?? undefined, 'end');
-                    }}
-                    hideIdentity
-                    speechRunning={timerRunning}
-                    onJoinRequestResolved={handleJoinRequestResolved}
-                    canAddToList={canAddToCaucusQueue}
-                    onListIds={caucusQueueIds}
-                    onRemoveFromList={(delegateId) => {
-                      updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId) }), true);
-                      removeFromCaucusListInDB(committee.id, delegateId, committee.code, committee.dbChairJoinSuffix ?? undefined);
-                    }}
-                    onReorderList={(newList) => {
-                      updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }), true);
-                      reorderSpeakersListInDB(committee.id, newList, committee.code, committee.dbChairJoinSuffix ?? undefined, 'caucus');
-                    }}
-                    onCycleStatus={handleCycleStatus}
-                    onStatusChange={handleStatusChange}
-                    onDelegateAdd={handleDelegateAdd}
-                    showStatusSliders={showSliders}
-                    isReadOnly={sessionEnded}
-                    isViewOnly={isViewOnly} />
-                ) : (committee.phase === 'unmoderated-caucus' && committee.caucus) ? (
-                  <RollCallPanel committee={committee}
-                    hideIdentity
-                    onCycleStatus={handleCycleStatus}
-                    onStatusChange={handleStatusChange}
-                    onDelegateAdd={handleDelegateAdd}
-                    showStatusSliders={showSliders}
-                    isReadOnly={sessionEnded}
-                    isViewOnly={isViewOnly} />
-                ) : (
-                  <RollCallPanel committee={committee}
-                    hideIdentity
-                    onAddToList={handleAddToSpeakersList}
-                    onListIds={gslListIds}
-                    onRemoveFromList={handleRemoveFromSpeakersList}
-                    onCycleStatus={handleCycleStatus}
-                    onStatusChange={handleStatusChange}
-                    onPhaseChange={handlePhaseChange}
-                    onDelegateAdd={handleDelegateAdd}
-                    onReorderList={handleReorderSpeakersList}
-                    showStatusSliders={showSliders}
-                    speechRunning={timerRunning}
-                    onJoinRequestResolved={handleJoinRequestResolved}
-                    isReadOnly={sessionEnded}
-                    isViewOnly={isViewOnly} />
-                )}
-                </div>
-              </aside>
-            )}
-            {showRollCall && (
-              <SidebarResizer
-                width={sidebarWidth}
-                targetRef={sidebarRef}
-                onCommit={handleSidebarResize}
-                label={t('rollcall_resize_sidebar')}
-              />
-            )}
             <main className="flex-1 overflow-hidden flex flex-col min-w-0 min-h-0">
               {committee.phase === 'moderated-caucus' && committee.caucus && (
                 caucusLoading ? (() => {
@@ -4932,6 +4929,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           </div>
         </div>
       )}
+      </div>
     </div>
     </SeatArtProvider>
     </FitToScreen>

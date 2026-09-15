@@ -19,11 +19,12 @@ import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { notifyErr, notifyOk, clearErr, clearOk } from '@/lib/appNotify';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { FlagImg } from '@/components/FlagImg';
+import { CircleFlag } from '@/components/CircleFlag';
 import { DatePicker } from '@/components/DatePicker';
 import { LogoDisc } from '@/components/LogoDisc';
 import Portal from '@/components/Portal';
 import ProfileLink from '@/components/ProfileLink';
-import { getCountryByName, getFlagUrl, UN_COUNTRIES } from '@/lib/countries';
+import { getCountryByName, UN_COUNTRIES } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
 import { checkInApplication, undoCheckIn } from '@/lib/checkIn';
 import { isPaymentsLive } from '@/lib/payments';
@@ -4311,13 +4312,12 @@ export default function ApplicationsPage() {
                       <div style={{ position: 'relative', flexShrink: 0 }}>
                         <MemberAvatar name={name} url={app.profiles?.avatar_url ?? null} size={62} />
                         {natCode && (
-                          /* eslint-disable-next-line @next/next/no-img-element */
-                          <img
-                            src={getFlagUrl(natCode)}
-                            alt={nationality ?? ''}
+                          <CircleFlag
+                            code={natCode}
+                            size={24}
+                            label={nationality ?? ''}
                             title={nationality ?? ''}
-                            draggable={false}
-                            style={{ position: 'absolute', right: -3, bottom: -3, width: 24, height: 24, borderRadius: 9999, objectFit: 'cover', boxShadow: '0 1px 3px rgba(27,56,40,0.25)', border: `2px solid ${NEU.surface}` }}
+                            style={{ position: 'absolute', right: -3, bottom: -3, boxShadow: '0 1px 3px rgba(27,56,40,0.25)', border: `2px solid ${NEU.surface}` }}
                           />
                         )}
                       </div>

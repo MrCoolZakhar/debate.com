@@ -10,6 +10,7 @@ import {
 } from '@/lib/awards';
 import { loadCommitteeAwards } from '@/lib/awardsService';
 import { FlagImg } from '@/components/FlagImg';
+import { CircleFlag } from '@/components/CircleFlag';
 import { LogoDisc } from '@/components/LogoDisc';
 import { getCountryByName } from '@/lib/countries';
 import Portal from '@/components/Portal';
@@ -1663,7 +1664,7 @@ export function RosterBody({ data }: { data: LiveCommittee }) {
                     className="flex items-center justify-center rounded-full overflow-hidden flex-shrink-0"
                     style={{ width: 34, height: 34, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
                   >
-                    <FlagImg code={flagCodeFor(d.country)} size={22} />
+                    <CircleFlag code={flagCodeFor(d.country) || null} label={d.country} size={34} decorative />
                   </span>
                   {/* Same wrap rule as the feedback row above: the status pill
                       ("PRESENT & VOTING") and the chevron are unshrinkable and

@@ -41,7 +41,9 @@ import {
 } from '@/lib/committeeService';
 import { serverNow } from '@/lib/serverClock';
 import { useAuth } from '@/components/AuthProvider';
-import { claimDelegateSeat, seatKey } from '@/lib/seatClaims';
+import { claimDelegateSeat, leaveDelegateSeat, seatKey } from '@/lib/seatClaims';
+import { useDelegateIdleLogout, markDelegateActivity } from '@/lib/delegateIdle';
+import DelegateIdleWarning from '@/components/delegate/DelegateIdleWarning';
 import { safeStorageKey } from '@/lib/storageKey';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -500,6 +502,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
 
   const handleSubmit = async () => {
     if (!title.trim() || sending || uploading || limitReached) return;
+    markDelegateActivity();
     setSending(true);
     // V-6: the insert result is checked. A failure keeps the form filled and says so,
     // instead of clearing it and showing "submitted". The code sent here is only a
@@ -1022,8 +1025,29 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, country, authLoading, user?.id, seatRetry]);
 
+  // Idle logout (src/lib/delegateIdle.ts). An hour with no pointer, touch, key, scroll,
+  // tab focus or delegate action signs this device out of the seat: it gives up its OWN
+  // claim (leave_delegate_seat) and goes back to the join page with a notice. Wall clock,
+  // so a phone that slept past the hour logs out on wake. Not on an ended session (it holds
+  // nothing) and not before the seat is confirmed. The server expires a claim not seen for
+  // 65 minutes, and the re-verify below stops once idle, so a closed tab frees it too.
+  const [idleLoggedOut, setIdleLoggedOut] = useState(false);
+  // Paused while the session is suspended: delegates waiting out a break are not idle, and
+  // a lunch longer than an hour must not sign the whole room out. Resuming restarts the hour.
+  const idleEnabled = accessState === 'allowed' && !sessionEnded && !sessionSuspended && !!country && !idleLoggedOut;
+  const handleIdleLogout = useCallback(() => {
+    setIdleLoggedOut(true);
+    const target = '/join?code=' + encodeURIComponent(code.toUpperCase()) + '&idle=' + encodeURIComponent(country);
+    // Best effort, and never allowed to strand the delegate on a dead page: the claim
+    // expires on the server anyway.
+    const leave = leaveDelegateSeat(code, country, seatAccessTokenRef.current);
+    const timeout = new Promise((resolve) => setTimeout(resolve, 3000));
+    Promise.race([leave, timeout]).finally(() => router.replace(target));
+  }, [code, country, router]);
+  const idle = useDelegateIdleLogout(idleEnabled, handleIdleLogout);
+
   // Seat re-verify. A claim checked only on load let the wrong device keep a working page
-  // after the chair freed the seat and the right person took it. So while the page is in,
+  // after its claim expired and the right person took the seat. So while the page is in,
   // ask claim_delegate_seat again every 30 s and whenever the tab becomes visible: one
   // RPC, idempotent for your own seat, and it re-takes a seat that was freed and is still
   // free. Only the server's explicit answer that the seat is someone else's ('taken') or
@@ -1037,12 +1061,15 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // per-second work.
   const seatAllowed = accessState === 'allowed';
   const hasMySeatRow = !!committee?.delegates.some((d) => seatKey(d.country) === seatKey(country));
+  // Idle: once the delegate has done nothing for the idle threshold this stops refreshing
+  // the claim's last_seen_at, so the server lets the seat go even if the logout never runs.
+  const idleIsIdle = idle.isIdle;
   useEffect(() => {
-    if (!seatAllowed || sessionEnded || authLoading || !country) return;
+    if (!seatAllowed || sessionEnded || authLoading || !country || idleLoggedOut) return;
     let alive = true;
     let busy = false;
     const check = async (takeover = false) => {
-      if (busy) return;
+      if (busy || idleIsIdle()) return;
       busy = true;
       const res = await claimDelegateSeat(code, country, seatAccessTokenRef.current, { takeover });
       busy = false;
@@ -1066,7 +1093,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       clearInterval(id);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [seatAllowed, sessionEnded, authLoading, code, country, hasMySeatRow, seatNoSeat]);
+  }, [seatAllowed, sessionEnded, authLoading, code, country, hasMySeatRow, seatNoSeat, idleLoggedOut, idleIsIdle]);
 
   // Browser title abbreviation
   useEffect(() => {
@@ -1314,7 +1341,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
      into the flag. Small and constant-ish is the honest bound here. */
   const arcDepth = Math.round(Math.max(4, Math.min(9, 640 / Math.max(discSize, 1))));
 
-  if (loading || authLoading || accessState === 'checking') return <GavelLoader />;
+  if (loading || authLoading || accessState === 'checking' || idleLoggedOut) return <GavelLoader />;
 
   // Seat guard screens (see the claim effect above). Every one of them has a way back.
   const backToJoin = () => router.push('/join?code=' + encodeURIComponent(code.toUpperCase()));
@@ -1416,6 +1443,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // ── Status change handler — optimistic update to avoid visible lag
   const handleStatusChange = async (newStatus: DelegateStatus) => {
     if (!myDelegate) return;
+    markDelegateActivity();
     const delegateId = myDelegate.id;
     // Tapping the status you ALREADY hold is a no-op, and a no-op must cost
     // nothing: no rate-limit slot, no DB write, no pin. The pin is consulted as
@@ -1461,6 +1489,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // ── Join request handler (absent → P or PV)
   const handleRequestJoin = async (desiredStatus: 'present' | 'present-voting') => {
     if (!myDelegate) return;
+    markDelegateActivity();
     setJoinDenied(false);
     // Chair approval OFF → delegates self-admit instantly (no waiting room).
     if (!requireChairApproval) {
@@ -1487,6 +1516,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   );
   const handleAddMeToSpeakers = () => {
     if (!myDelegate || isAbsent) return;
+    markDelegateActivity();
     /* Belt and braces with the disabled CTA: a stale render, a queued tap or a
        phase that changed between paint and press must not slip a request
        through while a caucus or vote owns the floor. */
@@ -1722,10 +1752,17 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     </Panel>
   );
 
+  // The idle warning must reach a delegate on every screen that holds a seat, including the
+  // adjourned and waiting-room screens, or the logout would arrive with no warning.
+  const idleWarning = idle.warning
+    ? <DelegateIdleWarning deadline={idle.deadline} onStillHere={idle.stillHere} onExpire={idle.check} />
+    : null;
+
   if (sessionSuspended && (committee.suspendedAt || wasEverSuspended.current)) {
     return (
       <div className="min-h-dvh flex flex-col items-center justify-center text-center px-6" style={{ background: DG.ivory }}>
         <DelegateStyles />
+        {idleWarning}
         <p style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: DG.deepGold }}>
           {getCommitteeDisplayName(committee.name, language)} · {committee.code}
         </p>
@@ -1744,6 +1781,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     return (
       <div className="min-h-dvh flex flex-col items-center justify-center text-center px-6 py-10" style={{ background: DG.ivory }}>
         <DelegateStyles />
+        {idleWarning}
         <p style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: DG.deepGold }}>
           {getCommitteeDisplayName(committee.name, language)}
         </p>
@@ -2323,6 +2361,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           </div>
         )}
       </Sheet>
+
+      {idleWarning}
 
       <Sheet open={sheet === 'chat'} onClose={() => setSheet(null)} title={t('tab_chat')}>
         {chatDisabled ? (
