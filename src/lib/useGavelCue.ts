@@ -16,7 +16,8 @@ export interface GavelCue {
    * The session code. Two tabs of the chair page on one device are the SAME device, so
    * both are Moderator, and a background tab keeps ticking the anchor it loaded (the
    * Moderator ignores current_speaker events, RULE 6) long after the other tab paused or
-   * called the next speaker. Only the tab the chair last clicked or typed in knocks.
+   * called the next speaker. Only the tab the chair last clicked, typed in, focused or
+   * brought back into view knocks.
    */
   scope?: string;
 }
@@ -32,6 +33,10 @@ const TAB_ID = typeof crypto !== 'undefined' && 'randomUUID' in crypto
   : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const tabKey = (scope: string) => `gavelling-gavel-knock-tab:${scope}`;
 const scopes = new Map<string, number>();
+// A tab claims the knock on a click or key press, and also when it is focused or becomes
+// visible again: otherwise closing the last-clicked tab would leave a key naming a tab
+// that no longer exists, and the remaining tab would stay silent until clicked.
+const onTabVisible = () => { if (document.visibilityState === 'visible') onTabGesture(); };
 const onTabGesture = () => {
   for (const scope of scopes.keys()) {
     try { if (localStorage.getItem(tabKey(scope)) !== TAB_ID) localStorage.setItem(tabKey(scope), TAB_ID); } catch { /* storage blocked */ }
@@ -42,14 +47,20 @@ function retainTabScope(scope: string): () => void {
   if (scopes.size === 0) {
     window.addEventListener('pointerdown', onTabGesture, true);
     window.addEventListener('keydown', onTabGesture, true);
+    window.addEventListener('focus', onTabGesture);
+    document.addEventListener('visibilitychange', onTabVisible);
   }
   scopes.set(scope, (scopes.get(scope) ?? 0) + 1);
+  // Arming in the tab the chair is looking at claims it straight away.
+  try { if (document.visibilityState === 'visible' && document.hasFocus()) onTabGesture(); } catch { /* no document */ }
   return () => {
     const n = (scopes.get(scope) ?? 1) - 1;
     if (n > 0) scopes.set(scope, n); else scopes.delete(scope);
     if (scopes.size === 0) {
       window.removeEventListener('pointerdown', onTabGesture, true);
       window.removeEventListener('keydown', onTabGesture, true);
+      window.removeEventListener('focus', onTabGesture);
+      document.removeEventListener('visibilitychange', onTabVisible);
     }
   };
 }

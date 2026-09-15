@@ -35,14 +35,29 @@ export interface GifResponse { enabled: boolean; items: GifItem[]; next: number 
 
 const cache = new Map<string, { at: number; data: GifResponse }>();
 const hits = new Map<string, { start: number; count: number }>();
+const HITS_MAX = 5000;
+const PRUNE_EVERY = 200;
+let sincePrune = 0;
+
+/** Drop expired windows. Runs every PRUNE_EVERY requests whatever the map's size. */
+function pruneHits(now: number): void {
+  for (const [k, v] of hits) if (now - v.start > RATE_WINDOW_MS) hits.delete(k);
+}
 
 function limited(ip: string): boolean {
   const now = Date.now();
+  if (++sincePrune >= PRUNE_EVERY) { sincePrune = 0; pruneHits(now); }
   const h = hits.get(ip);
   if (!h || now - h.start > RATE_WINDOW_MS) {
+    // Re-insert so Map order is window-start order: the first key is always the oldest.
+    hits.delete(ip);
     hits.set(ip, { start: now, count: 1 });
-    if (hits.size > 5000) {
-      for (const [k, v] of hits) if (now - v.start > RATE_WINDOW_MS) hits.delete(k);
+    if (hits.size > HITS_MAX) pruneHits(now);
+    // Still over the cap (a burst of distinct IPs inside one window): drop the oldest.
+    while (hits.size > HITS_MAX) {
+      const oldest = hits.keys().next().value;
+      if (oldest === undefined) break;
+      hits.delete(oldest);
     }
     return false;
   }

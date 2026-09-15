@@ -45,10 +45,28 @@ export const CHAT_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image
 export const CHAT_ACCEPT = [...CHAT_IMAGE_MIMES, 'application/pdf'].join(',');
 
 const FRAG = '#gva=';
-const PUBLIC_PREFIX = `${SUPABASE_URL}/storage/v1/object/public/${CHAT_BUCKET}/chat/`;
+const CHAT_PATH = new RegExp(`^/storage/v1/object/public/${CHAT_BUCKET}/chat/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/[^/]+$`, 'i');
+const PROJECT_ORIGIN = (() => { try { return new URL(SUPABASE_URL).origin; } catch { return ''; } })();
 const GIPHY_HOST = /^https:\/\/(media\d*\.giphy\.com|i\.giphy\.com)\//;
 
-function trustedFileUrl(u: string): boolean { return u.startsWith(PUBLIC_PREFIX); }
+/**
+ * A file in this project's chat folder, and nothing that only LOOKS like one. A plain prefix
+ * test let `.../chat/../../<other-bucket>/x.png` through, so the raw string must carry no dot
+ * segment (literal or percent-encoded) and no backslash, and the PARSED URL must have exactly
+ * this project's origin and the path `/storage/v1/object/public/session-documents/chat/<uuid>/<file>`.
+ */
+function trustedFileUrl(u: string): boolean {
+  if (!PROJECT_ORIGIN) return false;
+  const raw = u.split('#')[0].split('?')[0];
+  if (raw.includes('\\') || /(^|\/)\.{1,2}(\/|$)/.test(raw) || /%2e|%2f|%5c/i.test(raw)) return false;
+  let parsed: URL;
+  try { parsed = new URL(u); } catch { return false; }
+  if (parsed.origin !== PROJECT_ORIGIN || parsed.username || parsed.password) return false;
+  // What was written must be exactly the origin plus the normalised pathname: nothing was
+  // resolved away, re-encoded or smuggled in before the host.
+  if (raw !== PROJECT_ORIGIN + parsed.pathname) return false;
+  return CHAT_PATH.test(parsed.pathname);
+}
 function trustedGifUrl(u: string): boolean { return GIPHY_HOST.test(u); }
 
 function oneLine(s: string, max = 120): string {

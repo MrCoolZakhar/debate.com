@@ -506,6 +506,10 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   /** Verdicts this screen has already recorded, re-applied after every refetch so a
    *  refetch racing the write cannot revert a result that is already on screen. */
   const docResultPatchRef = useRef<Record<string, 'passed' | 'failed' | 'introduced'>>({});
+  // Back from a result puts the paper back to `introduced`, but only once THAT vote state
+  // has landed (seq per document). If another device's newer state wins instead, nothing
+  // is written to the document and the stored state is applied.
+  const backStatusSeqRef = useRef<Record<string, number>>({});
   /** Optimistic observer placards awaiting confirmation from the refetched row. */
   const observerWriteRef = useRef<Record<string, { value: boolean; at: number }>>({});
   const [observerOverrides, setObserverOverrides] = useState<Record<string, boolean>>({});
@@ -1061,6 +1065,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   const persistResult = (docId: string, result: 'passed' | 'failed' | 'introduced') => {
     if (isViewOnly) return;
+    // A verdict given after Back supersedes the `introduced` still waiting on Back's save.
+    if (result !== 'introduced') delete backStatusSeqRef.current[docId];
     // Recorded so every refetch re-applies it: a fetch already in flight still
     // carries the pre-vote status and would otherwise revert the verdict on screen.
     docResultPatchRef.current[docId] = result;
@@ -1088,16 +1094,25 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   // ── Vote writes ────────────────────────────────────────────────────────────
   // Optimistic first (the ref and the state), then a serialised, checked write. Only the
   // driving device ever calls this; a Commenter's controls are not rendered.
+  /** Back's `introduced` status write, once the vote state it belongs to has landed. */
+  const flushBackStatus = (docId: string) => {
+    const want = backStatusSeqRef.current[docId];
+    if (want == null || (savedSeqRef.current[docId] ?? 0) < want) return;
+    delete backStatusSeqRef.current[docId];
+    persistResult(docId, 'introduced');
+  };
+
   const saveLatest = (docId: string) => {
     saveChainRef.current = saveChainRef.current.then(async () => {
       const latest = voteStatesRef.current[docId];
       if (!latest) return;
       // Every queued save sends the LATEST state, so once it has landed the saves queued
       // behind it have nothing new to send.
-      if ((savedSeqRef.current[docId] ?? 0) >= latest.seq) return;
+      if ((savedSeqRef.current[docId] ?? 0) >= latest.seq) { flushBackStatus(docId); return; }
       const r = await saveVoteState(docId, latest, committee.code, suffix);
       if (r === 'ok') {
         savedSeqRef.current[docId] = Math.max(savedSeqRef.current[docId] ?? 0, latest.seq);
+        flushBackStatus(docId);
         setVoteSaveError((prev) => (prev?.docId === docId ? null : prev));
         return;
       }
@@ -1118,6 +1133,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           const again = await saveVoteState(docId, next, committee.code, suffix);
           if (again === 'ok') {
             savedSeqRef.current[docId] = Math.max(savedSeqRef.current[docId] ?? 0, seq);
+            // Same ballot re-applied: it carries the Back, so the waiting status write goes out.
+            flushBackStatus(docId);
             setVoteSaveError((prev) => (prev?.docId === docId ? null : prev));
             return;
           }
@@ -1126,8 +1143,10 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         } else {
           setVoteSaveError({ docId, kind: 'stale' });
         }
-        // A different ballot (or a second refusal): the DB wins.
+        // A different ballot (or a second refusal): the DB wins. A Back waiting on this save
+        // is dropped with it: the document keeps the status the stored state implies.
         delete pendingSeqRef.current[docId];
+        delete backStatusSeqRef.current[docId];
         if (loaded) {
           voteStatesRef.current = { ...voteStatesRef.current, ...loaded };
           setVoteStates(voteStatesRef.current);
@@ -1329,10 +1348,10 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const stepBack = () => {
     if (isViewOnly || !vote || !selectedDoc) return;
     const docId = selectedDoc.id;
-    if (vote.status === 'result') {
+    const fromResult = vote.status === 'result' && (() => {
       const docStatus = committee.documents.find((d) => d.id === docId)?.status;
-      if (docStatus === 'passed' || docStatus === 'failed' || vote.result) persistResult(docId, 'introduced');
-    }
+      return docStatus === 'passed' || docStatus === 'failed' || !!vote.result;
+    })();
     updateVote((prev) => {
       if (prev.status === 'rights-speakers' && prev.rightsIndex > 0) return { rightsIndex: prev.rightsIndex - 1 };
       if (prev.status !== 'voting') return { status: 'voting', result: null, rightsOrder: [], rightsIndex: 0 };
@@ -1346,6 +1365,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       if (idx > 0) return { currentVoterIndex: idx - 1 };
       return {};
     });
+    // Put the paper back to `introduced` only once this Back's vote state has landed
+    // (flushBackStatus). commitVote stamped its seq synchronously; the save runs later.
+    if (fromResult && pendingSeqRef.current[docId] != null) backStatusSeqRef.current[docId] = pendingSeqRef.current[docId];
   };
 
   const finishWithResult = () => {

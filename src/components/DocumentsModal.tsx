@@ -664,7 +664,11 @@ function DocCard({ doc, committee, onRemove, onStartPresentation, requireApprova
   // Approval gate: while the setting is on and this doc isn't approved yet, offer Approve/Reject
   // (also lets a chair reverse a rejection) and hold back Introduce until approved. Once the doc has
   // been introduced/passed/failed the gate is moot.
-  const canDecide = requireApproval && doc.approval !== 'approved' && (doc.status === 'submitted' || doc.status === 'on-floor');
+  // An introduced working paper can be re-introduced (below), so the gate applies to it too,
+  // and Approve/Reject stays offered there: otherwise a paper introduced before the setting was
+  // switched on, or rejected from another device, would have no way forward.
+  const canDecide = requireApproval && doc.approval !== 'approved'
+    && (doc.status === 'submitted' || doc.status === 'on-floor' || (doc.status === 'introduced' && doc.type === 'working-paper'));
   const approvalBlocksIntroduce = requireApproval && doc.approval !== 'approved';
 
   return (
@@ -806,7 +810,7 @@ function DocCard({ doc, committee, onRemove, onStartPresentation, requireApprova
               whose introduction was closed before Q&A finished is still "introduced" and
               offers Introduce again (setup prefilled with its saved times), so it can always
               reach its automatic pass. An introduced draft resolution goes to the voting page. */}
-          {!isViewOnly && ((nextStatus === 'introduced' && !approvalBlocksIntroduce) || (doc.status === 'introduced' && doc.type === 'working-paper')) && (
+          {!isViewOnly && !approvalBlocksIntroduce && (nextStatus === 'introduced' || (doc.status === 'introduced' && doc.type === 'working-paper')) && (
             <button onClick={() => onStartPresentation(doc)}
               className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none gv-lift">
               {`${t('documents_introduce')} →`}

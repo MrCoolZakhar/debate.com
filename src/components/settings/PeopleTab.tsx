@@ -110,8 +110,11 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
       tone: 'danger',
       icon: UserX,
       run: async () => {
-        const ok = await kickDelegateSeat(committee.code, suffix, committee.id, country);
-        if (!ok) return t('stg_action_failed');
+        const res = await kickDelegateSeat(committee.code, suffix, committee.id, country);
+        if (!res.ok) {
+          if (res.reason === 'reserved') { void load(); return t('stg_kick_reserved'); }
+          return t('stg_action_failed');
+        }
         setData((prev) => prev ? {
           ...prev,
           seats: prev.seats.filter((s) => seatKey(s.country) !== seatKey(country)),
@@ -132,7 +135,10 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
       icon: UserX,
       run: async () => {
         const res = await removeSessionChair(committee.code, suffix, name);
-        if (!res.ok) return res.reason === 'moderator' ? t('stg_chair_remove_moderator') : t('stg_action_failed');
+        if (!res.ok) {
+          if (res.reason === 'not_found') { void load(); return t('stg_chair_remove_not_found'); }
+          return res.reason === 'moderator' ? t('stg_chair_remove_moderator') : t('stg_action_failed');
+        }
         void load();
         return true;
       },
@@ -309,6 +315,8 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
               const active = claims.some((c) => c.active);
               const latest = claims.reduce<string | null>((acc, c) => (!acc || c.lastSeenAt > acc ? c.lastSeenAt : acc), null);
               const accounts = claims.filter((c) => c.kind === 'account').length;
+              // Every holder is the seat's allocated account: the server refuses the kick.
+              const reservedOnly = joined && claims.every((c) => c.reserved);
               const name = getCountryDisplayName(d.country, language);
               const kickLeft = kickedAt ? Math.min(10, Math.max(1, Math.ceil((600_000 - (now + skew - Date.parse(kickedAt))) / 60_000))) : 0;
               return (
@@ -340,7 +348,12 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
                       </span>
                     </span>
                   </span>
-                  {isModerator && joined && (
+                  {isModerator && reservedOnly && (
+                    <span className="shrink-0" style={{ maxWidth: 220, fontSize: 12, fontWeight: 700, color: K.inkSoft, lineHeight: 1.35 }}>
+                      {t('stg_kick_reserved')}
+                    </span>
+                  )}
+                  {isModerator && joined && !reservedOnly && (
                     <button type="button" onClick={() => kick(d.country)} aria-label={t('stg_kick_aria', { country: name })}
                       className="stg-focus stg-press inline-flex items-center gap-1.5 shrink-0"
                       style={{ height: 34, padding: '0 12px', borderRadius: 10, border: 'none', background: 'transparent', color: K.danger, fontSize: 12.5, fontWeight: 800, cursor: 'pointer', boxShadow: 'inset 0 0 0 1px rgba(155,44,34,0.25)' }}>
