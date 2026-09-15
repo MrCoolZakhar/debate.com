@@ -38,10 +38,18 @@ const LOCALES: Record<string, string> = { en: 'en-GB', es: 'es-ES', fr: 'fr-FR',
    centred dialog on the chair laptop and in a phone-width sheet on the delegate page. */
 const WIDE_PX = 640;
 
+/** A v4 UUID: it becomes the definition row's primary key (messages.id is uuid). */
 function newGroupId(): string {
   const c = typeof crypto !== 'undefined' ? crypto : undefined;
   if (c?.randomUUID) return c.randomUUID();
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  // randomUUID is missing outside a secure context (plain http on a LAN address).
+  const b = new Uint8Array(16);
+  if (c?.getRandomValues) c.getRandomValues(b);
+  else for (let i = 0; i < 16; i++) b[i] = Math.floor(Math.random() * 256);
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
 /** Threads where more than two people talk, so incoming bubbles carry a name and a flag. */
@@ -282,7 +290,8 @@ export default function ChatPanel({
     setActiveConv(key);
     setShowThread(true);
     markDelegateActivity();
-    const ok = await sendMessageToDB(committee.id, '__system__', content, committee.code, chairSuffix, true, GROUP_DEF_RECIPIENT);
+    // The definition row's own id IS the group id (primary key), so no later row can claim it.
+    const ok = await sendMessageToDB(committee.id, '__system__', content, committee.code, chairSuffix, true, GROUP_DEF_RECIPIENT, undefined, id);
     if (!ok) {
       setPendingGroups((p) => p.filter((x) => x.id !== pending.id));
       setActiveConv((cur) => (cur === key ? 'everyone' : cur));

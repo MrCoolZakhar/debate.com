@@ -5,7 +5,7 @@ import FitToScreen from '@/components/FitToScreen';
 import CowDelegationBoard from '@/components/CowDelegationBoard';
 import Link from 'next/link';
 import {
-  getCommitteeByCode,
+  getCommitteeByCodeWithRetry,
   sendMessage as sendMessageDB,
   caucusRemainingNow,
   moderatedCaucusRemainingNow,
@@ -261,6 +261,9 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // The initial room read failed (after its retries): an inline Retry, never "not found".
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   // Live seconds on the TOTAL caucus clock. This view used to render
   // `caucus.remainingTime` raw, with no interval at all — but that field is only the value
@@ -305,9 +308,12 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
     let unsub: (() => void) | null = null;
 
     let cancelled = false;
-    getCommitteeByCode(upperCode).then((c) => {
+    // A failed read is not "not found": retried with backoff, then an inline Retry.
+    getCommitteeByCodeWithRetry(upperCode, { isCancelled: () => cancelled }).then((result) => {
       if (cancelled) return;
+      setLoadFailed(result.status === 'error');
       setLoading(false);
+      const c = result.status === 'ok' ? result.committee : null;
       if (!c) return;
       setCommittee(c);
       // One pipeline for every event (src/lib/sessionSync.ts): each event refetches ONLY its
@@ -350,7 +356,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
     });
 
     return () => { cancelled = true; unsub?.(); };
-  }, [code]);
+  }, [code, loadAttempt]);
 
   if (accessState === 'signin') {
     return (
@@ -408,6 +414,23 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
           <circle cx="56" cy="56" r="3" fill="#1B3828" opacity="0.5" />
         </svg>
         <p className="text-[#9A8A78] text-sm font-mono tracking-widest">LOADING…</p>
+      </div>
+    );
+  }
+
+  if (!committee && loadFailed) {
+    return (
+      <div className="min-h-screen bg-[#F6F1E9] flex items-center justify-center px-6">
+        <div className="text-center max-w-sm" role="alert">
+          <p className="text-[#1C1410] text-xl font-bold mb-6">{t('session_load_failed')}</p>
+          <button
+            onClick={() => { setLoadFailed(false); setLoading(true); setLoadAttempt((n) => n + 1); }}
+            className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none"
+            style={{ backgroundColor: '#1B3828' }}
+          >
+            {t('delegate_seat_retry')}
+          </button>
+        </div>
       </div>
     );
   }

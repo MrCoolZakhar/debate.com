@@ -19,8 +19,9 @@ export interface ChatConv {
 // definition never shows up as a message anywhere, on this bundle or an older one.
 // A group MESSAGE is an ordinary row with recipient `group:<id>` and is_private true.
 //
-// The first definition row for an id wins, so a later forged row cannot rename a group or
-// add members to it. Messages are shown only to members and only when their sender is a
+// The definition row's primary key IS the group id, and that row wins (parseChatGroups), so a
+// forged row cannot rename a group or add members to it, even backdated (created_at is
+// client-writable). Older rows without that binding fall back to "first by created_at". Messages are shown only to members and only when their sender is a
 // member.
 //
 // NOT PRIVATE. `messages` SELECT is `true` and every device downloads every row of its
@@ -81,10 +82,24 @@ export function parseChatGroups(messages: ChatMessage[]): Map<string, ChatGroupD
   const ts = (m: ChatMessage) => new Date(m.timestamp).getTime();
   const defs = messages.filter((m) => m.sender === '__system__' && m.recipient === GROUP_DEF_RECIPIENT)
     .sort((a, b) => ts(a) - ts(b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  // A definition whose ROW id is the group id (the messages primary key; `pending-group-<id>`
+  // for this device's optimistic copy) is authoritative: no other row can ever carry that id.
+  // `created_at` is client-writable, so "earliest" alone let a backdated forged row take over
+  // a group whose id it read. Earliest-wins remains only for groups with no bound row (rows
+  // written before definitions carried their id).
+  const bound = (m: ChatMessage, def: ChatGroupDef) => {
+    const rowId = String(m.id).toLowerCase();
+    const id = def.id.toLowerCase();
+    return rowId === id || rowId === `pending-group-${id}`;
+  };
+  const legacy = new Map<string, ChatGroupDef>();
   for (const m of defs) {
     const def = parseGroupDefRow(m);
-    if (def && !out.has(def.id)) out.set(def.id, def);
+    if (!def) continue;
+    if (bound(m, def)) { if (!out.has(def.id)) out.set(def.id, def); }
+    else if (!legacy.has(def.id)) legacy.set(def.id, def);
   }
+  for (const [id, def] of legacy) if (!out.has(id)) out.set(id, def);
   groupCache.set(messages, out);
   return out;
 }

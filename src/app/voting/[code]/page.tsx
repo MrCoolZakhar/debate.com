@@ -16,7 +16,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { PreVoteScreen } from '@/components/voting/PreVoteScreen';
 import { serverNowIso } from '@/lib/serverClock';
 import { startSessionSync, rowFields } from '@/lib/sessionSync';
-import { getCommitteeByCode, setDelegateStatus as setDelegateStatusInDB, setDelegateObserver as setDelegateObserverInDB, updateDocumentStatus as updateDocumentStatusInDB, saveCommitteeSettings, endDebate as endDebateInDB } from '@/lib/committeeService';
+import { getCommitteeByCodeWithRetry, setDelegateStatus as setDelegateStatusInDB, setDelegateObserver as setDelegateObserverInDB, updateDocumentStatus as updateDocumentStatusInDB, saveCommitteeSettings, endDebate as endDebateInDB } from '@/lib/committeeService';
 import { useSettingsStore, DEFAULT_SETTINGS, impliedSettings, stripNonHydratedSettings, type CommitteeSettings } from '@/lib/settingsStore';
 import { supabase } from '@/lib/supabase';
 import { deriveGavelRole, getGavelDeviceId } from '@/lib/gavelDevice';
@@ -477,6 +477,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const hydrateSettings = useSettingsStore((s) => s.hydrateSettings);
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [loading, setLoading] = useState(true);
+  // The initial room read failed (after its retries): an inline Retry, never "not found".
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
 
   // ── Standalone chair gate ──────────────────────────────────────────────────
@@ -734,8 +737,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
     async function load() {
       const ticket = ++refetchSeqRef.current;
-      const found = await getCommitteeByCode(code);
+      // A failed read is not "not found": retried with backoff, then an inline Retry.
+      const result = await getCommitteeByCodeWithRetry(code, { isCancelled: () => cancelled });
       if (cancelled || ticket !== refetchSeqRef.current) return;
+      if (result.status === 'error') { setLoadFailed(true); setLoading(false); return; }
+      setLoadFailed(false);
+      const found = result.status === 'ok' ? result.committee : null;
       if (!found) setCommittee(null);
       if (found) {
         // Defaults the committee's IDENTITY implies — today: a Security Council
@@ -823,7 +830,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     }
     load();
     return () => { cancelled = true; unsubscribe?.(); };
-  }, [code]);
+  }, [code, loadAttempt]);
 
   // ── Observer write reconciliation ──────────────────────────────────────────
   // `setDelegateObserver` returns void and swallows its error, and every delegates
@@ -963,6 +970,23 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>{t('session_access_error_title')}</h1>
           <p className="mb-6" style={{ color: '#6A5A4A' }}>{t('session_access_error_body')}</p>
           <button onClick={votingAccess.retry} className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>{t('delegate_seat_retry')}</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!committee && loadFailed) {
+    return (
+      <div className="min-h-screen bg-[#F6F1E9] flex items-center justify-center px-6">
+        <div className="text-center max-w-sm" role="alert">
+          <h1 className="text-xl font-bold text-[#1C1410] mb-6">{t('session_load_failed')}</h1>
+          <button
+            onClick={() => { setLoadFailed(false); setLoading(true); setLoadAttempt((n) => n + 1); }}
+            className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none"
+            style={{ backgroundColor: '#1B3828' }}
+          >
+            {t('delegate_seat_retry')}
+          </button>
         </div>
       </div>
     );

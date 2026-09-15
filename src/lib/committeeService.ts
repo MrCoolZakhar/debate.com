@@ -302,13 +302,94 @@ export async function createCommittee(
 }
 
 export async function getCommitteeByCode(code: string): Promise<Committee | null> {
+  // Unchanged contract for every existing caller: null on not-found AND on any failure of the
+  // committee row read; a failed sub-query still yields an empty slice (lax).
+  try {
+    const r = await loadCommitteeByCode(code, false);
+    return r.status === 'ok' ? r.committee : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The initial page load's read. Tells a session that does not exist ('not_found') apart from
+ * a read that could not be answered ('error': network blip, a timeout, a 5xx), so a page never
+ * says "session not found" because the connection dropped. STRICT: a failed sub-query is an
+ * 'error' too, because an empty roster or an empty chat is a wrong answer on a first load.
+ */
+export type CommitteeLoadResult =
+  | { status: 'ok'; committee: Committee }
+  | { status: 'not_found' }
+  | { status: 'error' };
+
+export async function getCommitteeByCodeResult(code: string): Promise<CommitteeLoadResult> {
+  try {
+    return await loadCommitteeByCode(code, true);
+  } catch {
+    return { status: 'error' };
+  }
+}
+
+/**
+ * getCommitteeByCodeResult, retried on 'error' with backoff (default 3 attempts: now, +0.8 s,
+ * +2 s). 'ok' and 'not_found' are answers and return at once. `isCancelled` stops the wait
+ * between attempts (an unmounted page).
+ */
+export async function getCommitteeByCodeWithRetry(
+  code: string,
+  opts: { attempts?: number; isCancelled?: () => boolean } = {},
+): Promise<CommitteeLoadResult> {
+  const attempts = Math.max(1, opts.attempts ?? 3);
+  const delays = [800, 2000, 4000];
+  let last: CommitteeLoadResult = { status: 'error' };
+  for (let i = 0; i < attempts; i++) {
+    if (i > 0) {
+      await new Promise((r) => setTimeout(r, delays[Math.min(i - 1, delays.length - 1)]));
+      if (opts.isCancelled?.()) return last;
+    }
+    last = await getCommitteeByCodeResult(code);
+    if (last.status !== 'error' || opts.isCancelled?.()) return last;
+  }
+  return last;
+}
+
+async function loadCommitteeByCode(code: string, strict: boolean): Promise<CommitteeLoadResult> {
   const upperCode = code.toUpperCase();
 
+  // maybeSingle: zero rows is data (not found), not an error. An error here is a failed read.
   const { data: committeeRow, error: committeeError } = await supabase
-    .from('committees').select('*').eq('code', upperCode).single();
-  if (committeeError || !committeeRow) return null;
+    .from('committees').select('*').eq('code', upperCode).maybeSingle().retry(!strict);
+  if (committeeError) {
+    // PGRST116 = more than one row: an answer about the data, kept as "no match" like before.
+    return committeeError.code === 'PGRST116' ? { status: 'not_found' } : { status: 'error' };
+  }
+  if (!committeeRow) return { status: 'not_found' };
 
+  // `.retry(!strict)`: the strict (initial page load) read does NOT use postgrest-js's own
+  // 1 s / 2 s / 4 s network retries, because getCommitteeByCodeWithRetry retries the whole
+  // read; stacked, a dead connection kept the loader up for ~25 s. Lax keeps the default.
   // Run all sub-queries in parallel (S8) — was 7 sequential round-trips (~700ms–2s total)
+  const subResults = await Promise.all([
+    supabase.from('delegates').select('*').eq('committee_id', committeeRow.id).order('country', { ascending: true }).retry(!strict),
+    // position, then created_at, then id: `position` alone is not a total order if two rows
+    // ever share one (rows written before speakers_list_add existed still can), and an
+    // undefined order is a queue that reshuffles on every refetch. Every queue reader uses
+    // this same three-key order so all devices agree.
+    supabase.from('speakers_list').select('*').eq('committee_id', committeeRow.id).eq('list_type', 'gsl')
+      .order('position', { ascending: true }).order('created_at', { ascending: true }).order('id', { ascending: true }).retry(!strict),
+    supabase.from('speakers_list').select('*').eq('committee_id', committeeRow.id).eq('list_type', 'caucus')
+      .order('position', { ascending: true }).order('created_at', { ascending: true }).order('id', { ascending: true }).retry(!strict),
+    supabase.from('current_speaker').select('*').eq('committee_id', committeeRow.id).maybeSingle().retry(!strict),
+    // Include ALL pending motions, incl. the gsl-request / join-request pseudo-motions: the
+    // chair's request panels and the delegate's pending-state UI read them from here. The main
+    // motions feed filters them out at the display layer — do NOT exclude them at the query
+    // level or request-to-speak and join requests silently break.
+    supabase.from('motions').select('*').eq('committee_id', committeeRow.id).eq('status', 'pending').order('disruptiveness', { ascending: false }).retry(!strict),
+    supabase.from('documents').select('*').eq('committee_id', committeeRow.id).order('created_at', { ascending: true }).retry(!strict),
+    supabase.from('messages').select('*').eq('committee_id', committeeRow.id).order('created_at', { ascending: true }).retry(!strict),
+  ]);
+  if (strict && subResults.some((r) => r.error)) return { status: 'error' };
   const [
     { data: delegateRows },
     { data: speakersRows },
@@ -317,25 +398,7 @@ export async function getCommitteeByCode(code: string): Promise<Committee | null
     { data: motionRows },
     { data: docRows },
     { data: messageRows },
-  ] = await Promise.all([
-    supabase.from('delegates').select('*').eq('committee_id', committeeRow.id).order('country', { ascending: true }),
-    // position, then created_at, then id: `position` alone is not a total order if two rows
-    // ever share one (rows written before speakers_list_add existed still can), and an
-    // undefined order is a queue that reshuffles on every refetch. Every queue reader uses
-    // this same three-key order so all devices agree.
-    supabase.from('speakers_list').select('*').eq('committee_id', committeeRow.id).eq('list_type', 'gsl')
-      .order('position', { ascending: true }).order('created_at', { ascending: true }).order('id', { ascending: true }),
-    supabase.from('speakers_list').select('*').eq('committee_id', committeeRow.id).eq('list_type', 'caucus')
-      .order('position', { ascending: true }).order('created_at', { ascending: true }).order('id', { ascending: true }),
-    supabase.from('current_speaker').select('*').eq('committee_id', committeeRow.id).maybeSingle(),
-    // Include ALL pending motions, incl. the gsl-request / join-request pseudo-motions: the
-    // chair's request panels and the delegate's pending-state UI read them from here. The main
-    // motions feed filters them out at the display layer — do NOT exclude them at the query
-    // level or request-to-speak and join requests silently break.
-    supabase.from('motions').select('*').eq('committee_id', committeeRow.id).eq('status', 'pending').order('disruptiveness', { ascending: false }),
-    supabase.from('documents').select('*').eq('committee_id', committeeRow.id).order('created_at', { ascending: true }),
-    supabase.from('messages').select('*').eq('committee_id', committeeRow.id).order('created_at', { ascending: true }),
-  ]);
+  ] = subResults;
 
   const delegates: Delegate[] = (delegateRows ?? []).map((d: DbRow) => ({
     id: d.id as string, country: d.country as string, status: d.status as DelegateStatus,
@@ -394,8 +457,11 @@ export async function getCommitteeByCode(code: string): Promise<Committee | null
   }));
 
   return {
-    ...rowToCommittee(committeeRow, delegates, gslDeduped, caucusQueue, currentSpeaker, speakerTimeRemaining, pendingMotions, documents, messages, speakerStartedAt),
-    speakerSeatedAt: currentSpeaker ? speakerSeatedAt : null,
+    status: 'ok',
+    committee: {
+      ...rowToCommittee(committeeRow, delegates, gslDeduped, caucusQueue, currentSpeaker, speakerTimeRemaining, pendingMotions, documents, messages, speakerStartedAt),
+      speakerSeatedAt: currentSpeaker ? speakerSeatedAt : null,
+    },
   };
 }
 
@@ -1483,6 +1549,8 @@ export async function sendMessage(
   code: string, chairSuffix: string | undefined,
   isPrivate: boolean = false, recipient?: string,
   messageType?: 'general' | 'speech-comment',
+  /** Client-chosen row id (a UUID). Group definitions use the group id, see chatConversations.ts. */
+  rowId?: string,
 ): Promise<boolean> {
   // Encode messageType as a prefix so it survives without a schema change
   const encoded = messageType === 'speech-comment' ? `[🎙️] ${content}` : content;
@@ -1490,6 +1558,7 @@ export async function sendMessage(
   // the RLS write-gate keys off them and will silently reject anything else.
   const { error } = await sessionClient(code, chairSuffix).from('messages').insert({
     committee_id: committeeId, sender, content: encoded, is_private: isPrivate, recipient: recipient ?? null,
+    ...(rowId ? { id: rowId } : {}),
   });
   if (error) { console.error('Error sending message:', error); return false; }
   // Reported so the sender can render a real failed state instead of a bubble that silently

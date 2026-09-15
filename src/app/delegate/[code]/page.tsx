@@ -28,7 +28,7 @@ import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
 import { startSessionSync, rowFields, withCurrentSpeaker, withLists, type ConnectionState } from '@/lib/sessionSync';
 import ConnectionPill from '@/components/ConnectionPill';
 import {
-  getCommitteeByCode,
+  getCommitteeByCodeWithRetry,
   // Explicitly sanctioned on this surface: a pure reader over the committee row,
   // no store, no localStorage (see its comment banner in committeeService).
   caucusRemainingNow,
@@ -826,6 +826,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
      check must re-read CURRENT state, never the closure it was armed in. */
   const committeeRef = useRef<Committee | null>(null);
   const [loading, setLoading] = useState(true);
+  // The initial room read failed (after its retries): an inline Retry, never "not found".
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [sheet, setSheet] = useState<DelegateSheet>(null);
   const [docsSection, setDocsSection] = useState<'submit' | 'view'>('submit');
   const [sessionSuspended, setSessionSuspended] = useState(false);
@@ -909,9 +912,12 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     let unsubscribe: (() => void) | undefined;
     let cancelled = false;
     async function load() {
-      const found = await getCommitteeByCode(code.toUpperCase());
+      // A failed read is not "not found": retried with backoff, then an inline Retry.
+      const result = await getCommitteeByCodeWithRetry(code.toUpperCase(), { isCancelled: () => cancelled });
       if (cancelled) return;
-      setCommittee(found ?? null);
+      setLoadFailed(result.status === 'error');
+      const found = result.status === 'ok' ? result.committee : null;
+      setCommittee(found);
       setLoading(false);
       if (found) {
         if (found.endedAt) setSessionEnded(true);
@@ -982,7 +988,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     }
     load();
     return () => { cancelled = true; unsubscribe?.(); };
-  }, [code]);
+  }, [code, loadAttempt]);
 
   // Seat guard. Runs independently of the committee load. claim_delegate_seat is the one
   // authority for who may sit here (src/lib/seatClaims.ts):
@@ -1403,6 +1409,18 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         primaryLabel={t('delegate_seat_retry')} onPrimary={retrySeat}
         backLabel={t('delegate_seat_back')} onBack={backToJoin}
       />
+    );
+  }
+
+  if (!committee && loadFailed) {
+    return (
+      <div className="min-h-dvh flex items-center justify-center px-6" style={{ background: DG.ivory }}>
+        <DelegateStyles />
+        <Panel className="dgv-rise w-full max-w-sm text-center">
+          <h1 role="alert" style={{ margin: '0 0 20px', fontFamily: OUTFIT, fontSize: 22, fontWeight: 900, color: DG.forest }}>{t('session_load_failed')}</h1>
+          <ChunkyButton onClick={() => { setLoadFailed(false); setLoading(true); setLoadAttempt((n) => n + 1); }}>{t('delegate_seat_retry')}</ChunkyButton>
+        </Panel>
+      </div>
     );
   }
 

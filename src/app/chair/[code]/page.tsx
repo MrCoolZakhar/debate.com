@@ -65,6 +65,7 @@ import {
 } from '@/lib/sessionNotifications';
 import {
   getCommitteeByCode,
+  getCommitteeByCodeWithRetry,
   logEvent,
   setPhase as setPhaseInDB,
   setDelegateStatus as setDelegateStatusInDB,
@@ -1407,6 +1408,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const { user, session, loading: authLoading } = useAuth();
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [loading, setLoading] = useState(true);
+  // The initial room read failed (after its retries): an inline Retry, never "not found".
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   // Conference-session access guard (Phase 2 #8). Standalone sessions stay anonymous
   // ('allowed'); a conference session requires a signed-in user who is a chair of THIS
@@ -1683,8 +1687,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     // start nothing: no state writes, no sync, no heartbeat, no listeners, no channel.
     let cancelled = false;
     async function load() {
-      const found = await getCommitteeByCode(code);
+      // A failed read is not "not found": retried with backoff, then an inline Retry.
+      const result = await getCommitteeByCodeWithRetry(code, { isCancelled: () => cancelled });
       if (cancelled) return;
+      if (result.status === 'error') { setLoadFailed(true); setLoading(false); return; }
+      setLoadFailed(false);
+      const found = result.status === 'ok' ? result.committee : null;
       if (found) {
         if (found.suspendedAt) {
           setSessionSuspended(true);
@@ -1939,7 +1947,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     }
     load();
     return () => { cancelled = true; unsubscribe?.(); };
-  }, [code, seatSpeakerClock]);
+  }, [code, seatSpeakerClock, loadAttempt]);
 
   useEffect(() => {
     if (!committee?.id || !myChairName) return;
@@ -2583,9 +2591,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
   const caucusRollCallCommittee = useMemo(
     () => committee ? { ...committee, speakersList: committee.caucusQueue ?? [], currentSpeaker: null } : null,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     // caucus / pendingMotions / endedAt too: RollCallPanel's memo compares all three, and a
     // snapshot missing them kept the OLD caucus speaker at #1 of the sidebar queue.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [committee?.caucusQueue, committee?.delegates, committee?.phase, committee?.caucus, committee?.pendingMotions, committee?.endedAt]
   );
 
@@ -3387,6 +3395,23 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           <p className="mb-6" style={{ color: '#6A5A4A' }}>{t('session_access_error_body')}</p>
           <button
             onClick={chairAccess.retry}
+            className="font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none gv-lift"
+            style={{ backgroundColor: '#1B3828' }}
+          >
+            {t('delegate_seat_retry')}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!committee && loadFailed) {
+    return (
+      <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
+        <div className="text-center max-w-sm" role="alert">
+          <p className="text-[#1C1410] text-xl font-bold mb-6">{t('session_load_failed')}</p>
+          <button
+            onClick={() => { setLoadFailed(false); setLoading(true); setLoadAttempt((n) => n + 1); }}
             className="font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none gv-lift"
             style={{ backgroundColor: '#1B3828' }}
           >
