@@ -41,13 +41,6 @@ Last swept: 11 Sep 2026.
       `chair_invite_reminder_1` in Communications and watch it be ignored. Real
       inconsistency, deliberately not fixed silently.
 
-## Blocked on information
-
-- [ ] **ONUcly's original email failure was never explained.** The code now
-      reports the true cause instead of blaming the audience filter, but the
-      original fault is still unknown. Blocked on: the exact on-screen error
-      text from them.
-
 ## Needs a human's eyes
 
 - [ ] **No admin surface has been verified visually, and it is now LIVE.**

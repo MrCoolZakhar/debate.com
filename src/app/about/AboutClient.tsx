@@ -65,7 +65,7 @@ const AMBASSADORS = [
   // ── Joined since the last update ──────────────────────────────────────────
   // `photo: null` is deliberate and not a placeholder to fill in blindly: it
   // means we have the person but not a picture of them, and the card renders
-  // their initials instead. Two of the eight below are in that state. Adding
+  // their initials instead. One of the nine below is in that state. Adding
   // a photo is just swapping the null for a path.
   // Europe
   { name: 'Marsia Qurku',            country: 'Albania',        initials: 'MQ', photo: '/ambassador-photos/marsia_ambassador.webp', photoPosition: '51% 55%', photoScale: 1.5 },
@@ -75,9 +75,11 @@ const AMBASSADORS = [
   { name: 'Sarth Agrawal',           country: 'Jordan',         initials: 'SA', photo: '/ambassador-photos/sarth_ambassador.webp', photoPosition: '45% 20%', photoScale: 1.8 },
   { name: 'Nadia Seranity',          country: 'Sri Lanka',      initials: 'NS', photo: '/ambassador-photos/nadia_ambassador.webp', photoPosition: '48% 38%', photoScale: 1.3 },
   { name: 'Qais Soub',               country: 'Jordan',         initials: 'QS', photo: null },
-  { name: 'Arun Kaloo',              country: 'Malaysia',       initials: 'AK', photo: null },
+  { name: 'Arun Kaloo',              country: 'Malaysia',       initials: 'AK', photo: '/ambassador-photos/arun_ambassador.webp' },
   // North America
   { name: 'Nolan Taarea',            country: 'United States',  initials: 'NT', photo: '/ambassador-photos/nolan_ambassador.webp', photoPosition: '52% 22%', photoScale: 1.35 },
+  // South America
+  { name: 'Alejandro Ospina Gil',    country: 'Colombia',       initials: 'AO', photo: '/ambassador-photos/alejandro_ambassador.webp' },
 ];
 
 const inputStyle: React.CSSProperties = {
