@@ -35,8 +35,12 @@
  * A row seated before the column existed has no nonce; it falls back to the old anchor key
  * (`s:` started_at, or `p:` the paused remaining), still deduped exactly.
  *
- * Room Order "Speaker N" placeholders are never logged (they are not delegations), and a
- * zero-second turn is never logged.
+ * Room Order "Speaker N" placeholders are never logged per turn (they are not delegations,
+ * and their queue and speaker clock cannot be persisted: the id columns are uuids), and a
+ * zero-second turn is never logged. Instead the whole Room Order Tour de Table is credited
+ * ONCE when it ends, by `creditRoomOrderTour`: one `tour-de-table` speech for every
+ * delegation on the roster snapshot taken when the motion passed (`caucus.roomOrderCountries`),
+ * keyed per tour instance (`caucus.tourStartedAt`) + country.
  */
 import type { Committee } from '@/lib/types';
 import { speakerRemainingNow, readSpokenSeconds } from '@/lib/committeeService';
@@ -181,4 +185,67 @@ export async function logFloorSpeech(committee: Committee, clock?: FloorClock): 
     turnKey,
     at: now,
   });
+}
+
+/** Turn key for the one credited speech per delegation in a Room Order Tour de Table:
+ *  the tour instance (database-clock instant the motion passed, epoch ms) plus the country. */
+export function roomOrderTourTurnKey(committeeId: string, country: string, tourStartedAtMs: number): string {
+  return `${committeeId}|${country}|tour:${Math.round(tourStartedAtMs)}`;
+}
+
+/**
+ * A Room Order Tour de Table has ENDED (End button, expiry, Next past the total or past the
+ * last placeholder, another caucus accepted over it, End Debate): credit every delegation
+ * that was in the room when the tour started with exactly ONE speech, context
+ * `tour-de-table`.
+ *
+ * - Who: `caucus.roomOrderCountries`, the snapshot MotionsModal takes at accept with the
+ *   tour's own eligibility rule (every delegate not absent, observers included). A tour
+ *   accepted before the snapshot existed has none and credits nobody.
+ * - Seconds: the tour's per-speaker time (`caucus.speakingTime`). Placeholders cannot be
+ *   mapped to seats, so no per-delegation elapsed time exists; the owner asked for one
+ *   speech each, not seconds precision.
+ * - Only a tour that actually ran: someone was called, or time came off the total. Accepting
+ *   one by mistake and ending it at once credits nobody.
+ * - Idempotent: `roomOrderTourTurnKey` per country, checked against this device's claims and
+ *   the loaded log before the insert, and deduped exactly in `parseLogEvents`, so a second
+ *   trigger, a reload or a second device can never double-credit.
+ *
+ * Call from the Moderator's device only. One insert for the whole batch. Fire-and-forget safe.
+ */
+export async function creditRoomOrderTour(committee: Committee | null | undefined): Promise<boolean> {
+  const caucus = committee?.caucus;
+  if (!committee || !caucus || !(caucus.purpose?.includes('Room Order') ?? false)) return false;
+  const countries = Array.from(new Set((caucus.roomOrderCountries ?? []).filter((c) => typeof c === 'string' && c)));
+  const startedMs = caucus.tourStartedAt ? new Date(caucus.tourStartedAt).getTime() : NaN;
+  if (countries.length === 0 || !Number.isFinite(startedMs)) return false;
+  const ran = !!caucus.currentSpeaker || (caucus.spokenCountries?.length ?? 0) > 0
+    || !!caucus.totalStartedAt || caucus.remainingTime < caucus.totalTime;
+  if (!ran) return false;
+  const seconds = Math.max(1, Math.round(caucus.speakingTime || 0));
+  const at = new Date(serverNow()).toISOString();
+  const topic = caucus.purpose || committee.topic;
+  const todo = countries
+    .map((country) => ({ country, turnKey: roomOrderTourTurnKey(committee.id, country, startedMs) }))
+    .filter((e) => !alreadyLogged(committee, e.turnKey));
+  if (todo.length === 0) return true;
+  todo.forEach((e) => loggedTurnKeys.add(e.turnKey));   // claimed before the await
+  const rows = todo.map((e) => ({
+    committee_id: committee.id,
+    sender: '__system__',
+    is_private: true,
+    recipient: '__log__',
+    content: `__log__:${JSON.stringify({
+      country: e.country, type: 'speech', seconds, context: 'tour-de-table' as SpeechContext,
+      topic, turnKey: e.turnKey, timestamp: at,
+    })}`,
+  }));
+  const { error } = await sessionClient(committee.code, committee.dbChairJoinSuffix ?? undefined)
+    .from('messages').insert(rows);
+  if (error) {
+    console.error('Error crediting Room Order tour:', error);
+    todo.forEach((e) => loggedTurnKeys.delete(e.turnKey));
+    return false;
+  }
+  return true;
 }

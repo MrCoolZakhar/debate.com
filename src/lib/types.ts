@@ -128,6 +128,13 @@ export interface CaucusState {
   /** Consultation of the Whole: when the current floor holder took the floor (database-clock
    *  ISO). Written with the flag tap, so a reload keeps the holder's real start. */
   floorSince?: string | null;
+  /** Room Order Tour de Table only: the delegations in the room when the motion passed
+   *  (every delegate not absent), credited one speech each when the tour ends
+   *  (`creditRoomOrderTour`, src/lib/floorSpeech.ts). */
+  roomOrderCountries?: string[];
+  /** Room Order Tour de Table only: database-clock ISO instant the motion passed. Names the
+   *  tour instance in each credited speech's turn key. */
+  tourStartedAt?: string;
 
   // ── Wall-clock ANCHOR for the TOTAL caucus countdown ────────────────────────
   // ISO timestamp of the instant the total clock last (re)started, or null when it is

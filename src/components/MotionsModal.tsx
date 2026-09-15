@@ -12,7 +12,7 @@ import { SeatFlag } from '@/components/SeatFlag';
 const SQUARE_FLAGS = new Set(['CH', 'NP']);
 import { Emoji } from '@/components/Emoji';
 import { useSettingsStore, DEFAULT_MOTION_NAMES, MotionNames } from '@/lib/settingsStore';
-import { logFloorSpeech, type FloorClock } from '@/lib/floorSpeech';
+import { logFloorSpeech, creditRoomOrderTour, type FloorClock } from '@/lib/floorSpeech';
 import {
   useTempMotionIds, isTempMotionId, raiseMotionOptimistic, removeMotionEverywhere,
   fellOtherFloorMotions, showMotionNotice,
@@ -1277,6 +1277,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     // fall at the same moment.
     const clearFloorForCaucus = () => {
       fellOtherFloorMotions({ committee, passedId: motion.id, update, motionOrder, rank: rankMotion });
+      // A Room Order Tour de Table this caucus replaces has ended: one speech per delegation
+      // on its roster snapshot (idempotent per tour + country; no-op for any other caucus).
+      void creditRoomOrderTour(committee);
       if (!floorSpeaker) return;
       void logFloorSpeech(committee, floorClock?.());
       clearCurrentSpeakerIfUnchanged(
@@ -1363,6 +1366,10 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
           speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
           currentSpeaker: null, proposerPosition: null, spokenCountries: [],
           totalStartedAt: null,   // paused until the chair starts the first speaker
+          // Placeholders credit nobody per turn, so the room is snapshotted here and every
+          // delegation on it gets ONE speech when the tour ends (creditRoomOrderTour).
+          roomOrderCountries: alphabetical.map((d) => d.country),
+          tourStartedAt: serverNowIso(),
         };
         // Numbered placeholder queue, "Speaker 1", "Speaker 2", etc.
         const caucusQueue = alphabetical.map((_, i) => ({
@@ -1441,6 +1448,8 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               // M-1: the other floor motions fall. G-1: whoever held the floor has their speech
               // logged, then leaves it, so a resumed session cannot log the same turn again.
               fellOtherFloorMotions({ committee, passedId: motionId, passedType: specialVoteMotion!.type, update, motionOrder, rank: rankMotion });
+              // End Debate ends a Room Order Tour de Table for good (Suspend only pauses it).
+              if (!isSuspend) void creditRoomOrderTour(committee);
               const floor = committee.currentSpeaker;
               if (floor) {
                 void logFloorSpeech(committee, floorClock?.());

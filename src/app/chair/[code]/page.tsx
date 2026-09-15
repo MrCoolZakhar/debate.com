@@ -16,7 +16,7 @@ import { CaucusState, Committee, Delegate, DelegateStatus } from '@/lib/types';
 import RollCallPanel, { FlagCircle, recognisedStatus } from '@/components/RollCallPanel';
 import MotionsModal from '@/components/MotionsModal';
 import MotionFlightNotice from '@/components/MotionFlightNotice';
-import { logFloorSpeech, logTimedSpeech, cowTurnKey, floorSpeechSeconds } from '@/lib/floorSpeech';
+import { logFloorSpeech, logTimedSpeech, cowTurnKey, floorSpeechSeconds, creditRoomOrderTour } from '@/lib/floorSpeech';
 import DocumentsModal from '@/components/DocumentsModal';
 import { getCountryByName, getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import { SeatFlag, SeatArtProvider } from '@/components/SeatFlag';
@@ -2282,8 +2282,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // the End button). Only Next used to log, so the last speaker of every caucus that ran
   // out, or was ended by hand, was silently missing from stats and scoring. That is now
   // the usual ending: the last speaker's clock is capped to the caucus's remaining time,
-  // so the caucus expires the moment they finish. Room-Order placeholders are never logged.
+  // so the caucus expires the moment they finish. Room-Order placeholders are never logged
+  // per turn; a Room Order Tour de Table credits every delegation on its roster snapshot with
+  // ONE speech here instead (creditRoomOrderTour, idempotent per tour + country).
   const logFloorSpeechOnCaucusEnd = (c: Committee | null) => {
+    if (c?.caucus && c.phase === 'moderated-caucus') void creditRoomOrderTour(c);
     if (!c?.caucus || c.phase !== 'moderated-caucus' || !c.currentSpeaker) return;
     // The one speech logger (src/lib/floorSpeech.ts): persisted anchor first (T-3), local
     // slot + extra time as the fallback, idempotent per turn, Room Order skipped. Called
@@ -3188,6 +3191,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       extraSecs: extraTimeAddedSecsRef.current,
     });
     extraTimeAddedSecsRef.current = 0;
+    // An organiser END finishes a Room Order Tour de Table for good (a pause only freezes it).
+    if (b.action !== 'pause') void creditRoomOrderTour(committee);
     // ...and then LEAVES the floor, exactly like the Suspend / End motion path. Without this
     // the current_speaker row kept them through the break, and the first Next after a resume
     // logged the same turn again (hours later, so no duplicate window could catch it).
@@ -3837,8 +3842,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       : (committee.caucus.spokenCountries ?? []);
 
     // Room-Order Tour de Table speakers are anonymous "Speaker N" placeholders, not real
-    // delegations — logging their time would credit a nonexistent country, so skip logging
-    // entirely for Room Order (do not log to anyone).
+    // delegations — logging their time would credit a nonexistent country, so no per-turn
+    // log for Room Order; the tour credits its roster once when it ends (below).
     // T-3: the one speech logger (src/lib/floorSpeech.ts) skips Room Order itself, reads the
     // persisted anchor, and falls back to the extended slot (caucus.speakerTimeRemaining, capped
     // for a last speaker, plus any +time) only for legacy rows.
@@ -3846,6 +3851,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       void logFloorSpeech(committee, { base: anchorBase, startedAt: anchorStarted, extraSecs: extraTimeAddedSecsRef.current });
     }
     extraTimeAddedSecsRef.current = 0;
+    // A Room Order tour ends here when Next runs past the total or past the last placeholder:
+    // one speech per delegation on its roster snapshot (idempotent, no-op for other caucuses).
+    if (newRemaining <= 0 || (!next && !!prevCountry)) void creditRoomOrderTour(committee);
 
     // nextSpeakerInDB below writes { time_remaining: speakTime, started_at: null }.
     seatSpeakerClock(speakTime, null);
