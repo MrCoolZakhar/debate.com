@@ -395,6 +395,7 @@ function RollCallPanelInner({
   isRoomOrderTdT = false,
   hideIdentity = false,
   speechRunning = false,
+  readyDelegateId = null,
   onJoinRequestResolved,
   canAddToList,
   onRemoveCurrentSpeaker,
@@ -454,6 +455,14 @@ function RollCallPanelInner({
    * that a speech started, which scrolls the list back to the top.
    */
   speechRunning?: boolean;
+  /**
+   * The delegation the floor draws as "Ready to speak": the first GSL delegate while nobody
+   * is seated (the chair page's `onDeck`). Presentation only: they stay an ordinary
+   * `speakers_list` row, so they keep #1, stay draggable and removable, and get a quiet
+   * "Ready" caption instead of the gold speaking treatment. Ignored when a speaker holds
+   * the floor or outside the queue view.
+   */
+  readyDelegateId?: string | null;
   /**
    * An absent delegate was recognised from this panel (clicked onto a list). The parent
    * drops that country's pending join-request motions from local state; the DB delete is
@@ -975,6 +984,9 @@ function RollCallPanelInner({
             caucus?.currentSpeaker === d.country
           );
           const isUpNext = isQueueView && isCurrentSpeakerInPanel;
+          // First on the GSL with nobody seated, drawn "Ready to speak" on the floor. Not the
+          // speaking treatment: no gold rim, no microphone, just a quiet caption at #1.
+          const isReadyRow = isQueueView && !speakerAtTop && !!readyDelegateId && readyDelegateId === d.id && queuePos === 1;
           // Removable from the floor from this row (chair page, onRemoveCurrentSpeaker).
           const holdsFloor = !isRollCallPhase && !showStatusSliders && !isReadOnly && !isViewOnly && !committee.endedAt
             && (isCurrentSpeaker || (!!caucus?.currentSpeaker && caucus.currentSpeaker === d.country));
@@ -1093,7 +1105,8 @@ function RollCallPanelInner({
                   // A lit edge, not a border: the speaker's row reads at a distance.
                   boxShadow: isLifted
                     ? '0 10px 28px rgba(0,0,0,0.38), 0 2px 6px rgba(0,0,0,0.25), inset 0 0 0 1.5px rgba(238,217,138,0.55)'
-                    : isSpeakingRow ? 'inset 0 0 0 1.5px rgba(238,217,138,0.6)' : undefined,
+                    : isSpeakingRow ? 'inset 0 0 0 1.5px rgba(238,217,138,0.6)'
+                    : isReadyRow ? 'inset 0 0 0 1px rgba(238,217,138,0.26)' : undefined,
                 } as React.CSSProperties}
               >
                 <div className="relative shrink-0">
@@ -1154,6 +1167,11 @@ function RollCallPanelInner({
                   {isSpeakingRow && !sliderMode && (
                     <span className="truncate uppercase" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', lineHeight: 1.3, color: '#EED98A' }}>
                       {t('rollcall_speaking')}
+                    </span>
+                  )}
+                  {isReadyRow && !sliderMode && (
+                    <span className="truncate uppercase" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.08em', lineHeight: 1.3, color: 'rgba(238,217,138,0.72)' }}>
+                      {t('gsl_on_deck')}
                     </span>
                   )}
                 </div>
@@ -1299,6 +1317,7 @@ const RollCallPanel = React.memo(RollCallPanelInner, (prev, next) => {
     prev.showStatusSliders === next.showStatusSliders &&
     prev.showBulkActions === next.showBulkActions &&
     prev.speechRunning === next.speechRunning &&
+    prev.readyDelegateId === next.readyDelegateId &&
     prev.canAddToList === next.canAddToList &&
     prev.isReadOnly === next.isReadOnly &&
     prev.isViewOnly === next.isViewOnly &&

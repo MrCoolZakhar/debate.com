@@ -88,7 +88,6 @@ export function VoterCarousel({ seats, current, markOf, hideTally }: {
       <style>{`
         .gv-carousel .gv-seat, .gv-carousel .gv-seat-label {
           transition: transform 560ms cubic-bezier(0.2,0,0,1), opacity 460ms cubic-bezier(0.2,0,0,1);
-          will-change: transform, opacity;
         }
         .gv-carousel .gv-seat-ring { transition: box-shadow 400ms cubic-bezier(0.2,0,0,1) }
         @media (prefers-reduced-motion: reduce) {
@@ -123,7 +122,14 @@ export function VoterCarousel({ seats, current, markOf, hideTally }: {
                     : '0 0 0 8px #F6F1E9, 0 10px 26px rgba(27,56,40,0.20)',
                 }}
               />
-              <SeatCircleFlag seat={seat} size={D} decorative className="relative" />
+              {/* Eager, not lazy: at most 11 tiny same-origin SVGs, and a seat enters the window
+                  at opacity 0 far off centre and then moves in by TRANSFORM only. Lazy loading is
+                  judged on layout position, which a transform never changes, so a flag could stay
+                  unpainted (US and UK, last in A-Z, were the ones reported blank). The persistent
+                  will-change was dropped for the same report: an SVG <img> in a permanently
+                  promoted, rescaled layer can be left un-rastered; the transition still
+                  composites while it runs. */}
+              <SeatCircleFlag seat={seat} size={D} decorative loading="eager" className="relative" />
               {showMark && <ChoiceBadge mark={mark} />}
             </div>
             {step >= 1 && step <= 2 && (

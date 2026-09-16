@@ -136,9 +136,13 @@ function attachNotes(speeches: HistorySpeech[], feedback: FeedbackEntry[]): void
     push(byCountry, s.country, s);
   }
 
+  // Consumed PER AUTHOR: two chairs each writing a note on the same speech must both land on
+  // it. A global "taken" sent the second chair's note to the next identical-signature speech,
+  // however far away in time.
   const taken = new Set<string>();
-  const nearest = (pool: HistorySpeech[], at: number, freeOnly: boolean): HistorySpeech | null => {
-    const open = freeOnly ? pool.filter((s) => !taken.has(s.id)) : pool;
+  const takenKey = (author: string, speechId: string) => `${author}|${speechId}`;
+  const nearest = (pool: HistorySpeech[], at: number, freeOnly: boolean, author: string): HistorySpeech | null => {
+    const open = freeOnly ? pool.filter((s) => !taken.has(takenKey(author, s.id))) : pool;
     if (open.length === 0) return null;
     if (open.length === 1 || !Number.isFinite(at)) return open[0];
     return open.reduce((best, s) =>
@@ -154,17 +158,17 @@ function attachNotes(speeches: HistorySpeech[], feedback: FeedbackEntry[]): void
     let hit: HistorySpeech | null = null;
     if (f.speechSeconds != null && f.speechContext) {
       const pool = bySignature.get(`${f.country}|${f.speechContext}|${f.speechSeconds}`) ?? [];
-      hit = nearest(pool, at, true) ?? nearest(pool, at, false);
+      hit = nearest(pool, at, true, f.chairName) ?? nearest(pool, at, false, f.chairName);
     }
     if (!hit) {
       const pool = byCountry.get(f.country) ?? [];
-      const near = nearest(pool, at, true) ?? nearest(pool, at, false);
+      const near = nearest(pool, at, true, f.chairName) ?? nearest(pool, at, false, f.chairName);
       // Ten minutes: long enough to cover a note typed after the speaker sat down,
       // short enough that it cannot wander into a different caucus.
       if (near && Number.isFinite(at) && Math.abs(ms(near.timestamp) - at) <= 10 * 60_000) hit = near;
     }
     if (!hit) continue;
-    taken.add(hit.id);
+    taken.add(takenKey(f.chairName, hit.id));
     hit.notes.push({
       id: f.id,
       chairName: f.chairName,

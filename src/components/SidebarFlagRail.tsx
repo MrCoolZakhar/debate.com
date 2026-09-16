@@ -80,6 +80,7 @@ function SidebarFlagRailInner({
   emblem,
   onExpand,
   onReorderList,
+  readyDelegateId = null,
 }: {
   committee: Committee;
   emblem: { src: string | null; monogram: string; alt: string };
@@ -87,6 +88,9 @@ function SidebarFlagRailInner({
   /** The expanded list's reorder handler. Omit for a Commenter, an ended session, or a
    *  list that is not reorderable (the unmoderated caucus). Must be stable (memo key). */
   onReorderList?: (next: ListEntry[]) => void;
+  /** The first GSL delegate drawn "Ready to speak" on an empty floor (chair page `onDeck`).
+   *  Presentation only: #1, still draggable, a quiet gold ring, no microphone. */
+  readyDelegateId?: string | null;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -337,7 +341,10 @@ function SidebarFlagRailInner({
           const n = i + 1;
           const name = getCountryDisplayName(d.country, language);
           const draggable = canReorder && !speaking;
-          const baseLabel = speaking ? `${name}, ${t('rollcall_speaking')}` : t('sidebar_rail_item', { country: name, n });
+          const ready = !speaker && i === 0 && !!readyDelegateId && readyDelegateId === d.id;
+          const baseLabel = speaking ? `${name}, ${t('rollcall_speaking')}`
+            : ready ? `${t('sidebar_rail_item', { country: name, n })}, ${t('gsl_on_deck')}`
+            : t('sidebar_rail_item', { country: name, n });
           const label = draggable ? `${baseLabel}. ${t('rollcall_reorder_hint')}` : baseLabel;
           const px = speaking ? SPEAKER_FLAG : FLAG;
           const lifted = drag?.id === d.id;
@@ -384,7 +391,9 @@ function SidebarFlagRailInner({
                       ? '0 0 0 2.5px #EED98A, 0 0 0 4px #1B3828, 0 3px 10px rgba(27,56,40,0.35)'
                       : lifted
                         ? '0 0 0 2px #B6871F, 0 8px 18px rgba(27,56,40,0.38)'
-                        : '0 1px 2px rgba(27,56,40,0.28), 0 3px 9px rgba(27,56,40,0.20)',
+                        : ready
+                          ? '0 0 0 2px rgba(182,135,31,0.55), 0 1px 2px rgba(27,56,40,0.28), 0 3px 9px rgba(27,56,40,0.20)'
+                          : '0 1px 2px rgba(27,56,40,0.28), 0 3px 9px rgba(27,56,40,0.20)',
                     opacity: d.status === 'absent' ? 0.55 : 1,
                   }}
                 />
@@ -424,6 +433,7 @@ const SidebarFlagRail = React.memo(SidebarFlagRailInner, (a, b) =>
   && a.committee.caucus?.currentSpeaker === b.committee.caucus?.currentSpeaker
   && a.committee.phase === b.committee.phase
   && a.onReorderList === b.onReorderList
+  && a.readyDelegateId === b.readyDelegateId
   && a.emblem.src === b.emblem.src
   && a.emblem.monogram === b.emblem.monogram,
 );

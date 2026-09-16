@@ -4283,12 +4283,17 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     sublabel: committee.topic ?? null,
     meta: gslListLen > 0 ? t('gsl_queue_count').replace('{n}', String(gslListLen)) : null,
   };
-  // Start with a delegation on deck: seat them AND start the clock in one press. Both writes
-  // ride the one per-committee current_speaker chain, so the start can never land before the
-  // seat. `seated_at` is stamped by `nextSpeakerInDB` exactly as any other seating, so the
-  // turn key (S7) is ordinary and `logFloorSpeech` dedupes it the usual way.
+  // Start with a delegation on deck: seat them AND start the clock in ONE current_speaker
+  // update (`nextSpeakerInDB(..., seatedAt, startedAt)`). It used to be the seat, an await,
+  // then a separate start: a Pause or Next pressed while the seat was in flight queued its
+  // write between the two, so the start landed last and the database ran a clock the
+  // Moderator's screen showed paused (RULE 6: the Moderator never reads its own row back).
+  // `seated_at` is stamped exactly as any other seating, so the turn key (S7) is ordinary
+  // and `logFloorSpeech` dedupes it the usual way.
   const handleStartOnDeck = async () => {
+    if (isViewOnly || committee.phase !== 'speakers-list') return;
     if (belowQuorum || sessionEnded || sessionSuspended) return;
+    if (gslRequireNextSpeaker && isLastGSLSpeaker) return;
     const next = committee.speakersList[0];
     if (!next || committee.currentSpeaker) return;
     const timeToUse = speakerTimeLimit;
@@ -4308,9 +4313,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     }));
     await nextSpeakerInDB(
       committee.id, timeToUse, next.delegateId, next.country, next.delegateId,
-      committee.code, committee.dbChairJoinSuffix ?? undefined, startedAt,
+      committee.code, committee.dbChairJoinSuffix ?? undefined, startedAt, startedAt,
     );
-    startSpeakerTimerInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined, startedAt, timeToUse);
     localUpdateTime.current = Date.now();
   };
   const handleGslToggleTimer = () => {
@@ -4365,6 +4369,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // it is already hidden once sessionEnded is true, so it is read-only.
   const showSpeakersListView = committee.phase === 'speakers-list' || caucusPhaseWithoutCaucus
     || (committee.phase === 'adjourned' && sessionEnded);
+  // The delegation the GSL floor draws as "Ready to speak", mirrored in the sidebar at #1
+  // (expanded list and collapsed rail). Presentation only: they stay in speakersList.
+  const gslReadyDelegateId = showSpeakersListView && onDeck ? onDeck.delegateId : null;
 
   // Blocked modal handler — only allow after roll call
   const handleMotionsClick = () => {
@@ -4418,6 +4425,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   : (caucusPanelLocked || committee.caucus?.type === 'moderated') ? handleReorderCaucusQueue
                   : (committee.phase === 'unmoderated-caucus' && committee.caucus) ? undefined
                   : handleReorderSpeakersList}
+                readyDelegateId={(caucusPanelLocked || committee.caucus?.type === 'moderated') ? null : gslReadyDelegateId}
               />
             );
           })()}
@@ -4484,6 +4492,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               onReorderList={handleReorderSpeakersList}
               showStatusSliders={showSliders}
               speechRunning={timerRunning}
+              readyDelegateId={gslReadyDelegateId}
               onJoinRequestResolved={handleJoinRequestResolved}
               isReadOnly={sessionEnded}
               isViewOnly={isViewOnly} />

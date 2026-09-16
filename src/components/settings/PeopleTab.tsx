@@ -6,6 +6,7 @@ import { getCountryDisplayName } from '@/lib/countries';
 import { seatKey } from '@/lib/seatClaims';
 import { getSessionParticipants, kickDelegateSeat, removeSessionChair, releaseChairDeviceClaim, type SessionParticipants, type ParticipantSeat } from '@/lib/sessionParticipants';
 import { SeatCircleFlag, flagMonogram } from '@/components/CircleFlag';
+import { delegationNameLabel, useSessionDelegationNames } from '@/lib/sessionDelegationNames';
 import { K, Section } from './settingsKit';
 import type { TabProps } from './settingsTypes';
 
@@ -40,6 +41,9 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
   const now = useNow(30_000);
+  // Conference rooms: who was allocated to each delegation, beside its name. Chairs only
+  // (this tab is chair-only); null on a standalone session, so rows render as before.
+  const delegationNames = useSessionDelegationNames(committee);
 
   const apply = useCallback((res: SessionParticipants | null) => {
     setLoading(false);
@@ -97,7 +101,8 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
   const shown = rows.filter((r) => {
     if (filter === 'joined' && r.claims.length === 0) return false;
     if (filter === 'missing' && r.claims.length > 0) return false;
-    if (q && !getCountryDisplayName(r.d.country, language).toLowerCase().includes(q) && !r.d.country.toLowerCase().includes(q)) return false;
+    if (q && !getCountryDisplayName(r.d.country, language).toLowerCase().includes(q) && !r.d.country.toLowerCase().includes(q)
+      && !delegationNameLabel(delegationNames, r.d.country).toLowerCase().includes(q)) return false;
     return true;
   });
 
@@ -318,6 +323,7 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
               // Every holder is the seat's allocated account: the server refuses the kick.
               const reservedOnly = joined && claims.every((c) => c.reserved);
               const name = getCountryDisplayName(d.country, language);
+              const people = delegationNameLabel(delegationNames, d.country);
               const kickLeft = kickedAt ? Math.min(10, Math.max(1, Math.ceil((600_000 - (now + skew - Date.parse(kickedAt))) / 60_000))) : 0;
               return (
                 <li key={d.id} className="flex flex-wrap items-center gap-3" style={{ padding: '10px 4px', borderTop: i === 0 ? 'none' : `1px solid ${K.hair}` }}>
@@ -326,7 +332,10 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
                     {joined && <span aria-hidden style={{ position: 'absolute', bottom: -1, insetInlineEnd: -1, width: 12, height: 12, borderRadius: 12, background: active ? '#3FA268' : K.deepGold, boxShadow: `0 0 0 2px ${K.surface}` }} />}
                   </span>
                   <span className="flex-1 min-w-0" style={{ minWidth: 160 }}>
-                    <span className="block truncate" style={{ fontSize: 14.5, fontWeight: 800, color: joined ? K.ink : K.inkSoft }}>{name}</span>
+                    <span className="block truncate" style={{ fontSize: 14.5, fontWeight: 800, color: joined ? K.ink : K.inkSoft }} title={people ? `${name} · ${people}` : undefined}>
+                      {name}
+                      {people && <span style={{ fontWeight: 600, color: K.inkSoft }}> · {people}</span>}
+                    </span>
                     <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5" style={{ marginTop: 2, fontSize: 12, fontWeight: 600, color: K.inkSoft }}>
                       {joined ? (
                         <>

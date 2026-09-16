@@ -394,10 +394,15 @@ function IntroTimerPanel({
   }, []);
 
   // Keep it on screen when the window (and so the fit-root) changes size.
+  // FitToScreen resizes `#fit-root` through React state AFTER the window's resize event, so a
+  // clamp inside that event measured the old size; the fit-root itself is observed too.
   useEffect(() => {
     const onResize = () => { if (boxRef.current) apply(boxRef.current, false); };
     window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    const root = document.getElementById('fit-root');
+    const ro = root && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onResize) : null;
+    if (root) ro?.observe(root);
+    return () => { window.removeEventListener('resize', onResize); ro?.disconnect(); };
   }, [apply]);
 
   const startDrag = (mode: 'move' | 'resize') => (e: React.PointerEvent<HTMLElement>) => {
@@ -524,7 +529,7 @@ function IntroTimerPanel({
               {running
                 ? <><Pause size={15} strokeWidth={2.6} fill="currentColor" aria-hidden />{t('documents_pause_btn')}</>
                 : <><Play size={15} strokeWidth={2.6} fill="currentColor" aria-hidden className="rtl:rotate-180" />
-                    <span className="truncate">{started ? t('documents_resume_btn').replace('▶ ', '') : t('documents_start_btn').replace(' →', '')}</span></>}
+                    <span className="truncate">{started ? t('documents_resume_btn').replace(/▶\s*/g, '').trim() : t('documents_start_btn').replace(/\s*[→←]\s*/g, ' ').trim()}</span></>}
             </button>
             <TimerIconButton onClick={onComplete} label={t('documents_stage_skip_title')}>
               <ChevronRight size={18} strokeWidth={2.4} aria-hidden className="rtl:rotate-180" />

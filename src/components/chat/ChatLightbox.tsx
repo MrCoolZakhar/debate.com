@@ -282,6 +282,10 @@ function Viewer({
     multi: boolean;
   } | null>(null);
   const lastTap = useRef(0);
+  /** The last press started on the picture. With pointer capture on the stage, browsers send
+   *  the resulting click to the STAGE, not the image, so the stage must not read it as a
+   *  backdrop tap (it closed the viewer on a tap and made double-tap zoom unreachable). */
+  const pressOnImageRef = useRef(false);
 
   const pointsOf = () => Array.from(pointers.current.values());
   const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -291,6 +295,7 @@ function Viewer({
     // The prev / next buttons live inside the stage: capturing their pointer would retarget
     // the click to the stage and the button would never fire.
     if ((e.target as HTMLElement).closest('button, a')) return;
+    pressOnImageRef.current = !!imgRef.current && imgRef.current.contains(e.target as Node);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     // Capture keeps a drag alive when the finger leaves the stage. It throws for a pointer the
     // browser no longer considers active; the gesture must still start without it.
@@ -366,10 +371,14 @@ function Viewer({
   const onStageClick = (e: React.MouseEvent) => {
     // A tap on the empty backdrop closes; a tap that ended a drag does not.
     if (draggedRef.current) { draggedRef.current = false; return; }
-    if (e.target === e.currentTarget) onClose();
+    if (e.target !== e.currentTarget) return;
+    // A click retargeted to the stage by pointer capture, from a press on the picture.
+    if (pressOnImageRef.current) { pressOnImageRef.current = false; onImageClick(e); return; }
+    onClose();
   };
 
   const onImageClick = (e: React.MouseEvent) => {
+    pressOnImageRef.current = false;
     if (draggedRef.current) return;
     const now = Date.now();
     if (now - lastTap.current < 320) {

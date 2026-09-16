@@ -925,6 +925,11 @@ export async function nextSpeaker(
   /** The seat nonce (S7). Pass the value the caller put into local state, so this device's
    *  turn key and every reader's agree. Ignored (written null) when nobody is seated. */
   seatedAt: string = serverNowIso(),
+  /** Seat AND start in the same update: the clock's anchor (database clock). Null (the
+   *  default) seats a stopped clock, as Next always has. Used by Start on a delegation that
+   *  is on deck, so no other current_speaker write can ever land between the seat and the
+   *  start (a pause or Next pressed while the seat is in flight). */
+  startedAt: string | null = null,
 ): Promise<boolean> {
   // HAPPENS-BEFORE GUARD (MUST NEVER HAPPEN #5). Rule #5 forbids firing a blind
   // clearCurrentSpeaker when entering a caucus because it races nextSpeakerInDB: two
@@ -957,7 +962,7 @@ export async function nextSpeaker(
             country: nextCountry,
             time_remaining: limit,
             time_granted: limit,
-            started_at: null,
+            started_at: nextCountry ? startedAt : null,
             seated_at: nextCountry ? seatedAt : null,
           })
           .eq('committee_id', committeeId)

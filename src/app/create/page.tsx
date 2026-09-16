@@ -522,8 +522,11 @@ function CreatePageInner() {
 
   // The one add path: the + button, the Enter key and the typeahead's first row all
   // land here, so the field can never do something the button does not.
-  const typedIsAddable = !!(available[0] || (search.trim() && !delegates.includes(search.trim())));
+  // An empty field adds nothing: `available` is then every remaining country, and the + button
+  // used to add whichever sorted first.
+  const typedIsAddable = !!search.trim() && !!(available[0] || !delegates.includes(search.trim()));
   const addTyped = () => {
+    if (!search.trim()) return;
     if (available[0]) { addDelegate(available[0].name); setSearch(''); return; }
     const raw = search.trim();
     if (raw && !delegates.includes(raw)) { addDelegate(raw); setSearch(''); }

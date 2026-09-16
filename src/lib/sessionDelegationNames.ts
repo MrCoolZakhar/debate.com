@@ -14,8 +14,12 @@
  *   non-empty display name. No email, no user id, no application or society, and it writes
  *   nothing.
  *
- *   The session code alone is NOT enough, on purpose. `sess_select` on `committees` is `true`,
- *   so a 6-char code is a weak credential (AGENTS.md is explicit that seat claims stop honest
+ *   The INTENT is that the session code alone is not enough. In practice it is: the chair
+ *   suffix sits in `committees.settings`, which `sess_select` (`true`) exposes, and every
+ *   client already holds it as `committee.dbChairJoinSuffix` (delegate phones included), so
+ *   anyone with the 6-char code can call this RPC and read these names. Gating it on a real
+ *   conference identity (`auth.uid()` as a committee chair or organiser) needs a migration
+ *   and is an open decision (review, 16 Sep 2026). A 6-char code is a weak credential (AGENTS.md is explicit that seat claims stop honest
  *   collisions, not a hostile user), and nothing in the schema makes a delegate's name public
  *   today: `conferences.show_taken_countries` publishes which COUNTRIES are taken, never who
  *   holds them, and `conference_committees.display_chairs` is a curated chair list. So a
