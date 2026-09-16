@@ -22,7 +22,7 @@ import { Committee } from '@/lib/types';
 import { updateCommitteeChairSuffixInDB, saveCommitteeSettings, updateCommitteeScoringInDB } from '@/lib/committeeService';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import type { Language } from '@/lib/translations';
-import { K, SettingsKitStyles, ConfirmSheet } from '@/components/settings/settingsKit';
+import { K, T, W, LH, SettingsKitStyles, ConfirmSheet } from '@/components/settings/settingsKit';
 import type { SettingsTab, TabProps } from '@/components/settings/settingsTypes';
 import AccessTab from '@/components/settings/AccessTab';
 import MotionsTab from '@/components/settings/MotionsTab';
@@ -215,8 +215,8 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
             <div className="flex items-center gap-2.5" style={{ padding: '20px 18px 16px 20px' }}>
               <Brand markOnly size={30} />
               <span className="hidden md:block min-w-0">
-                <span className="block" style={{ fontSize: 16.5, fontWeight: 900, color: '#FFF8E4', lineHeight: 1.1 }}>{t('stg_dialog_title')}</span>
-                <span className="block truncate" style={{ marginTop: 2, fontSize: 11.5, fontWeight: 600, color: 'rgba(243,234,208,0.6)' }} title={committee.name}>{committee.name}</span>
+                <span className="block" style={{ fontSize: T.section, fontWeight: W.section, color: '#FFF8E4', lineHeight: LH.section }}>{t('stg_dialog_title')}</span>
+                <span className="block truncate" style={{ marginTop: 2, fontSize: T.caption, fontWeight: W.label, color: 'rgba(243,234,208,0.72)' }} title={committee.name}>{committee.name}</span>
               </span>
             </div>
 
@@ -254,7 +254,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
                       {/* Stitching along the ribbon. */}
                       <span aria-hidden className="stg-stitch absolute" style={{ top: 5, bottom: 5, insetInlineStart: 5, insetInlineEnd: 20, borderRadius: 8, border: `1px dashed ${on ? 'rgba(27,56,40,0.22)' : 'rgba(238,217,138,0.12)'}`, pointerEvents: 'none' }} />
                       <TabIcon aria-hidden size={18} strokeWidth={on ? 2.5 : 2.1} style={{ position: 'relative', flexShrink: 0 }} />
-                      <span className="relative hidden md:block truncate" style={{ fontSize: 14.5, fontWeight: on ? 900 : 700, letterSpacing: '0.005em' }}>{x.label}</span>
+                      <span className="relative hidden md:block truncate" style={{ fontSize: T.body, fontWeight: on ? W.section : W.label }}>{x.label}</span>
                       {x.id === 'awards' && !on && <Sparkles aria-hidden size={12} strokeWidth={2.4} style={{ position: 'relative', color: K.gold, marginInlineStart: 'auto', flexShrink: 0 }} />}
                     </button>
                   </div>
@@ -264,7 +264,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
 
             {/* Language, at the foot of the spine. */}
             <div className="hidden md:block" style={{ padding: '14px 18px 20px 22px', borderTop: '1px solid rgba(238,217,138,0.08)' }}>
-              <div className="flex items-center gap-2" style={{ marginBottom: 8, fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(243,234,208,0.55)' }}>
+              <div className="flex items-center gap-2" style={{ marginBottom: 8, fontSize: T.caption, fontWeight: W.label, color: 'rgba(243,234,208,0.72)' }}>
                 <Languages size={13} strokeWidth={2.4} aria-hidden />{t('settings_language')}
               </div>
               <div role="radiogroup" aria-label={t('settings_language')} className="grid grid-cols-4 gap-1" style={{ padding: 3, borderRadius: 12, background: 'rgba(0,0,0,0.18)' }}>
@@ -273,7 +273,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
                   return (
                     <button key={l.code} type="button" role="radio" aria-checked={on} onClick={() => setLanguage(l.code)} lang={l.code}
                       aria-label={l.code === 'en' ? 'English' : l.code === 'es' ? 'Español' : l.code === 'fr' ? 'Français' : 'العربية'}
-                      className="stg-focus stg-press" style={{ height: 30, borderRadius: 9, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 900, background: on ? K.gold : 'transparent', color: on ? K.forest : 'rgba(243,234,208,0.7)' }}>
+                      className="stg-focus stg-press" style={{ height: 30, borderRadius: 9, border: 'none', cursor: 'pointer', fontSize: T.caption, fontWeight: on ? W.section : W.label, background: on ? K.gold : 'transparent', color: on ? K.forest : 'rgba(243,234,208,0.7)' }}>
                       {l.label}
                     </button>
                   );
@@ -284,18 +284,16 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
 
           {/* ── The page ── */}
           <div className="relative flex-1 min-w-0 flex flex-col min-h-0" style={{ background: `linear-gradient(180deg, ${K.page}, #F1EBDD)` }}>
-            {/* One clear title per tab: a gold eyebrow that repeats the bookmark, the title,
-                then a single lead sentence. Every group heading below is one step smaller. */}
-            <header className="shrink-0 flex items-start gap-4" style={{ padding: '20px 26px 12px 28px' }}>
+            {/* One title per tab at T.title, then ONE short lead in inkSoft. The bookmark already
+                names the tab, so there is no eyebrow repeating it. Group titles below are one
+                step down the 1.6 scale (T.section, forest). */}
+            <header className="shrink-0 flex items-start gap-4" style={{ padding: '22px 26px 16px 28px' }}>
               <div className="flex-1 min-w-0">
-                <span className="flex items-center gap-1.5" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: K.deepGold }}>
-                  <active.icon aria-hidden size={13} strokeWidth={2.6} />{active.label}
-                </span>
-                <h2 id="stg-heading" className="stg-title" style={{ margin: '5px 0 0', fontSize: 25, fontWeight: 900, letterSpacing: '-0.02em', color: K.ink, lineHeight: 1.08 }}>{active.title}</h2>
-                <p className="stg-body" style={{ margin: '4px 0 0', fontSize: 13.5, lineHeight: 1.45, color: K.inkSoft, maxWidth: 660 }}>{active.desc}</p>
+                <h2 id="stg-heading" className="stg-title" style={{ margin: 0, fontSize: T.title, fontWeight: W.title, letterSpacing: '-0.02em', color: K.ink, lineHeight: LH.title }}>{active.title}</h2>
+                <p className="stg-body" style={{ margin: '6px 0 0', fontSize: T.body, fontWeight: W.body, lineHeight: LH.body, color: K.inkSoft, maxWidth: 560 }}>{active.desc}</p>
               </div>
               <div className="shrink-0 flex items-center gap-2">
-                <span className={`${active.id === 'people' || active.id === 'awards' ? 'hidden' : 'hidden lg:inline-flex'} items-center gap-1.5`} aria-live="polite" style={{ height: 28, padding: '0 10px', borderRadius: 999, fontSize: 11.5, fontWeight: 700, background: writeFailed ? K.dangerTint : 'rgba(27,56,40,0.06)', color: writeFailed ? K.danger : K.forestLight }}>
+                <span className={`${active.id === 'people' || active.id === 'awards' ? 'hidden' : 'hidden lg:inline-flex'} items-center gap-1.5`} aria-live="polite" style={{ height: 28, padding: '0 10px', borderRadius: 999, fontSize: T.caption, fontWeight: W.label, background: writeFailed ? K.dangerTint : 'rgba(27,56,40,0.06)', color: writeFailed ? K.danger : K.forestMid }}>
                   {isViewOnly ? <Eye size={13} strokeWidth={2.4} aria-hidden /> : writeFailed ? <CircleAlert size={13} strokeWidth={2.4} aria-hidden /> : <Check size={13} strokeWidth={2.8} aria-hidden />}
                   {isViewOnly ? t('stg_read_only') : writeFailed ? t('stg_not_saved') : t('stg_saves_instantly')}
                 </span>
@@ -309,19 +307,18 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
             {(writeFailed || isViewOnly) && (
               <div className="shrink-0" style={{ padding: '0 26px 10px 28px' }}>
                 {writeFailed && (
-                  <div role="alert" className="flex items-center gap-3" style={{ padding: '10px 14px', borderRadius: 14, background: K.dangerTint, color: K.danger, fontSize: 13, fontWeight: 700 }}>
+                  <div role="alert" className="flex items-center gap-3" style={{ padding: '10px 14px', borderRadius: 14, background: K.dangerTint, color: K.danger, fontSize: T.body, fontWeight: W.label }}>
                     <CircleAlert size={16} strokeWidth={2.4} aria-hidden />
                     <span className="flex-1">{t('settings_write_failed')}</span>
                     <button type="button" onClick={() => setWriteFailed(false)} aria-label={t('sb_close')} className="stg-focus inline-flex items-center justify-center" style={{ width: 28, height: 28, borderRadius: 8, border: 'none', background: 'transparent', color: K.danger, cursor: 'pointer' }}><X size={15} strokeWidth={2.6} /></button>
                   </div>
                 )}
                 {isViewOnly && !writeFailed && (
-                  <div className="flex items-center gap-3" style={{ padding: '10px 14px', borderRadius: 14, background: 'rgba(182,135,31,0.10)', color: '#6E5114', fontSize: 13 }}>
+                  <div className="flex items-center gap-3" style={{ padding: '10px 14px', borderRadius: 14, background: 'rgba(182,135,31,0.10)', color: '#6E5114', fontSize: T.body, fontWeight: W.body }}>
                     <Gavel size={16} strokeWidth={2.4} aria-hidden />
                     <span className="flex-1">
-                      <strong style={{ fontWeight: 800 }}>{t('settings_view_only')}</strong>
+                      <strong style={{ fontWeight: W.section }}>{t('settings_view_only')}</strong>
                       {headChairName ? <> · {headChairName === myChairName ? t('gavel_device_elsewhere') : t('settings_view_only_chairing', { name: headChairName })}</> : null}
-                      <span style={{ display: 'block', marginTop: 1, opacity: 0.85 }}>{t('settings_view_only_note')}</span>
                     </span>
                   </div>
                 )}

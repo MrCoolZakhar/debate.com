@@ -1,13 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Gavel, MessageSquareText, RefreshCw, Search, Smartphone, UserRound, UserX, Users, Landmark, MonitorSmartphone, CircleUserRound } from 'lucide-react';
+import { Gavel, MessageSquareText, RefreshCw, Search, Smartphone, UserRound, UserX, Landmark, MonitorSmartphone, CircleUserRound } from 'lucide-react';
 import { getCountryDisplayName } from '@/lib/countries';
 import { seatKey } from '@/lib/seatClaims';
 import { getSessionParticipants, kickDelegateSeat, removeSessionChair, releaseChairDeviceClaim, type SessionParticipants, type ParticipantSeat } from '@/lib/sessionParticipants';
 import { SeatCircleFlag, flagMonogram } from '@/components/CircleFlag';
 import { delegationNameLabel, useSessionDelegationNames } from '@/lib/sessionDelegationNames';
-import { K, Section } from './settingsKit';
+import { K, T, W, LH, Section, InfoHint } from './settingsKit';
 import type { TabProps } from './settingsTypes';
 
 export interface ConfirmRequest {
@@ -166,7 +166,7 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
   };
 
   const pill = (active: boolean, text: string) => (
-    <span className="inline-flex items-center gap-1.5" style={{ fontSize: 11.5, fontWeight: 700, color: active ? K.forestLight : K.muted }}>
+    <span className="inline-flex items-center gap-1.5" style={{ fontSize: T.caption, fontWeight: W.label, color: active ? K.forestMid : K.inkSoft }}>
       <span aria-hidden style={{ width: 7, height: 7, borderRadius: 7, background: active ? '#3FA268' : '#C9BDA9', boxShadow: active ? '0 0 0 3px rgba(63,162,104,0.18)' : 'none' }} />
       {text}
     </span>
@@ -183,9 +183,9 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
   return (
     <div>
       {failed && !data && (
-        <div role="alert" className="flex flex-wrap items-center gap-3" style={{ marginBottom: 18, padding: '12px 14px', borderRadius: 14, background: K.dangerTint, color: K.danger, fontSize: 13, fontWeight: 700 }}>
+        <div role="alert" className="flex flex-wrap items-center gap-3" style={{ marginBottom: 18, padding: '12px 14px', borderRadius: 14, background: K.dangerTint, color: K.danger, fontSize: T.body, fontWeight: W.label }}>
           <span className="flex-1">{t('stg_people_failed')}</span>
-          <button type="button" onClick={() => void load()} className="stg-focus stg-press" style={{ height: 32, padding: '0 12px', borderRadius: 9, border: 'none', background: K.danger, color: '#FFF6EE', fontWeight: 800, cursor: 'pointer' }}>{t('delegate_seat_retry')}</button>
+          <button type="button" onClick={() => void load()} className="stg-focus stg-press" style={{ height: 32, padding: '0 12px', borderRadius: 9, border: 'none', background: K.danger, color: '#FFF6EE', fontSize: T.body, fontWeight: W.section, cursor: 'pointer' }}>{t('delegate_seat_retry')}</button>
         </div>
       )}
 
@@ -198,20 +198,20 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
             const online = onlineChairs?.has(name);
             return (
               <li key={name} className="flex items-center gap-2.5" style={{ padding: 8, borderRadius: 14, background: isHead ? `linear-gradient(150deg, ${K.forest}, #24492F)` : K.surface, boxShadow: isHead ? '0 12px 24px -16px rgba(27,56,40,0.9)' : K.outSm }}>
-                <span aria-hidden className="relative inline-flex items-center justify-center shrink-0" style={{ width: 38, height: 38, borderRadius: 999, fontSize: 13.5, fontWeight: 900, background: isHead ? `radial-gradient(circle at 35% 30%, #F7EBB5, ${K.gold} 60%, ${K.deepGold})` : K.ivory, color: K.forest, boxShadow: isHead ? 'none' : K.inSm }}>
+                <span aria-hidden className="relative inline-flex items-center justify-center shrink-0" style={{ width: 38, height: 38, borderRadius: 999, fontSize: T.body, fontWeight: W.section, background: isHead ? `radial-gradient(circle at 35% 30%, #F7EBB5, ${K.gold} 60%, ${K.deepGold})` : K.ivory, color: K.forest, boxShadow: isHead ? 'none' : K.inSm }}>
                   {flagMonogram(name)}
                   {onlineChairs && (
                     <span style={{ position: 'absolute', bottom: 0, insetInlineEnd: 0, width: 11, height: 11, borderRadius: 11, background: online ? '#3FA268' : '#C9BDA9', boxShadow: `0 0 0 2px ${isHead ? K.forest : K.surface}` }} />
                   )}
                 </span>
                 <span className="flex-1 min-w-0">
-                  <span className="block truncate" style={{ fontSize: 14.5, fontWeight: 800, color: isHead ? '#F3EAD0' : K.ink }}>
-                    {name}{me && <span style={{ marginInlineStart: 6, fontSize: 12, fontWeight: 700, color: isHead ? K.gold : K.forestLight }}>{t('gavel_you')}</span>}
+                  <span className="block truncate" style={{ fontSize: T.body, fontWeight: W.label, color: isHead ? '#F3EAD0' : K.ink }}>
+                    {name}{me && <span style={{ marginInlineStart: 6, fontSize: T.caption, fontWeight: W.label, color: isHead ? K.gold : K.forestMid }}>{t('gavel_you')}</span>}
                   </span>
-                  <span className="inline-flex items-center gap-1.5" style={{ marginTop: 2, fontSize: 12, fontWeight: 700, color: isHead ? K.gold : K.inkSoft }}>
+                  <span className="inline-flex items-center gap-1.5" style={{ marginTop: 2, fontSize: T.caption, fontWeight: W.label, color: isHead ? K.gold : K.inkSoft }}>
                     {isHead ? <Gavel size={12} strokeWidth={2.6} aria-hidden /> : <MessageSquareText size={12} strokeWidth={2.4} aria-hidden />}
                     {isHead ? t('stg_role_moderator') : t('stg_role_commenter')}
-                    {onlineChairs && <span style={{ fontWeight: 600, opacity: 0.75 }}>· {online ? t('stg_online') : t('stg_offline')}</span>}
+                    {onlineChairs && <span style={{ fontWeight: W.body }}>· {online ? t('stg_online') : t('stg_offline')}</span>}
                   </span>
                 </span>
                 {isModerator && !isHead && !me && listedChairs.includes(name) && (
@@ -228,14 +228,14 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
 
         {data?.isConference && data.conferenceChairs.length > 0 && (
           <div style={{ borderTop: `1px solid ${K.hair}`, padding: '10px 0' }}>
-            <div className="flex items-center gap-2" style={{ marginBottom: 10, fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: K.inkSoft }}>
-              <Landmark size={13} strokeWidth={2.4} aria-hidden />{t('stg_conference_chairs')}
+            <div className="flex items-center gap-2" style={{ marginBottom: 10, fontSize: T.body, fontWeight: W.section, color: K.forest }}>
+              <Landmark size={14} strokeWidth={2.3} aria-hidden />{t('stg_conference_chairs')}
             </div>
             <div className="flex flex-wrap gap-2">
               {data.conferenceChairs.map((c) => (
                 <span key={c.key} className="inline-flex items-center gap-2" style={{ height: 36, padding: '0 12px 0 5px', borderRadius: 999, background: K.surface, boxShadow: K.outSm }}>
-                  <span aria-hidden className="inline-flex items-center justify-center" style={{ width: 26, height: 26, borderRadius: 26, background: K.ivory, color: K.forest, fontSize: 10.5, fontWeight: 900 }}>{flagMonogram(c.name ?? '?')}</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: K.ink }}>{c.name ?? t('stg_unnamed_account')}</span>
+                  <span aria-hidden className="inline-flex items-center justify-center" style={{ width: 26, height: 26, borderRadius: 26, background: K.ivory, color: K.forest, fontSize: T.caption, fontWeight: W.section }}>{flagMonogram(c.name ?? '?')}</span>
+                  <span style={{ fontSize: T.body, fontWeight: W.label, color: K.ink }}>{c.name ?? t('stg_unnamed_account')}</span>
                   {pill(c.joined, c.joined ? t('stg_joined_here') : t('stg_not_joined'))}
                 </span>
               ))}
@@ -245,21 +245,21 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
 
         {data && data.chairDevices.length > 0 && (
           <div style={{ borderTop: `1px solid ${K.hair}`, padding: '10px 0' }}>
-            <div className="flex items-center gap-2" style={{ marginBottom: 4, fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: K.inkSoft }}>
-              <MonitorSmartphone size={13} strokeWidth={2.4} aria-hidden />{t('stg_chair_devices')}
+            <div className="flex items-center gap-2" style={{ marginBottom: 6, fontSize: T.body, fontWeight: W.section, color: K.forest }}>
+              <MonitorSmartphone size={14} strokeWidth={2.3} aria-hidden />{t('stg_chair_devices')}
+              <InfoHint text={t('stg_chair_devices_hint')} />
             </div>
-            <p className="stg-body" style={{ margin: '0 0 10px', fontSize: 12, color: K.muted }}>{t('stg_chair_devices_hint')}</p>
             <ul style={{ listStyle: 'none', margin: 0, padding: 0 }} className="flex flex-col gap-1">
               {data.chairDevices.map((c) => {
                 const label = c.name ?? t('stg_signed_in_chair');
                 return (
                   <li key={c.key} className="flex items-center gap-3" style={{ padding: '6px 0' }}>
                     <CircleUserRound size={20} strokeWidth={2} aria-hidden style={{ color: K.forestLight }} />
-                    <span className="flex-1 min-w-0 truncate" style={{ fontSize: 13.5, fontWeight: 700, color: K.ink }}>{label}</span>
+                    <span className="flex-1 min-w-0 truncate" style={{ fontSize: T.body, fontWeight: W.label, color: K.ink }}>{label}</span>
                     {pill(c.active, c.active ? t('stg_active_now') : ago(c.lastSeenAt))}
                     {isModerator && (
                       <button type="button" onClick={() => forgetDevice(c.key, label)} className="stg-focus stg-press"
-                        style={{ height: 30, padding: '0 10px', borderRadius: 9, border: 'none', background: 'transparent', color: K.inkSoft, fontSize: 12, fontWeight: 800, cursor: 'pointer', boxShadow: 'inset 0 0 0 1px rgba(28,20,16,0.14)' }}>
+                        style={{ height: 30, padding: '0 10px', borderRadius: 9, border: 'none', background: 'transparent', color: K.inkSoft, fontSize: T.body, fontWeight: W.label, cursor: 'pointer', boxShadow: 'inset 0 0 0 1px rgba(28,20,16,0.14)' }}>
                         {t('stg_device_forget_confirm')}
                       </button>
                     )}
@@ -272,15 +272,15 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
       </Section>
 
       {/* ── Delegations ── */}
-      <Section icon={Smartphone} title={t('stg_people_delegates')} hint={t('stg_people_delegates_hint')} lead delay={40}>
+      <Section icon={Smartphone} title={t('stg_people_delegates')} hint={`${t('stg_people_delegates_hint')} ${t('stg_people_footnote')}`} lead delay={40}>
         {/* Who is in, as one segmented bar. */}
         <div style={{ padding: '12px 0 4px' }}>
           <div className="flex items-end justify-between gap-3 flex-wrap" style={{ marginBottom: 10 }}>
-            <div className="stg-num" style={{ fontSize: 30, fontWeight: 900, color: K.ink, lineHeight: 1 }}>
-              {live + idle}<span style={{ fontSize: 15, fontWeight: 700, color: K.muted }}> / {rows.length}</span>
-              <span style={{ display: 'block', marginTop: 4, fontSize: 12.5, fontWeight: 700, color: K.inkSoft }}>{t('stg_on_devices')}</span>
+            <div className="stg-num" style={{ fontSize: T.title, fontWeight: W.title, color: K.ink, lineHeight: LH.title }}>
+              {live + idle}<span style={{ fontSize: T.body, fontWeight: W.label, color: K.inkSoft }}> / {rows.length}</span>
+              <span style={{ display: 'block', marginTop: 4, fontSize: T.caption, fontWeight: W.label, color: K.inkSoft }}>{t('stg_on_devices')}</span>
             </div>
-            <div className="flex flex-wrap gap-3" style={{ fontSize: 12, fontWeight: 700, color: K.inkSoft }}>
+            <div className="flex flex-wrap gap-3 stg-num" style={{ fontSize: T.caption, fontWeight: W.label, color: K.inkSoft }}>
               <span className="inline-flex items-center gap-1.5"><span aria-hidden style={{ width: 10, height: 10, borderRadius: 3, background: K.forest }} />{t('stg_legend_live', { n: live })}</span>
               <span className="inline-flex items-center gap-1.5"><span aria-hidden style={{ width: 10, height: 10, borderRadius: 3, background: K.deepGold }} />{t('stg_legend_idle', { n: idle })}</span>
               <span className="inline-flex items-center gap-1.5"><span aria-hidden style={{ width: 10, height: 10, borderRadius: 3, background: 'rgba(28,20,16,0.14)' }} />{t('stg_legend_missing', { n: missing })}</span>
@@ -297,22 +297,22 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
           <div role="radiogroup" aria-label={t('stg_people_filter')} className="inline-flex" style={{ padding: 3, borderRadius: 12, background: K.ivory, boxShadow: K.inSm }}>
             {([['all', t('stg_filter_all', { n: rows.length })], ['joined', t('stg_filter_joined', { n: live + idle })], ['missing', t('stg_filter_missing', { n: missing })]] as [Filter, string][]).map(([id, label]) => (
               <button key={id} type="button" role="radio" aria-checked={filter === id} onClick={() => setFilter(id)} className="stg-focus stg-press stg-num"
-                style={{ height: 30, padding: '0 12px', borderRadius: 9, border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 800, background: filter === id ? K.surface : 'transparent', color: filter === id ? K.forest : K.inkSoft, boxShadow: filter === id ? K.outSm : 'none' }}>
+                style={{ height: 30, padding: '0 12px', borderRadius: 9, border: 'none', cursor: 'pointer', fontSize: T.body, fontWeight: filter === id ? W.section : W.label, background: filter === id ? K.surface : 'transparent', color: filter === id ? K.forest : K.inkSoft, boxShadow: filter === id ? K.outSm : 'none' }}>
                 {label}
               </button>
             ))}
           </div>
           {rows.length > 8 && (
             <label className="inline-flex items-center gap-2 flex-1" style={{ minWidth: 180, maxWidth: 280, height: 36, padding: '0 12px', borderRadius: 12, background: K.surface, boxShadow: 'inset 0 0 0 1px rgba(28,20,16,0.12)' }}>
-              <Search size={14} strokeWidth={2.4} aria-hidden style={{ color: K.muted }} />
+              <Search size={14} strokeWidth={2.4} aria-hidden style={{ color: K.inkSoft }} />
               <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('stg_people_search')} aria-label={t('stg_people_search')}
-                className="flex-1 min-w-0" style={{ border: 'none', background: 'transparent', fontSize: 13.5, fontWeight: 600, color: K.ink, fontFamily: K.font, outline: 'none' }} />
+                className="flex-1 min-w-0" style={{ border: 'none', background: 'transparent', fontSize: T.body, fontWeight: W.label, color: K.ink, fontFamily: K.font, outline: 'none' }} />
             </label>
           )}
         </div>
 
         {rows.length === 0 ? (
-          <p style={{ margin: 0, padding: '8px 0 18px', fontSize: 13, color: K.muted }}>{t('stg_no_delegations')}</p>
+          <p style={{ margin: 0, padding: '8px 0 18px', fontSize: T.body, color: K.inkSoft }}>{t('stg_no_delegations')}</p>
         ) : (
           <ul style={{ listStyle: 'none', margin: 0, padding: '0 0 10px' }}>
             {shown.map(({ d, claims, kickedAt }, i) => {
@@ -332,11 +332,11 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
                     {joined && <span aria-hidden style={{ position: 'absolute', bottom: -1, insetInlineEnd: -1, width: 12, height: 12, borderRadius: 12, background: active ? '#3FA268' : K.deepGold, boxShadow: `0 0 0 2px ${K.surface}` }} />}
                   </span>
                   <span className="flex-1 min-w-0" style={{ minWidth: 160 }}>
-                    <span className="block truncate" style={{ fontSize: 14.5, fontWeight: 800, color: joined ? K.ink : K.inkSoft }} title={people ? `${name} · ${people}` : undefined}>
+                    <span className="block truncate" style={{ fontSize: T.body, fontWeight: W.label, color: joined ? K.ink : K.inkSoft }} title={people ? `${name} · ${people}` : undefined}>
                       {name}
-                      {people && <span style={{ fontWeight: 600, color: K.inkSoft }}> · {people}</span>}
+                      {people && <span style={{ fontWeight: W.body, color: K.inkSoft }}> · {people}</span>}
                     </span>
-                    <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5" style={{ marginTop: 2, fontSize: 12, fontWeight: 600, color: K.inkSoft }}>
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5" style={{ marginTop: 2, fontSize: T.caption, fontWeight: W.label, color: K.inkSoft }}>
                       {joined ? (
                         <>
                           <span className="inline-flex items-center gap-1">
@@ -347,40 +347,36 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
                           <span>{active ? t('stg_active_now') : latest ? ago(latest) : ''}</span>
                         </>
                       ) : kickedAt ? (
-                        <span style={{ color: K.danger, fontWeight: 700 }}>{t('stg_kicked_recent', { n: kickLeft })}</span>
+                        <span style={{ color: K.danger }}>{t('stg_kicked_recent', { n: kickLeft })}</span>
                       ) : (
                         <span>{t('stg_not_joined')}</span>
                       )}
                       <span aria-hidden>·</span>
-                      <span style={{ color: d.status === 'absent' ? K.muted : K.forestLight, fontWeight: 700 }}>
+                      <span style={{ color: d.status === 'absent' ? K.inkSoft : K.forestMid }}>
                         {d.status === 'absent' ? t('rollcall_absent') : d.status === 'present-voting' ? t('stg_status_pv') : t('stg_status_present')}
                       </span>
                     </span>
                   </span>
                   {isModerator && reservedOnly && (
-                    <span className="shrink-0" style={{ maxWidth: 220, fontSize: 12, fontWeight: 700, color: K.inkSoft, lineHeight: 1.35 }}>
+                    <span className="shrink-0" style={{ maxWidth: 220, fontSize: T.caption, fontWeight: W.label, color: K.inkSoft, lineHeight: LH.body }}>
                       {t('stg_kick_reserved')}
                     </span>
                   )}
                   {isModerator && joined && !reservedOnly && (
                     <button type="button" onClick={() => kick(d.country)} aria-label={t('stg_kick_aria', { country: name })}
                       className="stg-focus stg-press inline-flex items-center gap-1.5 shrink-0"
-                      style={{ height: 34, padding: '0 12px', borderRadius: 10, border: 'none', background: 'transparent', color: K.danger, fontSize: 12.5, fontWeight: 800, cursor: 'pointer', boxShadow: 'inset 0 0 0 1px rgba(155,44,34,0.25)' }}>
+                      style={{ height: 34, padding: '0 12px', borderRadius: 10, border: 'none', background: 'transparent', color: K.danger, fontSize: T.body, fontWeight: W.label, cursor: 'pointer', boxShadow: 'inset 0 0 0 1px rgba(155,44,34,0.25)' }}>
                       <UserX size={14} strokeWidth={2.4} aria-hidden />{t('stg_kick_short')}
                     </button>
                   )}
                 </li>
               );
             })}
-            {shown.length === 0 && <li style={{ padding: '8px 4px 14px', fontSize: 13, color: K.muted }}>{t('stg_no_matches')}</li>}
+            {shown.length === 0 && <li style={{ padding: '8px 4px 14px', fontSize: T.body, color: K.inkSoft }}>{t('stg_no_matches')}</li>}
           </ul>
         )}
       </Section>
 
-      <p className="stg-body inline-flex items-start gap-2" style={{ margin: '0 4px 8px', fontSize: 12, lineHeight: 1.5, color: K.muted }}>
-        <Users size={13} strokeWidth={2.4} aria-hidden style={{ marginTop: 2, flexShrink: 0 }} />
-        {t('stg_people_footnote')}
-      </p>
     </div>
   );
 }

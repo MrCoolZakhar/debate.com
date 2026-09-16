@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, FileText, Gavel, GripVertical, Hourglass, Infinity as InfinityIcon, ListOrdered, Sparkles, Timer } from 'lucide-react';
 import { DEFAULT_DOCUMENT_NAMES, DEFAULT_MOTION_NAMES, type CommitteeSettings, type DocumentNames, type MotionNames } from '@/lib/settingsStore';
 import { localizedMotionDefaults } from '@/lib/committeeFlags';
-import { K, Section, SettingRow, GavelSwitch, ClockStepper, InlineRename, HoverHint, TallyStepper } from './settingsKit';
+import { K, T, W, Section, SettingRow, GavelSwitch, ClockStepper, InlineRename, HoverHint, TallyStepper } from './settingsKit';
 import type { TabProps } from './settingsTypes';
 
 type OrderableType = 'moderated' | 'unmoderated' | 'consultation' | 'tour';
@@ -19,10 +19,11 @@ const MOTION_META: Record<OrderableType, { enabledKey: keyof CommitteeSettings; 
   tour:         { enabledKey: 'motionTourDeTable',       namesKey: 'tour',         defaultName: 'Tour de Table' },
 };
 
-/** Four rising bars: how disruptive this rank is. Red-brown for the procedural motions. */
-function HeatBars({ level, tone = 'gold' }: { level: number; tone?: 'gold' | 'red' | 'off' }) {
+/** Four rising bars: how disruptive this rank is. Red-brown for the procedural motions. The
+ *  words ("Disruptiveness 3 of 4") are its tooltip, not a printed caption. */
+function HeatBars({ level, tone = 'gold', title }: { level: number; tone?: 'gold' | 'red' | 'off'; title?: string }) {
   return (
-    <span aria-hidden className="inline-flex items-end gap-[3px]" style={{ height: 18 }}>
+    <span aria-hidden title={title} className="inline-flex items-end gap-[3px] shrink-0" style={{ height: 18 }}>
       {[1, 2, 3, 4].map((l) => (
         <span key={l} style={{
           width: 4, height: 5 + l * 3, borderRadius: 2,
@@ -42,7 +43,7 @@ function LimitControl({ value, onChange, label, unlimitedLabel, limitLabel }: {
       <button type="button" aria-pressed={unlimited} onClick={() => onChange(unlimited ? 3 : null)}
         className="stg-focus stg-press inline-flex items-center gap-1.5"
         title={unlimited ? limitLabel : unlimitedLabel}
-        style={{ height: 32, padding: '0 11px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800,
+        style={{ height: 32, padding: '0 11px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: T.body, fontWeight: W.label,
           background: unlimited ? K.forest : 'transparent', color: unlimited ? K.gold : K.inkSoft,
           boxShadow: unlimited ? K.outSm : 'inset 0 0 0 1px rgba(28,20,16,0.14)' }}>
         <InfinityIcon size={15} strokeWidth={2.6} aria-hidden />
@@ -113,16 +114,13 @@ export default function MotionsTab({ s, upd, t, language, isViewOnly }: TabProps
                 </span>
                 {/* The rank, as a number and nothing else: no tile behind it. */}
                 <span aria-hidden className="stg-num shrink-0 text-center" style={{
-                  width: 20, fontSize: 18, fontWeight: 900, lineHeight: 1, color: i === 0 ? K.deepGold : 'rgba(27,56,40,0.45)',
+                  width: 22, fontSize: T.section, fontWeight: W.section, lineHeight: 1, color: i === 0 ? K.deepGold : 'rgba(27,56,40,0.5)',
                 }}>{i + 1}</span>
                 <span className="flex-1 min-w-0" style={{ opacity: enabled ? 1 : 0.6 }}>
                   <InlineRename {...renameProps} defaultName={locName(meta.namesKey, meta.defaultName)} resetValue={meta.defaultName} value={name}
                     onChange={(v) => upd('motionNames', { ...s.motionNames, [meta.namesKey]: v })} />
-                  <span className="flex items-center gap-2" style={{ marginTop: 1, paddingInlineStart: 2 }}>
-                    <HeatBars level={4 - i} />
-                    <span style={{ fontSize: 11.5, fontWeight: 700, color: K.muted }}>{t('stg_disruptiveness', { n: 4 - i })}</span>
-                  </span>
                 </span>
+                <HeatBars level={4 - i} title={t('stg_disruptiveness', { n: 4 - i })} />
                 <span className="shrink-0 inline-flex flex-col">
                   <button type="button" aria-label={t('stg_move_up', { name: shown })} disabled={i === 0} onClick={() => move(i, i - 1)}
                     className="stg-focus stg-press inline-flex items-center justify-center" style={{ width: 28, height: 20, border: 'none', background: 'transparent', color: K.forest, opacity: i === 0 ? 0.25 : 0.8, cursor: 'pointer', borderRadius: 6 }}>
@@ -149,21 +147,18 @@ export default function MotionsTab({ s, upd, t, language, isViewOnly }: TabProps
           <span className="flex-1 min-w-0">
             <InlineRename {...renameProps} defaultName={locName('custom', DEFAULT_MOTION_NAMES.custom)} resetValue={DEFAULT_MOTION_NAMES.custom}
               value={s.motionNames.custom ?? DEFAULT_MOTION_NAMES.custom} onChange={(v) => upd('motionNames', { ...s.motionNames, custom: v })} />
-            <span className="flex items-center gap-2" style={{ marginTop: 1, paddingInlineStart: 2 }}>
-              <HeatBars level={0} tone="off" />
-              <HoverHint text={t('stg_custom_motion_hint')}><span style={{ fontSize: 11.5, fontWeight: 700, color: K.muted }}>{t('stg_unranked')}</span></HoverHint>
-            </span>
           </span>
+          <HoverHint text={t('stg_custom_motion_hint')}><span style={{ fontSize: T.caption, fontWeight: W.label, color: K.inkSoft }}>{t('stg_unranked')}</span></HoverHint>
           <GavelSwitch size="sm" label={t('stg_motion_enabled', { name: locName('custom', DEFAULT_MOTION_NAMES.custom) })}
             checked={s.motionCustom !== false} onChange={(v) => upd('motionCustom', v)} />
         </div>
 
         {s.motionCoW !== false && (
           <>
-            <SettingRow dense labelId="stg-cow" label={t('settings_cow_timer_label')} note={t('settings_cow_timer_note')}
+            <SettingRow dense labelId="stg-cow" label={t('settings_cow_timer_label')} hint={t('settings_cow_timer_note')}
               control={<GavelSwitch size="sm" icon={Timer} labelledBy="stg-cow" checked={s.cowTimerEnabled === true} onChange={(v) => upd('cowTimerEnabled', v)} />} />
             {s.cowTimerEnabled === true && (
-              <SettingRow dense label={t('stg_cow_duration_label')} note={t('stg_cow_duration_note')}
+              <SettingRow dense label={t('stg_cow_duration_label')} hint={t('stg_cow_duration_note')}
                 control={<ClockStepper label={t('stg_cow_duration_label')} unit={t('motions_sec')} value={s.cowTimerSeconds || 60} min={5} max={3600} step={15} arcMax={300}
                   presets={[30, 45, 60, 90, 120]} onCommit={(v) => upd('cowTimerSeconds', v)} />} />
             )}
@@ -184,16 +179,16 @@ export default function MotionsTab({ s, upd, t, language, isViewOnly }: TabProps
                   onChange={(v) => upd('motionNames', { ...s.motionNames, [key]: v })} />
               </span>
               <HeatBars level={4} tone="red" />
-              <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: K.muted, minWidth: 64, textAlign: 'end' }}>{t('stg_always_on')}</span>
+              <span style={{ fontSize: T.caption, fontWeight: W.label, color: K.inkSoft, minWidth: 56, textAlign: 'end' }}>{t('stg_always_on')}</span>
             </div>
           ))}
         </div>
       </Section>
 
       <Section icon={FileText} title={t('settings_documents_heading')} hint={t('stg_documents_hint')} lead delay={80}>
-        <SettingRow first dense labelId="stg-docappr" label={t('settings_require_doc_approval')} note={t('settings_require_doc_approval_note')}
+        <SettingRow first dense labelId="stg-docappr" label={t('settings_require_doc_approval')} hint={t('settings_require_doc_approval_note')}
           control={<GavelSwitch size="sm" glyph="lock" labelledBy="stg-docappr" checked={s.requireDocApproval} onChange={(v) => upd('requireDocApproval', v)} />} />
-        <SettingRow dense label={t('settings_doc_names_label')} note={t('settings_doc_names_desc')}>
+        <SettingRow dense label={t('settings_doc_names_label')} hint={t('settings_doc_names_desc')}>
           <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))' }}>
             {([
               { singular: 'workingPaper' as keyof DocumentNames, plural: 'workingPapers' as keyof DocumentNames, sd: t('documents_working_paper'), pd: t('documents_working_papers_tab'), tag: 'WP' },
@@ -207,16 +202,16 @@ export default function MotionsTab({ s, upd, t, language, isViewOnly }: TabProps
                 <div key={g.tag} style={{ borderRadius: 14, background: K.ivory, boxShadow: K.inSm, padding: '10px 12px' }}>
                   {/* A folded-corner document tag beside the two names, not on a row of its own. */}
                   <div className="flex items-start gap-2.5">
-                  <span aria-hidden className="stg-num inline-flex items-center justify-center shrink-0" style={{ marginTop: 5, height: 20, padding: '0 7px', borderRadius: '6px 10px 6px 6px', background: K.forest, color: K.gold, fontSize: 10.5, fontWeight: 900, letterSpacing: '0.06em' }}>{g.tag}</span>
+                  <span aria-hidden className="stg-num inline-flex items-center justify-center shrink-0" style={{ marginTop: 5, height: 20, padding: '0 7px', borderRadius: '6px 10px 6px 6px', background: K.forest, color: K.gold, fontSize: T.caption, fontWeight: W.section, letterSpacing: '0.06em' }}>{g.tag}</span>
                   <div className="flex-1 min-w-0">
                   {([
                     { key: g.singular, label: t('settings_doc_name_singular'), loc: g.sd },
                     { key: g.plural, label: t('settings_doc_name_plural'), loc: g.pd },
                   ]).map(({ key, label, loc }) => (
                     <div key={key} className="flex items-center gap-2" style={{ padding: '2px 0' }}>
-                      <span style={{ width: 62, fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: K.muted }}>{label}</span>
+                      <span style={{ width: 58, fontSize: T.caption, fontWeight: W.label, color: K.inkSoft }}>{label}</span>
                       <span className="flex-1 min-w-0">
-                        <InlineRename {...renameProps} size={14} defaultName={loc} resetValue={DEFAULT_DOCUMENT_NAMES[key]} value={docNames[key] ?? DEFAULT_DOCUMENT_NAMES[key]}
+                        <InlineRename {...renameProps} defaultName={loc} resetValue={DEFAULT_DOCUMENT_NAMES[key]} value={docNames[key] ?? DEFAULT_DOCUMENT_NAMES[key]}
                           onChange={(v) => upd('documentNames', { ...docNames, [key]: v })} />
                       </span>
                     </div>
@@ -224,9 +219,7 @@ export default function MotionsTab({ s, upd, t, language, isViewOnly }: TabProps
                   </div>
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-2" style={{ marginTop: 6, paddingTop: 8, borderTop: `1px solid ${K.hair}` }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: K.inkSoft }}>
-                      {limit === null ? t('stg_limit_none', { docs: plural }) : t('stg_limit_some', { n: limit, docs: plural })}
-                    </span>
+                    <span style={{ fontSize: T.caption, fontWeight: W.label, color: K.inkSoft }}>{t('stg_limit_label', { docs: plural })}</span>
                     <LimitControl label={t('stg_limit_label', { docs: plural })} unlimitedLabel={t('stg_unlimited')} limitLabel={t('stg_set_limit')}
                       value={limit} onChange={(v) => upd(limitKey, v)} />
                   </div>

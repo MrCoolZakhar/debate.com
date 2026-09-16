@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Award, MonitorOff, Trophy, ScrollText, Crown } from 'lucide-react';
 import { resolveChairAwardsHref } from '@/lib/sessionAwardsLink';
-import { K, Section } from './settingsKit';
+import { K, T, W, LH, Section, InfoHint } from './settingsKit';
 import type { ConfirmRequest } from './PeopleTab';
 import type { TabProps } from './settingsTypes';
 
@@ -59,17 +59,17 @@ export default function AwardsTab({ committee, t, requestConfirm }: TabProps & {
         <svg aria-hidden width="220" height="220" viewBox="0 0 220 220" className="absolute" style={{ insetInlineEnd: -50, top: -60, opacity: 0.16 }}>
           {[96, 74, 52].map((r) => <circle key={r} cx="110" cy="110" r={r} fill="none" stroke={K.gold} strokeWidth="2" strokeDasharray="3 7" />)}
         </svg>
-        <h3 className="stg-title flex items-start gap-2.5" style={{ margin: 0, fontSize: 22, fontWeight: 900, letterSpacing: '-0.01em', color: '#FFF8E4', maxWidth: 540 }}>
-          <Trophy aria-hidden size={22} strokeWidth={2.3} style={{ color: K.gold, flexShrink: 0, marginTop: 3 }} />
+        <h3 className="stg-title flex items-start gap-2.5" style={{ margin: 0, fontSize: T.section, fontWeight: W.section, lineHeight: LH.section, letterSpacing: '-0.01em', color: '#FFF8E4', maxWidth: 540 }}>
+          <Trophy aria-hidden size={20} strokeWidth={2.3} style={{ color: K.gold, flexShrink: 0, marginTop: 2 }} />
           <span>{t('stg_awards_card_title')}</span>
         </h3>
-        <p className="stg-body" style={{ margin: '7px 0 0', fontSize: 14, lineHeight: 1.5, color: 'rgba(243,234,208,0.82)', maxWidth: 560 }}>{t('stg_awards_card_body')}</p>
+        <p className="stg-body" style={{ margin: '8px 0 0', fontSize: T.body, fontWeight: W.body, lineHeight: LH.body, color: 'rgba(243,234,208,0.86)', maxWidth: 520 }}>{t('stg_awards_card_body')}</p>
         <button type="button" onClick={open} className="stg-focus stg-press inline-flex items-center gap-2"
-          style={{ marginTop: 16, height: 42, padding: '0 18px', borderRadius: 12, border: 'none', background: K.gold, color: K.forest, fontSize: 14.5, fontWeight: 900, cursor: 'pointer', boxShadow: '0 10px 20px -10px rgba(0,0,0,0.55)' }}>
+          style={{ marginTop: 16, height: 42, padding: '0 18px', borderRadius: 12, border: 'none', background: K.gold, color: K.forest, fontSize: T.body, fontWeight: W.section, cursor: 'pointer', boxShadow: '0 10px 20px -10px rgba(0,0,0,0.55)' }}>
           {t('stg_awards_open')}
           <ArrowUpRight size={17} strokeWidth={2.6} aria-hidden />
         </button>
-        <p style={{ margin: '8px 0 0', fontSize: 11.5, fontWeight: 600, color: 'rgba(243,234,208,0.6)' }}>
+        <p style={{ margin: '8px 0 0', fontSize: T.caption, fontWeight: W.label, color: 'rgba(243,234,208,0.72)' }}>
           {href ? t('stg_awards_new_tab') : t('stg_awards_resolving')}
         </p>
       </div>
@@ -78,12 +78,12 @@ export default function AwardsTab({ committee, t, requestConfirm }: TabProps & {
         <ol className="grid gap-2.5" style={{ listStyle: 'none', margin: 0, padding: '10px 0', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' }}>
           {steps.map((s, i) => (
             <li key={i} style={{ borderRadius: 13, padding: 12, background: K.surface, boxShadow: K.outSm }}>
-              <span className="flex items-baseline gap-2">
-                <span aria-hidden className="stg-num" style={{ fontSize: 13, fontWeight: 900, color: K.deepGold }}>{i + 1}</span>
-                <s.icon size={15} strokeWidth={2.3} aria-hidden style={{ color: K.forestLight, alignSelf: 'center' }} />
+              <span className="flex items-center gap-2">
+                <span aria-hidden className="stg-num" style={{ fontSize: T.section, fontWeight: W.section, lineHeight: 1, color: K.deepGold }}>{i + 1}</span>
+                <s.icon size={16} strokeWidth={2.3} aria-hidden style={{ color: K.forestLight }} />
+                <span style={{ fontSize: T.body, fontWeight: W.section, color: K.ink }}>{s.title}</span>
+                <InfoHint text={s.body} />
               </span>
-              <span className="block" style={{ marginTop: 7, fontSize: 13.5, fontWeight: 800, color: K.ink }}>{s.title}</span>
-              <span className="block stg-body" style={{ marginTop: 2, fontSize: 12, lineHeight: 1.4, color: K.inkSoft }}>{s.body}</span>
             </li>
           ))}
         </ol>

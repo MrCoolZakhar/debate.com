@@ -12,16 +12,20 @@
  *   NotchDial     role=slider track of notches, a pebble thumb, drag and arrow keys
  *   SecondsDial   role=slider on a LOG scale + a typed value + presets (the gavel knock)
  *   TallyStepper  compact +/- counter for points
- *   Section, SettingRow, RowGrid, SectionPair, HoverHint, InlineRename, ConfirmSheet
+ *   Section, SettingRow, RowGrid, SectionPair, HoverHint, InfoHint, InlineRename, ConfirmSheet
  *
- * ICONS. A glyph in this dialog is a CRISP LUCIDE LINE at one of three sizes (14 in a
- * section eyebrow, 16 inline in a row, 18-20 in a header) in forest, deep gold or ink.
+ * TEXT. Every size is a step of the T scale below (ratio 1.6) and every weight a W. A
+ * setting shows a 1-4 word label; what it does lives in an InfoHint (hover or focus), never
+ * as a visible sentence under the label.
+ *
+ * ICONS. A glyph in this dialog is a CRISP LUCIDE LINE at one of three sizes (14 inline or in
+ * a hint, 16 in a row, 18-20 beside a group title) in forest, deep gold or ink.
  * It NEVER sits in a decorative rounded-square tile: those tiles are what made the panel
  * look generated. The only round or plated things left are the ones that really are an
  * object: a person's avatar, a wax seal on a chosen card, a join-code ticket, a switch knob.
  */
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Check, Lock, Minus, Plus, Pencil, RotateCcw } from 'lucide-react';
+import { Check, Info, Lock, Minus, Plus, Pencil, RotateCcw } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { portalFrame } from '@/components/chat/chatTokens';
 
@@ -39,6 +43,8 @@ export const K = {
   inkSoft: '#5E5044',
   muted: '#8C7C6A',
   hair: 'rgba(28,20,16,0.08)',
+  /** The quiet group surface: a breath of forest over the page. */
+  tint: 'rgba(27,56,40,0.035)',
   danger: '#9B2C22',
   dangerTint: 'rgba(155,44,34,0.08)',
   font: "'Outfit', sans-serif",
@@ -49,6 +55,25 @@ export const K = {
   card: '0 0 0 1px rgba(27,56,40,0.06), 0 1px 2px rgba(27,56,40,0.06), 0 8px 24px -12px rgba(27,56,40,0.18)',
   ring: '0 0 0 2px #FBF8F1, 0 0 0 4px #B6871F',
 } as const;
+
+// ── Type scale ────────────────────────────────────────────────────────────────
+/**
+ * ONE type scale for the whole dialog, ratio 1.6 from a 13px base:
+ *
+ *   T.title    33px  (13 x 1.6 x 1.6)  the tab title, big display numbers     weight 700
+ *   T.section  21px  (13 x 1.6)        a group title, codes, a dialog title   weight 600
+ *   T.body     13px                    labels, controls, buttons, lead text   weight 400-500
+ *   T.caption  11px                    units, "seen 2 min ago", legends only  weight 500
+ *
+ * 13 / 1.6 = 8px is too small to read, so the caption is the ONE off-ratio step and is kept
+ * for meta that would otherwise crowd a row. No other font size appears in Settings: use
+ * these constants, never a literal. Colour carries the rest of the hierarchy: titles in
+ * ink, group titles in forest, the lead and hints in inkSoft.
+ */
+export const T = { title: 33, section: 21, body: 13, caption: 11 } as const;
+export const W = { title: 700, section: 600, label: 500, body: 400 } as const;
+/** Line heights that keep the scale's rhythm (tight for display, open for reading). */
+export const LH = { title: 1.1, section: 1.2, body: 1.45 } as const;
 
 /** Shared CSS for focus rings, press scale and reduced motion inside the dialog. */
 export function SettingsKitStyles() {
@@ -75,28 +100,28 @@ export function SettingsKitStyles() {
 // ── Section and rows ──────────────────────────────────────────────────────────
 type LucideIcon = React.ComponentType<{ size?: number; strokeWidth?: number; className?: string; style?: React.CSSProperties; 'aria-hidden'?: boolean | 'true' }>;
 
-/** A labelled group. ONE heading shape on every tab: a 14px glyph, a short uppercase label
- *  and a rule that runs to the inline-end, with an optional aside riding on the rule. The
- *  lead groups of a tab get a raised plate, the rest a hairline, so the weight says which
- *  settings matter without a second type size. */
+/** A labelled group. ONE heading shape on every tab: a Lucide glyph and the group title at
+ *  T.section in forest, with its explanation behind an InfoHint and an optional aside at the
+ *  inline-end. The lead groups of a tab sit on a raised ivory plate, the rest on a faint
+ *  forest tint, so the surface says which settings matter. */
 export function Section({ icon: Icon, title, hint, lead = false, children, delay = 0, aside }: {
   icon?: LucideIcon; title: string; hint?: string; lead?: boolean; children: React.ReactNode; delay?: number; aside?: React.ReactNode;
 }) {
   const id = useId();
   return (
-    <section aria-labelledby={id} className="stg-rise" style={{ animationDelay: `${delay}ms`, marginBottom: 18 }}>
-      <div className="flex items-center gap-2" style={{ marginBottom: hint ? 5 : 8, paddingInline: 2 }}>
-        {Icon && <Icon aria-hidden size={14} strokeWidth={2.5} style={{ color: lead ? K.deepGold : K.forestLight, flexShrink: 0 }} />}
-        <h3 id={id} className="stg-title truncate" style={{ margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: K.forest }}>
+    <section aria-labelledby={id} className="stg-rise" style={{ animationDelay: `${delay}ms`, marginBottom: 26 }}>
+      <div className="flex items-center gap-2.5" style={{ marginBottom: 10, paddingInline: 2, minHeight: 34 }}>
+        {Icon && <Icon aria-hidden size={18} strokeWidth={2.2} style={{ color: lead ? K.deepGold : K.forestLight, flexShrink: 0 }} />}
+        <h3 id={id} className="stg-title min-w-0" style={{ margin: 0, fontSize: T.section, fontWeight: W.section, lineHeight: LH.section, letterSpacing: '-0.01em', color: K.forest }}>
           {title}
         </h3>
-        <span aria-hidden className="flex-1" style={{ height: 1, minWidth: 10, background: K.hair }} />
+        {hint && <InfoHint text={hint} />}
+        <span aria-hidden className="flex-1" />
         {aside}
       </div>
-      {hint && <p className="stg-body" style={{ margin: '0 0 8px', paddingInline: 2, fontSize: 12.5, lineHeight: 1.4, color: K.muted }}>{hint}</p>}
       <div style={{
-        borderRadius: 16, background: lead ? K.surface : 'rgba(251,248,241,0.5)',
-        boxShadow: lead ? K.card : '0 0 0 1px rgba(27,56,40,0.05)', padding: '2px 16px',
+        borderRadius: 16, background: lead ? K.surface : K.tint,
+        boxShadow: lead ? K.card : 'none', padding: '2px 16px',
       }}>
         {children}
       </div>
@@ -115,19 +140,21 @@ export function RowGrid({ children, min = 300 }: { children: React.ReactNode; mi
   return <div className="grid" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(${min}px, 1fr))`, columnGap: 24 }}>{children}</div>;
 }
 
-/** One setting: label and note on the inline-start side, the control on the inline-end. */
-export function SettingRow({ label, note, control, children, first = false, dense = false, htmlFor, labelId }: {
-  label: React.ReactNode; note?: React.ReactNode; control?: React.ReactNode; children?: React.ReactNode;
+/** One setting: a short label (and its InfoHint) on the inline-start side, the control on
+ *  the inline-end. `hint` is the explanation; it is never printed under the label. */
+export function SettingRow({ label, hint, control, children, first = false, dense = false, htmlFor, labelId }: {
+  label: React.ReactNode; hint?: string; control?: React.ReactNode; children?: React.ReactNode;
   first?: boolean; dense?: boolean; htmlFor?: string; labelId?: string;
 }) {
+  const labelStyle: React.CSSProperties = { fontSize: T.body, fontWeight: W.label, color: K.ink, lineHeight: LH.body };
   return (
-    <div style={{ padding: dense ? '9px 0' : '12px 0', borderTop: first ? 'none' : `1px solid ${K.hair}` }}>
-      <div className="flex items-center gap-3">
-        <div className="flex-1 min-w-0">
+    <div style={{ padding: dense ? '10px 0' : '13px 0', borderTop: first ? 'none' : `1px solid ${K.hair}` }}>
+      <div className="flex items-center gap-3" style={{ minHeight: 30 }}>
+        <div className="flex-1 min-w-0 flex items-center gap-1.5">
           {htmlFor
-            ? <label htmlFor={htmlFor} id={labelId} style={{ display: 'block', fontSize: 14, fontWeight: 700, color: K.ink, lineHeight: 1.3 }}>{label}</label>
-            : <div id={labelId} style={{ fontSize: 14, fontWeight: 700, color: K.ink, lineHeight: 1.3 }}>{label}</div>}
-          {note && <div className="stg-body" style={{ marginTop: 2, fontSize: 12, lineHeight: 1.4, color: K.inkSoft }}>{note}</div>}
+            ? <label htmlFor={htmlFor} id={labelId} style={labelStyle}>{label}</label>
+            : <div id={labelId} style={labelStyle}>{label}</div>}
+          {hint && <InfoHint text={hint} />}
         </div>
         {control && <div className="shrink-0">{control}</div>}
       </div>
@@ -185,6 +212,8 @@ export function GavelSwitch({ checked, onChange, label, labelledBy, glyph = 'che
 }
 
 // ── SealChoice: card radios ───────────────────────────────────────────────────
+/** `note` is the explanation: a native tooltip and the card's accessible description, never
+ *  printed on the card. */
 export interface SealOption<V extends string> { value: V; title: string; note?: string; icon?: LucideIcon; art?: React.ReactNode }
 
 export function SealChoice<V extends string>({ value, options, onChange, label, colsClass = 'sm:grid-cols-2', compact = false }: {
@@ -193,6 +222,7 @@ export function SealChoice<V extends string>({ value, options, onChange, label, 
   colsClass?: string; compact?: boolean;
 }) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const baseId = useId();
   const idx = Math.max(0, options.findIndex((o) => o.value === value));
   const move = (to: number) => {
     const n = (to + options.length) % options.length;
@@ -223,6 +253,8 @@ export function SealChoice<V extends string>({ value, options, onChange, label, 
             tabIndex={i === idx ? 0 : -1}
             onClick={() => onChange(o.value)}
             onKeyDown={(e) => onKey(e, i)}
+            title={o.note}
+            aria-describedby={o.note ? `${baseId}-${i}` : undefined}
             className="stg-focus stg-press relative text-start"
             style={{
               borderRadius: 14, border: 'none', cursor: 'pointer', padding: compact ? '10px 11px' : '12px 12px',
@@ -241,8 +273,8 @@ export function SealChoice<V extends string>({ value, options, onChange, label, 
                 </span>
               )}
               <span className="flex-1 min-w-0" style={{ paddingInlineEnd: 20 }}>
-                <span style={{ display: 'block', fontSize: compact ? 13.5 : 14, fontWeight: 800, lineHeight: 1.25 }}>{o.title}</span>
-                {o.note && <span className="stg-body" style={{ display: 'block', marginTop: 2, fontSize: 12, lineHeight: 1.4, color: on ? 'rgba(243,234,208,0.78)' : K.inkSoft }}>{o.note}</span>}
+                <span style={{ display: 'block', fontSize: T.body, fontWeight: on ? W.section : W.label, lineHeight: LH.body }}>{o.title}</span>
+                {o.note && <span id={`${baseId}-${i}`} className="sr-only">{o.note}</span>}
               </span>
             </div>
             {/* The wax seal: gold with a check when chosen, an empty ring otherwise. */}
@@ -339,10 +371,10 @@ export function ClockStepper({ value, onCommit, min, max, step = 5, presets = []
               else if (e.key === 'ArrowDown') { e.preventDefault(); bump(-step); }
             }}
             className="stg-focus stg-num relative text-center"
-            style={{ width: 64, height: 36, border: 'none', background: 'transparent', fontSize: 17, fontWeight: 800, color: K.forest, borderRadius: 10, paddingInlineStart: 14 }}
+            style={{ width: 64, height: 36, border: 'none', background: 'transparent', fontSize: T.section, fontWeight: W.section, color: K.forest, borderRadius: 10, paddingInlineStart: 14 }}
           />
         </span>
-        <span aria-hidden style={{ fontSize: 11, fontWeight: 700, color: K.muted, marginInlineEnd: 2 }}>{unit}</span>
+        <span aria-hidden style={{ fontSize: T.caption, fontWeight: W.label, color: K.inkSoft, marginInlineEnd: 2 }}>{unit}</span>
         <button type="button" aria-label={`+ ${step} ${unit}`} onClick={() => bump(step)} disabled={value >= max}
           className="stg-focus stg-press inline-flex items-center justify-center"
           style={{ width: 34, height: 34, borderRadius: 999, border: 'none', background: K.forest, color: K.gold, boxShadow: K.outSm, opacity: value >= max ? 0.4 : 1, cursor: 'pointer' }}>
@@ -358,7 +390,7 @@ export function ClockStepper({ value, onCommit, min, max, step = 5, presets = []
                 className="stg-focus stg-press stg-num"
                 style={{
                   minWidth: 40, height: 28, padding: '0 10px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                  fontSize: 12, fontWeight: 800,
+                  fontSize: T.body, fontWeight: on ? W.section : W.label,
                   background: on ? K.gold : 'transparent', color: on ? K.forest : K.inkSoft,
                   boxShadow: on ? '0 2px 6px -2px rgba(182,135,31,0.6)' : 'inset 0 0 0 1px rgba(28,20,16,0.12)',
                 }}>
@@ -446,9 +478,12 @@ export function NotchDial({ value, min, max, step = 1, onChange, label, valueTex
           top: 0, bottom: 0, insetInlineStart: `calc((100% - 30px) * ${frac})`, width: 30,
           transitionProperty: 'inset-inline-start', transitionDuration: isDragging ? '0ms' : '140ms',
         }}>
+          {/* The flag centres on the thumb, but hugs the track's end near either pole so it
+              never hangs past the group's edge. */}
           <span className="absolute inline-flex items-center justify-center stg-num" style={{
-            top: -30, left: '50%', transform: 'translateX(-50%)', minWidth: 38, height: 22, padding: '0 7px', borderRadius: 7,
-            background: K.forest, color: K.gold, fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap',
+            top: -30,
+            ...(frac < 0.12 ? { insetInlineStart: 0 } : frac > 0.88 ? { insetInlineEnd: 0 } : { left: '50%', transform: 'translateX(-50%)' }), minWidth: 38, height: 22, padding: '0 7px', borderRadius: 7,
+            background: K.forest, color: K.gold, fontSize: T.body, fontWeight: W.section, whiteSpace: 'nowrap',
             boxShadow: '0 4px 10px -4px rgba(27,56,40,0.6)',
           }}>
             {valueText ? valueText(value) : value}
@@ -462,7 +497,7 @@ export function NotchDial({ value, min, max, step = 1, onChange, label, valueTex
         </span>
       </div>
       {(startLabel || endLabel) && (
-        <div className="flex justify-between" style={{ marginTop: 8, fontSize: 11.5, fontWeight: 700, color: K.muted }}>
+        <div className="flex justify-between" style={{ marginTop: 8, fontSize: T.caption, fontWeight: W.label, color: K.inkSoft }}>
           <span>{startLabel}</span><span>{endLabel}</span>
         </div>
       )}
@@ -600,9 +635,9 @@ export function SecondsDial({ value, min, max, onChange, label, presets = [], un
               else if (e.key === 'Escape') { e.preventDefault(); setDraft(String(liveRef.current)); setEditing(false); (e.currentTarget as HTMLInputElement).blur(); }
             }}
             className="stg-focus stg-num text-center"
-            style={{ width: 46, height: 28, border: 'none', background: 'transparent', fontSize: 16, fontWeight: 800, color: K.forest, borderRadius: 8 }}
+            style={{ width: 46, height: 28, border: 'none', background: 'transparent', fontSize: T.section, fontWeight: W.section, color: K.forest, borderRadius: 8 }}
           />
-          <span aria-hidden style={{ fontSize: 11, fontWeight: 700, color: K.muted }}>{unit}</span>
+          <span aria-hidden style={{ fontSize: T.caption, fontWeight: W.label, color: K.inkSoft }}>{unit}</span>
         </span>
       </div>
       {(presets.length > 0 || aside) && (
@@ -615,7 +650,7 @@ export function SecondsDial({ value, min, max, onChange, label, presets = [], un
                 className="stg-focus stg-press stg-num"
                 style={{
                   minWidth: 38, height: 26, padding: '0 9px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                  fontSize: 12, fontWeight: 800,
+                  fontSize: T.body, fontWeight: on ? W.section : W.label,
                   background: on ? K.gold : 'transparent', color: on ? K.forest : K.inkSoft,
                   boxShadow: on ? '0 2px 6px -2px rgba(182,135,31,0.6)' : 'inset 0 0 0 1px rgba(28,20,16,0.12)',
                 }}>
@@ -662,9 +697,9 @@ export function TallyStepper({ value, onChange, min = -99, max = 999, label, suf
           else if (e.key === 'ArrowDown') { e.preventDefault(); onChange(clamp(value - 1)); }
         }}
         className="stg-focus stg-num text-center"
-        style={{ width: 34, height: 26, border: 'none', background: 'transparent', fontSize: 14, fontWeight: 800, color: K.ink, borderRadius: 6 }}
+        style={{ width: 34, height: 26, border: 'none', background: 'transparent', fontSize: T.body, fontWeight: W.section, color: K.ink, borderRadius: 6 }}
       />
-      {suffix && <span aria-hidden style={{ fontSize: 10.5, fontWeight: 700, color: K.muted, marginInlineEnd: 2 }}>{suffix}</span>}
+      {suffix && <span aria-hidden style={{ fontSize: T.caption, fontWeight: W.label, color: K.inkSoft, marginInlineEnd: 2 }}>{suffix}</span>}
       <button type="button" aria-label={`${label} +1`} className="stg-focus stg-press inline-flex items-center justify-center" style={btn} onClick={() => onChange(clamp(value + 1))}><Plus size={13} strokeWidth={2.6} /></button>
     </span>
   );
@@ -673,8 +708,8 @@ export function TallyStepper({ value, onChange, min = -99, max = 999, label, suf
 // ── InlineRename ──────────────────────────────────────────────────────────────
 /** `defaultName` is the localized label shown when nothing is renamed; `resetValue` is the
  *  canonical (English) value written back, so localized text never reaches the store. */
-export function InlineRename({ defaultName, value, onChange, resetValue, resetLabel, editLabel, size = 14.5 }: {
-  defaultName: string; value: string; onChange: (v: string) => void; resetValue?: string; resetLabel: string; editLabel: string; size?: number;
+export function InlineRename({ defaultName, value, onChange, resetValue, resetLabel, editLabel }: {
+  defaultName: string; value: string; onChange: (v: string) => void; resetValue?: string; resetLabel: string; editLabel: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -700,7 +735,7 @@ export function InlineRename({ defaultName, value, onChange, resetValue, resetLa
             if (e.key === 'Escape') { e.preventDefault(); setEditing(false); }
           }}
           className="min-w-0 flex-1"
-          style={{ fontSize: size, fontWeight: 700, color: K.ink, background: K.surface, border: 'none', borderRadius: 8, padding: '4px 8px', boxShadow: `inset 0 0 0 1.5px ${K.forest}` }}
+          style={{ fontSize: T.body, fontWeight: W.label, color: K.ink, background: K.surface, border: 'none', borderRadius: 8, padding: '4px 8px', boxShadow: `inset 0 0 0 1.5px ${K.forest}` }}
         />
       ) : (
         <button
@@ -708,7 +743,7 @@ export function InlineRename({ defaultName, value, onChange, resetValue, resetLa
           onClick={() => { setDraft(isCustom ? value : ''); setEditing(true); }}
           aria-label={`${editLabel}: ${shown}`}
           className="stg-focus group inline-flex items-center gap-1.5 min-w-0 text-start"
-          style={{ fontSize: size, fontWeight: 700, color: K.ink, background: 'transparent', border: 'none', padding: '4px 2px', borderRadius: 8, cursor: 'text' }}
+          style={{ fontSize: T.body, fontWeight: W.label, color: K.ink, background: 'transparent', border: 'none', padding: '4px 2px', borderRadius: 8, cursor: 'text' }}
         >
           <span className="truncate">{shown}</span>
           <Pencil aria-hidden size={12} strokeWidth={2.4} className="shrink-0 opacity-30 group-hover:opacity-80" style={{ color: K.forestLight, transitionProperty: 'opacity', transitionDuration: '150ms' }} />
@@ -717,7 +752,7 @@ export function InlineRename({ defaultName, value, onChange, resetValue, resetLa
       {isCustom && !editing && (
         <button type="button" onClick={() => onChange(baseValue)} title={resetLabel} aria-label={`${resetLabel}: ${defaultName}`}
           className="stg-focus stg-press inline-flex items-center justify-center shrink-0"
-          style={{ width: 26, height: 26, borderRadius: 8, border: 'none', background: 'transparent', color: K.muted, cursor: 'pointer' }}>
+          style={{ width: 26, height: 26, borderRadius: 8, border: 'none', background: 'transparent', color: K.inkSoft, cursor: 'pointer' }}>
           <RotateCcw size={12} strokeWidth={2.4} />
         </button>
       )}
@@ -726,11 +761,14 @@ export function InlineRename({ defaultName, value, onChange, resetValue, resetLa
 }
 
 // ── HoverHint (portal, never clipped) ─────────────────────────────────────────
-export function HoverHint({ text, children }: { text: string; children: React.ReactNode }) {
+/** With children: the children plus a small info glyph, one focusable trigger named by the
+ *  hint. Prefer InfoHint (the glyph alone) beside a label, so the label keeps its own name. */
+export function HoverHint({ text, children }: { text: string; children?: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number; flipUp: boolean } | null>(null);
-  const triggerRef = useRef<HTMLSpanElement>(null);
+  const triggerRef = useRef<HTMLElement>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tipId = useId();
   const WIDTH = 250;
   const place = () => {
     const el = triggerRef.current;
@@ -750,28 +788,45 @@ export function HoverHint({ text, children }: { text: string; children: React.Re
   useEffect(() => {
     if (!open) return;
     const onMove = () => place();
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
     window.addEventListener('scroll', onMove, true);
     window.addEventListener('resize', onMove);
-    return () => { window.removeEventListener('scroll', onMove, true); window.removeEventListener('resize', onMove); };
+    window.addEventListener('keydown', onKey, true);
+    return () => { window.removeEventListener('scroll', onMove, true); window.removeEventListener('resize', onMove); window.removeEventListener('keydown', onKey, true); };
   }, [open]);
   useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current); }, []);
+  const glyph = <Info aria-hidden size={14} strokeWidth={2.2} className="shrink-0" style={{ color: K.inkSoft, opacity: 0.8 }} />;
+  const handlers = { onMouseEnter: show, onMouseLeave: hide, onFocus: show, onBlur: hide };
   return (
     <>
-      <span ref={triggerRef} tabIndex={0} aria-label={text} className="stg-focus inline-flex items-center gap-1.5" style={{ borderRadius: 6 }}
-        onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
-        {children}
-        <span aria-hidden className="inline-flex items-center justify-center shrink-0" style={{ width: 15, height: 15, borderRadius: 999, fontSize: 9.5, fontWeight: 900, color: K.muted, boxShadow: 'inset 0 0 0 1.2px rgba(28,20,16,0.22)' }}>i</span>
-      </span>
+      {children ? (
+        <span ref={triggerRef as React.RefObject<HTMLSpanElement>} tabIndex={0} aria-label={text} className="stg-focus inline-flex items-center gap-1.5" style={{ borderRadius: 6 }} {...handlers}>
+          {children}
+          {glyph}
+        </span>
+      ) : (
+        <button ref={triggerRef as React.RefObject<HTMLButtonElement>} type="button" aria-label={text} aria-describedby={open ? tipId : undefined}
+          onClick={show} className="stg-focus inline-flex items-center justify-center shrink-0"
+          style={{ width: 22, height: 22, padding: 0, border: 'none', background: 'transparent', borderRadius: 999, cursor: 'help' }} {...handlers}>
+          {glyph}
+        </button>
+      )}
       {open && pos && (
         <Portal>
-          <div role="tooltip" onMouseEnter={show} onMouseLeave={hide} className="fixed"
-            style={{ zIndex: 90, top: pos.top, left: pos.left, width: WIDTH, transform: pos.flipUp ? 'translateY(-100%)' : undefined, background: K.forest, color: '#F3EAD0', borderRadius: 12, padding: '9px 12px', fontSize: 12, lineHeight: 1.45, fontFamily: K.font, boxShadow: '0 14px 30px -12px rgba(5,8,20,0.55)' }}>
+          <div id={tipId} role="tooltip" onMouseEnter={show} onMouseLeave={hide} className="fixed stg-body"
+            style={{ zIndex: 90, top: pos.top, left: pos.left, width: WIDTH, transform: pos.flipUp ? 'translateY(-100%)' : undefined, background: K.forest, color: '#F3EAD0', borderRadius: 12, padding: '9px 12px', fontSize: T.body, fontWeight: W.body, lineHeight: LH.body, fontFamily: K.font, boxShadow: '0 14px 30px -12px rgba(5,8,20,0.55)' }}>
             {text}
           </div>
         </Portal>
       )}
     </>
   );
+}
+
+/** The explanation of a setting or a group: an info glyph that shows `text` on hover and
+ *  focus. The one place a sentence of explanation lives in Settings. */
+export function InfoHint({ text }: { text: string }) {
+  return <HoverHint text={text} />;
 }
 
 // ── ConfirmSheet: an alertdialog inside the settings dialog ───────────────────
@@ -798,19 +853,19 @@ export function ConfirmSheet({ title, body, confirmLabel, cancelLabel, onConfirm
       onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (!busy) onCancel(); } }}>
       <div role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={bodyId} className="stg-rise"
         style={{ width: '100%', maxWidth: 440, borderRadius: 24, background: K.surface, boxShadow: '0 30px 60px -20px rgba(5,8,20,0.5), 0 0 0 1px rgba(27,56,40,0.08)', padding: 24 }}>
-        <h3 id={titleId} className="stg-title flex items-start gap-2.5" style={{ margin: 0, fontSize: 20, fontWeight: 900, color: K.ink, letterSpacing: '-0.01em' }}>
-          {Icon && <Icon aria-hidden size={20} strokeWidth={2.3} style={{ color: accent, flexShrink: 0, marginTop: 3 }} />}
+        <h3 id={titleId} className="stg-title flex items-start gap-2.5" style={{ margin: 0, fontSize: T.section, fontWeight: W.section, lineHeight: LH.section, color: K.ink, letterSpacing: '-0.01em' }}>
+          {Icon && <Icon aria-hidden size={20} strokeWidth={2.3} style={{ color: accent, flexShrink: 0, marginTop: 2 }} />}
           <span>{title}</span>
         </h3>
-        <div id={bodyId} className="stg-body" style={{ marginTop: 8, fontSize: 14, lineHeight: 1.55, color: K.inkSoft }}>{body}</div>
-        {error && <p role="alert" style={{ margin: '12px 0 0', fontSize: 13, fontWeight: 700, color: K.danger }}>{error}</p>}
+        <div id={bodyId} className="stg-body" style={{ marginTop: 8, fontSize: T.body, fontWeight: W.body, lineHeight: LH.body, color: K.inkSoft }}>{body}</div>
+        {error && <p role="alert" style={{ margin: '12px 0 0', fontSize: T.body, fontWeight: W.label, color: K.danger }}>{error}</p>}
         <div className="flex flex-wrap justify-end gap-2" style={{ marginTop: 20 }}>
           <button ref={cancelRef} type="button" onClick={onCancel} disabled={busy} className="stg-focus stg-press"
-            style={{ height: 42, padding: '0 18px', borderRadius: 12, border: 'none', background: 'transparent', color: K.inkSoft, fontSize: 14, fontWeight: 800, cursor: 'pointer', boxShadow: 'inset 0 0 0 1px rgba(28,20,16,0.14)' }}>
+            style={{ height: 42, padding: '0 18px', borderRadius: 12, border: 'none', background: 'transparent', color: K.inkSoft, fontSize: T.body, fontWeight: W.label, cursor: 'pointer', boxShadow: 'inset 0 0 0 1px rgba(28,20,16,0.14)' }}>
             {cancelLabel}
           </button>
           <button type="button" onClick={onConfirm} disabled={busy} className="stg-focus stg-press"
-            style={{ height: 42, padding: '0 20px', borderRadius: 12, border: 'none', background: accent, color: tone === 'danger' ? '#FFF6EE' : K.gold, fontSize: 14, fontWeight: 800, cursor: busy ? 'progress' : 'pointer', boxShadow: '0 8px 18px -10px rgba(27,56,40,0.8)', opacity: busy ? 0.7 : 1 }}>
+            style={{ height: 42, padding: '0 20px', borderRadius: 12, border: 'none', background: accent, color: tone === 'danger' ? '#FFF6EE' : K.gold, fontSize: T.body, fontWeight: W.section, cursor: busy ? 'progress' : 'pointer', boxShadow: '0 8px 18px -10px rgba(27,56,40,0.8)', opacity: busy ? 0.7 : 1 }}>
             {confirmLabel}
           </button>
         </div>

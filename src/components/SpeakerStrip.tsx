@@ -41,16 +41,12 @@ const PICKUP_PX = 6;
 /** Up to ten upcoming speakers (owner, 16 Sep 2026). The flags keep their size; the strip
  *  gets wider and the names clamp narrower instead. */
 const VISIBLE = 10;
-/** Where the floor is right now: the mode marker above the flags. */
+/** Where the floor is right now: the mode marker above the flags, a plain icon and a name. */
 export type StripHeader = {
-  /** Small glyph inside the marker disc. */
+  /** Lucide glyph drawn bare beside the name (no disc). */
   icon?: ReactNode;
   /** "General Speaker's List", or the motion's own name. */
   label: string;
-  /** The motion's topic / purpose, on its own line beneath. */
-  sublabel?: string | null;
-  /** One short fact on the marker (e.g. "3 spoke"). */
-  meta?: string | null;
 };
 
 type Drag = {
@@ -229,33 +225,11 @@ export default function SpeakerStrip({
   return (
     <div className="flex flex-col items-center w-full mb-1 shrink-0 pt-4" data-tutorial="speakers-queue">
       {header && (
-        <div className="flex flex-col items-center gap-1 mb-3 px-4 w-full">
-          <div
-            className="inline-flex items-center gap-2.5 max-w-full rounded-full ps-1.5 pe-3.5 py-1.5"
-            style={{ backgroundColor: '#E4DCC8', boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.12)' }}
-          >
-            <span
-              aria-hidden
-              className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
-            >
-              {header.icon}
-            </span>
-            <span className="min-w-0 truncate text-[15px] font-black tracking-tight" style={{ color: '#1B3828' }}>
-              {header.label}
-            </span>
-            {header.meta && (
-              <>
-                <span aria-hidden className="shrink-0 w-px h-4" style={{ backgroundColor: 'rgba(27,56,40,0.20)' }} />
-                <span className="shrink-0 text-xs font-bold tabular-nums" style={{ color: '#5A4E3E' }}>{header.meta}</span>
-              </>
-            )}
-          </div>
-          {header.sublabel && (
-            <span className="max-w-[34rem] text-center text-xs font-semibold leading-snug line-clamp-2" style={{ color: '#6A5A4A' }}>
-              {header.sublabel}
-            </span>
-          )}
+        // Just the icon and the motion's name (owner, 16 Sep 2026): no pill, no disc behind the
+        // icon, no queued / spoke count and no topic line beneath.
+        <div className="flex items-center justify-center gap-2 mb-3 px-4 max-w-full" style={{ color: '#1B3828' }}>
+          {header.icon && <span aria-hidden className="shrink-0 inline-flex">{header.icon}</span>}
+          <span className="min-w-0 truncate text-[15px] font-black tracking-tight">{header.label}</span>
         </div>
       )}
       <div

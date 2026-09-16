@@ -140,7 +140,7 @@ function landingConfTitle(c: Pick<LabConference, 'acronym' | 'full_name' | 'star
 const FEATURED_SLUGS = [
   'harvard-worldmun-2027-2h45a',                                  // WorldMUN 2027
   'stonehill-international-school-model-united-nations-ydkzm',    // SISMUN 2026
-  'model-united-nations-karachi-qd7tz',                           // MUNKR 2026
+  'tirta-model-united-nations-cq00g',                             // TIRTAMUN 2026 (replaced MUNKR, which ended 13 Sep and let SIMUN fill the slot)
 ];
 
 export default function VariantStagefront({

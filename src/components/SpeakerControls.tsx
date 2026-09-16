@@ -3,8 +3,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // SpeakerControls: the speaker buttons on the floor (GSL, moderated caucus, Tour de Table).
 //
-//   Row under the floor:     Restart (icon), Start / Pause, Next (or Finish / Call first
-//                            speaker), Add time (icon only).
+//   Row under the floor:     Restart (icon), Start / Pause, Next (or Finish), Add time
+//                            (icon only). There is no "Call first speaker" label any more
+//                            (owner, 16 Sep 2026): on the GSL the delegation at the head of
+//                            the list is already on deck and Start calls them.
 //   Beside the progress bar: Right of Reply (`RtrButton`: icon with "RTR" beneath), placed
 //                            to the inline-end of the bar by `FloorProgress`. With nobody on
 //                            the floor there is no bar, so the row carries it at its end.
@@ -22,8 +24,8 @@
 //
 // Colours keep AA contrast for icons and labels: Start forest green with white, Pause gold
 // with ink, Next forest with gold, Add time a pale sky blue with navy, Right of Reply a
-// muted sand with a deep brown (a calm warm tone that still reads as "reply", not the
-// saturated orange it replaced).
+// soft apricot orange with a deep rust (16 Sep 2026, owner: "a more pleasant orange"; the
+// muted sand before it read as beige, the saturated orange before that as an alarm).
 //
 // Purely presentational: every handler belongs to the chair page, which owns the clocks
 // and every write (RULES 3 to 5). `SpeakerClock` calls the SAME toggle handler as the
@@ -47,21 +49,22 @@ export const SPEAKER_TONES = {
   next: { bg: '#1B3828', hover: '#24503A', fg: '#EED98A' },
   // Lighter sky blue; navy on it is ~10:1.
   time: { bg: '#D4EAFB', hover: '#C2E0F7', fg: '#0A3350' },
-  // Muted warm sand; deep brown on it is ~7:1.
-  reply: { bg: '#EBD3B6', hover: '#E2C6A4', fg: '#5A3413' },
+  // Soft apricot; deep rust on it is ~6:1.
+  reply: { bg: '#FAD0A4', hover: '#F6C18C', fg: '#7A3A0C' },
 } satisfies Record<string, Tone>;
 const TONES = SPEAKER_TONES;
 
 /**
  * The two floor popovers (owner, 16 Sep 2026): Add time in a deep blue, Right of Reply in a
- * deep orange, both darker than the button that opens them so the panel reads as a surface
- * rather than a second button, and both still forest/ivory-adjacent.
- *   header  #0E3A57 / #DCEBF8  ≈ 11:1       header  #7A3E12 / #FBE7D1  ≈ 9:1
- *   body    #0A3350 on #D9E8F4 ≈ 10:1       body    #4A2A0E on #F2DCC2 ≈ 10:1
+ * warm, soft orange (a burnt-orange header over a peach body, replacing the brown that read
+ * as "deep orange"). Both headers are darker than the button that opens them so the panel
+ * reads as a surface rather than a second button.
+ *   header  #0E3A57 / #DCEBF8  ≈ 11:1       header  #AD4F18 / #FFF6EC  ≈ 5.2:1
+ *   body    #0A3350 on #D9E8F4 ≈ 10:1       body    #5A2A08 on #FCE3C8 ≈ 9.5:1
  */
 export const POPOVER_TONES = {
   time: { surface: '#D9E8F4', headerBg: '#0E3A57', headerFg: '#DCEBF8', ink: '#0A3350', accent: 'rgba(14,58,87,0.45)', btn: '#0E3A57', btnHover: '#16506F', btnFg: '#EAF4FC', chip: '#C6DCEE', chipOn: '#0E3A57' },
-  reply: { surface: '#F2DCC2', headerBg: '#7A3E12', headerFg: '#FBE7D1', ink: '#4A2A0E', accent: 'rgba(122,62,18,0.45)', btn: '#A9541A', btnHover: '#8E4514', btnFg: '#FFF2E3', chip: '#E4C39D', chipOn: '#7A3E12' },
+  reply: { surface: '#FCE3C8', headerBg: '#AD4F18', headerFg: '#FFF6EC', ink: '#5A2A08', accent: 'rgba(173,79,24,0.45)', btn: '#AD4F18', btnHover: '#964313', btnFg: '#FFF6EC', chip: '#F7CFA2', chipOn: '#AD4F18' },
 } as const;
 
 const ACTIVE_RING = (fg: string) => `inset 0 0 0 2px ${fg}, 0 1px 2px rgba(27,56,40,0.10), 0 4px 10px rgba(27,56,40,0.16)`;
@@ -229,10 +232,12 @@ export function SpeakerClock({
 export default function SpeakerControls({
   hasSpeaker,
   floorReady,
+  addTimeReady,
   timerRunning,
   onToggleTimer,
   startBlockedReason = null,
   onRestart,
+  startTutorial,
   next,
   onAddTime,
   addTimeActive = false,
@@ -248,11 +253,19 @@ export default function SpeakerControls({
    * Sep 2026). Restart and Add time stay gated on a real seated speaker.
    */
   floorReady?: boolean;
+  /**
+   * Add time may act. Defaults to `hasSpeaker`. The GSL passes true for a delegation on deck
+   * (owner, 16 Sep 2026): the grant is held locally and folded into the slot Start seats them
+   * with. Nothing is written, logged or started by the grant itself.
+   */
+  addTimeReady?: boolean;
   timerRunning: boolean;
   onToggleTimer: () => void;
   /** Extra reason Start cannot run (e.g. "require next speaker" on the last speaker). */
   startBlockedReason?: string | null;
   onRestart: () => void;
+  /** data-tutorial on Start instead of `timer-toggle` (the GSL on deck: Start is the call). */
+  startTutorial?: string;
   /** Next, or Finish when nobody is queued. `blockedReason` non-null = unavailable. */
   next: { label: string; title: string; onClick: () => void; blockedReason?: string | null; finish?: boolean; tutorial?: string };
   onAddTime: () => void;
@@ -284,7 +297,7 @@ export default function SpeakerControls({
         blockedReason={timerRunning ? null : startReason}
         onClick={onToggleTimer}
         variant="grow"
-        tutorial={tutorialTargets ? 'timer-toggle' : undefined}
+        tutorial={startTutorial ?? (tutorialTargets ? 'timer-toggle' : undefined)}
       >
         {timerRunning ? <Pause size={18} strokeWidth={2.6} aria-hidden className="shrink-0" /> : <Play size={18} strokeWidth={2.6} aria-hidden className="shrink-0" />}
       </ControlButton>
@@ -305,7 +318,7 @@ export default function SpeakerControls({
         tone={TONES.time}
         label={addTimeLabel}
         title={t('speaker_ctl_add_time_title')}
-        blockedReason={needSpeaker}
+        blockedReason={(addTimeReady ?? hasSpeaker) ? null : needSpeaker}
         onClick={onAddTime}
         active={addTimeActive}
         variant="icon"

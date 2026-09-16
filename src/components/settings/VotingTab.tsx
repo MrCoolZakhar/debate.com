@@ -4,7 +4,7 @@ import { Ban, CircleDashed, Crown, Handshake, ListChecks, Scale, ShieldBan, User
 import type { CommitteeSettings } from '@/lib/settingsStore';
 import { getCountryByName, getCountryDisplayName } from '@/lib/countries';
 import { SeatCircleFlag, CircleFlag } from '@/components/CircleFlag';
-import { K, Section, SettingRow, GavelSwitch, SealChoice, HoverHint } from './settingsKit';
+import { K, T, W, Section, SettingRow, GavelSwitch, SealChoice, HoverHint, InfoHint } from './settingsKit';
 import type { TabProps } from './settingsTypes';
 
 /** A hemicycle of 15 seats with the share needed to pass filled in forest. */
@@ -73,7 +73,7 @@ export default function VotingTab({ committee, s, upd, t, language, isViewOnly }
             ]}
           />
         </div>
-        <SettingRow dense labelId="stg-abst" label={t('settings_allow_abstentions_label')} note={t('settings_allow_abstentions_note')}
+        <SettingRow dense labelId="stg-abst" label={t('settings_allow_abstentions_label')} hint={t('settings_allow_abstentions_note')}
           control={<GavelSwitch size="sm" icon={CircleDashed} labelledBy="stg-abst" checked={s.allowAbstentions} onChange={(v) => upd('allowAbstentions', v)} />} />
       </Section>
 
@@ -98,9 +98,9 @@ export default function VotingTab({ committee, s, upd, t, language, isViewOnly }
           <div style={{ borderTop: `1px solid ${K.hair}`, padding: '10px 0' }}>
             <div className="flex items-center justify-between gap-3" style={{ marginBottom: 10 }}>
               <HoverHint text={t('stg_p5_fixed_hint')}>
-                <span style={{ fontSize: 13, fontWeight: 800, color: K.forest }}>{t('settings_p5_delegations')}</span>
+                <span style={{ fontSize: T.body, fontWeight: W.section, color: K.forest }}>{t('settings_p5_delegations')}</span>
               </HoverHint>
-              <span className="stg-num" style={{ fontSize: 12, fontWeight: 800, color: seatedIds.size === p5.length ? K.forestLight : '#9A6A2E' }}>
+              <span className="stg-num" style={{ fontSize: T.caption, fontWeight: W.label, color: seatedIds.size === p5.length ? K.forestMid : '#7A5424' }}>
                 {t('stg_p5_seated', { n: seatedIds.size, total: p5.length })}
               </span>
             </div>
@@ -113,18 +113,18 @@ export default function VotingTab({ committee, s, upd, t, language, isViewOnly }
                     boxShadow: seated ? K.outSm : 'inset 0 0 0 1px rgba(28,20,16,0.12)', opacity: seated ? 1 : 0.5,
                   }}>
                     <CircleFlag country={name} size={30} decorative />
-                    <span style={{ fontSize: 13, fontWeight: 700, color: K.ink }}>{getCountryDisplayName(name, language)}</span>
+                    <span style={{ fontSize: T.body, fontWeight: W.label, color: K.ink }}>{getCountryDisplayName(name, language)}</span>
                   </span>
                 );
               })}
             </div>
             {seatedIds.size < p5.length && (
               <div className="flex flex-wrap items-center gap-3" style={{ marginTop: 12, padding: '10px 12px', borderRadius: 12, background: 'rgba(184,132,74,0.10)' }}>
-                <span className="stg-body flex-1" style={{ minWidth: 200, fontSize: 12.5, lineHeight: 1.45, color: '#7A5424' }}>
+                <span className="stg-body flex-1" style={{ minWidth: 200, fontSize: T.body, fontWeight: W.body, color: '#7A5424' }}>
                   {seatedIds.size === 0 ? t('stg_p5_none_seated') : t('stg_p5_some_seated', { n: seatedIds.size })}
                 </span>
                 <button type="button" onClick={() => { upd('vetoCountries', seatedNames); upd('vetoMode', 'custom'); }}
-                  className="stg-focus stg-press" style={{ height: 34, padding: '0 12px', borderRadius: 10, border: 'none', background: K.forest, color: K.gold, fontSize: 12.5, fontWeight: 800, cursor: 'pointer' }}>
+                  className="stg-focus stg-press" style={{ height: 34, padding: '0 12px', borderRadius: 10, border: 'none', background: K.forest, color: K.gold, fontSize: T.body, fontWeight: W.section, cursor: 'pointer' }}>
                   {t('stg_p5_switch_custom')}
                 </button>
               </div>
@@ -135,8 +135,11 @@ export default function VotingTab({ committee, s, upd, t, language, isViewOnly }
         {s.vetoMode === 'custom' && (
           <div style={{ borderTop: `1px solid ${K.hair}`, padding: '10px 0' }}>
             <div className="flex items-center justify-between gap-3" style={{ marginBottom: 10 }}>
-              <span style={{ fontSize: 13, fontWeight: 800, color: K.forest }}>{t('settings_veto_custom_members')}</span>
-              <span className="stg-num" style={{ fontSize: 12, fontWeight: 800, color: K.inkSoft }}>{t('stg_selected_count', { n: committee.delegates.filter((d) => vetoSet.has(d.country)).length })}</span>
+              <span className="inline-flex items-center gap-1.5">
+                <span style={{ fontSize: T.body, fontWeight: W.section, color: K.forest }}>{t('settings_veto_custom_members')}</span>
+                <InfoHint text={t('settings_veto_custom_note')} />
+              </span>
+              <span className="stg-num" style={{ fontSize: T.caption, fontWeight: W.label, color: K.inkSoft }}>{t('stg_selected_count', { n: committee.delegates.filter((d) => vetoSet.has(d.country)).length })}</span>
             </div>
             <div className="flex flex-wrap gap-2" role="group" aria-label={t('settings_veto_custom_members')}>
               {[...committee.delegates]
@@ -159,19 +162,18 @@ export default function VotingTab({ committee, s, upd, t, language, isViewOnly }
                           </span>
                         )}
                       </span>
-                      <span style={{ fontSize: 13, fontWeight: 700 }}>{getCountryDisplayName(d.country, language)}</span>
+                      <span style={{ fontSize: T.body, fontWeight: W.label }}>{getCountryDisplayName(d.country, language)}</span>
                     </button>
                   );
                 })}
             </div>
-            <p className="stg-body" style={{ margin: '10px 0 0', fontSize: 12.5, color: K.inkSoft }}>{t('settings_veto_custom_note')}</p>
           </div>
         )}
       </Section>
 
       <Section icon={Users} title={t('settings_section_quorum')} hint={t('settings_quorum_note')} delay={80}
         aside={s.quorumThreshold !== 'none' && total > 0 ? (
-          <span className="stg-num shrink-0" style={{ fontSize: 12, fontWeight: 800, color: K.forest, background: K.ivory, borderRadius: 999, padding: '5px 10px', boxShadow: K.inSm }}>
+          <span className="stg-num shrink-0" style={{ fontSize: T.body, fontWeight: W.label, color: K.forest, background: K.ivory, borderRadius: 999, padding: '5px 10px', boxShadow: K.inSm }}>
             {t('stg_quorum_needs', { n: need, total })}
           </span>
         ) : undefined}>

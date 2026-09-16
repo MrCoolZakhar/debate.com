@@ -14,15 +14,17 @@
 //     never a broken image or an empty slot.
 //   • Beside it: the acronym big with the full name small beneath (AGENTS.md UI
 //     RULE, resolved by the caller via committeeDisplayName), and the topic. The
-//     topic is smaller than the name. For the Moderator (`onTopicSave`) a click turns
+//     topic is smaller than the name, and always starts with a fixed "Topic:" label
+//     (`topicLabel`, 16 Sep 2026) that is never part of the edit. For the Moderator (`onTopicSave`) a click turns
 //     it into an inline editor: Enter or blur saves, Escape cancels, 150 characters
-//     max. On a conference committee with 2+ topics a separate small "switch topic"
+//     max; only the text after the label edits. On a conference committee with 2+ topics a separate small "switch topic"
 //     control (`onSwitchAgenda`) opens the agenda picker, so the text edits and the
 //     picker stays one click away.
-//   • QuorumRings: three round capsules (Present, 2/3, 1/2+1) with full ring gauges,
-//     clear of the list below, plus the quorum pill when a quorum rule is set. Observers
-//     are counted in both numbers. Passed in as `present`/`total`; omit `present`
-//     to hide them. The topic is clamped to 3 lines with the full text in a tooltip.
+//   • QuorumRings: three half-circle bookmark tabs (Present, 2/3, 1/2+1) flush on the list
+//     below, plus the quorum pill when a quorum rule is set. Observers are counted in both
+//     numbers. Passed in as `present`/`total`; omit `present` to hide them. `seatField`
+//     (the inline SeatAddField) sits to the right of the tabs on the same row. The topic is
+//     clamped to 3 lines with the full text in a tooltip.
 //
 // Contrast on #1B3828: body ivory #EDE7D8 is 11:1; the full name at 78% ivory and
 // the topic at 84% gold both clear 4.5:1. Committee artwork is arbitrary (the UN
@@ -31,7 +33,7 @@
 // light ones alone.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowLeftRight, PanelLeftClose, Pencil } from 'lucide-react';
 import { NEU, OUTFIT } from '@/components/neu';
 import QuorumRings from '@/components/QuorumRings';
@@ -117,7 +119,7 @@ export default function CommitteeIdentityBadge({
   present,
   total = 0,
   quorumNeeded = null,
-  compactQuorum = false,
+  seatField,
 }: {
   /** When set, clicking the topic turns it into an inline editor (the Moderator, session
    *  not ended). Resolves false when the write was refused; the caller has already rolled
@@ -140,7 +142,7 @@ export default function CommitteeIdentityBadge({
   /** Full name, shown small beneath. Null when `primary` already IS the name. */
   secondary?: string | null;
   topic?: string | null;
-  /** Translated "Topic:" label, read by screen readers only. */
+  /** Translated "Topic:" label, shown before the topic and never editable. */
   topicLabel?: string;
   /** Delegations present, observers included. Omit to hide the quorum rings. */
   present?: number;
@@ -148,9 +150,9 @@ export default function CommitteeIdentityBadge({
   total?: number;
   /** Delegations the quorum rule needs, or null when there is no rule. */
   quorumNeeded?: number | null;
-  /** Pack the three quorum capsules together instead of spreading them across the width.
-   *  The wide pre-session roll-call card sets it; the narrow sidebar does not. */
-  compactQuorum?: boolean;
+  /** The inline seat field, drawn to the inline end of the quorum tabs. Omit for a
+   *  Commenter or an ended session. */
+  seatField?: ReactNode;
 }) {
   const monogram = emblemMonogram(primary);
   const longPrimary = primary.length > 12;
@@ -200,16 +202,17 @@ export default function CommitteeIdentityBadge({
     textWrap: 'pretty',
   };
 
-  const topicBody = topic ? (
-    <>
-      {topicLabel && <span className="sr-only">{topicLabel} </span>}
-      {topic}
-    </>
+  // The fixed "Topic:" prefix. Outside the editable control, so a click on it edits nothing
+  // and the textarea never contains it.
+  const labelNode = topicLabel ? (
+    <span style={{ fontWeight: 800, color: NEU.gold, letterSpacing: '0.01em' }}>{topicLabel} </span>
   ) : null;
 
   let topicNode: React.ReactNode = null;
   if (isEditing) {
     topicNode = (
+      <div className="mt-0.5 flex flex-col gap-0.5">
+      {labelNode && <span style={topicStyle}>{labelNode}</span>}
       <textarea
         ref={fieldRef}
         value={draft}
@@ -222,27 +225,38 @@ export default function CommitteeIdentityBadge({
           else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
         }}
         onBlur={() => finish(true)}
-        className="w-full resize-none rounded-md mt-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70"
+        className="w-full resize-none rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70"
         style={{ ...topicStyle, padding: '2px 4px', marginInlineStart: -4, color: '#F4EFE3', backgroundColor: 'rgba(0,0,0,0.22)', boxShadow: 'inset 0 0 0 1px rgba(238,217,138,0.35)' }}
       />
+      </div>
     );
   } else if (onTopicSave) {
+    // The label, then the topic as an INLINE control, so the two flow as one sentence
+    // under the 3-line clamp. A span with role=button rather than a <button>: a button is
+    // laid out as an inline-block and would break the text onto its own line.
     topicNode = (
-      <button
-        type="button"
-        onClick={startEdit}
-        title={topic ? `${topic}\n${labels?.edit ?? ''}`.trim() : labels?.edit}
-        className="group/topic line-clamp-3 w-full text-start rounded-md cursor-text mt-0.5 transition-colors hover:bg-[rgba(238,217,138,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70"
-        style={{ ...topicStyle, padding: '1px 4px', marginInlineStart: -4, color: topic ? topicStyle.color : 'rgba(238,217,138,0.6)' }}
-      >
-        {topicBody ?? labels?.add}
-        <Pencil size={10} aria-hidden className="inline-block ms-1 align-[-1px] opacity-0 group-hover/topic:opacity-70 group-focus-visible/topic:opacity-70 transition-opacity" />
-      </button>
+      <p className="line-clamp-3 mt-0.5" style={topicStyle}>
+        {labelNode}
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={startEdit}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEdit(); } }}
+          aria-label={`${topicLabel ?? ''} ${topic ?? ''}. ${labels?.edit ?? ''}`.trim()}
+          title={topic ? `${topic}\n${labels?.edit ?? ''}`.trim() : labels?.edit}
+          className="group/topic rounded cursor-text transition-colors hover:bg-[rgba(238,217,138,0.12)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70"
+          style={{ color: topic ? topicStyle.color : 'rgba(238,217,138,0.6)', boxDecorationBreak: 'clone', WebkitBoxDecorationBreak: 'clone', padding: '0 2px' }}
+        >
+          {topic || labels?.add}
+          <Pencil size={10} aria-hidden className="inline-block ms-1 align-[-1px] opacity-0 group-hover/topic:opacity-70 group-focus-visible/topic:opacity-70 transition-opacity" />
+        </span>
+      </p>
     );
-  } else if (topicBody) {
+  } else if (topic) {
     topicNode = (
-      <p className="line-clamp-3 mt-0.5" title={topic ?? undefined} style={topicStyle}>
-        {topicBody}
+      <p className="line-clamp-3 mt-0.5" title={topic} style={topicStyle}>
+        {labelNode}
+        {topic}
       </p>
     );
   }
@@ -311,7 +325,7 @@ export default function CommitteeIdentityBadge({
       </div>
       {typeof present === 'number' && (
         <div className="mt-2">
-          <QuorumRings present={present} total={total} quorumNeeded={quorumNeeded} compact={compactQuorum} />
+          <QuorumRings present={present} total={total} quorumNeeded={quorumNeeded} trailing={seatField} />
         </div>
       )}
     </div>

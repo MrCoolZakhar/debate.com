@@ -23,10 +23,15 @@
 // - Default slots sit ABOVE the floor's button row (16 Sep 2026, owner): a panel opened from
 //   Add time or Right of Reply must never land on the button that opened it. `BOTTOM_CLEAR`
 //   is the height of the controls row plus the bottom add bar.
-// - `avoid`: while a centred modal is open (Motions, Documents) the panel is nudged out of
-//   that modal's column so it stays usable and never sits under it. The nudge is NOT
-//   persisted and the panel returns to exactly where the chair left it when the modal
-//   closes, which is what "remember their positions even in motions" means.
+// - LAYERING (owner, 16 Sep 2026): the panels sit BELOW every pop-up. They are z-40 (the
+//   pressed one z-41) inside `#fit-root`'s stacking context, and every dialog that opens over
+//   the floor is z-50 or higher in the same context: GrowDialog (Motions, Documents, Settings,
+//   Chat, Scoreboard) z-50, the documents / motions fullscreen screens z-50 / z-60, the agenda
+//   picker z-80, MotionFlightNotice z-80, NotificationStack 900, the kick modal 1000, the
+//   tutorial 9990+, the session code presenter 400 on <body>. A dialog opening never moves or
+//   folds a panel: it keeps its exact position and is simply underneath until the dialog
+//   closes. (The previous round nudged / docked panels out of a modal's column; removed.)
+//   Keep new floor dialogs at z-50 or above, and never raise these panels past z-49.
 // - `tone`: the panel can paint itself (a deep header bar over a tinted body) instead of the
 //   default ivory. AA contrast is the caller's to pick; the close button and grip inherit
 //   the header foreground.
@@ -34,7 +39,7 @@
 // Purely presentational: it never touches committee state (RULES 3 to 5).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { GripHorizontal } from 'lucide-react';
 import Portal from '@/components/Portal';
 
@@ -43,8 +48,9 @@ const MARGIN = 8;
 const GAP = 12;
 /** Room kept free at the bottom of the floor: the speaker button row plus the add bar. */
 const BOTTOM_CLEAR = 220;
-/** The widest a centred floor modal gets (MotionsModal is max-w-5xl), plus a gutter. */
-const MODAL_BAND = 1024 + 48;
+/** Resting and pressed layers: below every dialog (z-50+), above the floor and sidebar (z-30). */
+const Z_REST = '40';
+const Z_FRONT = '41';
 
 export type PopoverTone = {
   /** Panel body. */ surface: string;
@@ -54,11 +60,11 @@ export type PopoverTone = {
 const storageKey = (id: string) => `gavelling-popover-pos:${id}`;
 /** Open panels, so a new one can open clear of the others. */
 const openPanels = new Map<string, HTMLDivElement>();
-/** The pressed panel sits one layer above the other open ones (z 51 vs 50, never higher,
- *  so it can never climb over a modal). Set on the node, outside React's style prop. */
+/** The pressed panel sits one layer above the other open ones (z 41 vs 40, never higher,
+ *  so it can never climb over a dialog). Set on the node, outside React's style prop. */
 function raise(el: HTMLDivElement | null) {
   if (!el) return;
-  for (const other of openPanels.values()) other.style.zIndex = other === el ? '51' : '50';
+  for (const other of openPanels.values()) other.style.zIndex = other === el ? Z_FRONT : Z_REST;
 }
 
 type Rect = { x: number; y: number; w: number; h: number };
@@ -102,7 +108,6 @@ export default function DraggablePopover({
   className = '',
   slot = 'center',
   tone,
-  avoid = false,
   anchor,
   children,
 }: {
@@ -122,8 +127,6 @@ export default function DraggablePopover({
   slot?: 'center' | 'upper' | 'lower';
   /** Deep header over a tinted body. Omitted = the ivory default. */
   tone?: PopoverTone;
-  /** A centred modal is open: step out of its column until it closes. Never persisted. */
-  avoid?: boolean;
   /** `data-floor-anchor` value of the button that opens it: the default spot sits above it. */
   anchor?: string;
   children: ReactNode;
@@ -131,10 +134,8 @@ export default function DraggablePopover({
   const panelRef = useRef<HTMLDivElement | null>(null);
   const roRef = useRef<ResizeObserver | null>(null);
   const [pos, setPos] = useState<Pos | null>(null);
-  /** Where it is drawn right now (may be nudged clear of an open modal). */
+  /** Where it is drawn, which is where the chair put it. */
   const posRef = useRef<Pos | null>(null);
-  /** Where the chair put it. The nudge never touches this, so it always comes back. */
-  const homeRef = useRef<Pos | null>(null);
   const drag = useRef<{ pointerId: number; sx: number; sy: number; ox: number; oy: number; scale: number } | null>(null);
   const [dragging, setDragging] = useState(false);
   const bringToFront = () => raise(panelRef.current);
@@ -150,49 +151,8 @@ export default function DraggablePopover({
     };
   }, []);
 
-  /**
-   * Out of the centred modal's column, to whichever side has room. When neither side has
-   * room (1280px: the Motions dialog is 1000px wide), the panel DOCKS: it folds to its handle
-   * bar and sits in the bottom inline-end corner under the dialog, stacked beside any other
-   * docked panel. It never overlaps the dialog and never loses its place.
-   */
-  const [docked, setDocked] = useState(false);
-  const avoidRef = useRef(avoid);
-  useLayoutEffect(() => { avoidRef.current = avoid; }, [avoid]);
-  const placeAvoiding = useCallback(() => {
-    const el = panelRef.current;
-    const home = homeRef.current;
-    if (!el || !home) return;
-    const { w, h } = space();
-    const pw = el.offsetWidth;
-    const band = Math.min(MODAL_BAND, w);
-    const left = (w - band) / 2;
-    const right = left + band;
-    const clear = home.x + pw <= left || home.x >= right;
-    const rtl = document.documentElement.dir === 'rtl';
-    let target: Pos;
-    let dock = false;
-    if (clear) target = home;
-    else if (w - right >= pw + MARGIN) target = { x: w - pw - MARGIN, y: home.y };
-    else if (left >= pw + MARGIN) target = { x: MARGIN, y: home.y };
-    else {
-      dock = true;
-      const headerH = (el.firstElementChild as HTMLElement | null)?.offsetHeight ?? 44;
-      // Stable slot per panel id among the open ones, so two docked panels sit side by side.
-      const ids = Array.from(openPanels.keys()).sort();
-      const i = Math.max(0, ids.indexOf(id));
-      const fromEnd = MARGIN + i * (pw + GAP);
-      target = { x: rtl ? fromEnd : w - pw - fromEnd, y: h - headerH - MARGIN };
-    }
-    setDocked(dock);
-    const c = clamp(target);
-    posRef.current = c;
-    setPos(c);
-  }, [clamp, id]);
-
   const apply = useCallback((p: Pos, persist: boolean) => {
     const c = clamp(p);
-    homeRef.current = c;
     posRef.current = c;
     setPos(c);
     if (persist) writePos(id, c);
@@ -200,22 +160,8 @@ export default function DraggablePopover({
 
   /** Re-clamp after a resize without ever overwriting the chair's own position. */
   const refit = useCallback(() => {
-    if (avoidRef.current) { placeAvoiding(); return; }
-    if (homeRef.current) apply(homeRef.current, false);
-  }, [apply, placeAvoiding]);
-
-  // A centred modal opened or closed: step aside (or dock), or step back. `homeRef` is
-  // untouched, so the remembered position survives the modal exactly as it was.
-  useEffect(() => {
-    if (!homeRef.current) return;
-    // Placement is measured from the DOM (panel size, the modal band), so it has to run after
-    // commit; it settles in one extra render and only when `avoid` flips.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (avoid) { placeAvoiding(); return; }
-    setDocked(false);
-    posRef.current = homeRef.current;
-    setPos(homeRef.current);
-  }, [avoid, placeAvoiding]);
+    if (posRef.current) apply(posRef.current, false);
+  }, [apply]);
 
   // Portal mounts its children one effect later than this component, so placement happens
   // when the panel node itself attaches (a callback ref), not in an effect of ours.
@@ -267,13 +213,12 @@ export default function DraggablePopover({
     openPanels.set(id, el);
     raise(el);
     apply(p, false);
-    if (avoidRef.current) placeAvoiding();
     // Keep it on screen when its own content grows (the RTR setup view becomes the timer).
     if (typeof ResizeObserver !== 'undefined') {
       roRef.current = new ResizeObserver(() => refit());
       roRef.current.observe(el);
     }
-  }, [apply, id, slot, anchor, placeAvoiding, refit]);
+  }, [apply, id, slot, anchor, refit]);
 
   // Keep it on screen when the window (and so the fit-root) changes size.
   useEffect(() => {
@@ -323,7 +268,7 @@ export default function DraggablePopover({
     <Portal>
       <div
         ref={attachPanel}
-        className={`fixed z-50 rounded-2xl overflow-hidden ${className}`}
+        className={`fixed z-40 rounded-2xl overflow-hidden ${className}`}
         onPointerDownCapture={bringToFront}
         onFocusCapture={bringToFront}
         style={{
@@ -372,7 +317,7 @@ export default function DraggablePopover({
             ✕
           </button>
         </div>
-        <div hidden={docked} className={tone ? 'px-3 pb-3 pt-3' : 'px-3 pb-3 pt-1'}>{children}</div>
+        <div className={tone ? 'px-3 pb-3 pt-3' : 'px-3 pb-3 pt-1'}>{children}</div>
       </div>
     </Portal>
   );
