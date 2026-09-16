@@ -903,10 +903,17 @@ function ConferenceApplyInner() {
   const [societyDropdownOpen, setSocietyDropdownOpen] = useState(false);
   const [societyError, setSocietyError] = useState('');
   // Delegations that ALREADY have a head-delegate / faculty-advisor application
-  // for this conference — grayed out and non-selectable in the picker (a second
-  // delegation application for the same society isn't allowed; joiners are
-  // invited by that society's head delegate instead). Populated from the
-  // conference_taken_society_ids RPC.
+  // for this conference. HEAD-DELEGATE AND FACULTY-ADVISOR ROLES ONLY: for those
+  // two roles a taken delegation is greyed out and not selectable, because a
+  // second delegation application for the same society would duplicate it.
+  //
+  // NEVER GATE A DELEGATE ON THIS SET. A delegate joining a delegation that
+  // already has a head delegate is the normal case, so for a delegate a taken
+  // delegation is precisely the one they need to pick. Applying this set to
+  // delegates blocked 37 delegations across 5 conferences before it was caught.
+  // Both use sites guard on isInvoicingRole. Keep it that way.
+  //
+  // Populated from the conference_taken_society_ids RPC.
   const [takenSocietyIds, setTakenSocietyIds] = useState<Set<string>>(new Set());
   // Delegation-invite consume (?delegationInvite=<token>): the resolved society
   // is pre-selected AND bypasses the "already applied" grayout, since the
@@ -2268,7 +2275,7 @@ function ConferenceApplyInner() {
       // this applicant was explicitly invited to that one). Resolve the id the
       // application would attach to: an explicit selection, or the one
       // delegation the typed name is unmistakably the same as.
-      if (!isObserver && !isIndependent) {
+      if (!isObserver && !isIndependent && isInvoicingRole) {
         const resolvedId = selectedSocietyId ?? adopted?.id ?? null;
         if (resolvedId && resolvedId !== invitedSocietyId && takenSocietyIds.has(resolvedId)) {
           setSocietyError('This delegation has already applied. Ask its head delegate or faculty advisor to invite you.');
@@ -3165,7 +3172,7 @@ function ConferenceApplyInner() {
                       {societySuggestions.map(s => {
                         // A delegation that already has a head/advisor application
                         // for this conference — grayed out and non-selectable.
-                        const taken = takenSocietyIds.has(s.id) && s.id !== invitedSocietyId;
+                        const taken = isInvoicingRole && takenSocietyIds.has(s.id) && s.id !== invitedSocietyId;
                         return (
                           <button
                             key={s.id}
