@@ -142,7 +142,7 @@ function RosterNotice({ names, notInVote, onOpenRollCall, onDismiss }: {
         </div>
         <button
           onClick={onOpenRollCall}
-          className="shrink-0 text-xs px-3 py-1.5 rounded-lg font-black transition-colors focus:outline-none gv-lift"
+          className="shrink-0 text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors focus:outline-none gv-lift"
           style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
         >
           {t('voting_roll_call_heading')}
@@ -184,7 +184,7 @@ function VotingBanner({ tone, text, actionLabel, onAction, onDismiss }: {
         {actionLabel && onAction && (
           <button
             onClick={onAction}
-            className="shrink-0 text-xs px-3 py-1.5 rounded-lg font-black focus:outline-none gv-lift"
+            className="shrink-0 text-xs px-3 py-1.5 rounded-lg font-semibold focus:outline-none gv-lift"
             style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
           >
             {actionLabel}
@@ -240,7 +240,7 @@ function BallotButton({ tone, icon, label, sub, onClick, disabled, recorded, wid
       onClick={onClick}
       disabled={disabled}
       aria-pressed={recorded || undefined}
-      className={`gv-ballot relative ${wide ? 'flex-[1.25]' : 'flex-1'} min-w-0 min-h-[92px] rounded-[22px] px-3 py-3 flex flex-col items-center justify-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F6F1E9] disabled:cursor-not-allowed disabled:opacity-40`}
+      className={`gv-ballot relative ${wide ? 'flex-[1.25]' : 'flex-1'} min-w-0 min-h-[84px] rounded-[18px] px-3 py-3 flex flex-col items-center justify-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F6F1E9] disabled:cursor-not-allowed disabled:opacity-40`}
       style={{
         ['--gv-b-bg' as string]: palette.bg,
         ['--gv-b-hover' as string]: palette.hover,
@@ -248,11 +248,11 @@ function BallotButton({ tone, icon, label, sub, onClick, disabled, recorded, wid
         boxShadow: `${tone === 'neutral' ? '0 0 0 1px rgba(27,56,40,0.12), ' : ''}0 2px 4px ${palette.shadow}, 0 10px 24px ${palette.shadow}${recorded ? ', 0 0 0 3px #F6F1E9, 0 0 0 6px #D9B44A' : ''}`,
       }}
     >
-      <span className="flex items-center gap-2 text-[19px] font-black leading-none">
+      <span className="flex items-center gap-2 text-[17px] font-semibold leading-none">
         <span aria-hidden className="shrink-0">{icon}</span>
         {label}
       </span>
-      {sub && <span className="text-[13px] font-bold leading-none" style={{ color: palette.sub }}>{sub}</span>}
+      {sub && <span className="text-[13px] font-medium leading-none" style={{ color: palette.sub }}>{sub}</span>}
     </button>
   );
 }
@@ -278,9 +278,9 @@ function VoteScale({ forCount, againstCount, totalVoted }: {
         />
         <div className="absolute left-1/2 -top-px -bottom-px w-[3px] -translate-x-1/2 rounded-full" style={{ backgroundColor: '#F6F1E9' }} />
       </div>
-      <div className="flex justify-between mt-2 text-[13px] font-black tabular-nums">
+      <div className="flex justify-between mt-2 text-[13px] font-semibold tabular-nums">
         <span style={{ color: '#8B2020' }}>{t('voting_against_bar').replace('{n}', String(againstCount))}</span>
-        <span className="text-[12px] font-semibold" style={{ color: '#6A5A4A' }}>{t('voting_voted_count').replace('{n}', String(totalVoted))}</span>
+        <span className="text-[12.5px] font-medium" style={{ color: '#6A5A4A' }}>{t('voting_voted_count').replace('{n}', String(totalVoted))}</span>
         <span style={{ color: '#2F6B45' }}>{t('voting_for_bar').replace('{n}', String(forCount))}</span>
       </div>
     </div>
@@ -309,7 +309,7 @@ function GavelLoader() {
         <rect x="10" y="16" width="36" height="7" rx="3" transform="rotate(-45 10 16)" fill="#6A5A4A" opacity="0.4" />
         <circle cx="56" cy="56" r="3" fill="#1B3828" opacity="0.5" />
       </svg>
-      <p className="text-[#9A8A78] text-sm font-mono tracking-widest">LOADING…</p>
+      <span className="sr-only" role="status">Loading</span>
     </div>
   );
 }
@@ -803,9 +803,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     return (
       <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
         <div className="text-center max-w-sm">
-          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>Sign in to view this session</h1>
+          <h1 className="text-2xl font-bold mb-2" style={{ color: '#1B3828' }}>Sign in to view this session</h1>
           <p className="mb-6" style={{ color: '#6A5A4A' }}>This is a conference session. Sign in to verify your access.</p>
-          <Link href={'/auth/signin?next=' + encodeURIComponent('/join?code=' + code)} className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>SIGN IN</Link>
+          <Link href={'/auth/signin?next=' + encodeURIComponent('/join?code=' + code)} className="inline-block font-semibold text-white px-6 py-3 rounded-full transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>Sign in</Link>
         </div>
       </div>
     );
@@ -815,9 +815,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     return (
       <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
         <div className="text-center max-w-sm">
-          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>You don&apos;t chair this committee</h1>
+          <h1 className="text-2xl font-bold mb-2" style={{ color: '#1B3828' }}>You don&apos;t chair this committee</h1>
           <p className="mb-6" style={{ color: '#6A5A4A' }}>The voting screen is part of the chair session. Only the committee&apos;s chair can open it.</p>
-          <Link href="/sessions" className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>BACK TO HOME</Link>
+          <Link href="/sessions" className="inline-block font-semibold text-white px-6 py-3 rounded-full transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>Back to home</Link>
         </div>
       </div>
     );
@@ -827,9 +827,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     return (
       <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
         <div className="text-center max-w-sm" role="alert">
-          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>{t('session_access_error_title')}</h1>
+          <h1 className="text-2xl font-bold mb-2" style={{ color: '#1B3828' }}>{t('session_access_error_title')}</h1>
           <p className="mb-6" style={{ color: '#6A5A4A' }}>{t('session_access_error_body')}</p>
-          <button onClick={votingAccess.retry} className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>{t('delegate_seat_retry')}</button>
+          <button onClick={votingAccess.retry} className="inline-block font-semibold text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>{t('delegate_seat_retry')}</button>
         </div>
       </div>
     );
@@ -842,7 +842,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           <h1 className="text-xl font-bold text-[#1C1410] mb-6">{t('session_load_failed')}</h1>
           <button
             onClick={() => { setLoadFailed(false); setLoading(true); setLoadAttempt((n) => n + 1); }}
-            className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none"
+            className="inline-block font-semibold text-white px-6 py-3 rounded-xl transition-colors focus:outline-none"
             style={{ backgroundColor: '#1B3828' }}
           >
             {t('delegate_seat_retry')}
@@ -897,11 +897,11 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
         <div className="w-full max-w-sm text-center">
           <div className="mb-3"><Emoji size="2.25rem">🪑</Emoji></div>
-          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>Chairs only</h1>
+          <h1 className="text-2xl font-bold mb-2" style={{ color: '#1B3828' }}>Chairs only</h1>
           <p className="mb-6 text-sm leading-relaxed" style={{ color: '#6A5A4A' }}>
             The voting screen records resolution results, changes the committee&apos;s rules and can end
             debate. Enter the chair code for{' '}
-            <span className="font-black" style={{ color: '#1B3828' }}>{committee.code}</span> to open it.
+            <span className="font-semibold" style={{ color: '#1B3828' }}>{committee.code}</span> to open it.
           </p>
           {expectedSuffix ? (
             <form
@@ -929,12 +929,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               )}
               <button
                 type="submit"
-                className="w-full font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none gv-lift"
+                className="w-full font-semibold text-white px-6 py-3 rounded-xl transition-colors focus:outline-none gv-lift"
                 style={{ backgroundColor: '#1B3828' }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
               >
-                OPEN VOTING
+                Open voting
               </button>
             </form>
           ) : (
@@ -1612,7 +1612,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           <div className="w-12 h-12 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: 'rgba(139,32,32,0.10)', color: '#8B2020' }} aria-hidden>
             <Flag size={22} strokeWidth={2.25} />
           </div>
-          <h2 id="gv-end-debate-title" className="text-[22px] font-black leading-tight text-[#1C1410]">{t('voting_end_debate_title')}</h2>
+          <h2 id="gv-end-debate-title" className="text-[22px] font-bold leading-tight text-[#1C1410]">{t('voting_end_debate_title')}</h2>
           <p className="text-[15px] text-[#6A5A4A] leading-relaxed mt-2 [text-wrap:pretty]">
             {t('voting_end_debate_body')}
           </p>
@@ -1627,7 +1627,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             autoFocus
             onClick={() => setShowEndDebateConfirm(false)}
             disabled={endDebateState === 'working'}
-            className="flex-1 h-12 rounded-2xl font-black text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] disabled:opacity-50"
+            className="flex-1 h-12 rounded-2xl font-semibold text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] disabled:opacity-50"
             style={{ backgroundColor: '#EDE7D8', color: '#1C1410' }}
           >
             {t('voting_cancel')}
@@ -1635,7 +1635,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           <button
             onClick={() => { void handleEndDebate(); }}
             disabled={endDebateState === 'working'}
-            className="flex-1 h-12 rounded-2xl font-black text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] disabled:opacity-60"
+            className="flex-1 h-12 rounded-2xl font-semibold text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] disabled:opacity-60"
             style={{ backgroundColor: '#8B2020', color: 'white', boxShadow: '0 2px 4px rgba(90,20,20,0.2), 0 8px 20px rgba(90,20,20,0.22)' }}
           >
             {endDebateState === 'working' ? t('voting_end_debate_working') : endDebateState === 'failed' ? t('voting_save_retry') : t('voting_confirm_end')}
@@ -1760,7 +1760,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       onClick={stepBack}
       disabled={!canStepBack}
       title={t('voting_step_back_title')}
-      className="inline-flex items-center gap-2 h-12 ps-4 pe-5 rounded-full text-[15px] font-black focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,transform,opacity] duration-150 active:scale-[0.96] motion-reduce:transition-none disabled:opacity-35 disabled:cursor-not-allowed enabled:hover:bg-[rgba(27,56,40,0.13)]"
+      className="inline-flex items-center gap-2 h-11 ps-4 pe-5 rounded-full text-[14px] font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,transform,opacity] duration-150 active:scale-[0.96] motion-reduce:transition-none disabled:opacity-35 disabled:cursor-not-allowed enabled:hover:bg-[rgba(27,56,40,0.13)]"
       style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: '#1B3828' }}
     >
       <Undo2 size={18} strokeWidth={2.5} aria-hidden style={{ transform: language === 'ar' ? 'scaleX(-1)' : undefined }} />
@@ -1770,8 +1770,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   const bigCount = (value: number, label: string, color: string) => (
     <div className="text-center min-w-[88px]">
-      <div className="text-[48px] font-black leading-none tabular-nums" style={{ color }}>{value}</div>
-      <div className="text-[14px] font-bold mt-2" style={{ color: '#6A5A4A' }}>{label}</div>
+      <div className="text-[36px] font-bold leading-none tabular-nums" style={{ color }}>{value}</div>
+      <div className="text-[13px] font-medium mt-2" style={{ color: '#6A5A4A' }}>{label}</div>
     </div>
   );
 
@@ -1805,16 +1805,16 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
       {/* ── Active voting: one delegation at a time ── */}
       {phase === 'voting' && currentDelegate && (
-        <div className="flex-1 min-h-0 flex flex-col items-center px-8 pt-4 pb-6">
+        <div className="flex-1 min-h-0 flex flex-col items-center px-8 pt-4 pb-8">
           <div className="h-9 shrink-0 flex items-center">
             {inPassRound ? (
-              <span className="inline-flex items-center gap-2 h-9 ps-3 pe-4 rounded-full text-[13px] font-black" style={{ backgroundColor: 'rgba(182,135,31,0.16)', color: '#6A4A0A' }}>
+              <span className="inline-flex items-center gap-2 h-9 ps-3 pe-4 rounded-full text-[13.5px] font-semibold" style={{ backgroundColor: 'rgba(182,135,31,0.16)', color: '#6A4A0A' }}>
                 <SkipForward size={15} strokeWidth={2.5} aria-hidden />
                 {t('voting_pass_round')}
-                <span className="font-semibold tabular-nums">· {t('voting_pass_round_sub', { current: passVoterIndex + 1, total: passedIds.length })}</span>
+                <span className="font-medium tabular-nums">· {t('voting_pass_round_sub', { current: passVoterIndex + 1, total: passedIds.length })}</span>
               </span>
             ) : (
-              <span className="text-[15px] font-bold tabular-nums" style={{ color: '#6A5A4A' }}>
+              <span className="text-[14px] font-medium tabular-nums" style={{ color: '#6A5A4A' }}>
                 {currentVoterIndex + 1} / {presentDelegates.length}
               </span>
             )}
@@ -1825,14 +1825,14 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             <VoterCarousel seats={carouselSeats} current={carouselIndex} markOf={markOf} hideTally={hideVotes} />
             <h1
               key={currentDelegate.id}
-              className="gv-name-in text-[46px] font-black text-[#1C1410] text-center leading-[1.05] mt-3 max-w-4xl [text-wrap:balance]"
+              className="gv-name-in text-[36px] font-bold text-[#1C1410] text-center leading-[1.1] tracking-[-0.015em] mt-3 max-w-4xl [text-wrap:balance]"
               aria-live="polite"
             >
               {getCountryDisplayName(currentDelegate.country, language)}
             </h1>
             <div className="h-8 mt-2 flex items-center">
               {recordedMark && (
-                <span className="inline-flex items-center gap-2 h-8 px-3.5 rounded-full text-[14px] font-bold" style={{ backgroundColor: 'rgba(182,135,31,0.16)', color: '#6A4A0A' }}>
+                <span className="inline-flex items-center gap-2 h-8 px-3.5 rounded-full text-[13.5px] font-medium" style={{ backgroundColor: 'rgba(182,135,31,0.16)', color: '#6A4A0A' }}>
                   {hideVotes && recordedMark !== 'pass' ? t('voting_recorded_hidden') : t('voting_recorded_choice', { choice: choiceLabel(recordedMark) })}
                 </span>
               )}
@@ -1840,7 +1840,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           </div>
 
           {isViewOnly ? (
-            <p className="shrink-0 w-full max-w-3xl my-6 text-center text-[16px] font-semibold text-[#6A5A4A]">
+            <p className="shrink-0 w-full max-w-3xl my-6 text-center text-[15px] font-medium text-[#6A5A4A]">
               {t('voting_follower_waiting', { name: gavelRole.head ?? '' })}
             </p>
           ) : (
@@ -1896,7 +1896,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   <button
                     type="button"
                     onClick={keepAndAdvance}
-                    className="inline-flex items-center gap-2 h-12 ps-4 pe-5 rounded-full text-[15px] font-black focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] motion-reduce:transition-none"
+                    className="inline-flex items-center gap-2 h-11 ps-4 pe-5 rounded-full text-[14px] font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] motion-reduce:transition-none"
                     style={{ backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 4px rgba(27,56,40,0.2), 0 8px 18px rgba(27,56,40,0.2)' }}
                   >
                     <CornerDownRight size={18} strokeWidth={2.5} aria-hidden style={{ transform: language === 'ar' ? 'scaleX(-1)' : undefined }} />
@@ -1919,14 +1919,11 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       {/* ── All voted: proceed ── */}
       {phase === 'voting' && !currentDelegate && (
         <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-8 gap-7">
-          <span className="w-16 h-16 rounded-full flex items-center justify-center" style={{ backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 8px 22px rgba(27,56,40,0.25)' }} aria-hidden>
-            <Check size={30} strokeWidth={3} />
-          </span>
-          <h2 className="text-[40px] font-black text-[#1C1410] text-center leading-tight [text-wrap:balance] -mt-2">
+          <h2 className="text-[28px] font-bold text-[#1C1410] text-center leading-tight tracking-[-0.012em] [text-wrap:balance]">
             {t('voting_all_voted', { n: presentDelegates.length })}
           </h2>
           {hideVotes ? (
-            <p className="text-[16px] font-semibold text-[#6A5A4A]">{t('voting_tally_hidden')}</p>
+            <p className="text-[15px] font-medium text-[#6A5A4A]">{t('voting_tally_hidden')}</p>
           ) : (
             <div className="w-full max-w-2xl flex flex-col items-center gap-6">
               <div className="flex gap-10">
@@ -1936,21 +1933,21 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 {withRights.length > 0 && bigCount(withRights.length, t('voting_with_rights_label'), '#8A6414')}
               </div>
               <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
-              <p className="text-[14px] font-semibold text-[#6A5A4A] tabular-nums -mt-2">
+              <p className="text-[13.5px] font-medium text-[#6A5A4A] tabular-nums -mt-2">
                 {summaryLine}
                 {outcome.quorumNeeded > 0 && ` · ${t('voting_summary_quorum', { present: presentAndPvDelegates.length, needed: outcome.quorumNeeded })}`}
               </p>
             </div>
           )}
           {isViewOnly ? (
-            <p className="text-[16px] font-semibold text-[#6A5A4A]">{t('voting_follower_waiting', { name: gavelRole.head ?? '' })}</p>
+            <p className="text-[15px] font-medium text-[#6A5A4A]">{t('voting_follower_waiting', { name: gavelRole.head ?? '' })}</p>
           ) : (
             <div className="flex items-center gap-3">
               {backButton(t('voting_step_back'))}
               <button
                 type="button"
                 onClick={handleFinishVoting}
-                className="h-14 px-10 rounded-2xl font-black text-[18px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 transition-transform duration-150 active:scale-[0.96] motion-reduce:transition-none"
+                className="h-12 px-8 rounded-full font-semibold text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 transition-transform duration-150 active:scale-[0.96] motion-reduce:transition-none"
                 style={{ backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 4px rgba(27,56,40,0.22), 0 12px 32px rgba(27,56,40,0.26)' }}
               >
                 {/* A hidden tally reveals nothing here either, not even whether anyone voted with rights. */}
@@ -1972,16 +1969,16 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         return (
           <div className="flex-1 min-h-0 flex gap-8 px-10 py-6">
             <div className="flex-1 min-w-0 flex flex-col items-center justify-center">
-              <p className="text-[13px] font-black uppercase tracking-[0.16em] mb-5" style={{ color: '#8A6414' }}>
+              <p className="text-[14px] font-medium mb-5 tabular-nums" style={{ color: '#6A5A4A' }}>
                 {t('voting_rights_header', { current: rightsIndex + 1, total: orderedRights.length })}
               </p>
               <span key={speaker.delegateId} className="gv-name-in rounded-full" style={{ boxShadow: '0 0 0 7px #F6F1E9, 0 0 0 12px #D9B44A, 0 18px 40px rgba(27,56,40,0.25)' }}>
-                <SeatCircleFlag seat={rightsSeat} size={168} decorative />
+                <SeatCircleFlag seat={rightsSeat} size={144} decorative />
               </span>
-              <h1 key={`n-${speaker.delegateId}`} className="gv-name-in text-[40px] font-black text-[#1C1410] text-center mt-6 leading-tight [text-wrap:balance]">
+              <h1 key={`n-${speaker.delegateId}`} className="gv-name-in text-[32px] font-bold text-[#1C1410] text-center mt-6 leading-tight tracking-[-0.012em] [text-wrap:balance]">
                 {getCountryDisplayName(speaker.country, language)}
               </h1>
-              <p className="text-[16px] font-bold mt-1" style={{ color: '#8A6414' }}>
+              <p className="text-[15px] font-medium mt-1" style={{ color: '#6A5A4A' }}>
                 {hideVotes
                   ? t('voting_with_rights_label')
                   : speaker.choice === 'for-rights' ? t('voting_rights_for') : t('voting_rights_against')}
@@ -1991,7 +1988,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               {!isViewOnly && (
                 <>
                   <div
-                    className="text-[72px] font-black mt-4 tabular-nums leading-none"
+                    className="text-[56px] font-bold mt-5 tabular-nums leading-none tracking-[-0.02em]"
                     style={{ color: rightsSpeakerTime <= 10 ? '#8B2020' : rightsSpeakerTime <= 20 ? '#8A6414' : '#1C1410' }}
                   >
                     {Math.floor(rightsSpeakerTime / 60)}:{String(rightsSpeakerTime % 60).padStart(2, '0')}
@@ -2000,7 +1997,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                     <button
                       type="button"
                       onClick={() => setRightsRunning((r) => !r)}
-                      className="h-11 px-6 rounded-full font-black text-[14px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96]"
+                      className="h-11 px-6 rounded-full font-semibold text-[14px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96]"
                       style={{ backgroundColor: rightsRunning ? '#8A6414' : '#2F6B45', color: '#FFFFFF' }}
                     >
                       {rightsRunning ? t('voting_pause') : t('voting_start')}
@@ -2011,7 +2008,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                         type="button"
                         onClick={() => updateVote(() => ({ rightsTimerLimit: s }))}
                         aria-pressed={rightsTimerLimit === s}
-                        className="h-11 min-w-11 px-3 rounded-full font-bold text-[13px] tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,transform] duration-150 active:scale-[0.96]"
+                        className="h-11 min-w-11 px-3 rounded-full font-medium text-[13px] tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,transform] duration-150 active:scale-[0.96]"
                         style={{ backgroundColor: rightsTimerLimit === s ? '#1B3828' : 'rgba(27,56,40,0.07)', color: rightsTimerLimit === s ? '#EED98A' : '#4A3F33' }}
                       >
                         {s}s
@@ -2022,8 +2019,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               )}
             </div>
 
-            <div className="w-[380px] shrink-0 flex flex-col gap-3 min-h-0">
-              <div className="flex-1 min-h-0 overflow-y-auto rounded-[24px] p-2 space-y-1" style={{ backgroundColor: '#FAF8F3', boxShadow: '0 0 0 1px rgba(27,56,40,0.07), 0 10px 28px rgba(27,56,40,0.08)' }}>
+            <div className="w-[380px] shrink-0 flex flex-col justify-center gap-3 min-h-0">
+              <div className="min-h-0 overflow-y-auto rounded-[20px] p-2 space-y-1" style={{ backgroundColor: '#FAF8F3', boxShadow: '0 0 0 1px rgba(27,56,40,0.07), 0 10px 28px rgba(27,56,40,0.08)' }}>
                 {orderedRights.map((v, absIdx) => {
                   const done = absIdx < rightsIndex;
                   const isCurrent = absIdx === rightsIndex;
@@ -2048,10 +2045,10 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                       className={`flex items-center gap-3 px-3 py-2 rounded-2xl transition-[background-color,opacity] duration-200 ${movable ? 'cursor-grab' : ''}`}
                       style={{ backgroundColor: isCurrent ? '#1B3828' : 'transparent', opacity: done ? 0.45 : 1 }}
                     >
-                      <span className="text-[12px] w-5 font-bold text-end tabular-nums" style={{ color: isCurrent ? 'rgba(238,217,138,0.8)' : '#9A8A78' }}>{absIdx + 1}</span>
+                      <span className="text-[12px] w-5 font-medium text-end tabular-nums" style={{ color: isCurrent ? 'rgba(238,217,138,0.8)' : '#9A8A78' }}>{absIdx + 1}</span>
                       <SeatCircleFlag country={v.country} size={30} decorative ring={!isCurrent} />
-                      <span className="flex-1 min-w-0 truncate text-[15px] font-bold" style={{ color: isCurrent ? '#FFFFFF' : '#1C1410' }}>{getCountryDisplayName(v.country, language)}</span>
-                      <span className="text-[12px] font-bold shrink-0" style={{
+                      <span className="flex-1 min-w-0 truncate text-[15px] font-medium" style={{ color: isCurrent ? '#FFFFFF' : '#1C1410' }}>{getCountryDisplayName(v.country, language)}</span>
+                      <span className="text-[12.5px] font-medium shrink-0" style={{
                         color: isCurrent ? '#EED98A' : hideVotes ? '#6A5A4A' : v.choice === 'for-rights' ? '#2F6B45' : '#8B2020',
                       }}>
                         {isCurrent ? t('voting_speaking') : hideVotes ? t('voting_with_rights_label') : v.choice === 'for-rights' ? t('voting_for_rights_list') : t('voting_against_rights_list')}
@@ -2066,7 +2063,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   <button
                     type="button"
                     onClick={() => { setRightsRunning(false); handleNextRightsSpeaker(); }}
-                    className="flex-1 h-12 rounded-full font-black text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96]"
+                    className="flex-1 h-11 rounded-full font-semibold text-[14px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96]"
                     style={{ backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 4px rgba(27,56,40,0.2), 0 8px 18px rgba(27,56,40,0.2)' }}
                   >
                     {rightsIndex + 1 < orderedRights.length ? t('voting_next_rights') : t('voting_see_result')}
@@ -2083,26 +2080,26 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         const soft = passed ? 'rgba(238,217,138,0.72)' : 'rgba(255,222,210,0.78)';
         return (
           <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-8 gap-6">
-            <p className="text-[13px] font-black uppercase tracking-[0.16em]" style={{ color: '#8A6414' }}>
+            <p className="text-[14px] font-medium tabular-nums" style={{ color: '#6A5A4A' }}>
               {t('voting_final_result', { code: selectedDoc.docCode })}
             </p>
 
             <div
-              className="gv-name-in rounded-[32px] px-12 py-9 text-center w-full max-w-2xl"
+              className="gv-name-in rounded-[24px] px-10 py-8 text-center w-full max-w-2xl"
               style={{
                 backgroundColor: passed ? '#1B3828' : '#8B2020',
                 boxShadow: passed ? '0 2px 4px rgba(27,56,40,0.2), 0 24px 64px rgba(27,56,40,0.30)' : '0 2px 4px rgba(90,20,20,0.2), 0 24px 64px rgba(139,32,32,0.30)',
               }}
             >
-              <div className="flex items-center justify-center gap-4">
-                <span className="w-14 h-14 rounded-full flex items-center justify-center" style={{ backgroundColor: passed ? '#EED98A' : '#FFE1D6', color: passed ? '#1B3828' : '#8B2020' }} aria-hidden>
-                  {passed ? <Check size={30} strokeWidth={3.25} /> : <X size={30} strokeWidth={3.25} />}
+              <div className="flex items-center justify-center gap-3">
+                <span className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: passed ? '#EED98A' : '#FFE1D6', color: passed ? '#1B3828' : '#8B2020' }} aria-hidden>
+                  {passed ? <Check size={22} strokeWidth={2.75} /> : <X size={22} strokeWidth={2.75} />}
                 </span>
-                <span className="text-[60px] font-black leading-none" style={{ color: passed ? '#EED98A' : '#FFFFFF' }}>
+                <span className="text-[40px] font-bold leading-none tracking-[-0.02em]" style={{ color: passed ? '#EED98A' : '#FFFFFF' }}>
                   {passed ? t('voting_pick_status_passed') : t('voting_pick_status_failed')}
                 </span>
               </div>
-              <p className="text-[20px] font-bold mt-4 mb-6 [text-wrap:balance]" style={{ color: soft }}>
+              <p className="text-[16px] font-medium mt-3 mb-6 leading-snug [text-wrap:balance]" style={{ color: soft }}>
                 {selectedDoc.title}
               </p>
               <div className="flex justify-center gap-10">
@@ -2113,12 +2110,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   { n: withRights.length, label: t('voting_with_rights_label'), color: '#F3D98A', show: withRights.length > 0 },
                 ].filter((c) => c.show).map((c) => (
                   <div key={c.label} className="text-center">
-                    <div className="text-[44px] font-black leading-none tabular-nums" style={{ color: c.color }}>{c.n}</div>
-                    <div className="text-[14px] font-bold mt-2" style={{ color: soft }}>{c.label}</div>
+                    <div className="text-[34px] font-bold leading-none tabular-nums" style={{ color: c.color }}>{c.n}</div>
+                    <div className="text-[13px] font-medium mt-2" style={{ color: soft }}>{c.label}</div>
                   </div>
                 ))}
               </div>
-              <div className="mt-5 space-y-1.5 text-[14px] font-semibold tabular-nums" style={{ color: '#FFFFFF' }}>
+              <div className="mt-6 space-y-1.5 text-[13.5px] font-medium tabular-nums" style={{ color: '#FFFFFF' }}>
                 {p5Veto && (
                   <p className="flex items-center gap-1.5 justify-center"><ShieldAlert size={16} strokeWidth={2.5} aria-hidden /> {settings.vetoMode === 'custom' ? t('voting_veto_exercised') : t('voting_p5_veto')}</p>
                 )}
@@ -2151,7 +2148,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 <button
                   type="button"
                   onClick={() => setPendingDocId(selectedDoc.id)}
-                  className="h-12 px-6 rounded-full font-black text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,transform] duration-150 active:scale-[0.96] hover:bg-white"
+                  className="h-11 px-5 rounded-full font-semibold text-[14px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,transform] duration-150 active:scale-[0.96] hover:bg-white"
                   style={{ backgroundColor: '#FAF8F3', color: '#1B3828', boxShadow: '0 0 0 1px rgba(27,56,40,0.14), 0 2px 6px rgba(27,56,40,0.08)' }}
                 >
                   {t('voting_vote_again')}
@@ -2159,7 +2156,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 <button
                   type="button"
                   onClick={() => setSelectedDocId(null)}
-                  className="h-12 px-7 rounded-full font-black text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 transition-transform duration-150 active:scale-[0.96]"
+                  className="h-11 px-6 rounded-full font-semibold text-[14px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 transition-transform duration-150 active:scale-[0.96]"
                   style={{ backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 4px rgba(27,56,40,0.22), 0 10px 26px rgba(27,56,40,0.24)' }}
                 >
                   {t('voting_next_doc', { doc: docName(committee, 'draft-resolution', 'singular', t('documents_draft_resolution')) })}

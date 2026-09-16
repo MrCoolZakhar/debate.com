@@ -32,6 +32,7 @@ import {
   checkChatFile, encodeAttachment, readImageSize, uploadChatFile, type ChatAttachment, type UploadHandle,
 } from '@/lib/chatAttachments';
 import { useGifsEnabled, type GifItem } from '@/lib/gifClient';
+import { delegationNameLabel, useSessionDelegationNames } from '@/lib/sessionDelegationNames';
 import NewGroupSheet, { type GroupCandidate } from './chat/NewGroupSheet';
 import { CHAT } from './chat/chatTokens';
 
@@ -152,6 +153,18 @@ export default function ChatPanel({
     if (isGroupKey(key)) return groups.get(key.slice('group:'.length))?.name ?? key;
     return senderLabel(key);
   }, [t, groups, senderLabel]);
+
+  // ── Who is in the seat (conference sessions, chair devices only) ─────────
+  // src/lib/sessionDelegationNames.ts: one chair-gated read per session, shared with
+  // Settings → People. Null everywhere else, so a standalone room and every delegate phone
+  // render exactly as before.
+  const delegationNames = useSessionDelegationNames(committee, isChair);
+  /** The allocated person behind a delegation key, or '' when there is none to show. */
+  const personFor = useCallback((key: string): string => {
+    if (!delegationNames) return '';
+    if (key === 'everyone' || key === 'chairs' || isGroupKey(key) || chairNames.includes(key)) return '';
+    return delegationNameLabel(delegationNames, key);
+  }, [delegationNames, chairNames]);
 
   // ── The directory ─────────────────────────────────────────────────────────
   const delegations = useMemo(() => committee.delegates.map((d) => d.country), [committee.delegates]);
@@ -347,11 +360,11 @@ export default function ChatPanel({
       .map((d) => d.country)
       .filter((c) => c !== senderName && !chairNames.includes(c))
       .sort((a, b) => compareCountryNames(a, b, language))
-      .map((c) => ({ key: c, label: getCountryDisplayName(c, language), isChair: false }));
+      .map((c) => ({ key: c, label: getCountryDisplayName(c, language), sublabel: personFor(c), isChair: false }));
     // A delegation talks to the dais as a whole, never to one named chair (same rule as DMs).
     const chairs = isChair ? chairNames.filter((n) => n && n !== senderName).map((n) => ({ key: n, label: n, isChair: true })) : [];
     return [...chairs, ...dels];
-  }, [committee.delegates, chairNames, senderName, isChair, language]);
+  }, [committee.delegates, chairNames, senderName, isChair, language, personFor]);
 
   const createGroup = useCallback(async (name: string, picked: string[]) => {
     const id = newGroupId();
@@ -386,11 +399,14 @@ export default function ChatPanel({
     const last = e.messages[e.messages.length - 1] ?? null;
     const multi = isMultiParty(e.kind, isChair);
     const label = labelFor(String(e.key));
+    const person = personFor(String(e.key));
     return {
       key: e.key,
       kind: e.kind,
       label,
-      search: `${label} ${String(e.key)}`.toLowerCase(),
+      personLabel: person,
+      // Searching the dais for a person by name, not only by delegation.
+      search: `${label} ${person} ${String(e.key)}`.toLowerCase(),
       last,
       lastSenderLabel: !last ? '' : last.sender === senderName ? t('chat_you_prefix') : multi ? senderLabel(last.sender) : '',
       lastAt: e.lastAt,
@@ -400,15 +416,25 @@ export default function ChatPanel({
         : e.kind === 'dais' ? t('chat_dais_subtitle')
         : t('chat_no_messages'),
     };
-  }), [directory, isChair, labelFor, senderName, senderLabel, readCounts, t]);
+  }), [directory, isChair, labelFor, personFor, senderName, senderLabel, readCounts, t]);
 
   // ── The open thread ───────────────────────────────────────────────────────
   const thread = activeEntry ? (() => {
     const kind = activeEntry.kind;
     const g = activeEntry.group;
+    /** "France (Ana Pérez)" in a member list, "France" when there is no name to add. */
+    const memberLabel = (m: string) => {
+      if (m === senderName) return t('chat_you_prefix');
+      const person = personFor(m);
+      return person ? `${senderLabel(m)} (${person})` : senderLabel(m);
+    };
+    // A delegate thread leads with WHO is in the seat when the conference knows; the message
+    // count is what a room without allocations still shows.
+    const person = kind === 'delegate' ? personFor(String(activeEntry.key)) : '';
     const subtitle = kind === 'everyone' ? t('chat_everyone_subtitle')
       : kind === 'dais' ? t('chat_dais_subtitle')
-      : g ? g.members.map((m) => (m === senderName ? t('chat_you_prefix') : senderLabel(m))).join(', ')
+      : g ? g.members.map(memberLabel).join(', ')
+      : person ? person
       : activeEntry.messages.length === 1 ? t('chat_message_count_one')
       : t('chat_message_count_other').replace('{n}', String(activeEntry.messages.length));
     const info = kind === 'everyone' ? t('chat_everyone_info')

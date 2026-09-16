@@ -19,9 +19,9 @@
 //     max. On a conference committee with 2+ topics a separate small "switch topic"
 //     control (`onSwitchAgenda`) opens the agenda picker, so the text edits and the
 //     picker stays one click away.
-//   • QuorumRings: three bookmark tabs (Present, 2/3, 1/2+1) with half-circle gauges,
-//     flush on the masthead's bottom edge so they grow out of the list, plus the quorum
-//     pill when a quorum rule is set. Passed in as `present`/`total`; omit `present`
+//   • QuorumRings: three round capsules (Present, 2/3, 1/2+1) with full ring gauges,
+//     clear of the list below, plus the quorum pill when a quorum rule is set. Observers
+//     are counted in both numbers. Passed in as `present`/`total`; omit `present`
 //     to hide them. The topic is clamped to 3 lines with the full text in a tooltip.
 //
 // Contrast on #1B3828: body ivory #EDE7D8 is 11:1; the full name at 78% ivory and
@@ -117,6 +117,7 @@ export default function CommitteeIdentityBadge({
   present,
   total = 0,
   quorumNeeded = null,
+  compactQuorum = false,
 }: {
   /** When set, clicking the topic turns it into an inline editor (the Moderator, session
    *  not ended). Resolves false when the write was refused; the caller has already rolled
@@ -141,12 +142,15 @@ export default function CommitteeIdentityBadge({
   topic?: string | null;
   /** Translated "Topic:" label, read by screen readers only. */
   topicLabel?: string;
-  /** Voting delegations present. Omit to hide the quorum rings. */
+  /** Delegations present, observers included. Omit to hide the quorum rings. */
   present?: number;
-  /** Voting delegations on the roster. */
+  /** Delegations on the roster, observers included. */
   total?: number;
   /** Delegations the quorum rule needs, or null when there is no rule. */
   quorumNeeded?: number | null;
+  /** Pack the three quorum capsules together instead of spreading them across the width.
+   *  The wide pre-session roll-call card sets it; the narrow sidebar does not. */
+  compactQuorum?: boolean;
 }) {
   const monogram = emblemMonogram(primary);
   const longPrimary = primary.length > 12;
@@ -307,7 +311,7 @@ export default function CommitteeIdentityBadge({
       </div>
       {typeof present === 'number' && (
         <div className="mt-2">
-          <QuorumRings present={present} total={total} quorumNeeded={quorumNeeded} />
+          <QuorumRings present={present} total={total} quorumNeeded={quorumNeeded} compact={compactQuorum} />
         </div>
       )}
     </div>

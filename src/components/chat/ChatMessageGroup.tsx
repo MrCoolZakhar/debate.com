@@ -20,6 +20,7 @@ export default function ChatMessageGroup({
   showIdentity,
   senderLabel,
   onRetry,
+  onOpenImage,
   t,
   locale,
 }: {
@@ -30,6 +31,8 @@ export default function ChatMessageGroup({
   /** Display name of the sender (localised country name, or the chair's name). */
   senderLabel: string;
   onRetry?: (outboxId: string) => void;
+  /** Open a photo or GIF in the in-app viewer, by the item's id. */
+  onOpenImage?: (itemId: string) => void;
   t: TFn;
   locale: string;
 }) {
@@ -84,6 +87,7 @@ export default function ChatMessageGroup({
                     a={it.attachment}
                     isMe={isMe}
                     t={t}
+                    onOpen={onOpenImage && it.attachment.kind !== 'pdf' ? () => onOpenImage(it.id) : undefined}
                     timeSlot={(
                       <span
                         style={{

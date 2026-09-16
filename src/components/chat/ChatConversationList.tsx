@@ -12,7 +12,9 @@ export interface ConvRow {
   key: ChatConvKey;
   kind: ChatEntryKind;
   label: string;
-  /** Lower-case text the search matches against (label plus the raw key). */
+  /** Conference sessions, chair devices only: who is in the seat. '' when unknown. */
+  personLabel?: string;
+  /** Lower-case text the search matches against (label, the person, and the raw key). */
   search: string;
   last: ChatMessage | null;
   /** Display name of the last message's sender, when it is not the reader. */
@@ -157,8 +159,17 @@ const Row = memo(function Row({ row, active, onSelect, t, locale }: {
       <ChatAvatar kind={row.kind} name={String(row.key)} size={46} />
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline justify-between gap-2">
-          <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 15.5, fontWeight: showBadge ? 800 : 650, color: NEU.ink }}>
-            {row.label}
+          {/* The delegation is the identity and keeps its weight; the person sitting in it is
+              a quieter second half of the same line, and gives up room first. */}
+          <span className="min-w-0 flex items-baseline gap-1.5">
+            <span className="truncate shrink-0 max-w-full" style={{ fontFamily: OUTFIT, fontSize: 15.5, fontWeight: showBadge ? 800 : 650, color: NEU.ink }}>
+              {row.label}
+            </span>
+            {row.personLabel && (
+              <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 500, color: NEU.inkSoft }}>
+                {row.personLabel}
+              </span>
+            )}
           </span>
           {row.lastAt != null && (
             <span className="shrink-0" style={{

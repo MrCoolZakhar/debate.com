@@ -9,7 +9,8 @@ import type { OutboxMsg } from '@/lib/chatOutbox';
 import type { ChatEntryKind } from '@/lib/chatConversations';
 import ChatMessageGroup from './ChatMessageGroup';
 import { ChatAvatar } from './ChatAvatar';
-import { buildChatRows, portalFrame, type TFn } from './chatTokens';
+import ChatLightbox, { type LightboxItem } from './ChatLightbox';
+import { buildChatRows, formatTime, portalFrame, type TFn } from './chatTokens';
 
 /** Day separators and the "New messages" divider: a small frosted-look pill, centred. */
 function Separator({ label, tone = 'muted' }: { label: string; tone?: 'muted' | 'unread' }) {
@@ -194,6 +195,36 @@ export default function ChatThread({
   const total = messages.length + outbox.length;
   const prevTotalRef = useRef(0);
 
+  // ── The in-app photo viewer ───────────────────────────────────────────────
+  // Every photo and GIF of THIS conversation, oldest first: that is what the arrow keys and a
+  // swipe move through. Built from the rows already folded above, so the order on screen and
+  // the order in the viewer can never disagree.
+  const [lightboxId, setLightboxId] = useState<string | null>(null);
+  const lightboxItems = useMemo<LightboxItem[]>(() => {
+    const out: LightboxItem[] = [];
+    for (const row of rows) {
+      if (row.kind !== 'group') continue;
+      for (const it of row.group.items) {
+        const a = it.attachment;
+        if (!a || a.kind === 'pdf') continue;
+        const who = row.group.isMe ? t('chat_you_prefix') : labelForSender(row.group.sender);
+        out.push({
+          id: it.id,
+          kind: a.kind,
+          url: a.url,
+          previewUrl: a.preview,
+          name: a.name || t('chat_photo'),
+          caption: `${who} · ${formatTime(it.timestamp, locale)}`,
+          width: a.width,
+          height: a.height,
+        });
+      }
+    }
+    return out;
+  }, [rows, labelForSender, t, locale]);
+  // Switching conversation closes the viewer: its photos are no longer on screen.
+  useEffect(() => { setLightboxId(null); }, [convKey]);
+
   const scrollToBottom = useCallback((smooth = false) => {
     const el = scrollRef.current;
     if (!el) return;
@@ -284,12 +315,23 @@ export default function ChatThread({
               showIdentity={multiParty}
               senderLabel={labelForSender(row.group.sender)}
               onRetry={onRetry}
+              onOpenImage={setLightboxId}
               t={t}
               locale={locale}
             />
           );
         })}
       </div>
+
+      {lightboxId && lightboxItems.length > 0 && (
+        <ChatLightbox
+          items={lightboxItems}
+          openId={lightboxId}
+          onOpenId={setLightboxId}
+          onClose={() => setLightboxId(null)}
+          t={t}
+        />
+      )}
 
       {/* Jump-to-latest pill */}
       {newPill && (

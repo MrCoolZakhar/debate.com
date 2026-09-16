@@ -19,14 +19,22 @@ function fit(w?: number, h?: number, maxW = MAX_W, maxH = MAX_H): { width: numbe
 /**
  * The media inside a chat bubble. Photos and GIFs render at their final size from the start
  * (dimensions travel in the message), so nothing shifts when they load. Images are lazy and
- * decode off the main thread; a click opens the full file in a new tab.
+ * decode off the main thread.
+ *
+ * A click opens the picture in the app's own viewer (ChatLightbox), not a new tab: leaving the
+ * page to look at a photo means leaving the committee. It stays an `<a href>` so the browser's
+ * own affordances still work — middle-click, cmd/ctrl-click and "open in new tab" go to the
+ * raw file exactly as before, and only a plain left click is taken over. A PDF is unchanged:
+ * there is nothing for the viewer to do with it.
  */
-function ChatAttachmentView({ a, isMe, t, timeSlot }: {
+function ChatAttachmentView({ a, isMe, t, timeSlot, onOpen }: {
   a: ChatAttachment;
   isMe: boolean;
   t: TFn;
   /** The time chip, positioned by the caller. */
   timeSlot: React.ReactNode;
+  /** Open this photo in the in-app viewer. Absent (a Commenter-free surface, or a PDF) = link only. */
+  onOpen?: () => void;
 }) {
   const [loaded, setLoaded] = useState(false);
 
@@ -69,6 +77,13 @@ function ChatAttachmentView({ a, isMe, t, timeSlot }: {
         target="_blank"
         rel="noopener noreferrer"
         aria-label={`${t('chat_attach_open')}: ${a.name}`}
+        onClick={(e) => {
+          if (!onOpen) return;
+          // Leave every "open it somewhere else" gesture alone.
+          if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          e.preventDefault();
+          onOpen();
+        }}
         className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
         style={{
           width: box.width, height: box.height, maxWidth: '100%', borderRadius: 14, overflow: 'hidden',

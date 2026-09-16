@@ -11,12 +11,22 @@
 // side's `loadConferenceScoreboard`. Chairs and secretariat now look at the same
 // object, and it can only ever be improved in one place.
 //
-// THREE THINGS ARE SESSION-ONLY and have no organiser equivalent, so they stay
+// FOUR THINGS ARE SESSION-ONLY and have no organiser equivalent, so they stay
 // here rather than moving into the shared table:
-//   • the forest header bar with Export CSV and ✕;
+//   • the forest header bar with Export CSV and ✕, and the strip of session
+//     figures under it;
 //   • the MANUAL award / deduct control — only a chair awards points, so it is
-//     passed into the shared drill-in through its `detailExtra` slot;
-//   • the Matrix tab, the chair's wide numeric grid.
+//     passed into the chair's own drill-in (`scoreboard/DelegateProfile`, handed
+//     to the shared table through its `renderDetail` slot);
+//   • the Matrix tab, the chair's wide numeric grid;
+//   • the History tab (`scoreboard/HistoryTab`), the session read back segment
+//     by segment with the chairs' notes in place.
+//
+// EVERY ONE OF THOSE IS A DEFAULTED-OFF PROP OR A SEPARATE COMPONENT, never a
+// change to what the organiser board renders: `onSortChange`, `sortDir`,
+// `circleFlags`, `flagSize` and `renderDetail` are all absent on the conferences
+// side, which therefore still draws plain headers, 20px rectangular flags, its
+// SORT BY pills and `DelegateDetail`, unchanged.
 //
 // THREE NUMBERS THAT USED TO DISAGREE, and now do not:
 //   1. the ranking list showed the BLENDED headline while the drill-in header
@@ -34,13 +44,16 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import GrowDialog from '@/components/GrowDialog';
-import { SeatFlag } from '@/components/SeatFlag';
-import { NEU, NeuPill, OUTFIT } from '@/components/neu';
+import { SeatCircleFlag } from '@/components/CircleFlag';
+import { NEU, OUTFIT } from '@/components/neu';
 import { SOFT, RED, CARD_BORDER_COLOR } from '@/components/scoreboardTokens';
 import {
-  ScoreboardTable, Stat, SORTS, sortScoreboardRows,
-  type SortKey, type ScoreboardLabels,
+  ScoreboardTable, sortScoreboardRows, naturalSortDir,
+  type SortKey, type SortDir, type ScoreboardLabels,
 } from '@/components/ScoreboardTable';
+import { IconStat, STAT_ICONS, TINT } from '@/components/scoreboard/SessionScoreboardParts';
+import DelegateProfile from '@/components/scoreboard/DelegateProfile';
+import HistoryTab from '@/components/scoreboard/HistoryTab';
 import { Committee } from '@/lib/types';
 import { getCountryDisplayName } from '@/lib/countries';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
@@ -51,7 +64,7 @@ import {
 import type { LedgerRow } from '@/lib/scoring';
 import { logEvent, getFeedbackForCommittee, type FeedbackEntry } from '@/lib/committeeService';
 import { resolveChairAwardsHref } from '@/lib/sessionAwardsLink';
-import { Trophy } from 'lucide-react';
+import { Trophy, ListOrdered, Grid3x3, History } from 'lucide-react';
 
 function csvEscape(v: string | number): string {
   const s = String(v);
@@ -65,8 +78,12 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
 }) {
   const { language } = useLanguage();
   const t = useT();
-  const [tab, setTab] = useState<'ranking' | 'matrix'>('ranking');
+  const [tab, setTab] = useState<'ranking' | 'matrix' | 'history'>('ranking');
   const [sortKey, setSortKey] = useState<SortKey>('score');
+  // The sort control is gone: the columns themselves are the control now, and a
+  // column can be read either way round. `naturalSortDir` keeps the arrow the
+  // header draws and the order `sortScoreboardRows` produces in agreement.
+  const [sortDir, setSortDir] = useState<SortDir>(naturalSortDir('score'));
   const [expanded, setExpanded] = useState<string | null>(null);
   const [awardAmt, setAwardAmt] = useState('');
   const [awardNote, setAwardNote] = useState('');
@@ -177,25 +194,17 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
     ctxUnmoderated: t('fb_tag_unmod'),
     ctxTour: t('fb_tag_tour'),
     commentWritten: t('sb_comment_written'),
+    sortAscending: t('sb_sort_asc'),
+    sortDescending: t('sb_sort_desc'),
   }), [t]);
-
-  // `SORTS` is exported with English labels because the organiser scoreboard
-  // renders it verbatim. Same reasoning as `labels`: translate at this caller.
-  const sortLabel: Record<SortKey, string> = {
-    score: t('sb_col_score'),
-    speeches: t('sb_col_speeches'),
-    time: t('sb_stat_speaking_time'),
-    comments: t('sb_sort_comments'),
-    name: t('sb_col_delegation'),
-  };
 
   const allRows = useMemo(
     () => buildSessionScoreboardRows(committee, feedback, language),
     [committee, feedback, language],
   );
   const rows = useMemo(
-    () => sortScoreboardRows(allRows, sortKey, language),
-    [allRows, sortKey, language],
+    () => sortScoreboardRows(allRows, sortKey, language, sortDir),
+    [allRows, sortKey, language, sortDir],
   );
 
   const totals = useMemo(() => ({
@@ -336,7 +345,19 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
       backdropStyle={{ background: 'rgba(28,20,16,0.45)' }}
     >
       {(requestClose) => (<>
-          <style>{`@keyframes sbFade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}`}</style>
+          {/* `gv-sort-th` styles the shared table's pressable column headers, and
+              `gv-sb-seg` the History tab's segment headers. Both live here because
+              this panel is the only place either renders: the organiser board
+              passes no `onSortChange`, so its headers are plain spans and these
+              rules never match anything on the conferences side. */}
+          <style>{`
+            @keyframes sbFade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+            .gv-sort-th:hover{color:${NEU.forest}}
+            .gv-sort-th:active{transform:scale(0.96)}
+            .gv-sb-seg{transition:background 160ms cubic-bezier(0.22,1,0.36,1),transform 160ms cubic-bezier(0.22,1,0.36,1)}
+            .gv-sb-seg:hover{background:rgba(27,56,40,0.05)}
+            .gv-sb-seg:active{transform:scale(0.995)}
+          `}</style>
           {/* Header */}
           <div className="px-5 py-3 flex items-center gap-3 shrink-0 sticky top-0 z-10" style={{ backgroundColor: NEU.forest }}>
             <div className="w-1 h-4 rounded-full" style={{ backgroundColor: NEU.gold }} />
@@ -355,13 +376,33 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
             </div>
           </div>
 
+          {/* ── THE FOUR FIGURES, MOVED UP AND GIVEN GLYPHS ──────────────────
+              They used to sit inside the Ranking tab, below the sort pills,
+              which put the session's headline numbers a tab-switch away and a
+              scroll down. They are true of the whole session, not of one tab,
+              so they belong above the tabs — and as one line of chips rather
+              than four full-width tiles, which is what "moved higher" buys in
+              vertical space on a 13-inch dais laptop. */}
+          <div className="flex gap-2 flex-wrap px-4 pt-3 shrink-0">
+            <IconStat compact icon={STAT_ICONS.delegations} label={t('sb_stat_delegations')} value={String(totals.delegations)} />
+            <IconStat compact icon={STAT_ICONS.speeches} label={t('sb_stat_speeches')} value={String(totals.speeches)} />
+            <IconStat compact icon={STAT_ICONS.time} label={t('sb_stat_speaking_time')} value={formatSpeakingTime(totals.seconds)} tint={TINT.sage} />
+            <IconStat compact icon={STAT_ICONS.notes} label={t('sb_stat_chair_notes')} value={String(totals.comments)} tint={TINT.amber} />
+          </div>
+
           {/* Tabs */}
           <div className="flex gap-1 px-4 pt-3 shrink-0">
-            {(['ranking', 'matrix'] as const).map((id) => (
+            {([
+              ['ranking', t('sb_tab_ranking'), ListOrdered],
+              ['matrix', t('sb_tab_matrix'), Grid3x3],
+              ['history', t('sb_tab_history'), History],
+            ] as const).map(([id, label, Icon]) => (
               <button key={id} onClick={() => { setTab(id); setExpanded(null); }}
-                className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
-                style={{ backgroundColor: tab === id ? NEU.forest : 'transparent', color: tab === id ? NEU.gold : SOFT, border: tab === id ? 'none' : `1px solid ${CARD_BORDER_COLOR}` }}>
-                {id === 'ranking' ? t('sb_tab_ranking') : t('sb_tab_matrix')}
+                aria-pressed={tab === id}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors inline-flex items-center gap-1.5"
+                style={{ fontFamily: OUTFIT, backgroundColor: tab === id ? NEU.forest : 'transparent', color: tab === id ? NEU.gold : SOFT, border: tab === id ? 'none' : `1px solid ${CARD_BORDER_COLOR}`, minHeight: 32 }}>
+                <Icon size={13} strokeWidth={2.4} aria-hidden />
+                {label}
               </button>
             ))}
           </div>
@@ -369,34 +410,33 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
           <div className="flex-1 min-h-0 overflow-y-auto p-4">
             {tab === 'ranking' && (
               <div style={{ animation: 'sbFade 160ms ease-out' }}>
-                <div className="flex gap-2.5 flex-wrap mb-4">
-                  <Stat label={t('sb_stat_delegations')} value={String(totals.delegations)} />
-                  <Stat label={t('sb_stat_speeches')} value={String(totals.speeches)} />
-                  <Stat label={t('sb_stat_speaking_time')} value={formatSpeakingTime(totals.seconds)} />
-                  <Stat label={t('sb_stat_chair_notes')} value={String(totals.comments)} />
-                </div>
-
-                <div className="flex items-center gap-2 mb-3 flex-wrap">
-                  <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.12em', color: SOFT }}>{t('sb_sort_by')}</span>
-                  {SORTS.map((s) => (
-                    <NeuPill key={s.key} active={sortKey === s.key} onClick={() => setSortKey(s.key)}>
-                      {sortLabel[s.key]}
-                    </NeuPill>
-                  ))}
-                </div>
-
+                {/* NO SORT CONTROL. The columns are the control: pressing one
+                    sorts by it, pressing it again reverses it. The organiser
+                    board still passes no `onSortChange`, so its SORT BY pills
+                    and its plain headers are exactly as they were. */}
                 <ScoreboardTable
                   rows={rows}
                   sortKey={sortKey}
+                  sortDir={sortDir}
+                  onSortChange={(key, dir) => { setSortKey(key); setSortDir(dir); }}
                   showCommitteeColumn={false}
                   expanded={expanded}
                   onExpand={handleExpand}
                   locale={language}
-                  detailSummary
-                  detailExtra={isViewOnly ? undefined : manualAdjustment}
+                  circleFlags
+                  flagSize={34}
+                  renderDetail={(row) => (
+                    <DelegateProfile row={row} extra={isViewOnly ? undefined : manualAdjustment(row)} />
+                  )}
                   labels={labels}
                   emptyText={t('sb_empty_no_delegations')}
                 />
+              </div>
+            )}
+
+            {tab === 'history' && (
+              <div style={{ animation: 'sbFade 160ms ease-out' }}>
+                <HistoryTab committee={committee} feedback={feedback} />
               </div>
             )}
 
@@ -439,8 +479,10 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
                         {/* Cap the name column so a long delegation name truncates instead of
                             widening the table (which would force the whole row to scroll). */}
                         <td style={{ ...TD, textAlign: 'start', maxWidth: 220 }}>
-                          <span className="flex items-center gap-1.5 min-w-0">
-                            <span className="shrink-0 flex"><SeatFlag country={r.country} size={20} className="shrink-0" /></span>
+                          <span className="flex items-center gap-2 min-w-0">
+                            {/* Round and bigger here too, so the Matrix and the
+                                Ranking tab identify a delegation the same way. */}
+                            <span className="shrink-0 flex"><SeatCircleFlag country={r.country} size={26} decorative /></span>
                             <span className="truncate" style={{ color: NEU.ink }} title={getCountryDisplayName(r.country, language)}>{getCountryDisplayName(r.country, language)}</span>
                           </span>
                         </td>

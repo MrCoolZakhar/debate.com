@@ -6,10 +6,10 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createCommittee as createCommitteeInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
-import { UN_COUNTRIES, getFlagUrl, getCountryByName, getCountryDisplayName, countryMatchRank, findCountryFlexible, compareCountryNames } from '@/lib/countries';
+import { UN_COUNTRIES, getCountryByName, getCountryDisplayName, countryMatchRank, findCountryFlexible, compareCountryNames } from '@/lib/countries';
 import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS, ICC_ROLES, ICJ_ROLES, CRISIS_MEMBERS, FIFA_MEMBERS, HOUSE_OF_COMMONS_ROLES, US_SENATE_MEMBERS, PRESS_ROLES, EUROPEAN_PARLIAMENT_MEMBERS } from '@/lib/presets';
-import { Globe, PenLine, ChevronLeft, Megaphone, X } from 'lucide-react';
-import { FlagImg } from '@/components/FlagImg';
+import { Globe, PenLine, ChevronLeft, Megaphone, Plus, Search, X } from 'lucide-react';
+import { CircleFlag } from '@/components/CircleFlag';
 import Loader from '@/components/Loader';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
@@ -115,6 +115,18 @@ const BUNDLES: Record<string, { label: string; acronym: string; logoPath?: strin
 function fuzzyMatchCountry(raw: string): string | null {
   return findCountryFlexible(raw);
 }
+
+// One field, one label, one panel — every control on the build screen is drawn from
+// these three so the column reads as one form rather than four different boxes.
+// `transition-all` is deliberately avoided (it animates layout properties too).
+const FIELD_CLS =
+  'w-full bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-[border-color,box-shadow] duration-150 text-sm';
+const LABEL_CLS = 'block text-[11px] font-bold uppercase tracking-[0.09em] mb-1.5 text-[#1B3828]';
+const PANEL_STYLE = {
+  backgroundColor: '#FAF8F3',
+  border: '1px solid #DDD4C0',
+  boxShadow: '0 1px 0 rgba(255,255,255,0.75) inset, 0 1px 2px rgba(27,56,40,0.04)',
+} as const;
 
 function CommitteeNameInput({ value, onChange, onPresetSelect }: {
   value: string;
@@ -468,7 +480,6 @@ function CreatePageInner() {
   const [editingName, setEditingName] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState('');
   const [creating, setCreating] = useState(false);
-  const [isUNSC, setIsUNSC] = useState(false);
 
   const handleCreate = async () => {
     const names = chairNames.map((n) => n.trim()).filter(Boolean);
@@ -507,6 +518,15 @@ function CreatePageInner() {
 
   const addDelegate = (name: string) => {
     if (!delegates.includes(name)) setDelegates((p) => [...p, name]);
+  };
+
+  // The one add path: the + button, the Enter key and the typeahead's first row all
+  // land here, so the field can never do something the button does not.
+  const typedIsAddable = !!(available[0] || (search.trim() && !delegates.includes(search.trim())));
+  const addTyped = () => {
+    if (available[0]) { addDelegate(available[0].name); setSearch(''); return; }
+    const raw = search.trim();
+    if (raw && !delegates.includes(raw)) { addDelegate(raw); setSearch(''); }
   };
 
   const addBundle = (key: string) => {
@@ -557,7 +577,6 @@ function CreatePageInner() {
   const handleCommitteePreset = (preset: typeof COMMITTEE_PRESETS[0]) => {
     setCommitteeName(preset.name);
     if (preset.members !== null) setDelegates(preset.members);
-    setIsUNSC(preset.acronym === 'UNSC');
   };
 
   return (
@@ -622,109 +641,57 @@ function CreatePageInner() {
         )}
 
         {committeeMode === 'build' && (
-          <div className="flex-1 flex flex-col overflow-hidden px-8 pt-4 pb-4">
-            <div className="relative flex items-center justify-center mb-4 shrink-0">
+          <div className="flex-1 flex flex-col overflow-hidden px-4 md:px-8 pt-4 pb-4">
+            {/* Back and title share one row, so the title can never sit under the
+                button on a phone (it used to be absolutely positioned over it). */}
+            <div className="flex items-center gap-3 mb-3 md:mb-4 shrink-0">
               <button
                 onClick={() => setCommitteeMode('select')}
-                className="absolute start-0 flex items-center gap-2 px-3 py-2 rounded-xl bg-[#EDE7D8] border border-[#DDD4C0] hover:bg-[#DDD4C0] text-[#6A5A4A] hover:text-[#1C1410] text-xs font-bold uppercase tracking-wide transition-all"
+                className="shrink-0 flex items-center gap-1.5 h-9 px-3 rounded-xl bg-[#F3EEE1] border border-[#DDD4C0] hover:bg-[#E2D9C5] text-[#6A5A4A] hover:text-[#1C1410] text-[11px] font-bold uppercase tracking-wide transition-[background-color,color,transform] duration-150 active:scale-[0.96] focus:outline-none"
               >
                 <ChevronLeft size={14} className="rtl:rotate-180" /> {t('create_back')}
               </button>
-              <h1 className="text-4xl font-black uppercase tracking-wide mb-2" style={{ color: '#1B3828', letterSpacing: '0.06em' }}>{t('create_new_committee').toUpperCase()}</h1>
+              <h1 className="flex-1 text-center text-[20px] md:text-4xl font-black uppercase" style={{ color: '#1B3828', letterSpacing: '0.06em', textWrap: 'balance' }}>{t('create_new_committee').toUpperCase()}</h1>
+              {/* Optical counterweight for the Back button; desktop only, where the
+                  title has room to be truly centred. */}
+              <div aria-hidden className="hidden md:block shrink-0" style={{ width: '92px' }} />
             </div>
 
-            <div className="grid grid-cols-3 gap-4 mb-3 shrink-0 mt-2">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: '#1B3828' }}>{t('create_committee_name')}</label>
-                <CommitteeNameInput value={committeeName} onChange={(v) => { setCommitteeName(v); setIsUNSC(false); }} onPresetSelect={handleCommitteePreset} />
-              </div>
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: '#1B3828' }}>
-                  {t('create_chair_name')} <span className="font-normal" style={{ color: '#9A8A78' }}>{t('create_optional')}</span>
-                </label>
-                <input type="text" value={chairNames[0]} onChange={(e) => setChairNames([e.target.value])}
-                  placeholder={language === 'ar' ? 'اسمك' : language === 'fr' ? 'Votre nom' : language === 'es' ? 'Tu nombre' : 'Your name'}
-                  className="w-full bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: '#1B3828' }}>{t('create_topic')}</label>
-                <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
-                  placeholder={language === 'ar' ? 'مثال: الحق في التعليم' : language === 'fr' ? "ex. Le droit à l'éducation" : language === 'es' ? 'ej. El derecho a la educación' : 'e.g. The right to education'}
-                  className="w-full bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm" />
-              </div>
-            </div>
-
-            {isUNSC && (
-              <div className="mb-3 px-4 py-3 rounded-xl text-xs shrink-0 flex items-center gap-3" style={{ backgroundColor: '#1B3828', border: '1px solid #3D7A52', color: 'rgba(238,217,138,0.85)' }}>
-                <span className="font-black shrink-0 px-2 py-0.5 rounded-md text-[10px]" style={{ fontFamily: "'DM Mono', monospace", backgroundColor: 'rgba(238,217,138,0.15)', color: '#EED98A', border: '1px solid rgba(238,217,138,0.25)' }}>UNSC</span>
-                <span>
-                  {language === 'ar'
-                    ? <><strong style={{ color: '#EED98A' }}>حق النقض مُفعَّل:</strong> ستتمتع دول الخمس الكبار (الصين، فرنسا، روسيا، المملكة المتحدة، الولايات المتحدة) بحق النقض في التصويت. خصّص ذلك من <strong style={{ color: '#EED98A' }}>الإعدادات</strong> بعد بدء الجلسة.</>
-                    : language === 'fr'
-                    ? <><strong style={{ color: '#EED98A' }}>Droit de veto activé :</strong> les nations du P5 (Chine, France, Russie, RU, États-Unis) auront un droit de veto. Personnalisez dans <strong style={{ color: '#EED98A' }}>Paramètres</strong> après le début de la session.</>
-                    : language === 'es'
-                    ? <><strong style={{ color: '#EED98A' }}>Poder de Veto activado:</strong> Grupo P5 (China, Francia, Rusia, RU, EE.UU.) tendrán veto. Personaliza en <strong style={{ color: '#EED98A' }}>Configuraciones</strong> al iniciar la sesión.</>
-                    : <><strong style={{ color: '#EED98A' }}>Veto power active:</strong> P5 nations (China, France, Russia, UK, USA) will have veto voting. Customize in <strong style={{ color: '#EED98A' }}>Settings</strong> after session starts.</>
-                  }
-                </span>
-              </div>
-            )}
-
-            <div className="flex-1 grid grid-cols-2 gap-6 min-h-0">
-              <div className="flex flex-col min-h-0">
-                {/* Search & Add — label row matches right column label row exactly */}
-                <div className="flex items-center justify-between mb-2 shrink-0">
-                  <label className="text-xs font-bold uppercase tracking-wide" style={{ color: '#1B3828' }}>{t('create_search_add')}</label>
+            {/* Two columns: everything you fill in on the left, the roster on the
+                right at full height. On a phone they stack and this region scrolls. */}
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6 min-h-0 overflow-auto md:overflow-visible">
+              {/* min-h-0 only from md: on a phone the grid scrolls, and a shrinkable
+                  column let the stacked roster slide up over the add field. */}
+              <div className="flex flex-col md:min-h-0 gap-3">
+                <div className="shrink-0">
+                  <label className={LABEL_CLS}>{t('create_committee_name')}</label>
+                  <CommitteeNameInput value={committeeName} onChange={setCommitteeName} onPresetSelect={handleCommitteePreset} />
                 </div>
-                <div className="shrink-0 mb-3">
-                  <div className="relative">
-                    <div className="flex items-center bg-[#FAF8F3] border border-[#DDD4C0] focus-within:border-[#1B3828] focus-within:ring-2 focus-within:ring-[#1B3828]/10 rounded-xl overflow-visible transition-all">
-                      <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            if (available[0]) { addDelegate(available[0].name); setSearch(''); }
-                            else if (search.trim() && !delegates.includes(search.trim())) { addDelegate(search.trim()); setSearch(''); }
-                          }
-                          if (e.key === 'Escape') setSearch('');
-                        }}
-                        placeholder={t('create_search_placeholder')}
-                        className="flex-1 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
-                      {search && (available[0] || search.trim()) && (
-                        <span className="text-xs text-[#9A8A78] px-3 shrink-0">↵ {available[0]?.name ?? search.trim()}</span>
-                      )}
-                    </div>
-                    {search && (available.length > 0 || search.trim()) && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-[#FAF8F3] border-2 border-[#C8BAA8] rounded-xl overflow-hidden z-20 shadow-xl">
-                        {available.slice(0, 5).map((c, i) => (
-                          <button key={c.code} onMouseDown={(e) => { e.preventDefault(); addDelegate(c.name); setSearch(''); }}
-                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-start transition-colors ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
-                            <img src={getFlagUrl(c.code)} alt={c.code} className="w-6 h-6 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                            <span className="text-sm flex-1">{getCountryDisplayName(c.name, language)}</span>
-                            {i === 0 && <span className="ms-auto text-xs text-[#9A8A78]">Enter ↵</span>}
-                          </button>
-                        ))}
-                        {/* "Add as custom" only when the text is not already an exact country — rank 0 covers accents, aliases and the localised name, so typing "turkiye" or "Turquía" no longer offers to add a custom delegation beside the real Türkiye. */}
-                        {search.trim() && !delegates.includes(search.trim()) && !available.some((c) => countryMatchRank(c.name, search, language) === 0) && (
-                          <button onMouseDown={(e) => { e.preventDefault(); addDelegate(search.trim()); setSearch(''); }}
-                            className="w-full flex items-center gap-3 px-4 py-2.5 text-start transition-colors text-[#1C1410] hover:bg-[#DDD4C0] border-t border-[#DDD4C0]">
-                            <Globe size={18} strokeWidth={1.5} className="text-[#9A8A78] shrink-0" />
-                            <span className="text-sm flex-1">{search.trim()}</span>
-                            <span className="text-[10px] text-[#1B3828] shrink-0 font-semibold">{t('create_custom_add')}</span>
-                          </button>
-                        )}
-                      </div>
-                    )}
+
+                <div className="grid grid-cols-2 gap-3 shrink-0">
+                  <div>
+                    <label className={LABEL_CLS}>
+                      {t('create_chair_name')} <span className="font-normal" style={{ color: '#9A8A78' }}>{t('create_optional')}</span>
+                    </label>
+                    <input type="text" value={chairNames[0]} onChange={(e) => setChairNames([e.target.value])}
+                      placeholder={language === 'ar' ? 'اسمك' : language === 'fr' ? 'Votre nom' : language === 'es' ? 'Tu nombre' : 'Your name'}
+                      className={FIELD_CLS} />
+                  </div>
+                  <div>
+                    <label className={LABEL_CLS}>{t('create_topic')}</label>
+                    <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
+                      placeholder={language === 'ar' ? 'مثال: الحق في التعليم' : language === 'fr' ? "ex. Le droit à l'éducation" : language === 'es' ? 'ej. El derecho a la educación' : 'e.g. The right to education'}
+                      className={FIELD_CLS} />
                   </div>
                 </div>
 
                 {/* Quick Bundles */}
-                <div className="shrink-0 mb-3">
-                  <label className="block text-xs font-bold uppercase tracking-wide mb-2" style={{ color: '#1B3828' }}>{t('create_quick_bundles')}</label>
-                  <div className="flex flex-wrap gap-2">
+                <div className="shrink-0">
+                  <label className={LABEL_CLS}>{t('create_quick_bundles')}</label>
+                  <div className="flex flex-wrap gap-1.5">
                     {Object.entries(BUNDLES).map(([key, bundle]) => (
                       <button key={key} onClick={() => addBundle(key)}
-                        className="group flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all gv-lift"
+                        className="group flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-[11px] font-bold uppercase tracking-wide transition-[background-color,color,border-color,transform,box-shadow] duration-150 active:scale-[0.96] focus:outline-none gv-lift"
                         style={{ backgroundColor: '#FAF8F3', color: '#1B3828', border: '1px solid #DDD4C0' }}
                         onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; el.style.borderColor = '#1B3828'; }}
                         onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#FAF8F3'; el.style.color = '#1B3828'; el.style.borderColor = '#DDD4C0'; }}>
@@ -738,46 +705,97 @@ function CreatePageInner() {
                   </div>
                 </div>
 
-                {/* Paste Country List — flex-1 to fill remaining space, matching delegates box */}
-                <div className="flex-1 flex flex-col min-h-0">
-                  <label className="block text-xs font-bold uppercase tracking-wide mb-2" style={{ color: '#1B3828' }}>{t('create_paste_list')}</label>
+                {/* Paste a list — takes whatever height is left over */}
+                <div className="flex-1 flex flex-col min-h-[132px] md:min-h-0">
+                  <label className={LABEL_CLS}>{t('create_paste_list')}</label>
                   <textarea value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
                     placeholder={t('create_paste_placeholder')}
-                    className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm resize-none min-h-0" />
-                </div>
-
-                {/* Auto-match button — same row as Start Session, outside the box */}
-                <div className="flex items-center gap-3 mt-3 shrink-0" style={{ height: '56px' }}>
+                    className="flex-1 min-h-[72px] bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-[border-color,box-shadow] duration-150 text-sm resize-none leading-relaxed" />
+                  {/* Secondary to Start Session: the page has one primary button. */}
                   <button onClick={handlePaste} disabled={!pasteText.trim()}
-                    className="px-6 py-4 rounded-xl font-black text-sm uppercase tracking-widest transition-all shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
-                    style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
-                    onMouseEnter={(e) => { if (!pasteText.trim()) return; (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; (e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 3px rgba(238,217,138,0.2)'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}>
+                    className="mt-2 w-full h-10 rounded-xl font-black text-[11px] uppercase tracking-[0.12em] transition-[background-color,color,border-color,transform] duration-150 active:scale-[0.98] shrink-0 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none"
+                    style={{ backgroundColor: '#F3EEE1', color: '#1B3828', border: '1px solid #C8BAA8' }}
+                    onMouseEnter={(e) => { if (!pasteText.trim()) return; const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; el.style.borderColor = '#1B3828'; }}
+                    onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#F3EEE1'; el.style.color = '#1B3828'; el.style.borderColor = '#C8BAA8'; }}>
                     {t('create_auto_match')}
                   </button>
-                  {pasteError && <p className="text-xs" style={{ color: '#B6871F' }}>{pasteError}</p>}
+                  {pasteError && <p className="mt-1.5 text-[11px] shrink-0" style={{ color: '#B6871F' }}>{pasteError}</p>}
+                </div>
+
+                {/* ADD A COUNTRY — the plain way in, at the bottom of the column where
+                    the eye lands last. The typeahead opens UPWARDS (bottom-full) so a
+                    field this low on the page is never suggesting off-screen. */}
+                <div className="shrink-0">
+                  <label className={LABEL_CLS} htmlFor="create-add-country">{t('create_add_country')}</label>
+                  <div className="relative">
+                    <div className="flex items-center gap-2 bg-white/70 border border-[#C8BAA8] rounded-xl ps-3 pe-1.5 py-1.5 focus-within:border-[#1B3828] focus-within:ring-2 focus-within:ring-[#1B3828]/10 transition-[border-color,box-shadow] duration-150">
+                      <Search size={15} strokeWidth={2} className="shrink-0" style={{ color: '#9A8A78' }} />
+                      <input id="create-add-country" type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') { e.preventDefault(); addTyped(); }
+                          if (e.key === 'Escape') setSearch('');
+                        }}
+                        placeholder={t('create_add_country_placeholder')}
+                        className="flex-1 min-w-0 bg-transparent py-1.5 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
+                      <button onClick={addTyped} disabled={!typedIsAddable}
+                        className="shrink-0 flex items-center gap-1 h-9 px-3 rounded-md font-black text-[11px] uppercase tracking-[0.08em] transition-[background-color,transform,opacity] duration-150 active:scale-[0.96] disabled:opacity-35 disabled:cursor-not-allowed focus:outline-none"
+                        style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
+                        onMouseEnter={(e) => { if (!typedIsAddable) return; (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
+                        <Plus size={14} strokeWidth={3} /> {t('create_add_btn')}
+                      </button>
+                    </div>
+                    {search && (available.length > 0 || search.trim()) && (
+                      <div className="absolute bottom-full left-0 right-0 mb-2 rounded-xl overflow-hidden z-30"
+                        style={{ backgroundColor: '#FAF8F3', border: '1px solid #C8BAA8', boxShadow: '0 12px 32px rgba(27,56,40,0.18), 0 2px 8px rgba(27,56,40,0.08)' }}>
+                        {available.slice(0, 5).map((c, i) => (
+                          <button key={c.code} onMouseDown={(e) => { e.preventDefault(); addDelegate(c.name); setSearch(''); }}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-start transition-colors border-b border-[#DDD4C0]/50 last:border-0 focus:outline-none ${i === 0 ? 'text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#EDE7D8]'}`}
+                            style={i === 0 ? { backgroundColor: 'rgba(27,56,40,0.07)' } : {}}>
+                            <CircleFlag code={c.code} size={22} decorative />
+                            <span className="text-sm flex-1 truncate">{getCountryDisplayName(c.name, language)}</span>
+                            {i === 0 && <span className="shrink-0 text-[10px] font-bold" style={{ color: '#9A8A78' }}>↵</span>}
+                          </button>
+                        ))}
+                        {/* "Add as custom" only when the text is not already an exact country — rank 0 covers accents, aliases and the localised name, so typing "turkiye" or "Turquía" no longer offers to add a custom delegation beside the real Türkiye. */}
+                        {search.trim() && !delegates.includes(search.trim()) && !available.some((c) => countryMatchRank(c.name, search, language) === 0) && (
+                          <button onMouseDown={(e) => { e.preventDefault(); addDelegate(search.trim()); setSearch(''); }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-start transition-colors text-[#1C1410] hover:bg-[#EDE7D8] border-t border-[#DDD4C0] focus:outline-none">
+                            <Globe size={18} strokeWidth={1.5} className="text-[#9A8A78] shrink-0" />
+                            <span className="text-sm flex-1 truncate">{search.trim()}</span>
+                            <span className="text-[10px] shrink-0 font-bold" style={{ color: '#1B3828' }}>{t('create_custom_add')}</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div className="flex flex-col min-h-0">
-                <div className="flex items-center justify-between mb-2 shrink-0">
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs font-bold uppercase tracking-wide" style={{ color: '#1B3828' }}>{t('create_selected_delegates')}</label>
-                    <span className="text-[10px] font-bold text-[#1B3828] bg-[#EED98A]/30 px-2 py-0.5 rounded-full" style={{ fontFamily: "'DM Mono', monospace" }}>{delegates.length}</span>
+              {/* The roster owns the whole right side, top to bottom, and lays out in
+                  two columns from md up, so a 30-seat committee is one glance. */}
+              <div className="flex flex-col md:min-h-0">
+                <div className="flex items-center justify-between gap-3 mb-1.5 shrink-0" style={{ minHeight: '22px' }}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <label className={`${LABEL_CLS} mb-0 truncate`}>{t('create_selected_delegates')}</label>
+                    <span className="shrink-0 text-[10px] font-bold text-[#1B3828] bg-[#EED98A]/40 px-2 py-0.5 rounded-full tabular-nums" style={{ fontFamily: "'DM Mono', monospace" }}>{delegates.length}</span>
                   </div>
                   {delegates.length > 0 && (
-                    <button onClick={() => setDelegates([])} className="text-[10px] font-bold text-[#9A8A78] hover:text-[#8B2020] uppercase tracking-wide transition-colors">{t('create_clear_all')}</button>
+                    <button onClick={() => setDelegates([])} className="shrink-0 text-[10px] font-bold text-[#9A8A78] hover:text-[#8B2020] uppercase tracking-wide transition-colors focus:outline-none">{t('create_clear_all')}</button>
                   )}
                 </div>
 
-                <div className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden mb-3 min-h-0">
+                <div className="flex-1 rounded-2xl overflow-hidden mb-3 h-[360px] md:h-auto md:min-h-0" style={PANEL_STYLE}>
                   {delegates.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full gap-2 px-8">
-                      <p className="text-base font-black uppercase tracking-wide text-center" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{t('create_no_delegates').toUpperCase()}</p>
-                      <p className="text-xs text-center leading-relaxed" style={{ color: '#9A8A78', maxWidth: '200px' }}>{t('create_no_delegates_hint')}</p>
+                    <div className="flex flex-col items-center justify-center h-full gap-2.5 px-8">
+                      <span className="flex items-center justify-center rounded-full" style={{ width: 46, height: 46, backgroundColor: 'rgba(27,56,40,0.06)' }}>
+                        <Globe size={22} strokeWidth={1.5} style={{ color: '#9A8A78' }} />
+                      </span>
+                      <p className="text-sm font-black uppercase tracking-[0.08em] text-center" style={{ color: '#1B3828' }}>{t('create_no_delegates').toUpperCase()}</p>
+                      <p className="text-xs text-center leading-relaxed" style={{ color: '#9A8A78', maxWidth: '230px', textWrap: 'pretty' }}>{t('create_no_delegates_hint')}</p>
                     </div>
                   ) : (
-                    <div className="overflow-y-auto h-full">
+                    <div className="overflow-y-auto h-full p-2 grid grid-cols-1 md:grid-cols-2 gap-x-2 gap-y-0.5 content-start">
                       {[...delegates].sort((a, b) => compareCountryNames(a, b, language)).map((name) => {
                         const found = getCountryByName(name);
                         const isCustom = !found;
@@ -793,12 +811,15 @@ function CreatePageInner() {
                           }
                           setEditingName(null);
                         };
+                        const isObserver = observers.has(name);
                         return (
-                          <div key={name} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#DDD4C0]/50 last:border-0 transition-colors group" onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = ''; }}>
-                            {found
-                              ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                              : <Globe size={16} strokeWidth={1.5} className="text-[#9A8A78] shrink-0" />
-                            }
+                          <div key={name} className="flex items-center gap-2 ps-2 pe-1 py-1 rounded-lg transition-colors group" style={{ minHeight: '36px' }} onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.055)'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = ''; }}>
+                            <CircleFlag
+                              country={name}
+                              label={getCountryDisplayName(name, language)}
+                              size={22}
+                              ring={isObserver ? 'rgba(182,135,31,0.6)' : true}
+                            />
                             {isEditing ? (
                               <input
                                 autoFocus
@@ -813,16 +834,16 @@ function CreatePageInner() {
                                 onBlur={() => commitRename(editDraft)}
                               />
                             ) : (
-                              <span className="text-sm flex-1 truncate font-medium" style={{ color: '#1C1410' }}>{getCountryDisplayName(name, language)}</span>
+                              <span className="text-[13px] flex-1 truncate font-medium" style={{ color: '#1C1410' }} title={getCountryDisplayName(name, language)}>{getCountryDisplayName(name, language)}</span>
                             )}
-                            {!isEditing && observers.has(name) && (
+                            {!isEditing && isObserver && (
                               <span className="text-[9px] shrink-0 font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md" style={{ backgroundColor: 'rgba(182,135,31,0.15)', color: '#B6871F', border: '1px solid rgba(182,135,31,0.35)' }}>{t('rollcall_observer')}</span>
                             )}
                             {!isEditing && (
                               <button onClick={() => setObservers((prev) => { const n = new Set(prev); n.has(name) ? n.delete(name) : n.add(name); return n; })}
-                                title={t('create_observer_toggle')} aria-pressed={observers.has(name)}
-                                className="shrink-0 flex items-center justify-center transition-transform active:scale-90 focus:outline-none"
-                                style={{ width: 32, height: 32, color: observers.has(name) ? '#B6871F' : '#9A8A78' }}>
+                                title={t('create_observer_toggle')} aria-label={t('create_observer_toggle')} aria-pressed={isObserver}
+                                className="shrink-0 flex items-center justify-center rounded-md transition-[color,background-color,transform] duration-150 active:scale-[0.9] hover:bg-[#1B3828]/[0.07] focus:outline-none"
+                                style={{ width: 28, height: 28, color: isObserver ? '#B6871F' : '#9A8A78' }}>
                                 <Megaphone size={15} strokeWidth={1.75} />
                               </button>
                             )}
@@ -831,15 +852,15 @@ function CreatePageInner() {
                                 no alternative route at all (remove at least has Clear All). */}
                             {!isEditing && isCustom && (
                               <button onClick={() => { setEditingName(name); setEditDraft(name); }}
-                                className="shrink-0 flex items-center justify-center text-[#9A8A78] hover:text-[#1B3828] transition-transform active:scale-90 focus:outline-none"
-                                style={{ width: 32, height: 32 }}>
+                                className="shrink-0 flex items-center justify-center rounded-md text-[#9A8A78] hover:text-[#1B3828] hover:bg-[#1B3828]/[0.07] transition-[color,background-color,transform] duration-150 active:scale-[0.9] focus:outline-none"
+                                style={{ width: 28, height: 28 }}>
                                 <PenLine size={15} strokeWidth={1.75} />
                               </button>
                             )}
                             {!isEditing && (
                               <button onClick={() => { setDelegates((p) => p.filter((d) => d !== name)); setObservers((prev) => { const n = new Set(prev); n.delete(name); return n; }); }}
-                                className="shrink-0 flex items-center justify-center text-[#9A8A78] hover:text-red-500 transition-transform active:scale-90 focus:outline-none"
-                                style={{ width: 32, height: 32 }}>
+                                className="shrink-0 flex items-center justify-center rounded-md text-[#9A8A78] hover:text-[#8B2020] hover:bg-[#8B2020]/[0.08] transition-[color,background-color,transform] duration-150 active:scale-[0.9] focus:outline-none"
+                                style={{ width: 28, height: 28 }}>
                                 <X size={15} strokeWidth={2} />
                               </button>
                             )}
@@ -853,7 +874,7 @@ function CreatePageInner() {
                 <button
                   onClick={handleCreate}
                   disabled={!canProceed || creating}
-                  className="w-full py-4 rounded-xl font-black text-sm uppercase tracking-widest transition-all shrink-0"
+                  className="w-full h-[54px] rounded-xl font-black text-sm uppercase tracking-widest transition-[background-color,box-shadow,transform] duration-150 enabled:active:scale-[0.99] shrink-0 focus:outline-none"
                   style={{
                     backgroundColor: canProceed && !creating ? '#1B3828' : '#DDD4C0',
                     color: canProceed && !creating ? '#EED98A' : '#9A8A78',
@@ -898,7 +919,7 @@ function CreatePageInner() {
               return (
                 <div key={idx} className="flex items-center gap-3 px-5 py-2.5 border-b border-[#DDD4C0]/50 last:border-0">
                   {found
-                    ? <img src={getFlagUrl(found.code)} alt={found.code} width={20} height={20} className="w-5 h-5 object-contain shrink-0" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }} />
+                    ? <CircleFlag code={found.code} size={22} decorative />
                     : <Globe size={16} strokeWidth={1.5} className="text-[#9A8A78] shrink-0" />}
                   {found ? (
                     <span className="text-sm flex-1 truncate font-medium" style={{ color: '#1C1410' }}>{getCountryDisplayName(r.name, language)}</span>

@@ -17,8 +17,8 @@ function BlendRing({ blend, t }: { blend: number; t: TabProps['t'] }) {
   const quality = 60;
   const headline = Math.round(objective * (1 - q) + quality * q);
   return (
-    <div className="flex flex-wrap items-center gap-6" style={{ padding: '14px 0 4px' }}>
-      <svg width="116" height="116" viewBox="0 0 116 116" role="img" aria-label={t('stg_blend_aria', { objective: 100 - blend, quality: blend })}>
+    <div className="flex flex-wrap items-center gap-5" style={{ padding: '10px 0 2px' }}>
+      <svg width="96" height="96" viewBox="0 0 116 116" role="img" aria-label={t('stg_blend_aria', { objective: 100 - blend, quality: blend })}>
         <circle cx="58" cy="58" r={R} fill="none" stroke="rgba(27,56,40,0.08)" strokeWidth="14" />
         <circle cx="58" cy="58" r={R} fill="none" stroke={K.forest} strokeWidth="14" strokeDasharray={`${C * (1 - q)} ${C}`} transform="rotate(-90 58 58)"
           style={{ transitionProperty: 'stroke-dasharray', transitionDuration: '220ms' }} />
@@ -57,9 +57,9 @@ function BlendRing({ blend, t }: { blend: number; t: TabProps['t'] }) {
 
 function AddButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="stg-focus stg-press inline-flex items-center gap-2"
-      style={{ height: 38, padding: '0 14px', borderRadius: 12, border: 'none', background: 'transparent', color: K.forest, fontSize: 13, fontWeight: 800, cursor: 'pointer', boxShadow: 'inset 0 0 0 1.5px rgba(27,56,40,0.22)' }}>
-      <Plus size={15} strokeWidth={2.6} aria-hidden />{label.replace(/^\+\s*/, '')}
+    <button type="button" onClick={onClick} className="stg-focus stg-press inline-flex items-center gap-1.5"
+      style={{ height: 34, padding: '0 12px', borderRadius: 10, border: 'none', background: 'transparent', color: K.forest, fontSize: 12.5, fontWeight: 800, cursor: 'pointer', boxShadow: 'inset 0 0 0 1.5px rgba(27,56,40,0.22)' }}>
+      <Plus size={14} strokeWidth={2.6} aria-hidden />{label.replace(/^\+\s*/, '')}
     </button>
   );
 }
@@ -74,39 +74,41 @@ export default function PointsTab({ scoring, updScoring, t, language, isViewOnly
 
   return (
     <div style={dim} aria-disabled={isViewOnly || undefined}>
+      {/* Two columns: the nine built-in sources are a long list and a chair needs to see the
+          shape of the ledger, not scroll it. Custom sources a committee already stores still
+          render here (name, points, enable, remove); there is no way to create a new one, and
+          nothing stored was migrated - CREATING one only ever produced a source no session
+          surface could award, so the ledger row could never be written. */}
       <Section icon={Coins} title={t('settings_points_sources_heading')} hint={t('settings_points_sources_desc')} lead>
-        <ul style={{ listStyle: 'none', margin: 0, padding: '8px 0' }}>
-          {scoring.sources.map((src, i) => {
+        <ul className="grid" style={{ listStyle: 'none', margin: 0, padding: '6px 0', gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))', columnGap: 24 }}>
+          {scoring.sources.map((src) => {
             const label = src.builtin ? sourceName(src, language) : src.name;
             return (
-              <li key={src.id} className="flex flex-wrap items-center gap-3" style={{ padding: '10px 0', borderTop: i === 0 ? 'none' : `1px solid ${K.hair}`, opacity: src.enabled ? 1 : 0.55 }}>
-                <span className="min-w-0" style={{ flex: '1 1 180px' }}>
+              <li key={src.id} className="flex flex-wrap items-center gap-2.5" style={{ padding: '7px 0', borderTop: `1px solid ${K.hair}`, opacity: src.enabled ? 1 : 0.55 }}>
+                <span className="min-w-0" style={{ flex: '1 1 140px' }}>
                   {src.builtin ? (
-                    <span className="block truncate" style={{ fontSize: 14, fontWeight: 700, color: K.ink }}>{label}</span>
+                    <span className="block truncate" style={{ fontSize: 13.5, fontWeight: 700, color: K.ink }}>{label}</span>
                   ) : (
                     <input value={src.name} aria-label={t('stg_source_name')} onChange={(e) => setSource(src.id, { name: e.target.value })}
-                      className="stg-focus w-full" style={{ fontSize: 14, fontWeight: 700, color: K.ink, background: K.ivory, border: 'none', borderRadius: 8, padding: '5px 8px', boxShadow: K.inSm, fontFamily: K.font }} />
+                      className="stg-focus w-full" style={{ fontSize: 13.5, fontWeight: 700, color: K.ink, background: K.ivory, border: 'none', borderRadius: 8, padding: '4px 8px', boxShadow: K.inSm, fontFamily: K.font }} />
                   )}
                   {/* Relative weight bar: this source against the heaviest enabled one. */}
-                  <span aria-hidden className="block relative" style={{ marginTop: 6, height: 5, borderRadius: 5, background: 'rgba(27,56,40,0.07)', maxWidth: 260 }}>
-                    <span className="absolute" style={{ insetBlock: 0, insetInlineStart: 0, borderRadius: 5, width: `${src.enabled ? Math.min(100, (Math.abs(src.value) / maxValue) * 100) : 0}%`, background: src.value < 0 ? K.danger : K.deepGold, transitionProperty: 'width', transitionDuration: '200ms' }} />
+                  <span aria-hidden className="block relative" style={{ marginTop: 4, height: 4, borderRadius: 4, background: 'rgba(27,56,40,0.07)', maxWidth: 200 }}>
+                    <span className="absolute" style={{ insetBlock: 0, insetInlineStart: 0, borderRadius: 4, width: `${src.enabled ? Math.min(100, (Math.abs(src.value) / maxValue) * 100) : 0}%`, background: src.value < 0 ? K.danger : K.deepGold, transitionProperty: 'width', transitionDuration: '200ms' }} />
                   </span>
                 </span>
                 <TallyStepper label={t('stg_points_for', { name: label })} suffix={t('settings_points_pts_suffix')} value={src.value} min={-99} max={999} onChange={(v) => setSource(src.id, { value: v })} />
                 <GavelSwitch size="sm" label={t('stg_source_enabled', { name: label })} checked={src.enabled} onChange={(v) => setSource(src.id, { enabled: v })} />
                 {!src.builtin ? (
                   <button type="button" aria-label={t('stg_remove_named', { name: label })} onClick={() => updScoring({ ...scoring, sources: scoring.sources.filter((x) => x.id !== src.id) })}
-                    className="stg-focus stg-press inline-flex items-center justify-center" style={{ width: 32, height: 32, borderRadius: 10, border: 'none', background: 'transparent', color: K.muted, cursor: 'pointer' }}>
-                    <Trash2 size={15} strokeWidth={2.2} />
+                    className="stg-focus stg-press inline-flex items-center justify-center" style={{ width: 28, height: 28, borderRadius: 9, border: 'none', background: 'transparent', color: K.muted, cursor: 'pointer' }}>
+                    <Trash2 size={14} strokeWidth={2.2} />
                   </button>
-                ) : <span aria-hidden style={{ width: 32 }} />}
+                ) : null}
               </li>
             );
           })}
         </ul>
-        <div style={{ padding: '4px 0 14px' }}>
-          <AddButton label={t('settings_points_add_source')} onClick={() => updScoring({ ...scoring, sources: [...scoring.sources, { id: `custom-${Date.now()}`, name: 'Custom source', value: 5, enabled: true, builtin: false }] })} />
-        </div>
       </Section>
 
       <Section icon={Star} title={t('settings_points_factors_heading')} delay={40}>
@@ -114,8 +116,8 @@ export default function PointsTab({ scoring, updScoring, t, language, isViewOnly
           control={<GavelSwitch icon={Star} labelledBy="stg-rate" checked={scoring.factorRatingsEnabled} onChange={(v) => updScoring({ ...scoring, factorRatingsEnabled: v })} />} />
         {scoring.factorRatingsEnabled && (
           <>
-            <div style={{ padding: '4px 0 12px' }}>
-              <p className="stg-body" style={{ margin: '0 0 10px', fontSize: 12.5, color: K.inkSoft }}>{t('settings_points_factors_desc', { max: scoring.factorScaleMax })}</p>
+            <div style={{ padding: '2px 0 10px', borderTop: `1px solid ${K.hair}` }}>
+              <p className="stg-body" style={{ margin: '8px 0 8px', fontSize: 12, color: K.inkSoft }}>{t('settings_points_factors_desc', { max: scoring.factorScaleMax })}</p>
               <div className="flex flex-wrap gap-2">
                 {scoring.factors.map((f) => (
                   <span key={f.id} className="inline-flex items-center gap-2" style={{ padding: '4px 4px 4px 12px', borderRadius: 999, background: f.enabled ? K.surface : 'transparent', boxShadow: f.enabled ? K.outSm : 'inset 0 0 0 1px rgba(28,20,16,0.12)' }}>
@@ -142,7 +144,7 @@ export default function PointsTab({ scoring, updScoring, t, language, isViewOnly
 
       <Section icon={Blend} title={t('settings_points_blend_heading')} hint={t('stg_blend_hint')} lead delay={80}>
         <BlendRing blend={scoring.scoreBlend} t={t} />
-        <div style={{ padding: '4px 0 16px' }}>
+        <div style={{ padding: '0 0 12px' }}>
           <NotchDial label={t('settings_points_blend_heading')} value={scoring.scoreBlend} min={0} max={100} notches={41} tone="split"
             onChange={(v) => updScoring({ ...scoring, scoreBlend: v })}
             valueText={(v) => `${100 - v} / ${v}`} startLabel={t('settings_points_blend_objective')} endLabel={t('settings_points_blend_quality')} />

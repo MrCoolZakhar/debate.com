@@ -5,11 +5,11 @@ import FitToScreen from '@/components/FitToScreen';
 import GavelChip from '@/components/GavelChip';
 import CommitteeIdentityBadge, { emblemMonogram } from '@/components/CommitteeIdentityBadge';
 import { TopBarTab, TopBarIconButton } from '@/components/ChairTopBar';
-import SpeakerControls, { FloorProgress, SpeakerClock } from '@/components/SpeakerControls';
+import SpeakerControls, { FloorProgress, SpeakerClock, POPOVER_TONES } from '@/components/SpeakerControls';
 import DraggablePopover from '@/components/DraggablePopover';
-import SpeakerStrip from '@/components/SpeakerStrip';
+import SpeakerStrip, { type StripHeader } from '@/components/SpeakerStrip';
 import SessionCodePresenter from '@/components/SessionCodePresenter';
-import { Maximize2, MessageCircle, Settings, Trophy } from 'lucide-react';
+import { ClockPlus, ListOrdered, Maximize2, MessageCircle, MessageSquareReply, Plus, Settings, Trophy, Users } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { CaucusState, Committee, Delegate, DelegateStatus } from '@/lib/types';
@@ -296,6 +296,12 @@ function resolveQuery(raw: string): string {
 // them Present in the same action, exactly like clicking their row in the sidebar. Without it
 // (below quorum, where the add itself is a no-op) absent delegates stay out of the list, so
 // nobody is ever marked Present without being added.
+//
+// Redesign (owner, 16 Sep 2026): "the add to speakers list thing doesn't really get used."
+// The field now leads with a gold + disc so it reads as the one action on the bar, and it
+// carries QUICK-ADD CHIPS for delegations that are present and not queued yet: one click
+// each, no typing, which is what a dais actually does between speeches. The typeahead, the
+// Enter shortcut and the recognise-absent path are unchanged behind it.
 function AddSpeakerInput({ committee, onAdd, onRecognise }: { committee: Committee; onAdd: (id: string) => void; onRecognise?: (id: string) => void }) {
   const { language } = useLanguage();
   const t = useT();
@@ -319,14 +325,44 @@ function AddSpeakerInput({ committee, onAdd, onRecognise }: { committee: Committ
     if (d.status === 'absent') { if (!onRecognise) return; onRecognise(d.id); }   // status before the add
     onAdd(d.id); setQuery('');
   };
+  // Present, not queued, not on the floor — in roster order so the chips never shuffle
+  // under the pointer between two speeches.
+  const quick = committee.delegates
+    .filter((d) => d.status !== 'absent' && !onList.has(d.id))
+    .slice(0, 5);
   return (
     <div className="relative" data-tutorial="speakers-input">
-      <div className="flex items-center bg-[#FAF8F3] border border-[#DDD4C0] focus-within:border-[#1B3828] rounded-xl transition-colors">
+      <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] focus-within:border-[#1B3828] rounded-xl transition-colors ps-2 pe-2">
+        <span
+          aria-hidden
+          className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center"
+          style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
+        >
+          <Plus size={19} strokeWidth={3} />
+        </span>
         <input ref={inputRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(topNotOnList); } if (e.key === 'Escape') setQuery(''); }}
           placeholder={t('gsl_add_to_list')} autoFocus
-          className="flex-1 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
-        {topNotOnList && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {getCountryDisplayName(topNotOnList.country, language)}</span>}
+          className="flex-1 min-w-[7rem] bg-transparent px-1 py-2.5 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
+        {topNotOnList && query && <span className="text-xs text-[#9A8A78] px-2 truncate max-w-[120px]">↵ {getCountryDisplayName(topNotOnList.country, language)}</span>}
+        {!query && quick.length > 0 && (
+          <div className="hidden md:flex items-center gap-1.5 shrink-0" aria-label={t('gsl_quick_add')}>
+            {quick.map((d) => (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => commit(d)}
+                title={`${t('gsl_quick_add')}: ${getCountryDisplayName(d.country, language)}`}
+                className="gv-lift flex items-center gap-1.5 shrink-0 max-w-[10rem] ps-1.5 pe-2.5 py-1 rounded-full bg-[#EDE7D8] hover:bg-[#1B3828] text-[#1C1410] hover:text-[#EED98A] text-xs font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.96]"
+              >
+                <span className="shrink-0 w-4 h-4 inline-flex items-center justify-center">
+                  <SeatFlag country={d.country} size={16} className="object-contain" fallback={<UnknownSeatIcon size={16} />} />
+                </span>
+                <span className="truncate">{abbrevCountry(getCountryDisplayName(d.country, language))}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       {query && matches.length > 0 && (
         <div data-tutorial="speakers-autocomplete" className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
@@ -435,7 +471,7 @@ function RtrCountryInput({
 const FLOOR_FLAG_PX = 164;
 const FLOOR_FLAG_SHADOW = '0 0 0 4px #F0EBDD, 0 2px 6px rgba(27,56,40,0.12), 0 12px 28px rgba(27,56,40,0.20)';
 
-function DraggableSpeakersQueue({ list, onReorder, onRemove, onRemoveCurrent, lastSpeakerDelegateId, currentSpeakerDelegateId, isRoomOrderTdT }: {
+function DraggableSpeakersQueue({ list, onReorder, onRemove, onRemoveCurrent, lastSpeakerDelegateId, currentSpeakerDelegateId, onDeckDelegateId, header, isRoomOrderTdT }: {
   list: { delegateId: string; country: string }[];
   onReorder?: (newList: { delegateId: string; country: string }[]) => void;
   onRemove?: (delegateId: string) => void;
@@ -443,6 +479,8 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, onRemoveCurrent, la
   onRemoveCurrent?: () => void;
   lastSpeakerDelegateId?: string | null;
   currentSpeakerDelegateId?: string | null;
+  onDeckDelegateId?: string | null;
+  header?: StripHeader | null;
   isRoomOrderTdT?: boolean;
 }) {
   // Pointer-driven drag (mouse, pen, touch), drop bar, the X on the floor speaker:
@@ -456,6 +494,8 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, onRemoveCurrent, la
       onRemoveCurrent={onRemoveCurrent}
       lastSpeakerDelegateId={lastSpeakerDelegateId}
       currentSpeakerDelegateId={currentSpeakerDelegateId}
+      onDeckDelegateId={onDeckDelegateId}
+      header={header}
       isRoomOrderTdT={isRoomOrderTdT}
       formatName={(country) => abbrevCountry(getCountryDisplayName(country, language))}
     />
@@ -1122,6 +1162,18 @@ function ModeratedCaucusMain({
   // first delegate in the queue (handleNextCaucusSpeaker already does exactly that).
   const caucusHasSpeaker = !!committee.caucus?.currentSpeaker;
   const toggleRtr = () => setPopover('rightToReply', 'toggle');
+  // The mode marker above the flags (owner, 16 Sep 2026): which motion the room is in, with
+  // its topic beneath. It replaces the label that used to float on the floor's inline-start
+  // edge, where it read as a stray caption rather than the room's state.
+  const caucusPurpose = committee.caucus?.purpose
+    ? (committee.caucus.purpose.replace(/^Tour de Table\s*[\(\-]?\s*/i, '').replace(/^\(/, '').replace(/\)$/, '') || committee.caucus.purpose)
+    : null;
+  const caucusStripHeader: StripHeader = {
+    icon: <Users size={15} strokeWidth={2.6} aria-hidden />,
+    label: committee.caucus?.motionLabel ?? caucusTitle,
+    sublabel: caucusPurpose ?? committee.topic ?? null,
+    meta: spokenCountries.length > 0 ? t('caucus_spoke_count').replace('{n}', String(spokenCountries.length)) : null,
+  };
   const caucusControls = !sessionEnded && !isViewOnly ? (
     <SpeakerControls
       hasSpeaker={caucusHasSpeaker}
@@ -1145,34 +1197,18 @@ function ModeratedCaucusMain({
     <>
       {committee.caucus?.currentSpeaker ? (
         <>
-          {/* ZONE 1 — Queue locked at top */}
-          {queue.length > 0 && (
-            <div className="shrink-0">
-              <DraggableSpeakersQueue
-                list={queue}
-                onReorder={handleCaucusReorderQueue}
-                onRemove={handleCaucusRemoveFromQueue}
-                isRoomOrderTdT={isRoomOrderTdT}
-              />
-            </div>
-          )}
+          {/* ZONE 1 — mode marker + queue locked at top */}
+          <div className="shrink-0">
+            <DraggableSpeakersQueue
+              list={queue}
+              header={caucusStripHeader}
+              onReorder={handleCaucusReorderQueue}
+              onRemove={handleCaucusRemoveFromQueue}
+              isRoomOrderTdT={isRoomOrderTdT}
+            />
+          </div>
           {/* ZONE 2 — Flag + name + timer + progress: compresses as viewport shrinks */}
           <div className="relative flex-1 min-h-0 flex flex-col items-center justify-center px-4 py-2">
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-1.5 max-w-[160px] ps-4 pointer-events-none select-none">
-              <span className="text-[#1C1410] font-black text-lg leading-tight uppercase">
-                {committee.caucus?.motionLabel ?? caucusTitle}
-              </span>
-              {committee.caucus?.purpose && (
-                <span className="text-[#1C1410]/70 text-sm font-medium leading-snug">
-                  {committee.caucus.purpose.replace(/^Tour de Table\s*[\(\-]?\s*/i, '').replace(/^\(/, '').replace(/\)$/, '') || committee.caucus.purpose}
-                </span>
-              )}
-              {spokenCountries.length > 0 && (
-                <span className="text-sm font-medium leading-snug" style={{ color: '#1C1410' }}>
-                  {spokenCountries.length} delegate{spokenCountries.length !== 1 ? 's' : ''} spoke
-                </span>
-              )}
-            </div>
             {isRoomOrderTdT ? (
               <div className="relative w-36 h-36 rounded-full bg-[#DDD4C0] shrink-0 flex items-center justify-center">
                 <span className="text-6xl font-black" style={{ color: '#1B3828' }}>{(() => {
@@ -1215,29 +1251,19 @@ function ModeratedCaucusMain({
       ) : (
         /* No-speaker branch */
         <div className="relative flex-1 flex flex-col items-center justify-center px-4 py-3 overflow-hidden">
-          <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-1.5 max-w-[160px] ps-4 pointer-events-none select-none">
-            <span className="text-[#1C1410] font-black text-lg leading-tight uppercase">
-              {committee.caucus?.motionLabel ?? caucusTitle}
-            </span>
-            {committee.caucus?.purpose && (
-              <span className="text-[#1C1410]/70 text-sm font-medium leading-snug">
-                {committee.caucus.purpose.replace(/^Tour de Table\s*[\(\-]?\s*/i, '').replace(/^\(/, '').replace(/\)$/, '') || committee.caucus.purpose}
-              </span>
-            )}
+          <div className="shrink-0 w-full">
+            <DraggableSpeakersQueue
+              list={queue}
+              header={caucusStripHeader}
+              onReorder={handleCaucusReorderQueue}
+              onRemove={handleCaucusRemoveFromQueue}
+              isRoomOrderTdT={isRoomOrderTdT}
+            />
           </div>
+          {/* The shouty "No Current Speaker" heading is gone (owner, 16 Sep 2026); the marker
+              above already says where the room is, so this is just the next step to take. */}
           <div className="flex-1 flex flex-col items-center justify-center w-full text-center">
-            {queue.length > 0 && (
-              <DraggableSpeakersQueue
-                list={queue}
-                onReorder={handleCaucusReorderQueue}
-                onRemove={handleCaucusRemoveFromQueue}
-                isRoomOrderTdT={isRoomOrderTdT}
-              />
-            )}
-            <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>{t('gsl_no_current_speaker')}</h2>
-            {/* A Commenter cannot call a speaker, so neither the instruction nor the
-                (previously disabled-looking but still rendered) button belong on their screen. */}
-            {!isViewOnly && <p className="mb-4 text-center text-sm" style={{ color: '#6A5A4A' }}>{t('gsl_add_call_first')}</p>}
+            {!isViewOnly && <p className="text-center text-sm font-semibold" style={{ color: '#6A5A4A' }}>{t('gsl_add_call_first')}</p>}
           </div>
           {/* The speaker buttons stay in place with nobody on the floor: Next calls the
               first delegate in the queue, the rest say why they are waiting. */}
@@ -2849,14 +2875,20 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   };
   const canAddToCaucusQueue = useCallback((delegateId: string) => caucusRoomRef.current(delegateId), []);
 
-  const handleDelegateAdd = useCallback(async (country: string) => {
+  // A seat added from the + picker (RollCallPanel → AddSeatPicker) is created PRESENT, in
+  // roll call and mid-session alike: a chair adds a seat because that delegation is in the
+  // room right now, and having to add it and then answer roll for it was two steps for one
+  // fact. The observer flag rides along in the same INSERT, so a seat never flashes as a
+  // voting delegation before a second write makes it an observer.
+  const handleDelegateAdd = useCallback(async (country: string, options?: { observer?: boolean }) => {
     if (!committee) return;
+    const observer = options?.observer === true;
     const { addDelegate: addDelegateInDB } = await import('@/lib/committeeService');
-    const realId = await addDelegateInDB(committee.id, country, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    const realId = await addDelegateInDB(committee.id, country, committee.code, committee.dbChairJoinSuffix ?? undefined, 'present', observer);
     if (realId) {
       updateLocal(setCommittee, (c) => ({
         ...c,
-        delegates: [...c.delegates, { id: realId, country, status: 'absent' }],
+        delegates: [...c.delegates, { id: realId, country, status: 'present', isObserver: observer }],
       }));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3500,10 +3532,18 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const isPreSession = committee.phase === 'pre-session';
 
   // ── Quorum enforcement ──────────────────────────────────────────────────────
-  // Observers are excluded from the voting body — they don't count toward quorum.
+  // OBSERVERS COUNT HERE (16 Sep 2026). Quorum is the question "is the room full enough to
+  // do business", and an observer is in the room: they take the floor, they are on the
+  // speakers list, and a chair counting heads counts them. So the sidebar's quorum rings,
+  // the quorum pill and the `belowQuorum` gate all read the WHOLE roster, and they read the
+  // same numbers as each other by construction (one pair of counts, three readers).
+  // Observers stop counting at exactly one place: the final substantive vote on
+  // /voting/[code], whose denominators (`liveVotable`, `livePresentAndPv`, the veto roster)
+  // still exclude them, because that is where a vote is actually cast. Motion voting counts
+  // them too (MotionsModal).
   const settings = getSettings(committee.code);
-  const presentCount = committee.delegates.filter((d) => d.status !== 'absent' && !d.isObserver).length;
-  const totalCount = committee.delegates.filter((d) => !d.isObserver).length;
+  const presentCount = committee.delegates.filter((d) => d.status !== 'absent').length;
+  const totalCount = committee.delegates.length;
   const quorumMap: Record<string, number> = { 'none': 0, '1-4': 1 / 4, '1-3': 1 / 3, '1-2': 1 / 2 };
   const quorumFraction = quorumMap[settings.quorumThreshold ?? 'none'] ?? 0;
   const belowQuorum = quorumFraction > 0 && totalCount > 0 && (presentCount / totalCount) < quorumFraction;
@@ -3560,6 +3600,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         present={presentCount}
         total={totalCount}
         quorumNeeded={quorumNeeded}
+        // The pre-session roll-call card is far wider than the sidebar: spread across it the
+        // three capsules stopped reading as one group, so there they sit together.
+        compactQuorum={!inSidebar}
       />
     );
   };
@@ -4200,7 +4243,30 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // The notification card reuses these EXACT handlers — no second DB path.
   gslActionsRef.current = { approve: handleApproveGslRequest, deny: handleDenyGslRequest };
 
-  const isLastGSLSpeaker = committee.speakersList.length === 0;
+  // ── ON DECK (owner, 16 Sep 2026) ──────────────────────────────────────────
+  // "Remove the 'no current speaker'. When a delegate gets added, they will automatically be
+  // put as speaking first."
+  //
+  // The FIRST delegate on a GSL with nobody seated is drawn on the floor with their clock
+  // ready but not running. Nothing is written for this: they remain an ordinary
+  // `speakers_list` row, which is exactly why they cannot be lost. A caucus never touches
+  // the GSL (RULE 1), suspend/resume preserves it, and a reload or a catch-up re-derives
+  // this from the list, so there is no state a motion, an expiry or another device can drop
+  // or duplicate. Nothing is seated, so `logFloorSpeech` has no turn to log and no phantom
+  // speech can be written for someone who never spoke.
+  //
+  // They also stay fully movable and removable while on deck, because they are just the
+  // head of the list — the strip's normal drag, the grip keys and the X all apply.
+  //
+  // Start seats them (`handleStartOnDeck`) and starts the clock in ONE press; Next seats
+  // them without starting, exactly as "Call first speaker" always did. From the moment they
+  // are seated this is an ordinary `current_speaker` turn with its own `seated_at` nonce.
+  const onDeck = !committee.currentSpeaker ? (committee.speakersList[0] ?? null) : null;
+  // Delegations left queued once the floor holder (seated or on deck) is speaking. This is
+  // what `gslRequireNextSpeaker` guards: it must not be possible to open the last name on
+  // the list when the chair asked for the GSL never to run dry.
+  const gslQueueBehindFloor = committee.currentSpeaker ? committee.speakersList.length : Math.max(0, committee.speakersList.length - 1);
+  const isLastGSLSpeaker = gslQueueBehindFloor === 0;
 
   // The GSL speaker buttons, rendered with AND without a speaker on the floor (the owner's
   // rule: they never disappear). With nobody on the floor, Next calls the first delegate on
@@ -4211,6 +4277,53 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // The same reasons the Start button cannot start; the clickable countdown obeys them too.
   const gslStartBlockedReason = belowQuorum ? t('speaker_ctl_below_quorum') : gslRequireNextSpeaker && isLastGSLSpeaker ? t('gsl_never_empty_warning') : null;
   const gslListLen = committee.speakersList.length;
+  const gslStripHeader: StripHeader = {
+    icon: <ListOrdered size={15} strokeWidth={2.6} aria-hidden />,
+    label: t('gsl_full_name'),
+    sublabel: committee.topic ?? null,
+    meta: gslListLen > 0 ? t('gsl_queue_count').replace('{n}', String(gslListLen)) : null,
+  };
+  // Start with a delegation on deck: seat them AND start the clock in one press. Both writes
+  // ride the one per-committee current_speaker chain, so the start can never land before the
+  // seat. `seated_at` is stamped by `nextSpeakerInDB` exactly as any other seating, so the
+  // turn key (S7) is ordinary and `logFloorSpeech` dedupes it the usual way.
+  const handleStartOnDeck = async () => {
+    if (belowQuorum || sessionEnded || sessionSuspended) return;
+    const next = committee.speakersList[0];
+    if (!next || committee.currentSpeaker) return;
+    const timeToUse = speakerTimeLimit;
+    if (timeToUse <= 0) return;
+    const startedAt = serverNowIso();          // database clock (RULE 6b)
+    setTimerRunning(true);
+    setExtraTimeAdded(false);
+    extraTimeAddedSecsRef.current = 0;
+    seatSpeakerClock(timeToUse, startedAt);
+    localUpdateTime.current = Date.now();
+    updateLocal(setCommittee, (c) => ({
+      ...c,
+      currentSpeaker: next,
+      speakerSeatedAt: startedAt,
+      speakersList: c.speakersList.filter((s) => s.delegateId !== next.delegateId),
+      speakerTimeRemaining: timeToUse,
+    }));
+    await nextSpeakerInDB(
+      committee.id, timeToUse, next.delegateId, next.country, next.delegateId,
+      committee.code, committee.dbChairJoinSuffix ?? undefined, startedAt,
+    );
+    startSpeakerTimerInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined, startedAt, timeToUse);
+    localUpdateTime.current = Date.now();
+  };
+  const handleGslToggleTimer = () => {
+    if (!committee.currentSpeaker && onDeck) { void handleStartOnDeck(); return; }
+    handleToggleTimer();
+  };
+  // Who the floor is drawn around: the seated speaker, else the delegation on deck.
+  const gslFloor = committee.currentSpeaker ?? onDeck;
+  // The strip shows the floor holder first. With a seated speaker they are prepended (they
+  // are not a `speakers_list` row); on deck they already ARE the head of the list.
+  const gslDisplayList = committee.currentSpeaker
+    ? [{ delegateId: committee.currentSpeaker.delegateId, country: committee.currentSpeaker.country }, ...committee.speakersList]
+    : committee.speakersList;
   const gslNext = gslHasSpeaker
     ? (gslListLen === 0 && !gslRequireNextSpeaker
       ? { label: t('gsl_yield'), title: t('gsl_yield_title'), onClick: () => { void handleYieldFloor(); }, finish: true, blockedReason: null }
@@ -4226,14 +4339,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const gslControls = !sessionEnded && !isViewOnly ? (
     <SpeakerControls
       hasSpeaker={gslHasSpeaker}
+      floorReady={gslHasSpeaker || !!onDeck}
       timerRunning={timerRunning}
-      onToggleTimer={handleToggleTimer}
+      onToggleTimer={handleGslToggleTimer}
       startBlockedReason={gslStartBlockedReason}
       onRestart={handleRestartTime}
       next={gslNext}
       onAddTime={() => setPopover('extraTime', 'toggle')}
       addTimeActive={openPopovers.extraTime}
-      onRightOfReply={gslHasSpeaker ? undefined : toggleGslRtr}
+      onRightOfReply={gslHasSpeaker || onDeck ? undefined : toggleGslRtr}
       rightOfReplyActive={openPopovers.rightToReply}
       tutorialTargets
     />
@@ -4810,58 +4924,54 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 <>
                 {/* Three-zone flex column: queue locked top, centre shrinks, buttons locked above bottom bar */}
                 <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden">
-                  <span className="absolute top-2 left-3 z-10 text-lg font-black tracking-widest"
-                    style={{ color: '#1C1410', fontFamily: "'Poppins', sans-serif" }}>GSL</span>
-                  {committee.currentSpeaker ? (
+                  {/* The floating "GSL" caption is gone: the strip's marker says
+                      "General Speaker's List" in full, with the topic beneath (owner). */}
+                  {gslFloor ? (
                     <>
-                      {/* ZONE 1 — Queue locked at top */}
+                      {/* ZONE 1 — mode marker + queue locked at top */}
                       <div className="shrink-0">
-                        {(() => {
-                          const gslDisplayList = [
-                            { delegateId: committee.currentSpeaker.delegateId, country: committee.currentSpeaker.country },
-                            ...committee.speakersList,
-                          ];
-                          return (
-                            <DraggableSpeakersQueue
-                              list={gslDisplayList}
-                              currentSpeakerDelegateId={committee.currentSpeaker.delegateId}
-                              onReorder={isViewOnly ? undefined : (newList) => handleReorderSpeakersList(newList.filter((s) => s.delegateId !== committee.currentSpeaker!.delegateId))}
-                              onRemove={isViewOnly ? undefined : handleRemoveFromSpeakersList}
-                              onRemoveCurrent={isViewOnly || sessionEnded ? undefined : () => handleRemoveCurrentSpeaker()}
-                            />
-                          );
-                        })()}
+                        <DraggableSpeakersQueue
+                          list={gslDisplayList}
+                          header={gslStripHeader}
+                          currentSpeakerDelegateId={committee.currentSpeaker?.delegateId ?? null}
+                          onDeckDelegateId={onDeck?.delegateId ?? null}
+                          onReorder={isViewOnly ? undefined : (newList) => handleReorderSpeakersList(newList.filter((s) => s.delegateId !== committee.currentSpeaker?.delegateId))}
+                          onRemove={isViewOnly ? undefined : handleRemoveFromSpeakersList}
+                          onRemoveCurrent={isViewOnly || sessionEnded || !committee.currentSpeaker ? undefined : () => handleRemoveCurrentSpeaker()}
+                        />
                       </div>
                       {/* ZONE 2 — Flag + name + timer + progress: compresses as viewport shrinks */}
                       <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-4 py-1">
                         <SeatCircleFlag
-                          country={committee.currentSpeaker.country}
+                          country={gslFloor.country}
                           size={FLOOR_FLAG_PX}
                           decorative
                           loading="eager"
                           style={{ boxShadow: FLOOR_FLAG_SHADOW }}
                         />
-                        <h1 className="font-black text-[#1C1410] text-center" style={{ fontSize: '1.8rem', margin: '8px 0' }}>{getCountryDisplayName(committee.currentSpeaker.country, language)}</h1>
+                        <h1 className="font-black text-[#1C1410] text-center" style={{ fontSize: '1.8rem', margin: '8px 0' }}>{getCountryDisplayName(gslFloor.country, language)}</h1>
                         {isViewOnly ? (
                           <div className="font-bold text-[#6A5A4A] text-center" style={{ fontSize: '1.5rem', marginBottom: '8px' }}>
-                            {t('view_is_speaking')}
+                            {committee.currentSpeaker ? t('view_is_speaking') : t('gsl_on_deck')}
                           </div>
                         ) : (
                           <>
                             <SpeakerClock
                               tutorial="timer"
                               running={timerRunning}
-                              onToggle={!sessionEnded ? handleToggleTimer : undefined}
+                              onToggle={!sessionEnded ? handleGslToggleTimer : undefined}
                               blockedReason={gslStartBlockedReason}
-                              className={`font-black font-mono tabular-nums ${speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'}`}
+                              className={`font-black font-mono tabular-nums ${committee.currentSpeaker && speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'}`}
                               style={{ fontSize: '5rem', marginBottom: '4px', lineHeight: 1.15 }}
                             >
-                              {formatTime(speakerTimeRemaining)}
+                              {/* On deck nothing is seated, so the clock the row still holds may
+                                  belong to the last turn: show the slot Start will give them. */}
+                              {formatTime(committee.currentSpeaker ? speakerTimeRemaining : speakerTimeLimit)}
                               {extraTimeAdded && <span className="text-base ms-2 font-normal text-[#1C1410]">{t('gsl_plus_time')}</span>}
                             </SpeakerClock>
                             <FloorProgress
-                              percent={progress}
-                              barClassName={progress > 20 ? 'bg-[#B6871F]' : 'bg-[#B8844A]'}
+                              percent={committee.currentSpeaker ? progress : 100}
+                              barClassName={!committee.currentSpeaker || progress > 20 ? 'bg-[#B6871F]' : 'bg-[#B8844A]'}
                               rtr={!sessionEnded ? { onClick: toggleGslRtr, active: openPopovers.rightToReply, tutorial: 'rtr-button' } : null}
                             />
                           </>
@@ -4876,28 +4986,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       {gslControls}
                     </>
                   ) : (
-                    /* No-current-speaker state — simple centred layout, with the same
-                       speaker buttons underneath so they never disappear. */
+                    /* Nobody on the list at all. The shouty "No Current Speaker" heading is
+                       gone (owner): the marker says where the room is, and the bar below says
+                       what to do. The speaker buttons stay put so nothing jumps. */
                     <>
+                    <div className="shrink-0">
+                      <DraggableSpeakersQueue list={[]} header={gslStripHeader} />
+                    </div>
                     <div className="flex-1 flex flex-col items-center justify-center w-full text-center px-4">
-                      {committee.speakersList.length > 0 && (
-                        <DraggableSpeakersQueue
-                          list={committee.speakersList}
-                          onReorder={isViewOnly ? undefined : handleReorderSpeakersList}
-                          onRemove={isViewOnly ? undefined : handleRemoveFromSpeakersList}
-                        />
-                      )}
-                      <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>{t('gsl_no_current_speaker')}</h2>
-                      <p className="mb-4 text-center text-sm" style={{ color: '#6A5A4A' }}>{t('gsl_add_call_first')}</p>
-                      {/* Only when the chair has opted into "require next speaker". By
-                          default the GSL is allowed to run down to its last delegate
-                          and elapse, so a single name on the list is not a problem
-                          to warn about. */}
-                      {gslRequireNextSpeaker && committee.speakersList.length === 1 && (
-                        <div className="mb-4 px-4 py-2 bg-[#B6871F]/10 border border-[#B6871F]/30 rounded-lg text-[#8B5A20] text-xs text-center">
-                          {t('gsl_one_delegate_warning')}
-                        </div>
-                      )}
+                      <p className="text-center text-sm font-semibold" style={{ color: '#6A5A4A' }}>{t('gsl_add_call_first')}</p>
                     </div>
                     {/* The call-first button is now Next in this row (it carries the
                         tutorial's `call-first-speaker` target while the floor is empty). */}
@@ -4908,17 +5005,30 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 {!sessionEnded && !isViewOnly && (
                 // FloorBarExtent publishes this bar's height: the collapsed sidebar column
                 // continues its ground under itself so the bar runs the full page width.
-                <FloorBarExtent className="border-t border-[#DDD4C0] px-6 py-2 shrink-0" style={{ backgroundColor: '#F6F1E9' }}>
-                  {!isViewOnly && <div className="flex items-center gap-3 mb-2">
-                    <span className="text-xs text-[#9A8A78] font-mono shrink-0">{t('gsl_time')}</span>
-                    <div className="flex gap-1.5">
+                <FloorBarExtent className="border-t border-[#DDD4C0] px-6 py-2.5 shrink-0" style={{ backgroundColor: '#F6F1E9' }}>
+                  {belowQuorum && (
+                    <p className="text-xs text-[#8B2020] text-center pb-2">
+                      ⚠️ Below quorum: speakers cannot be added until {Math.ceil(quorumFraction * totalCount)} delegates are present.
+                    </p>
+                  )}
+                  {/* ONE row under the Start / Next controls (owner, 16 Sep 2026): the add
+                      control runs the width of the floor, the speaking-time presets sit
+                      beside it instead of on their own line above. */}
+                  {!isViewOnly && (
+                  <div className="flex items-center gap-3" data-tutorial="speakers-bottom-bar">
+                    <div className="flex-1 min-w-0">
+                      <AddSpeakerInput committee={committee} onAdd={belowQuorum ? () => {} : handleAddToSpeakersList} onRecognise={belowQuorum ? undefined : recogniseAbsentDelegate} />
+                    </div>
+                    <div className="shrink-0 flex items-center gap-1.5">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-[#9A8A78] shrink-0 me-0.5">{t('gsl_time')}</span>
                       {[45, 60, 75, 90].map((preset) => (
-                        <button key={preset} onClick={() => handleSetSpeakerTimeLimit(preset)}
-                          className={`gv-lift text-xs px-2.5 py-1 rounded-lg transition-colors font-semibold ${speakerTimeLimit === preset ? 'bg-[#1B3828] text-white' : 'bg-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
+                        <button key={preset} onClick={() => handleSetSpeakerTimeLimit(preset)} title={t('gsl_time_preset_title').replace('{n}', String(preset))}
+                          className={`gv-lift h-9 min-w-[2.9rem] px-2 rounded-lg text-xs font-black tabular-nums transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] ${speakerTimeLimit === preset ? 'bg-[#1B3828] text-[#EED98A]' : 'bg-[#E4DCC8] text-[#5A4E3E] hover:bg-[#D8CDB4] hover:text-[#1B3828]'}`}>
                           {preset}s
                         </button>
                       ))}
                       <input type="number" value={speakerTimeLimitInput}
+                        aria-label={t('gsl_time_custom')}
                         onChange={(e) => setSpeakerTimeLimitInput(e.target.value)}
                         onBlur={() => {
                           const val = parseInt(speakerTimeLimitInput);
@@ -4933,17 +5043,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             (e.target as HTMLInputElement).blur();
                           }
                         }}
-                        className="w-14 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1 text-[#1C1410] text-xs focus:outline-none" />
+                        style={{ MozAppearance: 'textfield' } as React.CSSProperties}
+                        className="w-16 h-9 bg-[#FAF8F3] border border-[#DDD4C0] focus:border-[#1B3828] rounded-lg px-2 text-[#1C1410] text-xs font-bold tabular-nums text-center transition-colors focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
                     </div>
-                  </div>}
-                  {belowQuorum && (
-                    <p className="text-xs text-[#8B2020] text-center py-2">
-                      ⚠️ Below quorum: speakers cannot be added until {Math.ceil(quorumFraction * totalCount)} delegates are present.
-                    </p>
-                  )}
-                  {!isViewOnly && (
-                  <div data-tutorial="speakers-bottom-bar">
-                    <AddSpeakerInput committee={committee} onAdd={belowQuorum ? () => {} : handleAddToSpeakersList} onRecognise={belowQuorum ? undefined : recogniseAbsentDelegate} />
                   </div>
                   )}
                 </FloorBarExtent>
@@ -5020,22 +5122,35 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         />
       )}
       {/* EXTRA TIME OVERLAY: a movable panel (src/components/DraggablePopover.tsx), Portal +
-          fixed, dragged by its handle, position remembered for this tab. */}
+          fixed, dragged by its handle, position remembered for this tab.
+          16 Sep 2026 (owner): deep blue, the clock icon in the header AND on the button that
+          grants the time, and it opens ABOVE the Add time button instead of over it. While a
+          floor modal is open it steps out of that modal's column (`avoid`) and steps back
+          afterwards, so its remembered position survives raising a motion. */}
       {!sessionEnded && !isViewOnly && openPopovers.extraTime && (
         <DraggablePopover
           id="add-time"
           slot="upper"
-          accent="rgba(10,51,80,0.22)"
+          anchor="add-time"
+          accent={POPOVER_TONES.time.accent}
+          tone={POPOVER_TONES.time}
+          avoid={showMotions || showDocuments}
           className="w-72"
           handleLabel={t('popover_drag_handle')}
           closeLabel={t('popover_close')}
           onClose={() => setPopover('extraTime', false)}
-          title={<span className="text-xs font-black uppercase tracking-wide" style={{ color: '#1B3828' }}>{t('gsl_add_time_title')}</span>}
+          title={
+            <span className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wide">
+              <ClockPlus size={16} strokeWidth={2.6} aria-hidden className="shrink-0" />
+              {t('gsl_add_time_title')}
+            </span>
+          }
         >
             <div className="flex gap-2 mb-2">
               {[15, 30, 60].map((s) => (
                 <button key={s} onClick={() => { handleAddExtraTime(s); }}
-                  className="flex-1 py-2 bg-[#EDE7D8] hover:bg-[#1B3828] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1B3828] hover:text-[#EED98A] text-xs rounded-lg font-black uppercase tracking-wide transition-colors gv-lift">
+                  style={{ backgroundColor: POPOVER_TONES.time.chip, color: POPOVER_TONES.time.ink }}
+                  className="flex-1 py-2 text-xs rounded-lg font-black uppercase tracking-wide transition-transform gv-lift hover:brightness-95 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0E3A57]">
                   +{s}s
                 </button>
               ))}
@@ -5047,13 +5162,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 onChange={(e) => setExtraTimeSecs(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { const n = parseInt(extraTimeSecs); if (n > 0) { handleAddExtraTime(n); } } }}
                 placeholder={language === 'ar' ? 'ثوانٍ مخصصة...' : language === 'fr' ? 'Sec. personnalisées...' : language === 'es' ? 'Tiempo personalizado...' : 'Custom sec...'}
-                style={{ MozAppearance: 'textfield' } as React.CSSProperties}
-                className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 text-[#1C1410] text-xs focus:outline-none focus:border-[#1B3828] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                style={{ MozAppearance: 'textfield', color: POPOVER_TONES.time.ink } as React.CSSProperties}
+                className="flex-1 min-w-0 bg-white/70 border border-[#0E3A57]/25 rounded-lg px-2 py-2 text-xs font-semibold placeholder-[#0A3350]/55 focus:outline-none focus:border-[#0E3A57] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
               <button
                 onClick={() => { const n = parseInt(extraTimeSecs); if (n > 0) { handleAddExtraTime(n); } }}
                 disabled={!extraTimeSecs || parseInt(extraTimeSecs) <= 0}
-                className="px-2 py-1.5 bg-[#1B3828] hover:bg-[#2A5A3C] disabled:opacity-40 text-[#EED98A] text-xs rounded-lg font-black transition-colors gv-lift">
+                style={{ backgroundColor: POPOVER_TONES.time.btn, color: POPOVER_TONES.time.btnFg }}
+                className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-2 text-xs rounded-lg font-black transition-transform gv-lift disabled:opacity-40 hover:brightness-110 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0E3A57] focus-visible:ring-offset-2">
+                <ClockPlus size={15} strokeWidth={2.6} aria-hidden className="shrink-0" />
                 {t('gsl_add_time_btn')}
               </button>
             </div>
@@ -5071,13 +5188,17 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         />
       )}
       {/* RTR OVERLAY: a movable panel through Portal (DraggablePopover), completely outside
-          document flow, so it never affects the layout of the floor. Muted sand and deep
-          brown, the same calm tone as the RTR button. */}
+          document flow, so it never affects the layout of the floor.
+          16 Sep 2026 (owner): deep orange, the reply icon in the header AND on Grant, opens
+          above its button, and steps out of an open floor modal's column (`avoid`). */}
       {!isViewOnly && openPopovers.rightToReply && (
         <DraggablePopover
           id="right-of-reply"
           slot="lower"
-          accent="rgba(139,90,32,0.26)"
+          anchor="rtr"
+          accent={POPOVER_TONES.reply.accent}
+          tone={POPOVER_TONES.reply}
+          avoid={showMotions || showDocuments}
           className="w-72"
           handleLabel={t('popover_drag_handle')}
           closeLabel={t('popover_close')}
@@ -5088,7 +5209,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             setRtrCountry('');
             setRtrTimeRemaining(rtrSeconds);
           }}
-          title={<span className="text-xs font-black uppercase tracking-wide" style={{ color: '#8B5A20' }}>{t('gsl_right_to_reply_popover')}</span>}
+          title={
+            <span className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wide">
+              <MessageSquareReply size={16} strokeWidth={2.6} aria-hidden className="shrink-0" />
+              {t('gsl_right_to_reply_popover')}
+            </span>
+          }
         >
             {!rtrOpen ? (
               // ── Setup view ────────────────────────────────────
@@ -5103,11 +5229,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     <button
                       key={s}
                       onClick={() => setRtrSeconds(s)}
-                      className={`gv-lift flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-colors border ${
-                        rtrSeconds === s
-                          ? 'bg-[#EBD3B6] border-[#C99A6B] text-[#5A3413]'
-                          : 'bg-[#EDE7D8] border-[#DDD4C0] text-[#6A5A4A] hover:border-[#C99A6B]/60'
-                      }`}
+                      aria-pressed={rtrSeconds === s}
+                      style={rtrSeconds === s
+                        ? { backgroundColor: POPOVER_TONES.reply.chipOn, color: POPOVER_TONES.reply.headerFg }
+                        : { backgroundColor: POPOVER_TONES.reply.chip, color: POPOVER_TONES.reply.ink }}
+                      className="gv-lift flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-wide tabular-nums transition-transform active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7A3E12]"
                     >
                       {s}s
                     </button>
@@ -5122,8 +5248,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     setRtrOpen(true);
                   }}
                   disabled={!rtrCountry}
-                  className="w-full py-2 bg-[#E2C6A4] hover:bg-[#D9B891] disabled:opacity-40 disabled:cursor-not-allowed text-[#5A3413] text-xs rounded-lg font-black uppercase tracking-wide transition-colors gv-lift"
+                  style={{ backgroundColor: POPOVER_TONES.reply.btn, color: POPOVER_TONES.reply.btnFg }}
+                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 disabled:opacity-40 disabled:cursor-not-allowed text-xs rounded-lg font-black uppercase tracking-wide transition-transform gv-lift hover:brightness-95 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7A3E12] focus-visible:ring-offset-2"
                 >
+                  <MessageSquareReply size={15} strokeWidth={2.6} aria-hidden className="shrink-0" />
                   {t('gsl_grant')}
                 </button>
               </>
@@ -5132,16 +5260,16 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               <>
                 <div className="flex items-center gap-2 mb-3 px-1">
                   <SeatFlag country={rtrCountry} size={24} className="object-contain inline-block" fallback={<UnknownSeatIcon size={24} />} />
-                  <span className="text-sm text-[#1C1410] font-bold flex-1">{rtrCountry}</span>
+                  <span className="text-sm font-bold flex-1" style={{ color: POPOVER_TONES.reply.ink }}>{getCountryDisplayName(rtrCountry, language)}</span>
                 </div>
                 <div className={`text-5xl font-black font-mono text-center mb-3 tabular-nums ${
-                  rtrTimeRemaining <= 5 ? 'text-[#8B2020]' : rtrTimeRemaining <= 10 ? 'text-[#8B5A20]' : 'text-[#5A3413]'
+                  rtrTimeRemaining <= 5 ? 'text-[#8B2020]' : rtrTimeRemaining <= 10 ? 'text-[#7A3E12]' : 'text-[#4A2A0E]'
                 }`}>
                   {Math.floor(rtrTimeRemaining / 60)}:{String(rtrTimeRemaining % 60).padStart(2, '0')}
                 </div>
-                <div className="w-full h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden mb-3">
+                <div className="w-full h-1.5 bg-[#E4C39D] rounded-full overflow-hidden mb-3">
                   <div
-                    className={`h-full rounded-full transition-all ${rtrTimeRemaining / rtrSeconds > 0.5 ? 'bg-[#C99A6B]' : rtrTimeRemaining / rtrSeconds > 0.2 ? 'bg-[#B6871F]' : 'bg-[#B84A3A]'}`}
+                    className={`h-full rounded-full transition-all ${rtrTimeRemaining / rtrSeconds > 0.5 ? 'bg-[#A9541A]' : rtrTimeRemaining / rtrSeconds > 0.2 ? 'bg-[#B6871F]' : 'bg-[#B84A3A]'}`}
                     style={{ width: `${(rtrTimeRemaining / rtrSeconds) * 100}%` }}
                   />
                 </div>
@@ -5162,7 +5290,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       setRtrTimeRemaining(rtrSeconds);
                       setPopover('rightToReply', false);
                     }}
-                    className="px-3 py-2 rounded-lg font-bold text-xs bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#6A5A4A] transition-colors gv-lift"
+                    style={{ backgroundColor: POPOVER_TONES.reply.chip, color: POPOVER_TONES.reply.ink }}
+                    className="px-3 py-2 rounded-lg font-bold text-xs transition-transform gv-lift hover:brightness-95 active:scale-[0.97]"
                   >
                     {t('rtr_done')}
                   </button>

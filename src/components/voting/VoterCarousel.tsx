@@ -128,7 +128,7 @@ export function VoterCarousel({ seats, current, markOf, hideTally }: {
             </div>
             {step >= 1 && step <= 2 && (
               <span
-                className="gv-seat-label absolute left-1/2 text-center font-bold truncate pointer-events-none"
+                className="gv-seat-label absolute left-1/2 text-center font-medium truncate pointer-events-none"
                 style={{
                   top: D / 2 + (D * SCALE[step]) / 2 + 10,
                   width: 120,

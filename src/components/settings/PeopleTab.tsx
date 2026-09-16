@@ -186,14 +186,14 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
 
       {/* ── Chairs ── */}
       <Section icon={Gavel} title={t('stg_people_chairs')} hint={t('stg_people_chairs_hint')} lead aside={refresh}>
-        <ul className="grid gap-2.5" style={{ listStyle: 'none', margin: 0, padding: '14px 0', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))' }}>
+        <ul className="grid gap-2" style={{ listStyle: 'none', margin: 0, padding: '10px 0', gridTemplateColumns: 'repeat(auto-fill, minmax(226px, 1fr))' }}>
           {chairNames.map((name) => {
             const isHead = name === head;
             const me = !!myChairName && name === myChairName;
             const online = onlineChairs?.has(name);
             return (
-              <li key={name} className="flex items-center gap-3" style={{ padding: 10, borderRadius: 16, background: isHead ? `linear-gradient(150deg, ${K.forest}, #24492F)` : K.surface, boxShadow: isHead ? '0 12px 24px -16px rgba(27,56,40,0.9)' : K.outSm }}>
-                <span aria-hidden className="relative inline-flex items-center justify-center shrink-0" style={{ width: 42, height: 42, borderRadius: 999, fontSize: 14, fontWeight: 900, background: isHead ? `radial-gradient(circle at 35% 30%, #F7EBB5, ${K.gold} 60%, ${K.deepGold})` : K.ivory, color: K.forest, boxShadow: isHead ? 'none' : K.inSm }}>
+              <li key={name} className="flex items-center gap-2.5" style={{ padding: 8, borderRadius: 14, background: isHead ? `linear-gradient(150deg, ${K.forest}, #24492F)` : K.surface, boxShadow: isHead ? '0 12px 24px -16px rgba(27,56,40,0.9)' : K.outSm }}>
+                <span aria-hidden className="relative inline-flex items-center justify-center shrink-0" style={{ width: 38, height: 38, borderRadius: 999, fontSize: 13.5, fontWeight: 900, background: isHead ? `radial-gradient(circle at 35% 30%, #F7EBB5, ${K.gold} 60%, ${K.deepGold})` : K.ivory, color: K.forest, boxShadow: isHead ? 'none' : K.inSm }}>
                   {flagMonogram(name)}
                   {onlineChairs && (
                     <span style={{ position: 'absolute', bottom: 0, insetInlineEnd: 0, width: 11, height: 11, borderRadius: 11, background: online ? '#3FA268' : '#C9BDA9', boxShadow: `0 0 0 2px ${isHead ? K.forest : K.surface}` }} />
@@ -222,7 +222,7 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
         </ul>
 
         {data?.isConference && data.conferenceChairs.length > 0 && (
-          <div style={{ borderTop: `1px solid ${K.hair}`, padding: '14px 0' }}>
+          <div style={{ borderTop: `1px solid ${K.hair}`, padding: '10px 0' }}>
             <div className="flex items-center gap-2" style={{ marginBottom: 10, fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: K.inkSoft }}>
               <Landmark size={13} strokeWidth={2.4} aria-hidden />{t('stg_conference_chairs')}
             </div>
@@ -239,7 +239,7 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
         )}
 
         {data && data.chairDevices.length > 0 && (
-          <div style={{ borderTop: `1px solid ${K.hair}`, padding: '14px 0' }}>
+          <div style={{ borderTop: `1px solid ${K.hair}`, padding: '10px 0' }}>
             <div className="flex items-center gap-2" style={{ marginBottom: 4, fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: K.inkSoft }}>
               <MonitorSmartphone size={13} strokeWidth={2.4} aria-hidden />{t('stg_chair_devices')}
             </div>
@@ -269,7 +269,7 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
       {/* ── Delegations ── */}
       <Section icon={Smartphone} title={t('stg_people_delegates')} hint={t('stg_people_delegates_hint')} lead delay={40}>
         {/* Who is in, as one segmented bar. */}
-        <div style={{ padding: '16px 0 6px' }}>
+        <div style={{ padding: '12px 0 4px' }}>
           <div className="flex items-end justify-between gap-3 flex-wrap" style={{ marginBottom: 10 }}>
             <div className="stg-num" style={{ fontSize: 30, fontWeight: 900, color: K.ink, lineHeight: 1 }}>
               {live + idle}<span style={{ fontSize: 15, fontWeight: 700, color: K.muted }}> / {rows.length}</span>
@@ -288,7 +288,7 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2" style={{ padding: '12px 0' }}>
+        <div className="flex flex-wrap items-center gap-2" style={{ padding: '9px 0' }}>
           <div role="radiogroup" aria-label={t('stg_people_filter')} className="inline-flex" style={{ padding: 3, borderRadius: 12, background: K.ivory, boxShadow: K.inSm }}>
             {([['all', t('stg_filter_all', { n: rows.length })], ['joined', t('stg_filter_joined', { n: live + idle })], ['missing', t('stg_filter_missing', { n: missing })]] as [Filter, string][]).map(([id, label]) => (
               <button key={id} type="button" role="radio" aria-checked={filter === id} onClick={() => setFilter(id)} className="stg-focus stg-press stg-num"

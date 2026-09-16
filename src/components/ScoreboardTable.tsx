@@ -29,9 +29,10 @@
 
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { MessageSquareQuote, ChevronRight, Trophy, ExternalLink } from 'lucide-react';
+import { MessageSquareQuote, ChevronRight, ChevronUp, ChevronDown, Trophy, ExternalLink } from 'lucide-react';
 import { NEU, NeuInset, NeuPill, OUTFIT, EASE } from '@/components/neu';
 import { SeatFlag } from '@/components/SeatFlag';
+import { SeatCircleFlag } from '@/components/CircleFlag';
 import { getCountryDisplayName } from '@/lib/countries';
 import { committeeDisplayName } from '@/lib/presetNames';
 import {
@@ -86,6 +87,10 @@ export interface ScoreboardLabels {
   ctxGsl: string; ctxModerated: string; ctxUnmoderated: string; ctxTour: string;
   /** Tooltip on a note whose speech time and typing time differ. */
   commentWritten: string;
+  /** Tooltips on a sortable column header. Session-only: the organiser board has
+   *  no sortable headers, so it never renders either of these. */
+  sortAscending?: string;
+  sortDescending?: string;
 }
 
 /** The exact literals this file carried before the prop existed. Any caller that
@@ -139,6 +144,8 @@ export const DEFAULT_SCOREBOARD_LABELS: ScoreboardLabels = {
   ctxUnmoderated: COMMENT_CONTEXT_LABEL['unmoderated-caucus'],
   ctxTour: COMMENT_CONTEXT_LABEL['tour-de-table'],
   commentWritten: 'Written {time}',
+  sortAscending: 'Sorted low to high',
+  sortDescending: 'Sorted high to low',
 };
 
 const fmt = (tpl: string, vars: Record<string, string | number>): string =>
@@ -154,13 +161,25 @@ export const SORTS: { key: SortKey; label: string }[] = [
   { key: 'name', label: 'DELEGATION' },
 ];
 
+export type SortDir = 'asc' | 'desc';
+
+/** The direction a column reads in when you first press it: names climb A→Z,
+ *  every figure starts with the biggest. Exported so a caller's header arrows and
+ *  this function can never disagree about which way "unflipped" points. */
+export const naturalSortDir = (key: SortKey): SortDir => (key === 'name' ? 'asc' : 'desc');
+
 export function sortScoreboardRows(
   rows: ScoreboardDelegateRow[], sortKey: SortKey, locale: string = LOCALE,
+  /** Omitted → exactly the order this function has always produced. Passing the
+   *  opposite of `naturalSortDir(sortKey)` reverses it, which is what a second
+   *  press on a sortable column header does. No organiser caller passes it. */
+  dir?: SortDir,
 ): ScoreboardDelegateRow[] {
   const byName = (a: ScoreboardDelegateRow, b: ScoreboardDelegateRow) =>
     displayCountry(a.country, locale).localeCompare(displayCountry(b.country, locale), locale);
   const withComments = (r: ScoreboardDelegateRow) => r.comments.filter((c) => c.content.trim()).length;
-  return [...rows].sort((a, b) => {
+  const flip = dir && dir !== naturalSortDir(sortKey) ? -1 : 1;
+  return [...rows].sort((a, b) => flip * (() => {
     switch (sortKey) {
       case 'speeches': return (b.gslSpeeches + b.caucusSpeeches) - (a.gslSpeeches + a.caucusSpeeches) || byName(a, b);
       case 'time': return b.speakingSeconds - a.speakingSeconds || byName(a, b);
@@ -168,7 +187,7 @@ export function sortScoreboardRows(
       case 'name': return byName(a, b);
       default: return b.headline - a.headline || byName(a, b);
     }
-  });
+  })());
 }
 
 // ── Factor bar ───────────────────────────────────────────────────────────────
@@ -414,6 +433,11 @@ export function ScoreboardTable({
   detailSummary = false,
   detailExtra,
   labels = DEFAULT_SCOREBOARD_LABELS,
+  onSortChange,
+  sortDir,
+  circleFlags = false,
+  flagSize,
+  renderDetail,
 }: {
   rows: ScoreboardDelegateRow[];
   /** Translated strings. Omitted by every organiser caller → English literals. */
@@ -430,7 +454,72 @@ export function ScoreboardTable({
   /** Extra content under an expanded row's breakdown — the chair's manual
    *  award / deduct control. Omitted on the read-only organiser surfaces. */
   detailExtra?: (row: ScoreboardDelegateRow) => React.ReactNode;
+  // ── Session-only, all defaulted off ───────────────────────────────────────
+  // The organiser board passes none of these and renders exactly as before.
+  /** Makes the column headers pressable. The chair's scoreboard sorts from the
+   *  headers and has no sort control of its own; the organiser board keeps its
+   *  SORT BY pills, so it leaves this undefined and the headers stay plain text. */
+  onSortChange?: (key: SortKey, dir: SortDir) => void;
+  /** Which way the active column currently reads. Only meaningful with `onSortChange`. */
+  sortDir?: SortDir;
+  /** Round flags (`SeatCircleFlag`) instead of the rectangular `SeatFlag`. */
+  circleFlags?: boolean;
+  /** Flag box in px. Defaults to the 20px the table has always drawn. */
+  flagSize?: number;
+  /** Replaces the whole expanded drill-in. The chair's scoreboard passes its
+   *  icon-led delegate profile; omitted → `DelegateDetail`, unchanged. */
+  renderDetail?: (row: ScoreboardDelegateRow) => React.ReactNode;
 }) {
+  const px = flagSize ?? 20;
+  const sortable = !!onSortChange;
+  const activeDir = sortDir ?? naturalSortDir(sortKey);
+
+  /** A column header. Plain text without `onSortChange` — which is every organiser
+   *  call site — and a real button with it, so the chair sorts by pressing the
+   *  column instead of hunting for a dropdown. Pressing the active column again
+   *  reverses it; pressing another column starts at that column's natural end
+   *  (biggest first for a figure, A→Z for a name). */
+  const header = (label: string, sortKeyFor: SortKey | undefined, style: React.CSSProperties) => {
+    if (!sortable || !sortKeyFor) return <span style={{ ...HEADER_CELL, ...style }}>{label}</span>;
+    const active = sortKey === sortKeyFor;
+    const dir = active ? activeDir : naturalSortDir(sortKeyFor);
+    const Arrow = dir === 'asc' ? ChevronUp : ChevronDown;
+    const alignEnd = style.textAlign === 'end';
+    // `aria-sort` belongs on a column header, not on the button, so the button sits
+    // inside a `columnheader` cell (the strip is a `row` whenever it is sortable).
+    const { width, flex, minWidth, textAlign } = style;
+    return (
+      <span
+        role="columnheader"
+        aria-sort={active ? (activeDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+        style={{ width, flex, minWidth, textAlign, display: 'flex', justifyContent: alignEnd ? 'flex-end' : 'flex-start' }}
+      >
+      <button
+        type="button"
+        onClick={() => onSortChange!(sortKeyFor, active ? (activeDir === 'asc' ? 'desc' : 'asc') : naturalSortDir(sortKeyFor))}
+        title={active ? (activeDir === 'asc' ? labels.sortAscending : labels.sortDescending) : undefined}
+        className="gv-sort-th focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded-md"
+        style={{
+          ...HEADER_CELL, maxWidth: '100%',
+          display: 'inline-flex', alignItems: 'center', gap: 3,
+          justifyContent: alignEnd ? 'flex-end' : 'flex-start',
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: active ? NEU.forest : HEADER_CELL.color,
+          // The header strip is 10px type in a 10px-tall row; a bare button would
+          // be a 12px target. Padding pulls it out to a 28px band without moving
+          // the label, which stays on the grid the data columns below sit on.
+          paddingBlock: 6, marginBlock: -6, paddingInline: 4, marginInline: -4,
+          transition: `color 140ms ${EASE}`,
+        }}
+      >
+        {alignEnd && <Arrow size={11} strokeWidth={3} style={{ opacity: active ? 1 : 0, flexShrink: 0 }} aria-hidden />}
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+        {!alignEnd && <Arrow size={11} strokeWidth={3} style={{ opacity: active ? 1 : 0, flexShrink: 0 }} aria-hidden />}
+      </button>
+      </span>
+    );
+  };
+
   return (
     <div
       style={{
@@ -444,19 +533,20 @@ export function ScoreboardTable({
       {/* Header row — hidden on narrow screens where the cards stack */}
       <div
         className="hidden md:flex"
+        role={sortable ? 'row' : undefined}
         style={{
           alignItems: 'center', gap: 12, paddingInline: 18, paddingBlock: 10,
           borderBlockEnd: `1px solid ${CARD_BORDER_COLOR}`, backgroundColor: 'rgba(27,56,40,0.04)',
         }}
       >
         <span style={{ ...HEADER_CELL, width: 28, textAlign: 'end' }}>{labels.colRank}</span>
-        <span style={{ width: 22 }} />
-        <span style={{ ...HEADER_CELL, flex: 1, minWidth: 0 }}>{labels.colDelegation}</span>
+        <span style={{ width: Math.max(22, px + 2) }} />
+        {header(labels.colDelegation, 'name', { flex: 1, minWidth: 0 })}
         {showCommitteeColumn && <span style={{ ...HEADER_CELL, width: 120 }}>{labels.colCommittee}</span>}
-        <span style={{ ...HEADER_CELL, width: 70, textAlign: 'end' }}>{labels.colSpeeches}</span>
-        <span style={{ ...HEADER_CELL, width: 78, textAlign: 'end' }}>{labels.colTime}</span>
-        <span style={{ ...HEADER_CELL, width: 62, textAlign: 'end' }}>{labels.colNotes}</span>
-        <span style={{ ...HEADER_CELL, width: 62, textAlign: 'end' }}>{labels.colScore}</span>
+        {header(labels.colSpeeches, 'speeches', { width: 70, textAlign: 'end' })}
+        {header(labels.colTime, 'time', { width: 78, textAlign: 'end' })}
+        {header(labels.colNotes, 'comments', { width: 62, textAlign: 'end' })}
+        {header(labels.colScore, 'score', { width: 62, textAlign: 'end' })}
         <span style={{ width: 16 }} />
       </div>
 
@@ -480,7 +570,7 @@ export function ScoreboardTable({
                 background: open ? 'rgba(27,56,40,0.05)' : 'transparent',
                 border: 'none', cursor: 'pointer', textAlign: 'start',
                 // NEVER `flex-wrap: wrap` again — see the block comment below.
-                flexWrap: 'nowrap', minHeight: 52,
+                flexWrap: 'nowrap', minHeight: Math.max(52, px + 18),
                 transition: `background 160ms ${EASE}`,
               }}
               onMouseEnter={(e) => { if (!open) (e.currentTarget as HTMLElement).style.background = 'rgba(27,56,40,0.03)'; }}
@@ -489,8 +579,16 @@ export function ScoreboardTable({
               <span className="hidden md:inline-block" style={{ width: 28, fontFamily: OUTFIT, fontSize: 11.5, color: SOFT, fontVariantNumeric: 'tabular-nums', textAlign: 'end', flexShrink: 0 }}>
                 {sortKey === 'name' ? '' : i + 1}
               </span>
-              <span style={{ width: 22, flexShrink: 0, display: 'inline-flex' }}>
-                <SeatFlag country={r.country} size={20} />
+              {/* ROUND, AND BIG ENOUGH TO READ ACROSS THE DAIS. `SeatCircleFlag`
+                  draws the circle-flag artwork (a flag drawn FOR a disc), so it
+                  fills the circle edge to edge — never a `getFlagUrl` rectangle
+                  inside a `rounded-full` box (CLAUDE.md §8). Crests resolve
+                  through the page's `SeatArtProvider` exactly as `SeatFlag` does.
+                  Off by default: the organiser board keeps its 20px rectangle. */}
+              <span style={{ width: Math.max(22, px + 2), flexShrink: 0, display: 'inline-flex', ...(circleFlags ? { justifyContent: 'center' } : {}) }}>
+                {circleFlags
+                  ? <SeatCircleFlag country={r.country} size={px} decorative />
+                  : <SeatFlag country={r.country} size={px} />}
               </span>
               <span style={{ flex: '1 1 0', minWidth: 0 }}>
                 <span style={{ display: 'block', fontFamily: OUTFIT, fontWeight: 600, fontSize: 13.5, color: NEU.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -593,7 +691,9 @@ export function ScoreboardTable({
                 />
               </span>
             </button>
-            {open && <DelegateDetail row={r} summary={detailSummary} extra={detailExtra?.(r)} locale={locale} labels={labels} />}
+            {open && (renderDetail
+              ? renderDetail(r)
+              : <DelegateDetail row={r} summary={detailSummary} extra={detailExtra?.(r)} locale={locale} labels={labels} />)}
           </div>
         );
       })}

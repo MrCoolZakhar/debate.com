@@ -29,7 +29,7 @@ const FOREST = '#1B3828';
 const GOLD = '#EED98A';
 
 const QUIET_BTN =
-  'inline-flex items-center justify-center gap-2 h-10 min-w-10 rounded-full text-[13px] font-bold shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,color,transform,opacity] duration-150 active:scale-[0.96] motion-reduce:transition-none disabled:opacity-50';
+  'inline-flex items-center justify-center gap-2 h-10 min-w-10 rounded-full text-[13.5px] font-semibold shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,color,transform,opacity] duration-150 active:scale-[0.96] motion-reduce:transition-none disabled:opacity-50';
 
 export interface VotingHeaderProps {
   identity: VotingCommitteeIdentity;
@@ -114,7 +114,7 @@ export function VotingHeader({
       <div className="flex-1 min-w-0 flex items-center gap-2 ps-1 sm:ps-2">
         <CommitteeEmblem src={identity.src} monogram={identity.monogram} alt={identity.primary} size={30} onLight />
         <span
-          className="text-[15px] font-black truncate shrink-0 max-w-[10rem] lg:max-w-[16rem]"
+          className="text-[15px] font-semibold truncate shrink-0 max-w-[10rem] lg:max-w-[16rem]"
           style={{ color: INK }}
           title={identity.secondary ?? identity.primary}
         >
@@ -127,7 +127,7 @@ export function VotingHeader({
               <button
                 type="button"
                 onClick={onDocs}
-                className="hidden md:inline-flex items-center h-8 px-2.5 rounded-full text-[13px] font-semibold shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,color] duration-150"
+                className="hidden md:inline-flex items-center h-8 px-2.5 rounded-full text-[13.5px] font-medium shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,color] duration-150"
                 style={{ color: INK_SOFT }}
                 onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(27,56,40,0.08)'; e.currentTarget.style.color = INK; }}
                 onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = INK_SOFT; }}
@@ -135,7 +135,7 @@ export function VotingHeader({
                 {docsLabel}
               </button>
             ) : (
-              <span className="hidden md:inline text-[13px] font-semibold shrink-0 px-1" style={{ color: INK_SOFT }}>{docsLabel}</span>
+              <span className="hidden md:inline text-[13.5px] font-medium shrink-0 px-1" style={{ color: INK_SOFT }}>{docsLabel}</span>
             )}
           </>
         )}
@@ -143,12 +143,12 @@ export function VotingHeader({
           <>
             <ChevronRight size={15} className="shrink-0" style={{ color: '#9A8A78', transform: rtl ? 'scaleX(-1)' : undefined }} aria-hidden />
             <span
-              className="shrink-0 text-[12px] font-black tabular-nums px-2 py-1 rounded-md"
+              className="shrink-0 text-[12.5px] font-semibold tabular-nums px-2 py-1 rounded-md"
               style={{ backgroundColor: 'rgba(27,56,40,0.09)', color: FOREST }}
             >
               {doc.code}
             </span>
-            <span className="min-w-0 truncate text-[14px] font-bold hidden lg:inline" style={{ color: INK }} title={doc.title}>
+            <span className="min-w-0 truncate text-[14px] font-medium hidden 2xl:inline" style={{ color: INK }} title={doc.title}>
               {doc.title}
             </span>
           </>
@@ -157,10 +157,10 @@ export function VotingHeader({
 
       {/* Where the vote stands */}
       {progress && (
-        <div className="hidden md:flex flex-col justify-center gap-1 w-[150px] shrink-0 me-1" aria-live="polite">
+        <div className="hidden md:flex flex-col justify-center gap-1 w-[168px] shrink-0 me-1" aria-live="polite">
           <div className="flex items-baseline justify-between gap-2">
-            <span className="text-[11px] font-black uppercase tracking-[0.12em] truncate" style={{ color: '#8A6414' }}>{progress.stage}</span>
-            <span className="text-[12px] font-bold tabular-nums shrink-0" style={{ color: INK }}>{progress.cast}/{progress.total}</span>
+            <span className="text-[12.5px] font-medium truncate" style={{ color: INK_SOFT }}>{progress.stage}</span>
+            <span className="text-[12.5px] font-semibold tabular-nums shrink-0" style={{ color: INK }}>{progress.cast}/{progress.total}</span>
           </div>
           <div
             className="h-1.5 rounded-full overflow-hidden"
@@ -182,7 +182,7 @@ export function VotingHeader({
       {/* Who is driving */}
       {isViewOnly ? (
         <span
-          className="hidden sm:inline-flex items-center gap-1.5 h-8 ps-2.5 pe-3 rounded-full text-[12px] font-bold shrink-0 max-w-[13rem]"
+          className="hidden sm:inline-flex items-center gap-1.5 h-8 ps-2.5 pe-3 rounded-full text-[12.5px] font-medium shrink-0 max-w-[13rem]"
           style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: INK_SOFT }}
           title={t('voting_view_only_note')}
         >
@@ -191,7 +191,7 @@ export function VotingHeader({
         </span>
       ) : (
         <span
-          className="hidden sm:inline-flex items-center gap-1.5 h-8 ps-2.5 pe-3 rounded-full text-[12px] font-black shrink-0"
+          className="hidden sm:inline-flex items-center gap-1.5 h-8 ps-2.5 pe-3 rounded-full text-[12.5px] font-semibold shrink-0"
           style={{ backgroundColor: FOREST, color: GOLD, boxShadow: '0 1px 2px rgba(27,56,40,0.25)' }}
         >
           <Gavel size={14} strokeWidth={2.25} aria-hidden />

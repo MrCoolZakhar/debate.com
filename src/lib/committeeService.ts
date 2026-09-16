@@ -893,9 +893,18 @@ export async function reorderSpeakersList(
 // DELEGATES
 // ============================================================
 
-export async function addDelegate(committeeId: string, country: string, code: string, chairSuffix?: string): Promise<string | null> {
+export async function addDelegate(
+  committeeId: string,
+  country: string,
+  code: string,
+  chairSuffix?: string,
+  /** The seat's opening status. The chair's + picker adds seats PRESENT (16 Sep 2026): a
+   *  chair adds a seat because the person is in the room. Defaults to the old 'absent'. */
+  status: DelegateStatus = 'absent',
+  isObserver = false,
+): Promise<string | null> {
   const { data, error } = await sessionClient(code, chairSuffix).from('delegates')
-    .insert({ committee_id: committeeId, country, status: 'absent', is_observer: false })
+    .insert({ committee_id: committeeId, country, status, is_observer: isObserver })
     .select('id').single();
   if (error) { console.error('Error adding delegate:', error); return null; }
   return data.id as string;

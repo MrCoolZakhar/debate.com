@@ -706,7 +706,9 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
       </div>
 
       {type && (
-        <div className="px-7 pb-7 pt-3 border-t border-white/10 shrink-0">
+        // The form scrolls behind this footer, so the footer needs its own ground and a visible
+        // hairline: `border-white/10` on ivory drew nothing, and the fields ran into the button.
+        <div className="px-7 pb-7 pt-3 shrink-0 bg-[#FAF8F3]" style={{ boxShadow: '0 -1px 0 #DDD4C0, 0 -10px 16px -12px rgba(27,56,40,0.30)' }}>
           {belowQuorum && (
             <div className="mb-4 p-3 bg-[#8B2020]/20 border border-[#8B2020]/40 rounded-xl text-xs text-[#8B2020]">
               ⚠️ {t('motions_quorum_warning')}
@@ -765,15 +767,32 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   const overflowRef = useRef<HTMLDivElement | null>(null);
   const [overflowFade, setOverflowFade] = useState<{ top: boolean; bottom: boolean }>({ top: false, bottom: false });
   const extrasCount = Math.max(0, order.length - RANKED_VISIBLE);
-  const scrolls = extrasCount > 0;
+  /** MEASURED, never counted (16 Sep 2026). This used to be `extrasCount > 0`, so with five or
+   *  fewer motions the queue column got no `overflow-y-auto` at all: on a short window, or with
+   *  tall cards (a long Custom name, a topic, a Tour de Table's two badges), the cards ran past
+   *  the column and over the Raise a Motion button below it. The button is outside the scroller,
+   *  so nothing can overlap it now, whatever the motion count. */
+  const [scrolls, setScrolls] = useState(false);
   const measureOverflow = useCallback(() => {
     const el = overflowRef.current;
     if (!el) return;
-    const top = el.scrollTop > 2;
-    const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - 2;
+    const over = el.scrollHeight > el.clientHeight + 2;
+    setScrolls((prev) => (prev === over ? prev : over));
+    const top = over && el.scrollTop > 2;
+    const bottom = over && el.scrollTop + el.clientHeight < el.scrollHeight - 2;
     setOverflowFade((prev) => (prev.top === top && prev.bottom === bottom ? prev : { top, bottom }));
   }, []);
   useEffect(() => { measureOverflow(); }, [extrasCount, measureOverflow]);
+  // The column's height moves with the window, and a card's height with its own content, so the
+  // fades and the scroll affordance are re-measured for both.
+  useEffect(() => {
+    const el = overflowRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => measureOverflow());
+    ro.observe(el);
+    for (const child of Array.from(el.children)) ro.observe(child);
+    return () => ro.disconnect();
+  }, [measureOverflow, extrasCount]);
 
   // Keep order in sync when motions are removed externally
   const motionIdKey = (committee.pendingMotions ?? []).map((m) => m.id).join(',');
@@ -795,7 +814,12 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [motionIdKey]);
 
-  const present = committee.delegates.filter((d) => d.status !== 'absent' && !d.isObserver).length;
+  // OBSERVERS COUNT ON A MOTION (16 Sep 2026). A motion is procedure, not the final
+  // substantive vote: an observer sitting in the room is part of the body deciding how the
+  // room runs, so the threshold is measured against everyone present. Only the ballot on
+  // /voting/[code] excludes them. The chair page's quorum rings and `belowQuorum` count the
+  // same way.
+  const present = committee.delegates.filter((d) => d.status !== 'absent').length;
 
   if (order.length === 0) {
     return (
@@ -1022,13 +1046,13 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
             the queued cards scroll inside this same column (hidden scrollbar, edge fades), so
             the modal never grows a side column or widens. Order, ranks and actions unchanged. */}
         <div className="w-72 shrink-0 flex flex-col min-h-0">
-          <div className="relative min-h-0 flex flex-col">
+          <div className="relative flex-1 min-h-0 flex flex-col">
             <div
               ref={overflowRef}
-              onScroll={scrolls ? measureOverflow : undefined}
+              onScroll={measureOverflow}
               tabIndex={scrolls ? 0 : undefined}
-              aria-label={scrolls ? t('motions_more_on_floor', { count: extrasCount }) : undefined}
-              className={`min-h-0 pt-3 pe-4 ${scrolls ? 'overflow-y-auto overscroll-contain pb-2 focus:outline-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden' : ''}`}
+              aria-label={scrolls ? (extrasCount > 0 ? t('motions_more_on_floor', { count: extrasCount }) : t('motions_vote_heading')) : undefined}
+              className="flex-1 min-h-0 pt-3 pe-4 overflow-y-auto overscroll-contain pb-2 focus:outline-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
               {rest.map((m, i) => (
                 <React.Fragment key={m.id}>

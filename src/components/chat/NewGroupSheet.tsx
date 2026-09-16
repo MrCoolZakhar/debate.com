@@ -11,6 +11,8 @@ export interface GroupCandidate {
   /** The participant's identity: a country name or a chair name. */
   key: string;
   label: string;
+  /** Conference sessions, chair devices only: who is in the seat. */
+  sublabel?: string;
   isChair: boolean;
 }
 
@@ -58,7 +60,7 @@ export default function NewGroupSheet({
 
   const q = query.trim().toLowerCase();
   const visible = useMemo(
-    () => (q ? candidates.filter((c) => c.label.toLowerCase().includes(q) || c.key.toLowerCase().includes(q)) : candidates),
+    () => (q ? candidates.filter((c) => c.label.toLowerCase().includes(q) || c.key.toLowerCase().includes(q) || (c.sublabel ?? '').toLowerCase().includes(q)) : candidates),
     [candidates, q],
   );
   const toggle = (key: string) => setPicked((p) => (p.includes(key) ? p.filter((k) => k !== key) : [...p, key]));
@@ -162,8 +164,15 @@ export default function NewGroupSheet({
               style={{ padding: '7px 10px', borderRadius: 14, border: 'none', background: on ? CHAT.rowActive : 'transparent', cursor: 'pointer', transitionProperty: 'background-color', transitionDuration: '120ms' }}
             >
               <ChatAvatar kind={c.isChair ? 'chair' : 'delegate'} name={c.key} size={40} />
-              <span className="flex-1 min-w-0 truncate" style={{ fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 600, color: NEU.ink }}>
-                {c.label}{c.isChair ? ` ${t('chat_chair_badge')}` : ''}
+              <span className="flex-1 min-w-0">
+                <span className="block truncate" style={{ fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 600, color: NEU.ink }}>
+                  {c.label}{c.isChair ? ` ${t('chat_chair_badge')}` : ''}
+                </span>
+                {c.sublabel && (
+                  <span className="block truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 500, color: NEU.inkSoft }}>
+                    {c.sublabel}
+                  </span>
+                )}
               </span>
               <span
                 aria-hidden

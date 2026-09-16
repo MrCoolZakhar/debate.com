@@ -227,6 +227,8 @@ src/components/ neu.tsx (design tokens), DatePicker, Portal, SiteNav, Scoreboard
 
 **Database:** there is **no `supabase/` directory and no migrations in git**. The schema lives only in the remote project; the loose `scratch-*.sql` files at the root are drafts, not truth. Inspect with the Supabase MCP tools before assuming a column exists. RLS is the security boundary everywhere; `isViewOnly`, section permissions and hidden buttons are not.
 
+**Storage cleanup:** deleting a **conference** committee takes its CHAT attachments out of the `session-documents` bucket and leaves its submitted documents alone. Chat lives under `chat/<committee_id>/`, documents at the bucket root under `<committee_id>/`, and the cleanup only ever touches the `chat/` prefix. A BEFORE DELETE trigger queues the id in `chat_cleanup_queue` (conference rows only, RLS on with no policies, service role only) and the `cleanup-chat-attachments` edge function drains it hourly on pg_cron (`10 * * * *`). Rules and limits in AGENTS.md → FEATURE: CHAT → Attachments and GIFs.
+
 **Email:** nothing sends inline. Every email is an `email_outbox` row (rendered by a DB trigger, delivered by the `send-emails` edge function via Resend). Add an event to `EVENT_REGISTRY` in `emailEvents.ts` and TypeScript forces a category and a default body.
 
 **Emailing "everyone" reaches people who have never registered, and that is

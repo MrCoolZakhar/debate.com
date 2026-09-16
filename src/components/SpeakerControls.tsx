@@ -52,10 +52,22 @@ export const SPEAKER_TONES = {
 } satisfies Record<string, Tone>;
 const TONES = SPEAKER_TONES;
 
+/**
+ * The two floor popovers (owner, 16 Sep 2026): Add time in a deep blue, Right of Reply in a
+ * deep orange, both darker than the button that opens them so the panel reads as a surface
+ * rather than a second button, and both still forest/ivory-adjacent.
+ *   header  #0E3A57 / #DCEBF8  ≈ 11:1       header  #7A3E12 / #FBE7D1  ≈ 9:1
+ *   body    #0A3350 on #D9E8F4 ≈ 10:1       body    #4A2A0E on #F2DCC2 ≈ 10:1
+ */
+export const POPOVER_TONES = {
+  time: { surface: '#D9E8F4', headerBg: '#0E3A57', headerFg: '#DCEBF8', ink: '#0A3350', accent: 'rgba(14,58,87,0.45)', btn: '#0E3A57', btnHover: '#16506F', btnFg: '#EAF4FC', chip: '#C6DCEE', chipOn: '#0E3A57' },
+  reply: { surface: '#F2DCC2', headerBg: '#7A3E12', headerFg: '#FBE7D1', ink: '#4A2A0E', accent: 'rgba(122,62,18,0.45)', btn: '#A9541A', btnHover: '#8E4514', btnFg: '#FFF2E3', chip: '#E4C39D', chipOn: '#7A3E12' },
+} as const;
+
 const ACTIVE_RING = (fg: string) => `inset 0 0 0 2px ${fg}, 0 1px 2px rgba(27,56,40,0.10), 0 4px 10px rgba(27,56,40,0.16)`;
 
 function ControlButton({
-  tone, label, title, blockedReason, onClick, children, variant = 'normal', active = false, tutorial, className = '', stacked,
+  tone, label, title, blockedReason, onClick, children, variant = 'normal', active = false, tutorial, className = '', stacked, anchor,
 }: {
   tone: Tone;
   label: string;
@@ -69,6 +81,8 @@ function ControlButton({
   variant?: 'normal' | 'grow' | 'next' | 'icon';
   active?: boolean;
   tutorial?: string;
+  /** `data-floor-anchor`: a popover this button opens places itself above it. */
+  anchor?: string;
   className?: string;
   /** Short caption rendered under the icon (RTR). The full name is the aria-label. */
   stacked?: string;
@@ -86,6 +100,7 @@ function ControlButton({
     <button
       type="button"
       data-tutorial={tutorial}
+      data-floor-anchor={anchor}
       aria-disabled={blocked || undefined}
       aria-label={iconOnly ? label : undefined}
       aria-pressed={active || undefined}
@@ -125,6 +140,7 @@ export function RtrButton({ onClick, active = false, tutorial }: { onClick: () =
       onClick={onClick}
       active={active}
       tutorial={tutorial}
+      anchor="rtr"
       stacked={t('speaker_ctl_rtr_short')}
     >
       <MessageSquareReply size={18} strokeWidth={2.4} aria-hidden />
@@ -212,6 +228,7 @@ export function SpeakerClock({
 
 export default function SpeakerControls({
   hasSpeaker,
+  floorReady,
   timerRunning,
   onToggleTimer,
   startBlockedReason = null,
@@ -223,8 +240,14 @@ export default function SpeakerControls({
   rightOfReplyActive = false,
   tutorialTargets = false,
 }: {
-  /** Somebody holds the floor. Restart and Add time need one; Start needs one too. */
+  /** Somebody holds the floor. Restart and Add time need one (they write `current_speaker`). */
   hasSpeaker: boolean;
+  /**
+   * Start may act. Defaults to `hasSpeaker`. The GSL passes true for a delegation that is on
+   * deck but not seated yet: Start seats them and starts the clock in one press (owner, 16
+   * Sep 2026). Restart and Add time stay gated on a real seated speaker.
+   */
+  floorReady?: boolean;
   timerRunning: boolean;
   onToggleTimer: () => void;
   /** Extra reason Start cannot run (e.g. "require next speaker" on the last speaker). */
@@ -245,7 +268,7 @@ export default function SpeakerControls({
 }) {
   const t = useT();
   const needSpeaker = hasSpeaker ? null : t('speaker_ctl_need_speaker');
-  const startReason = needSpeaker ?? startBlockedReason;
+  const startReason = ((floorReady ?? hasSpeaker) ? null : needSpeaker) ?? startBlockedReason;
   const addTimeLabel = t('gsl_add_time').replace(/\s*\n\s*/g, ' ');
   return (
     // No wrapping: two icon squares plus two flexible buttons always fit on one line, and
@@ -287,6 +310,7 @@ export default function SpeakerControls({
         active={addTimeActive}
         variant="icon"
         tutorial={tutorialTargets ? 'add-time-button' : undefined}
+        anchor="add-time"
       >
         <ClockPlus size={20} strokeWidth={2.4} aria-hidden />
       </ControlButton>

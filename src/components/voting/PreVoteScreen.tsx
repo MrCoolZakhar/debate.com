@@ -95,7 +95,7 @@ function Choice<T extends string>({ value, options, onChange, label, disabled }:
               opacity: disabled && !on ? 0.6 : 1,
             }}
           >
-            <span className="block text-[15px] font-black leading-tight">{o.label}</span>
+            <span className="block text-[15px] font-semibold leading-tight">{o.label}</span>
             {o.sub && (
               <span className="block text-[12.5px] font-medium leading-snug mt-0.5" style={{ color: on ? 'rgba(238,217,138,0.8)' : INK_SOFT }}>
                 {o.sub}
@@ -141,7 +141,7 @@ function Fact({ icon, children, tone = 'plain' }: { icon: ReactNode; children: R
       >
         {icon}
       </span>
-      <span className="text-[14px] font-semibold leading-snug [text-wrap:pretty]" style={{ color: tone === 'warn' ? '#FECACA' : 'rgba(255,255,255,0.9)' }}>
+      <span className="text-[14px] font-medium leading-snug [text-wrap:pretty]" style={{ color: tone === 'warn' ? '#FECACA' : 'rgba(255,255,255,0.9)' }}>
         {children}
       </span>
     </li>
@@ -156,8 +156,8 @@ function CountChip({ n, label, tone }: { n: string | number; label: string; tone
     : { bg: 'rgba(27,56,40,0.06)', fg: INK_SOFT };
   return (
     <span className="inline-flex items-baseline gap-1.5 h-8 px-3 rounded-full items-center" style={{ backgroundColor: p.bg, color: p.fg }}>
-      <span className="text-[15px] font-black tabular-nums">{n}</span>
-      <span className="text-[12px] font-bold whitespace-nowrap">{label}</span>
+      <span className="text-[14px] font-semibold tabular-nums">{n}</span>
+      <span className="text-[12.5px] font-medium whitespace-nowrap">{label}</span>
     </span>
   );
 }
@@ -236,11 +236,11 @@ export function PreVoteScreen({
     : settings.vetoMode === 'unanimous' ? t('voting_prevote_veto_unanimous') : t('voting_rules_veto_off');
   const quorumValue = settings.quorumThreshold === 'none' ? t('voting_rules_quorum_none_short') : settings.quorumThreshold.replace('-', '/');
 
-  const tabs: { key: RuleTab; label: string; value: string; icon: ReactNode; warn?: boolean }[] = [
-    { key: 'threshold', label: t('voting_rules_threshold_info_title'), value: thresholdValue, icon: <Scale size={15} strokeWidth={2.5} /> },
-    { key: 'abstentions', label: t('voting_abstain_label'), value: abstValue, icon: <CircleSlash size={15} strokeWidth={2.5} /> },
-    { key: 'veto', label: t('voting_rules_veto_info_title'), value: vetoValue, icon: <ShieldCheck size={15} strokeWidth={2.5} />, warn: vetoFact.warn },
-    { key: 'quorum', label: t('voting_rules_quorum_info_title'), value: quorumValue, icon: <Users size={15} strokeWidth={2.5} />, warn: quorumFact.warn },
+  const tabs: { key: RuleTab; label: string; value: string; warn?: boolean }[] = [
+    { key: 'threshold', label: t('voting_rules_threshold_info_title'), value: thresholdValue },
+    { key: 'abstentions', label: t('voting_abstain_label'), value: abstValue },
+    { key: 'veto', label: t('voting_rules_veto_info_title'), value: vetoValue, warn: vetoFact.warn },
+    { key: 'quorum', label: t('voting_rules_quorum_info_title'), value: quorumValue, warn: quorumFact.warn },
   ];
 
   const canConfirm = presentCount > 0 && !readOnly;
@@ -278,10 +278,9 @@ export function PreVoteScreen({
             {t('voting_prevote_close')}
           </button>
           <div className="min-w-0 flex-1 flex items-baseline gap-3">
-            <p className="hidden sm:block shrink-0 text-[12px] font-black uppercase tracking-[0.18em]" style={{ color: '#8A6414' }}>{t('voting_prevote_eyebrow')}</p>
-            <h1 id="gv-prevote-title" className="min-w-0 truncate text-[20px] sm:text-[24px] font-black leading-tight" style={{ color: INK }}>
+            <h1 id="gv-prevote-title" className="min-w-0 truncate text-[19px] sm:text-[21px] font-bold leading-tight" style={{ color: INK, letterSpacing: '-0.01em' }}>
               {doc ? t('voting_prevote_for_doc', { code: doc.code }) : t('voting_prevote_title')}
-              {doc?.title && <span className="font-semibold text-[16px] sm:text-[18px] ms-3" style={{ color: INK_SOFT }}>{doc.title}</span>}
+              {doc?.title && <span className="font-medium text-[15px] sm:text-[16px] ms-3" style={{ color: INK_SOFT, letterSpacing: 0 }}>{doc.title}</span>}
             </h1>
           </div>
         </div>
@@ -293,7 +292,7 @@ export function PreVoteScreen({
             <section className="gv-in gv-in-2 rounded-[28px] flex flex-col lg:min-h-0 overflow-hidden" style={{ backgroundColor: CARD, boxShadow: CARD_SHADOW }}>
               <div className="shrink-0 px-5 pt-5 pb-3 flex flex-wrap items-center gap-x-4 gap-y-3">
                 <div className="min-w-0 me-auto">
-                  <h2 className="text-[21px] font-black leading-tight" style={{ color: INK }}>{t('voting_roll_call_heading')}</h2>
+                  <h2 className="text-[18px] font-bold leading-tight" style={{ color: INK }}>{t('voting_roll_call_heading')}</h2>
                   <p className="text-[13px] mt-0.5 leading-snug" style={{ color: INK_SOFT }}>{t('voting_prevote_roll_call_hint')}</p>
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap" aria-live="polite">
@@ -305,12 +304,12 @@ export function PreVoteScreen({
               {votable.length > 0 && !readOnly && (
                 <div className="shrink-0 px-5 pb-3 flex items-center gap-2">
                   <button type="button" onClick={() => onBulkStatus('present')}
-                    className={`h-9 px-3.5 rounded-full text-[13px] font-black focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] hover:bg-[rgba(47,107,69,0.18)] ${PRESS}`}
+                    className={`h-9 px-3.5 rounded-full text-[13px] font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] hover:bg-[rgba(47,107,69,0.18)] ${PRESS}`}
                     style={{ backgroundColor: 'rgba(47,107,69,0.10)', color: '#2F6B45' }}>
                     {t('rollcall_all_present')}
                   </button>
                   <button type="button" onClick={() => onBulkStatus('present-voting')}
-                    className={`h-9 px-3.5 rounded-full text-[13px] font-black focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] hover:bg-[rgba(182,135,31,0.22)] ${PRESS}`}
+                    className={`h-9 px-3.5 rounded-full text-[13px] font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] hover:bg-[rgba(182,135,31,0.22)] ${PRESS}`}
                     style={{ backgroundColor: 'rgba(182,135,31,0.13)', color: '#6A4A0A' }}>
                     {t('rollcall_all_pv')}
                   </button>
@@ -331,7 +330,7 @@ export function PreVoteScreen({
                           style={{ backgroundColor: rowTint(s) }}
                         >
                           <SeatCircleFlag seat={d} size={38} decorative style={{ opacity: s === 'absent' ? 0.5 : 1 }} />
-                          <span className="flex-1 min-w-0 text-[16px] font-bold truncate" style={{ color: s === 'absent' ? INK_SOFT : INK }}>{name}</span>
+                          <span className="flex-1 min-w-0 text-[16px] font-medium truncate" style={{ color: s === 'absent' ? INK_SOFT : INK }}>{name}</span>
                           <button
                             type="button"
                             onClick={() => onToggleObserver(d)}
@@ -355,7 +354,7 @@ export function PreVoteScreen({
                                   title={seg.title}
                                   disabled={readOnly}
                                   onClick={() => { if (!on) onSetStatus(d.id, seg.value); }}
-                                  className={`h-8 min-w-[3.25rem] px-2.5 rounded-full text-[12.5px] font-black focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] disabled:cursor-not-allowed ${PRESS}`}
+                                  className={`h-8 min-w-[3.25rem] px-2.5 rounded-full text-[12.5px] font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] disabled:cursor-not-allowed ${PRESS}`}
                                   style={{
                                     backgroundColor: on ? seg.on : 'transparent',
                                     color: on ? '#FFFFFF' : INK_SOFT,
@@ -375,7 +374,7 @@ export function PreVoteScreen({
 
                 {observers.length > 0 && (
                   <div className="mt-4 pt-3 px-2" style={{ boxShadow: 'inset 0 1px 0 rgba(27,56,40,0.10)' }}>
-                    <p className="text-[12px] font-black uppercase tracking-[0.14em]" style={{ color: '#8A6414' }}>
+                    <p className="text-[14px] font-semibold" style={{ color: INK }}>
                       {t('voting_observers_heading', { n: observers.length })}
                     </p>
                     <p className="text-[13px] mt-0.5 mb-2 leading-snug" style={{ color: INK_SOFT }}>{t('voting_observers_note')}</p>
@@ -385,7 +384,7 @@ export function PreVoteScreen({
                         return (
                           <li key={d.id} className="flex items-center gap-3 rounded-2xl ps-2 pe-1.5 py-1.5 -mx-2" style={{ backgroundColor: 'rgba(238,217,138,0.24)' }}>
                             <SeatCircleFlag seat={d} size={34} decorative />
-                            <span className="flex-1 min-w-0 text-[15px] font-bold truncate" style={{ color: INK }}>{name}</span>
+                            <span className="flex-1 min-w-0 text-[15px] font-medium truncate" style={{ color: INK }}>{name}</span>
                             <button
                               type="button"
                               onClick={() => onToggleObserver(d)}
@@ -415,11 +414,11 @@ export function PreVoteScreen({
                 aria-live="polite"
               >
                 <div className="shrink-0 w-[92px] text-center">
-                  <p className="text-[11px] font-black uppercase tracking-[0.14em]" style={{ color: 'rgba(238,217,138,0.8)' }}>{t('voting_prevote_to_pass')}</p>
-                  <p className="text-[52px] font-black leading-none tabular-nums mt-1.5" style={{ color: GOLD }}>
+                  <p className="text-[12.5px] font-medium" style={{ color: 'rgba(238,217,138,0.85)' }}>{t('voting_prevote_to_pass')}</p>
+                  <p className="text-[40px] font-bold leading-none tabular-nums mt-1.5" style={{ color: GOLD }}>
                     {consensus ? 0 : presentCount === 0 ? '–' : outcome.needed}
                   </p>
-                  <p className="text-[12px] font-bold mt-1 leading-tight" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                  <p className="text-[12.5px] font-medium mt-1.5 leading-tight" style={{ color: 'rgba(255,255,255,0.72)' }}>
                     {consensus ? t('voting_rules_stat_against_max').toLowerCase() : t('voting_prevote_of_total', { total: presentCount })}
                   </p>
                 </div>
@@ -433,7 +432,7 @@ export function PreVoteScreen({
 
               <section className="gv-in gv-in-4 rounded-[28px] flex flex-col lg:flex-1 lg:min-h-0 overflow-hidden" style={{ backgroundColor: CARD, boxShadow: CARD_SHADOW }}>
                 <div className="shrink-0 px-5 pt-4 flex items-baseline justify-between gap-3">
-                  <h2 className="text-[18px] font-black" style={{ color: INK }}>{t('voting_rules_title')}</h2>
+                  <h2 className="text-[16px] font-bold" style={{ color: INK }}>{t('voting_rules_title')}</h2>
                   <p className="text-[12px] truncate" style={{ color: INK_SOFT }}>{readOnly ? t('voting_rules_read_only') : t('settings_changes_apply')}</p>
                 </div>
                 <div role="tablist" aria-label={t('voting_rules_title')} className="shrink-0 mx-4 mt-3 grid grid-cols-4 gap-1 rounded-2xl p-1" style={{ backgroundColor: 'rgba(27,56,40,0.07)' }}>
@@ -454,11 +453,10 @@ export function PreVoteScreen({
                           boxShadow: on ? '0 1px 2px rgba(27,56,40,0.10), 0 4px 10px rgba(27,56,40,0.08)' : 'none',
                         }}
                       >
-                        <span className="flex items-center gap-1.5 text-[12px] font-black truncate" style={{ color: on ? FOREST : INK_SOFT }}>
-                          <span aria-hidden className="shrink-0" style={{ color: tb.warn ? '#8B2020' : undefined }}>{tb.icon}</span>
-                          <span className="truncate">{tb.label}</span>
+                        <span className="flex items-center gap-1.5 text-[12px] font-medium truncate" style={{ color: on ? FOREST : INK_SOFT }}>
+                                                    <span className="truncate">{tb.label}</span>
                         </span>
-                        <span className="block text-[13.5px] font-bold truncate mt-0.5 tabular-nums" style={{ color: tb.warn ? '#8B2020' : INK }}>{tb.value}</span>
+                        <span className="block text-[13.5px] font-semibold truncate mt-0.5 tabular-nums" style={{ color: tb.warn ? '#8B2020' : INK }}>{tb.value}</span>
                       </button>
                     );
                   })}
@@ -546,14 +544,14 @@ export function PreVoteScreen({
 
               {/* The one primary action */}
               <div className="gv-in gv-in-4 shrink-0 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                <p className="flex-1 text-[14px] font-semibold text-center sm:text-start [text-wrap:pretty]" style={{ color: presentCount > 0 ? INK_SOFT : '#8B2020' }}>
+                <p className="flex-1 text-[14px] font-medium text-center sm:text-start [text-wrap:pretty]" style={{ color: presentCount > 0 ? INK_SOFT : '#8B2020' }}>
                   {presentCount > 0 ? t('voting_prevote_start_sub', { n: presentCount }) : t('voting_mark_present')}
                 </p>
                 <button
                   type="button"
                   onClick={onConfirm}
                   disabled={!canConfirm}
-                  className={`min-h-14 px-10 rounded-2xl text-[18px] font-black focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 disabled:cursor-not-allowed ${PRESS}`}
+                  className={`h-12 px-8 rounded-full text-[15px] font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 disabled:cursor-not-allowed ${PRESS}`}
                   style={{
                     backgroundColor: canConfirm ? FOREST : 'rgba(27,56,40,0.18)',
                     color: canConfirm ? GOLD : 'rgba(28,20,16,0.45)',

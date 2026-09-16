@@ -10,8 +10,15 @@
  *   SealChoice    role=radiogroup of cards with an icon and a wax-seal selected mark
  *   ClockStepper  role=spinbutton seconds well with - / + and notch presets
  *   NotchDial     role=slider track of notches, a pebble thumb, drag and arrow keys
+ *   SecondsDial   role=slider on a LOG scale + a typed value + presets (the gavel knock)
  *   TallyStepper  compact +/- counter for points
- *   Section, SettingRow, HoverHint, InlineRename, ConfirmSheet
+ *   Section, SettingRow, RowGrid, SectionPair, HoverHint, InlineRename, ConfirmSheet
+ *
+ * ICONS. A glyph in this dialog is a CRISP LUCIDE LINE at one of three sizes (14 in a
+ * section eyebrow, 16 inline in a row, 18-20 in a header) in forest, deep gold or ink.
+ * It NEVER sits in a decorative rounded-square tile: those tiles are what made the panel
+ * look generated. The only round or plated things left are the ones that really are an
+ * object: a person's avatar, a wax seal on a chosen card, a join-code ticket, a switch knob.
  */
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Check, Lock, Minus, Plus, Pencil, RotateCcw } from 'lucide-react';
@@ -68,35 +75,28 @@ export function SettingsKitStyles() {
 // ── Section and rows ──────────────────────────────────────────────────────────
 type LucideIcon = React.ComponentType<{ size?: number; strokeWidth?: number; className?: string; style?: React.CSSProperties; 'aria-hidden'?: boolean | 'true' }>;
 
-/** A titled group. `lead` sections (the settings that matter most on the tab) get a forest
- *  eyebrow and a raised plate; the rest sit flatter so the hierarchy reads at a glance. */
+/** A labelled group. ONE heading shape on every tab: a 14px glyph, a short uppercase label
+ *  and a rule that runs to the inline-end, with an optional aside riding on the rule. The
+ *  lead groups of a tab get a raised plate, the rest a hairline, so the weight says which
+ *  settings matter without a second type size. */
 export function Section({ icon: Icon, title, hint, lead = false, children, delay = 0, aside }: {
   icon?: LucideIcon; title: string; hint?: string; lead?: boolean; children: React.ReactNode; delay?: number; aside?: React.ReactNode;
 }) {
   const id = useId();
   return (
-    <section aria-labelledby={id} className="stg-rise" style={{ animationDelay: `${delay}ms`, marginBottom: 26 }}>
-      <div className="flex items-end gap-3" style={{ marginBottom: 10, paddingInline: 4 }}>
-        {Icon && (
-          <span aria-hidden className="inline-flex items-center justify-center shrink-0" style={{
-            width: 26, height: 26, borderRadius: 9,
-            background: lead ? K.forest : 'transparent', color: lead ? K.gold : K.forestLight,
-            boxShadow: lead ? K.outSm : 'none',
-          }}>
-            <Icon size={14} strokeWidth={2.4} />
-          </span>
-        )}
-        <div className="flex-1 min-w-0">
-          <h3 id={id} className="stg-title" style={{ margin: 0, fontSize: lead ? 15 : 13, fontWeight: 800, letterSpacing: lead ? '-0.005em' : '0.06em', textTransform: lead ? 'none' : 'uppercase', color: lead ? K.forest : K.inkSoft }}>
-            {title}
-          </h3>
-          {hint && <p className="stg-body" style={{ margin: '2px 0 0', fontSize: 12.5, lineHeight: 1.45, color: K.muted }}>{hint}</p>}
-        </div>
+    <section aria-labelledby={id} className="stg-rise" style={{ animationDelay: `${delay}ms`, marginBottom: 18 }}>
+      <div className="flex items-center gap-2" style={{ marginBottom: hint ? 5 : 8, paddingInline: 2 }}>
+        {Icon && <Icon aria-hidden size={14} strokeWidth={2.5} style={{ color: lead ? K.deepGold : K.forestLight, flexShrink: 0 }} />}
+        <h3 id={id} className="stg-title truncate" style={{ margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: K.forest }}>
+          {title}
+        </h3>
+        <span aria-hidden className="flex-1" style={{ height: 1, minWidth: 10, background: K.hair }} />
         {aside}
       </div>
+      {hint && <p className="stg-body" style={{ margin: '0 0 8px', paddingInline: 2, fontSize: 12.5, lineHeight: 1.4, color: K.muted }}>{hint}</p>}
       <div style={{
-        borderRadius: 20, background: lead ? K.surface : 'rgba(251,248,241,0.55)',
-        boxShadow: lead ? K.card : '0 0 0 1px rgba(27,56,40,0.05)', padding: '4px 18px',
+        borderRadius: 16, background: lead ? K.surface : 'rgba(251,248,241,0.5)',
+        boxShadow: lead ? K.card : '0 0 0 1px rgba(27,56,40,0.05)', padding: '2px 16px',
       }}>
         {children}
       </div>
@@ -104,22 +104,34 @@ export function Section({ icon: Icon, title, hint, lead = false, children, delay
   );
 }
 
+/** Two groups side by side on a wide dialog, stacked below ~330px each. */
+export function SectionPair({ children }: { children: React.ReactNode }) {
+  return <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', columnGap: 20 }}>{children}</div>;
+}
+
+/** Settings in two columns inside one group, so a tab of switches is half as tall. Rows
+ *  inside keep their own hairline (never pass `first`), which reads as a small table. */
+export function RowGrid({ children, min = 300 }: { children: React.ReactNode; min?: number }) {
+  return <div className="grid" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(${min}px, 1fr))`, columnGap: 24 }}>{children}</div>;
+}
+
 /** One setting: label and note on the inline-start side, the control on the inline-end. */
-export function SettingRow({ label, note, control, children, first = false, htmlFor, labelId }: {
-  label: React.ReactNode; note?: React.ReactNode; control?: React.ReactNode; children?: React.ReactNode; first?: boolean; htmlFor?: string; labelId?: string;
+export function SettingRow({ label, note, control, children, first = false, dense = false, htmlFor, labelId }: {
+  label: React.ReactNode; note?: React.ReactNode; control?: React.ReactNode; children?: React.ReactNode;
+  first?: boolean; dense?: boolean; htmlFor?: string; labelId?: string;
 }) {
   return (
-    <div style={{ padding: '14px 0', borderTop: first ? 'none' : `1px solid ${K.hair}` }}>
-      <div className="flex items-center gap-4">
+    <div style={{ padding: dense ? '9px 0' : '12px 0', borderTop: first ? 'none' : `1px solid ${K.hair}` }}>
+      <div className="flex items-center gap-3">
         <div className="flex-1 min-w-0">
           {htmlFor
-            ? <label htmlFor={htmlFor} id={labelId} style={{ display: 'block', fontSize: 14.5, fontWeight: 700, color: K.ink, lineHeight: 1.3 }}>{label}</label>
-            : <div id={labelId} style={{ fontSize: 14.5, fontWeight: 700, color: K.ink, lineHeight: 1.3 }}>{label}</div>}
-          {note && <div className="stg-body" style={{ marginTop: 3, fontSize: 12.5, lineHeight: 1.45, color: K.inkSoft }}>{note}</div>}
+            ? <label htmlFor={htmlFor} id={labelId} style={{ display: 'block', fontSize: 14, fontWeight: 700, color: K.ink, lineHeight: 1.3 }}>{label}</label>
+            : <div id={labelId} style={{ fontSize: 14, fontWeight: 700, color: K.ink, lineHeight: 1.3 }}>{label}</div>}
+          {note && <div className="stg-body" style={{ marginTop: 2, fontSize: 12, lineHeight: 1.4, color: K.inkSoft }}>{note}</div>}
         </div>
         {control && <div className="shrink-0">{control}</div>}
       </div>
-      {children && <div style={{ marginTop: 12 }}>{children}</div>}
+      {children && <div style={{ marginTop: 10 }}>{children}</div>}
     </div>
   );
 }
@@ -213,25 +225,24 @@ export function SealChoice<V extends string>({ value, options, onChange, label, 
             onKeyDown={(e) => onKey(e, i)}
             className="stg-focus stg-press relative text-start"
             style={{
-              borderRadius: 16, border: 'none', cursor: 'pointer', padding: compact ? '12px 12px' : '14px 14px 14px 14px',
+              borderRadius: 14, border: 'none', cursor: 'pointer', padding: compact ? '10px 11px' : '12px 12px',
               background: on ? `linear-gradient(160deg, ${K.forest}, #22472F)` : K.surface,
               color: on ? '#F3EAD0' : K.ink,
               boxShadow: on ? '0 10px 22px -12px rgba(27,56,40,0.7), inset 0 1px 0 rgba(255,255,255,0.08)' : K.outSm,
             }}
           >
-            <div className="flex items-start gap-3">
+            {/* Glyph or diagram, on the card itself: no tile behind it (see ICONS above). */}
+            <div className="flex items-start gap-2.5">
               {(o.art || Icon) && (
                 <span aria-hidden className="inline-flex items-center justify-center shrink-0" style={{
-                  width: compact ? 34 : 40, height: compact ? 34 : 40, borderRadius: 12,
-                  background: on ? 'rgba(238,217,138,0.14)' : K.ivory, color: on ? K.gold : K.forest,
-                  boxShadow: on ? 'inset 0 0 0 1px rgba(238,217,138,0.22)' : K.inSm,
+                  width: 22, height: compact ? 18 : 20, color: on ? K.gold : K.forest,
                 }}>
                   {o.art ?? (Icon && <Icon size={compact ? 16 : 18} strokeWidth={2.2} />)}
                 </span>
               )}
-              <span className="flex-1 min-w-0" style={{ paddingInlineEnd: 22 }}>
-                <span style={{ display: 'block', fontSize: compact ? 13.5 : 14.5, fontWeight: 800, lineHeight: 1.25 }}>{o.title}</span>
-                {o.note && <span className="stg-body" style={{ display: 'block', marginTop: 3, fontSize: 12, lineHeight: 1.4, color: on ? 'rgba(243,234,208,0.78)' : K.inkSoft }}>{o.note}</span>}
+              <span className="flex-1 min-w-0" style={{ paddingInlineEnd: 20 }}>
+                <span style={{ display: 'block', fontSize: compact ? 13.5 : 14, fontWeight: 800, lineHeight: 1.25 }}>{o.title}</span>
+                {o.note && <span className="stg-body" style={{ display: 'block', marginTop: 2, fontSize: 12, lineHeight: 1.4, color: on ? 'rgba(243,234,208,0.78)' : K.inkSoft }}>{o.note}</span>}
               </span>
             </div>
             {/* The wax seal: gold with a check when chosen, an empty ring otherwise. */}
@@ -270,15 +281,27 @@ export function ClockStepper({ value, onCommit, min, max, step = 5, presets = []
   const [synced, setSynced] = useState(value);
   if (!editing && synced !== value) { setSynced(value); setDraft(String(value)); }
   const clamp = (n: number) => Math.min(max, Math.max(min, n));
+  // What the control is really on right now. Clicking - / + blurs a focused field, so the
+  // blur commits the typed number and THEN the click runs: without this ref the click would
+  // step from the value of the previous render and throw the typed number away.
+  const liveRef = useRef(value);
+  useEffect(() => { liveRef.current = value; }, [value]);
   const commit = () => {
     setEditing(false);
     const n = parseInt(draft.trim(), 10);
     if (!Number.isFinite(n)) { setDraft(String(value)); return; }
     const c = clamp(n);
     setDraft(String(c));
+    liveRef.current = c;
     if (c !== value) onCommit(c);
   };
-  const bump = (d: number) => onCommit(clamp(value + d));
+  const bump = (d: number) => {
+    // Step onto the grid (5, 10, 15...) rather than drifting off it from a typed 17.
+    const base = liveRef.current;
+    const next = clamp(d > 0 ? (Math.floor(base / step) + 1) * step : (Math.ceil(base / step) - 1) * step);
+    liveRef.current = next;
+    if (next !== base) onCommit(next);
+  };
   const frac = Math.min(1, value / (arcMax ?? max));
   const R = 17;
   const C = 2 * Math.PI * R;
@@ -441,6 +464,167 @@ export function NotchDial({ value, min, max, step = 1, onChange, label, valueTex
       {(startLabel || endLabel) && (
         <div className="flex justify-between" style={{ marginTop: 8, fontSize: 11.5, fontWeight: 700, color: K.muted }}>
           <span>{startLabel}</span><span>{endLabel}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── SecondsDial: the "knock at N seconds" control ─────────────────────────────
+/**
+ * A real slider for a seconds setting with a very wide range (1..600), plus presets and a
+ * typed value. Three things make it work where a plain +/- stepper did not:
+ *
+ *  1. LOG SCALE. On a linear 1..600 track the useful part of the setting (5 to 60 seconds)
+ *     lives in the first 10% and cannot be hit with a finger. Here the position is
+ *     log(v/min) / log(max/min), so 15 s (the default) sits near the middle.
+ *  2. A GRAIN that follows the value: 1 s below a minute, 5 s up to five minutes, 15 s above.
+ *     Dragging therefore lands on round numbers, and so do the arrow keys.
+ *  3. ONE source of truth for what is committed: every path (drag, keys, preset, typed
+ *     number) goes through `clamp` then `onChange`, and the typed field re-reads the value
+ *     from a ref, so committing by blurring into a preset cannot lose what was typed.
+ *
+ * `onChange` fires on every drag sample; the caller's write is key-level and debounced, so a
+ * drag is one patch. Presets are drawn as ticks on the rail as well as chips under it.
+ */
+export function SecondsDial({ value, min, max, onChange, label, presets = [], unit, format, clamp: clampIn, aside }: {
+  value: number; min: number; max: number; onChange: (v: number) => void; label: string;
+  presets?: number[]; unit: string; format?: (v: number) => string; clamp?: (v: number) => number;
+  /** Rendered at the inline-end of the preset row (e.g. a Test button). */
+  aside?: React.ReactNode;
+}) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const [draft, setDraft] = useState(String(value));
+  const [editing, setEditing] = useState(false);
+  const [synced, setSynced] = useState(value);
+  if (!editing && synced !== value) { setSynced(value); setDraft(String(value)); }
+  const liveRef = useRef(value);
+  useEffect(() => { liveRef.current = value; }, [value]);
+
+  const clamp = useCallback((v: number) => {
+    const n = clampIn ? clampIn(v) : Math.round(v);
+    return Math.min(max, Math.max(min, Number.isFinite(n) ? n : min));
+  }, [clampIn, min, max]);
+  const grain = (v: number) => (v <= 60 ? 1 : v <= 300 ? 5 : 15);
+  const toPos = useCallback((v: number) => Math.log(Math.max(min, v) / min) / Math.log(max / min), [min, max]);
+  const fromPos = useCallback((p: number) => min * Math.pow(max / min, Math.min(1, Math.max(0, p))), [min, max]);
+  const snap = useCallback((v: number) => { const g = grain(v); return clamp(Math.round(v / g) * g); }, [clamp]);
+
+  const fromPointer = (clientX: number) => {
+    const el = trackRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    let p = (clientX - r.left) / (r.width || 1);
+    if (getComputedStyle(el).direction === 'rtl') p = 1 - p;
+    onChange(snap(fromPos(p)));
+  };
+  const onKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const rtl = getComputedStyle(e.currentTarget).direction === 'rtl';
+    const v = liveRef.current;
+    // Step onto the grain of the side we move towards, so 60 -> 65 and 66 -> 65, never 66.
+    const up = (n: number) => { const g = grain(v + 1); return (Math.floor(v / g) + n) * g; };
+    const down = (n: number) => { const g = grain(Math.max(min, v - 1)); return (Math.ceil(v / g) - n) * g; };
+    let next: number | null = null;
+    if (e.key === 'ArrowUp' || e.key === (rtl ? 'ArrowLeft' : 'ArrowRight')) next = up(1);
+    else if (e.key === 'ArrowDown' || e.key === (rtl ? 'ArrowRight' : 'ArrowLeft')) next = down(1);
+    else if (e.key === 'PageUp') next = up(10);
+    else if (e.key === 'PageDown') next = down(10);
+    else if (e.key === 'Home') next = min;
+    else if (e.key === 'End') next = max;
+    if (next === null) return;
+    e.preventDefault();
+    onChange(clamp(next));
+  };
+  const commitDraft = () => {
+    setEditing(false);
+    const n = parseInt(draft.trim(), 10);
+    if (!Number.isFinite(n)) { setDraft(String(liveRef.current)); return; }
+    const c = clamp(n);
+    setDraft(String(c));
+    liveRef.current = c;
+    if (c !== value) onChange(c);
+  };
+  const frac = toPos(value);
+  const text = format ? format(value) : `${value}${unit}`;
+
+  return (
+    <div className="flex flex-col gap-2 w-full" style={{ minWidth: 220 }}>
+      <div className="flex items-center gap-3">
+        <div
+          ref={trackRef}
+          role="slider"
+          tabIndex={0}
+          aria-label={label}
+          aria-valuemin={min}
+          aria-valuemax={max}
+          aria-valuenow={value}
+          aria-valuetext={text}
+          onKeyDown={onKey}
+          onPointerDown={(e) => { if (e.pointerType === 'mouse' && e.button !== 0) return; setDragging(true); (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); fromPointer(e.clientX); }}
+          onPointerMove={(e) => { if (dragging) fromPointer(e.clientX); }}
+          onPointerUp={() => setDragging(false)}
+          onPointerCancel={() => setDragging(false)}
+          className="stg-focus relative flex-1 select-none"
+          style={{ height: 30, borderRadius: 10, cursor: 'pointer', touchAction: 'none', minWidth: 120 }}
+        >
+          {/* Rail, fill, and a tick where each preset sits. */}
+          <span aria-hidden className="absolute" style={{ insetInline: 0, top: 12, height: 6, borderRadius: 999, background: K.ivory, boxShadow: K.inSm }} />
+          <span aria-hidden className="absolute" style={{ insetInlineStart: 0, top: 12, height: 6, width: `calc(11px + (100% - 22px) * ${frac})`, borderRadius: 999, background: `linear-gradient(90deg, ${K.forestMid}, ${K.deepGold})` }} />
+          {presets.map((p) => (
+            <span key={p} aria-hidden className="absolute" style={{
+              top: 22, insetInlineStart: `calc(10px + (100% - 22px) * ${toPos(p)})`, width: 2, height: 5, borderRadius: 2,
+              background: 'rgba(28,20,16,0.2)',
+            }} />
+          ))}
+          <span aria-hidden className="absolute" style={{
+            top: 3, insetInlineStart: `calc((100% - 22px) * ${frac})`, width: 22, height: 24, borderRadius: 8,
+            background: 'linear-gradient(180deg, #FFFFFF, #EFE8D8)',
+            boxShadow: `0 3px 8px rgba(27,56,40,0.3), inset 0 -2px 0 rgba(27,56,40,0.08)${dragging ? `, 0 0 0 3px rgba(182,135,31,0.25)` : ''}`,
+            transitionProperty: 'inset-inline-start, box-shadow', transitionDuration: dragging ? '0ms' : '140ms',
+          }}>
+            <span className="absolute" style={{ top: 7, left: 6, right: 6, height: 2, borderRadius: 2, background: 'rgba(27,56,40,0.25)', boxShadow: '0 4px 0 rgba(27,56,40,0.25)' }} />
+          </span>
+        </div>
+        <span className="inline-flex items-center shrink-0" style={{ height: 34, padding: '0 8px 0 2px', borderRadius: 10, background: K.ivory, boxShadow: K.inSm }}>
+          <input
+            type="text"
+            inputMode="numeric"
+            aria-label={label}
+            value={draft}
+            onFocus={() => setEditing(true)}
+            onChange={(e) => setDraft(e.target.value.replace(/[^\d]/g, '').slice(0, 3))}
+            onBlur={commitDraft}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); (e.currentTarget as HTMLInputElement).blur(); }
+              else if (e.key === 'Escape') { e.preventDefault(); setDraft(String(liveRef.current)); setEditing(false); (e.currentTarget as HTMLInputElement).blur(); }
+            }}
+            className="stg-focus stg-num text-center"
+            style={{ width: 46, height: 28, border: 'none', background: 'transparent', fontSize: 16, fontWeight: 800, color: K.forest, borderRadius: 8 }}
+          />
+          <span aria-hidden style={{ fontSize: 11, fontWeight: 700, color: K.muted }}>{unit}</span>
+        </span>
+      </div>
+      {(presets.length > 0 || aside) && (
+        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap gap-1.5 flex-1" role="group" aria-label={label}>
+          {presets.map((p) => {
+            const on = p === value;
+            return (
+              <button key={p} type="button" aria-pressed={on} onClick={() => onChange(clamp(p))}
+                className="stg-focus stg-press stg-num"
+                style={{
+                  minWidth: 38, height: 26, padding: '0 9px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                  fontSize: 12, fontWeight: 800,
+                  background: on ? K.gold : 'transparent', color: on ? K.forest : K.inkSoft,
+                  boxShadow: on ? '0 2px 6px -2px rgba(182,135,31,0.6)' : 'inset 0 0 0 1px rgba(28,20,16,0.12)',
+                }}>
+                {format ? format(p) : `${p}${unit}`}
+              </button>
+            );
+          })}
+        </div>
+        {aside}
         </div>
       )}
     </div>
@@ -614,12 +798,10 @@ export function ConfirmSheet({ title, body, confirmLabel, cancelLabel, onConfirm
       onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (!busy) onCancel(); } }}>
       <div role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={bodyId} className="stg-rise"
         style={{ width: '100%', maxWidth: 440, borderRadius: 24, background: K.surface, boxShadow: '0 30px 60px -20px rgba(5,8,20,0.5), 0 0 0 1px rgba(27,56,40,0.08)', padding: 24 }}>
-        {Icon && (
-          <span aria-hidden className="inline-flex items-center justify-center" style={{ width: 46, height: 46, borderRadius: 15, background: tone === 'danger' ? K.dangerTint : K.ivory, color: accent, boxShadow: K.inSm, marginBottom: 14 }}>
-            <Icon size={22} strokeWidth={2.2} />
-          </span>
-        )}
-        <h3 id={titleId} className="stg-title" style={{ margin: 0, fontSize: 20, fontWeight: 900, color: K.ink, letterSpacing: '-0.01em' }}>{title}</h3>
+        <h3 id={titleId} className="stg-title flex items-start gap-2.5" style={{ margin: 0, fontSize: 20, fontWeight: 900, color: K.ink, letterSpacing: '-0.01em' }}>
+          {Icon && <Icon aria-hidden size={20} strokeWidth={2.3} style={{ color: accent, flexShrink: 0, marginTop: 3 }} />}
+          <span>{title}</span>
+        </h3>
         <div id={bodyId} className="stg-body" style={{ marginTop: 8, fontSize: 14, lineHeight: 1.55, color: K.inkSoft }}>{body}</div>
         {error && <p role="alert" style={{ margin: '12px 0 0', fontSize: 13, fontWeight: 700, color: K.danger }}>{error}</p>}
         <div className="flex flex-wrap justify-end gap-2" style={{ marginTop: 20 }}>

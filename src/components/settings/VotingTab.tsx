@@ -60,7 +60,7 @@ export default function VotingTab({ committee, s, upd, t, language, isViewOnly }
   return (
     <div style={dim} aria-disabled={isViewOnly || undefined}>
       <Section icon={Scale} title={t('settings_substantive_threshold')} hint={t('stg_threshold_hint')} lead>
-        <div style={{ padding: '14px 0' }}>
+        <div style={{ padding: '10px 0' }}>
           <SealChoice
             label={t('settings_substantive_threshold')}
             colsClass="sm:grid-cols-3"
@@ -73,12 +73,12 @@ export default function VotingTab({ committee, s, upd, t, language, isViewOnly }
             ]}
           />
         </div>
-        <SettingRow labelId="stg-abst" label={t('settings_allow_abstentions_label')} note={t('settings_allow_abstentions_note')}
-          control={<GavelSwitch icon={CircleDashed} labelledBy="stg-abst" checked={s.allowAbstentions} onChange={(v) => upd('allowAbstentions', v)} />} />
+        <SettingRow dense labelId="stg-abst" label={t('settings_allow_abstentions_label')} note={t('settings_allow_abstentions_note')}
+          control={<GavelSwitch size="sm" icon={CircleDashed} labelledBy="stg-abst" checked={s.allowAbstentions} onChange={(v) => upd('allowAbstentions', v)} />} />
       </Section>
 
       <Section icon={ShieldBan} title={t('stg_veto_title')} hint={t('stg_veto_hint')} lead delay={40}>
-        <div style={{ padding: '14px 0' }}>
+        <div style={{ padding: '10px 0' }}>
           <SealChoice
             label={t('stg_veto_title')}
             value={s.vetoMode}
@@ -95,7 +95,7 @@ export default function VotingTab({ committee, s, upd, t, language, isViewOnly }
         {/* The P5 list is fixed (it is the Security Council's permanent five). The panel
             answers the question a non-UNSC chair has: which of them sit here? */}
         {s.vetoMode === 'p5' && (
-          <div style={{ borderTop: `1px solid ${K.hair}`, padding: '14px 0' }}>
+          <div style={{ borderTop: `1px solid ${K.hair}`, padding: '10px 0' }}>
             <div className="flex items-center justify-between gap-3" style={{ marginBottom: 10 }}>
               <HoverHint text={t('stg_p5_fixed_hint')}>
                 <span style={{ fontSize: 13, fontWeight: 800, color: K.forest }}>{t('settings_p5_delegations')}</span>
@@ -133,7 +133,7 @@ export default function VotingTab({ committee, s, upd, t, language, isViewOnly }
         )}
 
         {s.vetoMode === 'custom' && (
-          <div style={{ borderTop: `1px solid ${K.hair}`, padding: '14px 0' }}>
+          <div style={{ borderTop: `1px solid ${K.hair}`, padding: '10px 0' }}>
             <div className="flex items-center justify-between gap-3" style={{ marginBottom: 10 }}>
               <span style={{ fontSize: 13, fontWeight: 800, color: K.forest }}>{t('settings_veto_custom_members')}</span>
               <span className="stg-num" style={{ fontSize: 12, fontWeight: 800, color: K.inkSoft }}>{t('stg_selected_count', { n: committee.delegates.filter((d) => vetoSet.has(d.country)).length })}</span>
@@ -175,7 +175,7 @@ export default function VotingTab({ committee, s, upd, t, language, isViewOnly }
             {t('stg_quorum_needs', { n: need, total })}
           </span>
         ) : undefined}>
-        <div style={{ padding: '14px 0' }}>
+        <div style={{ padding: '10px 0' }}>
           <SealChoice
             compact
             colsClass="grid-cols-2 lg:grid-cols-4"

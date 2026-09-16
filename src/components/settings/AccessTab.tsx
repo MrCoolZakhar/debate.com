@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { BellRing, Check, Copy, Eye, Gavel, KeyRound, Lock, MessageSquareOff, ShieldCheck, Tag, Users, Volume2, ListOrdered, DoorOpen } from 'lucide-react';
+import { BellRing, Check, Copy, Eye, Gavel, KeyRound, Lock, MessageSquareText, MessageSquareOff, ShieldCheck, Tag, Volume2, ListOrdered, DoorOpen, Users } from 'lucide-react';
 import { clampGavelSeconds, primeGavelAudio, playGavelKnock, GAVEL_MIN_SECONDS, GAVEL_MAX_SECONDS, GAVEL_DEFAULT_SECONDS } from '@/lib/gavelSound';
-import { K, Section, SettingRow, GavelSwitch, ClockStepper } from './settingsKit';
+import { getCountryByName } from '@/lib/countries';
+import { CircleFlag, flagMonogram } from '@/components/CircleFlag';
+import { K, Section, SectionPair, SettingRow, RowGrid, GavelSwitch, SecondsDial, formatSeconds } from './settingsKit';
 import type { TabProps } from './settingsTypes';
 
 /** A ticket stub for a code: perforated edge, big tabular letters, copy on press. */
@@ -31,53 +33,111 @@ function CodeTicket({ label, code, caption, secret = false, tone, copiedLabel, c
       aria-label={`${label}: ${copyLabel}`}
       className="stg-focus stg-press relative text-start overflow-hidden"
       style={{
-        flex: '1 1 240px', minWidth: 0, border: 'none', cursor: 'pointer', borderRadius: 18, padding: '16px 18px 16px 22px',
+        flex: '1 1 220px', minWidth: 0, border: 'none', cursor: 'pointer', borderRadius: 14, padding: '11px 14px 11px 20px',
         background: dark ? `linear-gradient(140deg, ${K.forest}, #244A33)` : K.surface,
         color: dark ? K.gold : K.forest,
         boxShadow: dark ? '0 14px 30px -18px rgba(27,56,40,0.9)' : K.out,
       }}
     >
       {/* Perforation along the inline-start edge. */}
-      <span aria-hidden className="absolute flex flex-col justify-around" style={{ insetInlineStart: 8, top: 10, bottom: 10 }}>
-        {Array.from({ length: 7 }, (_, i) => <span key={i} style={{ width: 5, height: 5, borderRadius: 5, background: dark ? 'rgba(238,217,138,0.22)' : 'rgba(27,56,40,0.12)' }} />)}
+      <span aria-hidden className="absolute flex flex-col justify-around" style={{ insetInlineStart: 7, top: 9, bottom: 9 }}>
+        {Array.from({ length: 6 }, (_, i) => <span key={i} style={{ width: 4, height: 4, borderRadius: 4, background: dark ? 'rgba(238,217,138,0.22)' : 'rgba(27,56,40,0.12)' }} />)}
       </span>
-      <span className="flex items-center gap-2" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: dark ? 0.8 : 0.7 }}>
-        {secret ? <Lock size={12} strokeWidth={2.6} aria-hidden /> : <KeyRound size={12} strokeWidth={2.6} aria-hidden />}
+      <span className="flex items-center gap-1.5" style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: dark ? 0.8 : 0.7 }}>
+        {secret ? <Lock size={11} strokeWidth={2.6} aria-hidden /> : <KeyRound size={11} strokeWidth={2.6} aria-hidden />}
         {label}
       </span>
-      <span className="stg-num flex items-center justify-between gap-3" style={{ marginTop: 8 }}>
+      <span className="stg-num flex items-center justify-between gap-3" style={{ marginTop: 5 }}>
         <span dir="ltr" style={{
-          fontSize: 30, fontWeight: 900, letterSpacing: '0.14em', lineHeight: 1,
+          fontSize: 26, fontWeight: 900, letterSpacing: '0.12em', lineHeight: 1,
           filter: hidden ? 'blur(7px)' : 'none', transitionProperty: 'filter', transitionDuration: '200ms',
           userSelect: hidden ? 'none' : 'text',
         }}>{code}</span>
-        <span aria-hidden className="inline-flex items-center justify-center shrink-0" style={{
-          width: 34, height: 34, borderRadius: 11, background: dark ? 'rgba(238,217,138,0.14)' : K.ivory, boxShadow: dark ? 'none' : K.inSm,
-        }}>
-          {copied ? <Check size={16} strokeWidth={3} /> : hidden ? <Eye size={15} strokeWidth={2.4} /> : <Copy size={15} strokeWidth={2.4} />}
-        </span>
+        {/* A crisp glyph, not a tiled button: the whole ticket is the control. */}
+        {copied ? <Check aria-hidden size={17} strokeWidth={3} className="shrink-0" /> : hidden ? <Eye aria-hidden size={16} strokeWidth={2.4} className="shrink-0" /> : <Copy aria-hidden size={16} strokeWidth={2.4} className="shrink-0" style={{ opacity: 0.75 }} />}
       </span>
-      <span className="stg-body" aria-live="polite" style={{ display: 'block', marginTop: 8, fontSize: 12, lineHeight: 1.4, color: dark ? 'rgba(243,234,208,0.72)' : K.inkSoft }}>
+      <span className="stg-body" aria-live="polite" style={{ display: 'block', marginTop: 5, fontSize: 11.5, lineHeight: 1.35, color: dark ? 'rgba(243,234,208,0.72)' : K.inkSoft }}>
         {copied ? copiedLabel : hidden ? revealLabel : caption}
       </span>
     </button>
   );
 }
 
-export default function AccessTab({ committee, s, upd, isViewOnly, myChairName, t, onOpenPeople, displayChairSuffix }: TabProps & {
-  onOpenPeople: () => void;
+type ChairState = 'moderator' | 'commenting' | 'viewing' | 'offline';
+
+/**
+ * One chair on the dais, as a round avatar with what they are doing right now.
+ *
+ * The state is derived from facts this page already holds, never guessed: the gavel is
+ * `committee.dbHeadChair` (persisted), and liveness is the chair-presence channel the chair
+ * page passes down. The voting page mounts SettingsPanel without presence, so a Commenter
+ * there reads "Viewing" - all we honestly know is that they hold a read-only dais view.
+ */
+function ChairAvatar({ name, state, isMe, youLabel, stateLabel }: {
+  name: string; state: ChairState; isMe: boolean; youLabel: string; stateLabel: string;
+}) {
+  const country = getCountryByName(name);
+  const moderator = state === 'moderator';
+  const live = state === 'moderator' || state === 'commenting';
+  const dot = state === 'commenting' ? '#3FA268' : state === 'moderator' ? K.deepGold : '#C9BDA9';
+  return (
+    <li className="flex items-center gap-2.5 min-w-0" style={{ padding: '8px 10px 8px 8px', borderRadius: 14, background: moderator ? K.surface : 'transparent', boxShadow: moderator ? K.outSm : 'inset 0 0 0 1px rgba(28,20,16,0.07)' }}>
+      <span className="relative inline-flex shrink-0">
+        {country
+          ? <CircleFlag country={name} size={38} decorative ring={moderator ? K.gold : true} />
+          : (
+            <span aria-hidden className="inline-flex items-center justify-center" style={{
+              width: 38, height: 38, borderRadius: 999, fontSize: 13.5, fontWeight: 900,
+              background: moderator ? `radial-gradient(circle at 35% 30%, #F7EBB5, ${K.gold} 60%, ${K.deepGold})` : K.ivory,
+              color: K.forest, boxShadow: moderator ? '0 4px 10px -5px rgba(182,135,31,0.9)' : K.inSm,
+              opacity: live ? 1 : 0.6,
+            }}>{flagMonogram(name)}</span>
+          )}
+        <span aria-hidden style={{ position: 'absolute', bottom: -1, insetInlineEnd: -1, width: 11, height: 11, borderRadius: 11, background: dot, boxShadow: `0 0 0 2px ${moderator ? K.surface : K.page}` }} />
+      </span>
+      <span className="flex-1 min-w-0">
+        <span className="block truncate" style={{ fontSize: 13.5, fontWeight: 800, color: live ? K.ink : K.inkSoft }}>
+          {name}{isMe && <span style={{ marginInlineStart: 5, fontSize: 11.5, fontWeight: 700, color: K.forestLight }}>{youLabel}</span>}
+        </span>
+        <span className="flex items-center gap-1" style={{ marginTop: 1, fontSize: 11.5, fontWeight: 700, color: moderator ? '#8A6415' : K.muted }}>
+          {moderator ? <Gavel size={11} strokeWidth={2.6} aria-hidden /> : state === 'commenting' ? <MessageSquareText size={11} strokeWidth={2.4} aria-hidden /> : <Eye size={11} strokeWidth={2.4} aria-hidden />}
+          {stateLabel}
+        </span>
+      </span>
+    </li>
+  );
+}
+
+export default function AccessTab({ committee, s, upd, isViewOnly, myChairName, t, displayChairSuffix, onlineChairs }: TabProps & {
   displayChairSuffix: string;
+  /** Chair names on the chair-presence channel. Undefined on the voting page (no channel). */
+  onlineChairs?: ReadonlySet<string>;
 }) {
   const headChair = committee.dbHeadChair || committee.chairNames?.[0] || '';
-  const isHead = !myChairName || (headChair === myChairName && !isViewOnly);
   const gavelAt = clampGavelSeconds(s.gavelSoundAtSeconds ?? GAVEL_DEFAULT_SECONDS);
   const [knocking, setKnocking] = useState(false);
   const dim = isViewOnly ? { opacity: 0.55, pointerEvents: 'none' as const } : undefined;
 
+  // chair_names plus anyone on the presence channel who opened the link without the join page.
+  const listed = committee.chairNames ?? [];
+  const chairs = [...listed, ...[...(onlineChairs ?? [])].filter((n) => n && !listed.includes(n))];
+  if (myChairName && !chairs.includes(myChairName)) chairs.push(myChairName);
+  const stateOf = (name: string): ChairState => {
+    if (name === headChair) return 'moderator';
+    if (!onlineChairs) return 'viewing';
+    return onlineChairs.has(name) ? 'commenting' : 'offline';
+  };
+  const stateLabel: Record<ChairState, string> = {
+    moderator: t('stg_role_moderator'),
+    commenting: t('stg_chair_state_commenting'),
+    viewing: t('stg_chair_state_viewing'),
+    offline: t('stg_chair_state_offline'),
+  };
+
   return (
     <div>
       <Section icon={KeyRound} title={t('stg_access_codes')} hint={t('stg_access_codes_hint')} lead>
-        <div className="flex flex-wrap gap-3" style={{ padding: '14px 0' }}>
+        <div className="flex flex-wrap gap-2.5" style={{ padding: '10px 0' }}>
           <CodeTicket tone="forest" label={t('settings_session_code_label')} code={committee.code} caption={t('stg_session_code_caption')}
             copiedLabel={t('stg_copied')} copyLabel={t('stg_copy')} revealLabel={t('stg_hover_reveal')} />
           <CodeTicket tone="ivory" secret label={t('settings_chair_code_label')} code={displayChairSuffix} caption={t('stg_chair_code_caption')}
@@ -85,74 +145,78 @@ export default function AccessTab({ committee, s, upd, isViewOnly, myChairName, 
         </div>
       </Section>
 
-      {/* Read-only on purpose: taking the gavel lives in one place, the gavel chip in the top bar. */}
-      <Section icon={Gavel} title={t('settings_head_chair_label')} delay={40}>
-        <div className="flex flex-wrap items-center gap-4" style={{ padding: '14px 0' }}>
-          <span aria-hidden className="inline-flex items-center justify-center shrink-0" style={{
-            width: 48, height: 48, borderRadius: 16, color: K.forest,
-            background: `radial-gradient(circle at 35% 30%, #F7EBB5, ${K.gold} 60%, ${K.deepGold})`, boxShadow: '0 8px 18px -10px rgba(182,135,31,0.9)',
-          }}>
-            <Gavel size={22} strokeWidth={2.3} />
-          </span>
-          <div className="flex-1 min-w-0">
-            <div style={{ fontSize: 18, fontWeight: 900, color: K.ink }}>
-              {headChair || '-'}{isHead && myChairName ? <span style={{ marginInlineStart: 6, fontSize: 13, fontWeight: 700, color: K.forestLight }}>{t('gavel_you')}</span> : null}
-            </div>
-            <div className="stg-body" style={{ fontSize: 12.5, color: K.inkSoft, marginTop: 2 }}>{t('settings_head_chair_note')}</div>
-          </div>
-          <button type="button" onClick={onOpenPeople} className="stg-focus stg-press inline-flex items-center gap-2"
-            style={{ height: 38, padding: '0 14px', borderRadius: 12, border: 'none', background: K.ivory, color: K.forest, fontSize: 13, fontWeight: 800, cursor: 'pointer', boxShadow: K.outSm }}>
-            <Users size={15} strokeWidth={2.4} aria-hidden />
-            {t('stg_see_people')}
-          </button>
-        </div>
+      {/* The dais at a glance. Taking the gavel still lives in one place, the top-bar chip;
+          the full roster with devices and removals is the People tab. */}
+      <Section icon={Users} title={t('stg_people_chairs')} hint={t('stg_dais_hint')} delay={40}>
+        <ul className="grid gap-1.5" style={{ listStyle: 'none', margin: 0, padding: '10px 0', gridTemplateColumns: 'repeat(auto-fill, minmax(196px, 1fr))' }}>
+          {chairs.map((name) => (
+            <ChairAvatar key={name} name={name} state={stateOf(name)} isMe={!!myChairName && name === myChairName}
+              youLabel={t('gavel_you')} stateLabel={stateLabel[stateOf(name)]} />
+          ))}
+          {chairs.length === 0 && <li style={{ fontSize: 13, color: K.muted, padding: '4px 2px' }}>{t('stg_dais_empty')}</li>}
+        </ul>
       </Section>
 
       <div style={dim} aria-disabled={isViewOnly || undefined}>
         <Section icon={ShieldCheck} title={t('stg_access_floor')} hint={t('stg_access_floor_hint')} lead delay={80}>
-          <SettingRow first labelId="stg-appr" label={t('settings_chair_approval_label')} note={t('settings_chair_approval_note')}
-            control={<GavelSwitch glyph="lock" icon={DoorOpen} labelledBy="stg-appr" checked={s.requireChairApproval} onChange={(v) => upd('requireChairApproval', v)} />} />
-          <SettingRow labelId="stg-lockrc" label={t('stg_lock_rollcall_label')} note={t('stg_lock_rollcall_note')}
-            control={<GavelSwitch glyph="lock" labelledBy="stg-lockrc" checked={s.lockDelegateRollCall} onChange={(v) => upd('lockDelegateRollCall', v)} />} />
-          <SettingRow labelId="stg-gsl" label={t('settings_gsl_require_next_label')} note={t('settings_gsl_require_next_note')}
-            control={<GavelSwitch icon={ListOrdered} labelledBy="stg-gsl" checked={s.gslRequireNextSpeaker} onChange={(v) => upd('gslRequireNextSpeaker', v)} />} />
-          <SettingRow labelId="stg-chat" label={t('stg_disable_chat_label')} note={t('stg_disable_chat_note')}
-            control={<GavelSwitch icon={MessageSquareOff} labelledBy="stg-chat" checked={s.disableChat} onChange={(v) => upd('disableChat', v)} />} />
+          <RowGrid min={290}>
+            <SettingRow dense labelId="stg-appr" label={t('settings_chair_approval_label')} note={t('settings_chair_approval_note')}
+              control={<GavelSwitch size="sm" glyph="lock" icon={DoorOpen} labelledBy="stg-appr" checked={s.requireChairApproval} onChange={(v) => upd('requireChairApproval', v)} />} />
+            <SettingRow dense labelId="stg-lockrc" label={t('stg_lock_rollcall_label')} note={t('stg_lock_rollcall_note')}
+              control={<GavelSwitch size="sm" glyph="lock" labelledBy="stg-lockrc" checked={s.lockDelegateRollCall} onChange={(v) => upd('lockDelegateRollCall', v)} />} />
+            <SettingRow dense labelId="stg-gsl" label={t('settings_gsl_require_next_label')} note={t('settings_gsl_require_next_note')}
+              control={<GavelSwitch size="sm" icon={ListOrdered} labelledBy="stg-gsl" checked={s.gslRequireNextSpeaker} onChange={(v) => upd('gslRequireNextSpeaker', v)} />} />
+            <SettingRow dense labelId="stg-chat" label={t('stg_disable_chat_label')} note={t('stg_disable_chat_note')}
+              control={<GavelSwitch size="sm" icon={MessageSquareOff} labelledBy="stg-chat" checked={s.disableChat} onChange={(v) => upd('disableChat', v)} />} />
+          </RowGrid>
         </Section>
 
-        {/* Gavel knock, played only on the Moderator's device by src/lib/useGavelCue.ts. The
-            Test button is a user gesture, so it also unlocks audio for the timer knocks. */}
-        <Section icon={BellRing} title={t('settings_section_timer_sound')} delay={120}>
-          <SettingRow first labelId="stg-knock" label={t('settings_gavel_sound_label')} note={t('settings_gavel_sound_note')}
-            control={<GavelSwitch icon={BellRing} labelledBy="stg-knock" checked={s.gavelSoundEnabled !== false} onChange={(v) => upd('gavelSoundEnabled', v)} />} />
-          {s.gavelSoundEnabled !== false && (
-            <SettingRow label={t('settings_gavel_at_label')} note={t('settings_gavel_at_note')}
-              control={<ClockStepper label={t('settings_gavel_at_label')} unit={t('motions_sec')} value={gavelAt} min={GAVEL_MIN_SECONDS} max={GAVEL_MAX_SECONDS} step={5} arcMax={60}
-                presets={[5, 10, 15, 30, 60]} onCommit={(v) => upd('gavelSoundAtSeconds', clampGavelSeconds(v))} />}>
-              <button type="button"
-                onClick={() => { primeGavelAudio(); playGavelKnock(); setKnocking(true); setTimeout(() => setKnocking(false), 500); }}
-                className="stg-focus stg-press inline-flex items-center gap-2"
-                style={{ height: 36, padding: '0 14px', borderRadius: 11, border: 'none', background: knocking ? K.gold : K.ivory, color: K.forest, fontSize: 13, fontWeight: 800, cursor: 'pointer', boxShadow: K.outSm }}>
-                <Volume2 size={15} strokeWidth={2.4} aria-hidden />
-                {t('settings_gavel_test')}
-              </button>
+        <SectionPair>
+          {/* Gavel knock, played only on the Moderator's device by src/lib/useGavelCue.ts. The
+              Test button is a user gesture, so it also unlocks audio for the timer knocks. */}
+          <Section icon={BellRing} title={t('settings_section_timer_sound')} delay={120}>
+            <SettingRow first dense labelId="stg-knock" label={t('settings_gavel_sound_label')} note={t('settings_gavel_sound_note')}
+              control={<GavelSwitch size="sm" icon={BellRing} labelledBy="stg-knock" checked={s.gavelSoundEnabled !== false} onChange={(v) => upd('gavelSoundEnabled', v)} />} />
+            {s.gavelSoundEnabled !== false && (
+              <SettingRow dense label={t('settings_gavel_at_label')} note={t('settings_gavel_at_note')}>
+                <SecondsDial
+                    label={t('settings_gavel_at_label')}
+                    unit={t('motions_sec')}
+                    value={gavelAt}
+                    min={GAVEL_MIN_SECONDS}
+                    max={GAVEL_MAX_SECONDS}
+                    presets={[5, 10, 15, 30, 60, 120]}
+                    format={formatSeconds}
+                    clamp={clampGavelSeconds}
+                    onChange={(v) => upd('gavelSoundAtSeconds', clampGavelSeconds(v))}
+                    aside={(
+                      <button type="button"
+                        onClick={() => { primeGavelAudio(); playGavelKnock(); setKnocking(true); setTimeout(() => setKnocking(false), 500); }}
+                        className="stg-focus stg-press inline-flex items-center gap-1.5 shrink-0"
+                        style={{ height: 28, padding: '0 10px', borderRadius: 9, border: 'none', background: knocking ? K.gold : K.ivory, color: K.forest, fontSize: 12, fontWeight: 800, cursor: 'pointer', boxShadow: K.outSm }}>
+                        <Volume2 size={14} strokeWidth={2.4} aria-hidden />
+                        {t('settings_gavel_test')}
+                      </button>
+                    )}
+                  />
+              </SettingRow>
+            )}
+          </Section>
+
+          <Section icon={Tag} title={t('stg_labels')} delay={160}>
+            <SettingRow first dense htmlFor="stg-sponsor" label={t('stg_sponsor_label')} note={t('stg_sponsor_note')}>
+              <input
+                id="stg-sponsor"
+                type="text"
+                value={s.sponsorLabel}
+                placeholder={t('stg_sponsor_placeholder')}
+                onChange={(e) => upd('sponsorLabel', e.target.value)}
+                className="stg-focus w-full"
+                style={{ height: 38, maxWidth: 300, borderRadius: 11, border: 'none', padding: '0 12px', fontSize: 14, fontWeight: 600, color: K.ink, background: K.ivory, boxShadow: K.inSm, fontFamily: K.font }}
+              />
             </SettingRow>
-          )}
-        </Section>
-
-        <Section icon={Tag} title={t('stg_labels')} delay={160}>
-          <SettingRow first htmlFor="stg-sponsor" label={t('stg_sponsor_label')} note={t('stg_sponsor_note')}>
-            <input
-              id="stg-sponsor"
-              type="text"
-              value={s.sponsorLabel}
-              placeholder={t('stg_sponsor_placeholder')}
-              onChange={(e) => upd('sponsorLabel', e.target.value)}
-              className="stg-focus w-full"
-              style={{ height: 42, maxWidth: 360, borderRadius: 12, border: 'none', padding: '0 14px', fontSize: 15, fontWeight: 600, color: K.ink, background: K.ivory, boxShadow: K.inSm, fontFamily: K.font }}
-            />
-          </SettingRow>
-        </Section>
+          </Section>
+        </SectionPair>
       </div>
     </div>
   );

@@ -54,36 +54,36 @@ export default function AwardsTab({ committee, t, requestConfirm }: TabProps & {
 
   return (
     <div>
-      <div className="stg-rise relative overflow-hidden" style={{ borderRadius: 24, padding: '26px 26px 24px', marginBottom: 26, background: `linear-gradient(145deg, ${K.forest} 0%, #20452E 60%, #2B5A3B 100%)`, color: '#F3EAD0', boxShadow: '0 24px 44px -26px rgba(27,56,40,0.95)' }}>
+      <div className="stg-rise relative overflow-hidden" style={{ borderRadius: 20, padding: '20px 22px 18px', marginBottom: 18, background: `linear-gradient(145deg, ${K.forest} 0%, #20452E 60%, #2B5A3B 100%)`, color: '#F3EAD0', boxShadow: '0 24px 44px -26px rgba(27,56,40,0.95)' }}>
         {/* A laurel of gold rings in the corner: decoration only. */}
         <svg aria-hidden width="220" height="220" viewBox="0 0 220 220" className="absolute" style={{ insetInlineEnd: -50, top: -60, opacity: 0.16 }}>
           {[96, 74, 52].map((r) => <circle key={r} cx="110" cy="110" r={r} fill="none" stroke={K.gold} strokeWidth="2" strokeDasharray="3 7" />)}
         </svg>
-        <span aria-hidden className="inline-flex items-center justify-center" style={{ width: 58, height: 58, borderRadius: 18, color: K.forest, background: `radial-gradient(circle at 35% 30%, #F7EBB5, ${K.gold} 60%, ${K.deepGold})`, boxShadow: '0 10px 22px -10px rgba(0,0,0,0.6)' }}>
-          <Trophy size={28} strokeWidth={2.2} />
-        </span>
-        <h3 className="stg-title" style={{ margin: '16px 0 0', fontSize: 24, fontWeight: 900, letterSpacing: '-0.01em', color: '#FFF8E4', maxWidth: 520 }}>{t('stg_awards_card_title')}</h3>
-        <p className="stg-body" style={{ margin: '8px 0 0', fontSize: 14.5, lineHeight: 1.55, color: 'rgba(243,234,208,0.82)', maxWidth: 560 }}>{t('stg_awards_card_body')}</p>
+        <h3 className="stg-title flex items-start gap-2.5" style={{ margin: 0, fontSize: 22, fontWeight: 900, letterSpacing: '-0.01em', color: '#FFF8E4', maxWidth: 540 }}>
+          <Trophy aria-hidden size={22} strokeWidth={2.3} style={{ color: K.gold, flexShrink: 0, marginTop: 3 }} />
+          <span>{t('stg_awards_card_title')}</span>
+        </h3>
+        <p className="stg-body" style={{ margin: '7px 0 0', fontSize: 14, lineHeight: 1.5, color: 'rgba(243,234,208,0.82)', maxWidth: 560 }}>{t('stg_awards_card_body')}</p>
         <button type="button" onClick={open} className="stg-focus stg-press inline-flex items-center gap-2"
-          style={{ marginTop: 20, height: 46, padding: '0 20px', borderRadius: 14, border: 'none', background: K.gold, color: K.forest, fontSize: 15, fontWeight: 900, cursor: 'pointer', boxShadow: '0 10px 20px -10px rgba(0,0,0,0.55)' }}>
+          style={{ marginTop: 16, height: 42, padding: '0 18px', borderRadius: 12, border: 'none', background: K.gold, color: K.forest, fontSize: 14.5, fontWeight: 900, cursor: 'pointer', boxShadow: '0 10px 20px -10px rgba(0,0,0,0.55)' }}>
           {t('stg_awards_open')}
-          <ArrowUpRight size={18} strokeWidth={2.6} aria-hidden />
+          <ArrowUpRight size={17} strokeWidth={2.6} aria-hidden />
         </button>
-        <p style={{ margin: '10px 0 0', fontSize: 12, fontWeight: 600, color: 'rgba(243,234,208,0.6)' }}>
+        <p style={{ margin: '8px 0 0', fontSize: 11.5, fontWeight: 600, color: 'rgba(243,234,208,0.6)' }}>
           {href ? t('stg_awards_new_tab') : t('stg_awards_resolving')}
         </p>
       </div>
 
       <Section icon={Award} title={t('stg_awards_how')} delay={60}>
-        <ol className="grid gap-3" style={{ listStyle: 'none', margin: 0, padding: '14px 0', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+        <ol className="grid gap-2.5" style={{ listStyle: 'none', margin: 0, padding: '10px 0', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' }}>
           {steps.map((s, i) => (
-            <li key={i} style={{ borderRadius: 16, padding: 14, background: K.surface, boxShadow: K.outSm }}>
-              <span className="flex items-center gap-2">
-                <span aria-hidden className="stg-num inline-flex items-center justify-center" style={{ width: 24, height: 24, borderRadius: 8, background: K.ivory, color: K.forest, fontSize: 12, fontWeight: 900, boxShadow: K.inSm }}>{i + 1}</span>
-                <s.icon size={16} strokeWidth={2.3} aria-hidden style={{ color: K.deepGold }} />
+            <li key={i} style={{ borderRadius: 13, padding: 12, background: K.surface, boxShadow: K.outSm }}>
+              <span className="flex items-baseline gap-2">
+                <span aria-hidden className="stg-num" style={{ fontSize: 13, fontWeight: 900, color: K.deepGold }}>{i + 1}</span>
+                <s.icon size={15} strokeWidth={2.3} aria-hidden style={{ color: K.forestLight, alignSelf: 'center' }} />
               </span>
-              <span className="block" style={{ marginTop: 10, fontSize: 14, fontWeight: 800, color: K.ink }}>{s.title}</span>
-              <span className="block stg-body" style={{ marginTop: 3, fontSize: 12.5, lineHeight: 1.45, color: K.inkSoft }}>{s.body}</span>
+              <span className="block" style={{ marginTop: 7, fontSize: 13.5, fontWeight: 800, color: K.ink }}>{s.title}</span>
+              <span className="block stg-body" style={{ marginTop: 2, fontSize: 12, lineHeight: 1.4, color: K.inkSoft }}>{s.body}</span>
             </li>
           ))}
         </ol>

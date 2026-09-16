@@ -28,7 +28,7 @@
 // the speech, pause, clear the floor".
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { GripHorizontal, X } from 'lucide-react';
 import { useT } from '@/contexts/LanguageContext';
 import { SeatCircleFlag } from '@/components/CircleFlag';
@@ -38,7 +38,20 @@ type Entry = { delegateId: string; country: string };
 // Round seat flags (crest, flag, monogram), like the sidebar and the speaker card.
 const CHIP_PX = 52;
 const PICKUP_PX = 6;
-const VISIBLE = 7;
+/** Up to ten upcoming speakers (owner, 16 Sep 2026). The flags keep their size; the strip
+ *  gets wider and the names clamp narrower instead. */
+const VISIBLE = 10;
+/** Where the floor is right now: the mode marker above the flags. */
+export type StripHeader = {
+  /** Small glyph inside the marker disc. */
+  icon?: ReactNode;
+  /** "General Speaker's List", or the motion's own name. */
+  label: string;
+  /** The motion's topic / purpose, on its own line beneath. */
+  sublabel?: string | null;
+  /** One short fact on the marker (e.g. "3 spoke"). */
+  meta?: string | null;
+};
 
 type Drag = {
   id: string;
@@ -58,6 +71,8 @@ export default function SpeakerStrip({
   onRemoveCurrent,
   lastSpeakerDelegateId,
   currentSpeakerDelegateId,
+  onDeckDelegateId,
+  header,
   isRoomOrderTdT,
   formatName,
 }: {
@@ -69,6 +84,14 @@ export default function SpeakerStrip({
   onRemoveCurrent?: () => void;
   lastSpeakerDelegateId?: string | null;
   currentSpeakerDelegateId?: string | null;
+  /**
+   * The delegation the floor is waiting on: seated visually, but nothing is written and they
+   * have not spoken. They keep the gold rim of the floor AND stay movable and removable
+   * (owner, 16 Sep 2026), because they are still an ordinary `speakers_list` row.
+   */
+  onDeckDelegateId?: string | null;
+  /** The mode marker above the flags. Rendered even with an empty list. */
+  header?: StripHeader | null;
   isRoomOrderTdT?: boolean;
   formatName: (country: string) => string;
 }) {
@@ -79,9 +102,11 @@ export default function SpeakerStrip({
   const rowRef = useRef<HTMLDivElement>(null);
   const suppressClick = useRef(false);
 
-  const visible = list.slice(0, VISIBLE);
-  const overflow = list.length > VISIBLE ? list.length - VISIBLE : 0;
   const currentAtTop = !!currentSpeakerDelegateId && list[0]?.delegateId === currentSpeakerDelegateId;
+  // Ten UPCOMING speakers: the one holding the floor does not use up a place.
+  const visibleCount = VISIBLE + (currentAtTop ? 1 : 0);
+  const visible = list.slice(0, visibleCount);
+  const overflow = list.length > visibleCount ? list.length - visibleCount : 0;
   const minInsert = currentAtTop ? 1 : 0;
 
   const setDragBoth = (d: Drag | null) => { dragRef.current = d; setDrag(d); };
@@ -196,15 +221,51 @@ export default function SpeakerStrip({
   const barAtEnd = !!drag?.active && drag.insertAt !== null && drag.insertAt >= withoutVisible.length;
   const lastVisibleId = withoutVisible[withoutVisible.length - 1]?.delegateId ?? null;
 
+  // Ten flags have to fit the floor at 1280px too, and the owner asked for the same flag
+  // size: the names clamp and the gaps tighten instead.
+  const dense = visible.length > 7;
+  const nameMax = dense ? 64 : 80;
+
   return (
-    <div className="flex flex-col items-center w-full mb-1 shrink-0 pt-2" data-tutorial="speakers-queue">
+    <div className="flex flex-col items-center w-full mb-1 shrink-0 pt-4" data-tutorial="speakers-queue">
+      {header && (
+        <div className="flex flex-col items-center gap-1 mb-3 px-4 w-full">
+          <div
+            className="inline-flex items-center gap-2.5 max-w-full rounded-full ps-1.5 pe-3.5 py-1.5"
+            style={{ backgroundColor: '#E4DCC8', boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.12)' }}
+          >
+            <span
+              aria-hidden
+              className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center"
+              style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
+            >
+              {header.icon}
+            </span>
+            <span className="min-w-0 truncate text-[15px] font-black tracking-tight" style={{ color: '#1B3828' }}>
+              {header.label}
+            </span>
+            {header.meta && (
+              <>
+                <span aria-hidden className="shrink-0 w-px h-4" style={{ backgroundColor: 'rgba(27,56,40,0.20)' }} />
+                <span className="shrink-0 text-xs font-bold tabular-nums" style={{ color: '#5A4E3E' }}>{header.meta}</span>
+              </>
+            )}
+          </div>
+          {header.sublabel && (
+            <span className="max-w-[34rem] text-center text-xs font-semibold leading-snug line-clamp-2" style={{ color: '#6A5A4A' }}>
+              {header.sublabel}
+            </span>
+          )}
+        </div>
+      )}
       <div
         ref={rowRef}
-        className="flex flex-nowrap items-start gap-3 justify-center min-w-0 px-2"
+        className={`flex flex-nowrap items-start justify-center min-w-0 px-2 ${dense ? 'gap-2' : 'gap-3'}`}
         onClickCapture={(e) => { if (suppressClick.current) { e.stopPropagation(); e.preventDefault(); } }}
       >
         {visible.map((s, i) => {
           const isCurrent = !!currentSpeakerDelegateId && s.delegateId === currentSpeakerDelegateId;
+          const isOnDeck = !isCurrent && !!onDeckDelegateId && s.delegateId === onDeckDelegateId;
           const movable = !isCurrent && !!onReorder;
           const dragging = drag?.active && drag.id === s.delegateId;
           const name = formatName(s.country);
@@ -243,16 +304,19 @@ export default function SpeakerStrip({
                     pointerEvents: 'none',
                     boxShadow: isCurrent
                       ? '0 0 0 3px #EDE7D8, 0 0 0 5.5px #B6871F'
-                      : '0 1px 2px rgba(27,56,40,0.10), 0 3px 8px rgba(27,56,40,0.14)',
+                      : isOnDeck
+                        ? '0 0 0 3px #EDE7D8, 0 0 0 5.5px rgba(182,135,31,0.55)'
+                        : '0 1px 2px rgba(27,56,40,0.10), 0 3px 8px rgba(27,56,40,0.14)',
                   }}
                 />
               )}
               {!isRoomOrderTdT && (
-                <span className="line-clamp-2 break-words whitespace-normal leading-tight max-w-[80px] text-xs font-semibold text-center" style={{ color: '#1C1410' }}>{name}</span>
+                <span className="line-clamp-2 break-words whitespace-normal leading-tight text-xs font-semibold text-center" style={{ color: '#1C1410', maxWidth: nameMax }}>{name}</span>
               )}
               {isCurrent && <span className="text-sm font-semibold" style={{ color: '#8B5A20' }}>{t('gsl_speaking')}</span>}
-              {!isCurrent && i === 0 && <span className="text-xs font-semibold" style={{ color: '#8B5A20' }}>{t('gsl_up_next')}</span>}
-              {!isCurrent && lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && i !== 0 && (
+              {isOnDeck && <span className="text-xs font-semibold" style={{ color: '#8B5A20' }}>{t('gsl_on_deck')}</span>}
+              {!isCurrent && !isOnDeck && i === 0 && <span className="text-xs font-semibold" style={{ color: '#8B5A20' }}>{t('gsl_up_next')}</span>}
+              {!isCurrent && !isOnDeck && lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && i !== 0 && (
                 <span className="text-xs font-bold text-[#6A5A4A] bg-[#DDD4C0] px-1.5 py-0.5 rounded">{t('gsl_last')}</span>
               )}
               {movable && !drag?.active && (
@@ -288,11 +352,13 @@ export default function SpeakerStrip({
           );
         })}
       </div>
-      <div className="text-center h-10 flex items-start justify-center pt-1">
-        {overflow > 0 && (
-          <span className="text-xs font-medium tabular-nums" style={{ color: '#6A5A4A' }}>{t('gsl_more_in_queue').replace('{n}', String(overflow))}</span>
-        )}
-      </div>
+      {list.length > 0 && (
+        <div className="text-center h-10 flex items-start justify-center pt-1">
+          {overflow > 0 && (
+            <span className="text-xs font-medium tabular-nums" style={{ color: '#6A5A4A' }}>{t('gsl_more_in_queue').replace('{n}', String(overflow))}</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -6,7 +6,10 @@ import GrowDialog from '@/components/GrowDialog';
 import { portalFrame } from '@/components/chat/chatTokens';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
-import { Ban, BadgeCheck, Check, CircleDot, FileText, Presentation, Vote, X, type LucideIcon } from 'lucide-react';
+import {
+  Ban, BadgeCheck, Check, ChevronLeft, ChevronRight, CircleDot, FileText, GripHorizontal,
+  Minimize2, Minus, Pause, Play, Plus, Presentation, RotateCcw, Timer, Vote, X, type LucideIcon,
+} from 'lucide-react';
 import { Committee, CommitteeDocument, DocIntroState, DocumentType, DocumentStatus } from '@/lib/types';
 import { serverNow, serverNowIso } from '@/lib/serverClock';
 import { introRemainingNow, requireDocApproval as readRequireDocApproval, updateDocumentFlow, deleteDocumentChecked } from '@/lib/documentFlow';
@@ -227,20 +230,131 @@ function formatTime(seconds: number) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-// ── Countdown Timer (reading / presentation / Q&A) ────────────────────────────
-// Anchor-based (V-5): the clock is `clock` = documents.intro_state {base, startedAt}, and the
-// remaining time is DERIVED from it, never decremented. The interval only refreshes `now`
-// for this component; it never writes. Start, pause and reset are the only writes, so a
-// reload or another chair device picks the stage up at the right second.
-function StageTimer({
-  label, totalSeconds, doc, committee, showDocument, clock, onClockChange,
-  onComplete, onToggleDocument, onBack,
+// ── The introduction screen ───────────────────────────────────────────────────
+// Document-first (16 Sep 2026). The paper fills the screen and is mounted ONCE for the whole
+// introduction; the stage clock and its controls are a floating panel the chair drags and
+// resizes over it. Moving between Reading, Presentation and Q&A now only re-labels that panel,
+// so the viewer keeps its zoom AND its scroll position: before, the viewer lived inside a
+// component keyed on the stage (remount, so a PDF reloaded to page 1) and the split ratio was
+// stage-local state that snapped back to 50% on every change.
+
+/** Zoom is the chair's, not the stage's: it lives above the stage and is remembered per device. */
+const ZOOM_STEPS = [0.5, 0.67, 0.8, 1, 1.25, 1.5, 2, 2.5, 3] as const;
+const ZOOM_KEY = 'gavelling-intro-zoom';
+function readZoom(): number {
+  try {
+    const raw = Number(localStorage.getItem(ZOOM_KEY));
+    return ZOOM_STEPS.includes(raw as (typeof ZOOM_STEPS)[number]) ? raw : 1;
+  } catch { return 1; }
+}
+function writeZoom(z: number) {
+  try { localStorage.setItem(ZOOM_KEY, String(z)); } catch { /* storage blocked */ }
+}
+const stepZoom = (z: number, dir: 1 | -1) =>
+  ZOOM_STEPS[Math.min(ZOOM_STEPS.length - 1, Math.max(0, ZOOM_STEPS.indexOf(z as (typeof ZOOM_STEPS)[number]) + dir))] ?? 1;
+
+/** The paper, filling the introduction screen. Mounted once per introduction: nothing here is
+ *  keyed on the stage, so a stage change never touches the iframe or the scroll box. The zoom
+ *  is a transform, so the frame is never re-created either. */
+function IntroDocument({ doc, zoom }: { doc: CommitteeDocument; zoom: number }) {
+  const t = useT();
+  const size = `${100 / zoom}%`;
+  return (
+    <div className="absolute inset-0 overflow-hidden bg-[#E4DCCA]">
+      {doc.fileUrl ? (
+        <iframe
+          src={doc.fileUrl}
+          title={doc.title}
+          style={{ width: size, height: size, border: 0, transform: `scale(${zoom})`, transformOrigin: '0 0', display: 'block' }}
+        />
+      ) : doc.content ? (
+        <div className="absolute inset-0 overflow-auto px-6 py-8">
+          <div className="mx-auto bg-[#FAF8F3] rounded-2xl px-8 py-8"
+            style={{ maxWidth: 820 * zoom, boxShadow: '0 1px 2px rgba(28,20,16,0.08), 0 10px 30px rgba(27,56,40,0.10)' }}>
+            <p className="text-xs font-mono font-bold mb-3" style={{ color: '#1B3828', fontSize: 12 * zoom }}>{doc.docCode}</p>
+            <h2 className="font-black mb-5" style={{ color: '#1C1410', fontSize: 20 * zoom, textWrap: 'balance' }}>{doc.title}</h2>
+            <pre className="whitespace-pre-wrap font-sans leading-relaxed" style={{ color: '#1C1410', fontSize: 15 * zoom, textWrap: 'pretty' }}>{doc.content}</pre>
+          </div>
+        </div>
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center px-8">
+          <p className="max-w-sm text-center text-sm" style={{ color: '#6A5A4A', textWrap: 'pretty' }}>{t('documents_no_content')}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── The floating stage timer ──────────────────────────────────────────────────
+// Dragged by its handle, resized from its corner, both with the pointer or the arrow keys, and
+// always clamped inside the screen. The box is remembered per device (localStorage, try/catch:
+// storage can be blocked and the panel then just opens in its default spot).
+// Purely presentational: it never touches committee state (RULES 3 to 5).
+type PanelBox = { x: number; y: number; w: number; h: number };
+const PANEL_MARGIN = 12;
+const PANEL_MIN_W = 248;
+const PANEL_MIN_H = 250;
+const PANEL_DEF_W = 340;
+const PANEL_DEF_H = 330;
+const PANEL_KEY = 'gavelling-intro-timer-panel';
+
+/** The local coordinate space a fixed panel lives in, and its scale on screen: Portal mounts
+ *  into FitToScreen's `#fit-root`, which is scaled with a CSS transform, so pointer deltas are
+ *  divided by the live scale and the bounds are the fit-root's own size. */
+function panelSpace() {
+  const root = typeof document !== 'undefined' ? document.getElementById('fit-root') : null;
+  if (root && root.offsetWidth > 0) {
+    const r = root.getBoundingClientRect();
+    return { w: root.offsetWidth, h: root.offsetHeight, scale: r.width / root.offsetWidth || 1 };
+  }
+  return { w: window.innerWidth, h: window.innerHeight, scale: 1 };
+}
+
+function clampBox(b: PanelBox): PanelBox {
+  const { w: fw, h: fh } = panelSpace();
+  const w = Math.min(Math.max(PANEL_MIN_W, b.w), Math.max(PANEL_MIN_W, fw - 2 * PANEL_MARGIN));
+  const h = Math.min(Math.max(PANEL_MIN_H, b.h), Math.max(PANEL_MIN_H, fh - 2 * PANEL_MARGIN));
+  return {
+    w, h,
+    x: Math.min(Math.max(PANEL_MARGIN, b.x), Math.max(PANEL_MARGIN, fw - w - PANEL_MARGIN)),
+    y: Math.min(Math.max(PANEL_MARGIN, b.y), Math.max(PANEL_MARGIN, fh - h - PANEL_MARGIN)),
+  };
+}
+
+function readBox(): PanelBox | null {
+  try {
+    const raw = localStorage.getItem(PANEL_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw);
+    return [p?.x, p?.y, p?.w, p?.h].every((n) => Number.isFinite(n)) ? { x: p.x, y: p.y, w: p.w, h: p.h } : null;
+  } catch { return null; }
+}
+function writeBox(b: PanelBox) {
+  try {
+    localStorage.setItem(PANEL_KEY, JSON.stringify({ x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.round(b.h) }));
+  } catch { /* storage blocked */ }
+}
+
+function TimerIconButton({ onClick, label, children }: { onClick: () => void; label: string; children: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} title={label} aria-label={label}
+      className="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center text-[#6A5A4A] bg-transparent hover:bg-[#1B3828]/[0.07] hover:text-[#1B3828] transition-[background-color,color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+      style={{ boxShadow: 'inset 0 0 0 1px #DDD4C0' }}>
+      {children}
+    </button>
+  );
+}
+
+// Anchor-based (V-5): the clock is {base, startedAt} and the remaining time is DERIVED from it,
+// never decremented. The interval only refreshes `now` inside this panel; it never writes.
+function IntroTimerPanel({
+  label, totalSeconds, doc, committee, clock, onClockChange, onComplete, onBack, onHide,
 }: {
-  label: React.ReactNode; totalSeconds: number;
-  doc: CommitteeDocument; committee: Committee; showDocument: boolean;
+  label: string; totalSeconds: number;
+  doc: CommitteeDocument; committee: Committee;
   clock: { base: number; startedAt: string | null };
   onClockChange: (next: { base: number; startedAt: string | null }) => void;
-  onComplete: () => void; onToggleDocument: () => void; onBack: () => void;
+  onComplete: () => void; onBack: () => void; onHide: () => void;
 }) {
   const t = useT();
   // Database clock (T-1): the stage anchor is stamped and read on every chair device.
@@ -253,143 +367,186 @@ function StageTimer({
   }, [running, clock.startedAt]);
   const remaining = introRemainingNow(clock, now);
   const started = running || clock.base < totalSeconds;
-  const [splitPct, setSplitPct] = useState(50);
-  const isDraggingDivider = useRef(false);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-
-  const onDividerMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    isDraggingDivider.current = true;
-    const onMouseMove = (ev: MouseEvent) => {
-      if (!isDraggingDivider.current || !containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const pct = ((ev.clientX - rect.left) / rect.width) * 100;
-      setSplitPct(Math.min(65, Math.max(35, pct)));
-    };
-    const onMouseUp = () => {
-      isDraggingDivider.current = false;
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-    };
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-  };
-
   const done = remaining === 0;
   const progress = totalSeconds > 0 ? ((totalSeconds - remaining) / totalSeconds) * 100 : 100;
 
-  return (
-    <div ref={containerRef} className={`flex-1 flex ${showDocument ? 'flex-row items-stretch' : 'flex-col items-center justify-center px-8 py-8 text-center'}`}>
-      <div className={`flex flex-col items-center justify-center text-center ${showDocument ? 'px-6 py-8' : 'w-full px-8 py-8'}`} style={showDocument ? { width: `${splitPct}%` } : undefined}>
-      <p className="text-xs font-mono tracking-widest mb-2" style={{ color: '#9A8A78' }}>
-        {docName(committee, doc.type, 'singular', doc.type === 'working-paper' ? t('documents_working_paper_type') : t('documents_draft_resolution_type')).toUpperCase()} · {doc.docCode}
-      </p>
-      <h2 className="text-2xl font-black mb-1" style={{ color: '#1C1410' }}>{doc.title}</h2>
-      <p className="text-xs font-black mb-6 mt-1 tracking-widest uppercase" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{label}</p>
+  // First placement: the remembered box, else the lower inline-end corner. Computed once in the
+  // initialiser (the panel only ever mounts in the browser, inside the introduction's Portal).
+  const [box, setBox] = useState<PanelBox | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const { w: fw, h: fh } = panelSpace();
+    const rtl = document.documentElement.dir === 'rtl';
+    return clampBox(readBox() ?? {
+      w: PANEL_DEF_W, h: PANEL_DEF_H,
+      x: rtl ? 24 : fw - PANEL_DEF_W - 24,
+      y: Math.max(PANEL_MARGIN, fh - PANEL_DEF_H - 24),
+    });
+  });
+  const boxRef = useRef<PanelBox | null>(box);
+  const drag = useRef<{ pointerId: number; mode: 'move' | 'resize'; sx: number; sy: number; b: PanelBox; scale: number } | null>(null);
+  const [busy, setBusy] = useState(false);
 
-      {!done ? (
+  const apply = useCallback((next: PanelBox, persist: boolean) => {
+    const c = clampBox(next);
+    boxRef.current = c;
+    setBox(c);
+    if (persist) writeBox(c);
+  }, []);
+
+  // Keep it on screen when the window (and so the fit-root) changes size.
+  useEffect(() => {
+    const onResize = () => { if (boxRef.current) apply(boxRef.current, false); };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [apply]);
+
+  const startDrag = (mode: 'move' | 'resize') => (e: React.PointerEvent<HTMLElement>) => {
+    if (e.button !== 0 || !boxRef.current) return;
+    if ((e.target as HTMLElement).closest('[data-panel-button]')) return;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* pointer gone */ }
+    drag.current = { pointerId: e.pointerId, mode, sx: e.clientX, sy: e.clientY, b: boxRef.current, scale: panelSpace().scale };
+    setBusy(true);
+    e.preventDefault();
+  };
+  const onPointerMove = (e: React.PointerEvent<HTMLElement>) => {
+    const d = drag.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    const dx = (e.clientX - d.sx) / d.scale;
+    const dy = (e.clientY - d.sy) / d.scale;
+    apply(d.mode === 'move'
+      ? { ...d.b, x: d.b.x + dx, y: d.b.y + dy }
+      : { ...d.b, w: d.b.w + dx, h: d.b.h + dy }, false);
+  };
+  const endDrag = (e: React.PointerEvent<HTMLElement>) => {
+    const d = drag.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    try { if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    drag.current = null;
+    setBusy(false);
+    if (boxRef.current) writeBox(boxRef.current);
+  };
+  const onKeyDown = (mode: 'move' | 'resize') => (e: React.KeyboardEvent<HTMLElement>) => {
+    const b = boxRef.current;
+    if (!b) return;
+    const step = e.shiftKey ? 64 : 16;
+    const delta: Record<string, { x: number; y: number }> = {
+      ArrowLeft: { x: -step, y: 0 }, ArrowRight: { x: step, y: 0 }, ArrowUp: { x: 0, y: -step }, ArrowDown: { x: 0, y: step },
+    };
+    const m = delta[e.key];
+    if (!m) return;
+    e.preventDefault();
+    apply(mode === 'move' ? { ...b, x: b.x + m.x, y: b.y + m.y } : { ...b, w: b.w + m.x, h: b.h + m.y }, true);
+  };
+
+  // Everything inside scales with the panel, so a chair who makes it big gets a clock the room
+  // can read and one who makes it small still gets a full set of controls.
+  const w = box?.w ?? PANEL_DEF_W;
+  const h = box?.h ?? PANEL_DEF_H;
+  const clockPx = Math.round(Math.max(30, Math.min(w * 0.245, h * 0.30)));
+  const typeName = docName(committee, doc.type, 'singular',
+    doc.type === 'working-paper' ? t('documents_working_paper_type') : t('documents_draft_resolution_type')).toUpperCase();
+
+  return (
+    <div
+      role="group"
+      aria-label={t('documents_timer_panel')}
+      className="fixed rounded-2xl bg-[#F6F1E9] flex flex-col overflow-hidden"
+      style={{
+        left: box?.x ?? 0, top: box?.y ?? 0, width: w, height: h, zIndex: 20,
+        visibility: box ? 'visible' : 'hidden',
+        boxShadow: busy
+          ? '0 0 0 1px rgba(27,56,40,0.30), 0 6px 14px rgba(27,56,40,0.16), 0 28px 60px rgba(27,56,40,0.34)'
+          : '0 0 0 1px rgba(27,56,40,0.22), 0 2px 8px rgba(27,56,40,0.12), 0 18px 40px rgba(27,56,40,0.26)',
+        transition: 'box-shadow 180ms cubic-bezier(0.22,1,0.36,1)',
+      }}
+    >
+      {/* Handle */}
+      <div className="flex items-center gap-1 ps-1 pe-1.5 pt-1.5 shrink-0">
+        <div
+          role="button" tabIndex={0}
+          aria-label={t('documents_timer_move')} title={t('documents_timer_move')}
+          onPointerDown={startDrag('move')} onPointerMove={onPointerMove}
+          onPointerUp={endDrag} onPointerCancel={endDrag} onKeyDown={onKeyDown('move')}
+          className={`flex-1 min-w-0 flex items-center gap-2 h-9 px-2 rounded-lg select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] hover:bg-[#1B3828]/[0.05] transition-colors ${busy ? 'cursor-grabbing' : 'cursor-grab'}`}
+          style={{ touchAction: 'none' }}
+        >
+          <GripHorizontal size={16} strokeWidth={2.4} aria-hidden className="shrink-0 text-[#6A5A4A]" />
+          <span className="min-w-0 truncate text-[11px] font-black tracking-widest uppercase"
+            style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{label}</span>
+        </div>
+        <button type="button" data-panel-button onClick={onHide}
+          aria-label={t('documents_timer_hide')} title={t('documents_timer_hide')}
+          className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-[#6A5A4A] hover:text-[#1C1410] hover:bg-[#1B3828]/[0.07] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">
+          <Minimize2 size={15} strokeWidth={2.4} aria-hidden />
+        </button>
+      </div>
+
+      <div className="px-3 pb-1 shrink-0">
+        <p className="truncate text-[10.5px] font-mono tracking-widest" style={{ color: '#9A8A78' }}>{typeName} · {doc.docCode}</p>
+      </div>
+
+      {done ? (
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-4 px-4 pb-4 text-center">
+          <p className="text-sm" style={{ color: '#6A5A4A', textWrap: 'pretty' }}>{t('documents_stage_complete').replace('{stage}', label)}</p>
+          <button onClick={onComplete}
+            className="px-6 py-3 rounded-xl font-black text-sm bg-[#1B3828] hover:bg-[#2A5A3C] text-white transition-[background-color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]/40"
+            style={{ letterSpacing: '0.05em' }}>
+            {t('documents_continue_btn')}
+          </button>
+        </div>
+      ) : (
         <>
-          <div className="text-8xl font-black font-mono tabular-nums mb-4" style={{ color: remaining <= 30 ? '#B8844A' : '#1C1410' }}>
-            {formatTime(remaining)}
+          <div className="flex-1 min-h-0 flex items-center justify-center px-3">
+            <span className="font-black font-mono tabular-nums leading-none"
+              style={{ fontSize: clockPx, color: remaining <= 30 ? '#B8844A' : '#1C1410' }}>
+              {formatTime(remaining)}
+            </span>
           </div>
-          <div className="w-full max-w-sm h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-8">
-            <div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, backgroundColor: '#1B3828' }} />
+          <div className="px-3 pb-2 shrink-0">
+            <div className="w-full h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden">
+              <div className="h-full rounded-full" style={{ width: `${progress}%`, backgroundColor: '#1B3828', transition: 'width 500ms linear' }} />
+            </div>
           </div>
-          <div className="flex gap-3 flex-wrap justify-center items-center">
-            <button onClick={onBack}
-              className="w-10 h-10 rounded-xl font-bold transition-colors focus:outline-none flex items-center justify-center"
-              style={{ backgroundColor: 'transparent', color: '#6A5A4A', border: '1px solid #DDD4C0' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.color = '#6A5A4A'; }}
-              title="Back">
-              ←
-            </button>
+          <div className="flex items-center gap-1.5 px-3 pb-3 shrink-0">
+            <TimerIconButton onClick={onBack} label={t('documents_stage_back_title')}>
+              <ChevronLeft size={18} strokeWidth={2.4} aria-hidden className="rtl:rotate-180" />
+            </TimerIconButton>
+            <TimerIconButton onClick={() => onClockChange({ base: totalSeconds, startedAt: null })} label={t('documents_timer_reset_title')}>
+              <RotateCcw size={16} strokeWidth={2.4} aria-hidden />
+            </TimerIconButton>
             <button
-              onClick={() => onClockChange({ base: totalSeconds, startedAt: null })}
-              title="Reset timer"
-              className="w-10 h-10 rounded-xl font-bold transition-colors focus:outline-none flex items-center justify-center"
-              style={{ backgroundColor: 'transparent', color: '#6A5A4A', border: '1px solid #DDD4C0' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.color = '#6A5A4A'; }}>
-              ↺
-            </button>
-            <button onClick={() => {
+              onClick={() => {
                 const live = introRemainingNow(clock, serverNow());
                 onClockChange(running ? { base: live, startedAt: null } : { base: live, startedAt: serverNowIso() });
               }}
-              className="px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none"
-              style={{ backgroundColor: running ? '#B8844A' : '#2A5A3C', color: 'white', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
-              {running ? (
-                <span className="flex items-center gap-2">
-                  <span className="flex gap-[3px]"><span className="w-[3px] h-[13px] rounded-sm bg-white inline-block" /><span className="w-[3px] h-[13px] rounded-sm bg-white inline-block" /></span>
-                  PAUSE
-                </span>
-              ) : started ? t('documents_resume_btn') : `▶ ${t('documents_start_btn').replace(' →', '')}`}
+              className="flex-1 min-w-0 h-10 rounded-xl font-black text-sm text-white flex items-center justify-center gap-1.5 transition-[background-color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]/40"
+              style={{ backgroundColor: running ? '#B8844A' : '#2A5A3C', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}>
+              {running
+                ? <><Pause size={15} strokeWidth={2.6} fill="currentColor" aria-hidden />{t('documents_pause_btn')}</>
+                : <><Play size={15} strokeWidth={2.6} fill="currentColor" aria-hidden className="rtl:rotate-180" />
+                    <span className="truncate">{started ? t('documents_resume_btn').replace('▶ ', '') : t('documents_start_btn').replace(' →', '')}</span></>}
             </button>
-            <button onClick={onToggleDocument}
-              className="px-5 py-3 rounded-xl font-bold transition-colors focus:outline-none text-sm"
-              style={{ backgroundColor: showDocument ? '#1B3828' : 'transparent', color: showDocument ? 'white' : '#6A5A4A', border: showDocument ? 'none' : '1px solid #DDD4C0', fontFamily: "'Outfit', sans-serif" }}
-              onMouseEnter={(e) => { if (!showDocument) { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.color = '#1B3828'; } }}
-              onMouseLeave={(e) => { if (!showDocument) { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.color = '#6A5A4A'; } }}>
-              {showDocument ? t('documents_hide_doc') : t('documents_show_doc')}
-            </button>
-            <button onClick={onComplete}
-              className="w-10 h-10 rounded-xl font-bold transition-colors focus:outline-none flex items-center justify-center"
-              style={{ backgroundColor: 'transparent', color: '#6A5A4A', border: '1px solid #DDD4C0' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.color = '#6A5A4A'; }}
-              title="Skip">
-              →
-            </button>
+            <TimerIconButton onClick={onComplete} label={t('documents_stage_skip_title')}>
+              <ChevronRight size={18} strokeWidth={2.4} aria-hidden className="rtl:rotate-180" />
+            </TimerIconButton>
           </div>
         </>
-      ) : (
-        <>
-          <p className="text-lg mb-8" style={{ color: '#6A5A4A' }}>{t('documents_stage_complete').replace('{stage}', String(label))}</p>
-          <button onClick={onComplete}
-            className="px-10 py-4 rounded-2xl font-black text-lg transition-colors focus:outline-none gv-lift" style={{ backgroundColor: '#1B3828', color: 'white' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
-            {t('documents_continue_btn')}
-          </button>
-        </>
       )}
 
+      {/* Resize corner. Pointer or arrow keys; the panel can never be dragged or resized off screen. */}
+      <div
+        role="button" tabIndex={0}
+        aria-label={t('documents_timer_resize')} title={t('documents_timer_resize')}
+        onPointerDown={startDrag('resize')} onPointerMove={onPointerMove}
+        onPointerUp={endDrag} onPointerCancel={endDrag} onKeyDown={onKeyDown('resize')}
+        className="absolute bottom-0 right-0 w-6 h-6 flex items-end justify-end p-1 cursor-nwse-resize text-[#9A8A78] hover:text-[#1B3828] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded-br-2xl"
+        style={{ touchAction: 'none' }}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden fill="none">
+          <path d="M9 1v8H1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.5" />
+          <path d="M9 5v4H5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
       </div>
-
-      {showDocument && (
-        <div
-          onMouseDown={onDividerMouseDown}
-          style={{ width: '6px', cursor: 'col-resize', backgroundColor: 'transparent', flexShrink: 0, position: 'relative' }}
-          className="hover:bg-[#DDD4C0] transition-colors"
-        >
-          <div style={{ position: 'absolute', top: 0, bottom: 0, left: '2px', width: '2px', backgroundColor: '#DDD4C0', borderRadius: '1px' }} />
-        </div>
-      )}
-      {showDocument && (
-        <div className="flex flex-col p-4 overflow-hidden min-h-0" style={{ flex: 1, minWidth: 0 }}>
-          {doc.fileUrl ? (
-            <iframe
-              src={doc.fileUrl}
-              title={doc.title}
-              className="flex-1 w-full rounded-xl border border-[#DDD4C0]"
-              style={{ minHeight: 0 }}
-            />
-          ) : doc.content ? (
-            <div className="flex-1 min-h-0 overflow-y-auto bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <span className="text-xs font-mono font-bold text-[#1B3828]">{doc.docCode}</span>
-                <span className="text-sm font-bold text-[#1C1410]">{doc.title}</span>
-              </div>
-              <pre className="text-sm text-[#1C1410] whitespace-pre-wrap font-sans leading-relaxed">{doc.content}</pre>
-            </div>
-          ) : (
-            <div className="flex-1 flex items-center justify-center bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl">
-              <p className="text-[#9A8A78] text-sm text-center px-6">No document content saved.<br/>Delegates can view via shared file.</p>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -851,7 +1008,10 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
   const [stage, setStage] = useState<PresentationStage>(null);
   const [timings, setTimings] = useState({ reading: 0, presentation: 0, qa: 0 });
   const [clock, setClock] = useState<{ base: number; startedAt: string | null }>({ base: 0, startedAt: null });
-  const [showDocContent, setShowDocContent] = useState(false);
+  /** Both belong to the introduction, not to a stage, so moving between Reading, Presentation
+   *  and Q&A leaves the paper exactly as the chair set it. Zoom is remembered per device. */
+  const [zoom, setZoom] = useState(() => (typeof window === 'undefined' ? 1 : readZoom()));
+  const [timerOpen, setTimerOpen] = useState(true);
   const [flowError, setFlowError] = useState(false);
   /** Write order for this modal, and the failures still standing (doc id -> seq of the
    *  failed write). A success clears ONLY failures of the same document issued before it:
@@ -925,7 +1085,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
   const handleStartPresentation = (doc: CommitteeDocument) => {
     setActiveDocSnap(doc);
     setStage('setup');
-    setShowDocContent(false);
+    setTimerOpen(true);
   };
 
   const stageMinutes = (s: TimedStage, tm = timings) => tm[s];
@@ -994,33 +1154,72 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
     </p>
   ) : null;
 
-  // Fullscreen stages
+  // Fullscreen stages. The paper is the page; the clock floats over it (16 Sep 2026).
   if (activeDoc && stage && stage !== 'setup') {
     const stageLabel = stage === 'reading' ? t('documents_stage_reading') : stage === 'presentation' ? t('documents_stage_presentation') : t('documents_stage_qa');
     return (
-      <Portal><div className="fixed inset-0 z-50 bg-[#F6F1E9] flex flex-col">
-        <div className="flex items-center justify-between px-6 pt-4 pb-2 border-b border-[#DDD4C0] shrink-0">
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-bold text-[#1C1410]">{activeDoc.docCode}</span>
+      <Portal><div className="fixed inset-0 z-50 bg-[#EDE7D8] flex flex-col">
+        <div className="flex items-center gap-3 px-5 py-2.5 shrink-0" style={{ boxShadow: '0 1px 0 rgba(28,20,16,0.10)' }}>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="text-sm font-black shrink-0" style={{ color: '#1B3828' }}>{activeDoc.docCode}</span>
+            <span className="text-sm font-semibold truncate min-w-0" style={{ color: '#1C1410' }}>{activeDoc.title}</span>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
             {STAGE_ORDER.map((s) => (
-              <span key={s} className={`text-xs px-2 py-0.5 rounded-full font-bold`} style={{ backgroundColor: stage === s ? '#1B3828' : '#DDD4C0', color: stage === s ? '#EED98A' : '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+              <span key={s} className="text-[11px] px-2 py-0.5 rounded-full font-bold"
+                style={{ backgroundColor: stage === s ? '#1B3828' : 'transparent', color: stage === s ? '#EED98A' : '#9A8A78', boxShadow: stage === s ? 'none' : 'inset 0 0 0 1px #DDD4C0', fontFamily: "'Outfit', sans-serif" }}>
                 {s === 'reading' ? t('documents_stage_reading_short') : s === 'presentation' ? t('documents_stage_presentation') : t('documents_stage_qa')}
               </span>
             ))}
           </div>
-          {/* Closing leaves the paper introduced. A working paper's card offers Introduce
-              again; a draft resolution goes to the voting page. */}
-          <button onClick={() => { closeFlow(); onClose(); }} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl">✕</button>
+          {/* Zoom belongs to the chair, not to the stage: it survives every stage change. */}
+          <div className="ms-auto flex items-center gap-1 shrink-0">
+            <button type="button" onClick={() => setZoom((z) => { const n = stepZoom(z, -1); writeZoom(n); return n; })}
+              disabled={zoom === ZOOM_STEPS[0]}
+              aria-label={t('documents_zoom_out')} title={t('documents_zoom_out')}
+              className="w-9 h-9 rounded-lg flex items-center justify-center text-[#6A5A4A] hover:text-[#1B3828] hover:bg-[#1B3828]/[0.07] disabled:opacity-35 disabled:hover:bg-transparent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">
+              <Minus size={16} strokeWidth={2.6} aria-hidden />
+            </button>
+            <button type="button" onClick={() => { setZoom(1); writeZoom(1); }}
+              aria-label={t('documents_zoom_reset')} title={t('documents_zoom_reset')}
+              className="min-w-[52px] h-9 px-2 rounded-lg text-xs font-bold tabular-nums text-[#6A5A4A] hover:text-[#1B3828] hover:bg-[#1B3828]/[0.07] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">
+              {Math.round(zoom * 100)}%
+            </button>
+            <button type="button" onClick={() => setZoom((z) => { const n = stepZoom(z, 1); writeZoom(n); return n; })}
+              disabled={zoom === ZOOM_STEPS[ZOOM_STEPS.length - 1]}
+              aria-label={t('documents_zoom_in')} title={t('documents_zoom_in')}
+              className="w-9 h-9 rounded-lg flex items-center justify-center text-[#6A5A4A] hover:text-[#1B3828] hover:bg-[#1B3828]/[0.07] disabled:opacity-35 disabled:hover:bg-transparent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">
+              <Plus size={16} strokeWidth={2.6} aria-hidden />
+            </button>
+            {!timerOpen && (
+              <button type="button" onClick={() => setTimerOpen(true)}
+                aria-label={t('documents_timer_show')} title={t('documents_timer_show')}
+                className="ms-1 h-9 ps-2.5 pe-3 rounded-lg flex items-center gap-1.5 text-xs font-bold bg-[#1B3828] text-[#EED98A] transition-[background-color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]/40">
+                <Timer size={15} strokeWidth={2.4} aria-hidden />
+                {t('documents_timer_show')}
+              </button>
+            )}
+            {/* Closing leaves the paper introduced. A working paper's card offers Introduce
+                again; a draft resolution goes to the voting page. */}
+            <button onClick={() => { closeFlow(); onClose(); }} aria-label={t('sb_close')}
+              className="ms-1 w-9 h-9 rounded-lg flex items-center justify-center text-[#9A8A78] hover:text-[#1C1410] hover:bg-[#1B3828]/[0.07] transition-colors text-lg leading-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">✕</button>
+          </div>
         </div>
         {flowErrorBanner}
-        {/* A stage with a 0-minute timer renders as already complete (Continue), never blank. */}
-        <StageTimer key={`${activeDoc.id}-${stage}`} label={stageLabel}
-          totalSeconds={timings[stage] * 60} doc={activeDoc} committee={committee}
-          showDocument={showDocContent}
-          clock={clock} onClockChange={handleClockChange}
-          onComplete={() => advanceFromStage(stage)}
-          onToggleDocument={() => setShowDocContent((v) => !v)}
-          onBack={() => backFromStage(stage)} />
+        <div className="flex-1 min-h-0 relative">
+          {/* Mounted once for the whole introduction: a stage change never remounts it, so the
+              zoom and the scroll position stay exactly where the chair left them. */}
+          <IntroDocument doc={activeDoc} zoom={zoom} />
+          {/* A stage with a 0-minute timer renders as already complete (Continue), never blank. */}
+          {timerOpen && (
+            <IntroTimerPanel label={stageLabel}
+              totalSeconds={timings[stage] * 60} doc={activeDoc} committee={committee}
+              clock={clock} onClockChange={handleClockChange}
+              onComplete={() => advanceFromStage(stage)}
+              onBack={() => backFromStage(stage)}
+              onHide={() => setTimerOpen(false)} />
+          )}
+        </div>
       </div></Portal>
     );
   }
@@ -1092,16 +1291,8 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
           ) : (
             <div className="px-7 pb-7 space-y-3">
               {flowErrorBanner}
-              {tab === 'draft-resolution' && (committee.documents ?? []).some((d) => d.type === 'draft-resolution' && d.status === 'introduced') && (
-                <button
-                  onClick={goToVoting}
-                  className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] border border-[#1B3828] text-[#EED98A] py-3 rounded-xl font-black text-sm transition-colors"
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 24px rgba(27,56,40,0.25)'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
-                >
-                  {t('documents_go_to_voting')}
-                </button>
-              )}
+              {/* The full-width GO TO VOTING banner is gone (16 Sep 2026). The small Vote
+                  button beside the tabs is the one way to the voting page from here. */}
               {docs.length === 0 ? (
                 <div className="text-center py-10">
                   <p className="text-2xl font-black mb-1" style={{ color: '#1B3828' }}>{t('documents_empty_doc', { doc: tabPluralName })}</p>
