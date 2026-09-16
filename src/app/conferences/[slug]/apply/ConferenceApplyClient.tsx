@@ -3031,8 +3031,13 @@ function ConferenceApplyInner() {
     // The existing delegation Continue will attach this application to, shown
     // under the field so the adoption is never silent. Not when it has
     // already applied (Continue refuses that with its own message).
+    // Suppressed only for the roles Continue still refuses, which is
+    // head-delegate and faculty-advisor. For a DELEGATE an already-applied
+    // delegation is the normal thing to be matched to, and hiding the line
+    // would make that attachment silent, which is the one thing this line
+    // exists to prevent.
     const adoptionShown = !invitedSocietyId && adoptableSociety
-      && !(takenSocietyIds.has(adoptableSociety.id) && adoptableSociety.id !== invitedSocietyId)
+      && !(isInvoicingRole && takenSocietyIds.has(adoptableSociety.id) && adoptableSociety.id !== invitedSocietyId)
       ? adoptableSociety
       : null;
     const pickSociety = (s: Society) => {
