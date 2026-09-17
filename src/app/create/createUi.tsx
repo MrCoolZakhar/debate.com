@@ -3,24 +3,27 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // createUi — the visual kit for the /create build screen, and nothing else.
 //
-// THE SCREEN (17 Sep 2026, owner: "It needs to be easy, in one page"). One
-// screen, no page scroll from lg up (1280x800 and larger), two panels:
+// THE SCREEN (17 Sep 2026, owner: "It needs to be easy, in one page"; reworked the
+// same day: "I don't like the massive green block"). One screen, no page scroll
+// from lg up (1280x800 and larger), two columns:
 //
-//   1. Committee    a forest masthead with a LIVE preview of the committee as the
-//                   chair will see it (the emblem big, the acronym with the full
-//                   name beneath, the topic, the chairs), then the name, topic and
-//                   chairs fields. A quiet "part of a conference? Log in" link.
-//   2. Delegations  the add field and quick bundles, then ONE column of countries
-//                   that scrolls inside its panel, and the primary button pinned
-//                   at the foot.
+//   Left   1. Committee: the emblem in a WHITE DISC with the live acronym / name,
+//          topic and chairs beside it (LiveCommitteeIdentity), then the name,
+//          topic and chairs fields. 2. Delegations: the add bar, the quick
+//          bundles and Paste a list.
+//   Right  the delegations only: a large count (DelegationCount, plain type, no
+//          pill), ONE column of countries that scrolls inside, and Start session
+//          (StartSessionButton) pinned at the foot.
 //
+// Design rule (CLAUDE.md §8): no count or status pills. Counts are typography,
+// observer status is the megaphone icon.
 // Below lg the panels stack and the page scrolls normally (phones).
 // Borrows `joinUi` directly so /join and /create stay one family.
 // Presentational only: no data, no routing, no state beyond a failed-image set.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Plus, X } from 'lucide-react';
+import { Gavel, Loader2, Lock, Megaphone, Plus, X } from 'lucide-react';
 import { DEFAULT_EMBLEM, emblemMonogram } from '@/components/CommitteeIdentityBadge';
 import { C, OUTFIT, SHADOW } from '../join/joinUi';
 
@@ -41,7 +44,16 @@ export function CreateStyles() {
     <style>{`
       @keyframes create-emblem-in { from { opacity: 0; transform: scale(0.94); filter: blur(4px); } to { opacity: 1; transform: scale(1); filter: blur(0); } }
       .create-emblem-in { animation: create-emblem-in 260ms cubic-bezier(0.2,0,0,1) both; }
-      @media (prefers-reduced-motion: reduce) { .create-emblem-in { animation: none; } }
+      @keyframes create-count-in { from { opacity: 0; transform: translateY(6px); filter: blur(3px); } to { opacity: 1; transform: none; filter: blur(0); } }
+      .create-count-in { animation: create-count-in 220ms cubic-bezier(0.2,0,0,1) both; }
+      .create-start { transition-property: transform, box-shadow, background-color; transition-duration: 180ms; transition-timing-function: cubic-bezier(0.2,0,0,1); }
+      .create-start-disc { transition-property: transform; transition-duration: 220ms; transition-timing-function: cubic-bezier(0.2,0,0,1); }
+      @media (hover: hover) {
+        .create-start.is-ready:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 rgba(238,217,138,0.28), inset 0 0 0 1px rgba(238,217,138,0.22), 0 4px 8px rgba(27,56,40,0.18), 0 18px 36px rgba(27,56,40,0.30) !important; }
+        .create-start.is-ready:hover .create-start-disc { transform: rotate(-12deg); }
+      }
+      .create-start.is-ready:active { transform: scale(0.96); }
+      @media (prefers-reduced-motion: reduce) { .create-emblem-in, .create-count-in { animation: none; } .create-start, .create-start-disc { transition: none; } .create-start.is-ready:hover .create-start-disc { transform: none; } }
     `}</style>
   );
 }
@@ -61,28 +73,40 @@ export function Panel({ step, title, labelledBy, aside, children, className = ''
       className={`relative flex flex-col p-4 sm:p-5 ${className}`}
       style={{ borderRadius: 26, backgroundColor: C.surface, boxShadow: `${SHADOW.card}, inset 0 0 0 1px rgba(27,56,40,0.07)` }}
     >
-      <header className="mb-3.5 flex min-h-[32px] flex-shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5">
-        <span
-          aria-hidden
-          className="flex flex-shrink-0 items-center justify-center tabular-nums"
-          style={{
-            width: 28, height: 28, borderRadius: 999, backgroundColor: C.forest, color: C.gold,
-            fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, boxShadow: '0 2px 6px rgba(27,56,40,0.18)',
-          }}
-        >
-          {step}
-        </span>
-        <h2
-          id={labelledBy}
-          className="me-auto"
-          style={{ fontFamily: OUTFIT, fontSize: 19, fontWeight: 800, letterSpacing: '-0.01em', color: C.forest, lineHeight: 1.2, margin: 0 }}
-        >
-          {title}
-        </h2>
-        {aside && <div className="flex flex-wrap items-center gap-2">{aside}</div>}
-      </header>
+      <StepHeading step={step} title={title} labelledBy={labelledBy} aside={aside} />
       {children}
     </section>
+  );
+}
+
+/** The numbered step heading: a forest disc with the gold numeral, then the title. */
+export function StepHeading({ step, title, labelledBy, aside }: {
+  step: number;
+  title: string;
+  labelledBy: string;
+  aside?: ReactNode;
+}) {
+  return (
+    <header className="mb-3 flex min-h-[32px] flex-shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+      <span
+        aria-hidden
+        className="flex flex-shrink-0 items-center justify-center tabular-nums"
+        style={{
+          width: 28, height: 28, borderRadius: 999, backgroundColor: C.forest, color: C.gold,
+          fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, boxShadow: '0 2px 6px rgba(27,56,40,0.18)',
+        }}
+      >
+        {step}
+      </span>
+      <h2
+        id={labelledBy}
+        className="me-auto"
+        style={{ fontFamily: OUTFIT, fontSize: 19, fontWeight: 800, letterSpacing: '-0.01em', color: C.forest, lineHeight: 1.2, margin: 0 }}
+      >
+        {title}
+      </h2>
+      {aside && <div className="flex flex-wrap items-center gap-2">{aside}</div>}
+    </header>
   );
 }
 
@@ -94,12 +118,13 @@ export function SmallLabel({ children, htmlFor, id }: { children: ReactNode; htm
     : <p id={id} className="uppercase" style={style}>{children}</p>;
 }
 
-// ── The live committee preview ───────────────────────────────────────────────
-// Mirrors the chair masthead (CommitteeIdentityBadge): the emblem resolved by
-// the caller (matchPresetEmblem), then the UN emblem, then gold initials, never a
-// broken image. The emblem's size follows the window height so the whole screen
-// fits at 1280x800 and still reads as the hero at 1920x1080.
-export function LiveCommitteePreview({ src, primary, secondary, placeholder, topic, topicLabel, topicEmpty, chairsLine }: {
+// ── The live committee identity ─────────────────────────────────────────────
+// (17 Sep 2026, owner: "I don't like the massive green block. Rather have the
+// committee logo in a white circle".) A compact row: the emblem in a white disc,
+// resolved by the caller (matchPresetEmblem), then the UN emblem, then forest
+// initials, never a broken image; beside it the acronym with the full name
+// beneath, the topic and the chairs, exactly as the chair masthead will state them.
+export function LiveCommitteeIdentity({ src, primary, secondary, placeholder, topic, topicLabel, topicEmpty, chairsLine }: {
   src: string | null;
   primary: string;
   secondary: string | null;
@@ -116,71 +141,150 @@ export function LiveCommitteePreview({ src, primary, secondary, placeholder, top
   const monogram = emblemMonogram(primary || placeholder);
 
   return (
-    <div
-      aria-hidden
-      className="relative flex min-h-[300px] flex-col items-center justify-center overflow-hidden px-5 py-5 text-center lg:min-h-0 lg:flex-1"
-      style={{ borderRadius: 20, backgroundColor: C.forest, boxShadow: 'inset 0 0 0 1px rgba(238,217,138,0.10), 0 10px 26px rgba(27,56,40,0.20)' }}
-    >
-      <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: GRAIN, backgroundSize: '300px 300px', mixBlendMode: 'overlay', opacity: 0.08 }} />
-      <div
-        className="pointer-events-none absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 rounded-full"
-        style={{ width: 'min(90%, 420px)', aspectRatio: '1', background: 'radial-gradient(circle, rgba(237,231,216,0.15) 0%, rgba(237,231,216,0.05) 42%, rgba(237,231,216,0) 70%)' }}
-      />
-
-      {/* The emblem: re-keyed on the image, so a new match fades in instead of snapping. */}
+    <div aria-hidden className="flex flex-shrink-0 items-center gap-4">
+      {/* The white disc. The artwork is re-keyed, so a new match fades in instead of snapping. */}
       <span
-        key={shown ?? `mono:${monogram}`}
-        className="create-emblem-in relative flex flex-shrink-0 items-center justify-center"
-        style={{ width: 'clamp(104px, 23vh, 232px)', aspectRatio: '1', containerType: 'size' }}
+        className="relative flex flex-shrink-0 items-center justify-center rounded-full bg-white"
+        style={{
+          width: 'clamp(72px, 9.5vh, 96px)', aspectRatio: '1', containerType: 'size',
+          boxShadow: '0 1px 2px rgba(27,56,40,0.10), 0 8px 22px rgba(27,56,40,0.14), inset 0 0 0 1px rgba(0,0,0,0.06)',
+        }}
       >
-        {shown ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={shown}
-            alt=""
-            draggable={false}
-            decoding="async"
-            onError={() => setFailed((prev) => { const n = new Set(prev); n.add(shown); return n; })}
-            className="block h-full w-full object-contain"
-            style={{ filter: 'drop-shadow(0 0 1px rgba(255,255,255,0.55)) drop-shadow(0 6px 14px rgba(0,0,0,0.34))' }}
-          />
-        ) : (
-          <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: '31cqw', letterSpacing: '0.02em', color: C.gold }}>{monogram}</span>
-        )}
+        <span key={shown ?? `mono:${monogram}`} className="create-emblem-in flex h-full w-full items-center justify-center" style={{ padding: '15%' }}>
+          {shown ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={shown}
+              alt=""
+              draggable={false}
+              decoding="async"
+              onError={() => setFailed((prev) => { const n = new Set(prev); n.add(shown); return n; })}
+              className="block h-full w-full object-contain"
+            />
+          ) : (
+            <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: '26cqw', letterSpacing: '0.02em', color: C.forest }}>{monogram}</span>
+          )}
+        </span>
       </span>
 
-      <div className="relative mt-3 w-full max-w-[520px] min-w-0">
-        {/* A long custom name wraps to two lines at a smaller size instead of losing its end. */}
+      <div className="min-w-0 flex-1">
         <p
-          className="line-clamp-2"
+          className="truncate"
           title={primary || placeholder}
           style={{
-            fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '-0.015em', lineHeight: 1.12, textWrap: 'balance', overflowWrap: 'anywhere',
-            fontSize: (primary || placeholder).length > 22 ? 'clamp(20px, 3vh, 30px)' : 'clamp(24px, 3.9vh, 40px)',
-            color: hasName ? C.page : 'rgba(237,231,216,0.62)',
+            fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '-0.015em', lineHeight: 1.12,
+            fontSize: (primary || placeholder).length > 22 ? 20 : 26,
+            color: hasName ? C.forest : C.muted,
           }}
         >
           {primary || placeholder}
         </p>
         {secondary && (
-          <p className="mt-0.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 500, lineHeight: 1.35, color: 'rgba(237,231,216,0.80)' }}>
+          <p className="mt-0.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 500, lineHeight: 1.35, color: C.inkSoft }}>
             {secondary}
           </p>
         )}
-        <p
-          className="mt-2.5 line-clamp-2"
-          style={{ fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.4, color: topic ? 'rgba(237,231,216,0.90)' : 'rgba(237,231,216,0.62)', textWrap: 'balance' }}
-        >
-          <span style={{ fontWeight: 800, color: C.gold }}>{topicLabel}</span>{' '}
+        <p className="mt-1 line-clamp-2" style={{ fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.4, color: topic ? C.ink : C.muted, textWrap: 'pretty' }}>
+          <span style={{ fontWeight: 800, color: C.goldDeep }}>{topicLabel}</span>{' '}
           <span style={{ fontWeight: 500 }}>{topic || topicEmpty}</span>
         </p>
         {chairsLine && (
-          <p className="mt-1.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, letterSpacing: '0.01em', color: 'rgba(237,231,216,0.72)' }}>
+          <p className="mt-0.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: C.inkSoft }}>
             {chairsLine}
           </p>
         )}
       </div>
     </div>
+  );
+}
+
+// ── The delegation count ─────────────────────────────────────────────────────
+// Plain typography, never a pill (CLAUDE.md §8): a large tabular numeral with its
+// word beside it, and the observers in a quiet line beneath. The numeral re-keys
+// on change so it settles in with a short rise (off under reduced motion).
+export function DelegationCount({ count, word, observersLine, liveLabel }: {
+  count: number;
+  word: string;
+  observersLine: string | null;
+  /** The full sentence ("15 delegations, 2 observers") for screen readers. */
+  liveLabel: string;
+}) {
+  return (
+    <div className="flex min-w-0 items-end gap-3">
+      <span className="sr-only" aria-live="polite">{liveLabel}</span>
+      <span
+        aria-hidden
+        key={count}
+        className="create-count-in flex-shrink-0 tabular-nums"
+        style={{ fontFamily: OUTFIT, fontSize: 52, fontWeight: 800, lineHeight: 0.9, letterSpacing: '-0.04em', color: count > 0 ? C.forest : C.muted }}
+      >
+        {count}
+      </span>
+      <span aria-hidden className="flex min-w-0 flex-col pb-0.5">
+        <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 800, lineHeight: 1.15, color: C.forest }}>{word}</span>
+        <span className="flex min-w-0 items-center gap-1.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, lineHeight: 1.3, color: observersLine ? '#8A6414' : 'transparent' }}>
+          {observersLine ? <><Megaphone size={13} strokeWidth={2.2} className="flex-shrink-0" />{observersLine}</> : '\u00A0'}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+// ── Start session ────────────────────────────────────────────────────────────
+// The one primary action. Forest with gold, a gold gavel disc at the inline end,
+// a sub line that says what will happen (or what is missing), a soft lift on
+// hover, scale on press. When the form is incomplete it stays focusable
+// (aria-disabled) so a press can take the chair to the missing field.
+export function StartSessionButton({ label, sub, state, onClick }: {
+  label: string;
+  sub: string | null;
+  state: 'ready' | 'blocked' | 'creating';
+  onClick: () => void;
+}) {
+  const ready = state === 'ready';
+  const creating = state === 'creating';
+  const blocked = state === 'blocked';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-disabled={!ready || undefined}
+      aria-busy={creating || undefined}
+      disabled={creating}
+      className={`create-start group relative flex w-full items-center gap-3 overflow-hidden text-start focus:outline-none focus-visible:shadow-[0_0_0_3px_#EDE7D8,0_0_0_5px_#1B3828] ${ready ? 'is-ready active:scale-[0.96]' : ''}`}
+      style={{
+        minHeight: 64, borderRadius: 20, paddingInlineStart: 20, paddingInlineEnd: 8,
+        backgroundColor: blocked ? 'rgba(27,56,40,0.06)' : C.forest,
+        boxShadow: blocked
+          ? 'inset 0 0 0 1.5px rgba(27,56,40,0.14)'
+          : 'inset 0 1px 0 rgba(238,217,138,0.22), inset 0 0 0 1px rgba(238,217,138,0.14), 0 2px 4px rgba(27,56,40,0.16), 0 12px 28px rgba(27,56,40,0.26)',
+        cursor: blocked ? 'not-allowed' : creating ? 'progress' : 'pointer',
+      }}
+    >
+      {!blocked && <span aria-hidden className="pointer-events-none absolute inset-0" style={{ backgroundImage: GRAIN, backgroundSize: '300px 300px', mixBlendMode: 'overlay', opacity: 0.08 }} />}
+      <span className="relative flex min-w-0 flex-1 flex-col py-2.5">
+        <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 800, letterSpacing: '0.01em', lineHeight: 1.2, color: blocked ? C.forest : C.gold }}>
+          {label}
+        </span>
+        {sub && (
+          <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, lineHeight: 1.3, marginTop: 2, color: blocked ? C.inkSoft : 'rgba(237,231,216,0.72)' }}>
+            {sub}
+          </span>
+        )}
+      </span>
+      <span
+        aria-hidden
+        className="create-start-disc relative flex flex-shrink-0 items-center justify-center rounded-full"
+        style={{
+          width: 48, height: 48,
+          backgroundColor: blocked ? 'rgba(27,56,40,0.08)' : C.gold,
+          color: blocked ? C.muted : C.forest,
+          boxShadow: blocked ? 'none' : 'inset 0 1px 0 rgba(255,255,255,0.55), 0 2px 6px rgba(0,0,0,0.22)',
+        }}
+      >
+        {creating ? <Loader2 size={21} strokeWidth={2.6} className="animate-spin" /> : blocked ? <Lock size={18} strokeWidth={2.4} /> : <Gavel size={21} strokeWidth={2.3} className="rtl:-scale-x-100" />}
+      </span>
+    </button>
   );
 }
 
@@ -291,7 +395,7 @@ export function RowIconButton({ onClick, label, pressed, tone = 'neutral', child
       aria-label={label}
       aria-pressed={pressed}
       className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[10px] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828] active:scale-[0.96] transition-[color,background-color,transform] duration-150 ${hover}`}
-      style={{ color: tone === 'gold' ? '#8A6414' : C.inkSoft }}
+      style={{ color: tone === 'gold' ? '#6E500F' : C.inkSoft, backgroundColor: tone === 'gold' ? 'rgba(238,217,138,0.62)' : undefined }}
     >
       {children}
     </button>

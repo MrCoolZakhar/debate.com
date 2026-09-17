@@ -11,13 +11,14 @@ import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 import { SeatArtProvider } from '@/components/SeatFlag';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { Emoji } from '@/components/Emoji';
-import { Check, CornerDownRight, Eye, EyeOff, Flag, Minus, ShieldAlert, SkipForward, Undo2, X } from 'lucide-react';
+import { Check, CornerDownRight, Eye, EyeOff, Flag, Minus, RotateCcw, ShieldAlert, SkipForward, Undo2, X } from 'lucide-react';
 import { VotingRollCall } from '@/components/voting/VotingRollCall';
 import { DeviceVoteGate, DeviceVotingPanel } from '@/components/voting/DeviceVotingPanel';
 import { VotingHeader } from '@/components/voting/VotingHeader';
 import { ResolutionPicker, type PickCardState } from '@/components/voting/ResolutionPicker';
 import { VoterCarousel, type SeatMark as CarouselMark } from '@/components/voting/VoterCarousel';
-import { RightsQueue } from '@/components/voting/RightsQueue';
+import { RightsQueue, RightsTimeField } from '@/components/voting/RightsQueue';
+import { ResultBackdrop } from '@/components/voting/ResultBackdrop';
 import ChatDialog from '@/components/chat/ChatDialog';
 import ChatPanel from '@/components/ChatPanel';
 import ChatDisabledNotice from '@/components/ChatDisabledNotice';
@@ -36,7 +37,7 @@ import {
   loadVoteStates, saveVoteState, setVotingPhase, isVoteOpen,
   type VoteChoice, type DelegateVote, type VoteStateV1, type VoteStatus, type FrozenSeat,
 } from '@/lib/voteState';
-import { VotingRulesPopover, computeVoteOutcome, isVetoDelegation } from '@/components/VotingRulesPanel';
+import { computeVoteOutcome, isVetoDelegation } from '@/components/VotingRulesPanel';
 import { useAuth } from '@/components/AuthProvider';
 import type { ConferenceAccess } from '@/lib/conferenceAccess';
 import { useSessionAccess } from '@/lib/useSessionAccess';
@@ -444,6 +445,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const [resultSaveError, setResultSaveError] = useState<null | { docId: string; result: 'passed' | 'failed' | 'introduced' }>(null);
   const [rightsSpeakerTime, setRightsSpeakerTime] = useState(60);
   const [rightsRunning, setRightsRunning] = useState(false);
+  /** The speaker on the rights floor has started (the clock ran at least once). Until then
+   *  they can still be moved in the queue like anyone waiting. */
+  const [rightsStarted, setRightsStarted] = useState(false);
   const rightsTimerRef = useRef<NodeJS.Timeout | null>(null);
   /** The roll call opened on its own (resolution list, roster notice), with no vote to start. */
   const [rollCallOpen, setRollCallOpen] = useState(false);
@@ -511,6 +515,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const activeVote: VoteStateV1 | null = activeDocId ? voteStates[activeDocId] ?? null : null;
   const rightsIndex = activeVote?.rightsIndex ?? 0;
   const rightsTimerLimit = activeVote?.rightsTimerLimit ?? 60;
+  /** The delegation holding the rights floor now, and its own time (override or the default). */
+  const rightsSpeakerId = activeVote?.status === 'rights-speakers' ? activeVote.rightsOrder[rightsIndex]?.delegateId ?? null : null;
+  const rightsSpeakerLimit = (rightsSpeakerId && activeVote?.rightsTimes?.[rightsSpeakerId]) || rightsTimerLimit;
   const anyOpenVote = Object.values(voteStates).some(isVoteOpen);
 
   // ── Live roster plumbing ───────────────────────────────────────────────────
@@ -801,11 +808,14 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     return () => { if (rightsTimerRef.current) { clearInterval(rightsTimerRef.current); rightsTimerRef.current = null; } };
   }, [rightsRunning]);
 
-  // Reset rights timer when speaker index or limit changes
+  // Reset the rights clock when the speaker on the floor, their time or the paper changes.
+  // Keyed on the speaker's id (not only the index): moving the not-yet-started speaker away
+  // puts someone else at the same index.
   useEffect(() => {
-    setRightsSpeakerTime(rightsTimerLimit);
+    setRightsSpeakerTime(rightsSpeakerLimit);
     setRightsRunning(false);
-  }, [rightsIndex, rightsTimerLimit, activeDocId]);
+    setRightsStarted(false);
+  }, [rightsIndex, rightsSpeakerId, rightsSpeakerLimit, activeDocId]);
 
   // ── V-3: the room enters voting mode when the Moderator opens this screen ──────
   // `set_committee_voting_phase` remembers the phase the room was in and sets 'voting' in
@@ -1078,7 +1088,6 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   // bar that moved under it.
   const presentAndPvDelegates = vote ? vote.order.map(liveSeat) : livePresentAndPv;
   const votableDelegates = vote ? vote.votable.map(liveSeat) : liveVotable;
-  const tally = { forCount, againstCount, abstainCount };
 
   /** The veto seats in force under a given rule set. `custom` → the chair-picked
    *  list; `p5` → p5Delegations, falling back to the shipped P5 default. */
@@ -1126,6 +1135,14 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const { vetoBlocked: p5Veto, unanFail: unanimousFail, outcome } = evaluate(settings);
   const totalDecisive = outcome.denominator;
   const passed = outcome.passed;
+  /** Ballot choices in force (Settings, and the roll call's Abstentions bookmark). */
+  const allowRights = settings.allowRightsVotes !== false;
+  const allowPass = settings.allowPass !== false;
+  /** The verdict fields a finished vote stores: vetoed is a failure a veto holder caused. */
+  const verdictOf = (rules: CommitteeSettings, list: DelegateVote[]) => {
+    const ev = evaluate(rules, list);
+    return { result: ev.outcome.passed ? 'passed' as const : 'failed' as const, vetoed: !ev.outcome.passed && ev.vetoBlocked };
+  };
 
   const persistResult = (docId: string, result: 'passed' | 'failed' | 'introduced') => {
     if (isViewOnly) return;
@@ -1277,15 +1294,13 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     // Result already on screen: the verdict can flip, so the DR's stored status
     // has to follow it rather than keeping the value from the first evaluation.
     if (phase === 'result' && selectedDoc) {
-      const nextPassed = evaluate(next).outcome.passed;
-      if (nextPassed !== passed) {
-        persistResult(selectedDoc.id, nextPassed ? 'passed' : 'failed');
-        updateVote(() => ({ result: nextPassed ? 'passed' : 'failed' }));
+      const v = verdictOf(next, votes);
+      if (v.result !== (passed ? 'passed' : 'failed') || v.vetoed !== !!vote?.vetoed) {
+        persistResult(selectedDoc.id, v.result);
+        updateVote(() => v);
       }
     }
   };
-  const applyRule = <K extends keyof CommitteeSettings>(key: K, value: CommitteeSettings[K]) =>
-    applyRules({ [key]: value } as Partial<CommitteeSettings>);
 
   /** Veto seats a chair can pick: every non-observer delegation on the roster. */
   const vetoRoster = committee.delegates.filter((d) => !isObserverSeat(d));
@@ -1307,31 +1322,6 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     applyRules({ vetoMode: mode });
   };
 
-  const rulesProps = {
-    rules: settings,
-    onChange: applyRule,
-    vetoMode: settings.vetoMode,
-    onVetoModeChange: changeVetoMode,
-    vetoRoster,
-    onVetoCountriesChange: (next: string[]) => applyRules({ vetoCountries: next }),
-    // "Hide tally" hides the running count in the header console too, until the result.
-    hideTally: hideVotes && phase !== 'result',
-    tally,
-    outcome,
-    votesCast: votes.length,
-    eligible: presentDelegates.length,
-    presentCount: presentAndPvDelegates.length,
-    totalCount: votableDelegates.length,
-    resultShown: phase === 'result',
-    vetoBlocked: p5Veto,
-    unanimousFail,
-    // So the console can warn about veto seats that match NO delegation in the room
-    // — a silent no-match is exactly how a missing veto used to hide.
-    vetoEntries: vetoListFor(settings),
-    delegationNames: votableDelegates.map((d) => d.country),
-    readOnly: isViewOnly,
-  };
-
   const startNewVote = (docId: string) => {
     if (isViewOnly) return;
     // A suspended or ended room takes no new ballot; say why instead of freezing a vote.
@@ -1349,7 +1339,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       rightsOrder: [],
       rightsIndex: 0,
       rightsTimerLimit: voteStatesRef.current[docId]?.rightsTimerLimit ?? 60,
+      rightsTimes: {},
       result: null,
+      vetoed: false,
       startedAt: serverNowIso(),   // database clock (T-1): compared across chair devices
       // Frozen with the ballot: changing the setting later never changes a vote in progress.
       method: settings.votingMethod === 'device' ? 'device' : 'rollcall',
@@ -1363,22 +1355,53 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   };
 
   // ── Casting, passing and moving back ───────────────────────────────────────
-  // Invariants the pass round depends on (it is derived: the delegation voting in the pass
-  // round is `passedIds[number of passedIds that have a vote]`):
-  //   • in the MAIN round a delegation has either a vote or a Pass, never both. A vote cast
-  //     after Back drops its Pass; a Pass after Back drops its vote.
-  //   • `passedIds` stays in ballot order, so a Pass recorded after Back still comes back in
-  //     the pass round at its own place.
-  //   • the pass-round votes are always a prefix of `passedIds`, so Back in the pass round
-  //     removes the last of them and that delegation is asked again.
+  // THE LINE (17 Sep 2026, owner: "Do not have a pass round, they simply vote next"). The
+  // delegations are asked in `order`; a delegation that passes is appended to `passedIds` and
+  // is asked once more after the last delegation in `order`. `currentVoterIndex` points into
+  // that line: index < order.length is the main ballot, index >= order.length is
+  // passedIds[index - order.length]. On the second ask a delegation must vote For or Against
+  // (with rights when rights are allowed): no second Pass and no Abstain, the usual MUN rule
+  // (a delegation that passes has said it will take a position once it has heard the room).
+  // Invariants:
+  //   • in the main ballot a delegation has either a vote or a Pass, never both. A vote cast
+  //     there after Back drops its Pass (and so its second ask); a Pass after Back drops its vote.
+  //   • a delegation that passed and was asked again holds a vote AND stays in passedIds; its
+  //     main-ballot seat reads Pass, its second-ask seat reads the vote.
   // Every step is one `updateVote`, so `seq` grows and `vote_state` stays authoritative.
-  const inBallotOrder = (prev: VoteStateV1, ids: string[]) => {
-    const pos = new Map(prev.order.map((s, i) => [s.id, i]));
-    return [...ids].sort((a, b) => (pos.get(a) ?? Infinity) - (pos.get(b) ?? Infinity));
+  // Ballots stored before this change kept `passedIds` in ballot order and advanced the same
+  // pointer through a derived pass round, so they read correctly under the line rule.
+  type LineStep = Pick<VoteStateV1, 'votes' | 'passedIds' | 'currentVoterIndex'>;
+
+  /** Apply one step of the ballot. When the step walks past the end of the line, the vote
+   *  finishes at once (owner: "When everyone finishes voting, automatically move to rights
+   *  speakers"): the rights speakers when anyone voted with rights, otherwise the result. */
+  const advance = (make: (prev: VoteStateV1) => LineStep) => {
+    if (isViewOnly || !selectedDoc) return;
+    const docId = selectedDoc.id;
+    const prev = voteStatesRef.current[docId];
+    if (!prev) return;
+    const step = make(prev);
+    if (prev.method === 'device' || step.currentVoterIndex < prev.order.length + step.passedIds.length) {
+      updateVote(() => step);
+      return;
+    }
+    const rights = allowRights
+      ? step.votes
+        .filter((v) => v.choice === 'for-rights' || v.choice === 'against-rights')
+        .sort((a, b) => compareCountryNames(a.country, b.country, language))
+        .slice(0, 10)
+      : [];
+    if (rights.length > 0) {
+      updateVote(() => ({ ...step, status: 'rights-speakers', rightsOrder: rights, rightsIndex: 0 }));
+      return;
+    }
+    const v = verdictOf(settings, step.votes);
+    persistResult(docId, v.result);
+    updateVote(() => ({ ...step, status: 'result', ...v }));
   };
 
   const castVoteAndAdvance = (delegateId: string, country: string, choice: VoteChoice) => {
-    updateVote((prev) => {
+    advance((prev) => {
       const mainRound = prev.currentVoterIndex < prev.order.length;
       const existing = prev.votes.find((v) => v.delegateId === delegateId);
       const nextVotes = existing
@@ -1392,26 +1415,30 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     });
   };
 
+  /** Pass (main ballot only): asked again at the end of the line, once. */
   const handlePass = (delegateId: string) => {
-    updateVote((prev) => ({
-      passedIds: prev.passedIds.includes(delegateId) ? prev.passedIds : inBallotOrder(prev, [...prev.passedIds, delegateId]),
-      votes: prev.votes.filter((v) => v.delegateId !== delegateId),
-      currentVoterIndex: prev.currentVoterIndex + 1,
-    }));
+    advance((prev) => {
+      if (prev.currentVoterIndex >= prev.order.length) return { votes: prev.votes, passedIds: prev.passedIds, currentVoterIndex: prev.currentVoterIndex };
+      return {
+        passedIds: prev.passedIds.includes(delegateId) ? prev.passedIds : [...prev.passedIds, delegateId],
+        votes: prev.votes.filter((v) => v.delegateId !== delegateId),
+        currentVoterIndex: prev.currentVoterIndex + 1,
+      };
+    });
   };
 
   /** After Back: leave this delegation's recorded vote (or Pass) as it is and move on. */
   const keepAndAdvance = () => {
-    updateVote((prev) => ({ currentVoterIndex: prev.currentVoterIndex + 1 }));
+    advance((prev) => ({ votes: prev.votes, passedIds: prev.passedIds, currentVoterIndex: prev.currentVoterIndex + 1 }));
   };
 
   /**
    * Back: one step towards the start of the vote, as many times as needed.
-   *   result or rights speakers (at the first speaker) → the ballot, all votes kept, verdict
-   *     cleared (and the paper's status put back to introduced until the vote is finished again)
-   *   rights speakers → the previous rights speaker
-   *   pass round → the last delegation that voted in it is asked again
-   *   main round → the previous delegation, whose recorded choice is shown and can be kept
+   *   rights speakers (after the first) → the previous rights speaker
+   *   result or the first rights speaker → the last seat in the line, its choice shown and
+   *     kept or changed (a device ballot returns to its all-voted screen); verdict cleared and
+   *     the paper's status put back to introduced until the vote is finished again
+   *   ballot → the previous seat in the line, whose recorded choice is shown and can be kept
    */
   const stepBack = () => {
     if (isViewOnly || !vote || !selectedDoc) return;
@@ -1424,14 +1451,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     })();
     updateVote((prev) => {
       if (prev.status === 'rights-speakers' && prev.rightsIndex > 0) return { rightsIndex: prev.rightsIndex - 1 };
-      if (prev.status !== 'voting') return { status: 'voting', result: null, rightsOrder: [], rightsIndex: 0 };
-      const n = prev.order.length;
-      const idx = Math.min(prev.currentVoterIndex, n);
-      if (idx >= n) {
-        const votedInPassRound = prev.passedIds.filter((id) => prev.votes.some((v) => v.delegateId === id));
-        const last = votedInPassRound[votedInPassRound.length - 1];
-        if (last) return { votes: prev.votes.filter((v) => v.delegateId !== last), currentVoterIndex: n };
+      const lineLen = prev.order.length + prev.passedIds.length;
+      if (prev.status !== 'voting') {
+        const reset = { status: 'voting' as const, result: null, vetoed: false, rightsOrder: [], rightsIndex: 0 };
+        return prev.method === 'device' ? reset : { ...reset, currentVoterIndex: Math.max(0, lineLen - 1) };
       }
+      const idx = Math.min(prev.currentVoterIndex, lineLen);
       if (idx > 0) return { currentVoterIndex: idx - 1 };
       return {};
     });
@@ -1442,34 +1467,51 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   const finishWithResult = () => {
     if (isViewOnly || !selectedDoc) return;
-    persistResult(selectedDoc.id, passed ? 'passed' : 'failed');
-    updateVote(() => ({ status: 'result', result: passed ? 'passed' : 'failed' }));
+    const v = verdictOf(settings, votes);
+    persistResult(selectedDoc.id, v.result);
+    updateVote(() => ({ status: 'result', ...v }));
   };
 
+  /** The all-voted screen (a device ballot after Back, or a ballot stored before votes
+   *  finished on their own): rights speakers if anyone has them, else the result. */
   const handleFinishVoting = () => {
-    if (withRights.length > 0) {
+    if (allowRights && withRights.length > 0) {
       updateVote(() => ({ status: 'rights-speakers', rightsOrder: [...withRights], rightsIndex: 0 }));
     } else {
       finishWithResult();
     }
   };
 
-  /** Move an upcoming rights speaker to `slot` among the speakers still to come (owner, 17 Sep
-   *  2026). One `updateVote`, so the seq grows and every chair device follows. Re-checked
-   *  against the state it patches: the delegation must still be upcoming there. */
+  /** Move a rights speaker to `slot` among the movable speakers: the ones still to come, plus
+   *  the one on the floor while they have not started (owner, 17 Sep 2026: "change the order
+   *  even of the current speaker if they are not speaking yet"). One `updateVote`, so the seq
+   *  grows and every chair device follows. Re-checked against the state it patches. */
   const moveRightsSpeaker = (delegateId: string, slot: number) => {
     if (isViewOnly) return;
+    const includeCurrent = !rightsStarted && !rightsRunning;
     updateVote((prev) => {
       if (prev.status !== 'rights-speakers') return {};
-      const head = prev.rightsOrder.slice(0, prev.rightsIndex + 1);
-      const upcoming = prev.rightsOrder.slice(prev.rightsIndex + 1);
-      const item = upcoming.find((v) => v.delegateId === delegateId);
+      const cut = prev.rightsIndex + (includeCurrent ? 0 : 1);
+      const head = prev.rightsOrder.slice(0, cut);
+      const movable = prev.rightsOrder.slice(cut);
+      const item = movable.find((v) => v.delegateId === delegateId);
       if (!item) return {};
-      const rest = upcoming.filter((v) => v.delegateId !== delegateId);
+      const rest = movable.filter((v) => v.delegateId !== delegateId);
       const at = Math.max(0, Math.min(slot, rest.length));
       rest.splice(at, 0, item);
-      if (rest.every((v, i) => v.delegateId === upcoming[i].delegateId)) return {};
+      if (rest.every((v, i) => v.delegateId === movable[i].delegateId)) return {};
       return { rightsOrder: [...head, ...rest] };
+    });
+  };
+
+  /** Speaking time of one rights speaker, seconds; null = back to the default. */
+  const setRightsTime = (delegateId: string, seconds: number | null) => {
+    if (isViewOnly) return;
+    updateVote((prev) => {
+      const times = { ...(prev.rightsTimes ?? {}) };
+      if (seconds == null || seconds === prev.rightsTimerLimit) delete times[delegateId];
+      else times[delegateId] = seconds;
+      return { rightsTimes: times };
     });
   };
 
@@ -1481,8 +1523,11 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     const cur = voteStatesRef.current[docId];
     if (!cur || cur.method !== 'device' || cur.status !== 'voting' || cur.currentVoterIndex >= cur.order.length) return;
     const inOrder = new Set(cur.order.map((s) => s.id));
-    const list = revealed.filter((v) => inOrder.has(v.delegateId));
-    const rights = list
+    // Rights switched off: a rights choice cast before the switch counts as the plain vote.
+    const list = revealed
+      .filter((v) => inOrder.has(v.delegateId))
+      .map((v) => (allowRights ? v : v.choice === 'for-rights' ? { ...v, choice: 'for' as const } : v.choice === 'against-rights' ? { ...v, choice: 'against' as const } : v));
+    const rights = (allowRights ? list : [])
       .filter((v) => v.choice === 'for-rights' || v.choice === 'against-rights')
       .sort((a, b) => compareCountryNames(a.country, b.country, language))
       .slice(0, 10);
@@ -1491,9 +1536,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       updateVote(() => ({ ...base, status: 'rights-speakers', rightsOrder: rights, rightsIndex: 0 }));
       return;
     }
-    const ok = evaluate(settings, list).outcome.passed;
-    persistResult(docId, ok ? 'passed' : 'failed');
-    updateVote(() => ({ ...base, status: 'result', result: ok ? 'passed' : 'failed' }));
+    const v = verdictOf(settings, list);
+    persistResult(docId, v.result);
+    updateVote(() => ({ ...base, status: 'result', ...v }));
   };
 
   const handleNextRightsSpeaker = () => {
@@ -1554,7 +1599,6 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     onOpenScoreboard: () => setShowScoreboard(true),
     sessionCode: committee.code,
     chat: committee.endedAt ? null : { unread: chatUnread, open: showChat, onToggle: () => setShowChat((v) => !v) },
-    rules: <VotingRulesPopover {...rulesProps} trigger="icon" />,
     isViewOnly,
   };
 
@@ -1784,10 +1828,10 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         onKeyDown={(e) => { if (e.key === 'Escape' && endDebateState !== 'working') setShowEndDebateConfirm(false); }}
       >
         <div className="px-7 pt-7 pb-2">
-          <div className="w-12 h-12 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: 'rgba(139,32,32,0.10)', color: '#8B2020' }} aria-hidden>
-            <Flag size={22} strokeWidth={2.25} />
+          <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: '#A32424', color: '#FFFFFF', boxShadow: '0 0 0 6px rgba(163,36,36,0.14), 0 8px 20px rgba(139,32,32,0.30)' }} aria-hidden>
+            <Flag size={24} strokeWidth={2.5} fill="currentColor" />
           </div>
-          <h2 id="gv-end-debate-title" className="text-[22px] font-bold leading-tight text-[#1C1410]">{t('voting_end_debate_title')}</h2>
+          <h2 id="gv-end-debate-title" className="text-[24px] font-bold leading-tight" style={{ color: '#8B1A1A' }}>{t('voting_end_debate_title')}</h2>
           <p className="text-[15px] text-[#6A5A4A] leading-relaxed mt-2 [text-wrap:pretty]">
             {t('voting_end_debate_body')}
           </p>
@@ -1834,7 +1878,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       if (stored && isVoteOpen(stored)) return { kind: 'live', vote: stored, canOpen };
       if (isVoted) {
         const result = stored?.result ?? (doc.status === 'failed' ? 'failed' : 'passed');
-        return { kind: 'voted', result, vote: stored, canOpen: !!stored };
+        return { kind: 'voted', result: result === 'failed' && stored?.vetoed ? 'vetoed' : result, vote: stored, canOpen: !!stored };
       }
       return { kind: 'ready', canOpen };
     };
@@ -1885,32 +1929,25 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     );
   }
 
-  // Pass-round: derived, no extra state needed
-  const mainRoundComplete = currentVoterIndex >= presentDelegates.length;
-  const passVoterIndex = passedIds.filter(id => votes.some(v => v.delegateId === id)).length;
-  const inPassRound = mainRoundComplete && passVoterIndex < passedIds.length;
-
-  const currentDelegate = (() => {
-    if (!mainRoundComplete) return presentDelegates[currentVoterIndex];
-    if (inPassRound) {
-      const nextId = passedIds[passVoterIndex];
-      return committee.delegates.find(d => d.id === nextId) ?? null;
-    }
-    return null;
-  })();
-
-  // The line the carousel draws: the ballot order in the main round, the delegations that
-  // passed in the pass round. Resolved to live rows by id (a new crest still flows through).
-  const passRoundSeats: Delegate[] = passedIds.map((id) => liveSeatById.get(id) ?? { id, country: vote.order.find((s) => s.id === id)?.country ?? '', status: 'present' as DelegateStatus });
-  const carouselSeats = inPassRound ? passRoundSeats : presentDelegates;
-  const carouselIndex = inPassRound ? passVoterIndex : Math.min(currentVoterIndex, Math.max(0, presentDelegates.length - 1));
-  const markOf = (id: string): CarouselMark => {
-    const cast = votes.find((v) => v.delegateId === id);
-    if (cast) return cast.choice;
-    return !inPassRound && passedIds.includes(id) ? 'pass' : null;
+  // The voting line (see "THE LINE" above): the ballot order, then every delegation that
+  // passed, asked once more. Resolved to live rows by id (a new crest still flows through).
+  const mainCount = presentDelegates.length;
+  const passedSeat = (id: string): Delegate => liveSeatById.get(id) ?? { id, country: vote.order.find((s) => s.id === id)?.country ?? '', status: 'present' as DelegateStatus };
+  const lineSeats: (Delegate & { key: string })[] = [
+    ...presentDelegates.map((d) => ({ ...d, key: d.id })),
+    ...passedIds.map((id) => ({ ...passedSeat(id), key: `again:${id}` })),
+  ];
+  const lineLength = lineSeats.length;
+  const currentDelegate = currentVoterIndex < lineLength ? lineSeats[currentVoterIndex] : null;
+  /** The delegation on screen passed earlier and is being asked again: it must vote. */
+  const isSecondAsk = !!currentDelegate && currentVoterIndex >= mainCount;
+  const passedWaiting = Math.max(0, passedIds.length - Math.max(0, currentVoterIndex - mainCount));
+  const markOf = (id: string, index: number): CarouselMark => {
+    if (index < mainCount && passedIds.includes(id)) return 'pass';
+    return votes.find((v) => v.delegateId === id)?.choice ?? null;
   };
-  // After Back, the delegation on screen may already have a choice on record (main round).
-  const recordedMark: CarouselMark = currentDelegate && !mainRoundComplete ? markOf(currentDelegate.id) : null;
+  // After Back, the seat on screen may already have a choice on record.
+  const recordedMark: CarouselMark = currentDelegate ? markOf(currentDelegate.id, currentVoterIndex) : null;
   const choiceLabel = (m: Exclude<CarouselMark, null>) => t(
     m === 'for' ? 'voting_choice_for'
       : m === 'for-rights' ? 'voting_choice_for_rights'
@@ -1920,12 +1957,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       : 'voting_choice_pass',
   );
   // A device ballot not yet revealed: the delegations vote on their own devices (DeviceVotingPanel).
-  const deviceBallotOpen = vote.method === 'device' && phase === 'voting' && currentVoterIndex < presentDelegates.length;
-  const canStepBack = !isViewOnly && !(vote.method === 'device' && phase === 'voting') && (phase !== 'voting' || currentVoterIndex > 0 || passVoterIndex > 0);
+  const deviceBallotOpen = vote.method === 'device' && phase === 'voting' && currentVoterIndex < mainCount;
+  const canStepBack = !isViewOnly && !(vote.method === 'device' && phase === 'voting') && (phase !== 'voting' || currentVoterIndex > 0);
 
   const stage = phase === 'result' ? t('voting_stage_result')
     : phase === 'rights-speakers' ? t('voting_stage_rights')
-    : inPassRound ? t('voting_stage_pass')
+    : isSecondAsk ? t('voting_stage_again')
     : !currentDelegate ? t('voting_stage_tallied')
     : t('voting_stage_voting');
 
@@ -1955,6 +1992,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     </div>
   );
 
+  const clock = (secs: number) => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+
   return (
     <FitToScreen>
     <SeatArtProvider delegates={committee.delegates}>
@@ -1976,7 +2015,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         docsLabel={drPlural}
         onDocs={() => { setSelectedDocId(null); if (isViewOnly) setFollowLive(false); }}
         doc={{ code: selectedDoc.docCode, title: selectedDoc.title }}
-        progress={{ stage, cast: deviceBallotOpen ? (deviceCast?.ballot === `${selectedDoc.id}:${vote.startedAt}` ? deviceCast.cast : 0) : votes.length, total: presentDelegates.length }}
+        progress={{ stage, cast: deviceBallotOpen ? (deviceCast?.ballot === `${selectedDoc.id}:${vote.startedAt}` ? deviceCast.cast : 0) : votes.length, total: mainCount }}
       />
       {rollCallModal}
       {observerFailBanner}
@@ -2002,36 +2041,46 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       {/* ── Active voting: one delegation at a time ── */}
       {phase === 'voting' && currentDelegate && !deviceBallotOpen && (
         <div className="flex-1 min-h-0 flex flex-col items-center px-8 pt-4 pb-8">
-          <div className="h-9 shrink-0 flex items-center">
-            {inPassRound ? (
+          <div className="h-9 shrink-0 flex items-center gap-2">
+            {isSecondAsk ? (
               <span className="inline-flex items-center gap-2 h-9 ps-3 pe-4 rounded-full text-[13.5px] font-semibold" style={{ backgroundColor: 'rgba(182,135,31,0.16)', color: '#6A4A0A' }}>
                 <SkipForward size={15} strokeWidth={2.5} aria-hidden />
-                {t('voting_pass_round')}
-                <span className="font-medium tabular-nums">· {t('voting_pass_round_sub', { current: passVoterIndex + 1, total: passedIds.length })}</span>
+                {t('voting_again_title')}
+                <span className="font-medium tabular-nums">· {t('voting_pass_round_sub', { current: currentVoterIndex - mainCount + 1, total: passedIds.length })}</span>
               </span>
             ) : (
-              <span className="text-[14px] font-medium tabular-nums" style={{ color: '#6A5A4A' }}>
-                {currentVoterIndex + 1} / {presentDelegates.length}
-              </span>
+              <>
+                <span className="text-[14px] font-medium tabular-nums" style={{ color: '#6A5A4A' }}>
+                  {currentVoterIndex + 1} / {mainCount}
+                </span>
+                {passedWaiting > 0 && (
+                  <span className="inline-flex items-center gap-1.5 h-7 ps-2.5 pe-3 rounded-full text-[12.5px] font-semibold" style={{ backgroundColor: 'rgba(182,135,31,0.14)', color: '#6A4A0A' }}>
+                    <SkipForward size={13} strokeWidth={2.5} aria-hidden />
+                    {t('voting_passed_waiting', { n: passedWaiting })}
+                  </span>
+                )}
+              </>
             )}
           </div>
 
           {/* The line of delegations, voting now in the centre */}
           <div className="flex-1 min-h-0 w-full flex flex-col items-center justify-center">
-            <VoterCarousel seats={carouselSeats} current={carouselIndex} markOf={markOf} hideTally={hideVotes} />
+            <VoterCarousel seats={lineSeats} current={Math.min(currentVoterIndex, Math.max(0, lineLength - 1))} markOf={markOf} hideTally={hideVotes} />
             <h1
-              key={currentDelegate.id}
+              key={`${currentDelegate.key}`}
               className="gv-name-in text-[36px] font-bold text-[#1C1410] text-center leading-[1.1] tracking-[-0.015em] mt-3 max-w-4xl [text-wrap:balance]"
               aria-live="polite"
             >
               {getCountryDisplayName(currentDelegate.country, language)}
             </h1>
             <div className="h-8 mt-2 flex items-center">
-              {recordedMark && (
+              {recordedMark ? (
                 <span className="inline-flex items-center gap-2 h-8 px-3.5 rounded-full text-[13.5px] font-medium" style={{ backgroundColor: 'rgba(182,135,31,0.16)', color: '#6A4A0A' }}>
                   {hideVotes && recordedMark !== 'pass' ? t('voting_recorded_hidden') : t('voting_recorded_choice', { choice: choiceLabel(recordedMark) })}
                 </span>
-              )}
+              ) : isSecondAsk ? (
+                <span className="text-[14px] font-medium" style={{ color: '#6A5A4A' }}>{t('voting_again_rule')}</span>
+              ) : null}
             </div>
           </div>
 
@@ -2047,12 +2096,14 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   recorded={!hideVotes && recordedMark === 'for'}
                   onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'for')}
                 />
-                <BallotButton
-                  tone="for" icon={<Check size={20} strokeWidth={3} />} label={t('voting_in_favour')} sub={t('voting_with_rights_label')}
-                  recorded={!hideVotes && recordedMark === 'for-rights'}
-                  onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'for-rights')}
-                />
-                {settings.allowAbstentions && (
+                {allowRights && (
+                  <BallotButton
+                    tone="for" icon={<Check size={20} strokeWidth={3} />} label={t('voting_in_favour')} sub={t('voting_with_rights_label')}
+                    recorded={!hideVotes && recordedMark === 'for-rights'}
+                    onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'for-rights')}
+                  />
+                )}
+                {settings.allowAbstentions && !isSecondAsk && (
                   (vote?.order.find((f) => f.id === currentDelegate.id)?.status ?? seatStatus(currentDelegate)) === 'present' ? (
                     <BallotButton
                       tone="neutral" icon={<Minus size={20} strokeWidth={3} />} label={t('voting_abstain')}
@@ -2063,18 +2114,20 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                     <BallotButton tone="neutral" icon={<Minus size={20} strokeWidth={3} />} label={t('voting_abstain_pv')} disabled onClick={() => {}} />
                   )
                 )}
-                {!inPassRound && (
+                {allowPass && !isSecondAsk && (
                   <BallotButton
                     tone="neutral" icon={<SkipForward size={20} strokeWidth={2.75} />} label={t('voting_pass')}
                     recorded={recordedMark === 'pass'}
                     onClick={() => handlePass(currentDelegate.id)}
                   />
                 )}
-                <BallotButton
-                  tone="against" icon={<X size={20} strokeWidth={3} />} label={t('voting_against')} sub={t('voting_with_rights_label')}
-                  recorded={!hideVotes && recordedMark === 'against-rights'}
-                  onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'against-rights')}
-                />
+                {allowRights && (
+                  <BallotButton
+                    tone="against" icon={<X size={20} strokeWidth={3} />} label={t('voting_against')} sub={t('voting_with_rights_label')}
+                    recorded={!hideVotes && recordedMark === 'against-rights'}
+                    onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'against-rights')}
+                  />
+                )}
                 <BallotButton
                   tone="against" wide icon={<X size={22} strokeWidth={3} />} label={t('voting_against')}
                   recorded={!hideVotes && recordedMark === 'against'}
@@ -2088,7 +2141,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                     <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
                   </div>
                 )}
-                {recordedMark ? (
+                {recordedMark && !(isSecondAsk && recordedMark === 'pass') ? (
                   <button
                     type="button"
                     onClick={keepAndAdvance}
@@ -2114,14 +2167,15 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         </div>
       )}
 
-      {/* ── All voted: proceed ── */}
-      {phase === 'voting' && !currentDelegate && (
+      {/* ── All voted: only a device ballot after Back, or a ballot stored before a vote
+          finished on its own (owner, 17 Sep 2026: move straight on when everyone has voted) ── */}
+      {phase === 'voting' && !currentDelegate && !deviceBallotOpen && (
         <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-8 gap-7">
           <h2 className="text-[28px] font-bold text-[#1C1410] text-center leading-tight tracking-[-0.012em] [text-wrap:balance]">
-            {votes.length >= presentDelegates.length
-              ? t('voting_all_voted', { n: presentDelegates.length })
+            {votes.length >= mainCount
+              ? t('voting_all_voted', { n: mainCount })
               // An early device reveal (then Back) lands here with delegations that never voted.
-              : t('voting_some_voted', { cast: votes.length, n: presentDelegates.length })}
+              : t('voting_some_voted', { cast: votes.length, n: mainCount })}
           </h2>
           {hideVotes ? (
             <p className="text-[15px] font-medium text-[#6A5A4A]">{t('voting_tally_hidden')}</p>
@@ -2131,7 +2185,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 {bigCount(forCount, t('voting_for_label'), '#2F6B45')}
                 {bigCount(againstCount, t('voting_against_label'), '#8B2020')}
                 {abstainCount > 0 && bigCount(abstainCount, t('voting_abstain_label'), '#6A5A4A')}
-                {withRights.length > 0 && bigCount(withRights.length, t('voting_with_rights_label'), '#8A6414')}
+                {allowRights && withRights.length > 0 && bigCount(withRights.length, t('voting_with_rights_label'), '#8A6414')}
               </div>
               <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
               <p className="text-[13.5px] font-medium text-[#6A5A4A] tabular-nums -mt-2">
@@ -2154,7 +2208,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 {/* A hidden tally reveals nothing here either, not even whether anyone voted with rights. */}
                 {hideVotes
                   ? t('voting_continue')
-                  : withRights.length > 0
+                  : allowRights && withRights.length > 0
                     ? t('voting_proceed_rights', { n: withRights.length })
                     : t('voting_see_result')}
               </button>
@@ -2168,19 +2222,21 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       {phase === 'rights-speakers' && orderedRights.length > rightsIndex && (() => {
         const speaker = orderedRights[rightsIndex];
         const rightsSeat = committee.delegates.find((d) => d.id === speaker.delegateId) ?? { country: speaker.country };
+        const custom = !!vote.rightsTimes?.[speaker.delegateId];
+        const presets = [30, 45, 60, 90, 120];
         return (
           <div className="flex-1 min-h-0 flex gap-8 px-10 py-6">
             <div className="flex-1 min-w-0 flex flex-col items-center justify-center">
-              <p className="text-[14px] font-medium mb-5 tabular-nums" style={{ color: '#6A5A4A' }}>
+              <p className="text-[15px] font-medium mb-6 tabular-nums" style={{ color: '#6A5A4A' }}>
                 {t('voting_rights_header', { current: rightsIndex + 1, total: orderedRights.length })}
               </p>
-              <span key={speaker.delegateId} className="gv-name-in rounded-full" style={{ boxShadow: '0 0 0 7px #F6F1E9, 0 0 0 12px #D9B44A, 0 18px 40px rgba(27,56,40,0.25)' }}>
-                <SeatCircleFlag seat={rightsSeat} size={144} decorative />
+              <span key={speaker.delegateId} className="gv-name-in rounded-full" style={{ boxShadow: '0 0 0 9px #F6F1E9, 0 0 0 15px #D9B44A, 0 24px 56px rgba(27,56,40,0.28)' }}>
+                <SeatCircleFlag seat={rightsSeat} size={220} decorative />
               </span>
-              <h1 key={`n-${speaker.delegateId}`} className="gv-name-in text-[32px] font-bold text-[#1C1410] text-center mt-6 leading-tight tracking-[-0.012em] [text-wrap:balance]">
+              <h1 key={`n-${speaker.delegateId}`} className="gv-name-in text-[46px] font-bold text-[#1C1410] text-center mt-8 leading-[1.05] tracking-[-0.018em] [text-wrap:balance]">
                 {getCountryDisplayName(speaker.country, language)}
               </h1>
-              <p className="text-[15px] font-medium mt-1" style={{ color: '#6A5A4A' }}>
+              <p className="text-[17px] font-medium mt-2" style={{ color: '#6A5A4A' }}>
                 {hideVotes
                   ? t('voting_with_rights_label')
                   : speaker.choice === 'for-rights' ? t('voting_rights_for') : t('voting_rights_against')}
@@ -2190,42 +2246,88 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               {!isViewOnly && (
                 <>
                   <div
-                    className="text-[56px] font-bold mt-5 tabular-nums leading-none tracking-[-0.02em]"
+                    className="text-[88px] font-bold mt-4 tabular-nums leading-none tracking-[-0.025em]"
                     style={{ color: rightsSpeakerTime <= 10 ? '#8B2020' : rightsSpeakerTime <= 20 ? '#8A6414' : '#1C1410' }}
                   >
-                    {Math.floor(rightsSpeakerTime / 60)}:{String(rightsSpeakerTime % 60).padStart(2, '0')}
+                    {clock(rightsSpeakerTime)}
                   </div>
-                  <div className="flex gap-2 mt-4 flex-wrap justify-center">
+                  <div className="flex gap-2 mt-5 items-center">
                     <button
                       type="button"
-                      onClick={() => setRightsRunning((r) => !r)}
-                      className="h-11 px-6 rounded-full font-semibold text-[14px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96]"
+                      onClick={() => { if (!rightsRunning) setRightsStarted(true); setRightsRunning((r) => !r); }}
+                      className="h-12 px-8 rounded-full font-semibold text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96]"
                       style={{ backgroundColor: rightsRunning ? '#8A6414' : '#2F6B45', color: '#FFFFFF' }}
                     >
                       {rightsRunning ? t('voting_pause') : t('voting_start')}
                     </button>
-                    {[30, 45, 60, 90, 120].map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => updateVote(() => ({ rightsTimerLimit: s }))}
-                        aria-pressed={rightsTimerLimit === s}
-                        className="h-11 min-w-11 px-3 rounded-full font-medium text-[13px] tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,transform] duration-150 active:scale-[0.96]"
-                        style={{ backgroundColor: rightsTimerLimit === s ? '#1B3828' : 'rgba(27,56,40,0.07)', color: rightsTimerLimit === s ? '#EED98A' : '#4A3F33' }}
-                      >
-                        {s}s
-                      </button>
-                    ))}
+                    <button
+                      type="button"
+                      onClick={() => { setRightsRunning(false); setRightsSpeakerTime(rightsSpeakerLimit); }}
+                      aria-label={t('voting_rights_restart')}
+                      title={t('voting_rights_restart')}
+                      className="h-12 w-12 rounded-full flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] hover:bg-[rgba(27,56,40,0.13)]"
+                      style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: '#1B3828' }}
+                    >
+                      <RotateCcw size={19} strokeWidth={2.4} aria-hidden />
+                    </button>
+                  </div>
+                  <div className="mt-5 flex flex-col items-center gap-2.5">
+                    <div className="flex items-center gap-2 flex-wrap justify-center">
+                      <span className="text-[13px] font-semibold" style={{ color: '#6A5A4A' }}>{t('voting_rights_this_speaker')}</span>
+                      <RightsTimeField
+                        seconds={rightsSpeakerLimit}
+                        custom={custom}
+                        disabled={rightsRunning}
+                        label={t('voting_rights_time_for', { name: getCountryDisplayName(speaker.country, language) })}
+                        onCommit={(secs) => setRightsTime(speaker.delegateId, secs)}
+                      />
+                      {custom && (
+                        <button
+                          type="button"
+                          disabled={rightsRunning}
+                          onClick={() => setRightsTime(speaker.delegateId, null)}
+                          className="h-9 px-3 rounded-full text-[12.5px] font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] disabled:opacity-40 hover:bg-[rgba(27,56,40,0.07)]"
+                          style={{ color: '#6A5A4A' }}
+                        >
+                          {t('voting_rights_use_default')}
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap justify-center">
+                      <span className="text-[13px] font-semibold" style={{ color: '#6A5A4A' }}>{t('voting_rights_default_time')}</span>
+                      {presets.map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => updateVote(() => ({ rightsTimerLimit: p }))}
+                          aria-pressed={rightsTimerLimit === p}
+                          className="h-9 min-w-10 px-3 rounded-full font-medium text-[13px] tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,transform] duration-150 active:scale-[0.96]"
+                          style={{ backgroundColor: rightsTimerLimit === p ? '#1B3828' : 'rgba(27,56,40,0.07)', color: rightsTimerLimit === p ? '#EED98A' : '#4A3F33' }}
+                        >
+                          {p}s
+                        </button>
+                      ))}
+                      <RightsTimeField
+                        seconds={rightsTimerLimit}
+                        custom={!presets.includes(rightsTimerLimit)}
+                        label={t('voting_rights_default_time')}
+                        onCommit={(secs) => { if (secs != null) updateVote(() => ({ rightsTimerLimit: secs })); }}
+                      />
+                    </div>
                   </div>
                 </>
               )}
             </div>
 
-            <div className="w-[380px] shrink-0 flex flex-col justify-center gap-3 min-h-0">
+            <div className="w-[400px] shrink-0 flex flex-col justify-center gap-3 min-h-0">
               <RightsQueue
                 speakers={orderedRights}
                 currentIndex={rightsIndex}
                 hideTally={hideVotes}
+                currentMovable={!rightsStarted && !rightsRunning}
+                timeOf={(id) => vote.rightsTimes?.[id] || rightsTimerLimit}
+                isCustomTime={(id) => !!vote.rightsTimes?.[id]}
+                onTime={isViewOnly ? undefined : setRightsTime}
                 onMove={isViewOnly ? undefined : moveRightsSpeaker}
               />
               {!isViewOnly && (
@@ -2248,7 +2350,15 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
       {/* ── Final result ── */}
       {phase === 'result' && (() => {
-        const soft = passed ? 'rgba(238,217,138,0.72)' : 'rgba(255,222,210,0.78)';
+        // Three outcomes, three looks (owner, 17 Sep 2026): passed forest, failed red, vetoed
+        // aubergine. Vetoed is a failure a veto holder caused, from the live evaluation.
+        const kind: 'passed' | 'failed' | 'vetoed' = passed ? 'passed' : p5Veto ? 'vetoed' : 'failed';
+        const look = {
+          passed: { bg: '#1B3828', chipBg: '#EED98A', chipFg: '#1B3828', title: '#EED98A', soft: 'rgba(238,217,138,0.78)', shadow: '0 2px 4px rgba(27,56,40,0.2), 0 24px 64px rgba(27,56,40,0.30)' },
+          failed: { bg: '#8B2020', chipBg: '#FFE1D6', chipFg: '#8B2020', title: '#FFFFFF', soft: 'rgba(255,222,210,0.82)', shadow: '0 2px 4px rgba(90,20,20,0.2), 0 24px 64px rgba(139,32,32,0.30)' },
+          vetoed: { bg: '#3E2447', chipBg: '#E9D6F0', chipFg: '#3E2447', title: '#FFFFFF', soft: 'rgba(233,214,240,0.84)', shadow: '0 2px 4px rgba(40,20,48,0.22), 0 24px 64px rgba(62,36,71,0.34)' },
+        }[kind];
+        const soft = look.soft;
         return (
           <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-8 gap-6">
             <p className="text-[14px] font-medium tabular-nums" style={{ color: '#6A5A4A' }}>
@@ -2256,18 +2366,17 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             </p>
 
             <div
-              className="gv-name-in rounded-[24px] px-10 py-8 text-center w-full max-w-2xl"
-              style={{
-                backgroundColor: passed ? '#1B3828' : '#8B2020',
-                boxShadow: passed ? '0 2px 4px rgba(27,56,40,0.2), 0 24px 64px rgba(27,56,40,0.30)' : '0 2px 4px rgba(90,20,20,0.2), 0 24px 64px rgba(139,32,32,0.30)',
-              }}
+              className="gv-name-in relative isolate overflow-hidden rounded-[24px] px-10 pt-8 pb-9 text-center w-full max-w-2xl"
+              style={{ backgroundColor: look.bg, boxShadow: look.shadow }}
             >
+              <ResultBackdrop kind={kind} tint={look.bg} />
+              <div className="relative">
               <div className="flex items-center justify-center gap-3">
-                <span className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: passed ? '#EED98A' : '#FFE1D6', color: passed ? '#1B3828' : '#8B2020' }} aria-hidden>
-                  {passed ? <Check size={22} strokeWidth={2.75} /> : <X size={22} strokeWidth={2.75} />}
+                <span className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: look.chipBg, color: look.chipFg }} aria-hidden>
+                  {kind === 'passed' ? <Check size={22} strokeWidth={2.75} /> : kind === 'vetoed' ? <ShieldAlert size={21} strokeWidth={2.5} /> : <X size={22} strokeWidth={2.75} />}
                 </span>
-                <span className="text-[40px] font-bold leading-none tracking-[-0.02em]" style={{ color: passed ? '#EED98A' : '#FFFFFF' }}>
-                  {passed ? t('voting_pick_status_passed') : t('voting_pick_status_failed')}
+                <span className="text-[40px] font-bold leading-none tracking-[-0.02em]" style={{ color: look.title, textShadow: '0 2px 12px rgba(0,0,0,0.35)' }}>
+                  {kind === 'passed' ? t('voting_pick_status_passed') : kind === 'vetoed' ? t('voting_pick_status_vetoed') : t('voting_pick_status_failed')}
                 </span>
               </div>
               <p className="text-[16px] font-medium mt-3 mb-6 leading-snug [text-wrap:balance]" style={{ color: soft }}>
@@ -2278,7 +2387,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   { n: forCount, label: t('voting_for_label'), color: '#9BE3B4', show: true },
                   { n: againstCount, label: t('voting_against_label'), color: '#FFB4A8', show: true },
                   { n: abstainCount, label: t('voting_abstain_label'), color: 'rgba(255,255,255,0.7)', show: abstainCount > 0 },
-                  { n: withRights.length, label: t('voting_with_rights_label'), color: '#F3D98A', show: withRights.length > 0 },
+                  { n: withRights.length, label: t('voting_with_rights_label'), color: '#F3D98A', show: allowRights && withRights.length > 0 },
                 ].filter((c) => c.show).map((c) => (
                   <div key={c.label} className="text-center">
                     <div className="text-[34px] font-bold leading-none tabular-nums" style={{ color: c.color }}>{c.n}</div>
@@ -2306,6 +2415,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 {outcome.countsAbstentions && abstainCount > 0 && (
                   <p className="text-[13px]" style={{ color: soft }}>{t('voting_result_abst_counted')}</p>
                 )}
+              </div>
               </div>
             </div>
 

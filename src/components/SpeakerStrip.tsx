@@ -73,6 +73,7 @@ export default function SpeakerStrip({
   onDeckDelegateId,
   header,
   isRoomOrderTdT,
+  onLockedAttempt,
   formatName,
 }: {
   list: Entry[];
@@ -92,6 +93,8 @@ export default function SpeakerStrip({
   /** The mode marker above the flags. Rendered even with an empty list. */
   header?: StripHeader | null;
   isRoomOrderTdT?: boolean;
+  /** A Commenter: pressing a flag (to drag or remove) raises the "only the Moderator" notice. */
+  onLockedAttempt?: () => void;
   formatName: (country: string) => string;
 }) {
   const t = useT();
@@ -267,6 +270,8 @@ export default function SpeakerStrip({
               }}
               onDragStart={(e) => e.preventDefault()}
               onPointerDown={movable ? (e) => onPointerDown(e, s.delegateId) : undefined}
+              onClick={onLockedAttempt ? () => onLockedAttempt() : undefined}
+              title={onLockedAttempt ? t('commenter_only_hint') : undefined}
             >
               {barBeforeId === s.delegateId && (
                 <span aria-hidden className="absolute rounded-full" style={{ insetInlineStart: -8, top: -2, height: 52, width: 4, backgroundColor: '#B6871F', boxShadow: '0 0 0 3px rgba(182,135,31,0.22)' }} />

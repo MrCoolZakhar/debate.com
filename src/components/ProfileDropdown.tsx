@@ -40,7 +40,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { compareStartDate, hasConcluded } from '@/lib/conferenceDates';
 import { User, FileText, FileClock, CalendarDays, Sparkles, Coins, LogOut, ArrowRight, Ticket, Plus } from 'lucide-react';
-import Portal from '@/components/Portal';
+import { createPortal } from 'react-dom';
 import { useDraftCount, draftResumeHref } from '@/hooks/useDraftCount';
 import { usePendingInvites, inviteAcceptHref } from '@/hooks/usePendingInvites';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
@@ -267,8 +267,10 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
       {/* Dropdown, kokonutui profile-dropdown anatomy in house style. Portaled
           at fixed coords with z-index 9999 so it always renders over sticky bars
           / transformed cards, on every page. */}
-      {open && pos && (
-        <Portal>
+      {/* Straight to document.body, never through Portal: on a FitToScreen
+          page (/create) Portal targets the scaled #fit-root, where these
+          viewport coordinates would land in the wrong place. */}
+      {open && pos && createPortal(
         <div
           ref={panelRef}
           onPointerEnter={handlePointerEnter}
@@ -685,8 +687,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
             SIGN OUT
           </button>
         </div>
-        </Portal>
-      )}
+        , document.body)}
     </div>
   );
 }

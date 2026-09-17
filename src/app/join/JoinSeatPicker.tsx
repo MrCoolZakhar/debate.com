@@ -26,11 +26,11 @@
 // (CircleFlag loads lazily). Filtering is one memo over a pre-folded index.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Check, Lock, Search, UserRound, X } from 'lucide-react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Check, Lock, Megaphone, Search, UserRound, X } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import { countryMatchRank, getCountryDisplayName } from '@/lib/countries';
-import { C, Chip, OUTFIT } from './joinUi';
+import { C, OUTFIT } from './joinUi';
 
 export type SeatTone = 'open' | 'taken' | 'reserved' | 'mine';
 
@@ -160,10 +160,16 @@ export default function JoinSeatPicker({
     if (e.key === 'Escape' && query) { e.preventDefault(); setQuery(''); }
   };
 
+  // Seat state as an icon and plain words, never a pill (CLAUDE.md §8).
+  const stateText = (icon: ReactNode, text: string, color: string) => (
+    <span className="inline-flex flex-shrink-0 items-center gap-1 whitespace-nowrap" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color }}>
+      {icon}{text}
+    </span>
+  );
   const chipFor = (s: JoinSeatRow) => {
-    if (s.state === 'mine') return <Chip tone="green" icon={<Check size={11} strokeWidth={3} />}>{labels.yours}</Chip>;
-    if (s.state === 'reserved') return <Chip tone="gold" icon={<Lock size={10} strokeWidth={2.6} />}>{labels.reserved}</Chip>;
-    if (s.state === 'taken') return <Chip tone="muted" icon={<UserRound size={11} strokeWidth={2.6} />}>{labels.taken}</Chip>;
+    if (s.state === 'mine') return stateText(<Check size={12} strokeWidth={3} />, labels.yours, C.moss);
+    if (s.state === 'reserved') return stateText(<Lock size={11} strokeWidth={2.6} />, labels.reserved, '#8A6414');
+    if (s.state === 'taken') return stateText(<UserRound size={12} strokeWidth={2.6} />, labels.taken, C.inkSoft);
     return null;
   };
 
@@ -280,7 +286,11 @@ export default function JoinSeatPicker({
                 <span className="min-w-0 flex-1 truncate" style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: picked ? 700 : 600, color: picked ? C.page : C.ink }}>
                   {label}
                 </span>
-                {seat.isObserver && !picked && <Chip tone="neutral">{labels.observer}</Chip>}
+                {seat.isObserver && (
+                  <span role="img" aria-label={labels.observer} title={labels.observer} className="flex flex-shrink-0" style={{ color: picked ? C.gold : '#8A6414' }}>
+                    <Megaphone size={15} strokeWidth={2.2} />
+                  </span>
+                )}
                 {picked ? <Check size={17} strokeWidth={3} color={C.gold} /> : chipFor(seat)}
               </div>
             );

@@ -47,12 +47,22 @@ export interface VoteStateV1 {
   /** Every non-observer seat when the vote opened (the quorum/veto denominator). */
   votable: FrozenSeat[];
   votes: DelegateVote[];
+  /** Pointer into the voting LINE: `order` followed by `passedIds` (see `votingLine`). */
   currentVoterIndex: number;
+  /** Delegations that passed in the main round, in the order they passed. Each is asked
+   *  once more, after the last delegation in `order`, and must then vote (no second Pass,
+   *  no Abstain). Ballots stored before 17 Sep 2026 kept these in ballot order under a
+   *  separate "pass round"; the index arithmetic is identical, so they load unchanged. */
   passedIds: string[];
   rightsOrder: DelegateVote[];
   rightsIndex: number;
+  /** Default speaking time for a rights speaker, seconds. */
   rightsTimerLimit: number;
+  /** Per-speaker override, seconds, keyed by delegate id. Absent = the default. */
+  rightsTimes?: Record<string, number>;
   result: 'passed' | 'failed' | null;
+  /** The paper failed because a veto holder voted against (shown as Vetoed). Absent = false. */
+  vetoed?: boolean;
   startedAt: string;
   updatedAt: string;
   /** Chair name that drove the last write (display only). */
@@ -86,6 +96,20 @@ function asVotes(v: unknown): DelegateVote[] {
     .filter((x) => x.delegateId && CHOICES.includes(x.choice));
 }
 
+function asTimes(v: unknown): Record<string, number> {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+  const out: Record<string, number> = {};
+  for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+    if (typeof x === 'number' && Number.isFinite(x) && x >= 5) out[k] = Math.min(900, Math.floor(x));
+  }
+  return out;
+}
+
+/** The voting line: the frozen ballot order, then each delegation that passed, asked once more. */
+export function votingLine<T extends { id: string }>(order: T[], passedIds: string[], resolve: (id: string) => T): T[] {
+  return [...order, ...passedIds.map(resolve)];
+}
+
 /** Defensive parse of a stored blob. Anything unrecognisable is null (treated as no vote). */
 export function parseVoteState(raw: unknown): VoteStateV1 | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -105,7 +129,9 @@ export function parseVoteState(raw: unknown): VoteStateV1 | null {
     rightsOrder: asVotes(r.rightsOrder),
     rightsIndex: int(r.rightsIndex, 0),
     rightsTimerLimit: int(r.rightsTimerLimit, 60) || 60,
+    rightsTimes: asTimes(r.rightsTimes),
     result: r.result === 'passed' || r.result === 'failed' ? r.result : null,
+    vetoed: r.result === 'failed' && r.vetoed === true,
     startedAt: typeof r.startedAt === 'string' ? r.startedAt : '',
     updatedAt: typeof r.updatedAt === 'string' ? r.updatedAt : '',
     driver: typeof r.driver === 'string' ? r.driver : null,

@@ -1,12 +1,15 @@
 'use client';
 import { use, useEffect, useState, useRef, useCallback, useMemo, Suspense } from 'react';
+import Portal from '@/components/Portal';
+import { anchorBox } from '@/components/voting/anchorPosition';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import FitToScreen from '@/components/FitToScreen';
 import GavelChip from '@/components/GavelChip';
 import CommitteeIdentityBadge, { emblemMonogram } from '@/components/CommitteeIdentityBadge';
 import SeatAddField from '@/components/SeatAddField';
 import { TopBarTab, TopBarIconButton } from '@/components/ChairTopBar';
-import SpeakerControls, { FloorProgress, SpeakerClock, POPOVER_TONES } from '@/components/SpeakerControls';
+import SpeakerControls, { FloorProgress, SpeakerClock, POPOVER_TONES, type ControlLock } from '@/components/SpeakerControls';
+import { moderatorNameOf, notifyCommenterOnly } from '@/lib/commenterNotice';
 import DraggablePopover from '@/components/DraggablePopover';
 import SpeakerStrip, { type StripHeader } from '@/components/SpeakerStrip';
 import SessionCodePresenter from '@/components/SessionCodePresenter';
@@ -389,6 +392,37 @@ function RtrCountryInput({
         .concat(eligible.filter((d) => !startsWithCountryQuery(d.country, q, language) && matchesCountryQuery(d.country, q, language)))
     : [];
   const topMatch = matches[0] ?? null;
+  const shown = matches.slice(0, 5);
+  const listShown = !!query && shown.length > 0 && !value;
+
+  // The suggestions render through Portal at fixed coordinates (UI RULE: never clipped). The
+  // Right of Reply panel is `overflow-hidden`, so the old `absolute bottom-full` list was cut
+  // off. Above the field by default (the panel usually sits low on the floor), flipped below
+  // when there is no room, clamped inside #fit-root. z 48: over the floor panels (40 / 41),
+  // under every dialog (50+). The panel can be dragged while the list is open, so the list
+  // follows it on a rAF loop that runs ONLY while it is shown and sets state only on a change.
+  const listRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number; width: number } | null>(null);
+  useEffect(() => {
+    if (!listShown) return;
+    let raf = 0;
+    const tick = () => {
+      const el = inputRef.current?.parentElement;
+      if (el) {
+        const box = anchorBox(el);
+        const width = box.right - box.left;
+        const h = listRef.current?.offsetHeight ?? shown.length * 34;
+        const M = 8;
+        const above = box.top - 4 - h;
+        const top = above >= M ? above : Math.min(box.bottom + 4, box.viewH - h - M);
+        const left = Math.min(Math.max(M, box.left), Math.max(M, box.viewW - width - M));
+        setPos((p) => (p && p.left === left && p.top === top && p.width === width ? p : { left, top, width }));
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [listShown, shown.length]);
 
   return (
     <div className="relative flex-1">
@@ -413,24 +447,31 @@ function RtrCountryInput({
           <span className="text-[10px] text-[#9A8A78] px-2 truncate max-w-[90px]">↵ {getCountryDisplayName(topMatch.country, language)}</span>
         )}
       </div>
-      {query && matches.length > 0 && !value && (
-        <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl z-10">
-          {matches.slice(0, 5).map((d, i) => {
-            return (
-              <button
-                key={d.id}
-                onMouseDown={(e) => { e.preventDefault(); setQuery(d.country); onChange(d.country); }}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-start text-xs transition-colors ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}
-              >
-                <span className="shrink-0 w-5 h-5 inline-flex items-center justify-center">
-                <SeatFlag country={d.country} size={16} className="object-contain" fallback={<UnknownSeatIcon size={16} />} />
-              </span>
-                <span className="flex-1">{getCountryDisplayName(d.country, language)}</span>
-                {i === 0 && <span className="text-[#9A8A78] shrink-0">Enter ↵</span>}
-              </button>
-            );
-          })}
-        </div>
+      {listShown && (
+        <Portal>
+          <div
+            ref={listRef}
+            data-rtr-suggestions=""
+            style={{ position: 'fixed', left: pos?.left ?? 0, top: pos?.top ?? 0, width: pos?.width ?? 240, zIndex: 48, visibility: pos ? 'visible' : 'hidden' }}
+            className="bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl"
+          >
+            {shown.map((d, i) => {
+              return (
+                <button
+                  key={d.id}
+                  onMouseDown={(e) => { e.preventDefault(); setQuery(d.country); onChange(d.country); }}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-start text-xs transition-colors focus:outline-none ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}
+                >
+                  <span className="shrink-0 w-5 h-5 inline-flex items-center justify-center">
+                    <SeatFlag country={d.country} size={16} className="object-contain" fallback={<UnknownSeatIcon size={16} />} />
+                  </span>
+                  <span className="flex-1">{getCountryDisplayName(d.country, language)}</span>
+                  {i === 0 && <span className="text-[#9A8A78] shrink-0">Enter ↵</span>}
+                </button>
+              );
+            })}
+          </div>
+        </Portal>
       )}
     </div>
   );
@@ -442,7 +483,7 @@ function RtrCountryInput({
 const FLOOR_FLAG_PX = 164;
 const FLOOR_FLAG_SHADOW = '0 0 0 4px #F0EBDD, 0 2px 6px rgba(27,56,40,0.12), 0 12px 28px rgba(27,56,40,0.20)';
 
-function DraggableSpeakersQueue({ list, onReorder, onRemove, onRemoveCurrent, lastSpeakerDelegateId, currentSpeakerDelegateId, onDeckDelegateId, header, isRoomOrderTdT }: {
+function DraggableSpeakersQueue({ list, onReorder, onRemove, onRemoveCurrent, lastSpeakerDelegateId, currentSpeakerDelegateId, onDeckDelegateId, header, isRoomOrderTdT, onLockedAttempt }: {
   list: { delegateId: string; country: string }[];
   onReorder?: (newList: { delegateId: string; country: string }[]) => void;
   onRemove?: (delegateId: string) => void;
@@ -453,6 +494,8 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, onRemoveCurrent, la
   onDeckDelegateId?: string | null;
   header?: StripHeader | null;
   isRoomOrderTdT?: boolean;
+  /** A Commenter pressing a flag: the "only the Moderator" notice. */
+  onLockedAttempt?: () => void;
 }) {
   // Pointer-driven drag (mouse, pen, touch), drop bar, the X on the floor speaker:
   // src/components/SpeakerStrip.tsx.
@@ -468,6 +511,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, onRemoveCurrent, la
       onDeckDelegateId={onDeckDelegateId}
       header={header}
       isRoomOrderTdT={isRoomOrderTdT}
+      onLockedAttempt={onLockedAttempt}
       formatName={(country) => abbrevCountry(getCountryDisplayName(country, language))}
     />
   );
@@ -1029,9 +1073,11 @@ function ModeratedCaucusMain({
   speakerTimeRemaining, timerRunning, caucusSeconds,
   openPopovers, setPopover, extraTimeAdded,
   handleToggleTimer, handleRestartTime, handleNextCaucusSpeaker, handleEndCaucus, handleStartOnDeck,
-  sessionEnded, isViewOnly = false, onRecognise,
+  sessionEnded, isViewOnly = false, onRecognise, commenterLock = null,
 }: {
   committee: Committee; setCommittee: CommitteeSetter;
+  /** A real Commenter: the Moderator's controls drawn disabled, a press raises the notice. */
+  commenterLock?: ControlLock | null;
   /** Start with a delegation on deck: seat the head of the queue AND start both clocks in one
    *  press (the page's `handleStartCaucusOnDeck`). */
   handleStartOnDeck: () => Promise<void>;
@@ -1174,6 +1220,7 @@ function ModeratedCaucusMain({
     label: committee.caucus?.motionLabel ?? caucusTitle,
     detail: caucusTopic || null,
   };
+  // Not drawn for a Commenter (see gslControls): the dock leaves no room for the row.
   const caucusControls = !sessionEnded && !isViewOnly ? (
     <SpeakerControls
       hasSpeaker={caucusHasSpeaker}
@@ -1211,6 +1258,7 @@ function ModeratedCaucusMain({
               onReorder={isViewOnly ? undefined : handleCaucusReorderQueue}
               onRemove={isViewOnly ? undefined : handleCaucusRemoveFromQueue}
               isRoomOrderTdT={isRoomOrderTdT}
+              onLockedAttempt={commenterLock?.onAttempt}
             />
           </div>
           {/* ZONE 2 — Flag + name + timer + progress: compresses as viewport shrinks */}
@@ -1242,6 +1290,7 @@ function ModeratedCaucusMain({
             )}
             <SpeakerClock
               running={caucusHasSpeaker && timerRunning}
+              locked={commenterLock}
               onToggle={!sessionEnded && !isViewOnly
                 ? (caucusHasSpeaker ? handleToggleTimer : () => { void handleStartOnDeck(); })
                 : undefined}
@@ -1255,7 +1304,7 @@ function ModeratedCaucusMain({
             <FloorProgress
               percent={caucusHasSpeaker ? caucusProgress : 100}
               barClassName={!caucusHasSpeaker || caucusProgress > 20 ? 'bg-[#B6871F]' : 'bg-red-500'}
-              rtr={!sessionEnded && !isViewOnly && !isTdT ? { onClick: toggleRtr, active: openPopovers.rightToReply } : null}
+              rtr={!sessionEnded && (!isViewOnly || commenterLock) && !isTdT ? { onClick: toggleRtr, active: openPopovers.rightToReply, locked: commenterLock } : null}
             />
           </div>
           {/* ZONE 3 — Action buttons locked just above bottom bar */}
@@ -1330,6 +1379,19 @@ function ModeratedCaucusMain({
                 className="px-8 py-3 rounded-lg font-black text-sm bg-[#8B2020] hover:bg-[#7A1C1C] text-white transition-colors gv-lift">
                 {t('caucus_end')}
               </button>}
+              {isViewOnly && commenterLock && (
+                // A Commenter sees Extend and End disabled; a press explains the gavel.
+                <>
+                  <button type="button" aria-disabled title={commenterLock.reason} onClick={commenterLock.onAttempt}
+                    className="px-3 py-2 rounded-lg font-bold text-xs bg-[#1B3828] text-[#EDE7D8] opacity-45 cursor-not-allowed focus:outline-none">
+                    {t('caucus_extend')}
+                  </button>
+                  <button type="button" aria-disabled title={commenterLock.reason} onClick={commenterLock.onAttempt}
+                    className="px-8 py-3 rounded-lg font-black text-sm bg-[#8B2020] text-white opacity-45 cursor-not-allowed focus:outline-none">
+                    {t('caucus_end')}
+                  </button>
+                </>
+              )}
             </div>
           )}
           {!isViewOnly && <CaucusAddSpeakerInput
@@ -1560,6 +1622,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       return p[which] === next ? p : { ...p, [which]: next };
     });
   }, []);
+  // A Commenter who tries a Moderator-only control gets ONE notice explaining the gavel
+  // (src/lib/commenterNotice.ts). Stable identity (refs), so memoised panels do not
+  // re-render on every page render. UI only (rule 15): nothing is written.
+  const moderatorNameRef = useRef('');
+  const notifyCommenter = useCallback(() => { notifyCommenterOnly(t, moderatorNameRef.current); }, [t]);
   const [extraTimeSecs, setExtraTimeSecs] = useState('');
   const [extraTimeAdded, setExtraTimeAdded] = useState(false);
   const [caucusLoading, setCaucusLoading] = useState(false);
@@ -2539,26 +2606,21 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     return () => { if (rtrIntervalRef.current) { clearInterval(rtrIntervalRef.current); rtrIntervalRef.current = null; } };
   }, [rtrTimerActive]);
 
-  // Right of Reply closes when something else starts: Next / call first / Finish / a removed
-  // speaker (the floor changes hands), Start on any speaker clock, a caucus total starting, a
-  // caucus beginning or ending, a motion passing, Suspend, End, or any phase change. Nothing
-  // needs logging here: the reply was logged when it was granted. Press-driven values only
-  // (identities, the phase, the running BOOLEANS going false → true), never a per-second
-  // value, and no setCommittee / updateLocal / localUpdateTime (RULES 3 and 4).
-  // The floor key: phase, suspend / end, the floor speaker (GSL and caucus) and the caucus
-  // itself (a motion accepted over a running caucus changes proposer / purpose / type).
-  const floorCloseKey = `${committee?.phase ?? ''}|${committee?.suspendedAt ?? ''}|${committee?.endedAt ?? ''}|${sessionSuspended ? 's' : ''}${sessionEnded ? 'e' : ''}|${committee?.currentSpeaker?.delegateId ?? ''}|${committee?.caucus?.currentSpeaker ?? ''}|${committee?.caucus?.type ?? ''}|${committee?.caucus?.proposedBy ?? ''}|${committee?.caucus?.purpose ?? ''}`;
-  const rtrCloseKey = floorCloseKey;
-  const caucusClockRunning = !!committee?.caucus?.totalStartedAt;
-  const prevRtrCloseRef = useRef<{ key: string; speaker: boolean; caucus: boolean } | null>(null);
+  // Right of Reply and Add time STICK (owner, 17 Sep 2026: "make them stick no matter what,
+  // except when going into a different motion"). Starting or pausing a clock, Next, Finish,
+  // a removed speaker, a grant and Restart leave both panels open. They close only when the
+  // MOTION CONTEXT changes: any phase change (a caucus starting or ending, voting, adjourned),
+  // Suspend, End, or another caucus accepted over a running one (type / proposer / purpose /
+  // tour instance change). Press-driven values only, never a per-second value, and no
+  // setCommittee / updateLocal / localUpdateTime (RULES 3 and 4). Nothing is logged here: a
+  // reply was logged when it was granted.
+  const floorCloseKey = `${committee?.phase ?? ''}|${committee?.suspendedAt ?? ''}|${committee?.endedAt ?? ''}|${sessionSuspended ? 's' : ''}${sessionEnded ? 'e' : ''}|${committee?.caucus?.type ?? ''}|${committee?.caucus?.proposedBy ?? ''}|${committee?.caucus?.purpose ?? ''}|${committee?.caucus?.tourStartedAt ?? ''}`;
+  const prevFloorCloseRef = useRef<string | null>(null);
   useEffect(() => {
-    const prev = prevRtrCloseRef.current;
-    prevRtrCloseRef.current = { key: rtrCloseKey, speaker: timerRunning, caucus: caucusClockRunning };
-    if (!prev) return;
-    const somethingStarted = prev.key !== rtrCloseKey
-      || (timerRunning && !prev.speaker)
-      || (caucusClockRunning && !prev.caucus);
-    if (!somethingStarted) return;
+    const prev = prevFloorCloseRef.current;
+    prevFloorCloseRef.current = floorCloseKey;
+    if (prev === null || prev === floorCloseKey) return;
+    setPopover('extraTime', false);
     if (!rtrOpen && !openPopovers.rightToReply) return;
     setPopover('rightToReply', false);
     setRtrOpen(false);
@@ -2566,18 +2628,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     setRtrCountry('');
     setRtrTimeRemaining(rtrSeconds);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rtrCloseKey, timerRunning, caucusClockRunning]);
-
-  // Add time closes on the same floor events as Right of Reply (a motion or caucus starting,
-  // Suspend, End, any phase change, the floor speaker changing), but NOT when a clock starts:
-  // adding time to a running speech is exactly what it is for. Independent of the RTR panel.
-  const prevAddTimeCloseRef = useRef<string | null>(null);
-  useEffect(() => {
-    const prev = prevAddTimeCloseRef.current;
-    prevAddTimeCloseRef.current = floorCloseKey;
-    if (prev === null || prev === floorCloseKey) return;
-    setPopover('extraTime', false);
-  }, [floorCloseKey, setPopover]);
+  }, [floorCloseKey]);
 
   // ── Gavel knock when time is nearly up ──────────────────────────────────────
   // A pure READ of the timer values above (RULES 3 and 4): no setCommittee, no
@@ -3545,6 +3596,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     );
   }
 
+  // A REAL Commenter (another chair's NAME holds the gavel): the Moderator's controls are drawn
+  // disabled and a press explains why (commenterLock). A device that is view-only only because
+  // the same name holds the gavel elsewhere keeps the old hidden controls and its own banner.
+  moderatorNameRef.current = moderatorNameOf(committee);
+  const isCommenter = isViewOnly && !sessionEnded && !!myChairName && !deriveGavelRole(committee, myChairName, gavelDeviceId, null).nameHolds;
+  const commenterLock: ControlLock | null = isCommenter ? { reason: t('commenter_only_hint'), onAttempt: notifyCommenter } : null;
+
   const present = committee.delegates.filter((d) => d.status !== 'absent' && !d.isObserver).length;
   const progress = committee.currentSpeaker ? (speakerTimeRemaining / committee.speakerTimeLimit) * 100 : 0;
   const isPreSession = committee.phase === 'pre-session';
@@ -3620,8 +3678,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         quorumNeeded={quorumNeeded}
         // The inline seat field beside the quorum tabs (replaces the + button and its
         // picker). A write, so never for a Commenter or an ended session.
-        seatField={!isViewOnly && !sessionEnded
-          ? <SeatAddField delegates={committee.delegates} onAdd={handleDelegateAdd} large={!inSidebar} />
+        seatField={!sessionEnded && (!isViewOnly || commenterLock)
+          ? <SeatAddField delegates={committee.delegates} onAdd={handleDelegateAdd} large={!inSidebar} locked={commenterLock} />
           : undefined}
       />
     );
@@ -3775,21 +3833,26 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // one — derives from current_speaker.{time_remaining, started_at}, an unpersisted grant
   // would be erased by this device's very next tick, so persisting it is what makes the
   // button work at all. No schema change: the existing two columns carry it.
+  const addTimeHasTarget = committee?.phase === 'moderated-caucus'
+    ? !!committee.caucus?.currentSpeaker
+    : !!committee?.currentSpeaker || (committee?.phase === 'speakers-list' && (committee.speakersList?.length ?? 0) > 0);
   const handleAddExtraTime = (secs: number) => {
     if (secs <= 0) return;
     // GSL with a delegation on deck and nobody seated: hold the grant locally for their
     // slot. No write, no log, no clock (see `onDeckGrant`).
     const deck = committee?.phase === 'speakers-list' && !committee.currentSpeaker ? committee.speakersList[0] ?? null : null;
     if (deck) {
-      setPopover('extraTime', false);
+      // The panel stays open after a grant (owner, 17 Sep 2026): only a motion change closes it.
       setExtraTimeSecs('');
       setOnDeckGrant((g) => ({ id: deck.delegateId, secs: (g?.id === deck.delegateId ? g.secs : 0) + secs }));
       return;
     }
+    // The panel now stays open when the floor empties (a removed or finished speaker), so a
+    // grant with nobody seated and nobody on deck must write nothing.
+    if (!addTimeHasTarget) return;
     const running = timerRunning;
     const { base: anchorBase, startedAt: anchorStarted } = speakerAnchorRef.current;
     const live = speakerRemainingNow(anchorBase, anchorStarted);
-    setPopover('extraTime', false);
     setExtraTimeSecs('');
     // In a moderated caucus (and Tour de Table) the total is speaking time, so a speaker can
     // never be given more than the caucus has left: the grant is capped to the room between
@@ -4424,6 +4487,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           ? t('speaker_ctl_on_deck_start').replace('{country}', getCountryDisplayName(onDeck.country, language))
           : t('speaker_ctl_list_empty'),
       };
+  // Not drawn for a Commenter: their comment dock takes the floor's lower half, and a locked
+  // button row overlapped the clock. Their attempts are caught on the clock, the strip flags
+  // and the add bar instead (commenterLock).
   const gslControls = !sessionEnded && !isViewOnly ? (
     <SpeakerControls
       hasSpeaker={gslHasSpeaker}
@@ -4558,7 +4624,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               onStatusChange={handleStatusChange}
               showStatusSliders={showSliders}
               isReadOnly={sessionEnded}
-              isViewOnly={isViewOnly} />
+              isViewOnly={isViewOnly} onCommenterAttempt={isCommenter ? notifyCommenter : undefined} />
           ) : (committee.phase === 'unmoderated-caucus' && committee.caucus) ? (
             <RollCallPanel committee={committee}
               hideIdentity
@@ -4566,7 +4632,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               onStatusChange={handleStatusChange}
               showStatusSliders={showSliders}
               isReadOnly={sessionEnded}
-              isViewOnly={isViewOnly} />
+              isViewOnly={isViewOnly} onCommenterAttempt={isCommenter ? notifyCommenter : undefined} />
           ) : (
             <RollCallPanel committee={committee}
               hideIdentity
@@ -4583,7 +4649,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               readyDelegateId={gslReadyDelegateId}
               onJoinRequestResolved={handleJoinRequestResolved}
               isReadOnly={sessionEnded}
-              isViewOnly={isViewOnly} />
+              isViewOnly={isViewOnly} onCommenterAttempt={isCommenter ? notifyCommenter : undefined} />
           )}
           </div>
         </ChairSidebarShell>
@@ -4888,7 +4954,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 isRollCallPhase={true}
                 showBulkActions={true}
                 isReadOnly={sessionEnded}
-                isViewOnly={isViewOnly} />
+                isViewOnly={isViewOnly} onCommenterAttempt={isCommenter ? notifyCommenter : undefined} />
               </div>
             </div>
           </div>
@@ -4984,6 +5050,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     handleEndCaucus={handleEndCaucus}
                     sessionEnded={sessionEnded}
                     isViewOnly={isViewOnly}
+                    commenterLock={commenterLock}
                     onRecognise={recogniseAbsentDelegate}
                   />
                 )
@@ -5045,6 +5112,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           onReorder={isViewOnly ? undefined : (newList) => handleReorderSpeakersList(newList.filter((s) => s.delegateId !== committee.currentSpeaker?.delegateId))}
                           onRemove={isViewOnly ? undefined : handleRemoveFromSpeakersList}
                           onRemoveCurrent={isViewOnly || sessionEnded || !committee.currentSpeaker ? undefined : () => handleRemoveCurrentSpeaker()}
+                          onLockedAttempt={commenterLock?.onAttempt}
                         />
                       </div>
                       {/* ZONE 2 — Flag + name + timer + progress: compresses as viewport shrinks */}
@@ -5059,7 +5127,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         />
                         <h1 className="font-black text-[#1C1410] text-center" style={{ fontSize: '1.8rem', margin: '8px 0' }}>{getCountryDisplayName(gslFloor.country, language)}</h1>
                         {isViewOnly ? (
-                          <div className="font-bold text-[#6A5A4A] text-center" style={{ fontSize: '1.5rem', marginBottom: '8px' }}>
+                          <div className={`font-bold text-[#6A5A4A] text-center ${commenterLock ? 'cursor-not-allowed' : ''}`} style={{ fontSize: '1.5rem', marginBottom: '8px' }}
+                            title={commenterLock?.reason} onClick={commenterLock?.onAttempt}>
                             {committee.currentSpeaker ? t('view_is_speaking') : t('gsl_on_deck')}
                           </div>
                         ) : (
@@ -5186,6 +5255,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           onCommitteeUpdate={(updater) => updateLocal(setCommittee, updater, true)}
           belowQuorum={belowQuorum}
           isViewOnly={isViewOnly}
+          onCommenterAttempt={isCommenter ? notifyCommenter : undefined}
           floorClock={() => ({
             base: speakerAnchorRef.current.base,
             startedAt: speakerAnchorRef.current.startedAt,
@@ -5251,9 +5321,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         >
             <div className="flex gap-2 mb-2">
               {[15, 30, 60].map((s) => (
-                <button key={s} onClick={() => { handleAddExtraTime(s); }}
+                <button key={s} onClick={() => { handleAddExtraTime(s); }} disabled={!addTimeHasTarget}
                   style={{ backgroundColor: POPOVER_TONES.time.chip, color: POPOVER_TONES.time.ink }}
-                  className="flex-1 py-2 text-xs rounded-lg font-black uppercase tracking-wide transition-transform gv-lift hover:brightness-95 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0E3A57]">
+                  className="flex-1 py-2 text-xs rounded-lg font-black uppercase tracking-wide transition-transform gv-lift disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-95 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0E3A57]">
                   +{s}s
                 </button>
               ))}
@@ -5270,7 +5340,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               />
               <button
                 onClick={() => { const n = parseInt(extraTimeSecs); if (n > 0) { handleAddExtraTime(n); } }}
-                disabled={!extraTimeSecs || parseInt(extraTimeSecs) <= 0}
+                disabled={!addTimeHasTarget || !extraTimeSecs || parseInt(extraTimeSecs) <= 0}
                 style={{ backgroundColor: POPOVER_TONES.time.btn, color: POPOVER_TONES.time.btnFg }}
                 className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-2 text-xs rounded-lg font-black transition-transform gv-lift disabled:opacity-40 hover:brightness-110 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0E3A57] focus-visible:ring-offset-2">
                 <ClockPlus size={15} strokeWidth={2.6} aria-hidden className="shrink-0" />

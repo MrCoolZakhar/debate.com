@@ -15,7 +15,11 @@
  *
  * Past voters wear a small badge with what they did. A recorded choice is the tally, so
  * with the tally hidden no choice badge is drawn; a Pass is not a vote and stays visible,
- * because the chair needs to see who comes back in the pass round.
+ * because the chair needs to see who comes back at the end of the line.
+ *
+ * The line is the ballot order followed by every delegation that passed, asked once more
+ * (17 Sep 2026: no separate pass round). A delegation that passed therefore appears twice,
+ * so each seat carries its own `key` and marks are asked by line position.
  */
 
 import { Check, Minus, SkipForward, X } from 'lucide-react';
@@ -42,7 +46,7 @@ const OFFSETS: number[] = (() => {
 
 export type SeatMark = VoteChoice | 'pass' | null;
 
-export interface CarouselSeat extends SessionSeat { id: string; country: string }
+export interface CarouselSeat extends SessionSeat { id: string; country: string; /** Unique in the line (a delegation that passed appears twice). */ key?: string }
 
 function ChoiceBadge({ mark }: { mark: Exclude<SeatMark, null> }) {
   const rights = mark === 'for-rights' || mark === 'against-rights';
@@ -70,18 +74,19 @@ function ChoiceBadge({ mark }: { mark: Exclude<SeatMark, null> }) {
 }
 
 export function VoterCarousel({ seats, current, markOf, hideTally }: {
-  /** The voting sequence (main round or pass round). */
+  /** The voting line: the ballot order, then the delegations that passed. */
   seats: CarouselSeat[];
   /** Index of the delegation voting now. */
   current: number;
-  markOf: (id: string) => SeatMark;
+  /** What the seat at line position `index` did. */
+  markOf: (id: string, index: number) => SeatMark;
   hideTally: boolean;
 }) {
   const { language } = useLanguage();
   const dir = language === 'ar' ? -1 : 1;
   const from = Math.max(0, current - VISIBLE);
   const to = Math.min(seats.length - 1, current + VISIBLE);
-  const windowed = seats.slice(from, to + 1).map((seat, k) => ({ seat, d: from + k - current }));
+  const windowed = seats.slice(from, to + 1).map((seat, k) => ({ seat, i: from + k, d: from + k - current }));
 
   return (
     <div className="gv-carousel relative w-full shrink-0" style={{ height: D + 52 }} aria-hidden>
@@ -94,14 +99,14 @@ export function VoterCarousel({ seats, current, markOf, hideTally }: {
           .gv-carousel .gv-seat, .gv-carousel .gv-seat-label, .gv-carousel .gv-seat-ring { transition: none }
         }
       `}</style>
-      {windowed.map(({ seat, d }) => {
+      {windowed.map(({ seat, i, d }) => {
         const step = Math.min(Math.abs(d), VISIBLE);
         const x = Math.sign(d) * OFFSETS[step] * dir;
-        const mark = d < 0 ? markOf(seat.id) : null;
+        const mark = d < 0 ? markOf(seat.id, i) : null;
         const showMark = mark !== null && (mark === 'pass' || !hideTally);
         const centre = d === 0;
         return (
-          <div key={seat.id}>
+          <div key={seat.key ?? seat.id}>
             <div
               className="gv-seat absolute top-0 left-1/2"
               style={{

@@ -7,14 +7,16 @@ import { portalFrame } from '@/components/chat/chatTokens';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import {
-  Ban, BadgeCheck, Check, CircleDot, FileText, Minus, Plus, Presentation, Timer, Vote, X, type LucideIcon,
+  Ban, BadgeCheck, Check, CheckCheck, CircleDot, FileText, Minus, Plus, Presentation, Timer, Vote, X, type LucideIcon,
 } from 'lucide-react';
 import PdfViewer, { PdfThumb, PDF_ZOOM_STEPS, stepPdfZoom, type PdfZoom } from '@/components/documents/PdfViewer';
 import StageTimerDevice from '@/components/documents/StageTimerDevice';
 import StageSwitcher from '@/components/documents/StageSwitcher';
 import ProceedingsSetup from '@/components/documents/ProceedingsSetup';
 import { Committee, CommitteeDocument, DocIntroState, DocumentType, DocumentStatus } from '@/lib/types';
-import { requireDocApproval as readRequireDocApproval, updateDocumentFlow, deleteDocumentChecked } from '@/lib/documentFlow';
+import { requireDocApproval as readRequireDocApproval, updateDocumentFlow, deleteDocumentChecked, introRemainingNow } from '@/lib/documentFlow';
+import { serverNow } from '@/lib/serverClock';
+import { anchorBox } from '@/components/voting/anchorPosition';
 import { sponsorLabel } from '@/lib/committeeFlags';
 import { docName, docCount, docLimit, docLimitReached } from '@/lib/docNames';
 import { TranslationKey } from '@/lib/translations';
@@ -685,6 +687,13 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
   /** Stages this introduction has finished (Next / Continue out of them), for the switcher's
    *  check marks. Local to this screen, like the stage itself. */
   const [doneStages, setDoneStages] = useState<TimedStage[]>([]);
+  /** Finish pressed with time still on the clock (or timed stages still ahead): ask first. */
+  const [finishAsk, setFinishAsk] = useState(false);
+  /** Vote pressed with no draft resolution to vote on: a small note above the button instead
+   *  of a whole empty voting page (owner, 17 Sep 2026). Fixed coordinates in #fit-root space. */
+  const [voteTip, setVoteTip] = useState<{ left: number; top: number } | null>(null);
+  const voteBtnRef = useRef<HTMLButtonElement>(null);
+  const voteTipRef = useRef<HTMLDivElement>(null);
   const introActive = !!(activeDocSnap && stage);
   const onIntroChangeRef = useRef(onIntroChange);
   useEffect(() => { onIntroChangeRef.current = onIntroChange; }, [onIntroChange]);
@@ -755,10 +764,46 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
     });
   };
 
-  const closeFlow = () => { setStage(null); setActiveDocSnap(null); };
+  const closeFlow = () => { setStage(null); setActiveDocSnap(null); setFinishAsk(false); };
 
-  const goToVoting = () =>
+  /** The voting page lists draft resolutions that are introduced, passed or failed (its picker's
+   *  own filter). With none, it would be an empty page: show a note by the button instead. */
+  const hasVotableDR = (committee.documents ?? []).some(
+    (d) => d.type === 'draft-resolution' && ['introduced', 'passed', 'failed'].includes(d.status));
+  const TIP_W = 272;
+  const TIP_H = 84;
+  const goToVoting = () => {
+    if (!hasVotableDR) {
+      const el = voteBtnRef.current;
+      if (!el) return;
+      const b = anchorBox(el);
+      const left = Math.min(Math.max(8, b.right - TIP_W), Math.max(8, b.viewW - TIP_W - 8));
+      const above = b.top - 8 - TIP_H;
+      setVoteTip({ left, top: above >= 8 ? above : b.bottom + 8 });
+      return;
+    }
     router.push(`/voting/${committee.code}${chairName ? `?chairName=${encodeURIComponent(chairName)}` : ''}`);
+  };
+
+  // The note closes by itself, on a press anywhere else, and on Escape (which it keeps from
+  // also closing the Documents dialog underneath).
+  useEffect(() => {
+    if (!voteTip) return;
+    const timer = setTimeout(() => setVoteTip(null), 3600);
+    const onDown = (e: PointerEvent) => {
+      const tgt = e.target as Node;
+      if (voteTipRef.current?.contains(tgt) || voteBtnRef.current?.contains(tgt)) return;
+      setVoteTip(null);
+    };
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault(); e.stopPropagation();
+      setVoteTip(null);
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('keydown', onKey, true);
+    return () => { clearTimeout(timer); document.removeEventListener('pointerdown', onDown, true); document.removeEventListener('keydown', onKey, true); };
+  }, [voteTip]);
 
   const handleStartPresentation = (doc: CommitteeDocument) => {
     setActiveDocSnap(doc);
@@ -772,6 +817,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
   /** Enter a timed stage with a fresh, paused clock. The stage lives only on this screen:
    *  there is no Resume from the card any more, so it is not persisted. */
   const enterStage = (s: TimedStage, tm = timings) => {
+    setFinishAsk(false);
     setClock({ base: stageMinutes(s, tm) * 60, startedAt: null });
     setStage(s);
   };
@@ -829,6 +875,37 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
     closeFlow();
   };
 
+  /** Finish beside the stage switcher: completes the introduction exactly like Continue out of
+   *  the last stage (a working paper passes, a draft resolution stays introduced for its vote).
+   *  Asks first while the current clock still has time or a timed stage is still ahead. */
+  const handleFinish = () => {
+    if (!activeDoc || !stage || stage === 'setup') return;
+    // A second press folds the question; it never finishes by itself (a double click must not).
+    if (finishAsk) { setFinishAsk(false); return; }
+    const timeLeft = introRemainingNow(clock, serverNow()) > 0
+      || STAGE_ORDER.slice(STAGE_ORDER.indexOf(stage) + 1).some((s) => timings[s] > 0);
+    if (timeLeft) { setFinishAsk(true); return; }
+    finishIntroduction(activeDoc);
+  };
+
+  // Escape: on the setup screen it goes back to the documents list (the bar with its X is
+  // gone); on a stage it only folds an open Finish question. Never while a dialog is over the
+  // introduction (Chat, Settings, Scoreboard handle their own Escape) or inside a field.
+  const introStage = activeDoc ? stage : null;
+  useEffect(() => {
+    if (!introStage) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      if (introStage === 'setup') { e.preventDefault(); setStage(null); setActiveDocSnap(null); setFinishAsk(false); }
+      else if (finishAsk) { e.preventDefault(); setFinishAsk(false); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [introStage, finishAsk]);
+
   /** Jump straight to a stage from the switcher: a fresh paused clock, like Next and Back. */
   const jumpToStage = (s: TimedStage) => {
     if (!activeDoc || timings[s] <= 0 || s === stage) return;
@@ -861,19 +938,50 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
   if (activeDoc && stage && stage !== 'setup') {
     const stageLabel = stage === 'reading' ? t('documents_stage_reading') : stage === 'presentation' ? t('documents_stage_presentation') : t('documents_stage_qa');
     return introFrame('#EDE7D8', (<>
-        <div className="grid items-center gap-3 px-4 h-14 shrink-0 bg-[#F6F1E6]"
+        <div className="relative z-[30] grid items-center gap-3 px-4 h-14 shrink-0 bg-[#F6F1E6]"
           style={{ gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', boxShadow: '0 1px 0 rgba(28,20,16,0.08)' }}>
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="shrink-0 h-6 px-2 rounded-md flex items-center text-[12px] font-semibold tabular-nums"
+            <span className="shrink-0 h-7 px-2.5 rounded-lg flex items-center text-[14.5px] font-semibold tabular-nums"
               style={{ color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.08)', fontFamily: "'Outfit', sans-serif" }}>{activeDoc.docCode}</span>
-            <span className="text-sm font-semibold truncate min-w-0" style={{ color: '#1C1410' }} title={activeDoc.title}>{activeDoc.title}</span>
+            <span className="text-[17px] font-semibold truncate min-w-0" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }} title={activeDoc.title}>{activeDoc.title}</span>
           </div>
-          <StageSwitcher
-            current={stage}
-            onSelect={(k) => jumpToStage(k as TimedStage)}
-            onTimings={() => setStage('setup')}
-            stages={STAGE_ORDER.map((s) => ({ key: s, label: switchLabel(s), minutes: timings[s], done: doneStages.includes(s) }))}
-          />
+          <div className="flex items-center gap-2 min-w-0">
+            <StageSwitcher
+              current={stage}
+              onSelect={(k) => jumpToStage(k as TimedStage)}
+              stages={STAGE_ORDER.map((s) => ({ key: s, label: switchLabel(s), minutes: timings[s], done: doneStages.includes(s) }))}
+            />
+            {/* Finish: big icon, small word beneath (the icon-button rule, CLAUDE.md section 8). */}
+            <div className="relative shrink-0">
+              <button type="button" onClick={handleFinish} aria-expanded={finishAsk} aria-haspopup="dialog"
+                aria-label={t('documents_finish_title')} title={t('documents_finish_title')}
+                className="h-[46px] min-w-[54px] px-2 rounded-[12px] flex flex-col items-center justify-center gap-[3px] bg-[#EED98A] hover:bg-[#E6CD6E] text-[#1B3828] transition-[background-color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                style={{ fontFamily: "'Outfit', sans-serif", boxShadow: '0 1px 2px rgba(27,56,40,0.16), 0 3px 8px rgba(27,56,40,0.10)' }}>
+                <CheckCheck size={19} strokeWidth={2.4} aria-hidden />
+                <span className="text-[10.5px] font-semibold leading-none">{t('documents_finish')}</span>
+              </button>
+              {finishAsk && (
+                <div role="dialog" aria-label={t('documents_finish_title')}
+                  className="absolute top-[calc(100%+8px)] end-0 w-[280px] rounded-2xl p-4 bg-[#FFFDF8]"
+                  style={{ fontFamily: "'Outfit', sans-serif", boxShadow: '0 0 0 1px rgba(28,20,16,0.08), 0 2px 6px rgba(27,56,40,0.08), 0 16px 40px rgba(27,56,40,0.20)' }}>
+                  <p className="text-[14px] font-semibold leading-snug" style={{ color: '#1C1410', textWrap: 'balance' }}>{t('documents_finish_confirm')}</p>
+                  <p className="mt-1 text-[13px] leading-snug" style={{ color: '#5C4E40', textWrap: 'pretty' }}>
+                    {activeDoc.type === 'working-paper' ? t('documents_finish_outcome_wp') : t('documents_finish_outcome_dr')}
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <button type="button" autoFocus onClick={() => finishIntroduction(activeDoc)}
+                      className="flex-1 h-9 rounded-xl text-[13px] font-semibold bg-[#1B3828] hover:bg-[#244A36] text-[#FAF8F3] transition-[background-color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#1B3828]">
+                      {t('documents_finish_now')}
+                    </button>
+                    <button type="button" onClick={() => setFinishAsk(false)}
+                      className="flex-1 h-9 rounded-xl text-[13px] font-medium text-[#5C4E40] hover:bg-[#1B3828]/[0.07] transition-[background-color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">
+                      {t('documents_finish_keep')}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
           {/* Zoom belongs to the chair, not to the stage: it survives every stage change. A PDF
               carries its own toolbar (PdfViewer); these controls serve a text paper only. */}
           <div className="flex items-center justify-end gap-1 min-w-0">
@@ -926,7 +1034,8 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
               clock={clock} onClockChange={handleClockChange}
               onComplete={() => advanceFromStage(stage)}
               onBack={() => backFromStage(stage)}
-              onHide={() => setTimerOpen(false)} />
+              onHide={() => setTimerOpen(false)}
+              onTimings={() => { setFinishAsk(false); setStage('setup'); }} />
           )}
         </div>
     </>));
@@ -934,16 +1043,11 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
 
   // Timing setup screen: the order of proceedings (17 Sep 2026).
   if (activeDoc && stage === 'setup') {
+    // No bar above the setup any more (owner: the "Introduce" strip and its X looked weird).
+    // Leaving is the docket's Back key or Escape; both return to the documents list.
     return introFrame('#F6F1E9', (<>
-        <div className="flex items-center justify-between gap-3 px-5 h-12 shrink-0" style={{ boxShadow: '0 1px 0 rgba(28,20,16,0.08)' }}>
-          <span className="text-[13px] font-semibold uppercase" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.14em' }}>{t('documents_introduce')}</span>
-          <button onClick={closeFlow} aria-label={t('sb_close')}
-            className="w-9 h-9 rounded-lg flex items-center justify-center text-[#6A5A4A] hover:text-[#1C1410] hover:bg-[#1B3828]/[0.07] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">
-            <X size={18} strokeWidth={2.4} aria-hidden />
-          </button>
-        </div>
         {flowErrorBanner}
-        <ProceedingsSetup doc={activeDoc} committee={committee} onStart={handleTimingConfirmed} onSkip={handleSkipToVote} />
+        <ProceedingsSetup doc={activeDoc} committee={committee} onStart={handleTimingConfirmed} onSkip={handleSkipToVote} onBack={closeFlow} />
     </>));
   }
 
@@ -976,21 +1080,6 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
                 </button>
               );
             })}
-            {/* Straight to the voting page, which picks the draft resolution and runs the roll
-                call. Carries ?chairName= like Go to voting. Moderator only (UI gate, RULE 15). */}
-            {!isViewOnly && (
-              <button
-                type="button"
-                onClick={goToVoting}
-                title={t('documents_vote_title')}
-                aria-label={t('documents_vote_title')}
-                className="shrink-0 inline-flex items-center gap-1.5 px-3 rounded-xl font-bold text-sm bg-[#EED98A] hover:bg-[#E6CD6E] text-[#1B3828] transition-[background-color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]/40"
-                style={{ fontFamily: "'Outfit', sans-serif" }}
-              >
-                <Vote size={15} strokeWidth={2.2} aria-hidden />
-                {t('documents_vote_btn')}
-              </button>
-            )}
           </div>
         )}
 
@@ -1000,8 +1089,8 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
           ) : (
             <div className="px-7 pb-7 space-y-3">
               {flowErrorBanner}
-              {/* The full-width GO TO VOTING banner is gone (16 Sep 2026). The small Vote
-                  button beside the tabs is the one way to the voting page from here. */}
+              {/* The full-width GO TO VOTING banner is gone (16 Sep 2026). The Vote tile beside
+                  the submit button is the one way to the voting page from here. */}
               {docs.length === 0 ? (
                 <div className="text-center py-10">
                   <p className="text-2xl font-black mb-1" style={{ color: '#1B3828' }}>{t('documents_empty_doc', { doc: tabPluralName })}</p>
@@ -1017,10 +1106,43 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
                 ))
               )}
               {!isViewOnly && (
-                <button onClick={() => setShowForm(true)}
-                  className="w-full bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-all mt-2 text-center focus:outline-none gv-lift" style={{ fontFamily: "'Outfit', sans-serif" }}>
-                  + {t('documents_submit_new_doc', { doc: tabSingularName })}
-                </button>
+                <div className="flex items-stretch gap-2 mt-2">
+                  <button onClick={() => setShowForm(true)}
+                    className="flex-1 min-w-0 bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-[background-color,border-color,transform] duration-150 active:scale-[0.96] text-center focus:outline-none gv-lift" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                    + {t('documents_submit_new_doc', { doc: tabSingularName })}
+                  </button>
+                  {/* Vote: big icon, small word beneath (CLAUDE.md section 8). Opens the voting
+                      page, which picks the draft resolution and runs the roll call, or, with no
+                      draft resolution to vote on, a small note above the button. Carries
+                      ?chairName=. Moderator only (UI gate, RULE 15). */}
+                  <button
+                    ref={voteBtnRef}
+                    type="button"
+                    onClick={goToVoting}
+                    title={t('documents_vote_title')}
+                    aria-label={t('documents_vote_title')}
+                    aria-describedby={voteTip ? 'documents-no-dr-tip' : undefined}
+                    className="shrink-0 w-[64px] rounded-2xl flex flex-col items-center justify-center gap-1 bg-[#EED98A] hover:bg-[#E6CD6E] text-[#1B3828] transition-[background-color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]/40 gv-lift"
+                    style={{ fontFamily: "'Outfit', sans-serif" }}
+                  >
+                    <Vote size={22} strokeWidth={2.1} aria-hidden />
+                    <span className="text-[11px] font-semibold leading-none">{t('documents_vote_btn')}</span>
+                  </button>
+                </div>
+              )}
+              {voteTip && (
+                <Portal>
+                  <div ref={voteTipRef} id="documents-no-dr-tip" role="status"
+                    className="fixed z-[70] rounded-2xl px-4 py-3 bg-[#1B3828]"
+                    style={{ left: voteTip.left, top: voteTip.top, width: TIP_W, minHeight: TIP_H, fontFamily: "'Outfit', sans-serif", boxShadow: '0 2px 6px rgba(27,56,40,0.18), 0 16px 36px rgba(27,56,40,0.28)' }}>
+                    <p className="text-[14px] font-semibold leading-snug text-[#EED98A]">
+                      {t('documents_no_dr_title', { doc: docName(committee, 'draft-resolution', 'singular', t('documents_draft_resolution')) })}
+                    </p>
+                    <p className="mt-1 text-[12.5px] leading-snug text-[#FAF8F3]/85" style={{ textWrap: 'pretty' }}>
+                      {t('documents_no_dr_body', { doc: docName(committee, 'draft-resolution', 'singular', t('documents_draft_resolution')) })}
+                    </p>
+                  </div>
+                </Portal>
               )}
             </div>
           )}

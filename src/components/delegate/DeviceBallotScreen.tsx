@@ -110,6 +110,7 @@ export default function DeviceBallotScreen({ code, country, committee, accessTok
       void refresh();
       return;
     }
+    if (r === 'no_rights') { setError('failed'); setPick(null); return; }
     if (r === 'closed' || r === 'revealed' || r === 'no_ballot' || r === 'not_in_ballot') { setError('closed'); setPick(null); void refresh(); return; }
     if (r === 'not_holder') { setError('not_holder'); setPick(null); return; }
     if (r === 'voted_elsewhere') { setError('voted_elsewhere'); setPick(null); setChanging(false); void refresh(); return; }
@@ -117,11 +118,16 @@ export default function DeviceBallotScreen({ code, country, committee, accessTok
   };
 
   const showChoices = ballot.holder && !ballot.votedElsewhere && !ballot.revealed && (!ballot.choice || changing);
+  // Settings → Voting → "Votes with rights" (default on), read from the committee row. There is
+  // no Pass on a device ballot, so `allowPass` does not apply here. cast_device_vote refuses a
+  // rights choice when the setting is off (`no_rights`), and the reveal counts one cast before
+  // the switch as the plain vote.
+  const allowRights = (committee.dbSettings as { allowRightsVotes?: unknown } | undefined)?.allowRightsVotes !== false;
   const options: { choice: VoteChoice; tone: 'for' | 'against' | 'neutral'; label: string; sub?: string }[] = [
     { choice: 'for', tone: 'for', label: t('voting_in_favour') },
-    { choice: 'for-rights', tone: 'for', label: t('voting_in_favour'), sub: t('voting_with_rights_label') },
+    ...(allowRights ? [{ choice: 'for-rights' as VoteChoice, tone: 'for' as const, label: t('voting_in_favour'), sub: t('voting_with_rights_label') }] : []),
     ...(ballot.mayAbstain ? [{ choice: 'abstain' as VoteChoice, tone: 'neutral' as const, label: t('voting_abstain') }] : []),
-    { choice: 'against-rights', tone: 'against', label: t('voting_against'), sub: t('voting_with_rights_label') },
+    ...(allowRights ? [{ choice: 'against-rights' as VoteChoice, tone: 'against' as const, label: t('voting_against'), sub: t('voting_with_rights_label') }] : []),
     { choice: 'against', tone: 'against', label: t('voting_against') },
   ];
   const skin = (tone: 'for' | 'against' | 'neutral') => tone === 'for'

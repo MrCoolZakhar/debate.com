@@ -6,7 +6,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { Globe, FileClock } from 'lucide-react';
-import ProfileDropdown from '@/components/ProfileDropdown';
+import ProfileAvatarMenu from '@/components/ProfileAvatar';
 import { useCredits } from '@/hooks/useCredits';
 import { CreditCoin } from '@/components/CreditCoin';
 import { useDraftCount, draftResumeHref } from '@/hooks/useDraftCount';
@@ -50,10 +50,9 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
   const { user, profile, signOut } = useAuth();
   const { language, setLanguage } = useLanguage();
   const { balance: creditBalance, loading: creditsLoading } = useCredits();
-  // ProfileDropdown is `hidden md:flex`, so on a phone it never mounts and its
-  // unfinished-application entries would be invisible exactly where applicants
-  // abandon forms. The hamburger sheet hand-rolls its own account block, so it
-  // needs them too (with its own lazy fetch, gated on the sheet being open).
+  // The hamburger sheet is where a phone user looks first, and the avatar menu
+  // beside it is easy to miss, so the sheet hand-rolls its own account block
+  // with the unfinished-application entries too (with its own lazy fetch, gated on the sheet being open).
   //
   // Mirrors the dropdown's treatment: one gold-washed row PER draft, tagged
   // UNFINISHED and linking straight back into that application's wizard —
@@ -96,12 +95,6 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
   // site's ivory. The .png remains as the onError fallback.
   const logoSrc = logoOverride?.src ?? '/GavellingSessionsApp.webp';
   const logoAlt = logoOverride?.alt ?? 'Gavelling Sessions';
-
-  const avatarInitial = profile?.display_name
-    ? profile.display_name[0].toUpperCase()
-    : user?.email
-    ? user.email[0].toUpperCase()
-    : '?';
 
   async function handleSignOut() {
     await signOut();
@@ -328,43 +321,8 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
           {/* Auth section */}
           {user ? (
             /* Account button + shared dropdown */
-            <ProfileDropdown trigger={(open, toggle) => (
-              <button
-                onClick={toggle}
-                className="flex items-center gap-2 focus:outline-none"
-                style={{
-                  backgroundColor: '#1B3828',
-                  color: '#EED98A',
-                  borderRadius: '9999px',
-                  padding: '7px 14px 7px 8px',
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  letterSpacing: '0.04em',
-                  fontFamily: "'Outfit', sans-serif",
-                  border: 'none',
-                  cursor: 'pointer',
-                  transition: 'background-color 150ms ease',
-                }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-              >
-                {profile?.avatar_url ? (
-                  <img
-                    src={profile.avatar_url}
-                    alt="Avatar"
-                    className="w-6 h-6 rounded-full object-cover"
-                  />
-                ) : (
-                  <div
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black"
-                    style={{ backgroundColor: '#EED98A', color: '#1B3828' }}
-                  >
-                    {avatarInitial}
-                  </div>
-                )}
-                <span>{profile?.display_name ?? user.email?.split('@')[0] ?? 'Account'}</span>
-              </button>
-            )} />
+            /* The avatar alone (picture, else initials) opens the shared menu. */
+            <ProfileAvatarMenu size={40} />
           ) : (
             /* Signed-out: SIGN IN only */
             <Link
@@ -385,9 +343,11 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
           )}
         </div>
 
-        {/* Mobile hamburger */}
+        {/* Mobile: avatar (signed in) + hamburger */}
+        <div className="md:hidden flex items-center gap-2">
+        {user && <ProfileAvatarMenu size={36} />}
         <button
-          className="md:hidden flex flex-col justify-center items-center w-10 h-10 gap-1.5"
+          className="flex flex-col justify-center items-center w-10 h-10 gap-1.5"
           onClick={() => setMenuOpen((v) => !v)}
           aria-label={menuOpen ? 'Close menu' : 'Open menu'}
         >
@@ -413,6 +373,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
             }}
           />
         </button>
+        </div>
       </nav>
 
       {/* Mobile dropdown menu.

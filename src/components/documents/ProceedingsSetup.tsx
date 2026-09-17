@@ -4,16 +4,21 @@
  * ProceedingsSetup: the timings screen before a paper is introduced (17 Sep 2026).
  *
  * Built like a dais docket, not a form: the paper on the left, and on the right an order of
- * proceedings with the three stages as a numbered timeline (I, II, III). Each stage has a
+ * proceedings with the three stages as a timeline marked by icons (Reading = an open book,
+ * Presentation = a presentation board, Q&A = speech bubbles; owner, 17 Sep 2026: "instead of
+ * I, II, III, add icons"). Each stage has a
  * tactile minute dial (a large numeral you can type into, minus / plus keys, Arrow and Page
  * keys, and 0 / 2 / 5 / 10 notches). A stage at 0 is shown as skipped on the timeline. The foot
  * shows the floor time as one proportional strip, when it would end, and what happens after.
+ *
+ * There is no bar above it any more (owner: the "Introduce" strip and its X "looked weird"). The
+ * way out is the Back key at the top of the docket, or Escape (handled by the modal).
  *
  * Presentational: it only holds the three draft numbers. Confirming calls `onStart` once, and
  * the modal still writes timings + status in ONE update (unchanged).
  */
 import React, { useState } from 'react';
-import { Check, SkipForward } from 'lucide-react';
+import { ArrowLeft, BookOpen, Check, MessagesSquare, Presentation, SkipForward, type LucideIcon } from 'lucide-react';
 import { useT } from '@/contexts/LanguageContext';
 import type { Committee, CommitteeDocument } from '@/lib/types';
 import { docName } from '@/lib/docNames';
@@ -24,7 +29,6 @@ const INK = '#1C1410';
 const INK_SOFT = '#5C4E40';
 const FOREST = '#1B3828';
 const GOLD = '#EED98A';
-const PLAYFAIR = "'Playfair Display', Georgia, serif";
 const OUTFIT = "'Outfit', sans-serif";
 const MAX_MIN = 99;
 const NOTCHES = [0, 2, 5, 10];
@@ -95,11 +99,13 @@ function MinuteDial({ value, onChange, label }: { value: number; onChange: (n: n
   );
 }
 
-export default function ProceedingsSetup({ doc, committee, onStart, onSkip }: {
+export default function ProceedingsSetup({ doc, committee, onStart, onSkip, onBack }: {
   doc: CommitteeDocument;
   committee: Committee;
   onStart: (readingMins: number, presentationMins: number, qaMins: number) => void;
   onSkip: () => void;
+  /** Leave the setup without introducing (back to the documents list). */
+  onBack: () => void;
 }) {
   const t = useT();
   const isWP = doc.type === 'working-paper';
@@ -110,10 +116,10 @@ export default function ProceedingsSetup({ doc, committee, onStart, onSkip }: {
   const [zoom, setZoom] = useState<PdfZoom>('fit');
 
   const stageName = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
-  const stages = [
-    { label: stageName(t('documents_stage_reading')), note: t('documents_stage_note_reading') },
-    { label: stageName(t('documents_stage_presentation')), note: t('documents_stage_note_presentation') },
-    { label: t('documents_stage_qa'), note: isWP ? t('documents_qa_optional_doc', { doc: typeNamePlural }) : t('documents_qa_note') },
+  const stages: { label: string; note: string; Icon: LucideIcon }[] = [
+    { label: stageName(t('documents_stage_reading')), note: t('documents_stage_note_reading'), Icon: BookOpen },
+    { label: stageName(t('documents_stage_presentation')), note: t('documents_stage_note_presentation'), Icon: Presentation },
+    { label: t('documents_stage_qa'), note: isWP ? t('documents_qa_optional_doc', { doc: typeNamePlural }) : t('documents_qa_note'), Icon: MessagesSquare },
   ];
   const total = mins[0] + mins[1] + mins[2];
   const endsAt = new Date(serverNow() + total * 60_000).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
@@ -143,9 +149,15 @@ export default function ProceedingsSetup({ doc, committee, onStart, onSkip }: {
       {/* The docket */}
       <section className="flex-1 min-h-0 overflow-y-auto">
         <div className="max-w-[620px] mx-auto px-6 sm:px-10 py-8 lg:py-10 flex flex-col min-h-full">
-          <p className="text-[12px] font-semibold uppercase" style={{ color: INK_SOFT, letterSpacing: '0.18em', fontFamily: OUTFIT }}>
-            {t('documents_setup_eyebrow')}
-          </p>
+          <div className="flex items-center gap-1.5 -ms-2">
+            <button type="button" onClick={onBack} aria-label={t('documents_setup_back')} title={t('documents_setup_back')}
+              className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-[background-color,color,transform] duration-150 active:scale-[0.96] text-[#5C4E40] hover:bg-[#1B3828]/[0.07] hover:text-[#1B3828] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">
+              <ArrowLeft size={19} strokeWidth={2.3} aria-hidden className="rtl:rotate-180" />
+            </button>
+            <p className="text-[12px] font-semibold uppercase" style={{ color: INK_SOFT, letterSpacing: '0.18em', fontFamily: OUTFIT }}>
+              {t('documents_setup_eyebrow')}
+            </p>
+          </div>
           <div className="mt-3 flex items-baseline gap-3 min-w-0">
             <span className="shrink-0 text-[13px] font-bold tabular-nums px-2 py-0.5 rounded-md" style={{ color: GOLD, backgroundColor: FOREST }}>{doc.docCode}</span>
             <span className="text-[13px] font-medium truncate" style={{ color: INK_SOFT }}>{typeName}</span>
@@ -167,7 +179,7 @@ export default function ProceedingsSetup({ doc, committee, onStart, onSkip }: {
                     style={on
                       ? { backgroundColor: FOREST, color: GOLD, boxShadow: '0 2px 0 rgba(0,0,0,0.12), 0 6px 14px rgba(27,56,40,0.22)' }
                       : { backgroundColor: '#F6F1E9', color: 'rgba(27,56,40,0.55)', boxShadow: 'inset 0 0 0 2px rgba(27,56,40,0.22)' }}>
-                    <span style={{ fontFamily: PLAYFAIR, fontStyle: 'italic', fontSize: 22, lineHeight: 1 }}>{['I', 'II', 'III'][i]}</span>
+                    <s.Icon size={22} strokeWidth={2} />
                   </span>
                   <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 min-w-0">
                     <div className="min-w-0 pt-1.5 flex-1 basis-[160px]">

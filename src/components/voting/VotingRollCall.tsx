@@ -43,6 +43,7 @@ import type { Delegate, DelegateStatus } from '@/lib/types';
 import { computeVoteOutcome } from '@/components/VotingRulesPanel';
 import { vetoEntryMatches } from '@/lib/vetoMatch';
 import { VetoCountryPicker } from '@/components/voting/VetoCountryPicker';
+import { Hemicycle } from '@/components/settings/VotingTab';
 
 const INK = '#1C1410';
 const INK_SOFT = '#6A5A4A';
@@ -140,7 +141,8 @@ function StatusSlider({ status, isObserver, onPick, label, disabled }: {
 /** A radio group of calm options, each with an optional second line. */
 function Choice<T extends string>({ value, options, onChange, label, disabled }: {
   value: T;
-  options: { value: T; label: string; sub?: string }[];
+  /** `art`: a pictogram drawn at the option's inline start, given whether it is selected. */
+  options: { value: T; label: string; sub?: string; art?: (on: boolean) => ReactNode }[];
   onChange: (v: T) => void;
   label: string;
   disabled?: boolean;
@@ -157,7 +159,7 @@ function Choice<T extends string>({ value, options, onChange, label, disabled }:
             aria-checked={on}
             disabled={disabled}
             onClick={() => { if (!on) onChange(o.value); }}
-            className={`min-h-12 rounded-2xl px-4 py-2.5 text-start focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] disabled:cursor-not-allowed ${PRESS}`}
+            className={`min-h-12 rounded-2xl px-4 py-2.5 text-start focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] disabled:cursor-not-allowed ${o.art ? 'flex items-center gap-3.5' : ''} ${PRESS}`}
             style={{
               backgroundColor: on ? FOREST : '#FCFAF5',
               color: on ? GOLD : INK,
@@ -165,12 +167,15 @@ function Choice<T extends string>({ value, options, onChange, label, disabled }:
               opacity: disabled && !on ? 0.6 : 1,
             }}
           >
-            <span className="block text-[15px] font-semibold leading-tight">{o.label}</span>
-            {o.sub && (
-              <span className="block text-[13px] font-medium leading-snug mt-0.5" style={{ color: on ? 'rgba(238,217,138,0.8)' : INK_SOFT }}>
-                {o.sub}
-              </span>
-            )}
+            {o.art && <span className="shrink-0 flex items-center justify-center w-[52px]" aria-hidden>{o.art(on)}</span>}
+            <span className={o.art ? 'min-w-0 flex-1' : undefined}>
+              <span className="block text-[15px] font-semibold leading-tight">{o.label}</span>
+              {o.sub && (
+                <span className="block text-[13px] font-medium leading-snug mt-0.5" style={{ color: on ? 'rgba(238,217,138,0.8)' : INK_SOFT }}>
+                  {o.sub}
+                </span>
+              )}
+            </span>
           </button>
         );
       })}
@@ -584,9 +589,10 @@ export function VotingRollCall({
                         disabled={readOnly}
                         onChange={(v) => onRulesChange({ substantiveThreshold: v })}
                         options={[
-                          { value: 'simple', label: t('voting_rules_threshold_simple'), sub: t('voting_rc_threshold_simple_sub') },
-                          { value: 'supermajority-2-3', label: '2/3', sub: t('voting_rc_threshold_two_thirds_sub') },
-                          { value: 'consensus', label: t('voting_rules_threshold_consensus'), sub: t('voting_rc_threshold_consensus_sub') },
+                          // The Settings pictograms (owner, 17 Sep 2026): the share of the hemicycle needed to pass.
+                          { value: 'simple', label: t('voting_rules_threshold_simple'), sub: t('voting_rc_threshold_simple_sub'), art: (on) => <Hemicycle size={50} share={8 / 15} on={on} /> },
+                          { value: 'supermajority-2-3', label: '2/3', sub: t('voting_rc_threshold_two_thirds_sub'), art: (on) => <Hemicycle size={50} share={2 / 3} on={on} /> },
+                          { value: 'consensus', label: t('voting_rules_threshold_consensus'), sub: t('voting_rc_threshold_consensus_sub'), art: (on) => <Hemicycle size={50} share={1} on={on} /> },
                         ]}
                       />
                       <Note>{thresholdFact}</Note>
@@ -621,6 +627,17 @@ export function VotingRollCall({
                       </div>
                       <Note>{abstentionFact}</Note>
                       <p className="text-[13px] mt-3 leading-snug [text-wrap:pretty]" style={{ color: INK_SOFT }}>{t('voting_rules_count_abstentions_info_body')}</p>
+                      {/* Which ballot buttons exist at all (owner, 17 Sep 2026). Default on. */}
+                      <div className="mt-6 pt-5" style={{ boxShadow: 'inset 0 1px 0 rgba(27,56,40,0.10)' }}>
+                        <h3 className="text-[16px] font-bold leading-tight mb-1" style={{ color: INK }}>{t('voting_choices_title')}</h3>
+                        <div className="divide-y divide-[rgba(27,56,40,0.08)]">
+                          <Switch label={t('voting_allow_rights_label')} checked={settings.allowRightsVotes !== false} disabled={readOnly}
+                            onChange={(v) => onRulesChange({ allowRightsVotes: v })} />
+                          <Switch label={t('voting_allow_pass_label')} checked={settings.allowPass !== false} disabled={readOnly}
+                            onChange={(v) => onRulesChange({ allowPass: v })} />
+                        </div>
+                        <Note>{settings.allowPass !== false ? t('voting_allow_pass_note') : t('voting_allow_pass_off_note')}</Note>
+                      </div>
                     </>
                   )}
                   {shownTab === 'veto' && (

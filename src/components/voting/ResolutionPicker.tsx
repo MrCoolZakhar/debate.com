@@ -22,7 +22,7 @@
  */
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Check, ClipboardList, FileText, Radio, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ClipboardList, FileText, Radio, ShieldAlert, X } from 'lucide-react';
 import { PdfThumb } from '@/components/documents/PdfViewer';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { SeatCircleFlag } from '@/components/CircleFlag';
@@ -41,7 +41,45 @@ const CARD = '#FAF8F3';
 export type PickCardState =
   | { kind: 'ready'; canOpen: boolean }
   | { kind: 'live'; vote: VoteStateV1; canOpen: boolean }
-  | { kind: 'voted'; result: 'passed' | 'failed'; vote: VoteStateV1 | null; canOpen: boolean };
+  | { kind: 'voted'; result: 'passed' | 'failed' | 'vetoed'; vote: VoteStateV1 | null; canOpen: boolean };
+
+/**
+ * The card's palette. A voted paper changes colour completely (owner, 17 Sep 2026: "When
+ * returning to DRs and some have already been voted upon, change their colour completely"):
+ * passed is solid forest, failed a muted red, vetoed a deep aubergine, each with light text,
+ * so a finished paper can never be mistaken for one still to vote on.
+ */
+interface CardPalette {
+  bg: string; ink: string; soft: string; muted: string;
+  codeBg: string; codeFg: string; pillBg: string; pillFg: string;
+  arrowBg: string; arrowFg: string; rule: string; ring: string; track: string; fill: string;
+}
+const LIGHT: CardPalette = {
+  bg: CARD, ink: INK, soft: INK_SOFT, muted: MUTED, codeBg: 'rgba(27,56,40,0.08)', codeFg: FOREST,
+  pillBg: FOREST, pillFg: GOLD, arrowBg: FOREST, arrowFg: GOLD, rule: 'rgba(27,56,40,0.08)',
+  ring: 'rgba(27,56,40,0.07)', track: 'rgba(27,56,40,0.10)', fill: FOREST,
+};
+const VOTED: Record<'passed' | 'failed' | 'vetoed', CardPalette> = {
+  passed: {
+    bg: FOREST, ink: '#F6EFDA', soft: 'rgba(246,239,218,0.80)', muted: 'rgba(238,217,138,0.72)',
+    codeBg: 'rgba(238,217,138,0.16)', codeFg: GOLD, pillBg: GOLD, pillFg: FOREST,
+    arrowBg: 'rgba(238,217,138,0.16)', arrowFg: GOLD, rule: 'rgba(255,255,255,0.12)',
+    ring: 'rgba(27,56,40,0.5)', track: 'rgba(255,255,255,0.16)', fill: GOLD,
+  },
+  failed: {
+    bg: '#8E3A33', ink: '#FFF3EE', soft: 'rgba(255,236,229,0.82)', muted: 'rgba(255,214,200,0.74)',
+    codeBg: 'rgba(255,255,255,0.14)', codeFg: '#FFE7DE', pillBg: '#FFE1D6', pillFg: '#7A2A24',
+    arrowBg: 'rgba(255,255,255,0.14)', arrowFg: '#FFE7DE', rule: 'rgba(255,255,255,0.14)',
+    ring: 'rgba(110,30,26,0.5)', track: 'rgba(255,255,255,0.18)', fill: '#FFE1D6',
+  },
+  vetoed: {
+    bg: '#3E2447', ink: '#F7EEFA', soft: 'rgba(240,226,246,0.82)', muted: 'rgba(222,200,232,0.72)',
+    codeBg: 'rgba(255,255,255,0.13)', codeFg: '#EBDAF2', pillBg: '#E9D6F0', pillFg: '#3E2447',
+    arrowBg: 'rgba(255,255,255,0.13)', arrowFg: '#EBDAF2', rule: 'rgba(255,255,255,0.13)',
+    ring: 'rgba(40,20,48,0.5)', track: 'rgba(255,255,255,0.16)', fill: '#E9D6F0',
+  },
+};
+const paletteOf = (state: PickCardState): CardPalette => (state.kind === 'voted' ? VOTED[state.result] : LIGHT);
 
 export interface ResolutionPickerProps {
   docs: CommitteeDocument[];
@@ -80,11 +118,11 @@ function StatusPill({ state }: { state: PickCardState }) {
     );
   }
   if (state.kind === 'voted') {
-    const passed = state.result === 'passed';
+    const pal = VOTED[state.result];
     return (
-      <span className={base} style={{ backgroundColor: passed ? 'rgba(47,107,69,0.13)' : 'rgba(139,32,32,0.10)', color: passed ? '#2F6B45' : '#8B2020' }}>
-        {passed ? <Check size={13} strokeWidth={2.75} aria-hidden /> : <X size={13} strokeWidth={2.75} aria-hidden />}
-        {passed ? t('voting_pick_status_passed') : t('voting_pick_status_failed')}
+      <span className={base} style={{ backgroundColor: pal.pillBg, color: pal.pillFg }}>
+        {state.result === 'passed' ? <Check size={13} strokeWidth={2.75} aria-hidden /> : state.result === 'vetoed' ? <ShieldAlert size={13} strokeWidth={2.5} aria-hidden /> : <X size={13} strokeWidth={2.75} aria-hidden />}
+        {state.result === 'passed' ? t('voting_pick_status_passed') : state.result === 'vetoed' ? t('voting_pick_status_vetoed') : t('voting_pick_status_failed')}
       </span>
     );
   }
@@ -121,11 +159,11 @@ function PaperPreview({ doc }: { doc: CommitteeDocument }) {
   );
 }
 
-function Sponsors({ sponsors, word }: { sponsors: string[]; word: string }) {
+function Sponsors({ sponsors, word, pal = LIGHT }: { sponsors: string[]; word: string; pal?: CardPalette }) {
   const t = useT();
   const { language } = useLanguage();
   if (sponsors.length === 0) {
-    return <p className="text-[13.5px] font-medium" style={{ color: MUTED }}>{t('voting_pick_no_sponsors')}</p>;
+    return <p className="text-[13.5px] font-medium" style={{ color: pal.muted }}>{t('voting_pick_no_sponsors')}</p>;
   }
   const shown = sponsors.slice(0, 6);
   const extra = sponsors.length - shown.length;
@@ -134,14 +172,14 @@ function Sponsors({ sponsors, word }: { sponsors: string[]; word: string }) {
     <div className="min-w-0">
       <div className="flex items-center ps-1.5 mb-2" aria-hidden>
         {shown.map((s, i) => (
-          <span key={`${s}-${i}`} className="gv-pick-flag rounded-full -ms-1.5" style={{ zIndex: shown.length - i, boxShadow: `0 0 0 2.5px ${CARD}` }}>
+          <span key={`${s}-${i}`} className="gv-pick-flag rounded-full -ms-1.5" style={{ zIndex: shown.length - i, boxShadow: `0 0 0 2.5px ${pal.bg}` }}>
             <SeatCircleFlag country={s} size={26} decorative />
           </span>
         ))}
         {extra > 0 && (
           <span
             className="-ms-1.5 h-[26px] min-w-[26px] px-1.5 rounded-full flex items-center justify-center text-[11px] font-semibold tabular-nums"
-            style={{ backgroundColor: '#EDE7D8', color: INK_SOFT, boxShadow: `0 0 0 2.5px ${CARD}` }}
+            style={{ backgroundColor: '#EDE7D8', color: INK_SOFT, boxShadow: `0 0 0 2.5px ${pal.bg}` }}
           >
             {t('voting_pick_more', { n: extra })}
           </span>
@@ -149,19 +187,19 @@ function Sponsors({ sponsors, word }: { sponsors: string[]; word: string }) {
       </div>
       {/* The label runs inline with the names instead of sitting above them as a
           letterspaced caps rubric. Same information, one line, no shouting. */}
-      <p className="text-[13.5px] leading-snug line-clamp-2" style={{ color: INK_SOFT }} title={names}>
-        <span style={{ color: MUTED }}>{word}: </span>{names}
+      <p className="text-[13.5px] leading-snug line-clamp-2" style={{ color: pal.soft }} title={names}>
+        <span style={{ color: pal.muted }}>{word}: </span>{names}
       </p>
     </div>
   );
 }
 
-function ProgressLine({ value, total, tone }: { value: number; total: number; tone: 'forest' | 'green' | 'red' }) {
+function ProgressLine({ value, total, pal }: { value: number; total: number; pal: CardPalette }) {
   const { language } = useLanguage();
   const pct = total > 0 ? Math.min(1, value / total) : 0;
-  const fill = tone === 'forest' ? FOREST : tone === 'green' ? '#2F6B45' : '#8B2020';
+  const fill = pal.fill;
   return (
-    <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(27,56,40,0.10)' }} aria-hidden>
+    <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: pal.track }} aria-hidden>
       <div
         className="h-full rounded-full transition-transform duration-500 motion-reduce:transition-none"
         style={{ backgroundColor: fill, transform: `scaleX(${pct})`, transformOrigin: language === 'ar' ? 'right' : 'left' }}
@@ -214,6 +252,8 @@ function Card({ doc, state, index, props }: { doc: CommitteeDocument; state: Pic
     ? vote.startedAt : null;
   const deviceCast = useDeviceCast(props.code, props.chairSuffix, doc.id, deviceBallot);
   const liveCast = deviceBallot ? deviceCast : vote ? vote.votes.length : 0;
+  const pal = paletteOf(state);
+  const voted = state.kind === 'voted';
 
   return (
     <button
@@ -225,12 +265,12 @@ function Card({ doc, state, index, props }: { doc: CommitteeDocument; state: Pic
       className="gv-pick-card gv-pick-in group relative text-start rounded-[20px] p-5 flex flex-col gap-4 min-h-[248px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 focus-visible:ring-offset-[#EDE7D8] disabled:cursor-default"
       style={{
         animationDelay: `${Math.min(index, 8) * 60}ms`,
-        backgroundColor: CARD,
-        ['--gv-ring' as string]: live ? 'rgba(182,135,31,0.55)' : 'rgba(27,56,40,0.07)',
+        backgroundColor: pal.bg,
+        ['--gv-ring' as string]: live ? 'rgba(182,135,31,0.55)' : pal.ring,
       }}
     >
       <div className="flex items-center justify-between gap-3">
-        <span className="text-[13px] font-semibold tabular-nums px-2 py-1 rounded-md" style={{ backgroundColor: 'rgba(27,56,40,0.08)', color: FOREST }}>
+        <span className="text-[13px] font-semibold tabular-nums px-2 py-1 rounded-md" style={{ backgroundColor: pal.codeBg, color: pal.codeFg }}>
           {doc.docCode}
         </span>
         <StatusPill state={state} />
@@ -239,10 +279,10 @@ function Card({ doc, state, index, props }: { doc: CommitteeDocument; state: Pic
       <div className="flex items-start gap-4 min-w-0">
         <PaperPreview doc={doc} />
         <div className="flex-1 min-w-0 flex flex-col gap-3">
-          <h2 className="text-[19px] leading-[1.28] font-bold line-clamp-3 [text-wrap:balance]" style={{ color: INK, letterSpacing: '-0.006em' }}>
+          <h2 className="text-[19px] leading-[1.28] font-bold line-clamp-3 [text-wrap:balance]" style={{ color: pal.ink, letterSpacing: '-0.006em' }}>
             {doc.title || doc.docCode}
           </h2>
-          <Sponsors sponsors={doc.sponsors} word={sponsorWord} />
+          <Sponsors sponsors={doc.sponsors} word={sponsorWord} pal={pal} />
         </div>
       </div>
 
@@ -252,26 +292,26 @@ function Card({ doc, state, index, props }: { doc: CommitteeDocument; state: Pic
             <span className="text-[13px] font-medium tabular-nums" style={{ color: INK_SOFT }}>
               {t('voting_voted_of', { cast: liveCast, total: vote.order.length })}
             </span>
-            <ProgressLine value={liveCast} total={vote.order.length} tone="forest" />
+            <ProgressLine value={liveCast} total={vote.order.length} pal={pal} />
           </div>
         )}
         {state.kind === 'voted' && vote && !hideTally && (
           <div className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-medium tabular-nums" style={{ color: INK_SOFT }}>
+            <span className="text-[13px] font-medium tabular-nums" style={{ color: pal.soft }}>
               {t('voting_pick_tally', { for: forCount, against: againstCount })}
             </span>
-            <ProgressLine value={forCount} total={forCount + againstCount} tone={state.result === 'passed' ? 'green' : 'red'} />
+            <ProgressLine value={forCount} total={forCount + againstCount} pal={pal} />
           </div>
         )}
         <div
           className="flex items-center justify-between gap-3 pt-3.5"
-          style={{ boxShadow: 'inset 0 1px 0 rgba(27,56,40,0.08)' }}
+          style={{ boxShadow: `inset 0 1px 0 ${pal.rule}` }}
         >
-          <span className="text-[14px] font-semibold" style={{ color: state.canOpen ? FOREST : MUTED }}>{action}</span>
+          <span className="text-[14px] font-semibold" style={{ color: voted ? pal.ink : state.canOpen ? FOREST : MUTED }}>{action}</span>
           {state.canOpen && (
             <span
               className="gv-pick-arrow w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-              style={{ backgroundColor: live || state.kind === 'ready' ? FOREST : 'rgba(27,56,40,0.09)', color: live || state.kind === 'ready' ? GOLD : FOREST }}
+              style={{ backgroundColor: voted ? pal.arrowBg : FOREST, color: voted ? pal.arrowFg : GOLD }}
               aria-hidden
             >
               <ArrowRight size={17} strokeWidth={2.25} className="gv-pick-arrow-icon" />
@@ -352,6 +392,7 @@ export function ResolutionPicker(props: ResolutionPickerProps) {
     live: states.filter((s) => s.kind === 'live').length,
     passed: states.filter((s) => s.kind === 'voted' && s.result === 'passed').length,
     failed: states.filter((s) => s.kind === 'voted' && s.result === 'failed').length,
+    vetoed: states.filter((s) => s.kind === 'voted' && s.result === 'vetoed').length,
   };
   const cols = Math.min(Math.max(docs.length, 1), 3);
 
@@ -405,6 +446,7 @@ export function ResolutionPicker(props: ResolutionPickerProps) {
               {counts.live > 0 && <Count n={counts.live} label={t('voting_pick_status_live')} tone="forest" />}
               {counts.passed > 0 && <Count n={counts.passed} label={t('voting_pick_status_passed')} tone="green" />}
               {counts.failed > 0 && <Count n={counts.failed} label={t('voting_pick_status_failed')} tone="red" />}
+              {counts.vetoed > 0 && <Count n={counts.vetoed} label={t('voting_pick_status_vetoed')} tone="plum" />}
               {onOpenRollCall && (
                 <button
                   type="button"
@@ -447,12 +489,13 @@ export function ResolutionPicker(props: ResolutionPickerProps) {
   );
 }
 
-function Count({ n, label, tone }: { n: number; label: string; tone: 'forest' | 'gold' | 'green' | 'red' }) {
+function Count({ n, label, tone }: { n: number; label: string; tone: 'forest' | 'gold' | 'green' | 'red' | 'plum' }) {
   const palette = {
     forest: { bg: FOREST, fg: GOLD },
     gold: { bg: 'rgba(182,135,31,0.15)', fg: '#6A4A0A' },
     green: { bg: 'rgba(47,107,69,0.13)', fg: '#2F6B45' },
     red: { bg: 'rgba(139,32,32,0.10)', fg: '#8B2020' },
+    plum: { bg: 'rgba(62,36,71,0.12)', fg: '#3E2447' },
   }[tone];
   return (
     <span className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-full text-[13.5px] font-medium" style={{ backgroundColor: palette.bg, color: palette.fg }}>

@@ -34,6 +34,7 @@ import { chairActiveElsewhere } from '@/lib/chairDeviceClaims';
 import { Committee } from '@/lib/types';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { useAuth } from '@/components/AuthProvider';
+import ProfileAvatarMenu from '@/components/ProfileAvatar';
 import { verifyConferenceAccess, type ConferenceAccess } from '@/lib/conferenceAccess';
 import { getSessionJoinRules, getSeatAvailability, peekSeatToken, seatKey, type SeatAvailability } from '@/lib/seatClaims';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
@@ -570,14 +571,7 @@ function JoinPageInner() {
             <span className="hidden sm:inline">{t('join_nav_create')}</span>
           </Link>
           {user ? (
-            <span
-              className="inline-flex h-10 min-w-0 max-w-[180px] items-center gap-2 rounded-xl px-3"
-              title={t('join_signed_in_as', { name: signedInName })}
-              style={{ backgroundColor: 'rgba(27,56,40,0.07)', boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.10)', fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: C.forest }}
-            >
-              <UserRound size={15} strokeWidth={2.4} className="flex-shrink-0" />
-              <span className="truncate">{signedInName}</span>
-            </span>
+            <ProfileAvatarMenu size={40} />
           ) : (
             <button
               type="button"

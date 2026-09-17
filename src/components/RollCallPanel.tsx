@@ -228,6 +228,7 @@ function RollCallPanelInner({
   showBulkActions = false,
   isReadOnly = false,
   isViewOnly = false,
+  onCommenterAttempt,
   isTdT = false,
   isRoomOrderTdT = false,
   hideIdentity = false,
@@ -270,6 +271,12 @@ function RollCallPanelInner({
   showBulkActions?: boolean;
   isReadOnly?: boolean;
   isViewOnly?: boolean;
+  /**
+   * A Commenter tried a Moderator-only action here (a row click, the status slider, the bulk
+   * roll-call buttons, Begin Session): the chair page raises the "only the Moderator" notice.
+   * Must be STABLE (it is in the memo comparator). UI only (rule 15): nothing is written.
+   */
+  onCommenterAttempt?: () => void;
   isTdT?: boolean;
   isRoomOrderTdT?: boolean;
   /**
@@ -443,6 +450,7 @@ function RollCallPanelInner({
   // Bulk set: localStatuses is flushed ATOMICALLY (one setState, one render) and
   // the parent owns the writes — one per delegate, not two.
   const setAllStatuses = (status: DelegateStatus) => {
+    if (isViewOnly) { onCommenterAttempt?.(); return; }
     const newStatuses: Record<string, DelegateStatus> = {};
     const at = Date.now();
     committee.delegates.forEach((d) => { newStatuses[d.id] = status; pendingStatusRef.current[d.id] = { value: status, at }; });
@@ -456,6 +464,7 @@ function RollCallPanelInner({
   const handleClear = () => setAllStatuses('absent');
 
   const handleBeginSession = () => {
+    if (isViewOnly) { onCommenterAttempt?.(); return; }
     // The chair page restores a caucus that a suspension paused (or opens the GSL); the DB
     // write decides from the stored row and clears any caucus data when there is none (C-1).
     onPhaseChange?.('speakers-list');
@@ -826,7 +835,12 @@ function RollCallPanelInner({
           const canRecognise = !!onAddToList && !isRollCallPhase && !showStatusSliders && !isReadOnly && !committee.endedAt;
 
           const handleRowClick = () => {
-            if (isViewOnly) return;
+            if (isViewOnly) {
+              // A row press that would act for the Moderator (add / remove / recognise, or a
+              // status slider, which is inert and lets the press through to the row).
+              if (!isReadOnly && !committee.endedAt && (onAddToList || isRollCallPhase || showStatusSliders)) onCommenterAttempt?.();
+              return;
+            }
             if (drag || justDraggedRef.current) return;
             if (!onAddToList) return;
             // The speaker holding the floor: a click takes them OFF it (the parent logs the
@@ -1150,6 +1164,7 @@ const RollCallPanel = React.memo(RollCallPanelInner, (prev, next) => {
     prev.canAddToList === next.canAddToList &&
     prev.isReadOnly === next.isReadOnly &&
     prev.isViewOnly === next.isViewOnly &&
+    prev.onCommenterAttempt === next.onCommenterAttempt &&
     prev.isTdT === next.isTdT &&
     prev.isRoomOrderTdT === next.isRoomOrderTdT &&
     prev.onListIds === next.onListIds &&

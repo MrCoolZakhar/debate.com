@@ -11,7 +11,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { LogoDisc } from '@/components/LogoDisc';
 import Loader from '@/components/Loader';
-import ProfileDropdown from '@/components/ProfileDropdown';
+import ProfileAvatarMenu from '@/components/ProfileAvatar';
 import type { EmailTheme } from '@/lib/emailHtml';
 import type { ConferenceTheme } from '@/lib/theme';
 import { financialsAreReadOnly } from '@/lib/organizerPermissions';
@@ -649,7 +649,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
 
-  const { user, session, profile, signOut, loading: authLoading } = useAuth();
+  const { user, session, signOut, loading: authLoading } = useAuth();
   /** The two stable primitives the inbox badge keys on. AuthProvider replaces
    *  the session OBJECT on every auth event (token refresh, tab focus), so
    *  depending on it would refetch the badge on each of those; the token is a
@@ -862,12 +862,6 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id, slug, session?.access_token]);
 
-  const avatarInitial = profile?.display_name
-    ? profile.display_name[0].toUpperCase()
-    : user?.email
-    ? user.email[0].toUpperCase()
-    : '?';
-
   // Memoised so consumers (useManage()) only see a new context value when
   // the conference data or the (now-stable, useCallback'd) refresh functions
   // actually change, not on every layout render. Declared before the early
@@ -1077,27 +1071,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
           </Link>
 
           {/* Shared account menu (same hover-open dropdown as SiteNav) */}
-          <ProfileDropdown
-            panelStyle={{ zIndex: 60 }}
-            trigger={(open, toggle) => (
-              <button
-                onClick={toggle}
-                aria-label="Account menu"
-                className="flex items-center justify-center w-7 h-7 rounded-full text-xs font-black focus:outline-none transition-opacity hover:opacity-80 flex-shrink-0"
-                style={{
-                  backgroundColor: '#EED98A', color: '#1B3828',
-                  fontFamily: "'Outfit', sans-serif",
-                  border: 'none', cursor: 'pointer', padding: 0,
-                }}
-              >
-                {profile?.avatar_url ? (
-                  <img src={profile.avatar_url} alt="Avatar" className="w-7 h-7 rounded-full object-cover" />
-                ) : (
-                  avatarInitial
-                )}
-              </button>
-            )}
-          />
+          <ProfileAvatarMenu size={38} tone="dark" panelStyle={{ zIndex: 60 }} />
 
           {/* Mobile hamburger */}
           <button

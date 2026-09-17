@@ -14,15 +14,17 @@
  *
  * Inline-start stays simple: Session (the way back) and the draft resolution on the floor
  * (the list crumb goes back to the list). Between them and the cluster: where the vote stands
- * (cast / total, never the direction), the rules popover, and End debate as quiet red ink
- * behind the page's confirmation. The tally toggle is no longer here: it sits under the
+ * (cast / total, never the direction) and End debate, a solid red button with its label
+ * (owner, 17 Sep 2026: "Make End debate more striking"), still behind the page's
+ * confirmation. There is no voting-rules popover any more (owner: "remove 'voting rules'
+ * altogether, it's in Settings anyway"); the rules live in Settings → Voting and in the roll
+ * call's bookmarks. The tally toggle is no longer here: it sits under the
  * ballot (owner: "the hide tally needs to be moved to the bottom, below voting").
  *
- * Declared at module scope and stable across renders: the rules popover it hosts keeps its
- * open state while votes are being cast.
+ * Declared at module scope and stable across renders.
  */
 
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useState } from 'react';
 import { ArrowLeft, ChevronRight, Flag, Maximize2, MessageCircle, Settings, Trophy } from 'lucide-react';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { TopBarIconButton } from '@/components/ChairTopBar';
@@ -47,7 +49,6 @@ export interface VotingHeaderProps {
   progress?: { stage: string; cast: number; total: number } | null;
   /** Commenter (or a same-name second device): UI gate only. No End debate. */
   isViewOnly: boolean;
-  rules?: ReactNode;
   onEndDebate: () => void;
   /** The SESSION code, never the chair code. */
   sessionCode: string;
@@ -59,7 +60,7 @@ export interface VotingHeaderProps {
 
 export function VotingHeader({
   onBack, backBusy = false, doc, docsLabel, onDocs, progress,
-  isViewOnly, rules, onEndDebate, sessionCode, chat, onOpenScoreboard, onOpenSettings,
+  isViewOnly, onEndDebate, sessionCode, chat, onOpenScoreboard, onOpenSettings,
 }: VotingHeaderProps) {
   const t = useT();
   const { language } = useLanguage();
@@ -143,19 +144,19 @@ export function VotingHeader({
         </div>
       )}
 
-      {rules}
-
       {!isViewOnly && (
         <button
           type="button"
           onClick={onEndDebate}
           aria-label={t('voting_hdr_end')}
           title={t('voting_hdr_end')}
-          className={`${QUIET_BTN} xl:ps-2.5 xl:pe-3 hover:bg-[rgba(139,32,32,0.08)]`}
-          style={{ color: '#8B2020' }}
+          className="gv-end-debate inline-flex items-center justify-center gap-2 h-8 min-w-8 px-2.5 sm:ps-3 sm:pe-3.5 rounded-lg text-[13.5px] font-bold shrink-0 ms-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-1 transition-[background-color,transform,box-shadow] duration-150 active:scale-[0.96] motion-reduce:transition-none"
+          style={{ backgroundColor: '#A32424', color: '#FFFFFF', boxShadow: '0 0 0 1px rgba(90,20,20,0.35), 0 1px 2px rgba(90,20,20,0.3), 0 4px 12px rgba(139,32,32,0.28)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#8B1A1A'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#A32424'; }}
         >
-          <Flag size={16} strokeWidth={2.25} aria-hidden />
-          <span className="hidden xl:inline">{t('voting_hdr_end')}</span>
+          <Flag size={15} strokeWidth={2.5} aria-hidden fill="currentColor" />
+          <span className="hidden sm:inline whitespace-nowrap">{t('voting_hdr_end')}</span>
         </button>
       )}
 

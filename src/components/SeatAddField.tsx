@@ -42,12 +42,15 @@ export default function SeatAddField({
   delegates,
   onAdd,
   large = false,
+  locked = null,
 }: {
   /** The roster, to leave out seats that already exist. */
   delegates: { country: string }[];
   onAdd: (country: string, options: { observer: boolean }) => void;
   /** The projector-sized pre-session roll call. */
   large?: boolean;
+  /** A Commenter: drawn disabled, a press raises the "only the Moderator" notice. Nothing is typed or written. */
+  locked?: { reason: string; onAttempt: () => void } | null;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -139,6 +142,27 @@ export default function SeatAddField({
   };
 
   const h = large ? 38 : 28;
+
+  if (locked) {
+    return (
+      <div className="relative w-full" style={{ maxWidth: large ? 300 : undefined }}>
+        <button
+          type="button"
+          aria-disabled
+          aria-label={t('rollcall_add_seat_field')}
+          title={locked.reason}
+          onClick={locked.onAttempt}
+          className="w-full flex items-center gap-1.5 rounded-full cursor-not-allowed opacity-60 shadow-[inset_0_0_0_1px_rgba(237,231,216,0.18)] focus:outline-none focus-visible:shadow-[inset_0_0_0_1.5px_rgba(238,217,138,0.65)]"
+          style={{ height: h, paddingInline: large ? 12 : 8, backgroundColor: 'rgba(237,231,216,0.08)' }}
+        >
+          <Plus size={large ? 16 : 13} strokeWidth={3} aria-hidden className="shrink-0" style={{ color: 'rgba(237,231,216,0.7)' }} />
+          <span className="flex-1 min-w-0 truncate text-start" style={{ fontFamily: OUTFIT, fontSize: large ? 15 : 12.5, fontWeight: 600, color: 'rgba(237,231,216,0.55)' }}>
+            {t('rollcall_add_seat')}
+          </span>
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="relative w-full" style={{ maxWidth: large ? 300 : undefined }}>

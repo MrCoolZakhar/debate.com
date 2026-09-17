@@ -20,7 +20,9 @@
 //     the ballot opened (`vote_state.order[].status`; older entries fall back to the live status).
 //     The first cast stores the voter's holder hash: a later cast for that delegation on that
 //     ballot from a different holder is `not_holder` with detail `voted_elsewhere`
-//     (migration `device_voting_review_fixes`).
+//     (migration `device_voting_review_fixes`). A rights choice ('for-rights' / 'against-rights')
+//     is `no_rights` while `settings.allowRightsVotes` is false (migration
+//     `device_vote_respects_allow_rights`, 17 Sep 2026).
 //   • `my_device_ballot(p_code, p_country, p_token)`: the open device ballot this delegation
 //     is in (doc code, title), and ONLY its own choice, and only for the seat's holder. A
 //     revealed ballot is never open, even if the chair used Back to the all-voted screen.
@@ -98,7 +100,7 @@ export async function getMyDeviceBallot(code: string, country: string, accessTok
   }
 }
 
-export type CastResult = 'ok' | 'closed' | 'revealed' | 'not_holder' | 'voted_elsewhere' | 'not_in_ballot' | 'no_abstain' | 'no_ballot' | 'error';
+export type CastResult = 'ok' | 'closed' | 'revealed' | 'not_holder' | 'voted_elsewhere' | 'not_in_ballot' | 'no_abstain' | 'no_rights' | 'no_ballot' | 'error';
 
 export async function castDeviceVote(code: string, documentId: string, country: string, choice: VoteChoice, accessToken?: string | null): Promise<CastResult> {
   try {
@@ -111,7 +113,7 @@ export async function castDeviceVote(code: string, documentId: string, country: 
     if (d.ok === true) return 'ok';
     const r = String(d.reason ?? 'error');
     if (r === 'not_holder' && d.detail === 'voted_elsewhere') return 'voted_elsewhere';
-    return (['closed', 'revealed', 'not_holder', 'not_in_ballot', 'no_abstain', 'no_ballot'] as string[]).includes(r) ? r as CastResult : 'error';
+    return (['closed', 'revealed', 'not_holder', 'not_in_ballot', 'no_abstain', 'no_rights', 'no_ballot'] as string[]).includes(r) ? r as CastResult : 'error';
   } catch {
     return 'error';
   }

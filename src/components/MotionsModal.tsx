@@ -555,48 +555,46 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                   <p className="text-[#1C1410] font-semibold text-xs">
                     {t('motions_all_speak', { n: presentCountries.length })}
                   </p>
-                  <div>
-                    <label className="block text-sm font-semibold text-[#6A5A4A] mb-1">{t('motions_speaking_time_label')}</label>
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-1.5">
-                        <input type="number" min={10} value={speakingTimeStr}
-                          onChange={(e) => setSpeakingTimeStr(e.target.value)}
-                          className={`w-14 ${numClass}`} />
-                        <span className="text-[#6A5A4A] text-sm">{t('motions_sec')}</span>
+                  {/* Speaking time on the left, the order as a vertical stack on the right (owner,
+                      17 Sep 2026: the three order buttons in one row were clipped). */}
+                  <div className="flex gap-3 items-start">
+                    <div className="flex-1 min-w-0">
+                      <label className="block text-sm font-semibold text-[#6A5A4A] mb-1">{t('motions_speaking_time_label')}</label>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-1.5">
+                          <input type="number" min={10} value={speakingTimeStr}
+                            onChange={(e) => setSpeakingTimeStr(e.target.value)}
+                            className={`w-14 ${numClass}`} />
+                          <span className="text-[#6A5A4A] text-sm">{t('motions_sec')}</span>
+                        </div>
+                        <span className="text-xs text-[#9A8A78]">
+                          {t('motions_total_approx', { n: speakingTime > 0 ? Math.ceil((presentCountries.length * speakingTime) / 60) : 0 })}
+                        </span>
                       </div>
-                      <span className="text-xs text-[#9A8A78]">
-                        {t('motions_total_approx', { n: speakingTime > 0 ? Math.ceil((presentCountries.length * speakingTime) / 60) : 0 })}
-                      </span>
-                    </div>
-                    <div className="flex gap-2 mt-1.5">
-                      {[30, 45, 60, 90, 120].map((t) => (
-                        <button key={t} onClick={() => setSpeakingTimeStr(String(t))}
-                          className={`gv-lift text-xs px-2.5 py-1 rounded-lg transition-colors focus:outline-none ${speakingTime === t ? 'bg-[#1B3828] text-white font-bold' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
-                          {t}s
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-[#6A5A4A] mb-1">{t('motions_speaking_order')}</label>
-                    <div className="flex gap-3">
-                      <button onClick={() => setTourOrder('asc')}
-                        className={`gv-lift flex-1 py-2 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'asc' ? 'bg-[#1B3828] text-white' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
-                        {t('motions_az')}
-                      </button>
-                      <button onClick={() => setTourOrder('desc')}
-                        className={`gv-lift flex-1 py-2 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'desc' ? 'bg-[#1B3828] text-white' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
-                        {t('motions_za')}
-                      </button>
-                      <button onClick={() => setTourOrder('custom')}
-                        className={`gv-lift flex-1 py-2 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'custom' ? 'bg-[#1B3828] text-white' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
-                        {t('motions_room_order')}
-                      </button>
-                    </div>
-                    <div style={{ height: '24px', display: 'flex', alignItems: 'center' }}>
+                      <div className="flex gap-2 mt-1.5 flex-wrap">
+                        {[30, 45, 60, 90, 120].map((t) => (
+                          <button key={t} onClick={() => setSpeakingTimeStr(String(t))}
+                            className={`gv-lift text-xs px-2.5 py-1 rounded-lg transition-colors focus:outline-none ${speakingTime === t ? 'bg-[#1B3828] text-white font-bold' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
+                            {t}s
+                          </button>
+                        ))}
+                      </div>
+                      {/* The Room Order hint sits under the presets: this column is shorter than
+                          the order stack beside it, so the hint never grows the form. */}
                       {tourOrder === 'custom' && (
-                        <p className="text-xs text-[#9A8A78] leading-relaxed">{t('motions_room_order_hint')}</p>
+                        <p className="mt-1.5 text-xs text-[#9A8A78] leading-relaxed">{t('motions_room_order_hint')}</p>
                       )}
+                    </div>
+                    <div className="shrink-0 w-36" role="radiogroup" aria-label={t('motions_speaking_order')}>
+                      <label className="block text-sm font-semibold text-[#6A5A4A] mb-1">{t('motions_speaking_order')}</label>
+                      <div className="flex flex-col gap-1.5">
+                        {([['asc', t('motions_az')], ['desc', t('motions_za')], ['custom', t('motions_room_order')]] as const).map(([key, label]) => (
+                          <button key={key} onClick={() => setTourOrder(key)} role="radio" aria-checked={tourOrder === key}
+                            className={`gv-lift w-full px-2 py-1.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === key ? 'bg-[#1B3828] text-white' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -733,7 +731,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
 }
 
 // ── Voting View ───────────────────────────────────────────────────────────────
-function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBack, onEdit, pendingIds, isViewOnly = false, rank }: {
+function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBack, onEdit, pendingIds, isViewOnly = false, onCommenterAttempt, rank }: {
   committee: Committee;
   typeMeta: TypeMeta;
   onAccepted: (motion: PendingMotion) => void;
@@ -743,6 +741,9 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   onEdit: (motionId: string) => void;
   pendingIds: ReadonlySet<string>;
   isViewOnly?: boolean;
+  /** A Commenter: Accept / Reject / Edit and Raise are drawn disabled and a press raises the
+   *  "only the Moderator" notice (the chair page's). Nothing is written (rule 15). */
+  onCommenterAttempt?: () => void;
   /** B7 — recompute disruptiveness from the CURRENT motionOrder instead of trusting the
    *  value baked into the row at insert time. See rankMotion in MotionsModal. */
   rank: (m: PendingMotion) => number;
@@ -825,6 +826,14 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
     return (
       <div className="px-7 pb-7 text-center py-8">
         <p className="text-[#6A5A4A]">{t('motions_no_vote')}</p>
+        {isViewOnly && onCommenterAttempt && (
+          // A Commenter with an empty floor still sees where raising lives; a press explains the gavel.
+          <button type="button" aria-disabled onClick={onCommenterAttempt} title={t('commenter_only_hint')}
+            className="mt-4 mx-auto block w-full max-w-sm bg-[#2A5A3C] text-white py-3 rounded-2xl font-black text-sm opacity-40 cursor-not-allowed focus:outline-none"
+            style={{ letterSpacing: '0.05em' }}>
+            {t('motions_raise_motion_btn')}
+          </button>
+        )}
         <button onClick={onAllDone} className="mt-4 text-sm text-[#B6871F] hover:text-[#EED98A]">{t('motions_back')}</button>
       </div>
     );
@@ -1010,6 +1019,19 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
             </button>
           </div>
         )}
+        {isPrimary && isViewOnly && onCommenterAttempt && (
+          // A Commenter sees the dais's decision buttons, disabled; a press explains the gavel.
+          <div className="flex gap-2 mt-auto">
+            <button type="button" aria-disabled onClick={onCommenterAttempt} title={t('commenter_only_hint')}
+              className="flex-1 bg-[#2A5A3C] text-white py-2.5 rounded-xl font-bold text-sm opacity-40 cursor-not-allowed focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
+              {isCustom ? clearFromFloorLabel(language) : t('motions_accept_btn')}
+            </button>
+            <button type="button" aria-disabled onClick={onCommenterAttempt} title={t('commenter_only_hint')}
+              className="flex-1 bg-[#DDD4C0] text-[#6A5A4A] border border-[#DDD4C0] py-2.5 rounded-xl font-bold text-sm opacity-40 cursor-not-allowed focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
+              {t('motions_reject_btn')}
+            </button>
+          </div>
+        )}
       </div>
     );
   };
@@ -1103,6 +1125,15 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
               )}
             </div>
           )}
+          {isViewOnly && onCommenterAttempt && (
+            <div className="shrink-0 pe-4">
+              <button type="button" aria-disabled onClick={onCommenterAttempt} title={t('commenter_only_hint')}
+                className="w-full bg-[#2A5A3C] text-white py-3 rounded-2xl font-black text-sm opacity-40 cursor-not-allowed focus:outline-none"
+                style={{ letterSpacing: '0.05em' }}>
+                {t('motions_raise_motion_btn')}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -1110,12 +1141,14 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
 }
 
 // ── Main Modal ────────────────────────────────────────────────────────────────
-export default function MotionsModal({ committee, onClose, onCommitteeUpdate, belowQuorum = false, isViewOnly = false, floorClock }: {
+export default function MotionsModal({ committee, onClose, onCommitteeUpdate, belowQuorum = false, isViewOnly = false, onCommenterAttempt, floorClock }: {
   committee: Committee;
   onClose: () => void;
   onCommitteeUpdate?: (updater: (c: Committee) => Committee) => void;
   belowQuorum?: boolean;
   isViewOnly?: boolean;
+  /** A Commenter tried a Moderator-only action (raise, accept, reject): the chair page's notice. */
+  onCommenterAttempt?: () => void;
   /** The chair page's live speaker clock (anchor + extra time), so a speech interrupted by
    *  a caucus, Suspend or End is logged from the real anchor (G-1). Without it the helper
    *  falls back to the committee row's own anchor and no extra time. */
@@ -1564,6 +1597,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               onEdit={(motionId) => { setEditingMotionId(motionId); setView('raise'); }}
               pendingIds={pendingIds}
               isViewOnly={isViewOnly}
+              onCommenterAttempt={onCommenterAttempt}
               rank={rankMotion}
             />
           )}

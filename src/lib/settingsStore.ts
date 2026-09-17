@@ -80,6 +80,11 @@ export interface CommitteeSettings {
   // delegation votes on its own device and the chair sees only counts until the reveal
   // (src/lib/deviceVoting.ts). Frozen into each ballot as vote_state.method when it opens.
   votingMethod: 'rollcall' | 'device';
+  // Ballot choices on /voting/[code] and on device ballots (17 Sep 2026). Default true.
+  // false hides "In favour / Against with rights" (so no rights speakers follow the vote).
+  allowRightsVotes: boolean;
+  // false hides Pass. A delegation that passes is asked again once, at the end of the ballot.
+  allowPass: boolean;
   // Tab 2 — Motions
   motionModeratedCaucus: boolean;
   motionUnmoderatedCaucus: boolean;
@@ -141,6 +146,8 @@ export const DEFAULT_SETTINGS: CommitteeSettings = {
   vetoCountries: ['China', 'France', 'Russia', 'United Kingdom', 'United States'],
   quorumThreshold: 'none',
   votingMethod: 'rollcall',
+  allowRightsVotes: true,
+  allowPass: true,
   motionModeratedCaucus: true,
   motionUnmoderatedCaucus: true,
   motionCoW: true,

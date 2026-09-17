@@ -5,16 +5,21 @@
  * speakers screen of /voting/[code].
  *
  * Owner, 17 Sep 2026: "Enable the rights speakers to be moved around in the queue." The
- * delegations still to speak (after the one speaking now) can be reordered by the Moderator:
+ * delegations still to speak can be reordered by the Moderator, and so can the one on the
+ * floor while they have not started ("change the order even of the current speaker if they
+ * are not speaking yet", `currentMovable`):
  *   - pointer: drag a row (mouse / pen from anywhere on it, touch from its grip). The row
  *     follows the pointer by a direct style.transform write, a gold line marks the slot, and
  *     one `onMove` is issued on release (none when it lands where it started);
  *   - keyboard: ArrowUp / ArrowDown on the focused grip moves it one place.
- * The speaker on the floor and those who already spoke never move, and nothing can be dropped
- * above the floor.
+ * A speaker who has started and those who already spoke never move, and nothing can be dropped
+ * above them.
+ *
+ * Every row shows that speaker's time. With `onTime` the chair can give one speaker a custom
+ * time (RightsTimeField: click the time, type m:ss or seconds, Enter); a custom time is gold.
  *
  * It writes nothing itself. `onMove(delegateId, slot)` hands the page the new position among
- * the UPCOMING speakers; the page persists it through `updateVote` (one vote_state write, the
+ * the MOVABLE speakers; the page persists it through `updateVote` (one vote_state write, the
  * seq grows), so every chair device follows the new order.
  *
  * Distances are divided by the list's scale: the ballot screens sit inside FitToScreen, which
@@ -37,8 +42,87 @@ export interface RightsQueueProps {
   /** Index of the delegation speaking now. */
   currentIndex: number;
   hideTally: boolean;
-  /** Moderator only; absent = read only. `slot` is the 0-based place among the upcoming speakers. */
+  /** The speaker on the floor has not started yet, so they can be moved too. */
+  currentMovable?: boolean;
+  /** Moderator only; absent = read only. `slot` is the 0-based place among the movable speakers. */
   onMove?: (delegateId: string, slot: number) => void;
+  /** Speaking time of a speaker, seconds. */
+  timeOf?: (delegateId: string) => number;
+  isCustomTime?: (delegateId: string) => boolean;
+  /** Moderator only: a custom time for one speaker (null = the default). */
+  onTime?: (delegateId: string, seconds: number | null) => void;
+}
+
+const clampSecs = (n: number) => Math.max(5, Math.min(900, Math.round(n)));
+const fmt = (secs: number) => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+/** "1:30", "90", "1.5m" → seconds; null when unreadable. */
+function parseTime(raw: string): number | null {
+  const v = raw.trim().toLowerCase();
+  if (!v) return null;
+  const mss = /^(\d{1,2}):(\d{1,2})$/.exec(v);
+  if (mss) return clampSecs(Number(mss[1]) * 60 + Number(mss[2]));
+  const mins = /^(\d+(?:[.,]\d+)?)\s*m(?:in)?$/.exec(v);
+  if (mins) return clampSecs(Number(mins[1].replace(',', '.')) * 60);
+  const secs = /^(\d+)\s*s?$/.exec(v);
+  if (secs) return clampSecs(Number(secs[1]));
+  return null;
+}
+
+/**
+ * A speaking time the chair can retype: shows m:ss, becomes a small field on click (or Enter),
+ * commits on Enter or blur, Escape cancels. 5 s to 15 min. Writes nothing itself.
+ */
+export function RightsTimeField({ seconds, custom = false, disabled = false, label, onCommit, dark = false, size = 'md' }: {
+  seconds: number;
+  custom?: boolean;
+  disabled?: boolean;
+  label: string;
+  onCommit: (seconds: number | null) => void;
+  /** On the forest row of the speaker on the floor. */
+  dark?: boolean;
+  size?: 'sm' | 'md';
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const h = size === 'sm' ? 'h-7 text-[12.5px] px-2 min-w-[3.25rem]' : 'h-9 text-[13.5px] px-3 min-w-[4rem]';
+  const fg = custom ? (dark ? '#EED98A' : '#6A4A0A') : dark ? 'rgba(255,255,255,0.85)' : '#4A3F33';
+  const bg = custom ? (dark ? 'rgba(238,217,138,0.16)' : 'rgba(182,135,31,0.16)') : dark ? 'rgba(255,255,255,0.10)' : 'rgba(27,56,40,0.07)';
+  if (draft !== null) {
+    const commit = () => {
+      const secs = parseTime(draft);
+      setDraft(null);
+      if (secs != null && secs !== seconds) onCommit(secs);
+    };
+    return (
+      <input
+        autoFocus
+        value={draft}
+        aria-label={label}
+        inputMode="numeric"
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { e.preventDefault(); commit(); }
+          else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setDraft(null); }
+        }}
+        onFocus={(e) => e.currentTarget.select()}
+        className={`${h} w-[4.5rem] rounded-full text-center font-semibold tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]`}
+        style={{ backgroundColor: '#FFFFFF', color: '#1C1410', boxShadow: '0 0 0 1.5px #B6871F' }}
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      aria-label={`${label}: ${fmt(seconds)}`}
+      title={label}
+      onClick={(e) => { e.stopPropagation(); setDraft(fmt(seconds)); }}
+      className={`${h} shrink-0 rounded-full font-semibold tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,transform] duration-150 active:scale-[0.96] disabled:opacity-45 disabled:cursor-not-allowed`}
+      style={{ backgroundColor: bg, color: fg }}
+    >
+      {fmt(seconds)}
+    </button>
+  );
 }
 
 interface Armed {
@@ -54,7 +138,7 @@ interface Armed {
   lifted: boolean;
 }
 
-export function RightsQueue({ speakers, currentIndex, hideTally, onMove }: RightsQueueProps) {
+export function RightsQueue({ speakers, currentIndex, hideTally, currentMovable = false, onMove, timeOf, isCustomTime, onTime }: RightsQueueProps) {
   const t = useT();
   const { language } = useLanguage();
   const listRef = useRef<HTMLDivElement>(null);
@@ -63,7 +147,9 @@ export function RightsQueue({ speakers, currentIndex, hideTally, onMove }: Right
   const [drag, setDrag] = useState<{ id: string; slot: number } | null>(null);
   const justDraggedRef = useRef(0);
 
-  const upcoming = speakers.slice(currentIndex + 1);
+  // The speakers that can move: those still to come, and the one on the floor until they start.
+  const firstMovable = currentIndex + (currentMovable ? 0 : 1);
+  const upcoming = speakers.slice(firstMovable);
   const canMove = !!onMove && upcoming.length > 1;
 
   // Window listeners while a pointer is armed: a drag never depends on pointer capture or
@@ -181,7 +267,7 @@ export function RightsQueue({ speakers, currentIndex, hideTally, onMove }: Right
       {speakers.map((v, absIdx) => {
         const done = absIdx < currentIndex;
         const isCurrent = absIdx === currentIndex;
-        const movable = canMove && absIdx > currentIndex;
+        const movable = canMove && absIdx >= firstMovable;
         const dragging = drag?.id === v.delegateId;
         const name = getCountryDisplayName(v.country, language);
         return (
@@ -189,7 +275,7 @@ export function RightsQueue({ speakers, currentIndex, hideTally, onMove }: Right
             {lineBefore === v.delegateId && dropLine}
             <div
               ref={(el) => { if (el) rowRefs.current.set(v.delegateId, el); else rowRefs.current.delete(v.delegateId); }}
-              onPointerDown={movable ? (e) => { if (!(e.target as HTMLElement).closest('button')) arm(e, v.delegateId, false); } : undefined}
+              onPointerDown={movable ? (e) => { if (!(e.target as HTMLElement).closest('button, input')) arm(e, v.delegateId, false); } : undefined}
               className={`relative flex items-center gap-3 ps-3 pe-1.5 py-2 rounded-2xl ${movable ? 'cursor-grab' : ''} ${dragging ? '' : 'transition-[background-color,opacity] duration-200'}`}
               style={{
                 backgroundColor: isCurrent ? '#1B3828' : dragging ? '#FFFFFF' : 'transparent',
@@ -202,12 +288,30 @@ export function RightsQueue({ speakers, currentIndex, hideTally, onMove }: Right
             >
               <span className="text-[12px] w-5 font-medium text-end tabular-nums" style={{ color: isCurrent ? 'rgba(238,217,138,0.8)' : '#9A8A78' }}>{absIdx + 1}</span>
               <SeatCircleFlag country={v.country} size={30} decorative ring={!isCurrent} />
-              <span className="flex-1 min-w-0 truncate text-[15px] font-medium" style={{ color: isCurrent ? '#FFFFFF' : '#1C1410' }}>{name}</span>
-              <span className="text-[12.5px] font-medium shrink-0" style={{
-                color: isCurrent ? '#EED98A' : hideTally ? '#6A5A4A' : v.choice === 'for-rights' ? '#2F6B45' : '#8B2020',
-              }}>
-                {isCurrent ? t('voting_speaking') : hideTally ? t('voting_with_rights_label') : v.choice === 'for-rights' ? t('voting_for_rights_list') : t('voting_against_rights_list')}
+              {/* Name over its status, so a long name never truncates to make room for the label. */}
+              <span className="flex-1 min-w-0 flex flex-col">
+                <span className="truncate text-[15px] font-medium leading-tight" style={{ color: isCurrent ? '#FFFFFF' : '#1C1410' }}>{name}</span>
+                <span className="truncate text-[12px] font-medium leading-tight mt-0.5" style={{
+                  color: isCurrent ? '#EED98A' : hideTally ? '#6A5A4A' : v.choice === 'for-rights' ? '#2F6B45' : '#8B2020',
+                }}>
+                  {isCurrent ? (currentMovable ? t('voting_rights_up_now') : t('voting_speaking')) : hideTally ? t('voting_with_rights_label') : v.choice === 'for-rights' ? t('voting_for_rights_list') : t('voting_against_rights_list')}
+                </span>
               </span>
+              {timeOf && !done && (
+                onTime ? (
+                  <RightsTimeField
+                    size="sm"
+                    dark={isCurrent && !dragging}
+                    seconds={timeOf(v.delegateId)}
+                    custom={isCustomTime?.(v.delegateId) ?? false}
+                    disabled={isCurrent && !currentMovable}
+                    label={t('voting_rights_time_for', { name })}
+                    onCommit={(secs) => onTime(v.delegateId, secs)}
+                  />
+                ) : (
+                  <span className="shrink-0 text-[12.5px] font-semibold tabular-nums" style={{ color: isCurrent ? 'rgba(255,255,255,0.8)' : '#6A5A4A' }}>{fmt(timeOf(v.delegateId))}</span>
+                )
+              )}
               {canMove && (
                 movable ? (
                   <button

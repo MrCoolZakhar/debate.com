@@ -16,13 +16,16 @@
  *   never clipped. The sponsor flags fold away before the stage label does.
  * - Moved by dragging the card anywhere that is not a key; keyboard: Arrow keys on the focused
  *   header move it, on the focused corner grip resize it (Shift = 64 px).
+ * - The header carries two quiet icon keys at its inline end: Timings (back to the order of
+ *   proceedings, 17 Sep 2026, owner: "it could be in the timer itself, no need to say the
+ *   words"; tooltip + accessible name only) and Hide.
  * - The box is remembered per device in `localStorage gavelling-intro-timer-device`.
  * - Anchor-based (V-5, RULE 6b): the clock is {base, startedAt} on the database clock and the
  *   remaining time is DERIVED. The 500 ms interval only refreshes `now` inside this component;
  *   it never writes anything, and moving or resizing writes nothing but localStorage.
  */
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, ChevronsRight, Minimize2, Pause, Play, RotateCcw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronsRight, Minimize2, Pause, Play, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { getCountryDisplayName } from '@/lib/countries';
@@ -125,7 +128,7 @@ function Key({ size, width, primary = false, label, onClick, children, text, tex
 }
 
 export default function StageTimerDevice({
-  label, totalSeconds, sponsors, sponsorsWord, clock, onClockChange, onComplete, onBack, onHide,
+  label, totalSeconds, sponsors, sponsorsWord, clock, onClockChange, onComplete, onBack, onHide, onTimings,
 }: {
   label: string; totalSeconds: number;
   /** The paper's sponsors (country names), drawn as round flags in the header. */
@@ -135,6 +138,8 @@ export default function StageTimerDevice({
   clock: { base: number; startedAt: string | null };
   onClockChange: (next: { base: number; startedAt: string | null }) => void;
   onComplete: () => void; onBack: () => void; onHide: () => void;
+  /** Back to the order of proceedings (the timings screen). Icon only. */
+  onTimings?: () => void;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -315,7 +320,7 @@ export default function StageTimerDevice({
   const hideW = Math.max(22, headH + 4);
   const flagSize = Math.round(clampN(headH * 0.92, 16, 28));
   const flagStep = Math.round(flagSize * 0.74);
-  const flagRoom = innerW - hideW - 96 - 8;
+  const flagRoom = innerW - hideW * (onTimings ? 2 : 1) - 96 - 8;
   let flagSlots = headH >= 16 && flagRoom >= flagSize ? Math.floor((flagRoom - flagSize) / flagStep) + 1 : 0;
   flagSlots = Math.min(flagSlots, 5);
   let shownFlags = Math.min(sponsors.length, flagSlots);
@@ -462,6 +467,14 @@ export default function StageTimerDevice({
               </span>
             )}
           </span>
+        )}
+        {onTimings && (
+          <button type="button" data-device-key onClick={onTimings}
+            aria-label={t('documents_switch_timings_title')} title={t('documents_switch_timings_title')}
+            className="shrink-0 rounded-md flex items-center justify-center text-[#8A7B6A] hover:text-[#1C1410] hover:bg-[rgba(28,20,16,0.06)] transition-[background-color,color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+            style={{ width: hideW, height: hideW, marginBlock: -4, marginInlineEnd: -4 }}>
+            <SlidersHorizontal size={clampN(headH * 0.6, 12, 16)} strokeWidth={2.2} aria-hidden />
+          </button>
         )}
         <button type="button" data-device-key onClick={onHide}
           aria-label={t('documents_timer_hide')} title={t('documents_timer_hide')}

@@ -67,10 +67,17 @@ export const POPOVER_TONES = {
   reply: { surface: '#FCE3C8', headerBg: '#AD4F18', headerFg: '#FFF6EC', ink: '#5A2A08', accent: 'rgba(173,79,24,0.45)', btn: '#AD4F18', btnHover: '#964313', btnFg: '#FFF6EC', chip: '#F7CFA2', chipOn: '#AD4F18' },
 } as const;
 
+/**
+ * A Commenter's view of a Moderator-only control (the RTR button, the clock): drawn disabled
+ * with `reason` as its tooltip, and a press calls `onAttempt` (the "only the Moderator"
+ * notice, src/lib/commenterNotice.ts) instead of the handler. UI only (rule 15).
+ */
+export interface ControlLock { reason: string; onAttempt: () => void }
+
 const ACTIVE_RING = (fg: string) => `inset 0 0 0 2px ${fg}, 0 1px 2px rgba(27,56,40,0.10), 0 4px 10px rgba(27,56,40,0.16)`;
 
 function ControlButton({
-  tone, label, title, blockedReason, onClick, children, variant = 'normal', active = false, tutorial, className = '', stacked, anchor,
+  tone, label, title, blockedReason, onClick, onBlockedClick, children, variant = 'normal', active = false, tutorial, className = '', stacked, anchor,
 }: {
   tone: Tone;
   label: string;
@@ -79,6 +86,8 @@ function ControlButton({
   /** Non-null = the control cannot act; this is the tooltip that says why. */
   blockedReason?: string | null;
   onClick: () => void;
+  /** Called instead when the control is blocked (a Commenter's attempt raises a notice). */
+  onBlockedClick?: () => void;
   children: ReactNode;
   /** grow = the primary (Start / Pause), next = shares the rest of the row, icon = square. */
   variant?: 'normal' | 'grow' | 'next' | 'icon';
@@ -108,7 +117,7 @@ function ControlButton({
       aria-label={iconOnly ? label : undefined}
       aria-pressed={active || undefined}
       title={blocked ? blockedReason! : (title ?? (iconOnly ? label : undefined))}
-      onClick={() => { if (!blocked) onClick(); }}
+      onClick={() => { if (!blocked) onClick(); else onBlockedClick?.(); }}
       className={`inline-flex items-center justify-center gap-2 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2 focus-visible:ring-offset-[#EDE7D8] ${
         blocked ? 'cursor-not-allowed opacity-45' : 'gv-lift cursor-pointer bg-[var(--ctl-bg)] hover:bg-[var(--ctl-hover)]'
       } ${sizing} ${className}`}
@@ -133,13 +142,15 @@ function ControlButton({
 }
 
 /** Right of Reply: the icon with a short "RTR" caption beneath it. */
-export function RtrButton({ onClick, active = false, tutorial }: { onClick: () => void; active?: boolean; tutorial?: string }) {
+export function RtrButton({ onClick, active = false, tutorial, locked }: { onClick: () => void; active?: boolean; tutorial?: string; locked?: ControlLock | null }) {
   const t = useT();
   return (
     <ControlButton
       tone={TONES.reply}
       label={t('gsl_right_to_reply')}
       title={t('speaker_ctl_rtr_title')}
+      blockedReason={locked?.reason ?? null}
+      onBlockedClick={locked?.onAttempt}
       onClick={onClick}
       active={active}
       tutorial={tutorial}
@@ -158,7 +169,7 @@ export function RtrButton({ onClick, active = false, tutorial }: { onClick: () =
 export function FloorProgress({ percent, barClassName, rtr }: {
   percent: number;
   barClassName: string;
-  rtr?: { onClick: () => void; active: boolean; tutorial?: string } | null;
+  rtr?: { onClick: () => void; active: boolean; tutorial?: string; locked?: ControlLock | null } | null;
 }) {
   return (
     // The button row below is max-w-3xl with 1rem gutters, and this bar already sits inside
@@ -168,7 +179,7 @@ export function FloorProgress({ percent, barClassName, rtr }: {
       <div className="flex-1 min-w-0 h-2 bg-[#DDD4C0] rounded-full overflow-hidden">
         <div className={`h-full rounded-full transition-[width] duration-300 ${barClassName}`} style={{ width: `${Math.max(0, Math.min(100, percent))}%` }} />
       </div>
-      {rtr && <RtrButton onClick={rtr.onClick} active={rtr.active} tutorial={rtr.tutorial} />}
+      {rtr && <RtrButton onClick={rtr.onClick} active={rtr.active} tutorial={rtr.tutorial} locked={rtr.locked} />}
     </div>
   );
 }
@@ -180,10 +191,12 @@ export function FloorProgress({ percent, barClassName, rtr }: {
  * Without `onToggle` (a Commenter) it is plain text.
  */
 export function SpeakerClock({
-  running, onToggle, blockedReason = null, className = '', style, tutorial, children,
+  running, onToggle, blockedReason = null, className = '', style, tutorial, children, locked,
 }: {
   running: boolean;
   onToggle?: () => void;
+  /** A Commenter: the clock stays plain text, and a press raises the notice. */
+  locked?: ControlLock | null;
   /** Why it cannot START right now. Ignored while running (pausing is always offered). */
   blockedReason?: string | null;
   className?: string;
@@ -192,6 +205,13 @@ export function SpeakerClock({
   children: ReactNode;
 }) {
   const t = useT();
+  if (locked) {
+    return (
+      <div data-tutorial={tutorial} className={`cursor-not-allowed ${className}`} style={style} title={locked.reason} onClick={locked.onAttempt}>
+        {children}
+      </div>
+    );
+  }
   if (!onToggle) {
     return <div data-tutorial={tutorial} className={className} style={style}>{children}</div>;
   }

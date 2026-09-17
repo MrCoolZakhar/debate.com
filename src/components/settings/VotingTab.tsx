@@ -7,8 +7,9 @@ import { SeatCircleFlag, CircleFlag } from '@/components/CircleFlag';
 import { K, T, W, LH, Section, GavelSwitch, SealChoice, HoverHint, InfoHint } from './settingsKit';
 import type { TabProps } from './settingsTypes';
 
-/** A hemicycle of 15 seats with the share needed to pass filled in forest. */
-function Hemicycle({ share, on, size = 30 }: { share: number; on?: boolean; size?: number }) {
+/** A hemicycle of 15 seats with the share needed to pass filled in forest. Also drawn on the
+ *  voting roll call's Threshold bookmark. */
+export function Hemicycle({ share, on, size = 30 }: { share: number; on?: boolean; size?: number }) {
   const seats: { x: number; y: number }[] = [];
   const rows = [{ r: 13, n: 7 }, { r: 8, n: 5 }, { r: 3.5, n: 3 }];
   rows.forEach(({ r, n }) => {
@@ -87,6 +88,19 @@ export default function VotingTab({ committee, s, upd, t, language, isViewOnly }
           </div>
         </div>
       </Section>
+
+      {/* Ballot choices (17 Sep 2026): rights votes and Pass, both on by default. */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2" style={{ padding: '4px 2px 14px' }}>
+        <span className="inline-flex items-center gap-2.5">
+          <span id="stg-rights" style={{ fontSize: T.body, fontWeight: W.label, color: K.ink }}>{t('voting_allow_rights_label')}</span>
+          <GavelSwitch labelledBy="stg-rights" checked={s.allowRightsVotes !== false} onChange={(v) => upd('allowRightsVotes', v)} />
+        </span>
+        <span className="inline-flex items-center gap-2.5">
+          <span id="stg-pass" style={{ fontSize: T.body, fontWeight: W.label, color: K.ink }}>{t('voting_allow_pass_label')}</span>
+          <InfoHint text={t('voting_allow_pass_note')} />
+          <GavelSwitch labelledBy="stg-pass" checked={s.allowPass !== false} onChange={(v) => upd('allowPass', v)} />
+        </span>
+      </div>
 
       {/* Device voting (src/lib/deviceVoting.ts): off by default. Frozen into each ballot when it opens. */}
       <Section icon={MonitorSmartphone} title={t('voting_method_title')} hint={t('voting_method_hint')} delay={20}>

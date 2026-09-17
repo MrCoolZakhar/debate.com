@@ -11,26 +11,26 @@
  * - A stage with a 0-minute timer is dimmed and not selectable ("Skipped").
  * - Click, or Enter / Space, jumps to a stage. Arrow keys move between segments (mirrored in
  *   RTL), Home / End go to the first / last.
- * - "Timings" before the track goes back to the order of proceedings.
+ * - The way back to the order of proceedings lives on the timer device now (an icon key in its
+ *   header, 17 Sep 2026, owner: "it could be in the timer itself, no need to say the words").
  *
- * Presentational: it calls `onSelect` / `onTimings` and nothing else. The modal's handlers
+ * Presentational: it calls `onSelect` and nothing else. The modal's handlers
  * start the chosen stage with a fresh paused clock, exactly like Next and Back (RULE 6b holds:
  * nothing is written).
  */
 import React, { useLayoutEffect, useRef, useState } from 'react';
-import { Check, SlidersHorizontal } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { useT } from '@/contexts/LanguageContext';
 
 export type SwitcherStage = { key: string; label: string; minutes: number; done: boolean };
 
 const OUTFIT = "'Outfit', sans-serif";
 
-export default function StageSwitcher({ stages, current, onSelect, onTimings, compact = false }: {
+export default function StageSwitcher({ stages, current, onSelect, compact = false }: {
   stages: SwitcherStage[];
   current: string;
   onSelect: (key: string) => void;
-  onTimings: () => void;
-  /** Narrow bars: the minutes captions and the Timings word are dropped. */
+  /** Narrow bars: the minutes captions are dropped. */
   compact?: boolean;
 }) {
   const t = useT();
@@ -73,11 +73,6 @@ export default function StageSwitcher({ stages, current, onSelect, onTimings, co
 
   return (
     <nav aria-label={t('documents_switch_label')} className="flex items-center gap-2 min-w-0" style={{ fontFamily: OUTFIT }}>
-      <button type="button" onClick={onTimings} title={t('documents_switch_timings_title')} aria-label={t('documents_switch_timings_title')}
-        className="shrink-0 h-9 px-2.5 rounded-[10px] flex items-center gap-1.5 text-[13px] font-medium text-[#5C4E40] hover:text-[#1B3828] hover:bg-[rgba(27,56,40,0.07)] transition-[background-color,color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">
-        <SlidersHorizontal size={15} strokeWidth={2.2} aria-hidden />
-        {!compact && <span>{t('documents_switch_timings')}</span>}
-      </button>
       <div onKeyDown={onKeyDown} className="relative flex items-center rounded-[12px] p-[3px] min-w-0"
         style={{ backgroundColor: 'rgba(28,20,16,0.055)', boxShadow: 'inset 0 1px 2px rgba(28,20,16,0.06)' }}>
         {thumb && (

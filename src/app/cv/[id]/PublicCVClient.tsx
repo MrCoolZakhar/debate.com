@@ -7,6 +7,7 @@ import type { CVEntry } from '@/components/CVEntryModal';
 import { CVStatsRow, TimelineEntry } from '../../account/cv/CVTimeline';
 import { Eyebrow, OUTFIT, MONO } from '../../account/accountUi';
 import PublicCVSignupPrompt from '@/components/PublicCVSignupPrompt';
+import ProfileAvatarMenu from '@/components/ProfileAvatar';
 
 export interface PublicProfile {
   id: string;
@@ -57,13 +58,17 @@ export default function PublicCVClient({ profile, entries }: { profile: PublicPr
         <Link href="/" style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 17, letterSpacing: '-0.01em', color: '#1B3828', textDecoration: 'none' }}>
           GAVELLING
         </Link>
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1.5 rounded-full"
-          style={{ padding: '9px 15px', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 12.5, textDecoration: 'none' }}
-        >
-          Build your MUN CV <ArrowRight size={15} strokeWidth={2.5} />
-        </Link>
+        <div className="flex items-center gap-2.5">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 rounded-full"
+            style={{ padding: '9px 15px', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 12.5, textDecoration: 'none' }}
+          >
+            Build your MUN CV <ArrowRight size={15} strokeWidth={2.5} />
+          </Link>
+          {/* Signed-in readers get their own avatar menu; nothing while signed out. */}
+          <ProfileAvatarMenu size={40} />
+        </div>
       </header>
 
       <main className="mx-auto w-full max-w-3xl px-4 md:px-6 pb-20">
