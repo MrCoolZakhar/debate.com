@@ -82,9 +82,8 @@ export interface HistorySegment {
   endedAt: string;
   speeches: HistorySpeech[];
   events: HistoryEvent[];
-  /** Totals for the segment header. */
+  /** Total speaking time, for the segment header. */
   totalSeconds: number;
-  noteCount: number;
   /** Distinct delegations that took the floor in this segment. */
   speakerCount: number;
 }
@@ -217,7 +216,6 @@ export function buildSessionHistory(committee: Committee, feedback: FeedbackEntr
           speeches: [],
           events: [],
           totalSeconds: 0,
-          noteCount: 0,
           speakerCount: 0,
         };
         segments.push(seg);
@@ -258,14 +256,13 @@ export function buildSessionHistory(committee: Committee, feedback: FeedbackEntr
       topic: committee.topic ?? '',
       startedAt: pending[0].timestamp,
       endedAt: pending[pending.length - 1].timestamp,
-      speeches: [], events: pending, totalSeconds: 0, noteCount: 0, speakerCount: 0,
+      speeches: [], events: pending, totalSeconds: 0, speakerCount: 0,
     });
   }
 
   attachNotes(allSpeeches, feedback);
 
   for (const seg of segments) {
-    seg.noteCount = seg.speeches.reduce((s, sp) => s + sp.notes.length, 0);
     seg.speakerCount = new Set(seg.speeches.map((s) => s.country)).size;
     seg.events.sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
   }
@@ -274,3 +271,18 @@ export function buildSessionHistory(committee: Committee, feedback: FeedbackEntr
   // chair wants open, and it is the one the tab expands by default.
   return segments.reverse();
 }
+
+/**
+ * The chair notes of every speech, keyed the way a ledger speech row can find
+ * them: `speechKey(country, timestamp, context, seconds)`. Both sides come out
+ * of the same `parseLedgerEvents` stream, so a speech and its ledger row carry
+ * the identical timestamp, context and seconds.
+ *
+ * This is what lets a delegation's profile print a note beside the speech it was
+ * written on without a second matching rule: the notes were already placed by
+ * `attachNotes` above, once, for the whole session.
+ */
+export function speechKey(country: string, timestamp: string, context: string | undefined, seconds: number | undefined): string {
+  return `${country}|${timestamp}|${context ?? 'speakers-list'}|${Math.max(0, Math.round(seconds ?? 0))}`;
+}
+

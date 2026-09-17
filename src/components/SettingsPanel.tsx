@@ -197,7 +197,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
       ariaLabel={t('stg_dialog_title')}
       /* % not vh: the dialog is portalled into the scaled #fit-root (see ScoreboardPanel). */
       panelClassName="w-full overflow-hidden flex"
-      panelStyle={{ maxWidth: 1160, height: '90%', borderRadius: 28, background: K.page, boxShadow: '0 40px 90px -30px rgba(5,8,20,0.6), 0 0 0 1px rgba(27,56,40,0.10)', fontFamily: K.font }}
+      panelStyle={{ maxWidth: 1320, height: '90%', borderRadius: 28, background: K.page, boxShadow: '0 40px 90px -30px rgba(5,8,20,0.6), 0 0 0 1px rgba(27,56,40,0.10)', fontFamily: K.font }}
       backdropStyle={{ background: 'rgba(16,24,19,0.62)' }}
     >
       {(requestClose) => (
@@ -327,7 +327,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
 
             <div ref={scrollRef} id={panelId} role="tabpanel" aria-labelledby={`stg-tab-${active.id}`} tabIndex={-1}
               className="flex-1 min-h-0 overflow-y-auto" style={{ padding: '4px 26px 24px 28px', overscrollBehavior: 'contain' }}>
-              <div key={active.id} style={{ maxWidth: 880 }}>
+              <div key={active.id} className="stg-page" style={{ maxWidth: active.id === 'motions' || active.id === 'points' || active.id === 'people' ? 1080 : 880 }}>
                 {active.id === 'access' && <AccessTab {...tabProps} displayChairSuffix={displayChairSuffix} onlineChairs={onlineChairs} />}
                 {active.id === 'motions' && <MotionsTab {...tabProps} />}
                 {active.id === 'voting' && <VotingTab {...tabProps} />}

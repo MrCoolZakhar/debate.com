@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { BellRing, Check, Copy, Eye, Gavel, KeyRound, Lock, MessageSquareText, MessageSquareOff, ShieldCheck, Tag, Volume2, ListOrdered, DoorOpen, Users } from 'lucide-react';
+import { Ban, BellRing, Check, Copy, Eye, Gavel, KeyRound, Lock, MessageCircle, MessageSquareText, Smartphone, Volume2, Users } from 'lucide-react';
 import { clampGavelSeconds, primeGavelAudio, playGavelKnock, GAVEL_MIN_SECONDS, GAVEL_MAX_SECONDS, GAVEL_DEFAULT_SECONDS } from '@/lib/gavelSound';
 import { getCountryByName } from '@/lib/countries';
 import { CircleFlag, flagMonogram } from '@/components/CircleFlag';
-import { K, T, W, LH, Section, SectionPair, SettingRow, RowGrid, GavelSwitch, SecondsDial, formatSeconds } from './settingsKit';
+import { ACTION_SKINS, DG } from '@/components/delegate/DelegateUI';
+import { K, T, W, LH, Section, SettingRow, GavelSwitch, InfoHint, TimeChooser } from './settingsKit';
 import type { TabProps } from './settingsTypes';
 
 /** A ticket stub for a code: perforated edge, the code at T.section, copy on press. What the
@@ -59,6 +60,100 @@ function CodeTicket({ label, code, caption, secret = false, tone, copiedLabel, c
         {copied ? <Check aria-hidden size={17} strokeWidth={3} className="shrink-0" /> : hidden ? <Eye aria-hidden size={16} strokeWidth={2.4} className="shrink-0" /> : <Copy aria-hidden size={16} strokeWidth={2.4} className="shrink-0" style={{ opacity: 0.75 }} />}
       </span>
     </button>
+  );
+}
+
+// ── What delegates can do: the delegate phone's own controls, as switches ──────
+/**
+ * One delegate ability. The stage is a role=switch drawn as the control a delegate sees; OFF
+ * greys it out and strikes it through, so a chair reads the room's rules at a glance. The
+ * label and its hint sit beneath (a hint is focusable, so it cannot live inside the switch).
+ */
+function DelegateAbility({ id, label, hint, allowed, onChange, onLabel, offLabel, children }: {
+  id: string; label: string; hint: string; allowed: boolean; onChange: (v: boolean) => void;
+  onLabel: string; offLabel: string; children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col" style={{ borderRadius: 16, background: K.page, boxShadow: 'inset 0 0 0 1px rgba(28,20,16,0.07)', padding: 8 }}>
+      <button type="button" role="switch" aria-checked={allowed} aria-labelledby={`${id}-label`} aria-describedby={`${id}-state`}
+        onClick={() => onChange(!allowed)}
+        className="stg-focus stg-press relative flex items-center justify-center overflow-hidden"
+        style={{
+          height: 150, borderRadius: 12, border: 'none', cursor: 'pointer', padding: 12,
+          background: allowed ? DG.ivory : '#E4DED0',
+          boxShadow: allowed ? 'inset 0 0 0 1.5px rgba(27,56,40,0.10)' : 'inset 0 0 0 1.5px rgba(28,20,16,0.06)',
+        }}>
+        <span aria-hidden className="flex items-center justify-center" style={{
+          filter: allowed ? 'none' : 'grayscale(1)', opacity: allowed ? 1 : 0.42,
+          transitionProperty: 'opacity, filter', transitionDuration: '200ms',
+        }}>
+          {children}
+        </span>
+        {!allowed && (
+          <>
+            {/* The strike: one line corner to corner over the replica. */}
+            <span aria-hidden className="absolute" style={{ left: '12%', right: '12%', top: '50%', height: 3, borderRadius: 3, background: K.danger, opacity: 0.8, transform: 'rotate(-18deg)' }} />
+            <span aria-hidden className="absolute inline-flex items-center justify-center" style={{ top: 8, insetInlineEnd: 8, width: 26, height: 26, borderRadius: 999, background: K.surface, color: K.danger, boxShadow: K.outSm }}>
+              <Ban size={15} strokeWidth={2.6} />
+            </span>
+          </>
+        )}
+      </button>
+      <div className="flex items-center gap-1.5" style={{ padding: '10px 4px 2px', minHeight: 36 }}>
+        <span id={`${id}-label`} className="min-w-0" style={{ fontSize: T.body, fontWeight: W.section, color: K.ink, lineHeight: LH.body }}>{label}</span>
+        <InfoHint text={hint} />
+        <span className="flex-1" aria-hidden />
+        <span id={`${id}-state`} className="inline-flex items-center gap-1 shrink-0" style={{
+          height: 24, padding: '0 9px', borderRadius: 999, fontSize: T.caption, fontWeight: W.section,
+          background: allowed ? 'rgba(27,56,40,0.09)' : K.dangerTint, color: allowed ? K.forestMid : K.danger,
+        }}>
+          {allowed ? <Check size={11} strokeWidth={3} aria-hidden /> : <Ban size={11} strokeWidth={2.8} aria-hidden />}
+          {allowed ? onLabel : offLabel}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** The gold Chat key from the delegate phone's action column (SquareButton, skin gold). */
+function ChatKeyReplica({ label }: { label: string }) {
+  const skin = ACTION_SKINS.gold;
+  return (
+    <span className="block" style={{ width: 150, paddingBottom: 6, borderRadius: 18, background: skin.edge, boxShadow: '0 2px 3px rgba(27,56,40,0.16)' }}>
+      <span className="flex flex-col justify-center" style={{ height: 104, gap: 10, padding: 16, borderRadius: 18, background: skin.bg, color: skin.fg, border: `2px solid ${DG.forest}` }}>
+        <MessageCircle size={26} strokeWidth={2.25} />
+        <span className="text-start" style={{ fontSize: T.section, fontWeight: W.title, lineHeight: 1.1, letterSpacing: '-0.01em' }}>{label}</span>
+      </span>
+    </span>
+  );
+}
+
+/** The ROLL CALL caption and P / PV pill from the delegate hero (RollCallSwitch). */
+function RollCallReplica({ caption }: { caption: string }) {
+  return (
+    <span className="flex flex-col items-center" style={{ gap: 6 }}>
+      <span style={{ fontSize: T.caption, fontWeight: W.title, color: DG.body, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{caption}</span>
+      <span className="relative inline-grid" style={{ gridTemplateColumns: '1fr 1fr', padding: 4, borderRadius: 999, background: DG.ivory, boxShadow: '-3px -3px 7px rgba(255,255,255,0.9), 4px 4px 9px rgba(27,56,40,0.15), inset 2px 2px 6px rgba(27,56,40,0.13)' }}>
+        <span className="absolute" style={{ top: 4, bottom: 4, insetInlineStart: 'calc(50%)', width: 'calc(50% - 4px)', borderRadius: 999, background: `linear-gradient(135deg, ${DG.forestMid}, ${DG.forest})`, boxShadow: '0 3px 8px rgba(27,56,40,0.30)' }} />
+        {['P', 'PV'].map((l, i) => (
+          <span key={l} className="relative inline-flex items-center justify-center stg-num" style={{ minWidth: 64, height: 48, padding: '0 16px', fontSize: T.section, fontWeight: W.title, color: i === 1 ? DG.gold : DG.body }}>{l}</span>
+        ))}
+      </span>
+    </span>
+  );
+}
+
+/** The two chunky buttons an absent delegate presses to join (AbsentBanner). */
+function JoinReplica({ present, voting }: { present: string; voting: string }) {
+  const btn: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', height: 42, padding: '0 14px', borderRadius: 14, width: 196,
+    fontSize: T.body, fontWeight: W.title, textTransform: 'uppercase', letterSpacing: '0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+  };
+  return (
+    <span className="flex flex-col" style={{ gap: 12 }}>
+      <span style={{ ...btn, background: DG.cream, color: DG.forest, border: `2px solid ${DG.forest}`, boxShadow: `0 5px 0 ${DG.forest}` }}>{present}</span>
+      <span style={{ ...btn, background: `linear-gradient(180deg, ${DG.forestLift}, ${DG.forest})`, color: DG.ivory, boxShadow: `0 5px 0 ${DG.forestEdge}` }}>{voting}</span>
+    </span>
   );
 }
 
@@ -157,65 +252,62 @@ export default function AccessTab({ committee, s, upd, isViewOnly, myChairName, 
       </Section>
 
       <div style={dim} aria-disabled={isViewOnly || undefined}>
-        <Section icon={ShieldCheck} title={t('stg_access_floor')} hint={t('stg_access_floor_hint')} lead delay={80}>
-          <RowGrid min={290}>
-            <SettingRow dense labelId="stg-appr" label={t('settings_chair_approval_label')} hint={t('settings_chair_approval_note')}
-              control={<GavelSwitch size="sm" glyph="lock" icon={DoorOpen} labelledBy="stg-appr" checked={s.requireChairApproval} onChange={(v) => upd('requireChairApproval', v)} />} />
-            <SettingRow dense labelId="stg-lockrc" label={t('stg_lock_rollcall_label')} hint={t('stg_lock_rollcall_note')}
-              control={<GavelSwitch size="sm" glyph="lock" labelledBy="stg-lockrc" checked={s.lockDelegateRollCall} onChange={(v) => upd('lockDelegateRollCall', v)} />} />
-            <SettingRow dense labelId="stg-gsl" label={t('settings_gsl_require_next_label')} hint={t('settings_gsl_require_next_note')}
-              control={<GavelSwitch size="sm" icon={ListOrdered} labelledBy="stg-gsl" checked={s.gslRequireNextSpeaker} onChange={(v) => upd('gslRequireNextSpeaker', v)} />} />
-            <SettingRow dense labelId="stg-chat" label={t('stg_disable_chat_label')} hint={t('stg_disable_chat_note')}
-              control={<GavelSwitch size="sm" icon={MessageSquareOff} labelledBy="stg-chat" checked={s.disableChat} onChange={(v) => upd('disableChat', v)} />} />
-          </RowGrid>
+        {/* Everything here is something a DELEGATE does, so each rule is drawn as the control
+            they see on their phone and the chair switches the control itself on or off. ON
+            always means "delegates can"; the stored keys keep their old sense (disableChat,
+            lockDelegateRollCall, requireChairApproval), so the value is inverted on the way in
+            and out and still written through `upd`. */}
+        <Section icon={Smartphone} title={t('stg_delegates_can')} hint={t('stg_delegates_can_hint')} lead delay={80}>
+          <div className="grid gap-3" style={{ padding: '12px 0 14px', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+            <DelegateAbility id="stg-can-chat" label={t('stg_can_chat')} hint={t('stg_can_chat_note')}
+              onLabel={t('stg_can_on')} offLabel={t('stg_can_off')}
+              allowed={!s.disableChat} onChange={(v) => upd('disableChat', !v)}>
+              <ChatKeyReplica label={t('tab_chat')} />
+            </DelegateAbility>
+            <DelegateAbility id="stg-can-rollcall" label={t('stg_can_rollcall')} hint={t('stg_can_rollcall_note')}
+              onLabel={t('stg_can_on')} offLabel={t('stg_can_off')}
+              allowed={!s.lockDelegateRollCall} onChange={(v) => upd('lockDelegateRollCall', !v)}>
+              <RollCallReplica caption={t('delegate_roll_call_label')} />
+            </DelegateAbility>
+            <DelegateAbility id="stg-can-join" label={t('stg_can_join')} hint={t('stg_can_join_note')}
+              onLabel={t('stg_can_on')} offLabel={t('stg_can_off')}
+              allowed={!s.requireChairApproval} onChange={(v) => upd('requireChairApproval', !v)}>
+              <JoinReplica present={t('delegate_present_btn')} voting={t('delegate_pv_btn')} />
+            </DelegateAbility>
+          </div>
         </Section>
 
-        <SectionPair>
-          {/* Gavel knock, played only on the Moderator's device by src/lib/useGavelCue.ts. The
-              Test button is a user gesture, so it also unlocks audio for the timer knocks. */}
-          <Section icon={BellRing} title={t('settings_section_timer_sound')} delay={120}>
-            <SettingRow first dense labelId="stg-knock" label={t('settings_gavel_sound_label')} hint={t('settings_gavel_sound_note')}
-              control={<GavelSwitch size="sm" icon={BellRing} labelledBy="stg-knock" checked={s.gavelSoundEnabled !== false} onChange={(v) => upd('gavelSoundEnabled', v)} />} />
-            {s.gavelSoundEnabled !== false && (
-              <SettingRow dense label={t('settings_gavel_at_label')} hint={t('settings_gavel_at_note')}>
-                <SecondsDial
-                    label={t('settings_gavel_at_label')}
-                    unit={t('motions_sec')}
-                    value={gavelAt}
-                    min={GAVEL_MIN_SECONDS}
-                    max={GAVEL_MAX_SECONDS}
-                    presets={[5, 10, 15, 30, 60, 120]}
-                    format={formatSeconds}
-                    clamp={clampGavelSeconds}
-                    onChange={(v) => upd('gavelSoundAtSeconds', clampGavelSeconds(v))}
-                    aside={(
-                      <button type="button"
-                        onClick={() => { primeGavelAudio(); playGavelKnock(); setKnocking(true); setTimeout(() => setKnocking(false), 500); }}
-                        className="stg-focus stg-press inline-flex items-center gap-1.5 shrink-0"
-                        style={{ height: 28, padding: '0 10px', borderRadius: 9, border: 'none', background: knocking ? K.gold : K.ivory, color: K.forest, fontSize: T.body, fontWeight: W.label, cursor: 'pointer', boxShadow: K.outSm }}>
-                        <Volume2 size={14} strokeWidth={2.4} aria-hidden />
-                        {t('settings_gavel_test')}
-                      </button>
-                    )}
-                  />
-              </SettingRow>
-            )}
-          </Section>
-
-          <Section icon={Tag} title={t('stg_labels')} delay={160}>
-            <SettingRow first dense htmlFor="stg-sponsor" label={t('stg_sponsor_label')} hint={t('stg_sponsor_note')}>
-              <input
-                id="stg-sponsor"
-                type="text"
-                value={s.sponsorLabel}
-                placeholder={t('stg_sponsor_placeholder')}
-                onChange={(e) => upd('sponsorLabel', e.target.value)}
-                className="stg-focus w-full"
-                style={{ height: 38, maxWidth: 300, borderRadius: 11, border: 'none', padding: '0 12px', fontSize: T.body, fontWeight: W.label, color: K.ink, background: K.ivory, boxShadow: K.inSm, fontFamily: K.font }}
-              />
-            </SettingRow>
-          </Section>
-        </SectionPair>
+        {/* Gavel knock, played only on the Moderator's device by src/lib/useGavelCue.ts. The
+            Test button is a user gesture, so it also unlocks audio for the timer knocks. */}
+        <Section icon={BellRing} title={t('settings_section_timer_sound')} delay={120}>
+          <SettingRow first dense labelId="stg-knock" label={t('settings_gavel_sound_label')} hint={t('settings_gavel_sound_note')}
+            control={<GavelSwitch size="sm" icon={BellRing} labelledBy="stg-knock" checked={s.gavelSoundEnabled !== false} onChange={(v) => upd('gavelSoundEnabled', v)} />} />
+          {s.gavelSoundEnabled !== false && (
+            <SettingRow dense label={t('settings_gavel_at_label')} hint={t('settings_gavel_at_note')}
+              control={(
+                <TimeChooser
+                  label={t('settings_gavel_at_label')}
+                  lessLabel={t('stg_knock_less', { n: 5 })}
+                  moreLabel={t('stg_knock_more', { n: 5 })}
+                  value={gavelAt}
+                  min={GAVEL_MIN_SECONDS}
+                  max={GAVEL_MAX_SECONDS}
+                  step={5}
+                  clamp={clampGavelSeconds}
+                  onChange={(v) => upd('gavelSoundAtSeconds', clampGavelSeconds(v))}
+                  aside={(
+                    <button type="button"
+                      onClick={() => { primeGavelAudio(); playGavelKnock(); setKnocking(true); setTimeout(() => setKnocking(false), 500); }}
+                      className="stg-focus stg-press inline-flex items-center gap-1.5 shrink-0"
+                      style={{ height: 34, padding: '0 12px', borderRadius: 10, border: 'none', background: knocking ? K.gold : K.ivory, color: K.forest, fontSize: T.body, fontWeight: W.label, cursor: 'pointer', boxShadow: K.outSm }}>
+                      <Volume2 size={14} strokeWidth={2.4} aria-hidden />
+                      {t('settings_gavel_test')}
+                    </button>
+                  )}
+                />
+              )} />
+          )}
+        </Section>
       </div>
     </div>
   );

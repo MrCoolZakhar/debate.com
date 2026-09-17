@@ -9,7 +9,7 @@
  * It owns no vote logic. `stateOf` is the page's decision for each card (start, resume,
  * view, follow, or nothing a Commenter can open) and `onOpen` hands the choice back.
  *
- * TYPE (16 Sep 2026). One scale, shared with PreVoteScreen, VotingHeader and the ballot
+ * TYPE (16 Sep 2026). One scale, shared with VotingRollCall, VotingHeader and the ballot
  * screens, so the whole vote reads as one document rather than four posters:
  *   28/700  screen title      19/700  card title      15/500  body
  *   13.5/500 meta             12.5/600 small label (sentence case, normal tracking)

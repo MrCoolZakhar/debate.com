@@ -22,6 +22,30 @@ export function FlagCircle({ country, size = 'md' }: { country: string; size?: '
   return <SeatCircleFlag country={country} size={px[size]} decorative />;
 }
 
+// ── Queue row size (17 Sep 2026) ─────────────────────────────────────────────
+// The sidebar's queue rows (not the roll call, not the Roll Call tab) are drawn 10% larger
+// than the 15 Sep sizes ("make their entire field 10% bigger"): flag, name, row height,
+// badges, grip and padding together. The console is scaled by FitToScreen (820px tall layout
+// → window height), so a big monitor already draws them physically larger (x1.32 at 1080p,
+// x1.76 at 1440p). Only where that scale SHRINKS the design (window under ~780px tall:
+// 1280x720, 1366x768, 1024x768) do rows get a further 5%, which still keeps ten rows in view.
+export const QUEUE_ROW_SCALE = 1.1;
+export const QUEUE_ROW_SCALE_SHORT_SCREEN = 1.155;
+function useQueueRowScale(): number {
+  const [k, setK] = useState(QUEUE_ROW_SCALE);
+  useEffect(() => {
+    const update = () => {
+      const fit = window.innerHeight / 820; // FitToScreen BASE_H
+      const next = fit > 0 && fit < 0.95 ? QUEUE_ROW_SCALE_SHORT_SCREEN : QUEUE_ROW_SCALE;
+      setK((prev) => (prev === next ? prev : next));
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+  return k;
+}
+
 // ── 3-state slider ────────────────────────────────────────────────────────────
 function StatusSlider({ status, onCycle, isObserver = false, large = false }: { status: DelegateStatus; onCycle: () => void; isObserver?: boolean; large?: boolean }) {
   // Observers can only be Absent or Present, no present-voting (PV) segment.
@@ -281,6 +305,7 @@ function RollCallPanelInner({
 }) {
   const { language } = useLanguage();
   const t = useT();
+  const queueRowScale = useQueueRowScale();
   const [showFullList, setShowFullList] = useState(false);
   const [localStatuses, setLocalStatuses] = useState<Record<string, DelegateStatus>>({});
   const [localObservers, setLocalObservers] = useState<Record<string, boolean>>({});
@@ -858,8 +883,12 @@ function RollCallPanelInner({
             : !sliderMode ? 'rgba(237,231,216,0.12)'
             : effectiveStatus === 'present' ? 'rgba(61,122,82,0.40)'
             : 'rgba(182,135,31,0.32)';
-          // Round flags, 5% up from 48 / 34 / 40 (15 Sep 2026).
-          const flagPx = isUpNext ? 50 : bigRoll ? 54 : sliderMode ? 34 : 42;
+          // Queue rows (not roll call, not the Roll Call tab) scale by `q`: 1.1, or 1.155 on a
+          // short screen (useQueueRowScale). Roll call sizes are unchanged.
+          const q = sliderMode ? 1 : queueRowScale;
+          const qr = (n: number) => Math.round(n * q * 10) / 10;
+          // Round flags, 5% up from 48 / 34 / 40 (15 Sep 2026), queue x q (17 Sep 2026).
+          const flagPx = isUpNext ? qr(50) : bigRoll ? 54 : sliderMode ? 34 : qr(42);
 
           return (
             <div
@@ -888,7 +917,7 @@ function RollCallPanelInner({
                   if (e.target !== e.currentTarget) return;
                   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleRowClick(); }
                 } : undefined}
-                className={`group/seat flex items-center ${bigRoll ? 'gap-3.5 px-3 rounded-2xl' : sliderMode ? 'gap-2 px-2.5 rounded-xl' : 'gap-3 px-2.5 rounded-xl'} focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/80 transition-[background-color,box-shadow] duration-150 motion-reduce:transition-none bg-[var(--row-bg)] hover:bg-[var(--row-bg-hover)] ${
+                className={`group/seat flex items-center ${bigRoll ? 'gap-3.5 px-3 rounded-2xl' : sliderMode ? 'gap-2 px-2.5 rounded-xl' : 'rounded-xl'} focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/80 transition-[background-color,box-shadow] duration-150 motion-reduce:transition-none bg-[var(--row-bg)] hover:bg-[var(--row-bg-hover)] ${
                   (!isRollCallPhase && !showStatusSliders && onAddToList && (!isAbsent || (canRecognise && !isViewOnly))) || isRollCallPhase || showStatusSliders
                     ? 'cursor-pointer'
                     : isAbsent && !isRollCallPhase && !showStatusSliders
@@ -898,8 +927,9 @@ function RollCallPanelInner({
                 style={{
                   ['--row-bg' as string]: rowBg,
                   ['--row-bg-hover' as string]: rowBgHover,
-                  minHeight: isUpNext ? 64 : bigRoll ? 70 : sliderMode ? 48 : 54,
-                  paddingBlock: bigRoll ? 8 : 6,
+                  minHeight: isUpNext ? qr(64) : bigRoll ? 70 : sliderMode ? 48 : qr(54),
+                  paddingBlock: bigRoll ? 8 : qr(6),
+                  ...(sliderMode ? null : { gap: qr(12), paddingInline: qr(10) }),
                   // A lit edge, not a border: the speaker's row reads at a distance.
                   boxShadow: isLifted
                     ? '0 10px 28px rgba(0,0,0,0.38), 0 2px 6px rgba(0,0,0,0.25), inset 0 0 0 1.5px rgba(238,217,138,0.55)'
@@ -910,7 +940,7 @@ function RollCallPanelInner({
                 <div className="relative shrink-0">
                   {isRoomOrderTdT && queuePos !== null ? (
                     <div className="rounded-full bg-[#DDD4C0] flex items-center justify-center" style={{ width: flagPx, height: flagPx }}>
-                      <span className={`font-black text-[#8B5A20] tabular-nums ${isUpNext ? 'text-xl' : 'text-base'}`}>{queuePos}</span>
+                      <span className="font-black text-[#8B5A20] tabular-nums" style={{ fontSize: isUpNext ? qr(20) : qr(16) }}>{queuePos}</span>
                     </div>
                   ) : (
                     <SeatCircleFlag
@@ -941,22 +971,22 @@ function RollCallPanelInner({
                       role="img"
                       aria-label={t('rollcall_observer')}
                       title={t('rollcall_observer')}
-                      className="absolute -bottom-1 -end-1.5 w-[19px] h-[19px] rounded-full flex items-center justify-center"
-                      style={{ backgroundColor: '#EED98A', color: '#1B3828', boxShadow: '0 0 0 1.5px #1B3828, 0 1px 3px rgba(0,0,0,0.3)' }}
+                      className="absolute -bottom-1 -end-1.5 rounded-full flex items-center justify-center"
+                      style={{ width: qr(19), height: qr(19), backgroundColor: '#EED98A', color: '#1B3828', boxShadow: '0 0 0 1.5px #1B3828, 0 1px 3px rgba(0,0,0,0.3)' }}
                     >
-                      <Megaphone size={10.5} strokeWidth={2.6} aria-hidden />
+                      <Megaphone size={qr(10.5)} strokeWidth={2.6} aria-hidden />
                     </div>
                   )}
                   {/* Queue position, or a microphone for the speaker holding the floor. Omitted
                       for a Room Order Tour de Table, where the number already IS the disc. */}
                   {queuePos !== null && !isRoomOrderTdT && (
                     <div
-                      className="absolute -top-1 -end-1.5 min-w-[21px] h-[21px] px-1 rounded-full flex items-center justify-center font-black leading-none text-[11.5px] tabular-nums"
-                      style={{ backgroundColor: isCurrentSpeakerInPanel ? '#EED98A' : '#EDE7D8', color: '#1B3828', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }}
+                      className="absolute -top-1 -end-1.5 px-1 rounded-full flex items-center justify-center font-black leading-none tabular-nums"
+                      style={{ minWidth: qr(21), height: qr(21), fontSize: qr(11.5), backgroundColor: isCurrentSpeakerInPanel ? '#EED98A' : '#EDE7D8', color: '#1B3828', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }}
                       aria-label={isCurrentSpeakerInPanel ? t('rollcall_speaking') : t('rollcall_queue_position', { n: queuePos })}
                       role="img"
                     >
-                      {isCurrentSpeakerInPanel ? <Mic size={11} strokeWidth={3} aria-hidden /> : queuePos <= 99 ? queuePos : '99+'}
+                      {isCurrentSpeakerInPanel ? <Mic size={qr(11)} strokeWidth={3} aria-hidden /> : queuePos <= 99 ? queuePos : '99+'}
                     </div>
                   )}
                 </div>
@@ -964,7 +994,7 @@ function RollCallPanelInner({
                   <span
                     className="truncate"
                     style={{
-                      fontSize: isUpNext ? 19.5 : bigRoll ? 21 : sliderMode ? 15.5 : 17,
+                      fontSize: isUpNext ? qr(19.5) : bigRoll ? 21 : sliderMode ? 15.5 : qr(17),
                       fontWeight: isUpNext ? 800 : 600,
                       lineHeight: 1.2,
                       // Full brightness whatever the status: the backdrop says answered, the
@@ -975,12 +1005,12 @@ function RollCallPanelInner({
                     {getCountryDisplayName(d.country, language)}
                   </span>
                   {isSpeakingRow && !sliderMode && (
-                    <span className="truncate uppercase" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', lineHeight: 1.3, color: '#EED98A' }}>
+                    <span className="truncate uppercase" style={{ fontSize: qr(11), fontWeight: 800, letterSpacing: '0.08em', lineHeight: 1.3, color: '#EED98A' }}>
                       {t('rollcall_speaking')}
                     </span>
                   )}
                   {isReadyRow && !sliderMode && (
-                    <span className="truncate uppercase" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.08em', lineHeight: 1.3, color: 'rgba(238,217,138,0.72)' }}>
+                    <span className="truncate uppercase" style={{ fontSize: qr(10.5), fontWeight: 700, letterSpacing: '0.08em', lineHeight: 1.3, color: 'rgba(238,217,138,0.72)' }}>
                       {t('gsl_on_deck')}
                     </span>
                   )}
@@ -992,7 +1022,7 @@ function RollCallPanelInner({
                     told apart here (no PV tag, no tint): the slider carries that distinction
                     while taking roll. */}
                 {!sliderMode && isAbsent && (
-                  <span className="text-[11px] shrink-0 font-bold uppercase tracking-wider" style={{ color: 'rgba(237,231,216,0.72)' }}>{t('rollcall_absent')}</span>
+                  <span className="shrink-0 font-bold uppercase tracking-wider" style={{ fontSize: qr(11), color: 'rgba(237,231,216,0.72)' }}>{t('rollcall_absent')}</span>
                 )}
                 {/* Reorder grip: drag with a mouse, finger or pen, or ArrowUp / ArrowDown. Faint
                     until the row is hovered; always visible on touch screens (no hover). */}
@@ -1004,12 +1034,12 @@ function RollCallPanelInner({
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e) => gripKeyDown(e, d.id)}
                     onPointerDown={(e) => startPointerDrag(e, d.id, true)}
-                    className={`shrink-0 -me-1 w-7 h-9 flex items-center justify-center rounded-md transition-opacity duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70 focus-visible:opacity-100 group-hover/seat:opacity-100 [@media(hover:none)]:opacity-80 ${
+                    className={`shrink-0 -me-1 flex items-center justify-center rounded-md transition-opacity duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70 focus-visible:opacity-100 group-hover/seat:opacity-100 [@media(hover:none)]:opacity-80 ${
                       isLifted ? 'opacity-100 cursor-grabbing' : 'opacity-45 cursor-grab'
                     }`}
-                    style={{ color: '#EDE7D8', touchAction: 'none' }}
+                    style={{ width: qr(28), height: qr(36), color: '#EDE7D8', touchAction: 'none' }}
                   >
-                    <GripVertical size={17} aria-hidden />
+                    <GripVertical size={qr(17)} aria-hidden />
                   </button>
                 )}
                 {sliderMode && (

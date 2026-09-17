@@ -39,6 +39,7 @@ const HIT = 8;
 
 export default function SidebarResizer({
   width,
+  maxWidth = SIDEBAR_MAX_WIDTH,
   collapsed,
   onLive,
   onRelease,
@@ -48,6 +49,8 @@ export default function SidebarResizer({
 }: {
   /** The committed width, in px. Source of truth between drags. */
   width: number;
+  /** The largest width this screen allows (ChairSidebarShell's proportional cap). */
+  maxWidth?: number;
   /** The sidebar is folded to its flag column. */
   collapsed: boolean;
   /** Every pointer move: the raw width under the pointer (never below the rail width). */
@@ -105,7 +108,7 @@ export default function SidebarResizer({
       const dx = (e.clientX - startXRef.current) / scale;
       if (!movedRef.current && Math.abs(dx) < 3) return;
       movedRef.current = true;
-      const next = Math.round(Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_RAIL_WIDTH, startWRef.current + sign * dx)));
+      const next = Math.round(Math.min(maxWidth, Math.max(SIDEBAR_RAIL_WIDTH, startWRef.current + sign * dx)));
       liveRef.current = next;
       onLive(next);
     };
@@ -128,7 +131,7 @@ export default function SidebarResizer({
       document.body.style.userSelect = prevSelect;
       document.body.style.cursor = prevCursor;
     };
-  }, [dragging, onLive, onRelease]);
+  }, [dragging, onLive, onRelease, maxWidth]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const rtl = typeof document !== 'undefined'
@@ -140,7 +143,7 @@ export default function SidebarResizer({
       if (e.key === grow || e.key === 'End' || e.key === 'Home') {
         e.preventDefault();
         onCollapsedChange(false);
-        if (e.key === 'End') onCommit(SIDEBAR_MAX_WIDTH);
+        if (e.key === 'End') onCommit(maxWidth);
         if (e.key === 'Home') onCommit(SIDEBAR_MIN_WIDTH);
       }
       return;
@@ -152,10 +155,10 @@ export default function SidebarResizer({
       next = width - SIDEBAR_KEY_STEP;
     }
     else if (e.key === 'Home') next = SIDEBAR_MIN_WIDTH;
-    else if (e.key === 'End') next = SIDEBAR_MAX_WIDTH;
+    else if (e.key === 'End') next = maxWidth;
     if (next === null) return;
     e.preventDefault();
-    onCommit(clampSidebarWidth(next));
+    onCommit(Math.min(maxWidth, clampSidebarWidth(next)));
   };
 
   const lit = dragging || focused || hovered;
@@ -171,7 +174,7 @@ export default function SidebarResizer({
         aria-label={label}
         aria-valuenow={shown}
         aria-valuemin={SIDEBAR_RAIL_WIDTH}
-        aria-valuemax={SIDEBAR_MAX_WIDTH}
+        aria-valuemax={maxWidth}
         aria-valuetext={`${shown} pixels`}
         tabIndex={0}
         onPointerDown={onPointerDown}

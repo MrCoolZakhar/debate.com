@@ -12,7 +12,7 @@ import { SeatArtProvider } from '@/components/SeatFlag';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { Emoji } from '@/components/Emoji';
 import { Check, CornerDownRight, Flag, Minus, ShieldAlert, SkipForward, Undo2, X } from 'lucide-react';
-import { PreVoteScreen } from '@/components/voting/PreVoteScreen';
+import { VotingRollCall } from '@/components/voting/VotingRollCall';
 import { VotingHeader } from '@/components/voting/VotingHeader';
 import { ResolutionPicker, type PickCardState } from '@/components/voting/ResolutionPicker';
 import { VoterCarousel, type SeatMark as CarouselMark } from '@/components/voting/VoterCarousel';
@@ -792,6 +792,25 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessGranted, committee?.id, committee?.endedAt, isViewOnly, roomClosed]);
 
+  // "Vote" goes straight to the roll call when there is exactly ONE paper to vote on (owner,
+  // 17 Sep 2026): a draft resolution that is introduced and has no stored vote state at all
+  // (a stored state is either a vote in progress or a recorded result), and no vote is open.
+  // With two or more the Moderator chooses one on the list first. Decided once per page load,
+  // after the vote states have loaded, so Back from the roll call lands on the list and stays.
+  const autoRollCallRef = useRef(false);
+  useEffect(() => {
+    if (autoRollCallRef.current || loading || !accessGranted || !committee) return;
+    autoRollCallRef.current = true;
+    if (isViewOnly || committee.endedAt || selectedDocId) return;
+    if (Object.values(voteStates).some(isVoteOpen)) return;
+    const ready = (committee.documents ?? []).filter(
+      (d) => d.type === 'draft-resolution' && d.status === 'introduced' && !voteStates[d.id],
+    );
+    if (ready.length === 1) setPendingDocId(ready[0].id);
+  // Once, when the room and its vote states are first on screen.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, accessGranted, committee?.id]);
+
   if (
     loading || authLoading || confAccess === 'checking' ||
     (confAccess === 'standalone' && chairGate === 'checking')
@@ -1445,8 +1464,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     headName: gavelRole.head,
   };
 
-  // ── Pre-vote screen: roll call + rules (blocks until confirmed) ──────────
-  /** Set one seat's roll-call status directly (the pre-vote screen's segmented control). */
+  // ── The roll call before a ballot (VotingRollCall): statuses + rule bookmarks ──
+  /** Set one seat's roll-call status directly (the roll call's slider). */
   const setRollCallStatus = (id: string, next: DelegateStatus) => {
     if (isViewOnly) return;
     touchedStatusRef.current.add(id);
@@ -1478,30 +1497,35 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     .map((id) => committee.delegates.find((d) => d.id === id))
     .filter((d): d is Delegate => !!d);
 
-  /** All present / All P+V for every voting seat. One RPC (`set_delegate_statuses`, the
-   *  chair page's bulk path), per-row only when the RPC is missing; a refused bulk write
-   *  gives the rows back to the DB values. */
-  const setAllRollCallStatuses = (status: 'present' | 'present-voting') => {
+  /** Clear All / All Present / All P+V over the whole room, as on the session's roll call.
+   *  An observer holds no voting placard, so All P+V makes observers Present. One RPC per
+   *  status (`set_delegate_statuses`, the chair page's bulk path), per-row only when the RPC
+   *  is missing (PGRST202); a refused bulk write gives the rows back to the DB values. */
+  const setAllRollCallStatuses = (status: DelegateStatus) => {
     if (isViewOnly) return;
-    const seats = committee.delegates.filter((d) => !isObserverSeat(d));
-    if (seats.length === 0) return;
-    seats.forEach((d) => touchedStatusRef.current.add(d.id));
-    setRollCallStatuses((prev) => {
-      const next = { ...prev };
-      seats.forEach((d) => { next[d.id] = status; });
-      return next;
-    });
-    const ids = seats.map((d) => d.id);
-    void setDelegateStatusesBulk(committee.id, status, ids, committee.code, suffix).then((r) => {
-      if (r === 'unavailable') { ids.forEach((id) => setDelegateStatusInDB(id, status, committee.code, suffix)); return; }
-      if (r !== null) return;
-      seats.forEach((d) => touchedStatusRef.current.delete(d.id));
+    const groups: [DelegateStatus, Delegate[]][] = status === 'present-voting'
+      ? [['present-voting', committee.delegates.filter((d) => !isObserverSeat(d))], ['present', committee.delegates.filter((d) => isObserverSeat(d))]]
+      : [[status, committee.delegates]];
+    for (const [st, seats] of groups) {
+      if (seats.length === 0) continue;
+      seats.forEach((d) => touchedStatusRef.current.add(d.id));
       setRollCallStatuses((prev) => {
         const next = { ...prev };
-        seats.forEach((d) => { next[d.id] = d.status; });
+        seats.forEach((d) => { next[d.id] = st; });
         return next;
       });
-    });
+      const ids = seats.map((d) => d.id);
+      void setDelegateStatusesBulk(committee.id, st, ids, committee.code, suffix).then((r) => {
+        if (r === 'unavailable') { ids.forEach((id) => setDelegateStatusInDB(id, st, committee.code, suffix)); return; }
+        if (r !== null) return;
+        seats.forEach((d) => touchedStatusRef.current.delete(d.id));
+        setRollCallStatuses((prev) => {
+          const next = { ...prev };
+          seats.forEach((d) => { next[d.id] = d.status; });
+          return next;
+        });
+      });
+    }
   };
 
   // The roll call and the failure banner are shared by the document-selection screen and
@@ -1513,7 +1537,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const showRollCall = !isViewOnly && (rollCallOpen || !!pendingDoc);
   const closeRollCall = () => { setRollCallOpen(false); setPendingDocId(null); };
   const rollCallModal = showRollCall ? (
-    <PreVoteScreen
+    <VotingRollCall
       delegates={committee.delegates}
       rollCallStatuses={rollCallStatuses}
       isObserverSeat={isObserverSeat}

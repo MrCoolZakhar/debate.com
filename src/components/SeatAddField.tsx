@@ -8,7 +8,8 @@
 // row as the quorum tabs (QuorumRings `trailing`), so it costs the list no height.
 //
 // Type a country (any locale's name, the same matching the old picker used) or any custom
-// name. A compact suggestion list opens under the field through Portal at fixed coordinates
+// name. Nothing is suggested on focus or while the field is empty (owner, 17 Sep 2026): the
+// list appears only once at least one non-space character is typed. It then opens under the field through Portal at fixed coordinates
 // (never clipped by the sidebar's overflow, flipped above near the bottom edge, positions
 // converted into #fit-root's scaled space by anchorBox):
 //   • Enter adds the highlighted row: the top country match, or the typed name as a custom
@@ -28,7 +29,7 @@ import Portal from '@/components/Portal';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 import { anchorBox, place } from '@/components/voting/anchorPosition';
-import { UN_COUNTRIES, getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery, compareCountryNames } from '@/lib/countries';
+import { UN_COUNTRIES, getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 
 const OUTFIT = "'Outfit', sans-serif";
@@ -65,10 +66,10 @@ export default function SeatAddField({
 
   const options = useMemo<Option[]>(() => {
     const available = UN_COUNTRIES.filter((c) => !existing.has(c.name.toLowerCase()));
-    const matches = rq
-      ? available.filter((c) => startsWithCountryQuery(c.name, rq, language))
-          .concat(available.filter((c) => !startsWithCountryQuery(c.name, rq, language) && matchesCountryQuery(c.name, rq, language)))
-      : [...available].sort((a, b) => compareCountryNames(a.name, b.name, language));
+    // No suggestions until something is typed.
+    if (!rq) return [];
+    const matches = available.filter((c) => startsWithCountryQuery(c.name, rq, language))
+      .concat(available.filter((c) => !startsWithCountryQuery(c.name, rq, language) && matchesCountryQuery(c.name, rq, language)));
     const out: Option[] = matches.map((c) => ({ kind: 'country', name: c.name, code: c.code }));
     // The custom seat follows the countries it could be confused with, so Enter (top row)
     // and the list agree on what comes first.
@@ -77,13 +78,12 @@ export default function SeatAddField({
     return out;
   }, [existing, rq, trimmed, language]);
 
-  // Arrowing is what makes an empty field's Enter mean something (see onKeyDown).
-  const navigatedRef = useRef(false);
   const changeQuery = (next: string) => {
     setQuery(next);
     setActive(0);
-    navigatedRef.current = false;
   };
+  // `open` = the field wants a list; it is only SHOWN once something is typed.
+  const listShown = open && trimmed.length > 0;
 
   const reposition = useCallback(() => {
     const el = inputRef.current;
@@ -96,15 +96,15 @@ export default function SeatAddField({
   }, []);
 
   useLayoutEffect(() => {
-    if (!open) return;
+    if (!listShown) return;
     reposition();
     // The Portal mounts its target one effect later, so measure the list again then.
     const raf = requestAnimationFrame(reposition);
     return () => cancelAnimationFrame(raf);
-  }, [open, options.length, reposition]);
+  }, [listShown, options.length, reposition]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!listShown) return;
     const onScroll = () => reposition();
     const onDown = (e: PointerEvent) => {
       const target = e.target as Node;
@@ -119,13 +119,13 @@ export default function SeatAddField({
       window.removeEventListener('resize', onScroll);
       document.removeEventListener('pointerdown', onDown, true);
     };
-  }, [open, reposition]);
+  }, [listShown, reposition]);
 
   // Keep the highlighted row in view while arrowing through the list.
   useEffect(() => {
-    if (!open) return;
+    if (!listShown) return;
     listRef.current?.querySelector<HTMLElement>(`[data-seat-index="${active}"]`)?.scrollIntoView({ block: 'nearest' });
-  }, [active, open]);
+  }, [active, listShown]);
 
   const commit = (opt: Option | undefined, observer: boolean) => {
     if (!opt) return;
@@ -153,10 +153,10 @@ export default function SeatAddField({
           type="text"
           value={query}
           role="combobox"
-          aria-expanded={open}
+          aria-expanded={listShown}
           aria-controls={listId}
           aria-autocomplete="list"
-          aria-activedescendant={open && options[active] ? `${listId}-${active}` : undefined}
+          aria-activedescendant={listShown && options[active] ? `${listId}-${active}` : undefined}
           aria-label={t('rollcall_add_seat_field')}
           title={t('rollcall_add_seat_hint')}
           placeholder={t('rollcall_add_seat')}
@@ -165,13 +165,13 @@ export default function SeatAddField({
           onFocus={() => setOpen(true)}
           onChange={(e) => { changeQuery(e.target.value); setOpen(true); }}
           onKeyDown={(e) => {
-            if (e.key === 'ArrowDown') { e.preventDefault(); navigatedRef.current = true; setOpen(true); setActive((i) => Math.min(options.length - 1, i + 1)); }
-            else if (e.key === 'ArrowUp') { e.preventDefault(); navigatedRef.current = true; setActive((i) => Math.max(0, i - 1)); }
+            if (e.key === 'ArrowDown') { if (!trimmed) return; e.preventDefault(); setOpen(true); setActive((i) => Math.min(options.length - 1, i + 1)); }
+            else if (e.key === 'ArrowUp') { if (!trimmed) return; e.preventDefault(); setActive((i) => Math.max(0, i - 1)); }
             else if (e.key === 'Enter') {
               e.preventDefault();
-              // Nothing typed: Enter adds only a row the chair arrowed to, never the first
-              // country of the alphabet by accident.
-              if (!trimmed && (!open || !navigatedRef.current)) return;
+              // Nothing typed: nothing is suggested, so Enter adds nothing.
+              if (!trimmed) return;
+              setOpen(true);
               commit(options[active], e.shiftKey);
             } else if (e.key === 'Escape') {
               e.preventDefault();
@@ -186,7 +186,7 @@ export default function SeatAddField({
       </div>
       <span role="status" aria-live="polite" className="sr-only">{announced}</span>
 
-      {open && (
+      {listShown && (
         <Portal>
           <div
             ref={listRef}

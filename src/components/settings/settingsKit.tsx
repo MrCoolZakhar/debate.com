@@ -10,7 +10,7 @@
  *   SealChoice    role=radiogroup of cards with an icon and a wax-seal selected mark
  *   ClockStepper  role=spinbutton seconds well with - / + and notch presets
  *   NotchDial     role=slider track of notches, a pebble thumb, drag and arrow keys
- *   SecondsDial   role=slider on a LOG scale + a typed value + presets (the gavel knock)
+ *   TimeChooser   a typed m:ss clock with - / + steps (the gavel knock), like the Add time panel
  *   TallyStepper  compact +/- counter for points
  *   Section, SettingRow, RowGrid, SectionPair, HoverHint, InfoHint, InlineRename, ConfirmSheet
  *
@@ -25,7 +25,7 @@
  * object: a person's avatar, a wax seal on a chosen card, a join-code ticket, a switch knob.
  */
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Check, Info, Lock, Minus, Plus, Pencil, RotateCcw } from 'lucide-react';
+import { Check, Info, Lock, Minus, Plus, Pencil, RotateCcw, Timer } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { portalFrame } from '@/components/chat/chatTokens';
 
@@ -89,6 +89,12 @@ export function SettingsKitStyles() {
       .stg-num { font-variant-numeric: tabular-nums; }
       @keyframes stgRise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
       .stg-rise { animation: stgRise 320ms ${K.ease} both; }
+      /* Tab columns follow the PAGE width (a container query), never the viewport: the
+         dialog is portalled into the scaled #fit-root and its spine takes a share. */
+      .stg-page { container-type: inline-size; }
+      .stg-cols-2, .stg-cols-3 { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 20px; align-items: start; }
+      @container (min-width: 720px) { .stg-cols-2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+      @container (min-width: 900px) { .stg-cols-3 { grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr) minmax(0, 0.92fr); } }
       @media (prefers-reduced-motion: reduce) {
         .stg-root *, .stg-root *::before, .stg-root *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; animation-delay: 0ms !important; }
         .stg-press:active:not(:disabled) { transform: none; }
@@ -505,163 +511,118 @@ export function NotchDial({ value, min, max, step = 1, onChange, label, valueTex
   );
 }
 
-// ── SecondsDial: the "knock at N seconds" control ─────────────────────────────
+// ── TimeChooser: a clock you set, like the Add time panel ─────────────────────
+/** m:ss, always with a minutes part (0:15, 1:30, 10:00). */
+export function formatClock(secs: number): string {
+  const v = Math.max(0, Math.round(secs));
+  return `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}`;
+}
+
+/** "1:30", "90", "1:5" -> seconds; null when it is not a time. */
+export function parseClock(text: string): number | null {
+  const s = text.trim();
+  const mm = /^(\d{1,2}):(\d{1,2})$/.exec(s);
+  if (mm) return parseInt(mm[1], 10) * 60 + parseInt(mm[2], 10);
+  if (/^\d{1,4}$/.test(s)) return parseInt(s, 10);
+  return null;
+}
+
 /**
- * A real slider for a seconds setting with a very wide range (1..600), plus presets and a
- * typed value. Three things make it work where a plain +/- stepper did not:
+ * A seconds setting read as a clock. The face is a typed m:ss field (seconds alone work too)
+ * that commits on blur or Enter, never per keystroke; - and + step by `step` seconds on either
+ * side, the way the Add time panel adds a fixed amount. Arrow Up / Down on the face step one
+ * second, Shift ten. There are NO presets and no slider: a slider over a 1..600 range could
+ * not land on the value a chair meant, and presets beside it doubled the ways to say one thing.
  *
- *  1. LOG SCALE. On a linear 1..600 track the useful part of the setting (5 to 60 seconds)
- *     lives in the first 10% and cannot be hit with a finger. Here the position is
- *     log(v/min) / log(max/min), so 15 s (the default) sits near the middle.
- *  2. A GRAIN that follows the value: 1 s below a minute, 5 s up to five minutes, 15 s above.
- *     Dragging therefore lands on round numbers, and so do the arrow keys.
- *  3. ONE source of truth for what is committed: every path (drag, keys, preset, typed
- *     number) goes through `clamp` then `onChange`, and the typed field re-reads the value
- *     from a ref, so committing by blurring into a preset cannot lose what was typed.
- *
- * `onChange` fires on every drag sample; the caller's write is key-level and debounced, so a
- * drag is one patch. Presets are drawn as ticks on the rail as well as chips under it.
+ * Every path goes through `clamp` then `onChange`, and the step buttons read the live value
+ * from a ref, so pressing + right after typing never steps from a stale number.
  */
-export function SecondsDial({ value, min, max, onChange, label, presets = [], unit, format, clamp: clampIn, aside }: {
-  value: number; min: number; max: number; onChange: (v: number) => void; label: string;
-  presets?: number[]; unit: string; format?: (v: number) => string; clamp?: (v: number) => number;
-  /** Rendered at the inline-end of the preset row (e.g. a Test button). */
+export function TimeChooser({ value, min, max, step = 5, onChange, label, lessLabel, moreLabel, clamp: clampIn, aside }: {
+  value: number; min: number; max: number; step?: number; onChange: (v: number) => void; label: string;
+  /** Accessible names for the step buttons, e.g. "5 seconds less". */
+  lessLabel: string; moreLabel: string;
+  clamp?: (v: number) => number;
+  /** Rendered at the inline-end of the row (e.g. a Test button). */
   aside?: React.ReactNode;
 }) {
-  const trackRef = useRef<HTMLDivElement>(null);
-  const [dragging, setDragging] = useState(false);
-  const [draft, setDraft] = useState(String(value));
+  const [draft, setDraft] = useState(formatClock(value));
   const [editing, setEditing] = useState(false);
   const [synced, setSynced] = useState(value);
-  if (!editing && synced !== value) { setSynced(value); setDraft(String(value)); }
+  if (!editing && synced !== value) { setSynced(value); setDraft(formatClock(value)); }
   const liveRef = useRef(value);
   useEffect(() => { liveRef.current = value; }, [value]);
-
-  const clamp = useCallback((v: number) => {
+  const clamp = (v: number) => {
     const n = clampIn ? clampIn(v) : Math.round(v);
     return Math.min(max, Math.max(min, Number.isFinite(n) ? n : min));
-  }, [clampIn, min, max]);
-  const grain = (v: number) => (v <= 60 ? 1 : v <= 300 ? 5 : 15);
-  const toPos = useCallback((v: number) => Math.log(Math.max(min, v) / min) / Math.log(max / min), [min, max]);
-  const fromPos = useCallback((p: number) => min * Math.pow(max / min, Math.min(1, Math.max(0, p))), [min, max]);
-  const snap = useCallback((v: number) => { const g = grain(v); return clamp(Math.round(v / g) * g); }, [clamp]);
-
-  const fromPointer = (clientX: number) => {
-    const el = trackRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    let p = (clientX - r.left) / (r.width || 1);
-    if (getComputedStyle(el).direction === 'rtl') p = 1 - p;
-    onChange(snap(fromPos(p)));
   };
-  const onKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    const rtl = getComputedStyle(e.currentTarget).direction === 'rtl';
-    const v = liveRef.current;
-    // Step onto the grain of the side we move towards, so 60 -> 65 and 66 -> 65, never 66.
-    const up = (n: number) => { const g = grain(v + 1); return (Math.floor(v / g) + n) * g; };
-    const down = (n: number) => { const g = grain(Math.max(min, v - 1)); return (Math.ceil(v / g) - n) * g; };
-    let next: number | null = null;
-    if (e.key === 'ArrowUp' || e.key === (rtl ? 'ArrowLeft' : 'ArrowRight')) next = up(1);
-    else if (e.key === 'ArrowDown' || e.key === (rtl ? 'ArrowRight' : 'ArrowLeft')) next = down(1);
-    else if (e.key === 'PageUp') next = up(10);
-    else if (e.key === 'PageDown') next = down(10);
-    else if (e.key === 'Home') next = min;
-    else if (e.key === 'End') next = max;
-    if (next === null) return;
-    e.preventDefault();
-    onChange(clamp(next));
-  };
-  const commitDraft = () => {
-    setEditing(false);
-    const n = parseInt(draft.trim(), 10);
-    if (!Number.isFinite(n)) { setDraft(String(liveRef.current)); return; }
-    const c = clamp(n);
-    setDraft(String(c));
+  const set = (v: number) => {
+    const c = clamp(v);
     liveRef.current = c;
+    setDraft(formatClock(c));
     if (c !== value) onChange(c);
   };
-  const frac = toPos(value);
-  const text = format ? format(value) : `${value}${unit}`;
-
+  const commit = () => {
+    setEditing(false);
+    const n = parseClock(draft);
+    if (n === null) { setDraft(formatClock(liveRef.current)); return; }
+    set(n);
+  };
+  // Step onto the grid (15 -> 20 -> 25), not off it from a typed 17.
+  const bump = (d: number) => {
+    const base = liveRef.current;
+    set(d > 0 ? (Math.floor(base / step) + 1) * step : (Math.ceil(base / step) - 1) * step);
+  };
+  const stepBtn = (dir: -1 | 1) => {
+    const off = dir < 0 ? value <= min : value >= max;
+    return (
+      <button type="button" aria-label={dir < 0 ? lessLabel : moreLabel} title={dir < 0 ? lessLabel : moreLabel}
+        onClick={() => bump(dir * step)} disabled={off}
+        className="stg-focus stg-press stg-num inline-flex items-center justify-center gap-0.5 shrink-0"
+        style={{
+          height: 34, minWidth: 52, padding: '0 10px', borderRadius: 10, border: 'none', cursor: off ? 'default' : 'pointer',
+          fontSize: T.body, fontWeight: W.section, opacity: off ? 0.4 : 1,
+          background: dir > 0 ? K.forest : K.surface, color: dir > 0 ? K.gold : K.forest, boxShadow: K.outSm,
+        }}>
+        {dir < 0 ? <Minus size={13} strokeWidth={2.8} aria-hidden /> : <Plus size={13} strokeWidth={2.8} aria-hidden />}
+        {step}s
+      </button>
+    );
+  };
   return (
-    <div className="flex flex-col gap-2 w-full" style={{ minWidth: 220 }}>
-      <div className="flex items-center gap-3">
-        <div
-          ref={trackRef}
-          role="slider"
-          tabIndex={0}
+    <div className="flex flex-wrap items-center gap-2">
+      {stepBtn(-1)}
+      <span className="inline-flex items-center gap-1.5 shrink-0" style={{ height: 40, padding: '0 12px 0 10px', borderRadius: 12, background: K.ivory, boxShadow: K.inSm }}>
+        <Timer aria-hidden size={16} strokeWidth={2.3} style={{ color: K.deepGold }} />
+        <input
+          type="text"
+          inputMode="numeric"
+          role="spinbutton"
           aria-label={label}
           aria-valuemin={min}
           aria-valuemax={max}
           aria-valuenow={value}
-          aria-valuetext={text}
-          onKeyDown={onKey}
-          onPointerDown={(e) => { if (e.pointerType === 'mouse' && e.button !== 0) return; setDragging(true); (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); fromPointer(e.clientX); }}
-          onPointerMove={(e) => { if (dragging) fromPointer(e.clientX); }}
-          onPointerUp={() => setDragging(false)}
-          onPointerCancel={() => setDragging(false)}
-          className="stg-focus relative flex-1 select-none"
-          style={{ height: 30, borderRadius: 10, cursor: 'pointer', touchAction: 'none', minWidth: 120 }}
-        >
-          {/* Rail, fill, and a tick where each preset sits. */}
-          <span aria-hidden className="absolute" style={{ insetInline: 0, top: 12, height: 6, borderRadius: 999, background: K.ivory, boxShadow: K.inSm }} />
-          <span aria-hidden className="absolute" style={{ insetInlineStart: 0, top: 12, height: 6, width: `calc(11px + (100% - 22px) * ${frac})`, borderRadius: 999, background: `linear-gradient(90deg, ${K.forestMid}, ${K.deepGold})` }} />
-          {presets.map((p) => (
-            <span key={p} aria-hidden className="absolute" style={{
-              top: 22, insetInlineStart: `calc(10px + (100% - 22px) * ${toPos(p)})`, width: 2, height: 5, borderRadius: 2,
-              background: 'rgba(28,20,16,0.2)',
-            }} />
-          ))}
-          <span aria-hidden className="absolute" style={{
-            top: 3, insetInlineStart: `calc((100% - 22px) * ${frac})`, width: 22, height: 24, borderRadius: 8,
-            background: 'linear-gradient(180deg, #FFFFFF, #EFE8D8)',
-            boxShadow: `0 3px 8px rgba(27,56,40,0.3), inset 0 -2px 0 rgba(27,56,40,0.08)${dragging ? `, 0 0 0 3px rgba(182,135,31,0.25)` : ''}`,
-            transitionProperty: 'inset-inline-start, box-shadow', transitionDuration: dragging ? '0ms' : '140ms',
-          }}>
-            <span className="absolute" style={{ top: 7, left: 6, right: 6, height: 2, borderRadius: 2, background: 'rgba(27,56,40,0.25)', boxShadow: '0 4px 0 rgba(27,56,40,0.25)' }} />
-          </span>
-        </div>
-        <span className="inline-flex items-center shrink-0" style={{ height: 34, padding: '0 8px 0 2px', borderRadius: 10, background: K.ivory, boxShadow: K.inSm }}>
-          <input
-            type="text"
-            inputMode="numeric"
-            aria-label={label}
-            value={draft}
-            onFocus={() => setEditing(true)}
-            onChange={(e) => setDraft(e.target.value.replace(/[^\d]/g, '').slice(0, 3))}
-            onBlur={commitDraft}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') { e.preventDefault(); (e.currentTarget as HTMLInputElement).blur(); }
-              else if (e.key === 'Escape') { e.preventDefault(); setDraft(String(liveRef.current)); setEditing(false); (e.currentTarget as HTMLInputElement).blur(); }
-            }}
-            className="stg-focus stg-num text-center"
-            style={{ width: 46, height: 28, border: 'none', background: 'transparent', fontSize: T.section, fontWeight: W.section, color: K.forest, borderRadius: 8 }}
-          />
-          <span aria-hidden style={{ fontSize: T.caption, fontWeight: W.label, color: K.inkSoft }}>{unit}</span>
-        </span>
-      </div>
-      {(presets.length > 0 || aside) && (
-        <div className="flex flex-wrap items-center gap-1.5">
-        <div className="flex flex-wrap gap-1.5 flex-1" role="group" aria-label={label}>
-          {presets.map((p) => {
-            const on = p === value;
-            return (
-              <button key={p} type="button" aria-pressed={on} onClick={() => onChange(clamp(p))}
-                className="stg-focus stg-press stg-num"
-                style={{
-                  minWidth: 38, height: 26, padding: '0 9px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                  fontSize: T.body, fontWeight: on ? W.section : W.label,
-                  background: on ? K.gold : 'transparent', color: on ? K.forest : K.inkSoft,
-                  boxShadow: on ? '0 2px 6px -2px rgba(182,135,31,0.6)' : 'inset 0 0 0 1px rgba(28,20,16,0.12)',
-                }}>
-                {format ? format(p) : `${p}${unit}`}
-              </button>
-            );
-          })}
-        </div>
-        {aside}
-        </div>
-      )}
+          aria-valuetext={formatClock(value)}
+          dir="ltr"
+          value={draft}
+          onFocus={(e) => { setEditing(true); e.currentTarget.select(); }}
+          onChange={(e) => setDraft(e.target.value.replace(/[^\d:]/g, '').slice(0, 5))}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); (e.currentTarget as HTMLInputElement).blur(); }
+            else if (e.key === 'Escape') { e.preventDefault(); setDraft(formatClock(liveRef.current)); setEditing(false); (e.currentTarget as HTMLInputElement).blur(); }
+            else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+              e.preventDefault();
+              const d = (e.key === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? 10 : 1);
+              set(liveRef.current + d);
+            }
+          }}
+          className="stg-focus stg-num text-center"
+          style={{ width: 64, height: 32, border: 'none', background: 'transparent', fontSize: T.section, fontWeight: W.section, color: K.forest, borderRadius: 8, fontFamily: K.font }}
+        />
+      </span>
+      {stepBtn(1)}
+      {aside && <span className="flex-1" aria-hidden />}
+      {aside}
     </div>
   );
 }

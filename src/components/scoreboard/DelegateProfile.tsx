@@ -8,26 +8,30 @@
 //
 // WHY IT IS NOT A FLAG ON `DelegateDetail`. That component is shared with the
 // organiser dashboard, where this view is read-only and English and has been
-// signed off as it stands. Rebuilding it in place would have meant two divergent
-// renders inside one function, gated on a boolean. `renderDetail` lets the chair
-// pass a different component instead, so the organiser board renders exactly the
-// bytes it rendered yesterday and this file is free to be what a chair needs.
+// signed off as it stands. `renderDetail` lets the chair pass a different
+// component instead, so the organiser board renders exactly the bytes it always
+// did and this file is free to be what a chair needs.
 //
-// WHAT CHANGED, AND WHY. The owner's words: "all tabs look the same". They did:
-// five stacked headings in identical 10px capitals, with no glyph, no tint and no
-// hierarchy, so finding the notes meant reading every heading. Now the profile
-// opens with the delegation itself — round flag, name, score — and then five
-// sections that are each visibly a different thing:
+// COMPACT, ON PURPOSE (17 Sep 2026). The owner found the previous profile
+// "messy, hard to tell apart and takes too much space": eight figure tiles, a
+// by-source ledger, rating bars, comment cards and a separate timeline, stacked.
+// It is now four things, top to bottom:
 //
-//   ACTIVITY        forest   what they did, as figures
-//   POINTS          gold     the ledger that sums to the objective total
-//   RATINGS         sage     the chairs' factor sliders
-//   COMMENTS        amber    what the chairs wrote, and who wrote it
-//   TIMELINE        forest   the same ledger in the order it happened
+//   1. ONE LINE: flag and name, then speeches, speaking time, rank and points.
+//   2. ONE STACKED BAR of where the points came from, with a legend of source
+//      names and values (`sessionPointSlices`, which sums to the objective).
+//   3. RATINGS, one line per factor, and only when a chair has rated anything.
+//   4. THE TIMELINE: every speech (context, duration, time, points) with the
+//      chair comments written on it inline, and the other scored events. Notes
+//      that belong to no speech follow under "Other comments".
 //
-// It computes NOTHING. Every number on screen is a field of the
-// `ScoreboardDelegateRow` the shared builder already produced, which is the same
-// row the organiser sees, so the two surfaces can still never disagree.
+// Then the Moderator's plus / minus (`extra`). No chair-note count anywhere: the
+// owner does not want notes tallied.
+//
+// It computes no score. Every number is a field of the shared row, or a fold of
+// its ledger (`sessionPointSlices`), or the history's note placement
+// (`buildSessionHistory`), so the ranking list, the matrix and the History tab
+// can never disagree with it.
 //
 // CHAIR-PRIVATE. Notes and ratings are rendered here because this component is
 // mounted only by `ScoreboardPanel`, which is mounted only by `/chair/[code]`.
@@ -35,246 +39,322 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React from 'react';
-import { Coins, Star, MessageSquareQuote, Activity, History } from 'lucide-react';
+import { Mic, Clock, Trophy } from 'lucide-react';
 import { NEU, OUTFIT } from '@/components/neu';
 import { SOFT, RED, CARD_BORDER_COLOR } from '@/components/scoreboardTokens';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { getCountryDisplayName } from '@/lib/countries';
-import { formatSpeakingTime, type ScoreboardDelegateRow, type ScoreboardComment } from '@/lib/conferenceScoreboard';
+import { formatSpeakingTime, type ScoreboardDelegateRow } from '@/lib/conferenceScoreboard';
+import type { PointSlice } from '@/lib/sessionScoreboard';
+import { speechKey, type HistorySpeech, type HistoryNote } from '@/lib/sessionHistory';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
-import { IconStat, SectionHead, eventIcon, STAT_ICONS, TINT } from './SessionScoreboardParts';
+import { eventIcon, TINT } from './SessionScoreboardParts';
 
 const fmt = (tpl: string, vars: Record<string, string | number>): string =>
   tpl.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
 
-export default function DelegateProfile({ row, extra }: {
+/** One colour per source, fixed, so a source reads the same on every delegation. */
+const SLICE_COLOUR: Record<string, string> = {
+  gslSpeech: '#1B3828',
+  caucusSpeech: '#4F7F5E',
+  speakingTimePer10s: '#C9A43A',
+  motionRaised: '#B8844A',
+  rightOfReply: '#A35D4A',
+  wpSponsor: '#5D86A8',
+  drSponsor: '#34587A',
+  drPassed: '#3F7A77',
+  attendance: '#B9A883',
+  manual: '#7E5E86',
+};
+const EXTRA_COLOURS = ['#8A7F5A', '#6B6B8E', '#9C6B7A', '#5F7F86'];
+
+const MICRO: React.CSSProperties = {
+  fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.1em', color: SOFT,
+};
+
+type TimelineItem =
+  | { kind: 'speech'; at: string; speech: HistorySpeech; pts: number | null }
+  | { kind: 'event'; at: string; row: ScoreboardDelegateRow['ledger'][number] };
+
+export default function DelegateProfile({ row, rank, rankTotal, slices, speeches, extra }: {
   row: ScoreboardDelegateRow;
-  /** The Moderator's manual award / deduct control. Absent for a Commenter. */
+  /** 1-based place by score among `rankTotal` delegations (ties share a place). */
+  rank: number;
+  rankTotal: number;
+  /** `sessionPointSlices` for this row. */
+  slices: PointSlice[];
+  /** This delegation's speeches from `buildSessionHistory`, notes already attached. */
+  speeches: HistorySpeech[];
+  /** The Moderator's plus / minus. Absent for a Commenter. */
   extra?: React.ReactNode;
 }) {
   const t = useT();
   const { language } = useLanguage();
   const dateLocale = language === 'en' ? 'en-GB' : language;
-  const stamp = (iso: string) =>
-    new Date(iso).toLocaleString(dateLocale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const clock = (iso: string) => (iso
+    ? new Date(iso).toLocaleTimeString(dateLocale, { hour: '2-digit', minute: '2-digit' })
+    : '');
 
-  const comments = row.comments.filter((c) => c.content.trim());
-  const speeches = row.gslSpeeches + row.caucusSpeeches;
+  const speechCount = row.gslSpeeches + row.caucusSpeeches;
 
-  // The ledger, folded by source for POINTS and left in time order for TIMELINE.
-  // Same rows, two readings: "where did the points come from" and "what happened".
-  const grouped: { sourceId: string; label: string; rows: typeof row.ledger; subtotal: number }[] = [];
-  for (const r of row.ledger) {
-    let g = grouped.find((x) => x.sourceId === r.sourceId);
-    if (!g) { g = { sourceId: r.sourceId, label: r.label, rows: [], subtotal: 0 }; grouped.push(g); }
-    g.rows.push(r);
-    g.subtotal += r.pts;
-  }
-  const timeline = [...row.ledger]
-    .filter((r) => r.timestamp)
-    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-
-  const ctxLabel = (c?: string): string => {
+  const ctxLabel = (c: string): string => {
     switch (c) {
-      case 'speakers-list': return t('fb_tag_gsl');
-      case 'moderated-caucus': return t('fb_tag_caucus');
-      case 'unmoderated-caucus': return t('fb_tag_unmod');
-      case 'tour-de-table': return t('fb_tag_tour');
-      default: return c ? c.toUpperCase() : '';
+      case 'speakers-list': return t('sb_hist_seg_gsl');
+      case 'moderated-caucus': return t('sb_hist_seg_moderated');
+      case 'unmoderated-caucus': return t('sb_hist_seg_unmoderated');
+      case 'tour-de-table': return t('sb_hist_seg_tour');
+      default: return c;
     }
   };
 
-  const commentMeta = (c: ScoreboardComment): string => [
-    c.level === 'speech' ? ctxLabel(c.speechContext ?? undefined) : t('sb_comment_level_session'),
-    c.speechTopic?.trim() || '',
-    c.speechSeconds ? fmt(t('sb_comment_speech_seconds'), { n: c.speechSeconds }) : '',
-    c.spokenAt || c.createdAt ? stamp((c.spokenAt || c.createdAt) as string) : '',
-  ].filter(Boolean).join(' · ');
+  // ── Points bar ────────────────────────────────────────────────────────────
+  const colourOf = (() => {
+    let extraIdx = 0;
+    const assigned = new Map<string, string>();
+    return (id: string) => {
+      if (SLICE_COLOUR[id]) return SLICE_COLOUR[id];
+      if (!assigned.has(id)) assigned.set(id, EXTRA_COLOURS[extraIdx++ % EXTRA_COLOURS.length]);
+      return assigned.get(id)!;
+    };
+  })();
+  const positive = slices.filter((s) => s.pts > 0);
+  const positiveSum = positive.reduce((s, x) => s + x.pts, 0);
 
-  const empty = (text: string) => (
-    <p style={{ fontFamily: OUTFIT, fontSize: 12, color: SOFT, textWrap: 'pretty' }}>{text}</p>
+  // ── Timeline: speeches (with their notes) + every other scored event ─────
+  const ledgerSpeechPts = new Map<string, number>();
+  for (const r of row.ledger) {
+    if (r.type === 'speech') ledgerSpeechPts.set(speechKey(row.country, r.timestamp, r.context, r.seconds), r.pts);
+  }
+  const items: TimelineItem[] = [
+    ...speeches.map((s): TimelineItem => ({
+      kind: 'speech', at: s.timestamp, speech: s,
+      pts: ledgerSpeechPts.get(speechKey(s.country, s.timestamp, s.context, s.seconds)) ?? null,
+    })),
+    ...row.ledger
+      .filter((r) => r.type !== 'speech' && r.timestamp)
+      .map((r): TimelineItem => ({ kind: 'event', at: r.timestamp, row: r })),
+  ].sort((a, b) => (b.at || '').localeCompare(a.at || ''));
+
+  const placed = new Set(speeches.flatMap((s) => s.notes.map((n) => n.id)));
+  const otherComments = row.comments.filter((c) => c.content.trim() && !placed.has(c.id));
+
+  const signed = (n: number) => (n > 0 ? `+${n}` : String(n));
+
+  const noteLine = (n: Pick<HistoryNote, 'id' | 'content' | 'chairName'>) => (
+    <p
+      key={n.id}
+      style={{
+        fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.45, color: NEU.ink, textWrap: 'pretty',
+        marginBlockStart: 3, paddingInlineStart: 9, borderInlineStart: `2px solid ${TINT.amber.fg}`,
+      }}
+    >
+      {n.content}
+      {n.chairName && (
+        <span style={{ color: SOFT, fontSize: 11, whiteSpace: 'nowrap' }}>{` · ${n.chairName}`}</span>
+      )}
+    </p>
   );
+
+  const eventTitle = (r: ScoreboardDelegateRow['ledger'][number]): string => {
+    if (r.type === 'manual-award' || r.type === 'manual-deduct') {
+      const base = r.type === 'manual-award' ? t('sb_hist_award') : t('sb_hist_deduct');
+      return r.detail ? `${r.detail} · ${base}` : base.charAt(0).toLocaleUpperCase(language) + base.slice(1);
+    }
+    if (r.type === 'wp' || r.type === 'dr' || r.type === 'drPassed') return r.detail ? `${r.label} · ${r.detail}` : r.label;
+    return r.label;
+  };
 
   return (
     <div
       style={{
         backgroundColor: 'rgba(27,56,40,0.035)',
         borderBlockStart: `1px solid ${CARD_BORDER_COLOR}`,
-        padding: '14px 16px 16px',
+        padding: '12px 16px 14px',
       }}
     >
-      {/* ── Who this is ──────────────────────────────────────────────────────
-          The row above scrolls out of sight as soon as the ledger is long, and
-          the old drill-in then had nothing on it naming the delegation. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBlockEnd: 14 }}>
-        <SeatCircleFlag country={row.country} size={40} decorative />
-        <span style={{ minWidth: 0 }}>
-          <span style={{ display: 'block', fontFamily: OUTFIT, fontWeight: 800, fontSize: 16, color: NEU.ink, lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      {/* ── 1. One line: who, and the four figures ───────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', rowGap: 6 }}>
+        <SeatCircleFlag country={row.country} size={34} decorative />
+        <span style={{ flex: '1 1 140px', minWidth: 0 }}>
+          <span style={{ display: 'block', fontFamily: OUTFIT, fontWeight: 800, fontSize: 15.5, color: NEU.ink, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {getCountryDisplayName(row.country, language)}
           </span>
-          <span style={{ fontFamily: OUTFIT, fontSize: 11, color: SOFT }}>
-            {row.isObserver ? t('sb_observer') : row.status === 'absent' ? t('sb_absent') : `${speeches} ${speeches === 1 ? t('sb_speech_one') : t('sb_speech_many')}`}
+          {(row.isObserver || row.status === 'absent') && (
+            <span style={{ display: 'block', fontFamily: OUTFIT, fontSize: 11, color: SOFT }}>
+              {row.isObserver ? t('sb_observer') : t('sb_absent')}
+            </span>
+          )}
+        </span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 14, fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>
+          <span
+            className="inline-flex items-center gap-1.5"
+            title={fmt(t('sb_title_speeches_split'), { gsl: row.gslSpeeches, caucus: row.caucusSpeeches })}
+            aria-label={`${speechCount} ${speechCount === 1 ? t('sb_speech_one') : t('sb_speech_many')}`}
+          >
+            <Mic size={13} strokeWidth={2.4} style={{ color: SOFT }} aria-hidden />
+            {speechCount}
+          </span>
+          <span className="inline-flex items-center gap-1.5" title={t('sb_stat_speaking_time')}>
+            <Clock size={13} strokeWidth={2.4} style={{ color: SOFT }} aria-hidden />
+            {formatSpeakingTime(row.speakingSeconds)}
+          </span>
+          <span className="inline-flex items-center gap-1.5" title={fmt(t('sb_profile_rank_title'), { rank, n: rankTotal })}>
+            <Trophy size={13} strokeWidth={2.4} style={{ color: SOFT }} aria-hidden />
+            #{rank}
+          </span>
+          <span
+            style={{
+              display: 'inline-flex', alignItems: 'baseline', gap: 3,
+              backgroundColor: NEU.forest, color: NEU.gold, borderRadius: 999,
+              paddingInline: 11, paddingBlock: 4, fontWeight: 900, fontSize: 15,
+            }}
+            title={row.quality != null
+              ? fmt(t('sb_title_score_blended'), { objective: row.objective, quality: row.quality })
+              : fmt(t('sb_title_score'), { objective: row.objective })}
+          >
+            {row.headline}
+            <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.75 }}>{t('sb_pts')}</span>
           </span>
         </span>
-        <span
-          style={{
-            marginInlineStart: 'auto', flexShrink: 0,
-            fontFamily: OUTFIT, fontWeight: 900, fontSize: 15, fontVariantNumeric: 'tabular-nums',
-            backgroundColor: NEU.forest, color: NEU.gold, borderRadius: 999,
-            paddingInline: 13, paddingBlock: 5,
-          }}
-          title={row.quality != null
-            ? fmt(t('sb_title_score_blended'), { objective: row.objective, quality: row.quality })
-            : fmt(t('sb_title_score'), { objective: row.objective })}
-        >
-          {row.headline}
-        </span>
       </div>
 
-      {/* ── ACTIVITY ───────────────────────────────────────────────────────── */}
-      <SectionHead icon={Activity} label={t('sb_section_this_session')} tint={TINT.forest} />
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBlockEnd: 18 }}>
-        <IconStat icon={STAT_ICONS.speeches} label={t('sb_stat_speeches')} value={String(speeches)}
-          title={fmt(t('sb_title_speeches_split'), { gsl: row.gslSpeeches, caucus: row.caucusSpeeches })} />
-        <IconStat icon={STAT_ICONS.time} label={t('sb_stat_speaking_time')} value={formatSpeakingTime(row.speakingSeconds)} />
-        <IconStat icon={STAT_ICONS.motions} label={t('sb_stat_motions')} value={String(row.motions)} title={t('sb_title_motions')} />
-        <IconStat icon={STAT_ICONS.rtr} label={t('sb_stat_rights_of_reply')} value={String(row.rightsOfReply)} />
-        <IconStat icon={STAT_ICONS.docs} label={t('sb_stat_wp_dr')} value={`${row.workingPapers} / ${row.draftResolutions}`}
-          title={fmt(t('sb_title_wp_dr'), { wp: row.workingPapers, dr: row.draftResolutions })} tint={TINT.sage} />
-        <IconStat icon={STAT_ICONS.notes} label={t('sb_stat_chair_notes')} value={String(comments.length)} tint={TINT.amber} />
-        {/* OBJECTIVE, NOT THE BADGE above: the ledger below sums to this, and
-            whenever a quality blend is set the two legitimately differ. */}
-        <IconStat
-          icon={STAT_ICONS.points} tint={TINT.gold}
-          label={row.quality != null && row.headline !== row.objective ? t('sb_stat_objective_pts') : t('sb_stat_points')}
-          value={String(row.objective)}
-          title={row.quality != null ? fmt(t('sb_title_ledger_blended'), { headline: row.headline, quality: row.quality }) : t('sb_title_ledger')}
-        />
-        <IconStat icon={STAT_ICONS.quality} tint={TINT.sage} label={t('sb_stat_quality')}
-          value={row.quality != null ? String(row.quality) : t('sb_quality_unrated')} title={t('sb_title_quality')} />
-      </div>
-
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 22 }}>
-        {/* ── POINTS ─────────────────────────────────────────────────────── */}
-        <div style={{ flex: '1 1 280px', minWidth: 0 }}>
-          <SectionHead icon={Coins} label={t('sb_section_points_breakdown')} tint={TINT.gold}
-            trailing={grouped.length ? `${row.objective}` : undefined} />
-          {grouped.length === 0 && empty(t('sb_empty_no_scored'))}
-          {grouped.map((g) => (
-            <div key={g.sourceId} style={{ marginBlockEnd: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: NEU.forest, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  {g.label}
-                </span>
-                <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, marginInlineStart: 'auto', fontVariantNumeric: 'tabular-nums', color: g.subtotal < 0 ? RED : NEU.forest }}>
-                  {g.subtotal < 0 ? '' : '+'}{g.subtotal}
-                </span>
+      {/* ── 2. Where the points came from ─────────────────────────────────── */}
+      <div style={{ marginBlockStart: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', marginBlockEnd: 6 }}>
+          <span style={MICRO}>{t('sb_section_points_breakdown')}</span>
+          {slices.length > 0 && (
+            <span
+              style={{ ...MICRO, marginInlineStart: 'auto', letterSpacing: 0, fontSize: 11.5, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}
+              title={row.quality != null
+                ? fmt(t('sb_title_ledger_blended'), { headline: row.headline, quality: row.quality })
+                : t('sb_title_ledger')}
+            >
+              {row.objective}
+            </span>
+          )}
+        </div>
+        {slices.length === 0 ? (
+          <p style={{ fontFamily: OUTFIT, fontSize: 12, color: SOFT }}>{t('sb_empty_no_scored')}</p>
+        ) : (
+          <>
+            {positiveSum > 0 && (
+              <div
+                role="img"
+                aria-label={positive.map((s) => `${s.label} ${s.pts}`).join(', ')}
+                style={{ display: 'flex', gap: 2, height: 10, borderRadius: 999, overflow: 'hidden', backgroundColor: 'rgba(27,56,40,0.08)' }}
+              >
+                {positive.map((s) => (
+                  <span
+                    key={s.sourceId}
+                    title={`${s.label} ${signed(s.pts)}`}
+                    style={{ flex: `${s.pts} 1 0`, minWidth: 3, backgroundColor: colourOf(s.sourceId) }}
+                  />
+                ))}
               </div>
-              {g.rows.map((r, i) => (
-                <div key={i} style={{ display: 'flex', gap: 8, padding: '2px 0' }}>
-                  <span style={{ fontFamily: OUTFIT, fontSize: 11.5, color: SOFT, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {r.detail || r.label}
-                    {r.timestamp ? ` · ${stamp(r.timestamp)}` : ''}
+            )}
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0, marginBlockStart: 7, display: 'flex', flexWrap: 'wrap', columnGap: 14, rowGap: 4 }}>
+              {slices.map((s) => (
+                <li key={s.sourceId} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: OUTFIT, fontSize: 12, color: NEU.ink }}>
+                  <span aria-hidden style={{ width: 8, height: 8, borderRadius: 999, flexShrink: 0, backgroundColor: s.pts > 0 ? colourOf(s.sourceId) : RED }} />
+                  {s.label}
+                  <span style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: s.pts < 0 ? RED : NEU.forest }}>{signed(s.pts)}</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+
+      {/* ── 3. Ratings, only when someone rated ───────────────────────────── */}
+      {row.factors.length > 0 && (
+        <div style={{ marginBlockStart: 12 }}>
+          <span style={{ ...MICRO, display: 'block', marginBlockEnd: 5 }}>{t('sb_section_chair_ratings')}</span>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', columnGap: 18, rowGap: 3 }}>
+            {row.factors.map((f) => {
+              const max = Math.max(1, f.scaleMax);
+              const avg = Math.round(f.average * 10) / 10;
+              const dots = max <= 10;
+              const filled = Math.round(f.average);
+              return (
+                <div
+                  key={f.id}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 22 }}
+                  title={fmt(f.ratings === 1 ? t('sb_title_factor_avg_one') : t('sb_title_factor_avg_many'), { n: f.ratings })}
+                >
+                  <span style={{ flex: 1, minWidth: 0, fontFamily: OUTFIT, fontSize: 12, color: NEU.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {f.name}
                   </span>
-                  <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontVariantNumeric: 'tabular-nums', color: r.pts < 0 ? RED : NEU.ink, flexShrink: 0 }}>
-                    {r.pts < 0 ? '' : '+'}{r.pts}
+                  {dots ? (
+                    <span aria-hidden style={{ display: 'inline-flex', gap: 2.5 }}>
+                      {Array.from({ length: max }, (_, i) => (
+                        <span key={i} style={{ width: 6, height: 6, borderRadius: 999, backgroundColor: i < filled ? NEU.forest : 'rgba(27,56,40,0.14)' }} />
+                      ))}
+                    </span>
+                  ) : (
+                    <span aria-hidden style={{ width: 64, height: 5, borderRadius: 999, backgroundColor: 'rgba(27,56,40,0.12)', overflow: 'hidden' }}>
+                      <span style={{ display: 'block', height: '100%', width: `${Math.min(100, (f.average / max) * 100)}%`, backgroundColor: NEU.forest }} />
+                    </span>
+                  )}
+                  <span style={{ width: 44, textAlign: 'end', fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>
+                    {avg}<span style={{ fontWeight: 600, color: SOFT, fontSize: 10.5 }}>/{max}</span>
                   </span>
                 </div>
-              ))}
-            </div>
-          ))}
+              );
+            })}
+          </div>
         </div>
+      )}
 
-        {/* ── RATINGS + COMMENTS ─────────────────────────────────────────── */}
-        <div style={{ flex: '1 1 280px', minWidth: 0 }}>
-          <SectionHead icon={Star} label={t('sb_section_chair_ratings')} tint={TINT.sage}
-            trailing={row.quality != null ? `${row.quality}/100` : undefined} />
-          {row.factors.length === 0 ? (
-            <div style={{ marginBlockEnd: 16 }}>{empty(t('sb_empty_no_ratings'))}</div>
-          ) : (
-            <div style={{ marginBlockEnd: 16 }}>
-              {row.factors.map((f) => {
-                const pct = Math.max(0, Math.min(100, (f.average / Math.max(1, f.scaleMax)) * 100));
-                return (
-                  <div key={f.id} style={{ marginBlockEnd: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBlockEnd: 3 }}>
-                      <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: NEU.ink }}>{f.name}</span>
-                      <span
-                        style={{ fontFamily: OUTFIT, fontSize: 11, color: SOFT, marginInlineStart: 'auto', fontVariantNumeric: 'tabular-nums' }}
-                        title={fmt(f.ratings === 1 ? t('sb_title_factor_avg_one') : t('sb_title_factor_avg_many'), { n: f.ratings })}
-                      >
-                        {f.average} / {f.scaleMax}
-                      </span>
-                    </div>
-                    <div style={{ height: 6, borderRadius: 999, backgroundColor: 'rgba(27,56,40,0.09)', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${pct}%`, borderRadius: 999, backgroundColor: NEU.forest }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          <SectionHead icon={MessageSquareQuote} label={t('sb_section_chair_comments')} tint={TINT.amber}
-            trailing={comments.length ? String(comments.length) : undefined} />
-          {comments.length === 0 ? empty(t('sb_empty_no_comments')) : comments.map((c) => (
-            <div
-              key={c.id}
-              style={{
-                backgroundColor: NEU.surface, border: `1px solid ${CARD_BORDER_COLOR}`,
-                // Concentric: 10px inner radius + the 9/11px padding of the card.
-                borderRadius: 10, padding: '9px 11px', marginBlockEnd: 7,
-                borderInlineStart: `3px solid ${TINT.amber.fg}`,
-              }}
-            >
-              <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.ink, lineHeight: 1.5, textWrap: 'pretty' }}>{c.content}</p>
-              <p style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT, marginBlockStart: 5 }}>
-                {c.chairName ? <strong style={{ color: NEU.forest, fontWeight: 700 }}>{c.chairName}</strong> : null}
-                {c.chairName && commentMeta(c) ? ' · ' : ''}
-                {commentMeta(c)}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── TIMELINE ───────────────────────────────────────────────────────
-          The same ledger rows as POINTS, read the other way: in the order they
-          happened, newest first, each wearing the glyph of what it was. A chair
-          defending an award wants "what did they do, and when", which the
-          by-source fold above genuinely cannot answer. */}
-      <div style={{ marginBlockStart: 18 }}>
-        <SectionHead icon={History} label={t('sb_section_timeline')} tint={TINT.forest}
-          trailing={timeline.length ? String(timeline.length) : undefined} />
-        {timeline.length === 0 ? empty(t('sb_empty_no_timeline')) : (
+      {/* ── 4. Timeline, with the comments where they were written ────────── */}
+      <div style={{ marginBlockStart: 12 }}>
+        <span style={{ ...MICRO, display: 'block', marginBlockEnd: 2 }}>{t('sb_section_timeline')}</span>
+        {items.length === 0 ? (
+          <p style={{ fontFamily: OUTFIT, fontSize: 12, color: SOFT, marginBlockStart: 4 }}>{t('sb_empty_no_timeline')}</p>
+        ) : (
           <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-            {timeline.map((r, i) => {
-              const Icon = eventIcon(r.type);
+            {items.map((it, i) => {
+              const Icon = eventIcon(it.kind === 'speech' ? 'speech' : it.row.type);
+              const pts = it.kind === 'speech' ? it.pts : it.row.pts;
               return (
-                <li key={i} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '5px 0', borderBlockEnd: i < timeline.length - 1 ? `1px solid ${CARD_BORDER_COLOR}` : 'none' }}>
-                  <span
-                    aria-hidden
-                    className="inline-flex items-center justify-center"
-                    style={{ width: 24, height: 24, borderRadius: 8, flexShrink: 0, backgroundColor: 'rgba(27,56,40,0.07)', color: NEU.forest }}
-                  >
-                    <Icon size={13} strokeWidth={2.3} />
-                  </span>
+                <li
+                  key={i}
+                  style={{
+                    display: 'flex', gap: 9, paddingBlock: 6,
+                    borderBlockEnd: i < items.length - 1 ? `1px solid ${CARD_BORDER_COLOR}` : 'none',
+                  }}
+                >
+                  <Icon size={13} strokeWidth={2.4} aria-hidden style={{ color: SOFT, flexShrink: 0, marginBlockStart: 3 }} />
                   <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: 'block', fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: NEU.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {r.label}
-                      {r.type === 'speech' && r.context ? <span style={{ fontWeight: 600, color: SOFT }}>{` · ${ctxLabel(r.context)}`}</span> : null}
+                    <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                      <span style={{ flex: 1, minWidth: 0, fontFamily: OUTFIT, fontSize: 12.5, color: NEU.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {it.kind === 'speech' ? (
+                          <>
+                            <span style={{ fontWeight: 700 }}>{ctxLabel(it.speech.context)}</span>
+                            <span style={{ color: SOFT, fontVariantNumeric: 'tabular-nums' }}>{` · ${formatSpeakingTime(it.speech.seconds)}`}</span>
+                          </>
+                        ) : (
+                          <span style={{ fontWeight: 600 }}>{eventTitle(it.row)}</span>
+                        )}
+                      </span>
+                      <span style={{ flexShrink: 0, fontFamily: OUTFIT, fontSize: 11, color: SOFT, fontVariantNumeric: 'tabular-nums' }}>
+                        {clock(it.at)}
+                      </span>
+                      <span style={{ flexShrink: 0, width: 34, textAlign: 'end', fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: pts != null && pts < 0 ? RED : NEU.forest }}>
+                        {pts != null && pts !== 0 ? signed(pts) : ''}
+                      </span>
                     </span>
-                    <span style={{ display: 'block', fontFamily: OUTFIT, fontSize: 10.5, color: SOFT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {[r.detail, r.timestamp ? stamp(r.timestamp) : ''].filter(Boolean).join(' · ')}
-                    </span>
-                  </span>
-                  <span style={{ flexShrink: 0, fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: r.pts < 0 ? RED : NEU.forest }}>
-                    {r.pts < 0 ? '' : '+'}{r.pts}
+                    {it.kind === 'speech' && it.speech.notes.map((n) => noteLine(n))}
                   </span>
                 </li>
               );
             })}
           </ol>
+        )}
+        {otherComments.length > 0 && (
+          <div style={{ marginBlockStart: 8 }}>
+            <span style={{ ...MICRO, display: 'block', marginBlockEnd: 2 }}>{t('sb_profile_other_comments')}</span>
+            {otherComments.map((c) => noteLine({ id: c.id, content: c.content.trim(), chairName: c.chairName }))}
+          </div>
         )}
       </div>
 

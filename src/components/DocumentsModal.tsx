@@ -7,12 +7,13 @@ import { portalFrame } from '@/components/chat/chatTokens';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import {
-  Ban, BadgeCheck, Check, ChevronLeft, ChevronRight, CircleDot, FileText, GripHorizontal,
-  Minimize2, Minus, Pause, Play, Plus, Presentation, RotateCcw, Timer, Vote, X, type LucideIcon,
+  Ban, BadgeCheck, Check, CircleDot, FileText, Minus, Plus, Presentation, Timer, Vote, X, type LucideIcon,
 } from 'lucide-react';
+import PdfViewer, { PdfThumb, PDF_ZOOM_STEPS, stepPdfZoom, type PdfZoom } from '@/components/documents/PdfViewer';
+import StageTimerDevice from '@/components/documents/StageTimerDevice';
+import ProceedingsSetup from '@/components/documents/ProceedingsSetup';
 import { Committee, CommitteeDocument, DocIntroState, DocumentType, DocumentStatus } from '@/lib/types';
-import { serverNow, serverNowIso } from '@/lib/serverClock';
-import { introRemainingNow, requireDocApproval as readRequireDocApproval, updateDocumentFlow, deleteDocumentChecked } from '@/lib/documentFlow';
+import { requireDocApproval as readRequireDocApproval, updateDocumentFlow, deleteDocumentChecked } from '@/lib/documentFlow';
 import { sponsorLabel } from '@/lib/committeeFlags';
 import { docName, docCount, docLimit, docLimitReached } from '@/lib/docNames';
 import { TranslationKey } from '@/lib/translations';
@@ -225,10 +226,6 @@ function autoDocCode(type: DocumentType, existingDocs: CommitteeDocument[]): str
   return `${prefix} 1${sep}${existingDocs.filter((d) => d.type === type).length + 1}`;
 }
 
-function formatTime(seconds: number) {
-  const m = Math.floor(seconds / 60); const s = seconds % 60;
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
 
 // ── The introduction screen ───────────────────────────────────────────────────
 // Document-first (16 Sep 2026). The paper fills the screen and is mounted ONCE for the whole
@@ -238,42 +235,38 @@ function formatTime(seconds: number) {
 // component keyed on the stage (remount, so a PDF reloaded to page 1) and the split ratio was
 // stage-local state that snapped back to 50% on every change.
 
-/** Zoom is the chair's, not the stage's: it lives above the stage and is remembered per device. */
-const ZOOM_STEPS = [0.5, 0.67, 0.8, 1, 1.25, 1.5, 2, 2.5, 3] as const;
+/** Zoom is the chair's, not the stage's: it lives above the stage and is remembered per device.
+ *  'fit' (fit width) is the default for a PDF; a text paper reads 'fit' as 100%. */
 const ZOOM_KEY = 'gavelling-intro-zoom';
-function readZoom(): number {
+function readZoom(): PdfZoom {
   try {
-    const raw = Number(localStorage.getItem(ZOOM_KEY));
-    return ZOOM_STEPS.includes(raw as (typeof ZOOM_STEPS)[number]) ? raw : 1;
-  } catch { return 1; }
+    const raw = localStorage.getItem(ZOOM_KEY);
+    if (!raw || raw === 'fit') return 'fit';
+    const n = Number(raw);
+    return (PDF_ZOOM_STEPS as readonly number[]).includes(n) ? n : 'fit';
+  } catch { return 'fit'; }
 }
-function writeZoom(z: number) {
+function writeZoom(z: PdfZoom) {
   try { localStorage.setItem(ZOOM_KEY, String(z)); } catch { /* storage blocked */ }
 }
-const stepZoom = (z: number, dir: 1 | -1) =>
-  ZOOM_STEPS[Math.min(ZOOM_STEPS.length - 1, Math.max(0, ZOOM_STEPS.indexOf(z as (typeof ZOOM_STEPS)[number]) + dir))] ?? 1;
 
 /** The paper, filling the introduction screen. Mounted once per introduction: nothing here is
- *  keyed on the stage, so a stage change never touches the iframe or the scroll box. The zoom
- *  is a transform, so the frame is never re-created either. */
-function IntroDocument({ doc, zoom }: { doc: CommitteeDocument; zoom: number }) {
+ *  keyed on the stage, so a stage change never touches the viewer or its scroll position. A PDF
+ *  is drawn by pdf.js (`PdfViewer`, its own toolbar); a text paper is a page card. */
+function IntroDocument({ doc, zoom, onZoomChange }: { doc: CommitteeDocument; zoom: PdfZoom; onZoomChange: (z: PdfZoom) => void }) {
   const t = useT();
-  const size = `${100 / zoom}%`;
+  const z = zoom === 'fit' ? 1 : zoom;
   return (
     <div className="absolute inset-0 overflow-hidden bg-[#E4DCCA]">
       {doc.fileUrl ? (
-        <iframe
-          src={doc.fileUrl}
-          title={doc.title}
-          style={{ width: size, height: size, border: 0, transform: `scale(${zoom})`, transformOrigin: '0 0', display: 'block' }}
-        />
+        <PdfViewer url={doc.fileUrl} title={doc.title} fileName={doc.fileName} zoom={zoom} onZoomChange={onZoomChange} className="absolute inset-0" />
       ) : doc.content ? (
         <div className="absolute inset-0 overflow-auto px-6 py-8">
-          <div className="mx-auto bg-[#FAF8F3] rounded-2xl px-8 py-8"
-            style={{ maxWidth: 820 * zoom, boxShadow: '0 1px 2px rgba(28,20,16,0.08), 0 10px 30px rgba(27,56,40,0.10)' }}>
-            <p className="text-xs font-mono font-bold mb-3" style={{ color: '#1B3828', fontSize: 12 * zoom }}>{doc.docCode}</p>
-            <h2 className="font-black mb-5" style={{ color: '#1C1410', fontSize: 20 * zoom, textWrap: 'balance' }}>{doc.title}</h2>
-            <pre className="whitespace-pre-wrap font-sans leading-relaxed" style={{ color: '#1C1410', fontSize: 15 * zoom, textWrap: 'pretty' }}>{doc.content}</pre>
+          <div className="mx-auto bg-[#FFFDF8] rounded-[3px] px-8 py-8"
+            style={{ maxWidth: 820 * z, boxShadow: '0 0 0 1px rgba(0,0,0,0.06), 0 1px 2px rgba(27,56,40,0.10), 0 10px 28px rgba(27,56,40,0.14)' }}>
+            <p className="text-xs font-bold mb-3 tabular-nums" style={{ color: '#1B3828', fontSize: 12 * z }}>{doc.docCode}</p>
+            <h2 className="font-black mb-5" style={{ color: '#1C1410', fontSize: 20 * z, textWrap: 'balance' }}>{doc.title}</h2>
+            <pre className="whitespace-pre-wrap font-sans leading-relaxed" style={{ color: '#1C1410', fontSize: 15 * z, textWrap: 'pretty' }}>{doc.content}</pre>
           </div>
         </div>
       ) : (
@@ -281,277 +274,6 @@ function IntroDocument({ doc, zoom }: { doc: CommitteeDocument; zoom: number }) 
           <p className="max-w-sm text-center text-sm" style={{ color: '#6A5A4A', textWrap: 'pretty' }}>{t('documents_no_content')}</p>
         </div>
       )}
-    </div>
-  );
-}
-
-// ── The floating stage timer ──────────────────────────────────────────────────
-// Dragged by its handle, resized from its corner, both with the pointer or the arrow keys, and
-// always clamped inside the screen. The box is remembered per device (localStorage, try/catch:
-// storage can be blocked and the panel then just opens in its default spot).
-// Purely presentational: it never touches committee state (RULES 3 to 5).
-type PanelBox = { x: number; y: number; w: number; h: number };
-const PANEL_MARGIN = 12;
-const PANEL_MIN_W = 248;
-const PANEL_MIN_H = 250;
-const PANEL_DEF_W = 340;
-const PANEL_DEF_H = 330;
-const PANEL_KEY = 'gavelling-intro-timer-panel';
-
-/** The local coordinate space a fixed panel lives in, and its scale on screen: Portal mounts
- *  into FitToScreen's `#fit-root`, which is scaled with a CSS transform, so pointer deltas are
- *  divided by the live scale and the bounds are the fit-root's own size. */
-function panelSpace() {
-  const root = typeof document !== 'undefined' ? document.getElementById('fit-root') : null;
-  if (root && root.offsetWidth > 0) {
-    const r = root.getBoundingClientRect();
-    return { w: root.offsetWidth, h: root.offsetHeight, scale: r.width / root.offsetWidth || 1 };
-  }
-  return { w: window.innerWidth, h: window.innerHeight, scale: 1 };
-}
-
-function clampBox(b: PanelBox): PanelBox {
-  const { w: fw, h: fh } = panelSpace();
-  const w = Math.min(Math.max(PANEL_MIN_W, b.w), Math.max(PANEL_MIN_W, fw - 2 * PANEL_MARGIN));
-  const h = Math.min(Math.max(PANEL_MIN_H, b.h), Math.max(PANEL_MIN_H, fh - 2 * PANEL_MARGIN));
-  return {
-    w, h,
-    x: Math.min(Math.max(PANEL_MARGIN, b.x), Math.max(PANEL_MARGIN, fw - w - PANEL_MARGIN)),
-    y: Math.min(Math.max(PANEL_MARGIN, b.y), Math.max(PANEL_MARGIN, fh - h - PANEL_MARGIN)),
-  };
-}
-
-function readBox(): PanelBox | null {
-  try {
-    const raw = localStorage.getItem(PANEL_KEY);
-    if (!raw) return null;
-    const p = JSON.parse(raw);
-    return [p?.x, p?.y, p?.w, p?.h].every((n) => Number.isFinite(n)) ? { x: p.x, y: p.y, w: p.w, h: p.h } : null;
-  } catch { return null; }
-}
-function writeBox(b: PanelBox) {
-  try {
-    localStorage.setItem(PANEL_KEY, JSON.stringify({ x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.round(b.h) }));
-  } catch { /* storage blocked */ }
-}
-
-function TimerIconButton({ onClick, label, children }: { onClick: () => void; label: string; children: React.ReactNode }) {
-  return (
-    <button type="button" onClick={onClick} title={label} aria-label={label}
-      className="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center text-[#6A5A4A] bg-transparent hover:bg-[#1B3828]/[0.07] hover:text-[#1B3828] transition-[background-color,color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-      style={{ boxShadow: 'inset 0 0 0 1px #DDD4C0' }}>
-      {children}
-    </button>
-  );
-}
-
-// Anchor-based (V-5): the clock is {base, startedAt} and the remaining time is DERIVED from it,
-// never decremented. The interval only refreshes `now` inside this panel; it never writes.
-function IntroTimerPanel({
-  label, totalSeconds, doc, committee, clock, onClockChange, onComplete, onBack, onHide,
-}: {
-  label: string; totalSeconds: number;
-  doc: CommitteeDocument; committee: Committee;
-  clock: { base: number; startedAt: string | null };
-  onClockChange: (next: { base: number; startedAt: string | null }) => void;
-  onComplete: () => void; onBack: () => void; onHide: () => void;
-}) {
-  const t = useT();
-  // Database clock (T-1): the stage anchor is stamped and read on every chair device.
-  const [now, setNow] = useState(() => serverNow());
-  const running = !!clock.startedAt;
-  useEffect(() => {
-    if (!running) return;
-    const id = setInterval(() => setNow(serverNow()), 500);
-    return () => clearInterval(id);
-  }, [running, clock.startedAt]);
-  const remaining = introRemainingNow(clock, now);
-  const started = running || clock.base < totalSeconds;
-  const done = remaining === 0;
-  const progress = totalSeconds > 0 ? ((totalSeconds - remaining) / totalSeconds) * 100 : 100;
-
-  // First placement: the remembered box, else the lower inline-end corner. Computed once in the
-  // initialiser (the panel only ever mounts in the browser, inside the introduction's Portal).
-  const [box, setBox] = useState<PanelBox | null>(() => {
-    if (typeof window === 'undefined') return null;
-    const { w: fw, h: fh } = panelSpace();
-    const rtl = document.documentElement.dir === 'rtl';
-    return clampBox(readBox() ?? {
-      w: PANEL_DEF_W, h: PANEL_DEF_H,
-      x: rtl ? 24 : fw - PANEL_DEF_W - 24,
-      y: Math.max(PANEL_MARGIN, fh - PANEL_DEF_H - 24),
-    });
-  });
-  const boxRef = useRef<PanelBox | null>(box);
-  const drag = useRef<{ pointerId: number; mode: 'move' | 'resize'; sx: number; sy: number; b: PanelBox; scale: number } | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const apply = useCallback((next: PanelBox, persist: boolean) => {
-    const c = clampBox(next);
-    boxRef.current = c;
-    setBox(c);
-    if (persist) writeBox(c);
-  }, []);
-
-  // Keep it on screen when the window (and so the fit-root) changes size.
-  // FitToScreen resizes `#fit-root` through React state AFTER the window's resize event, so a
-  // clamp inside that event measured the old size; the fit-root itself is observed too.
-  useEffect(() => {
-    const onResize = () => { if (boxRef.current) apply(boxRef.current, false); };
-    window.addEventListener('resize', onResize);
-    const root = document.getElementById('fit-root');
-    const ro = root && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onResize) : null;
-    if (root) ro?.observe(root);
-    return () => { window.removeEventListener('resize', onResize); ro?.disconnect(); };
-  }, [apply]);
-
-  const startDrag = (mode: 'move' | 'resize') => (e: React.PointerEvent<HTMLElement>) => {
-    if (e.button !== 0 || !boxRef.current) return;
-    if ((e.target as HTMLElement).closest('[data-panel-button]')) return;
-    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* pointer gone */ }
-    drag.current = { pointerId: e.pointerId, mode, sx: e.clientX, sy: e.clientY, b: boxRef.current, scale: panelSpace().scale };
-    setBusy(true);
-    e.preventDefault();
-  };
-  const onPointerMove = (e: React.PointerEvent<HTMLElement>) => {
-    const d = drag.current;
-    if (!d || d.pointerId !== e.pointerId) return;
-    const dx = (e.clientX - d.sx) / d.scale;
-    const dy = (e.clientY - d.sy) / d.scale;
-    apply(d.mode === 'move'
-      ? { ...d.b, x: d.b.x + dx, y: d.b.y + dy }
-      : { ...d.b, w: d.b.w + dx, h: d.b.h + dy }, false);
-  };
-  const endDrag = (e: React.PointerEvent<HTMLElement>) => {
-    const d = drag.current;
-    if (!d || d.pointerId !== e.pointerId) return;
-    try { if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
-    drag.current = null;
-    setBusy(false);
-    if (boxRef.current) writeBox(boxRef.current);
-  };
-  const onKeyDown = (mode: 'move' | 'resize') => (e: React.KeyboardEvent<HTMLElement>) => {
-    const b = boxRef.current;
-    if (!b) return;
-    const step = e.shiftKey ? 64 : 16;
-    const delta: Record<string, { x: number; y: number }> = {
-      ArrowLeft: { x: -step, y: 0 }, ArrowRight: { x: step, y: 0 }, ArrowUp: { x: 0, y: -step }, ArrowDown: { x: 0, y: step },
-    };
-    const m = delta[e.key];
-    if (!m) return;
-    e.preventDefault();
-    apply(mode === 'move' ? { ...b, x: b.x + m.x, y: b.y + m.y } : { ...b, w: b.w + m.x, h: b.h + m.y }, true);
-  };
-
-  // Everything inside scales with the panel, so a chair who makes it big gets a clock the room
-  // can read and one who makes it small still gets a full set of controls.
-  const w = box?.w ?? PANEL_DEF_W;
-  const h = box?.h ?? PANEL_DEF_H;
-  const clockPx = Math.round(Math.max(30, Math.min(w * 0.245, h * 0.30)));
-  const typeName = docName(committee, doc.type, 'singular',
-    doc.type === 'working-paper' ? t('documents_working_paper_type') : t('documents_draft_resolution_type')).toUpperCase();
-
-  return (
-    <div
-      role="group"
-      aria-label={t('documents_timer_panel')}
-      className="fixed rounded-2xl bg-[#F6F1E9] flex flex-col overflow-hidden"
-      style={{
-        left: box?.x ?? 0, top: box?.y ?? 0, width: w, height: h, zIndex: 20,
-        visibility: box ? 'visible' : 'hidden',
-        boxShadow: busy
-          ? '0 0 0 1px rgba(27,56,40,0.30), 0 6px 14px rgba(27,56,40,0.16), 0 28px 60px rgba(27,56,40,0.34)'
-          : '0 0 0 1px rgba(27,56,40,0.22), 0 2px 8px rgba(27,56,40,0.12), 0 18px 40px rgba(27,56,40,0.26)',
-        transition: 'box-shadow 180ms cubic-bezier(0.22,1,0.36,1)',
-      }}
-    >
-      {/* Handle */}
-      <div className="flex items-center gap-1 ps-1 pe-1.5 pt-1.5 shrink-0">
-        <div
-          role="button" tabIndex={0}
-          aria-label={t('documents_timer_move')} title={t('documents_timer_move')}
-          onPointerDown={startDrag('move')} onPointerMove={onPointerMove}
-          onPointerUp={endDrag} onPointerCancel={endDrag} onKeyDown={onKeyDown('move')}
-          className={`flex-1 min-w-0 flex items-center gap-2 h-9 px-2 rounded-lg select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] hover:bg-[#1B3828]/[0.05] transition-colors ${busy ? 'cursor-grabbing' : 'cursor-grab'}`}
-          style={{ touchAction: 'none' }}
-        >
-          <GripHorizontal size={16} strokeWidth={2.4} aria-hidden className="shrink-0 text-[#6A5A4A]" />
-          <span className="min-w-0 truncate text-[11px] font-black tracking-widest uppercase"
-            style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{label}</span>
-        </div>
-        <button type="button" data-panel-button onClick={onHide}
-          aria-label={t('documents_timer_hide')} title={t('documents_timer_hide')}
-          className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-[#6A5A4A] hover:text-[#1C1410] hover:bg-[#1B3828]/[0.07] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">
-          <Minimize2 size={15} strokeWidth={2.4} aria-hidden />
-        </button>
-      </div>
-
-      <div className="px-3 pb-1 shrink-0">
-        <p className="truncate text-[10.5px] font-mono tracking-widest" style={{ color: '#9A8A78' }}>{typeName} · {doc.docCode}</p>
-      </div>
-
-      {done ? (
-        <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-4 px-4 pb-4 text-center">
-          <p className="text-sm" style={{ color: '#6A5A4A', textWrap: 'pretty' }}>{t('documents_stage_complete').replace('{stage}', label)}</p>
-          <button onClick={onComplete}
-            className="px-6 py-3 rounded-xl font-black text-sm bg-[#1B3828] hover:bg-[#2A5A3C] text-white transition-[background-color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]/40"
-            style={{ letterSpacing: '0.05em' }}>
-            {t('documents_continue_btn')}
-          </button>
-        </div>
-      ) : (
-        <>
-          <div className="flex-1 min-h-0 flex items-center justify-center px-3">
-            <span className="font-black font-mono tabular-nums leading-none"
-              style={{ fontSize: clockPx, color: remaining <= 30 ? '#B8844A' : '#1C1410' }}>
-              {formatTime(remaining)}
-            </span>
-          </div>
-          <div className="px-3 pb-2 shrink-0">
-            <div className="w-full h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden">
-              <div className="h-full rounded-full" style={{ width: `${progress}%`, backgroundColor: '#1B3828', transition: 'width 500ms linear' }} />
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5 px-3 pb-3 shrink-0">
-            <TimerIconButton onClick={onBack} label={t('documents_stage_back_title')}>
-              <ChevronLeft size={18} strokeWidth={2.4} aria-hidden className="rtl:rotate-180" />
-            </TimerIconButton>
-            <TimerIconButton onClick={() => onClockChange({ base: totalSeconds, startedAt: null })} label={t('documents_timer_reset_title')}>
-              <RotateCcw size={16} strokeWidth={2.4} aria-hidden />
-            </TimerIconButton>
-            <button
-              onClick={() => {
-                const live = introRemainingNow(clock, serverNow());
-                onClockChange(running ? { base: live, startedAt: null } : { base: live, startedAt: serverNowIso() });
-              }}
-              className="flex-1 min-w-0 h-10 rounded-xl font-black text-sm text-white flex items-center justify-center gap-1.5 transition-[background-color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]/40"
-              style={{ backgroundColor: running ? '#B8844A' : '#2A5A3C', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}>
-              {running
-                ? <><Pause size={15} strokeWidth={2.6} fill="currentColor" aria-hidden />{t('documents_pause_btn')}</>
-                : <><Play size={15} strokeWidth={2.6} fill="currentColor" aria-hidden className="rtl:rotate-180" />
-                    <span className="truncate">{started ? t('documents_resume_btn').replace(/▶\s*/g, '').trim() : t('documents_start_btn').replace(/\s*[→←]\s*/g, ' ').trim()}</span></>}
-            </button>
-            <TimerIconButton onClick={onComplete} label={t('documents_stage_skip_title')}>
-              <ChevronRight size={18} strokeWidth={2.4} aria-hidden className="rtl:rotate-180" />
-            </TimerIconButton>
-          </div>
-        </>
-      )}
-
-      {/* Resize corner. Pointer or arrow keys; the panel can never be dragged or resized off screen. */}
-      <div
-        role="button" tabIndex={0}
-        aria-label={t('documents_timer_resize')} title={t('documents_timer_resize')}
-        onPointerDown={startDrag('resize')} onPointerMove={onPointerMove}
-        onPointerUp={endDrag} onPointerCancel={endDrag} onKeyDown={onKeyDown('resize')}
-        className="absolute bottom-0 right-0 w-6 h-6 flex items-end justify-end p-1 cursor-nwse-resize text-[#9A8A78] hover:text-[#1B3828] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded-br-2xl"
-        style={{ touchAction: 'none' }}
-      >
-        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden fill="none">
-          <path d="M9 1v8H1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.5" />
-          <path d="M9 5v4H5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        </svg>
-      </div>
     </div>
   );
 }
@@ -743,69 +465,6 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
   );
 }
 
-// ── Timing Setup Dialog ───────────────────────────────────────────────────────
-function TimingSetup({ doc, committee, onStart, onSkip }: {
-  doc: CommitteeDocument;
-  committee: Committee;
-  onStart: (readingMins: number, presentationMins: number, qaMins: number) => void;
-  onSkip: () => void;
-}) {
-  const t = useT();
-  const isWP = doc.type === 'working-paper';
-  const typeName = docName(committee, doc.type, 'singular',
-    isWP ? t('documents_working_paper') : t('documents_draft_resolution'));
-  const typeNamePlural = docName(committee, doc.type, 'plural',
-    isWP ? t('documents_working_papers_tab') : t('documents_draft_resolutions_tab'));
-  // Prefilled from the row, so Back to setup (or a re-introduction) keeps the chosen times.
-  const [readingMins, setReadingMins] = useState(doc.readingMinutes ?? 0);
-  const [presentationMins, setPresentationMins] = useState(doc.presentationMinutes ?? 0);
-  const [qaMins, setQaMins] = useState(doc.qaMinutes ?? 0);
-
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center px-8 py-12">
-      <p className="text-xs font-mono tracking-widest mb-2 text-[#9A8A78]">{doc.docCode} · {t('documents_setup_timers')}</p>
-      <h2 className="text-2xl font-black text-[#1C1410] mb-1">{doc.title}</h2>
-      <p className="text-sm text-[#6A5A4A] mb-8">
-        {isWP ? t('documents_doc_flow_auto', { doc: typeName }) : t('documents_doc_flow_vote', { doc: typeName })}
-      </p>
-
-      <div className="w-full max-w-sm space-y-4">
-        {[
-          { key: 'reading', label: t('documents_stage_reading'), value: readingMins, set: setReadingMins, note: t('documents_stage_note_reading') },
-          { key: 'presentation', label: t('documents_stage_presentation'), value: presentationMins, set: setPresentationMins, note: t('documents_stage_note_presentation') },
-          { key: 'qa', label: t('documents_stage_qa'), value: qaMins, set: setQaMins, note: isWP ? t('documents_qa_optional_doc', { doc: typeNamePlural }) : t('documents_qa_note') },
-        ].map(({ key, label, value, set, note }) => (
-          <div key={key} className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4">
-            <div className="flex items-center justify-between mb-1">
-              <span className="font-black text-sm" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{label}</span>
-              <div className="flex items-center gap-2">
-                <input type="number" min={0} max={60}
-                  value={value === 0 ? '' : value}
-                  onChange={(e) => set(e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value) || 0))}
-                  onBlur={(e) => { if (e.target.value === '') set(0); }}
-                  className="w-16 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1 text-[#1C1410] text-sm text-center focus:outline-none focus:border-[#1B3828]" />
-                <span className="text-sm text-[#9A8A78]">min</span>
-              </div>
-            </div>
-            <p className="text-xs text-[#9A8A78]">{note}</p>
-          </div>
-        ))}
-
-        <div className="flex gap-3 pt-2">
-          <button onClick={() => onStart(readingMins, presentationMins, qaMins)}
-            className="flex-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-3.5 rounded-2xl font-black transition-colors focus:outline-none gv-lift" style={{ letterSpacing: '0.05em' }}>
-            {t('documents_start_btn')}
-          </button>
-          <button onClick={onSkip}
-            className="px-6 py-3.5 rounded-2xl font-bold bg-transparent border border-[#DDD4C0] hover:border-[#1B3828] transition-colors focus:outline-none" style={{ color: '#6A5A4A' }}>
-            {t('documents_skip_btn')}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Doc Card ──────────────────────────────────────────────────────────────────
 function DocCard({ doc, committee, onRemove, onStartPresentation, requireApproval, onApprovalChange, isViewOnly }: {
   doc: CommitteeDocument; committee: Committee;
@@ -822,6 +481,7 @@ function DocCard({ doc, committee, onRemove, onStartPresentation, requireApprova
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [showPdf, setShowPdf] = useState(false);
+  const [pdfZoom, setPdfZoom] = useState<PdfZoom>('fit');
   const nextStatus = STATUS_NEXT[doc.status];
   // Approval gate: while the setting is on and this doc isn't approved yet, offer Approve/Reject
   // (also lets a chair reverse a rejection) and hold back Introduce until approved. Once the doc has
@@ -845,13 +505,8 @@ function DocCard({ doc, committee, onRemove, onStartPresentation, requireApprova
           <div className="w-full rounded-lg overflow-hidden flex-1 flex items-center justify-center"
             style={{ maxHeight: '120px', minHeight: '80px' }}>
             {doc.fileUrl ? (
-              <iframe
-                src={doc.fileUrl}
-                title={doc.docCode}
-                className="w-full"
-                style={{ height: '120px', pointerEvents: 'none' }}
-                scrolling="no"
-              />
+              <PdfThumb url={doc.fileUrl} width={72} height={110}
+                fallback={<FileText size={34} strokeWidth={1.8} aria-hidden style={{ color: '#1B3828', opacity: 0.6 }} />} />
             ) : (
               <span style={{ fontSize: '5.5rem', lineHeight: 1, userSelect: 'none' }}>📋</span>
             )}
@@ -929,9 +584,9 @@ function DocCard({ doc, committee, onRemove, onStartPresentation, requireApprova
                 📎 {doc.fileName} {showPdf ? '▲' : '▼'}
               </button>
               {showPdf && (
-                <iframe src={doc.fileUrl} title={doc.fileName}
-                  className="w-full rounded-lg border border-[#DDD4C0]"
-                  style={{ height: '480px' }} />
+                <PdfViewer url={doc.fileUrl} title={doc.fileName} fileName={doc.fileName}
+                  zoom={pdfZoom} onZoomChange={setPdfZoom} compact
+                  className="relative w-full h-[480px] rounded-xl overflow-hidden" />
               )}
             </div>
           )}
@@ -1015,7 +670,8 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
   const [clock, setClock] = useState<{ base: number; startedAt: string | null }>({ base: 0, startedAt: null });
   /** Both belong to the introduction, not to a stage, so moving between Reading, Presentation
    *  and Q&A leaves the paper exactly as the chair set it. Zoom is remembered per device. */
-  const [zoom, setZoom] = useState(() => (typeof window === 'undefined' ? 1 : readZoom()));
+  const [zoom, setZoomState] = useState<PdfZoom>(() => (typeof window === 'undefined' ? 'fit' : readZoom()));
+  const setZoom = useCallback((z: PdfZoom) => { setZoomState(z); writeZoom(z); }, []);
   const [timerOpen, setTimerOpen] = useState(true);
   const [flowError, setFlowError] = useState(false);
   /** Write order for this modal, and the failures still standing (doc id -> seq of the
@@ -1177,25 +833,28 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
               </span>
             ))}
           </div>
-          {/* Zoom belongs to the chair, not to the stage: it survives every stage change. */}
+          {/* Zoom belongs to the chair, not to the stage: it survives every stage change. A PDF
+              carries its own toolbar (PdfViewer); these controls serve a text paper only. */}
           <div className="ms-auto flex items-center gap-1 shrink-0">
-            <button type="button" onClick={() => setZoom((z) => { const n = stepZoom(z, -1); writeZoom(n); return n; })}
-              disabled={zoom === ZOOM_STEPS[0]}
+            {!activeDoc.fileUrl && activeDoc.content && (<>
+            <button type="button" onClick={() => setZoom(stepPdfZoom(zoom === 'fit' ? 1 : zoom, -1))}
+              disabled={zoom !== 'fit' && zoom <= PDF_ZOOM_STEPS[0]}
               aria-label={t('documents_zoom_out')} title={t('documents_zoom_out')}
               className="w-9 h-9 rounded-lg flex items-center justify-center text-[#6A5A4A] hover:text-[#1B3828] hover:bg-[#1B3828]/[0.07] disabled:opacity-35 disabled:hover:bg-transparent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">
               <Minus size={16} strokeWidth={2.6} aria-hidden />
             </button>
-            <button type="button" onClick={() => { setZoom(1); writeZoom(1); }}
+            <button type="button" onClick={() => setZoom(1)}
               aria-label={t('documents_zoom_reset')} title={t('documents_zoom_reset')}
               className="min-w-[52px] h-9 px-2 rounded-lg text-xs font-bold tabular-nums text-[#6A5A4A] hover:text-[#1B3828] hover:bg-[#1B3828]/[0.07] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">
-              {Math.round(zoom * 100)}%
+              {Math.round((zoom === 'fit' ? 1 : zoom) * 100)}%
             </button>
-            <button type="button" onClick={() => setZoom((z) => { const n = stepZoom(z, 1); writeZoom(n); return n; })}
-              disabled={zoom === ZOOM_STEPS[ZOOM_STEPS.length - 1]}
+            <button type="button" onClick={() => setZoom(stepPdfZoom(zoom === 'fit' ? 1 : zoom, 1))}
+              disabled={zoom !== 'fit' && zoom >= PDF_ZOOM_STEPS[PDF_ZOOM_STEPS.length - 1]}
               aria-label={t('documents_zoom_in')} title={t('documents_zoom_in')}
               className="w-9 h-9 rounded-lg flex items-center justify-center text-[#6A5A4A] hover:text-[#1B3828] hover:bg-[#1B3828]/[0.07] disabled:opacity-35 disabled:hover:bg-transparent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">
               <Plus size={16} strokeWidth={2.6} aria-hidden />
             </button>
+            </>)}
             {!timerOpen && (
               <button type="button" onClick={() => setTimerOpen(true)}
                 aria-label={t('documents_timer_show')} title={t('documents_timer_show')}
@@ -1214,11 +873,17 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
         <div className="flex-1 min-h-0 relative">
           {/* Mounted once for the whole introduction: a stage change never remounts it, so the
               zoom and the scroll position stay exactly where the chair left them. */}
-          <IntroDocument doc={activeDoc} zoom={zoom} />
+          <IntroDocument doc={activeDoc} zoom={zoom} onZoomChange={setZoom} />
           {/* A stage with a 0-minute timer renders as already complete (Continue), never blank. */}
           {timerOpen && (
-            <IntroTimerPanel label={stageLabel}
-              totalSeconds={timings[stage] * 60} doc={activeDoc} committee={committee}
+            <StageTimerDevice label={stageLabel}
+              totalSeconds={timings[stage] * 60} docCode={activeDoc.docCode}
+              stages={STAGE_ORDER.map((s) => ({
+                key: s,
+                label: s === 'reading' ? t('documents_stage_reading') : s === 'presentation' ? t('documents_stage_presentation') : t('documents_stage_qa'),
+                active: s === stage,
+                skipped: timings[s] === 0,
+              }))}
               clock={clock} onClockChange={handleClockChange}
               onComplete={() => advanceFromStage(stage)}
               onBack={() => backFromStage(stage)}
@@ -1229,16 +894,19 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
     );
   }
 
-  // Timing setup screen
+  // Timing setup screen: the order of proceedings (17 Sep 2026).
   if (activeDoc && stage === 'setup') {
     return (
       <Portal><div className="fixed inset-0 z-50 bg-[#F6F1E9] flex flex-col">
-        <div className="flex items-center justify-between px-6 pt-4 pb-2 border-b border-[#DDD4C0] shrink-0">
-          <span className="text-sm font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('documents_introduce_header')}</span>
-          <button onClick={closeFlow} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl">✕</button>
+        <div className="flex items-center justify-between gap-3 px-5 h-12 shrink-0" style={{ boxShadow: '0 1px 0 rgba(28,20,16,0.08)' }}>
+          <span className="text-[13px] font-semibold uppercase" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.14em' }}>{t('documents_introduce')}</span>
+          <button onClick={closeFlow} aria-label={t('sb_close')}
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-[#6A5A4A] hover:text-[#1C1410] hover:bg-[#1B3828]/[0.07] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">
+            <X size={18} strokeWidth={2.4} aria-hidden />
+          </button>
         </div>
         {flowErrorBanner}
-        <TimingSetup doc={activeDoc} committee={committee} onStart={handleTimingConfirmed} onSkip={handleSkipToVote} />
+        <ProceedingsSetup doc={activeDoc} committee={committee} onStart={handleTimingConfirmed} onSkip={handleSkipToVote} />
       </div></Portal>
     );
   }

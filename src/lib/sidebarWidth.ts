@@ -47,6 +47,46 @@ export const SIDEBAR_MIN_WIDTH = 288;
 export const SIDEBAR_MAX_WIDTH = Math.round(SIDEBAR_DEFAULT_WIDTH * 1.2); // 422
 
 /**
+ * ── Proportional to the screen (17 Sep 2026) ────────────────────────────────
+ * The chair console is drawn inside FitToScreen, which lays everything out 820px tall and
+ * scales that to the window. So the console's LAYOUT width is innerWidth x 820 / innerHeight:
+ * 1458 on every 16:9 screen, 1312 on 16:10, 1093 on 4:3 (1024x768). A fixed 352px sidebar
+ * took 24% of a 16:9 console but 32% of a 4:3 one, where it dominated the floor.
+ *
+ *   default = 24% of the layout width, clamped to [MIN, DEFAULT]   1458 → 350, 1312 → 315, 1093 → 288
+ *   max     = 29% of the layout width, clamped to [MIN, MAX]       1458 → 422, 1312 → 380, 1093 → 317
+ *
+ * The stored preference is never rewritten by this: a width dragged on a big monitor is
+ * shown capped on a small one and comes back when the chair returns to the big one.
+ */
+export const SIDEBAR_DEFAULT_FRACTION = 0.24;
+export const SIDEBAR_MAX_FRACTION = 0.29;
+const FIT_BASE_H = 820; // FitToScreen's BASE_H
+
+export interface SidebarBounds { def: number; max: number }
+
+export function sidebarBoundsFor(layoutWidth: number): SidebarBounds {
+  if (!Number.isFinite(layoutWidth) || layoutWidth <= 0) return { def: SIDEBAR_DEFAULT_WIDTH, max: SIDEBAR_MAX_WIDTH };
+  const clamp = (v: number, hi: number) => Math.min(hi, Math.max(SIDEBAR_MIN_WIDTH, Math.round(v)));
+  return {
+    def: clamp(layoutWidth * SIDEBAR_DEFAULT_FRACTION, SIDEBAR_DEFAULT_WIDTH),
+    max: clamp(layoutWidth * SIDEBAR_MAX_FRACTION, SIDEBAR_MAX_WIDTH),
+  };
+}
+
+/** The console's layout width (FitToScreen space) for the current window. */
+export function consoleLayoutWidth(): number {
+  if (typeof window === 'undefined' || !window.innerHeight) return SIDEBAR_DEFAULT_WIDTH / SIDEBAR_DEFAULT_FRACTION;
+  return window.innerWidth * FIT_BASE_H / window.innerHeight;
+}
+
+/** The width actually drawn: the stored preference (or the proportional default), capped for this screen. */
+export function effectiveSidebarWidth(preference: number | null, bounds: SidebarBounds): number {
+  if (preference === null) return bounds.def;
+  return Math.min(bounds.max, clampSidebarWidth(preference));
+}
+
+/**
  * Collapsed: the sidebar folds to a floating column of round flags (the queue in order)
  * under the committee emblem, with no panel behind it. This is its layout width.
  */

@@ -79,10 +79,13 @@ export default function MotionsTab({ s, upd, t, language, isViewOnly }: TabProps
   const renameProps = { resetLabel: t('stg_reset_name'), editLabel: t('stg_rename') };
 
   return (
-    <div style={dim} aria-disabled={isViewOnly || undefined}>
+    <div style={dim} aria-disabled={isViewOnly || undefined} className="stg-cols-2">
+      {/* Two columns (stacked when the dialog is narrow): the ranking alone on one side,
+          everything else about motions and papers on the other. */}
+      <div className="min-w-0">
       <Section icon={ListOrdered} title={t('settings_motion_types_heading')} hint={t('stg_motion_types_hint')} lead>
         <p className="sr-only" aria-live="polite">{announce}</p>
-        <ol style={{ listStyle: 'none', margin: 0, padding: '10px 0' }} className="flex flex-col gap-1.5">
+        <ol style={{ listStyle: 'none', margin: 0, padding: '8px 0' }} className="flex flex-col gap-1">
           {order.map((type, i) => {
             const meta = MOTION_META[type];
             const enabled = s[meta.enabledKey] !== false;
@@ -102,19 +105,19 @@ export default function MotionsTab({ s, upd, t, language, isViewOnly }: TabProps
                   setDragActive(null); setOverIndex(null); dragItem.current = null; dragOver.current = null;
                   if (from !== null && to !== null) move(from, to);
                 }}
-                className="flex items-center gap-2.5"
+                className="flex items-center gap-1.5"
                 style={{
-                  borderRadius: 13, padding: '6px 10px 6px 4px', background: enabled ? K.surface : 'rgba(237,231,216,0.6)',
+                  borderRadius: 12, padding: '3px 8px 3px 2px', background: enabled ? K.surface : 'rgba(237,231,216,0.6)',
                   boxShadow: over ? `0 0 0 2px ${K.deepGold}` : K.outSm, opacity: dragging ? 0.5 : 1,
                   transitionProperty: 'box-shadow, opacity', transitionDuration: '150ms',
                 }}
               >
-                <span aria-hidden className="shrink-0 inline-flex items-center justify-center" style={{ width: 20, color: '#B9AC97', cursor: 'grab' }}>
-                  <GripVertical size={15} strokeWidth={2.2} />
+                <span aria-hidden className="shrink-0 inline-flex items-center justify-center" style={{ width: 18, color: '#B9AC97', cursor: 'grab' }}>
+                  <GripVertical size={14} strokeWidth={2.2} />
                 </span>
                 {/* The rank, as a number and nothing else: no tile behind it. */}
                 <span aria-hidden className="stg-num shrink-0 text-center" style={{
-                  width: 22, fontSize: T.section, fontWeight: W.section, lineHeight: 1, color: i === 0 ? K.deepGold : 'rgba(27,56,40,0.5)',
+                  width: 18, fontSize: T.body, fontWeight: W.title, lineHeight: 1, color: i === 0 ? K.deepGold : 'rgba(27,56,40,0.55)',
                 }}>{i + 1}</span>
                 <span className="flex-1 min-w-0" style={{ opacity: enabled ? 1 : 0.6 }}>
                   <InlineRename {...renameProps} defaultName={locName(meta.namesKey, meta.defaultName)} resetValue={meta.defaultName} value={name}
@@ -123,12 +126,12 @@ export default function MotionsTab({ s, upd, t, language, isViewOnly }: TabProps
                 <HeatBars level={4 - i} title={t('stg_disruptiveness', { n: 4 - i })} />
                 <span className="shrink-0 inline-flex flex-col">
                   <button type="button" aria-label={t('stg_move_up', { name: shown })} disabled={i === 0} onClick={() => move(i, i - 1)}
-                    className="stg-focus stg-press inline-flex items-center justify-center" style={{ width: 28, height: 20, border: 'none', background: 'transparent', color: K.forest, opacity: i === 0 ? 0.25 : 0.8, cursor: 'pointer', borderRadius: 6 }}>
-                    <ChevronUp size={15} strokeWidth={2.6} />
+                    className="stg-focus stg-press inline-flex items-center justify-center" style={{ width: 24, height: 17, border: 'none', background: 'transparent', color: K.forest, opacity: i === 0 ? 0.25 : 0.8, cursor: 'pointer', borderRadius: 6 }}>
+                    <ChevronUp size={14} strokeWidth={2.6} />
                   </button>
                   <button type="button" aria-label={t('stg_move_down', { name: shown })} disabled={i === order.length - 1} onClick={() => move(i, i + 1)}
-                    className="stg-focus stg-press inline-flex items-center justify-center" style={{ width: 28, height: 20, border: 'none', background: 'transparent', color: K.forest, opacity: i === order.length - 1 ? 0.25 : 0.8, cursor: 'pointer', borderRadius: 6 }}>
-                    <ChevronDown size={15} strokeWidth={2.6} />
+                    className="stg-focus stg-press inline-flex items-center justify-center" style={{ width: 24, height: 17, border: 'none', background: 'transparent', color: K.forest, opacity: i === order.length - 1 ? 0.25 : 0.8, cursor: 'pointer', borderRadius: 6 }}>
+                    <ChevronDown size={14} strokeWidth={2.6} />
                   </button>
                 </span>
                 <GavelSwitch size="sm" label={t('stg_motion_enabled', { name: shown })} checked={enabled}
@@ -137,13 +140,14 @@ export default function MotionsTab({ s, upd, t, language, isViewOnly }: TabProps
             );
           })}
         </ol>
+      </Section>
+      </div>
 
+      <div className="min-w-0">
+      <Section icon={Gavel} title={t('stg_other_motions')} hint={t('settings_procedural_motions_desc')} delay={40}>
         {/* Custom motions: outside the ranking on purpose (no motionOrder position). */}
-        <div className="flex items-center gap-2.5" style={{ borderRadius: 13, padding: '6px 10px 6px 4px', marginBottom: 10, boxShadow: 'inset 0 0 0 1.5px rgba(28,20,16,0.10)', backgroundImage: 'repeating-linear-gradient(135deg, transparent 0 8px, rgba(27,56,40,0.025) 8px 16px)' }}>
-          <span aria-hidden style={{ width: 20 }} />
-          <span aria-hidden className="shrink-0 inline-flex items-center justify-center" style={{ width: 20, color: K.deepGold }}>
-            <Sparkles size={16} strokeWidth={2.3} />
-          </span>
+        <div className="flex items-center gap-2.5" style={{ padding: '9px 0' }}>
+          <Sparkles aria-hidden size={16} strokeWidth={2.3} className="shrink-0" style={{ color: K.deepGold }} />
           <span className="flex-1 min-w-0">
             <InlineRename {...renameProps} defaultName={locName('custom', DEFAULT_MOTION_NAMES.custom)} resetValue={DEFAULT_MOTION_NAMES.custom}
               value={s.motionNames.custom ?? DEFAULT_MOTION_NAMES.custom} onChange={(v) => upd('motionNames', { ...s.motionNames, custom: v })} />
@@ -153,43 +157,40 @@ export default function MotionsTab({ s, upd, t, language, isViewOnly }: TabProps
             checked={s.motionCustom !== false} onChange={(v) => upd('motionCustom', v)} />
         </div>
 
+        {([
+          { key: 'suspendDebate' as keyof MotionNames, defaultName: 'Suspend Debate', icon: Hourglass },
+          { key: 'endDebate' as keyof MotionNames, defaultName: 'End Debate', icon: Gavel },
+        ]).map(({ key, defaultName, icon: Icon }) => (
+          <div key={key} className="flex items-center gap-2.5" style={{ padding: '7px 0', borderTop: `1px solid ${K.hair}` }}>
+            <Icon aria-hidden size={16} strokeWidth={2.3} className="shrink-0" style={{ color: K.danger }} />
+            <span className="flex-1 min-w-0">
+              <InlineRename {...renameProps} defaultName={locName(key, defaultName)} resetValue={defaultName} value={s.motionNames[key] ?? defaultName}
+                onChange={(v) => upd('motionNames', { ...s.motionNames, [key]: v })} />
+            </span>
+            <HeatBars level={4} tone="red" />
+            <span style={{ fontSize: T.caption, fontWeight: W.label, color: K.inkSoft, minWidth: 56, textAlign: 'end' }}>{t('stg_always_on')}</span>
+          </div>
+        ))}
+
         {s.motionCoW !== false && (
           <>
             <SettingRow dense labelId="stg-cow" label={t('settings_cow_timer_label')} hint={t('settings_cow_timer_note')}
               control={<GavelSwitch size="sm" icon={Timer} labelledBy="stg-cow" checked={s.cowTimerEnabled === true} onChange={(v) => upd('cowTimerEnabled', v)} />} />
             {s.cowTimerEnabled === true && (
-              <SettingRow dense label={t('stg_cow_duration_label')} hint={t('stg_cow_duration_note')}
-                control={<ClockStepper label={t('stg_cow_duration_label')} unit={t('motions_sec')} value={s.cowTimerSeconds || 60} min={5} max={3600} step={15} arcMax={300}
-                  presets={[30, 45, 60, 90, 120]} onCommit={(v) => upd('cowTimerSeconds', v)} />} />
+              <SettingRow dense label={t('stg_cow_duration_label')} hint={t('stg_cow_duration_note')}>
+                <ClockStepper label={t('stg_cow_duration_label')} unit={t('motions_sec')} value={s.cowTimerSeconds || 60} min={5} max={3600} step={15} arcMax={300}
+                  presets={[30, 45, 60, 90, 120]} onCommit={(v) => upd('cowTimerSeconds', v)} />
+              </SettingRow>
             )}
           </>
         )}
-      </Section>
-
-      <Section icon={Gavel} title={t('settings_procedural_motions_heading')} hint={t('settings_procedural_motions_desc')} delay={40}>
-        <div className="grid gap-x-6 gap-y-1" style={{ padding: '9px 0', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
-          {([
-            { key: 'suspendDebate' as keyof MotionNames, defaultName: 'Suspend Debate', icon: Hourglass },
-            { key: 'endDebate' as keyof MotionNames, defaultName: 'End Debate', icon: Gavel },
-          ]).map(({ key, defaultName, icon: Icon }) => (
-            <div key={key} className="flex items-center gap-2.5" style={{ padding: '3px 0' }}>
-              <Icon aria-hidden size={16} strokeWidth={2.3} className="shrink-0" style={{ color: K.danger }} />
-              <span className="flex-1 min-w-0">
-                <InlineRename {...renameProps} defaultName={locName(key, defaultName)} resetValue={defaultName} value={s.motionNames[key] ?? defaultName}
-                  onChange={(v) => upd('motionNames', { ...s.motionNames, [key]: v })} />
-              </span>
-              <HeatBars level={4} tone="red" />
-              <span style={{ fontSize: T.caption, fontWeight: W.label, color: K.inkSoft, minWidth: 56, textAlign: 'end' }}>{t('stg_always_on')}</span>
-            </div>
-          ))}
-        </div>
       </Section>
 
       <Section icon={FileText} title={t('settings_documents_heading')} hint={t('stg_documents_hint')} lead delay={80}>
         <SettingRow first dense labelId="stg-docappr" label={t('settings_require_doc_approval')} hint={t('settings_require_doc_approval_note')}
           control={<GavelSwitch size="sm" glyph="lock" labelledBy="stg-docappr" checked={s.requireDocApproval} onChange={(v) => upd('requireDocApproval', v)} />} />
         <SettingRow dense label={t('settings_doc_names_label')} hint={t('settings_doc_names_desc')}>
-          <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))' }}>
+          <div className="grid gap-2.5">
             {([
               { singular: 'workingPaper' as keyof DocumentNames, plural: 'workingPapers' as keyof DocumentNames, sd: t('documents_working_paper'), pd: t('documents_working_papers_tab'), tag: 'WP' },
               { singular: 'draftResolution' as keyof DocumentNames, plural: 'draftResolutions' as keyof DocumentNames, sd: t('documents_draft_resolution'), pd: t('documents_draft_resolutions_tab'), tag: 'DR' },
@@ -228,7 +229,22 @@ export default function MotionsTab({ s, upd, t, language, isViewOnly }: TabProps
             })}
           </div>
         </SettingRow>
+        {/* The word for the delegations behind a paper (moved here from Access: it is a
+            documents word). Read everywhere through sponsorLabel(committee, fallback). */}
+        <SettingRow dense htmlFor="stg-sponsor" label={t('stg_sponsor_label')} hint={t('stg_sponsor_note')}
+          control={(
+            <input
+              id="stg-sponsor"
+              type="text"
+              value={s.sponsorLabel}
+              placeholder={t('stg_sponsor_placeholder')}
+              onChange={(e) => upd('sponsorLabel', e.target.value)}
+              className="stg-focus"
+              style={{ height: 34, width: 180, borderRadius: 10, border: 'none', padding: '0 12px', fontSize: T.body, fontWeight: W.label, color: K.ink, background: K.ivory, boxShadow: K.inSm, fontFamily: K.font }}
+            />
+          )} />
       </Section>
+      </div>
     </div>
   );
 }

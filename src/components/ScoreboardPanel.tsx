@@ -15,9 +15,11 @@
 // here rather than moving into the shared table:
 //   • the forest header bar with Export CSV and ✕, and the strip of session
 //     figures under it;
-//   • the MANUAL award / deduct control — only a chair awards points, so it is
-//     passed into the chair's own drill-in (`scoreboard/DelegateProfile`, handed
-//     to the shared table through its `renderDetail` slot);
+//   • the MANUAL plus / minus (`scoreboard/ManualAdjust`) — only the Moderator
+//     awards points, so it rides in the chair's own drill-in
+//     (`scoreboard/DelegateProfile`, handed to the shared table through its
+//     `renderDetail` slot), with the chair's score cell (`renderScore`) and no
+//     notes column (`hideNotesColumn`): chair notes are not counted;
 //   • the Matrix tab, the chair's wide numeric grid;
 //   • the History tab (`scoreboard/HistoryTab`), the session read back segment
 //     by segment with the chairs' notes in place.
@@ -53,11 +55,13 @@ import {
 } from '@/components/ScoreboardTable';
 import { IconStat, STAT_ICONS, TINT } from '@/components/scoreboard/SessionScoreboardParts';
 import DelegateProfile from '@/components/scoreboard/DelegateProfile';
+import ManualAdjust from '@/components/scoreboard/ManualAdjust';
 import HistoryTab from '@/components/scoreboard/HistoryTab';
 import { Committee } from '@/lib/types';
 import { getCountryDisplayName } from '@/lib/countries';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
-import { buildSessionScoreboardRows } from '@/lib/sessionScoreboard';
+import { buildSessionScoreboardRows, sessionPointSlices } from '@/lib/sessionScoreboard';
+import { buildSessionHistory, type HistorySpeech } from '@/lib/sessionHistory';
 import {
   formatSpeakingTime, type ScoreboardDelegateRow,
 } from '@/lib/conferenceScoreboard';
@@ -85,9 +89,6 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
   // header draws and the order `sortScoreboardRows` produces in agreement.
   const [sortDir, setSortDir] = useState<SortDir>(naturalSortDir('score'));
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [awardAmt, setAwardAmt] = useState('');
-  const [awardNote, setAwardNote] = useState('');
-  const [deduct, setDeduct] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackEntry[]>([]);
   // The board opens with a grow animation. The feedback read usually lands inside it, and
   // applying it then rebuilds and re-rasterises the whole table mid-motion (the "occasional
@@ -129,15 +130,6 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
   const openAwards = () => {
     if (awardsHref) { window.open(awardsHref, '_blank', 'noopener,noreferrer'); return; }
     resolveChairAwardsHref(committee.code).then((href) => window.open(href, '_blank', 'noopener,noreferrer'));
-  };
-
-  // A half-typed award belongs to the delegation it was typed under. Collapsing
-  // one row and opening another must not carry the amount and reason across —
-  // reset in the event handler, not in an effect on `expanded`, which would be a
-  // cascading render (and is what the lint rule is there to catch).
-  const handleExpand = (key: string | null) => {
-    setExpanded(key);
-    setAwardAmt(''); setAwardNote(''); setDeduct(false);
   };
 
   // The shared table deliberately does NOT call `useT()` — its other callers are
@@ -211,18 +203,42 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
     delegations: allRows.length,
     speeches: allRows.reduce((s, r) => s + r.gslSpeeches + r.caucusSpeeches, 0),
     seconds: allRows.reduce((s, r) => s + r.speakingSeconds, 0),
-    comments: allRows.reduce((s, r) => s + r.comments.filter((c) => c.content.trim()).length, 0),
   }), [allRows]);
 
-  const submitManual = (country: string) => {
-    const amt = parseInt(awardAmt);
-    if (!awardAmt || isNaN(amt) || amt <= 0 || !awardNote.trim()) return;
+  // Place by score, ties sharing a place, for the profile's top line.
+  const rankOf = useMemo(() => {
+    const byScore = [...allRows].sort((a, b) => b.headline - a.headline);
+    const out = new Map<string, number>();
+    byScore.forEach((r, i) => {
+      const prev = byScore[i - 1];
+      out.set(r.key, prev && prev.headline === r.headline ? out.get(prev.key)! : i + 1);
+    });
+    return out;
+  }, [allRows]);
+  const maxHeadline = useMemo(() => Math.max(0, ...allRows.map((r) => r.headline)), [allRows]);
+
+  // The session history, built once: the profile's timeline reads each speech,
+  // with its chair notes already placed, from here, so the History tab and the
+  // profile can never place a note differently.
+  const history = useMemo(() => buildSessionHistory(committee, feedback), [committee, feedback]);
+  const speechesByCountry = useMemo(() => {
+    const out = new Map<string, HistorySpeech[]>();
+    for (const seg of history) for (const sp of seg.speeches) {
+      const list = out.get(sp.country);
+      if (list) list.push(sp); else out.set(sp.country, [sp]);
+    }
+    return out;
+  }, [history]);
+
+  // Same write as the old Award / Deduct form: one manual ledger row, absolute
+  // value, the reason (now optional) as its note.
+  const applyManual = (country: string, delta: number, reason: string) => {
+    if (!delta) return;
     logEvent(committee.id, {
       country,
-      type: deduct ? 'manual-deduct' : 'manual-award',
-      value: amt, note: awardNote.trim(),
+      type: delta < 0 ? 'manual-deduct' : 'manual-award',
+      value: Math.abs(delta), ...(reason ? { note: reason } : {}),
     }, committee.code, committee.dbChairJoinSuffix ?? undefined);
-    setAwardAmt(''); setAwardNote('');
   };
 
   const exportCsv = () => {
@@ -287,39 +303,6 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
     a.click();
     URL.revokeObjectURL(url);
   };
-
-  // ── The Moderator-only slot inside the shared drill-in ────────────────────
-  // Passed as `detailExtra` only when this device is NOT view-only. Same UI gate as
-  // every other view-only affordance in the session — AGENTS.md RULE 15 still holds:
-  // RLS checks only the chair suffix, so this hides the control, it does not enforce
-  // anything. Before the rename this read as an oversight; now that the role is
-  // literally called Commenter, a Commenter holding award/deduct powers contradicts
-  // the name on the badge.
-  const manualAdjustment = (row: ScoreboardDelegateRow) => (
-    <div
-      className="mt-4 p-3 rounded-xl"
-      style={{ borderTop: `1px solid ${CARD_BORDER_COLOR}`, backgroundColor: NEU.base }}
-    >
-      <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.12em', color: NEU.forest, marginBlockEnd: 8 }}>
-        {t('sb_manual_adjustment')}
-      </p>
-      <div className="flex items-center gap-2 mb-2">
-        <button onClick={() => setDeduct(false)} className="text-xs font-bold px-2.5 py-1 rounded-lg"
-          style={{ fontFamily: OUTFIT, backgroundColor: !deduct ? NEU.forest : 'transparent', color: !deduct ? NEU.gold : SOFT, border: `1px solid ${CARD_BORDER_COLOR}` }}>{t('sb_award')}</button>
-        <button onClick={() => setDeduct(true)} className="text-xs font-bold px-2.5 py-1 rounded-lg"
-          style={{ fontFamily: OUTFIT, backgroundColor: deduct ? RED : 'transparent', color: deduct ? '#FFFFFF' : SOFT, border: `1px solid ${CARD_BORDER_COLOR}` }}>{t('sb_deduct')}</button>
-        <input type="number" min={1} value={awardAmt} onChange={(e) => setAwardAmt(e.target.value)} placeholder={t('sb_pts')}
-          className="w-16 text-sm text-center rounded-lg px-1.5 py-1 outline-none"
-          style={{ fontFamily: OUTFIT, backgroundColor: NEU.surface, border: `1px solid ${CARD_BORDER_COLOR}`, color: NEU.ink }} />
-      </div>
-      <input value={awardNote} onChange={(e) => setAwardNote(e.target.value)} placeholder={t('sb_reason_required')}
-        className="w-full text-sm rounded-lg px-2.5 py-1.5 mb-2 outline-none"
-        style={{ fontFamily: OUTFIT, backgroundColor: NEU.surface, border: `1px solid ${CARD_BORDER_COLOR}`, color: NEU.ink }} />
-      <button onClick={() => submitManual(row.country)} disabled={!awardAmt || !awardNote.trim()}
-        className="text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-40 gv-lift"
-        style={{ fontFamily: OUTFIT, backgroundColor: NEU.forest, color: NEU.gold }}>{t('sb_apply')}</button>
-    </div>
-  );
 
   const TH: React.CSSProperties = {
     fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.08em',
@@ -387,7 +370,6 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
             <IconStat compact icon={STAT_ICONS.delegations} label={t('sb_stat_delegations')} value={String(totals.delegations)} />
             <IconStat compact icon={STAT_ICONS.speeches} label={t('sb_stat_speeches')} value={String(totals.speeches)} />
             <IconStat compact icon={STAT_ICONS.time} label={t('sb_stat_speaking_time')} value={formatSpeakingTime(totals.seconds)} tint={TINT.sage} />
-            <IconStat compact icon={STAT_ICONS.notes} label={t('sb_stat_chair_notes')} value={String(totals.comments)} tint={TINT.amber} />
           </div>
 
           {/* Tabs */}
@@ -421,12 +403,46 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
                   onSortChange={(key, dir) => { setSortKey(key); setSortDir(dir); }}
                   showCommitteeColumn={false}
                   expanded={expanded}
-                  onExpand={handleExpand}
+                  onExpand={setExpanded}
                   locale={language}
                   circleFlags
                   flagSize={34}
+                  hideNotesColumn
+                  wrapHeaders
+                  columnWidths={{ speeches: 92, time: 84, score: 96 }}
+                  renderScore={(row) => {
+                    const pct = maxHeadline > 0 ? Math.max(0, Math.min(100, (row.headline / maxHeadline) * 100)) : 0;
+                    return (
+                      <span
+                        className="inline-flex flex-col items-end"
+                        style={{ gap: 4, fontFamily: OUTFIT }}
+                        title={row.quality != null
+                          ? t('sb_title_score_blended').replace('{objective}', String(row.objective)).replace('{quality}', String(row.quality))
+                          : t('sb_title_score').replace('{objective}', String(row.objective))}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 3, lineHeight: 1 }}>
+                          <span style={{ fontWeight: 800, fontSize: 16, color: NEU.forest, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em' }}>
+                            {row.headline}
+                          </span>
+                          <span style={{ fontWeight: 700, fontSize: 10, color: SOFT }}>{t('sb_pts')}</span>
+                        </span>
+                        <span aria-hidden style={{ width: 52, height: 3, borderRadius: 999, backgroundColor: 'rgba(27,56,40,0.10)', overflow: 'hidden' }}>
+                          <span style={{ display: 'block', height: '100%', width: `${pct}%`, borderRadius: 999, backgroundColor: rankOf.get(row.key) === 1 ? '#C9A43A' : NEU.forest }} />
+                        </span>
+                      </span>
+                    );
+                  }}
                   renderDetail={(row) => (
-                    <DelegateProfile row={row} extra={isViewOnly ? undefined : manualAdjustment(row)} />
+                    <DelegateProfile
+                      row={row}
+                      rank={rankOf.get(row.key) ?? 0}
+                      rankTotal={allRows.length}
+                      slices={sessionPointSlices(committee, row.ledger, language, t('sb_breakdown_manual'))}
+                      speeches={speechesByCountry.get(row.country) ?? []}
+                      extra={isViewOnly ? undefined : (
+                        <ManualAdjust key={row.key} onApply={(delta, reason) => applyManual(row.country, delta, reason)} />
+                      )}
+                    />
                   )}
                   labels={labels}
                   emptyText={t('sb_empty_no_delegations')}

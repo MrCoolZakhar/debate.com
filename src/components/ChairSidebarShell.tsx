@@ -33,6 +33,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNo
 import SidebarResizer from '@/components/SidebarResizer';
 import {
   SIDEBAR_ANIM_MS, SIDEBAR_COLLAPSE_AT, SIDEBAR_MIN_WIDTH, SIDEBAR_RAIL_WIDTH, clampSidebarWidth,
+  consoleLayoutWidth, effectiveSidebarWidth, sidebarBoundsFor, type SidebarBounds,
 } from '@/lib/sidebarWidth';
 
 const EASE = 'cubic-bezier(0.32, 0.72, 0, 1)';
@@ -55,8 +56,27 @@ interface Paint {
   rail: number;
 }
 
+/** Default and maximum sidebar width for this window, updated on resize (state only on change). */
+function useSidebarBounds(): SidebarBounds {
+  const [bounds, setBounds] = useState<SidebarBounds>(() => sidebarBoundsFor(consoleLayoutWidth()));
+  useEffect(() => {
+    const update = () => {
+      const next = sidebarBoundsFor(consoleLayoutWidth());
+      setBounds((prev) => (prev.def === next.def && prev.max === next.max ? prev : next));
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.visualViewport?.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.visualViewport?.removeEventListener('resize', update);
+    };
+  }, []);
+  return bounds;
+}
+
 export default function ChairSidebarShell({
-  width,
+  width: preference,
   collapsed,
   onWidthChange,
   onCollapsedChange,
@@ -64,7 +84,8 @@ export default function ChairSidebarShell({
   children,
   resizeLabel,
 }: {
-  width: number;
+  /** The reader's stored width, or null for none (then a proportion of the screen). Capped per screen. */
+  width: number | null;
   collapsed: boolean;
   onWidthChange: (width: number) => void;
   onCollapsedChange: (collapsed: boolean) => void;
@@ -74,6 +95,8 @@ export default function ChairSidebarShell({
   children: ReactNode;
   resizeLabel: string;
 }) {
+  const bounds = useSidebarBounds();
+  const width = effectiveSidebarWidth(preference, bounds);
   const slotRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLElement | null>(null);
   const railRef = useRef<HTMLDivElement>(null);
@@ -224,11 +247,11 @@ export default function ChairSidebarShell({
       if (!collapsed) onCollapsedChange(true);
       return;
     }
-    const w = clampSidebarWidth(raw);
+    const w = Math.min(bounds.max, clampSidebarWidth(raw));
     settle(false, w, true);
     if (w !== width) onWidthChange(w);
     if (collapsed) onCollapsedChange(false);
-  }, [collapsed, width, settle, onCollapsedChange, onWidthChange]);
+  }, [collapsed, width, bounds.max, settle, onCollapsedChange, onWidthChange]);
 
   return (
     <div
@@ -259,10 +282,11 @@ export default function ChairSidebarShell({
       </div>
       <SidebarResizer
         width={width}
+        maxWidth={bounds.max}
         collapsed={collapsed}
         onLive={onLive}
         onRelease={onRelease}
-        onCommit={onWidthChange}
+        onCommit={(w) => onWidthChange(Math.min(bounds.max, w))}
         onCollapsedChange={onCollapsedChange}
         label={resizeLabel}
       />

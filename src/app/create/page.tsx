@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, Suspense } from 'react';
+import React, { useState, useRef, Suspense } from 'react';
 import FitToScreen from '@/components/FitToScreen';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -8,11 +8,16 @@ import { createCommittee as createCommitteeInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { UN_COUNTRIES, getCountryByName, getCountryDisplayName, countryMatchRank, findCountryFlexible, compareCountryNames } from '@/lib/countries';
 import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS, ICC_ROLES, ICJ_ROLES, CRISIS_MEMBERS, FIFA_MEMBERS, HOUSE_OF_COMMONS_ROLES, US_SENATE_MEMBERS, PRESS_ROLES, EUROPEAN_PARLIAMENT_MEMBERS } from '@/lib/presets';
-import { Globe, PenLine, ChevronLeft, Megaphone, Plus, Search, X } from 'lucide-react';
+import { ArrowRight, Check, ChevronDown, ChevronLeft, ClipboardList, CornerDownLeft, Gavel, Globe, Loader2, Megaphone, PenLine, Plus, Search, UserRound, Wand2, X } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import Loader from '@/components/Loader';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
+import { Chip, Eyebrow, FieldLabel, GhostAction, PageBackdrop, PrimaryAction } from '../join/joinUi';
+import { C, GroupLabel, INPUT_CLS, OUTFIT, RowIconButton, SHADOW, StepCard } from './createUi';
+
+/** Older button strings end in an arrow glyph; the build screen draws an icon instead. */
+const stripArrow = (s: string) => s.replace(/\s*[→←]\s*$/, '');
 
 const COMMITTEE_PRESETS = [
   { name: 'UN Security Council', acronym: 'UNSC', logoPath: '/logos/un.svg', members: UNSC_MEMBERS },
@@ -116,19 +121,8 @@ function fuzzyMatchCountry(raw: string): string | null {
   return findCountryFlexible(raw);
 }
 
-// One field, one label, one panel — every control on the build screen is drawn from
-// these three so the column reads as one form rather than four different boxes.
-// `transition-all` is deliberately avoided (it animates layout properties too).
-const FIELD_CLS =
-  'w-full bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-[border-color,box-shadow] duration-150 text-sm';
-const LABEL_CLS = 'block text-[11px] font-bold uppercase tracking-[0.09em] mb-1.5 text-[#1B3828]';
-const PANEL_STYLE = {
-  backgroundColor: '#FAF8F3',
-  border: '1px solid #DDD4C0',
-  boxShadow: '0 1px 0 rgba(255,255,255,0.75) inset, 0 1px 2px rgba(27,56,40,0.04)',
-} as const;
-
-function CommitteeNameInput({ value, onChange, onPresetSelect }: {
+function CommitteeNameInput({ id, value, onChange, onPresetSelect }: {
+  id?: string;
   value: string;
   onChange: (v: string) => void;
   onPresetSelect: (preset: typeof COMMITTEE_PRESETS[0]) => void;
@@ -160,7 +154,9 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
     <div className="relative">
       <input
         ref={inputRef}
+        id={id}
         type="text"
+        autoComplete="off"
         value={displayValue}
         onChange={(e) => {
           // If user edits the translated preset name, treat it as a custom entry
@@ -183,27 +179,28 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
           if (e.key === 'Escape') setOpen(false);
         }}
         placeholder={language === 'ar' ? 'مثال: مجلس حقوق الإنسان' : language === 'fr' ? 'ex. Conseil des droits de l\'homme ou CDH' : language === 'es' ? 'ej. Consejo de Seguridad o CSNU' : 'e.g. Human Rights Council or HRC'}
-        className="w-full bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm"
+        className={INPUT_CLS}
       />
       {open && matches.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-30" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 8px 32px rgba(27,56,40,0.14), 0 2px 8px rgba(27,56,40,0.08)' }}>
+        <div className="absolute top-full inset-x-0 mt-2 rounded-2xl overflow-hidden z-40 p-1" style={{ backgroundColor: '#FAF8F3', boxShadow: '0 12px 32px rgba(27,56,40,0.18), 0 2px 8px rgba(27,56,40,0.08), inset 0 0 0 1px rgba(27,56,40,0.10)' }}>
           {matches.slice(0, 6).map((p, i) => (
             <button
               key={p.name}
               onMouseDown={(e) => { e.preventDefault(); onPresetSelect(p); setOpen(false); }}
-              className={`w-full flex items-center gap-3 px-4 py-3 text-start transition-colors border-b border-[#DDD4C0]/50 last:border-0 ${
-                i === 0 ? 'text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#EDE7D8]'
+              type="button"
+              className={`w-full flex items-center gap-3 px-3 h-11 rounded-xl text-start transition-colors text-[#1C1410] focus:outline-none ${
+                i === 0 ? '' : 'hover:bg-[#1B3828]/[0.05]'
               }`}
               style={i === 0 ? { backgroundColor: 'rgba(27,56,40,0.07)' } : {}}
             >
               {(p as { logoPath?: string }).logoPath ? (
-                <img src={(p as { logoPath?: string }).logoPath} alt={p.acronym} width={18} height={18} className="rounded-sm shrink-0 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                <img src={(p as { logoPath?: string }).logoPath} alt="" width={22} height={22} className="shrink-0 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
               ) : (
                 <div className="w-[22px] h-[22px] rounded-md shrink-0" style={{ backgroundColor: 'rgba(27,56,40,0.08)' }} />
               )}
-              <span className="text-sm flex-1">{getPresetDisplayName(p.name, language)}</span>
-              <span className="text-[10px] font-bold shrink-0" style={{ fontFamily: "'DM Mono', monospace", color: '#1B3828' }}>{(language === 'es' || language === 'fr') ? (getPresetAcronym(p.name, language) || p.acronym) : p.acronym}</span>
-              {i === 0 && <span className="text-[10px] shrink-0" style={{ color: '#9A8A78' }}>↵</span>}
+              <span className="text-[15px] font-semibold flex-1 truncate">{getPresetDisplayName(p.name, language)}</span>
+              <span className="text-[11px] font-extrabold tracking-[0.04em] shrink-0" style={{ color: '#1B3828' }}>{(language === 'es' || language === 'fr') ? (getPresetAcronym(p.name, language) || p.acronym) : p.acronym}</span>
+              {i === 0 && <CornerDownLeft size={14} strokeWidth={2.2} className="shrink-0 rtl:-scale-x-100" style={{ color: '#8A7C6B' }} />}
             </button>
           ))}
         </div>
@@ -480,6 +477,7 @@ function CreatePageInner() {
   const [editingName, setEditingName] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState('');
   const [creating, setCreating] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
 
   const handleCreate = async () => {
     const names = chairNames.map((n) => n.trim()).filter(Boolean);
@@ -582,252 +580,280 @@ function CreatePageInner() {
     if (preset.members !== null) setDelegates(preset.members);
   };
 
-  return (
-    <FitToScreen>
-    <div className="h-full w-full flex flex-col overflow-hidden relative" style={{ backgroundColor: '#EDE7D8' }}>
-      {/* Grain texture — matches landing page */}
-      <div
-        className="pointer-events-none fixed inset-0 z-[1]"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`,
-          backgroundRepeat: 'repeat',
-          backgroundSize: '300px 300px',
-          mixBlendMode: 'multiply',
-          opacity: 0.18,
-        }}
-      />
-      <nav className="relative z-20 border-b border-[#DDD4C0]/60 px-8 md:px-14 flex items-center shrink-0" style={{ height: '72px', backgroundColor: '#EDE7D8' }}>
-        <Link href="/sessions">
-          <img src="/GavellingLogo.png" alt="Gavelling" className="h-10 w-auto object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-        </Link>
-        {/* Language toggle — globe dropdown matching SiteNav */}
-        <div className="relative ms-auto">
-          <button
-            onClick={() => setShowLangMenu((v) => !v)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl transition-colors focus:outline-none"
-            style={{ backgroundColor: showLangMenu ? 'rgba(27,56,40,0.08)' : 'transparent', color: '#1B3828' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.08)'; }}
-            onMouseLeave={(e) => { if (!showLangMenu) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-          >
-            <Globe size={14} strokeWidth={2} style={{ color: '#1B3828' }} />
-            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', fontWeight: 700, color: '#6A5A4A' }}>{language.toUpperCase()}</span>
-          </button>
-          {showLangMenu && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setShowLangMenu(false)} />
-              <div className="absolute right-0 top-full mt-2 z-50 rounded-xl overflow-hidden shadow-xl" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', minWidth: '140px' }}>
-                {([['en', t('settings_english')], ['es', t('settings_spanish')], ['fr', t('settings_french')], ['ar', 'العربية']] as [string, string][]).map(([code, label], i) => (
-                  <React.Fragment key={code}>
-                    {i > 0 && <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />}
-                    <button
-                      onClick={() => { setLanguage(code as 'en' | 'es' | 'fr' | 'ar'); setShowLangMenu(false); }}
-                      className="w-full flex items-center gap-2.5 px-4 py-3 text-start transition-colors focus:outline-none"
-                      style={{ color: language === code ? '#1B3828' : '#6A5A4A', fontWeight: language === code ? 800 : 600, fontSize: '13px', backgroundColor: language === code ? 'rgba(27,56,40,0.07)' : 'transparent' }}
-                      onMouseEnter={(e) => { if (language !== code) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                      onMouseLeave={(e) => { if (language !== code) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                    >
-                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#9A8A78' }}>{code.toUpperCase()}</span>
-                      <span>{label}</span>
-                      {language === code && <span className="ms-auto" style={{ color: '#B6871F' }}>✓</span>}
-                    </button>
-                  </React.Fragment>
-                ))}
-              </div>
-            </>
-          )}
+  const grainStyle = {
+    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`,
+    backgroundRepeat: 'repeat',
+    backgroundSize: '300px 300px',
+    mixBlendMode: 'multiply',
+    opacity: 0.18,
+  } as const;
+
+  // Language toggle: globe dropdown matching SiteNav. Shared by both screens.
+  const langMenu = (
+    <div className="relative ms-auto">
+      <button
+        type="button"
+        onClick={() => setShowLangMenu((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={showLangMenu}
+        className="flex h-10 items-center gap-1.5 px-3 rounded-xl transition-[background-color,transform] duration-150 active:scale-[0.96] hover:bg-[#1B3828]/[0.08] focus:outline-none"
+        style={{ backgroundColor: showLangMenu ? 'rgba(27,56,40,0.08)' : undefined, color: C.forest }}
+      >
+        <Globe size={15} strokeWidth={2} />
+        <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', color: C.inkSoft }}>{language.toUpperCase()}</span>
+      </button>
+      {showLangMenu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setShowLangMenu(false)} />
+          <div role="menu" className="absolute end-0 top-full mt-2 z-50 rounded-2xl overflow-hidden p-1" style={{ backgroundColor: C.surface, boxShadow: `${SHADOW.card}, inset 0 0 0 1px rgba(27,56,40,0.08)`, minWidth: '160px' }}>
+            {([['en', t('settings_english')], ['es', t('settings_spanish')], ['fr', t('settings_french')], ['ar', 'العربية']] as [string, string][]).map(([code, label]) => (
+              <button
+                key={code}
+                type="button"
+                role="menuitemradio"
+                aria-checked={language === code}
+                onClick={() => { setLanguage(code as 'en' | 'es' | 'fr' | 'ar'); setShowLangMenu(false); }}
+                className="w-full flex items-center gap-2.5 h-10 px-3 rounded-xl text-start transition-colors hover:bg-[#1B3828]/[0.05] focus:outline-none"
+                style={{ fontFamily: OUTFIT, color: language === code ? C.forest : C.inkSoft, fontWeight: language === code ? 800 : 600, fontSize: '13px', backgroundColor: language === code ? 'rgba(27,56,40,0.07)' : undefined }}
+              >
+                <span style={{ fontSize: '11px', fontWeight: 700, color: C.muted, width: 20 }}>{code.toUpperCase()}</span>
+                <span>{label}</span>
+                {language === code && <Check size={14} strokeWidth={2.6} className="ms-auto" style={{ color: C.goldDeep }} />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  if (committeeMode === 'select') {
+    return (
+      <FitToScreen>
+      <div className="h-full w-full flex flex-col overflow-hidden relative" style={{ backgroundColor: '#EDE7D8' }}>
+        {/* Grain texture: matches landing page */}
+        <div className="pointer-events-none fixed inset-0 z-[1]" style={grainStyle} />
+        <nav className="relative z-20 border-b border-[#DDD4C0]/60 px-8 md:px-14 flex items-center shrink-0" style={{ height: '72px', backgroundColor: '#EDE7D8' }}>
+          <Link href="/sessions">
+            <img src="/GavellingLogo.png" alt="Gavelling" className="h-10 w-auto object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          </Link>
+          {langMenu}
+        </nav>
+        <div className="flex-1 flex overflow-hidden">
+          <SelectScreen onSelect={() => setCommitteeMode('build')} />
         </div>
+      </div>
+      </FitToScreen>
+    );
+  }
+
+  // ── Build screen: one column, top to bottom ────────────────────────────────
+  // No FitToScreen here (it re-scaled the whole page to the window and made the
+  // type shrink as the roster grew). An ordinary scrolling page, like /join.
+  const delegateCount = delegates.length;
+  const observerCount = delegates.filter((d) => observers.has(d)).length;
+  const presetLogo = COMMITTEE_PRESETS.find((p) => p.name === committeeName)?.logoPath ?? null;
+  const summaryName = committeeName.trim() ? getPresetDisplayName(committeeName.trim(), language) : t('create_untitled');
+  const countLabel = delegateCount === 1 ? t('create_delegations_count_one') : t('create_delegations_count', { n: delegateCount });
+  const observerLabel = observerCount === 1 ? t('create_observers_count_one') : t('create_observers_count', { n: observerCount });
+  const ctaLabel = creating ? t('create_creating') : canProceed ? t('create_cta_start') : t('create_cta_needs');
+  const removeDelegate = (name: string) => {
+    setDelegates((p) => p.filter((d) => d !== name));
+    setObservers((prev) => { const n = new Set(prev); n.delete(name); return n; });
+  };
+
+  return (
+    <div className="relative min-h-screen w-full" style={{ backgroundColor: C.page, WebkitFontSmoothing: 'antialiased', fontFamily: OUTFIT }}>
+      <PageBackdrop />
+
+      <nav className="relative z-20 mx-auto flex h-16 w-full max-w-[920px] items-center gap-3 px-4 sm:px-6">
+        <Link href="/sessions" className="flex flex-shrink-0 items-center focus:outline-none">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/GavellingLogo.png" alt="Gavelling" className="h-auto w-[118px] object-contain sm:w-[140px]" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+        </Link>
+        {langMenu}
       </nav>
 
-      <div className="flex-1 flex overflow-hidden">
-        {committeeMode === 'select' && (
-          <SelectScreen onSelect={() => setCommitteeMode('build')} />
-        )}
+      <main className="relative z-10 mx-auto w-full max-w-[920px] px-4 pt-1 sm:px-6 sm:pt-3">
+        <header className="mb-5 sm:mb-7">
+          <GhostAction onClick={() => setCommitteeMode('select')} icon={<ChevronLeft size={16} strokeWidth={2.4} className="rtl:rotate-180" />}>
+            {t('create_back')}
+          </GhostAction>
+          <div className="mt-4">
+            <Eyebrow tone="forest">{t('create_mun_title')}</Eyebrow>
+            <h1
+              className="mt-1.5"
+              style={{ fontFamily: OUTFIT, fontSize: 'clamp(28px, 5vw, 40px)', fontWeight: 800, letterSpacing: '-0.025em', lineHeight: 1.05, color: C.forest, margin: 0, textWrap: 'balance' }}
+            >
+              {t('create_title')}
+            </h1>
+          </div>
+        </header>
 
-        {committeeMode === 'build' && (
-          <div className="flex-1 flex flex-col overflow-hidden px-4 md:px-8 pt-4 pb-4">
-            {/* Back and title share one row, so the title can never sit under the
-                button on a phone (it used to be absolutely positioned over it). */}
-            <div className="flex items-center gap-3 mb-3 md:mb-4 shrink-0">
-              <button
-                onClick={() => setCommitteeMode('select')}
-                className="shrink-0 flex items-center gap-1.5 h-9 px-3 rounded-xl bg-[#F3EEE1] border border-[#DDD4C0] hover:bg-[#E2D9C5] text-[#6A5A4A] hover:text-[#1C1410] text-[11px] font-bold uppercase tracking-wide transition-[background-color,color,transform] duration-150 active:scale-[0.96] focus:outline-none"
-              >
-                <ChevronLeft size={14} className="rtl:rotate-180" /> {t('create_back')}
-              </button>
-              <h1 className="flex-1 text-center text-[20px] md:text-4xl font-black uppercase" style={{ color: '#1B3828', letterSpacing: '0.06em', textWrap: 'balance' }}>{t('create_new_committee').toUpperCase()}</h1>
-              {/* Optical counterweight for the Back button; desktop only, where the
-                  title has room to be truly centred. */}
-              <div aria-hidden className="hidden md:block shrink-0" style={{ width: '92px' }} />
-            </div>
-
-            {/* Two columns: everything you fill in on the left, the roster on the
-                right at full height. On a phone they stack and this region scrolls. */}
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6 min-h-0 overflow-auto md:overflow-visible">
-              {/* min-h-0 only from md: on a phone the grid scrolls, and a shrinkable
-                  column let the stacked roster slide up over the add field. */}
-              <div className="flex flex-col md:min-h-0 gap-3">
-                <div className="shrink-0">
-                  <label className={LABEL_CLS}>{t('create_committee_name')}</label>
-                  <CommitteeNameInput value={committeeName} onChange={setCommitteeName} onPresetSelect={handleCommitteePreset} />
+        <div className="flex flex-col gap-4 sm:gap-5">
+          {/* ── 1. Committee ─────────────────────────────────────────────── */}
+          <StepCard step={1} labelledBy="create-step-committee" title={t('create_step_committee')} hint={t('create_step_committee_hint')}>
+            <div className="flex flex-col gap-4">
+              <div>
+                <FieldLabel htmlFor="create-committee-name">{t('create_committee_name')}</FieldLabel>
+                <CommitteeNameInput id="create-committee-name" value={committeeName} onChange={setCommitteeName} onPresetSelect={handleCommitteePreset} />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+                <div>
+                  <FieldLabel htmlFor="create-topic">{t('create_topic')}</FieldLabel>
+                  <input id="create-topic" type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
+                    placeholder={language === 'ar' ? 'مثال: الحق في التعليم' : language === 'fr' ? "ex. Le droit à l'éducation" : language === 'es' ? 'ej. El derecho a la educación' : 'e.g. The right to education'}
+                    className={INPUT_CLS} />
                 </div>
-
-                <div className="grid grid-cols-2 gap-3 shrink-0">
-                  <div>
-                    <label className={LABEL_CLS}>
-                      {t('create_chair_name')} <span className="font-normal" style={{ color: '#9A8A78' }}>{t('create_optional')}</span>
-                    </label>
-                    <input type="text" value={chairNames[0]} onChange={(e) => setChairNames([e.target.value])}
-                      placeholder={language === 'ar' ? 'اسمك' : language === 'fr' ? 'Votre nom' : language === 'es' ? 'Tu nombre' : 'Your name'}
-                      className={FIELD_CLS} />
-                  </div>
-                  <div>
-                    <label className={LABEL_CLS}>{t('create_topic')}</label>
-                    <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
-                      placeholder={language === 'ar' ? 'مثال: الحق في التعليم' : language === 'fr' ? "ex. Le droit à l'éducation" : language === 'es' ? 'ej. El derecho a la educación' : 'e.g. The right to education'}
-                      className={FIELD_CLS} />
-                  </div>
-                </div>
-
-                {/* Quick Bundles */}
-                <div className="shrink-0">
-                  <label className={LABEL_CLS}>{t('create_quick_bundles')}</label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {Object.entries(BUNDLES).map(([key, bundle]) => (
-                      <button key={key} onClick={() => addBundle(key)}
-                        className="group flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-[11px] font-bold uppercase tracking-wide transition-[background-color,color,border-color,transform,box-shadow] duration-150 active:scale-[0.96] focus:outline-none gv-lift"
-                        style={{ backgroundColor: '#FAF8F3', color: '#1B3828', border: '1px solid #DDD4C0' }}
-                        onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; el.style.borderColor = '#1B3828'; }}
-                        onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#FAF8F3'; el.style.color = '#1B3828'; el.style.borderColor = '#DDD4C0'; }}>
-                        {bundle.logoPath ? (
-                          <img src={bundle.logoPath} alt={bundle.label} width={16} height={16} className="rounded-sm shrink-0 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                        ) : null}
-                        <span>{bundle.label}</span>
-                        <span className="font-mono text-[10px] ms-1 group-hover:opacity-60" style={{ color: '#9A8A78' }}>+{bundle.members.length}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Paste a list — takes whatever height is left over */}
-                <div className="flex-1 flex flex-col min-h-[132px] md:min-h-0">
-                  <label className={LABEL_CLS}>{t('create_paste_list')}</label>
-                  <textarea value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
-                    placeholder={t('create_paste_placeholder')}
-                    className="flex-1 min-h-[72px] bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-[border-color,box-shadow] duration-150 text-sm resize-none leading-relaxed" />
-                  {/* Secondary to Start Session: the page has one primary button. */}
-                  <button onClick={handlePaste} disabled={!pasteText.trim()}
-                    className="mt-2 w-full h-10 rounded-xl font-black text-[11px] uppercase tracking-[0.12em] transition-[background-color,color,border-color,transform] duration-150 active:scale-[0.98] shrink-0 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none"
-                    style={{ backgroundColor: '#F3EEE1', color: '#1B3828', border: '1px solid #C8BAA8' }}
-                    onMouseEnter={(e) => { if (!pasteText.trim()) return; const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; el.style.borderColor = '#1B3828'; }}
-                    onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#F3EEE1'; el.style.color = '#1B3828'; el.style.borderColor = '#C8BAA8'; }}>
-                    {t('create_auto_match')}
-                  </button>
-                  {pasteError && <p className="mt-1.5 text-[11px] shrink-0" style={{ color: '#B6871F' }}>{pasteError}</p>}
-                </div>
-
-                {/* ADD A COUNTRY — the plain way in, at the bottom of the column where
-                    the eye lands last. The typeahead opens UPWARDS (bottom-full) so a
-                    field this low on the page is never suggesting off-screen. */}
-                <div className="shrink-0">
-                  <label className={LABEL_CLS} htmlFor="create-add-country">{t('create_add_country')}</label>
-                  <div className="relative">
-                    <div className="flex items-center gap-2 bg-white/70 border border-[#C8BAA8] rounded-xl ps-3 pe-1.5 py-1.5 focus-within:border-[#1B3828] focus-within:ring-2 focus-within:ring-[#1B3828]/10 transition-[border-color,box-shadow] duration-150">
-                      <Search size={15} strokeWidth={2} className="shrink-0" style={{ color: '#9A8A78' }} />
-                      <input id="create-add-country" type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') { e.preventDefault(); addTyped(); }
-                          if (e.key === 'Escape') setSearch('');
-                        }}
-                        placeholder={t('create_add_country_placeholder')}
-                        className="flex-1 min-w-0 bg-transparent py-1.5 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
-                      <button onClick={addTyped} disabled={!typedIsAddable}
-                        className="shrink-0 flex items-center gap-1 h-9 px-3 rounded-md font-black text-[11px] uppercase tracking-[0.08em] transition-[background-color,transform,opacity] duration-150 active:scale-[0.96] disabled:opacity-35 disabled:cursor-not-allowed focus:outline-none"
-                        style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
-                        onMouseEnter={(e) => { if (!typedIsAddable) return; (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
-                        <Plus size={14} strokeWidth={3} /> {t('create_add_btn')}
-                      </button>
-                    </div>
-                    {search && (available.length > 0 || search.trim()) && (
-                      <div className="absolute bottom-full left-0 right-0 mb-2 rounded-xl overflow-hidden z-30"
-                        style={{ backgroundColor: '#FAF8F3', border: '1px solid #C8BAA8', boxShadow: '0 12px 32px rgba(27,56,40,0.18), 0 2px 8px rgba(27,56,40,0.08)' }}>
-                        {available.slice(0, 5).map((c, i) => (
-                          <button key={c.code} onMouseDown={(e) => { e.preventDefault(); addDelegate(c.name); setSearch(''); }}
-                            className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-start transition-colors border-b border-[#DDD4C0]/50 last:border-0 focus:outline-none ${i === 0 ? 'text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#EDE7D8]'}`}
-                            style={i === 0 ? { backgroundColor: 'rgba(27,56,40,0.07)' } : {}}>
-                            <CircleFlag code={c.code} size={22} decorative />
-                            <span className="text-sm flex-1 truncate">{getCountryDisplayName(c.name, language)}</span>
-                            {i === 0 && <span className="shrink-0 text-[10px] font-bold" style={{ color: '#9A8A78' }}>↵</span>}
-                          </button>
-                        ))}
-                        {/* "Add as custom" only when the text is not already an exact country — rank 0 covers accents, aliases and the localised name, so typing "turkiye" or "Turquía" no longer offers to add a custom delegation beside the real Türkiye. */}
-                        {search.trim() && !delegates.includes(search.trim()) && !available.some((c) => countryMatchRank(c.name, search, language) === 0) && (
-                          <button onMouseDown={(e) => { e.preventDefault(); addDelegate(search.trim()); setSearch(''); }}
-                            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-start transition-colors text-[#1C1410] hover:bg-[#EDE7D8] border-t border-[#DDD4C0] focus:outline-none">
-                            <Globe size={18} strokeWidth={1.5} className="text-[#9A8A78] shrink-0" />
-                            <span className="text-sm flex-1 truncate">{search.trim()}</span>
-                            <span className="text-[10px] shrink-0 font-bold" style={{ color: '#1B3828' }}>{t('create_custom_add')}</span>
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                <div>
+                  <FieldLabel htmlFor="create-chair-name">
+                    {t('create_chair_name')} <span style={{ fontWeight: 600, color: C.muted, letterSpacing: '0.06em' }}>{t('create_optional')}</span>
+                  </FieldLabel>
+                  <input id="create-chair-name" type="text" value={chairNames[0]} onChange={(e) => setChairNames([e.target.value])}
+                    placeholder={language === 'ar' ? 'اسمك' : language === 'fr' ? 'Votre nom' : language === 'es' ? 'Tu nombre' : 'Your name'}
+                    className={INPUT_CLS} />
                 </div>
               </div>
+            </div>
+          </StepCard>
 
-              {/* The roster owns the whole right side, top to bottom, and lays out in
-                  two columns from md up, so a 30-seat committee is one glance. */}
-              <div className="flex flex-col md:min-h-0">
-                <div className="flex items-center justify-between gap-3 mb-1.5 shrink-0" style={{ minHeight: '22px' }}>
-                  <div className="flex items-center gap-2 min-w-0">
-                    <label className={`${LABEL_CLS} mb-0 truncate`}>{t('create_selected_delegates')}</label>
-                    <span className="shrink-0 text-[10px] font-bold text-[#1B3828] bg-[#EED98A]/40 px-2 py-0.5 rounded-full tabular-nums" style={{ fontFamily: "'DM Mono', monospace" }}>{delegates.length}</span>
-                  </div>
-                  {delegates.length > 0 && (
-                    <button onClick={() => setDelegates([])} className="shrink-0 text-[10px] font-bold text-[#9A8A78] hover:text-[#8B2020] uppercase tracking-wide transition-colors focus:outline-none">{t('create_clear_all')}</button>
+          {/* ── 2. Delegations ───────────────────────────────────────────── */}
+          <StepCard
+            step={2}
+            labelledBy="create-step-delegations"
+            title={t('create_step_delegations')}
+            hint={t('create_step_delegations_hint')}
+            aside={<Chip tone={delegateCount > 0 ? 'gold' : 'muted'} style={{ fontVariantNumeric: 'tabular-nums' }}>{countLabel}</Chip>}
+          >
+            {/* Add a country: the one add path (+ button, Enter, first typeahead row). */}
+            <GroupLabel htmlFor="create-add-country">{t('create_add_country')}</GroupLabel>
+            <div className="relative">
+              <div className="flex items-center gap-2 rounded-[14px] bg-white/80 ps-3.5 pe-1.5 shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] focus-within:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] transition-[box-shadow] duration-150" style={{ height: 50 }}>
+                <Search size={17} strokeWidth={2.2} className="shrink-0" style={{ color: C.muted }} />
+                <input id="create-add-country" type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+                  autoComplete="off"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); addTyped(); }
+                    if (e.key === 'Escape') setSearch('');
+                  }}
+                  placeholder={t('create_add_country_placeholder')}
+                  className="flex-1 min-w-0 bg-transparent h-full text-base sm:text-[15px] text-[#1C1410] placeholder-[#8A7C6B] focus:outline-none" />
+                <button type="button" onClick={addTyped} disabled={!typedIsAddable} aria-label={t('create_add_btn')}
+                  className="shrink-0 flex items-center justify-center gap-1.5 h-[38px] min-w-[38px] px-2.5 sm:px-3.5 rounded-[10px] font-extrabold text-[13px] tracking-[0.02em] transition-[background-color,transform,opacity] duration-150 enabled:active:scale-[0.96] enabled:hover:bg-[#2A5A3C] disabled:opacity-35 disabled:cursor-not-allowed focus:outline-none"
+                  style={{ backgroundColor: C.forest, color: C.gold }}>
+                  <Plus size={15} strokeWidth={2.8} /> <span className="hidden sm:inline">{t('create_add_btn')}</span>
+                </button>
+              </div>
+              {search && (available.length > 0 || search.trim()) && (
+                <div className="absolute top-full inset-x-0 mt-2 rounded-2xl overflow-hidden z-40 p-1"
+                  style={{ backgroundColor: C.surface, boxShadow: '0 12px 32px rgba(27,56,40,0.18), 0 2px 8px rgba(27,56,40,0.08), inset 0 0 0 1px rgba(27,56,40,0.10)' }}>
+                  {available.slice(0, 5).map((c, i) => (
+                    <button key={c.code} type="button" onMouseDown={(e) => { e.preventDefault(); addDelegate(c.name); setSearch(''); }}
+                      className={`w-full flex items-center gap-3 px-3 h-11 rounded-xl text-start transition-colors focus:outline-none text-[#1C1410] ${i === 0 ? '' : 'hover:bg-[#1B3828]/[0.05]'}`}
+                      style={i === 0 ? { backgroundColor: 'rgba(27,56,40,0.07)' } : {}}>
+                      <CircleFlag code={c.code} size={26} decorative />
+                      <span className="text-[15px] font-semibold flex-1 truncate">{getCountryDisplayName(c.name, language)}</span>
+                      {i === 0 && <CornerDownLeft size={14} strokeWidth={2.2} className="shrink-0 rtl:-scale-x-100" style={{ color: C.muted }} />}
+                    </button>
+                  ))}
+                  {/* "Add as custom" only when the text is not already an exact country: rank 0 covers accents, aliases and the localised name, so typing "turkiye" or "Turquía" no longer offers to add a custom delegation beside the real Türkiye. */}
+                  {search.trim() && !delegates.includes(search.trim()) && !available.some((c) => countryMatchRank(c.name, search, language) === 0) && (
+                    <button type="button" onMouseDown={(e) => { e.preventDefault(); addDelegate(search.trim()); setSearch(''); }}
+                      className="w-full flex items-center gap-3 px-3 h-11 rounded-xl text-start transition-colors text-[#1C1410] hover:bg-[#1B3828]/[0.05] focus:outline-none">
+                      <span className="flex items-center justify-center shrink-0 rounded-full" style={{ width: 26, height: 26, backgroundColor: 'rgba(27,56,40,0.08)', color: C.forest }}>
+                        <UserRound size={15} strokeWidth={2} />
+                      </span>
+                      <span className="text-[15px] font-semibold flex-1 truncate">{search.trim()}</span>
+                      <span className="text-[12px] shrink-0 font-bold" style={{ color: C.forest }}>{t('create_custom_add')}</span>
+                    </button>
                   )}
                 </div>
+              )}
+            </div>
 
-                <div className="flex-1 rounded-2xl overflow-hidden mb-3 h-[360px] md:h-auto md:min-h-0" style={PANEL_STYLE}>
-                  {delegates.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full gap-2.5 px-8">
-                      <span className="flex items-center justify-center rounded-full" style={{ width: 46, height: 46, backgroundColor: 'rgba(27,56,40,0.06)' }}>
-                        <Globe size={22} strokeWidth={1.5} style={{ color: '#9A8A78' }} />
-                      </span>
-                      <p className="text-sm font-black uppercase tracking-[0.08em] text-center" style={{ color: '#1B3828' }}>{t('create_no_delegates').toUpperCase()}</p>
-                      <p className="text-xs text-center leading-relaxed" style={{ color: '#9A8A78', maxWidth: '230px', textWrap: 'pretty' }}>{t('create_no_delegates_hint')}</p>
-                    </div>
-                  ) : (
-                    <div className="overflow-y-auto h-full p-2 grid grid-cols-1 md:grid-cols-2 gap-x-2 gap-y-0.5 content-start">
-                      {[...delegates].sort((a, b) => compareCountryNames(a, b, language)).map((name) => {
-                        const found = getCountryByName(name);
-                        const isCustom = !found;
-                        const isEditing = editingName === name;
-                        const commitRename = (raw: string) => {
-                          const trimmed = raw.trim();
-                          if (!trimmed) {
-                            setDelegates((p) => p.filter((d) => d !== name));
-                            setObservers((prev) => { const n = new Set(prev); n.delete(name); return n; });
-                          } else if (trimmed !== name && !delegates.some((d) => d !== name && d === trimmed)) {
-                            setDelegates((p) => p.map((d) => d === name ? trimmed : d));
-                            setObservers((prev) => { if (!prev.has(name)) return prev; const n = new Set(prev); n.delete(name); n.add(trimmed); return n; });
-                          }
-                          setEditingName(null);
-                        };
-                        const isObserver = observers.has(name);
-                        return (
-                          <div key={name} className="flex items-center gap-2 ps-2 pe-1 py-1 rounded-lg transition-colors group" style={{ minHeight: '36px' }} onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.055)'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = ''; }}>
-                            <CircleFlag
-                              country={name}
-                              label={getCountryDisplayName(name, language)}
-                              size={22}
-                              ring={isObserver ? 'rgba(182,135,31,0.6)' : true}
-                            />
+            {/* Presets. One row that scrolls sideways on a phone, wraps from sm. */}
+            <div className="mt-5">
+              <GroupLabel id="create-presets-label">{t('create_quick_bundles')}</GroupLabel>
+              <div role="group" aria-labelledby="create-presets-label" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
+                {Object.entries(BUNDLES).map(([key, bundle]) => (
+                  <button key={key} type="button" onClick={() => addBundle(key)}
+                    className="group flex flex-shrink-0 items-center gap-2 h-10 ps-1.5 pe-3 rounded-full text-[13px] font-bold transition-[background-color,color,box-shadow,transform] duration-150 active:scale-[0.96] focus:outline-none bg-[#1B3828]/[0.055] text-[#1B3828] shadow-[inset_0_0_0_1px_rgba(27,56,40,0.10)] hover:bg-[#1B3828] hover:text-[#EED98A] hover:shadow-[0_4px_14px_rgba(27,56,40,0.22)]">
+                    <span className="flex items-center justify-center shrink-0 rounded-full bg-white" style={{ width: 28, height: 28, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)' }}>
+                      {bundle.logoPath ? (
+                        <img src={bundle.logoPath} alt="" width={18} height={18} className="object-contain" onError={(e) => {
+                          // Two bundles (G7, BRICS+) name logos that are not in /public: drop the empty disc.
+                          const disc = e.currentTarget.parentElement;
+                          const chip = disc?.parentElement;
+                          if (disc) disc.style.display = 'none';
+                          if (chip) chip.style.paddingInlineStart = '14px';
+                        }} />
+                      ) : null}
+                    </span>
+                    <span>{bundle.label}</span>
+                    <span className="text-[11.5px] font-semibold tabular-nums text-[#544B3E] group-hover:text-[#EED98A]/70 transition-colors">+{bundle.members.length}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* The roster: full width, FIXED height, scrolls inside. */}
+            <div className="mt-5">
+              <div className="mb-2 flex items-center justify-between gap-3" style={{ minHeight: 32 }}>
+                <p className="min-w-0 truncate uppercase" title={t('create_selected_delegates')} style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: C.inkSoft }}>{t('create_selected_delegates')}</p>
+                <div className="flex flex-shrink-0 items-center gap-2">
+                  {observerCount > 0 && <Chip tone="gold" style={{ fontVariantNumeric: 'tabular-nums' }}>{observerLabel}</Chip>}
+                  {delegateCount > 0 && (
+                    <button type="button" onClick={() => setDelegates([])}
+                      className="h-8 px-2.5 rounded-lg whitespace-nowrap text-[11px] font-extrabold uppercase tracking-[0.1em] transition-[color,background-color,transform] duration-150 active:scale-[0.96] hover:bg-[#8B2020]/[0.07] hover:text-[#8B2020] focus:outline-none"
+                      style={{ color: C.inkSoft }}>
+                      {t('create_clear_all')}
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="h-[340px] sm:h-[400px] rounded-[18px] overflow-hidden" style={{ backgroundColor: C.surfaceAlt, boxShadow: 'inset 0 1px 2px rgba(27,56,40,0.07), inset 0 0 0 1px rgba(27,56,40,0.08)' }}>
+                {delegateCount === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full gap-2.5 px-8 text-center">
+                    <span className="flex items-center justify-center rounded-full" style={{ width: 52, height: 52, backgroundColor: 'rgba(27,56,40,0.07)', color: C.forest }}>
+                      <Globe size={24} strokeWidth={1.75} />
+                    </span>
+                    <p style={{ fontSize: 16, fontWeight: 800, color: C.forest, textWrap: 'balance' }}>{t('create_no_delegates')}</p>
+                    <p style={{ fontSize: 13, color: C.inkSoft, maxWidth: 280, lineHeight: 1.5, textWrap: 'pretty' }}>{t('create_no_delegates_hint')}</p>
+                  </div>
+                ) : (
+                  <ul className="overflow-y-auto h-full p-2 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-1.5 content-start">
+                    {[...delegates].sort((a, b) => compareCountryNames(a, b, language)).map((name) => {
+                      const found = getCountryByName(name);
+                      const isCustom = !found;
+                      const isEditing = editingName === name;
+                      const commitRename = (raw: string) => {
+                        const trimmed = raw.trim();
+                        if (!trimmed) {
+                          setDelegates((p) => p.filter((d) => d !== name));
+                          setObservers((prev) => { const n = new Set(prev); n.delete(name); return n; });
+                        } else if (trimmed !== name && !delegates.some((d) => d !== name && d === trimmed)) {
+                          setDelegates((p) => p.map((d) => d === name ? trimmed : d));
+                          setObservers((prev) => { if (!prev.has(name)) return prev; const n = new Set(prev); n.delete(name); n.add(trimmed); return n; });
+                        }
+                        setEditingName(null);
+                      };
+                      const isObserver = observers.has(name);
+                      const display = getCountryDisplayName(name, language);
+                      return (
+                        <li key={name} className="flex items-center gap-2.5 ps-2.5 pe-1 rounded-xl bg-white/65 hover:bg-white transition-colors" style={{ minHeight: 50, boxShadow: '0 1px 2px rgba(27,56,40,0.05)' }}>
+                          <CircleFlag
+                            country={name}
+                            label={display}
+                            size={28}
+                            ring={isObserver ? 'rgba(182,135,31,0.7)' : true}
+                          />
+                          <div className="min-w-0 flex-1">
                             {isEditing ? (
                               <input
                                 autoFocus
-                                className="text-sm flex-1 bg-transparent border-b border-[#1B3828] outline-none font-medium"
-                                style={{ color: '#1C1410' }}
+                                aria-label={display}
+                                className="w-full text-[14px] bg-transparent border-b-2 border-[#1B3828] outline-none font-semibold py-0.5"
+                                style={{ color: C.ink }}
                                 value={editDraft}
                                 onChange={(e) => setEditDraft(e.target.value)}
                                 onKeyDown={(e) => {
@@ -837,127 +863,150 @@ function CreatePageInner() {
                                 onBlur={() => commitRename(editDraft)}
                               />
                             ) : (
-                              <span className="text-[13px] flex-1 truncate font-medium" style={{ color: '#1C1410' }} title={getCountryDisplayName(name, language)}>{getCountryDisplayName(name, language)}</span>
+                              <span className="block truncate text-[14px] font-semibold leading-tight" style={{ color: C.ink }} title={display}>{display}</span>
                             )}
                             {!isEditing && isObserver && (
-                              <span className="text-[9px] shrink-0 font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md" style={{ backgroundColor: 'rgba(182,135,31,0.15)', color: '#B6871F', border: '1px solid rgba(182,135,31,0.35)' }}>{t('rollcall_observer')}</span>
-                            )}
-                            {!isEditing && (
-                              <button onClick={() => setObservers((prev) => { const n = new Set(prev); n.has(name) ? n.delete(name) : n.add(name); return n; })}
-                                title={t('create_observer_toggle')} aria-label={t('create_observer_toggle')} aria-pressed={isObserver}
-                                className="shrink-0 flex items-center justify-center rounded-md transition-[color,background-color,transform] duration-150 active:scale-[0.9] hover:bg-[#1B3828]/[0.07] focus:outline-none"
-                                style={{ width: 28, height: 28, color: isObserver ? '#B6871F' : '#9A8A78' }}>
-                                <Megaphone size={15} strokeWidth={1.75} />
-                              </button>
-                            )}
-                            {/* Rename and remove are always visible: hiding them behind
-                                group-hover made both unreachable on touch, and rename has
-                                no alternative route at all (remove at least has Clear All). */}
-                            {!isEditing && isCustom && (
-                              <button onClick={() => { setEditingName(name); setEditDraft(name); }}
-                                className="shrink-0 flex items-center justify-center rounded-md text-[#9A8A78] hover:text-[#1B3828] hover:bg-[#1B3828]/[0.07] transition-[color,background-color,transform] duration-150 active:scale-[0.9] focus:outline-none"
-                                style={{ width: 28, height: 28 }}>
-                                <PenLine size={15} strokeWidth={1.75} />
-                              </button>
-                            )}
-                            {!isEditing && (
-                              <button onClick={() => { setDelegates((p) => p.filter((d) => d !== name)); setObservers((prev) => { const n = new Set(prev); n.delete(name); return n; }); }}
-                                className="shrink-0 flex items-center justify-center rounded-md text-[#9A8A78] hover:text-[#8B2020] hover:bg-[#8B2020]/[0.08] transition-[color,background-color,transform] duration-150 active:scale-[0.9] focus:outline-none"
-                                style={{ width: 28, height: 28 }}>
-                                <X size={15} strokeWidth={2} />
-                              </button>
+                              <span className="block text-[10px] font-extrabold uppercase tracking-[0.12em] mt-0.5" style={{ color: '#8A6414' }}>{t('rollcall_observer')}</span>
                             )}
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  onClick={handleCreate}
-                  disabled={!canProceed || creating}
-                  className="w-full h-[54px] rounded-xl font-black text-sm uppercase tracking-widest transition-[background-color,box-shadow,transform] duration-150 enabled:active:scale-[0.99] shrink-0 focus:outline-none"
-                  style={{
-                    backgroundColor: canProceed && !creating ? '#1B3828' : '#DDD4C0',
-                    color: canProceed && !creating ? '#EED98A' : '#9A8A78',
-                    boxShadow: canProceed && !creating ? '0 8px 24px rgba(27,56,40,0.25)' : 'none',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!canProceed || creating) return;
-                    (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C';
-                    (e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 3px rgba(238,217,138,0.2), 0 8px 24px rgba(27,56,40,0.25)';
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!canProceed || creating) return;
-                    (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828';
-                    (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 24px rgba(27,56,40,0.25)';
-                  }}
-                >
-                  {creating ? t('create_creating') : canProceed ? t('create_start_session') : t('create_enter_details')}
-                </button>
+                          {!isEditing && (
+                            <RowIconButton
+                              onClick={() => setObservers((prev) => { const n = new Set(prev); n.has(name) ? n.delete(name) : n.add(name); return n; })}
+                              label={t('create_observer_toggle')}
+                              pressed={isObserver}
+                              tone={isObserver ? 'gold' : 'neutral'}
+                            >
+                              <Megaphone size={16} strokeWidth={isObserver ? 2.2 : 1.8} />
+                            </RowIconButton>
+                          )}
+                          {/* Rename and remove are always visible: hover-only made both unreachable on touch. */}
+                          {!isEditing && isCustom && (
+                            <RowIconButton onClick={() => { setEditingName(name); setEditDraft(name); }} label={display}>
+                              <PenLine size={16} strokeWidth={1.8} />
+                            </RowIconButton>
+                          )}
+                          {!isEditing && (
+                            <RowIconButton onClick={() => removeDelegate(name)} label={display} tone="danger">
+                              <X size={16} strokeWidth={2} />
+                            </RowIconButton>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </div>
             </div>
-          </div>
-        )}
-      </div>
-    </div>
 
-    {/* Paste review modal — inside FitToScreen so it scales with the page */}
-    {pasteReview && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-        style={{ background: 'rgba(5,4,3,0.5)', backdropFilter: 'blur(4px)' }}
-        onMouseDown={(e) => { if (e.target === e.currentTarget) setPasteReview(null); }}>
-        <div className="w-full max-w-md flex flex-col rounded-2xl shadow-2xl overflow-hidden"
-          style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', maxHeight: '78%' }}>
-          {/* Header */}
-          <div className="px-6 py-4 shrink-0" style={{ borderBottom: '1px solid #DDD4C0' }}>
-            <h2 className="text-lg font-black uppercase tracking-wide" style={{ color: '#1B3828', letterSpacing: '0.04em' }}>{t('create_review_title')}</h2>
-            <p className="text-xs mt-0.5" style={{ color: '#9A8A78' }}>{t('create_review_subtitle').replace('{n}', String(pasteReview.length))}</p>
-          </div>
-          {/* List */}
-          <div className="flex-1 overflow-y-auto min-h-0">
-            {pasteReview.map((r, idx) => {
-              const found = getCountryByName(r.name);
-              return (
-                <div key={idx} className="flex items-center gap-3 px-5 py-2.5 border-b border-[#DDD4C0]/50 last:border-0">
-                  {found
-                    ? <CircleFlag code={found.code} size={22} decorative />
-                    : <Globe size={16} strokeWidth={1.5} className="text-[#9A8A78] shrink-0" />}
-                  {found ? (
-                    <span className="text-sm flex-1 truncate font-medium" style={{ color: '#1C1410' }}>{getCountryDisplayName(r.name, language)}</span>
-                  ) : (
-                    <input value={r.name} onChange={(e) => updateReviewName(idx, e.target.value)}
-                      className="text-sm flex-1 bg-white border border-[#C8BAA8] rounded-lg px-2.5 py-1.5 text-[#1C1410] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10" />
-                  )}
-                  <span className="text-[10px] font-bold uppercase tracking-wide shrink-0 px-2 py-0.5 rounded-full"
-                    style={found ? { color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.1)' } : { color: '#B6871F', backgroundColor: 'rgba(182,135,31,0.12)' }}>
-                    {found ? t('create_review_country_tag') : t('create_review_custom_tag')}
-                  </span>
-                  <button onClick={() => removeReviewIdx(idx)} className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm shrink-0">✕</button>
+            {/* Paste a list: secondary, last, so opening it moves nothing above. */}
+            <div className="mt-4">
+              <button type="button" onClick={() => setPasteOpen((v) => !v)} aria-expanded={pasteOpen} aria-controls="create-paste-panel"
+                className="flex w-full items-center gap-2.5 h-11 px-3 rounded-xl text-start transition-[background-color,transform] duration-150 active:scale-[0.99] hover:bg-[#1B3828]/[0.05] focus:outline-none"
+                style={{ color: C.forest }}>
+                <ClipboardList size={17} strokeWidth={2} />
+                <span className="flex-1 text-[14px] font-bold">{t('create_paste_toggle')}</span>
+                <ChevronDown size={17} strokeWidth={2.2} className="transition-transform duration-200" style={{ transform: pasteOpen ? 'rotate(180deg)' : undefined }} />
+              </button>
+              {pasteOpen && (
+                <div id="create-paste-panel" className="px-1 pt-2">
+                  <label htmlFor="create-paste" className="block text-[13px] mb-2" style={{ color: C.inkSoft, textWrap: 'pretty' }}>{t('create_paste_hint')}</label>
+                  <textarea id="create-paste" value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
+                    placeholder={t('create_paste_placeholder')}
+                    rows={5}
+                    className="w-full rounded-[14px] bg-white/80 px-4 py-3 text-base sm:text-[15px] leading-relaxed text-[#1C1410] placeholder-[#8A7C6B] resize-y shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] focus:outline-none focus:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] transition-[box-shadow] duration-150" />
+                  <div className="mt-2 flex flex-wrap items-center gap-3">
+                    <button type="button" onClick={handlePaste} disabled={!pasteText.trim()}
+                      className="flex items-center gap-2 h-10 px-4 rounded-xl text-[13px] font-extrabold transition-[background-color,color,transform,opacity] duration-150 enabled:active:scale-[0.96] enabled:hover:bg-[#1B3828] enabled:hover:text-[#EED98A] disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none"
+                      style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: C.forest, boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.14)' }}>
+                      <Wand2 size={15} strokeWidth={2.2} />
+                      {stripArrow(t('create_auto_match'))}
+                    </button>
+                    {pasteError && <p role="alert" className="text-[13px] font-semibold" style={{ color: '#8A6414' }}>{pasteError}</p>}
+                  </div>
                 </div>
-              );
-            })}
-          </div>
-          {/* Footer */}
-          <div className="flex items-center gap-3 px-6 py-4 shrink-0" style={{ borderTop: '1px solid #DDD4C0' }}>
-            <button onClick={() => setPasteReview(null)}
-              className="px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-wide transition-colors gv-lift"
-              style={{ color: '#6A5A4A', backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0' }}>
-              {t('create_review_cancel')}
-            </button>
-            <button onClick={commitPasteReview} disabled={pasteReview.length === 0}
-              className="flex-1 py-3 rounded-xl font-black text-sm uppercase tracking-widest transition-all disabled:opacity-30 gv-lift"
-              style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
-              onMouseEnter={(e) => { if (pasteReview.length) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
-              {t('create_review_proceed')}
-            </button>
+              )}
+            </div>
+          </StepCard>
+        </div>
+
+        {/* ── Sticky action bar ────────────────────────────────────────────── */}
+        <div
+          className="sticky bottom-0 z-30 -mx-4 mt-2 px-4 pt-8 sm:-mx-6 sm:px-6"
+          style={{ background: `linear-gradient(to top, ${C.page} 58%, rgba(237,231,216,0))`, paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}
+        >
+          <div className="flex items-center gap-4 rounded-[24px] p-2 sm:p-2.5" style={{ backgroundColor: C.surface, boxShadow: '0 2px 6px rgba(27,56,40,0.08), 0 16px 40px rgba(27,56,40,0.16), inset 0 0 0 1px rgba(27,56,40,0.08)' }}>
+            <div className="hidden min-w-0 flex-1 items-center gap-3 ps-1.5 sm:flex" aria-live="polite">
+              <span className="flex flex-shrink-0 items-center justify-center rounded-full bg-white" style={{ width: 42, height: 42, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)' }}>
+                {presetLogo
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={presetLogo} alt="" width={26} height={26} className="object-contain" />
+                  : <Gavel size={19} strokeWidth={2} style={{ color: C.forest }} />}
+              </span>
+              <div className="min-w-0">
+                <p className="truncate" style={{ fontSize: 15, fontWeight: 800, color: committeeName.trim() ? C.forest : C.muted, lineHeight: 1.25 }}>{summaryName}</p>
+                <p className="truncate tabular-nums" style={{ fontSize: 12.5, fontWeight: 600, color: C.inkSoft, lineHeight: 1.3 }}>
+                  {topic.trim() ? `${topic.trim()} · ${countLabel}` : countLabel}
+                </p>
+              </div>
+            </div>
+            <div className="w-full sm:w-auto sm:min-w-[260px]">
+              <PrimaryAction
+                onClick={handleCreate}
+                disabled={!canProceed || creating}
+                icon={creating
+                  ? <Loader2 size={18} strokeWidth={2.6} className="animate-spin" />
+                  : canProceed ? <ArrowRight size={18} strokeWidth={2.6} className="rtl:rotate-180" /> : null}
+              >
+                {stripArrow(ctaLabel)}
+              </PrimaryAction>
+            </div>
           </div>
         </div>
-      </div>
-    )}
-    </FitToScreen>
+      </main>
+
+      {/* Paste review modal */}
+      {pasteReview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(5,4,3,0.5)', backdropFilter: 'blur(4px)' }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setPasteReview(null); }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="create-review-title" className="w-full max-w-md flex flex-col overflow-hidden"
+            style={{ backgroundColor: C.surface, borderRadius: 24, boxShadow: SHADOW.panel, maxHeight: '82vh' }}>
+            <div className="px-6 pt-5 pb-4 shrink-0" style={{ boxShadow: 'inset 0 -1px 0 rgba(27,56,40,0.08)' }}>
+              <h2 id="create-review-title" style={{ fontSize: 19, fontWeight: 800, color: C.forest, margin: 0 }}>{t('create_review_title')}</h2>
+              <p className="mt-0.5" style={{ fontSize: 13, color: C.inkSoft }}>{t('create_review_subtitle').replace('{n}', String(pasteReview.length))}</p>
+            </div>
+            <div className="flex-1 overflow-y-auto min-h-0 p-2">
+              {pasteReview.map((r, idx) => {
+                const found = getCountryByName(r.name);
+                return (
+                  <div key={idx} className="flex items-center gap-3 px-3 rounded-xl" style={{ minHeight: 50 }}>
+                    {found
+                      ? <CircleFlag code={found.code} size={26} decorative />
+                      : <span className="flex items-center justify-center shrink-0 rounded-full" style={{ width: 26, height: 26, backgroundColor: 'rgba(27,56,40,0.08)', color: C.forest }}><UserRound size={15} strokeWidth={2} /></span>}
+                    {found ? (
+                      <span className="text-[14px] flex-1 truncate font-semibold" style={{ color: C.ink }}>{getCountryDisplayName(r.name, language)}</span>
+                    ) : (
+                      <input value={r.name} onChange={(e) => updateReviewName(idx, e.target.value)}
+                        className="text-base sm:text-[14px] flex-1 min-w-0 bg-white rounded-lg px-2.5 h-9 text-[#1C1410] shadow-[inset_0_0_0_1px_rgba(27,56,40,0.18)] focus:outline-none focus:shadow-[inset_0_0_0_2px_#1B3828]" />
+                    )}
+                    <Chip tone={found ? 'green' : 'gold'}>{found ? t('create_review_country_tag') : t('create_review_custom_tag')}</Chip>
+                    <RowIconButton onClick={() => removeReviewIdx(idx)} label={r.name} tone="danger"><X size={16} strokeWidth={2} /></RowIconButton>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-3 px-5 py-4 shrink-0" style={{ boxShadow: 'inset 0 1px 0 rgba(27,56,40,0.08)' }}>
+              <GhostAction onClick={() => setPasteReview(null)}>{t('create_review_cancel')}</GhostAction>
+              <button type="button" onClick={commitPasteReview} disabled={pasteReview.length === 0}
+                className="gv-lift flex-1 h-11 rounded-xl text-[14px] font-extrabold transition-[background-color,transform,opacity] duration-150 enabled:active:scale-[0.96] enabled:hover:bg-[#2A5A3C] disabled:opacity-30 focus:outline-none"
+                style={{ backgroundColor: C.forest, color: C.gold }}>
+                {t('create_review_proceed')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

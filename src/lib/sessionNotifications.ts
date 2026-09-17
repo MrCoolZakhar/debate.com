@@ -118,6 +118,8 @@ interface LiveNotification extends SessionNotification {
 const EMPTY: LiveNotification[] = [];
 let items: LiveNotification[] = [];
 let suppressed = false;
+/** Keys whose TTL is on hold because the pointer or focus is on that card (see `holdNotification`). */
+const held = new Set<string>();
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -157,9 +159,18 @@ export function notify(n: SessionNotification): void {
 
 /** Idempotent. Does NOT fire `onExpire` — that is reserved for real timeouts. */
 export function dismiss(key: string): void {
+  held.delete(key);
   if (!items.some((i) => i.key === key)) return;
   items = items.filter((i) => i.key !== key);
   emit();
+}
+
+/** Dismiss only if the card was not re-notified since `createdAt` (a fly-out that finishes
+ *  after the same key was raised again must not remove the fresh card). */
+export function dismissIfUnchanged(key: string, createdAt: number): void {
+  const live = items.find((i) => i.key === key);
+  if (!live || live.createdAt !== createdAt) return;
+  dismiss(key);
 }
 
 /** Drop every notification whose key starts with `prefix` (e.g. `gsl:`). */
@@ -171,6 +182,7 @@ export function dismissWhere(prefix: string): void {
 }
 
 export function clearAll(): void {
+  held.clear();
   if (items.length === 0) return;
   items = [];
   emit();
@@ -198,6 +210,21 @@ export function setPending(key: string, actionId: string | undefined): void {
 }
 
 /**
+ * Put one card's TTL on hold while the pointer (or keyboard focus) is on it, and release it.
+ *
+ * Why (owner, 17 Sep 2026: "the X is unclickable"): a short card used to keep counting down
+ * under the pointer. The chair saw "Queue full", moved to its X, and the card ran out on the
+ * way; the stack's hover freeze then kept its slot as an INVISIBLE ghost, so the click landed
+ * on nothing. Holding the TTL of the card being pointed at means the X is always there when
+ * it is reached. The TTL resumes from where it was as soon as the pointer leaves, so an
+ * unattended card still leaves on time. Not an emit: nothing on screen changes.
+ */
+export function holdNotification(key: string, hold: boolean): void {
+  if (hold) held.add(key);
+  else held.delete(key);
+}
+
+/**
  * Advance every TTL by `deltaMs` and drop what has run out. Called by the
  * renderer's single interval — the store owns no timers of its own, so it
  * stays testable and does not leak intervals when no host is mounted.
@@ -212,15 +239,23 @@ export function tickNotifications(deltaMs: number): void {
   if (suppressed && !items.some((i) => i.urgent)) return;
   const expired: LiveNotification[] = [];
   const next: LiveNotification[] = [];
+  let aged = false;
   for (const i of items) {
     if (i.ttlMs == null) { next.push(i); continue; }
     /* Paused while hidden. Only what is actually on screen ages. */
     if (suppressed && !i.urgent) { next.push(i); continue; }
+    /* On hold while the chair is pointing at it (holdNotification). */
+    if (held.has(i.key)) { next.push(i); continue; }
+    aged = true;
     const elapsedMs = i.elapsedMs + deltaMs;
     if (elapsedMs >= i.ttlMs) expired.push(i);
     else next.push({ ...i, elapsedMs });
   }
-  if (expired.length === 0) return;
+  /* The aged payloads MUST be committed on every tick. This used to return early unless
+     something had expired, which threw every `elapsedMs` away, so no card ever aged past
+     one tick: TTL cards (queue full, chat) never left on their own and the countdown hairline
+     sat at full width ("should disappear within 5 seconds", owner, 17 Sep 2026). */
+  if (!aged) return;
   items = next;
   emit();
   /* After the state settles, so a handler that re-notifies cannot be clobbered
@@ -243,8 +278,11 @@ export function useNotifications(): { items: LiveNotification[]; suppressed: boo
 export const NOTIFY_TTL = {
   /** A minute to accept or reject, matching the delegate's re-request window. */
   gslRequest: 60_000,
-  /** Long enough to register, short enough not to become clutter. */
-  chat: 10_000,
+  /** Long enough to register, short enough not to become clutter. Every transient card
+   *  leaves within 5 s of unattended time (owner, 17 Sep 2026). */
+  chat: 5_000,
+  /** A short refusal or heads-up (e.g. "Queue full"). */
+  notice: 4_000,
 } as const;
 
 export const notifyKey = {

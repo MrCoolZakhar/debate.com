@@ -67,6 +67,7 @@ export default function SessionCodePresenter({
   const [phase, setPhase] = useState<'enter' | 'open' | 'exit'>('enter');
   const [copied, setCopied] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const codeRef = useRef<HTMLDivElement>(null);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reduced = useMemo(
     () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
@@ -79,6 +80,31 @@ export default function SessionCodePresenter({
     const id = requestAnimationFrame(() => requestAnimationFrame(() => setPhase('open')));
     return () => cancelAnimationFrame(id);
   }, []);
+
+  // Fit the code to the screen (17 Sep 2026: "some session codes still go way off screen").
+  // A fixed min(24vw, 44vh) assumed six narrow characters; WWMMWW, or a custom code of up to
+  // 20 characters, ran far past both edges. Measure the text at 100px and scale it so it fills
+  // at most the width left inside the padding, and never more than 44% of the height. Written
+  // straight to the node (no state), again on resize and once the web font has loaded.
+  // scrollWidth is layout width, so the grow-in transform does not disturb the measurement.
+  useLayoutEffect(() => {
+    const el = codeRef.current;
+    if (!el) return;
+    const fit = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const avail = Math.max(120, w - 2 * Math.max(16, w * 0.03) - 8);
+      el.style.fontSize = '100px';
+      const at100 = el.scrollWidth || 1;
+      const byWidth = (avail / at100) * 100;
+      el.style.fontSize = `${Math.max(12, Math.floor(Math.min(byWidth, h * 0.44)))}px`;
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    let alive = true;
+    void document.fonts?.ready.then(() => { if (alive) fit(); });
+    return () => { alive = false; window.removeEventListener('resize', fit); };
+  }, [code]);
 
   const close = useCallback(() => {
     setPhase('exit');
@@ -159,14 +185,16 @@ export default function SessionCodePresenter({
       </p>
 
       <div
+        ref={codeRef}
         className="tabular-nums text-center"
         style={{
           fontFamily: OUTFIT,
           fontWeight: 800,
           lineHeight: 1,
           letterSpacing: '0.06em',
-          // Six characters fill the width; on a short, wide screen the height wins.
-          fontSize: 'min(24vw, 44vh)',
+          // A first guess for SSR; the layout effect above fits the real text to the screen.
+          fontSize: 'min(14vw, 44vh)',
+          maxWidth: '100%',
           color: '#FFFFFF',
           marginBlock: '2vh',
           whiteSpace: 'nowrap',
@@ -180,7 +208,7 @@ export default function SessionCodePresenter({
           <p style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 'clamp(14px, 1.5vw, 22px)', color: 'rgba(237,231,216,0.8)' }}>
             {t('code_present_join_at')}
           </p>
-          <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 'clamp(22px, 3.4vw, 54px)', color: '#EDE7D8', letterSpacing: '0.01em' }}>
+          <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 'clamp(22px, 3.4vw, 54px)', color: '#EDE7D8', letterSpacing: '0.01em', overflowWrap: 'anywhere' }}>
             {JOIN_HOST}/join
           </p>
           <button

@@ -88,7 +88,7 @@ import Portal from '@/components/Portal';
 import { getFlagUrl } from '@/lib/countries';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import {
-  useNotifications, dismiss, setPending, tickNotifications,
+  useNotifications, dismiss, dismissIfUnchanged, setPending, tickNotifications, holdNotification,
   type NotificationKind, type NotificationLevel, type NotificationTone,
 } from '@/lib/sessionNotifications';
 import { GLASS, GLASS_SAFE, glassFallbackCss, SPRING_BEZIER, SPRING_LINEAR } from './glass';
@@ -373,10 +373,26 @@ function NotificationCard({ n, extra, behind, onTap, entrance, index, rtf, dismi
   const [dx, setDx] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  /* A re-notify of this key while the card is flying out (the chair pressed x, then hit the
+     same refusal again) brings the SAME card back instead of letting the pending dismiss eat
+     the fresh notification. Derived during render from the payload's createdAt. */
+  const [shownAt, setShownAt] = useState(n.createdAt);
+  if (shownAt !== n.createdAt) {
+    setShownAt(n.createdAt);
+    if (leaving) { setLeaving(false); setDx(0); }
+  }
   /* Captured once: changing the wrapper's animation class after mount would replay it. */
   const [entranceClass] = useState(entrance === 'unfold' ? 'dgn-unfold' : 'dgn-drop');
 
   useEffect(() => () => { if (exitTimer.current) clearTimeout(exitTimer.current); }, []);
+
+  /* The card the pointer or focus is on keeps its TTL on hold, so its x can always be reached
+     (holdNotification). Released on leave, on blur and when the card goes away. */
+  const pointerOn = useRef(false);
+  const focusOn = useRef(false);
+  const syncHold = () => holdNotification(n.key, !ghost && (pointerOn.current || focusOn.current));
+  useEffect(() => () => { holdNotification(n.key, false); }, [n.key]);
+  useEffect(() => { if (ghost) holdNotification(n.key, false); }, [ghost, n.key]);
 
   /** +1 when the stack is anchored to the right (LTR), -1 in RTL. */
   const anchorSign = (): number => {
@@ -398,14 +414,15 @@ function NotificationCard({ n, extra, behind, onTap, entrance, index, rtf, dismi
     setLeaving(true);
     setDragging(false);
     if (prefersReducedMotion()) { dismiss(n.key); return; }
+    const flownAt = n.createdAt;
     setDx(anchorSign() * (CARD_W + 60));
-    exitTimer.current = setTimeout(() => dismiss(n.key), EXIT_MS);
+    exitTimer.current = setTimeout(() => dismissIfUnchanged(n.key, flownAt), EXIT_MS);
   };
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (leaving) return;
     // Never steal a press aimed at Accept / Reject / the x — those must click cleanly.
-    if ((e.target as HTMLElement).closest('button')) return;
+    if ((e.target as Element).closest('button, .dgn-end')) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     const scaled = e.clientX / fitScale();
     dragRef.current = {
@@ -513,6 +530,10 @@ function NotificationCard({ n, extra, behind, onTap, entrance, index, rtf, dismi
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
+        onPointerEnter={() => { pointerOn.current = true; syncHold(); }}
+        onPointerLeave={() => { pointerOn.current = false; syncHold(); }}
+        onFocus={() => { focusOn.current = true; syncHold(); }}
+        onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) { focusOn.current = false; syncHold(); } }}
         style={{
           ['--dgn-dx' as string]: `${dx}px`,
           opacity: leaving ? 0 : 1,
@@ -958,9 +979,14 @@ export default function NotificationStack({
         .dgn-dragging { transition: none }
         .dgn-end { display: grid; align-items: center; justify-items: end; flex-shrink: 0 }
         .dgn-end > * { grid-area: 1 / 1 }
-        .dgn-time { transition: opacity 140ms ${EASE} }
-        .dgn-x { opacity: 0; pointer-events: none; transition: opacity 140ms ${EASE}, background-color 140ms ${EASE}, transform 120ms ${EASE} }
-        .dgn-card:hover .dgn-x, .dgn-card:focus-within .dgn-x { opacity: 1; pointer-events: auto }
+        /* The x is ALWAYS the hit target of its slot; only its opacity waits for hover. It used
+           to be pointer-events: none until :hover applied, so a press that arrived with the
+           pointer (or before hover registered) landed on the timestamp under it, the card took
+           pointer capture for a swipe, and the click never reached the x ("the X is
+           unclickable", owner, 17 Sep 2026). The timestamp never takes the pointer. */
+        .dgn-time { transition: opacity 140ms ${EASE}; pointer-events: none }
+        .dgn-x { opacity: 0; pointer-events: auto; transition: opacity 140ms ${EASE}, background-color 140ms ${EASE}, transform 120ms ${EASE} }
+        .dgn-card:hover .dgn-x, .dgn-card:focus-within .dgn-x { opacity: 1 }
         .dgn-card:hover .dgn-time, .dgn-card:focus-within .dgn-time { opacity: 0 }
         .dgn-x:hover { background-color: rgba(27,56,40,0.14) !important }
         .dgn-x:focus-visible, .dgn-act:focus-visible, .dgn-pill:focus-visible {
@@ -969,7 +995,7 @@ export default function NotificationStack({
         /* Touch: no hover to reveal the x, so it always shows beside the time. */
         @media (hover: none) {
           .dgn-end { display: flex; gap: 6px }
-          .dgn-x { opacity: 1; pointer-events: auto }
+          .dgn-x { opacity: 1 }
           .dgn-card:focus-within .dgn-time { opacity: 1 }
         }
         /* Pointer devices only. On touch there is no hover, and a sticky

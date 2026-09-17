@@ -47,6 +47,9 @@ export type StripHeader = {
   icon?: ReactNode;
   /** "General Speaker's List", or the motion's own name. */
   label: string;
+  /** Drawn right after the label as " - detail" in regular weight (the caucus topic,
+   *  owner 17 Sep 2026). Omitted on the GSL. */
+  detail?: string | null;
 };
 
 type Drag = {
@@ -225,11 +228,18 @@ export default function SpeakerStrip({
   return (
     <div className="flex flex-col items-center w-full mb-1 shrink-0 pt-4" data-tutorial="speakers-queue">
       {header && (
-        // Just the icon and the motion's name (owner, 16 Sep 2026): no pill, no disc behind the
-        // icon, no queued / spoke count and no topic line beneath.
+        // The icon and the motion's name (owner, 16 Sep 2026): no pill, no disc behind the
+        // icon, no queued / spoke count. A caucus adds its topic on the same line after
+        // " - ", not bolded (owner, 17 Sep 2026); the full line is the tooltip when truncated.
         <div className="flex items-center justify-center gap-2 mb-3 px-4 max-w-full" style={{ color: '#1B3828' }}>
           {header.icon && <span aria-hidden className="shrink-0 inline-flex">{header.icon}</span>}
-          <span className="min-w-0 truncate text-[15px] font-black tracking-tight">{header.label}</span>
+          <span
+            className="min-w-0 truncate text-[15px] tracking-tight"
+            title={header.detail ? `${header.label} - ${header.detail}` : undefined}
+          >
+            <span className="font-black">{header.label}</span>
+            {header.detail && <span className="font-normal">{' - '}{header.detail}</span>}
+          </span>
         </div>
       )}
       <div

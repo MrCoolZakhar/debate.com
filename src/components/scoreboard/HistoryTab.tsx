@@ -15,8 +15,11 @@
 //
 // A SEGMENT IS A MOTION'S DEBATE. `buildSessionHistory` (src/lib/sessionHistory.ts)
 // derives them from the log: a run of speeches sharing a speaking context and a
-// topic is one segment, headed by the caucus purpose — which is the motion that
-// opened it — and a stretch of the General Speakers' List is its own segment.
+// topic is one segment (a caucus, or a stretch of the General Speakers' List).
+// The header says only which kind of debate it was, when, and how long was
+// spoken; each row says who spoke, when and for how long, with the chair comment
+// inline. No topic is printed (17 Sep 2026, owner): the caucus purpose rides in
+// the header's tooltip only.
 // Motions raised, rights of reply and manual awards sit in the segment that was
 // running when they happened, in time order with the speeches.
 //
@@ -33,7 +36,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   ChevronRight, ListOrdered, Gavel, Users, MicVocal, CircleDot, Clock,
-  MessageSquareQuote, type LucideIcon,
+  type LucideIcon,
 } from 'lucide-react';
 import { NEU, OUTFIT, EASE } from '@/components/neu';
 import { SOFT, RED, CARD_BORDER_COLOR } from '@/components/scoreboardTokens';
@@ -94,16 +97,6 @@ export default function HistoryTab({ committee, feedback }: {
     }
   };
 
-  const ctxLabel = (c: string): string => {
-    switch (c) {
-      case 'speakers-list': return t('fb_tag_gsl');
-      case 'moderated-caucus': return t('fb_tag_caucus');
-      case 'unmoderated-caucus': return t('fb_tag_unmod');
-      case 'tour-de-table': return t('fb_tag_tour');
-      default: return c.toUpperCase();
-    }
-  };
-
   const eventLabel = (e: HistoryEvent): string => {
     switch (e.type) {
       case 'motion-raised': return t('sb_hist_motion_raised');
@@ -122,46 +115,43 @@ export default function HistoryTab({ committee, feedback }: {
     );
   }
 
-  // ── One speech, with whatever the chairs wrote on it ──────────────────────
+  // ── One speech: who, how long, when, and what the chairs wrote ──────────
+  // No context label and no topic on the row (17 Sep 2026, owner): the segment
+  // header already says GSL or moderated caucus, and repeating the committee
+  // topic or the caucus purpose on every line was noise. The chair comment sits
+  // where the topic used to be.
   const renderSpeech = (s: HistorySpeech) => (
-    <li style={{ display: 'flex', gap: 10, paddingBlock: 8, borderBlockEnd: `1px solid ${CARD_BORDER_COLOR}` }}>
-      <SeatCircleFlag country={s.country} size={30} decorative style={{ marginBlockStart: 1 }} />
+    <li style={{ display: 'flex', gap: 10, paddingBlock: 7, borderBlockEnd: `1px solid ${CARD_BORDER_COLOR}` }}>
+      <SeatCircleFlag country={s.country} size={26} decorative style={{ marginBlockStart: 1 }} />
       <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-          <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: NEU.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span style={{ display: 'flex', alignItems: 'baseline', gap: 10, minHeight: 26 }}>
+          <span style={{ flex: 1, minWidth: 0, fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: NEU.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', alignSelf: 'center' }}>
             {getCountryDisplayName(s.country, language)}
+          </span>
+          <span style={{ flexShrink: 0, alignSelf: 'center', fontFamily: OUTFIT, fontSize: 11, color: SOFT, fontVariantNumeric: 'tabular-nums' }}>
+            {stamp(s.timestamp)}
           </span>
           <span
             style={{
-              marginInlineStart: 'auto', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3,
-              fontFamily: OUTFIT, fontWeight: 800, fontSize: 11.5, color: NEU.forest,
-              fontVariantNumeric: 'tabular-nums', backgroundColor: 'rgba(27,56,40,0.07)',
-              borderRadius: 999, paddingInline: 8, paddingBlock: 2,
+              flexShrink: 0, alignSelf: 'center', minWidth: 52, textAlign: 'end',
+              fontFamily: OUTFIT, fontWeight: 800, fontSize: 12.5, color: NEU.forest,
+              fontVariantNumeric: 'tabular-nums',
             }}
           >
-            <Clock size={10.5} strokeWidth={2.6} aria-hidden />
             {formatSpeakingTime(s.seconds)}
           </span>
-        </span>
-        <span style={{ display: 'block', fontFamily: OUTFIT, fontSize: 10.5, color: SOFT, marginBlockStart: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {[ctxLabel(s.context), s.topic, stamp(s.timestamp)].filter(Boolean).join(' · ')}
         </span>
         {s.notes.map((n) => (
           <span
             key={n.id}
             style={{
-              display: 'block', marginBlockStart: 6,
-              backgroundColor: NEU.surface, border: `1px solid ${CARD_BORDER_COLOR}`,
-              borderInlineStart: `3px solid ${TINT.amber.fg}`, borderRadius: 9, padding: '7px 10px',
+              display: 'block', marginBlockStart: 2, paddingInlineStart: 9,
+              borderInlineStart: `2px solid ${TINT.amber.fg}`,
+              fontFamily: OUTFIT, fontSize: 12.5, color: NEU.ink, lineHeight: 1.45, textWrap: 'pretty',
             }}
           >
-            <span style={{ display: 'block', fontFamily: OUTFIT, fontSize: 12, color: NEU.ink, lineHeight: 1.5, textWrap: 'pretty' }}>
-              {n.content}
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: OUTFIT, fontSize: 10, color: SOFT, marginBlockStart: 4 }}>
-              <MessageSquareQuote size={10} strokeWidth={2.4} aria-hidden style={{ color: TINT.amber.fg }} />
-              {n.chairName || t('fb_chair')}
-            </span>
+            {n.content}
+            <span style={{ color: SOFT, fontSize: 11, whiteSpace: 'nowrap' }}>{` · ${n.chairName || t('fb_chair')}`}</span>
           </span>
         ))}
       </span>
@@ -174,27 +164,21 @@ export default function HistoryTab({ committee, feedback }: {
     const signed = e.type === 'manual-deduct' ? -Math.abs(e.value ?? 0) : e.type === 'manual-award' ? Math.abs(e.value ?? 0) : null;
     return (
       <li style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBlock: 7, borderBlockEnd: `1px solid ${CARD_BORDER_COLOR}` }}>
-        <span
-          aria-hidden
-          className="inline-flex items-center justify-center"
-          style={{ width: 30, height: 30, borderRadius: 10, flexShrink: 0, backgroundColor: 'rgba(27,56,40,0.06)', color: SOFT }}
-        >
+        {/* Same 26px column as a speech row's flag, so every row lines up. */}
+        <span aria-hidden className="inline-flex items-center justify-center" style={{ width: 26, flexShrink: 0, color: SOFT }}>
           <Icon size={14} strokeWidth={2.3} />
         </span>
-        <span style={{ flex: 1, minWidth: 0 }}>
-          <span style={{ display: 'block', fontFamily: OUTFIT, fontSize: 12.5, color: NEU.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            <strong style={{ fontWeight: 700 }}>{getCountryDisplayName(e.country, language)}</strong>
-            {` · ${eventLabel(e)}`}
-          </span>
-          <span style={{ display: 'block', fontFamily: OUTFIT, fontSize: 10.5, color: SOFT }}>
-            {[e.note && e.type.startsWith('manual') ? e.note : '', stamp(e.timestamp)].filter(Boolean).join(' · ')}
-          </span>
+        <span style={{ flex: 1, minWidth: 0, fontFamily: OUTFIT, fontSize: 12.5, color: NEU.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <strong style={{ fontWeight: 700 }}>{getCountryDisplayName(e.country, language)}</strong>
+          {` · ${eventLabel(e)}`}
+          {e.note && e.type.startsWith('manual') ? <span style={{ color: SOFT }}>{` · ${e.note}`}</span> : null}
         </span>
-        {signed != null && (
-          <span style={{ flexShrink: 0, fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: signed < 0 ? RED : NEU.forest }}>
-            {signed < 0 ? '' : '+'}{signed}
-          </span>
-        )}
+        <span style={{ flexShrink: 0, fontFamily: OUTFIT, fontSize: 11, color: SOFT, fontVariantNumeric: 'tabular-nums' }}>
+          {stamp(e.timestamp)}
+        </span>
+        <span style={{ flexShrink: 0, minWidth: 52, textAlign: 'end', fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: signed != null && signed < 0 ? RED : NEU.forest }}>
+          {signed != null ? `${signed < 0 ? '' : '+'}${signed}` : ''}
+        </span>
       </li>
     );
   };
@@ -238,30 +222,31 @@ export default function HistoryTab({ committee, feedback }: {
               >
                 <Icon size={15} strokeWidth={2.4} />
               </span>
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: 'block', fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, color: NEU.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {seg.topic || kindLabel(seg.kind)}
+              {/* Just the kind of debate and when it opened. The caucus purpose
+                  (or the committee topic) is in the tooltip, never on screen:
+                  the owner asked for it not to be repeated. */}
+              <span style={{ flex: 1, minWidth: 0 }} title={seg.topic || undefined}>
+                <span style={{ display: 'block', fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, color: NEU.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {kindLabel(seg.kind)}
                 </span>
-                <span style={{ display: 'block', fontFamily: OUTFIT, fontSize: 10.5, color: SOFT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {[kindLabel(seg.kind), stamp(seg.startedAt)].filter(Boolean).join(' · ')}
-                </span>
-              </span>
-              <span
-                className="hidden sm:inline-flex"
-                style={{ flexShrink: 0, alignItems: 'center', gap: 10, fontFamily: OUTFIT, fontSize: 11.5, color: SOFT, fontVariantNumeric: 'tabular-nums' }}
-              >
-                <span className="inline-flex items-center gap-1" title={t('sb_stat_delegations')}>
-                  <Users size={11.5} strokeWidth={2.4} aria-hidden />{seg.speakerCount}
-                </span>
-                <span className="inline-flex items-center gap-1" title={t('sb_stat_speaking_time')}>
-                  <Clock size={11.5} strokeWidth={2.4} aria-hidden />{formatSpeakingTime(seg.totalSeconds)}
-                </span>
-                {seg.noteCount > 0 && (
-                  <span className="inline-flex items-center gap-1" style={{ color: TINT.amber.fg }} title={t('sb_stat_chair_notes')}>
-                    <MessageSquareQuote size={11.5} strokeWidth={2.4} aria-hidden />{seg.noteCount}
+                {seg.startedAt && (
+                  <span style={{ display: 'block', fontFamily: OUTFIT, fontSize: 11, color: SOFT, fontVariantNumeric: 'tabular-nums' }}>
+                    {seg.endedAt && stamp(seg.endedAt) !== stamp(seg.startedAt)
+                      ? `${stamp(seg.startedAt)} – ${stamp(seg.endedAt)}`
+                      : stamp(seg.startedAt)}
                   </span>
                 )}
               </span>
+              {seg.totalSeconds > 0 && (
+                <span
+                  className="inline-flex items-center gap-1"
+                  style={{ flexShrink: 0, fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: NEU.forest, fontVariantNumeric: 'tabular-nums' }}
+                  title={t('sb_stat_speaking_time')}
+                >
+                  <Clock size={12} strokeWidth={2.4} aria-hidden style={{ color: SOFT }} />
+                  {formatSpeakingTime(seg.totalSeconds)}
+                </span>
+              )}
               <ChevronRight
                 size={15} aria-hidden
                 style={{ flexShrink: 0, color: SOFT, transform: open ? 'rotate(90deg)' : 'none', transition: `transform 160ms ${EASE}` }}

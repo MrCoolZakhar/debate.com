@@ -10,7 +10,9 @@ import SpeakerControls, { FloorProgress, SpeakerClock, POPOVER_TONES } from '@/c
 import DraggablePopover from '@/components/DraggablePopover';
 import SpeakerStrip, { type StripHeader } from '@/components/SpeakerStrip';
 import SessionCodePresenter from '@/components/SessionCodePresenter';
-import { ClockPlus, ListOrdered, Maximize2, MessageCircle, MessageSquareReply, Settings, Trophy, Users } from 'lucide-react';
+import FloorEmblemBackdrop from '@/components/FloorEmblemBackdrop';
+import ConferencePromoDialog from '@/components/ConferencePromoDialog';
+import { Ban, ClockPlus, ListOrdered, Maximize2, MessageCircle, MessageSquareReply, Settings, Trophy, Users } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { CaucusState, Committee, Delegate, DelegateStatus } from '@/lib/types';
@@ -43,7 +45,7 @@ import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
 import ChairSidebarShell from '@/components/ChairSidebarShell';
 import SidebarFlagRail from '@/components/SidebarFlagRail';
 import FloorBarExtent from '@/components/FloorBarExtent';
-import { SIDEBAR_DEFAULT_WIDTH, loadSidebarWidth, saveSidebarWidth, loadSidebarCollapsed, saveSidebarCollapsed } from '@/lib/sidebarWidth';
+import { loadSidebarWidth, saveSidebarWidth, loadSidebarCollapsed, saveSidebarCollapsed } from '@/lib/sidebarWidth';
 import { startSessionSync, rowFields, withCurrentSpeaker, withLists, ALL_SYNC_SLICES, COALESCE_MS, type ConnectionState, type SessionSync, type FetchMeta } from '@/lib/sessionSync';
 import { endModeratedCaucusIfAnchorUnchanged } from '@/lib/caucusExpiryWrite';
 import ConnectionPill from '@/components/ConnectionPill';
@@ -541,7 +543,7 @@ function notifyCaucusQueueFull(t: ReturnType<typeof useT>) {
     kind: 'info',
     title: t('caucus_queue_full_title'),
     body: t('caucus_queue_full_body'),
-    ttlMs: 3000,
+    ttlMs: NOTIFY_TTL.notice,   // under 5 s of unattended time (owner, 17 Sep 2026)
     urgent: true,
   });
 }
@@ -588,18 +590,36 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
     if (!recogniseIfAbsent(d)) return;
     onAdd(d.id); setQuery('');
   };
+  // Full (owner, 17 Sep 2026): the field cannot even be typed in. It is disabled (so it is
+  // not focusable), whatever was half typed is dropped, and the bar itself says "Queue full".
+  // It re-enables on its own the moment room appears (a removal, Next, an extension).
+  // Adjusted during render (React's derived-state pattern), not in an effect.
+  if (isFull && query) setQuery('');
   return (
     <div className="flex gap-2">
       <div className="relative flex-1">
       <>
-      <div className="flex items-center bg-[#FAF8F3] border rounded-xl transition-colors border-[#DDD4C0] focus-within:border-[#1B3828]">
-        <input ref={inputRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
+      <div
+        className={`flex items-center border rounded-xl transition-colors ${isFull ? 'bg-[#EFE9DC] border-[#DDD4C0] cursor-not-allowed' : 'bg-[#FAF8F3] border-[#DDD4C0] focus-within:border-[#1B3828]'}`}
+        title={isFull ? t('caucus_queue_full_body') : undefined}
+      >
+        <input ref={inputRef} type="text" value={isFull ? '' : query} onChange={(e) => setQuery(e.target.value)}
+          disabled={isFull}
+          aria-describedby={isFull ? 'caucus-queue-full-note' : undefined}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(topNotOnList); } if (e.key === 'Escape') setQuery(''); }}
-          placeholder={t('gsl_add_to_list')}
-          className="flex-1 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
-        {topNotOnList && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {getCountryDisplayName(topNotOnList.country, language)}</span>}
+          placeholder={isFull ? t('caucus_queue_full_body') : t('gsl_add_to_list')}
+          className="flex-1 min-w-0 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm disabled:cursor-not-allowed" />
+        {isFull && (
+          <span id="caucus-queue-full-note" role="status"
+            className="shrink-0 me-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide"
+            style={{ background: 'rgba(139,32,32,0.08)', color: '#8B2020', boxShadow: 'inset 0 0 0 1px rgba(139,32,32,0.18)' }}>
+            <Ban size={12} strokeWidth={2.6} aria-hidden />
+            {t('caucus_queue_full_title')}
+          </span>
+        )}
+        {!isFull && topNotOnList && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {getCountryDisplayName(topNotOnList.country, language)}</span>}
       </div>
-      {query && matches.length > 0 && (
+      {!isFull && query && matches.length > 0 && (
         <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
           {matches.slice(0, 6).map((d) => {
             const alreadyOnList = onList.has(d.id);
@@ -874,7 +894,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
       </div>
       {/* liveTotal, not caucus.remainingTime — the stored field is the value at the anchor,
           so rendering it raw is a clock that only moves when the chair writes. */}
-      <div className={`text-9xl font-black font-mono tabular-nums mb-8 ${liveTotal <= 30 ? 'text-red-500' : 'text-[#1C1410]'}`}>
+      <div className={`floor-emblem-anchor text-9xl font-black font-mono tabular-nums mb-8 ${liveTotal <= 30 ? 'text-red-500' : 'text-[#1C1410]'}`}>
         {formatTime(liveTotal)}
       </div>
       <div className="w-full max-w-sm h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-8">
@@ -1008,10 +1028,13 @@ function ModeratedCaucusMain({
   committee, setCommittee,
   speakerTimeRemaining, timerRunning, caucusSeconds,
   openPopovers, setPopover, extraTimeAdded,
-  handleToggleTimer, handleRestartTime, handleNextCaucusSpeaker, handleEndCaucus,
+  handleToggleTimer, handleRestartTime, handleNextCaucusSpeaker, handleEndCaucus, handleStartOnDeck,
   sessionEnded, isViewOnly = false, onRecognise,
 }: {
   committee: Committee; setCommittee: CommitteeSetter;
+  /** Start with a delegation on deck: seat the head of the queue AND start both clocks in one
+   *  press (the page's `handleStartCaucusOnDeck`). */
+  handleStartOnDeck: () => Promise<void>;
   /** Marks an absent delegate Present before the typed bar queues them (see AddSpeakerInput). */
   onRecognise?: (id: string) => void;
   /** Live seconds on the TOTAL caucus clock, derived from the anchor by the page. */
@@ -1130,83 +1153,108 @@ function ModeratedCaucusMain({
   // controls never vanish when the floor empties. Next with nobody on the floor calls the
   // first delegate in the queue (handleNextCaucusSpeaker already does exactly that).
   const caucusHasSpeaker = !!committee.caucus?.currentSpeaker;
+  // ON DECK (owner, 17 Sep 2026: "there is always a delegate in the middle"). With nobody
+  // seated, the head of the queue is drawn on the floor exactly like the GSL's on deck:
+  // nothing is written, they stay an ordinary caucus queue row (movable, removable, counted
+  // by the capacity check), no clock starts and no speech is logged. Start seats them and
+  // starts the clock in one press. So a removed or absent floor speaker is replaced in the
+  // middle by the next delegation at once, and the empty hint shows only for an empty queue.
+  const onDeck = !caucusHasSpeaker ? (queue[0] ?? null) : null;
+  const floorCountry = committee.caucus?.currentSpeaker ?? onDeck?.country ?? null;
+  // The slot Start will give them: the speaking time, capped to what the caucus has left.
+  const onDeckSlot = capSpeakerSlot(speakerTime, liveRemaining);
   const toggleRtr = () => setPopover('rightToReply', 'toggle');
-  // The mode marker above the flags (owner, 16 Sep 2026): a bare icon and the motion's name,
-  // nothing else (no pill, no "N spoke", no purpose or topic line).
+  // The mode marker above the flags: a bare icon and the motion's name (owner, 16 Sep 2026),
+  // then " - <topic>" in regular weight on the same line (owner, 17 Sep 2026). A Tour de
+  // Table's purpose is an internal marker ("Tour de Table (A→Z)"), never a topic, so it is
+  // not shown.
+  const caucusTopic = !isTdT ? (caucus.purpose ?? '').trim() : '';
   const caucusStripHeader: StripHeader = {
     icon: <Users size={18} strokeWidth={2.4} aria-hidden />,
     label: committee.caucus?.motionLabel ?? caucusTitle,
+    detail: caucusTopic || null,
   };
   const caucusControls = !sessionEnded && !isViewOnly ? (
     <SpeakerControls
       hasSpeaker={caucusHasSpeaker}
+      floorReady={caucusHasSpeaker || !!onDeck}
       timerRunning={timerRunning}
-      onToggleTimer={handleToggleTimer}
+      onToggleTimer={caucusHasSpeaker ? handleToggleTimer : () => { void handleStartOnDeck(); }}
       onRestart={handleRestartTime}
       next={{
-        // Never "Call first speaker" (owner, 16 Sep 2026). With nobody on the caucus floor
-        // Next still calls the first delegation in the queue; the tooltip says so.
+        // Never "Call first speaker" (owner, 16 Sep 2026). On deck, Start gives them the
+        // floor, so Next is unavailable and says so (the GSL's rule): it never skips them.
         label: t('gsl_next'),
-        title: caucusHasSpeaker ? t('speaker_ctl_next_title') : t('speaker_ctl_call_first_title'),
-        blockedReason: queue.length === 0 ? t('speaker_ctl_queue_empty') : null,
+        title: t('speaker_ctl_next_title'),
+        blockedReason: onDeck
+          ? t('speaker_ctl_on_deck_start').replace('{country}', getCountryDisplayName(onDeck.country, language))
+          : queue.length === 0 ? t('speaker_ctl_queue_empty') : null,
         onClick: () => { void handleNextCaucusSpeaker(); },
       }}
       onAddTime={() => setPopover('extraTime', 'toggle')}
       addTimeActive={openPopovers.extraTime}
-      onRightOfReply={isTdT || caucusHasSpeaker ? undefined : toggleRtr}
+      onRightOfReply={isTdT || caucusHasSpeaker || onDeck ? undefined : toggleRtr}
       rightOfReplyActive={openPopovers.rightToReply}
     />
   ) : null;
 
   return (
     <>
-      {committee.caucus?.currentSpeaker ? (
+      {floorCountry ? (
         <>
           {/* ZONE 1 — mode marker + queue locked at top */}
           <div className="shrink-0">
             <DraggableSpeakersQueue
               list={queue}
               header={caucusStripHeader}
-              onReorder={handleCaucusReorderQueue}
-              onRemove={handleCaucusRemoveFromQueue}
+              onDeckDelegateId={onDeck?.delegateId ?? null}
+              onReorder={isViewOnly ? undefined : handleCaucusReorderQueue}
+              onRemove={isViewOnly ? undefined : handleCaucusRemoveFromQueue}
               isRoomOrderTdT={isRoomOrderTdT}
             />
           </div>
           {/* ZONE 2 — Flag + name + timer + progress: compresses as viewport shrinks */}
           <div className="relative flex-1 min-h-0 flex flex-col items-center justify-center px-4 py-2">
             {isRoomOrderTdT ? (
-              <div className="relative w-36 h-36 rounded-full bg-[#DDD4C0] shrink-0 flex items-center justify-center">
+              <div className="floor-emblem-anchor relative w-36 h-36 rounded-full bg-[#DDD4C0] shrink-0 flex items-center justify-center">
                 <span className="text-6xl font-black" style={{ color: '#1B3828' }}>{(() => {
-                  const match = committee.caucus!.currentSpeaker?.match(/(\d+)$/);
+                  const match = floorCountry.match(/(\d+)$/);
                   return match ? match[1] : '1';
                 })()}</span>
               </div>
             ) : (
               <SeatCircleFlag
-                country={committee.caucus!.currentSpeaker!}
+                country={floorCountry}
                 size={FLOOR_FLAG_PX}
                 decorative
                 loading="eager"
+                className="floor-emblem-anchor"
                 style={{ boxShadow: FLOOR_FLAG_SHADOW }}
               />
             )}
             {/* No X beside the caucus speaker's name (owner, 15 Sep 2026): taking a delegation
                 off the caucus floor stays on its sidebar row. */}
             <h1 className="font-black text-[#1C1410] text-center" style={{ fontSize: '1.8rem', margin: '8px 0' }}>
-              {getCountryDisplayName(committee.caucus!.currentSpeaker!, language)}
+              {getCountryDisplayName(floorCountry, language)}
             </h1>
+            {onDeck && (
+              <p className="text-center text-xs font-bold uppercase tracking-wide" style={{ color: '#8A6A1F', marginTop: -4 }}>{t('gsl_on_deck')}</p>
+            )}
             <SpeakerClock
-              running={timerRunning}
-              onToggle={!sessionEnded && !isViewOnly ? handleToggleTimer : undefined}
-              className={`font-black font-mono tabular-nums ${speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'}`}
+              running={caucusHasSpeaker && timerRunning}
+              onToggle={!sessionEnded && !isViewOnly
+                ? (caucusHasSpeaker ? handleToggleTimer : () => { void handleStartOnDeck(); })
+                : undefined}
+              className={`font-black font-mono tabular-nums ${caucusHasSpeaker && speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'}`}
               style={{ fontSize: '5rem', margin: '4px 0', lineHeight: 1.15 }}
             >
-              {formatTime(speakerTimeRemaining)}
-              {extraTimeAdded && <span className="text-base ms-2 font-normal text-[#1C1410]">{t('gsl_plus_time')}</span>}
+              {/* On deck nothing is seated: show the slot Start will give them. */}
+              {formatTime(caucusHasSpeaker ? speakerTimeRemaining : onDeckSlot)}
+              {caucusHasSpeaker && extraTimeAdded && <span className="text-base ms-2 font-normal text-[#1C1410]">{t('gsl_plus_time')}</span>}
             </SpeakerClock>
             <FloorProgress
-              percent={caucusProgress}
-              barClassName={caucusProgress > 20 ? 'bg-[#B6871F]' : 'bg-red-500'}
+              percent={caucusHasSpeaker ? caucusProgress : 100}
+              barClassName={!caucusHasSpeaker || caucusProgress > 20 ? 'bg-[#B6871F]' : 'bg-red-500'}
               rtr={!sessionEnded && !isViewOnly && !isTdT ? { onClick: toggleRtr, active: openPopovers.rightToReply } : null}
             />
           </div>
@@ -1214,16 +1262,10 @@ function ModeratedCaucusMain({
           {caucusControls}
         </>
       ) : (
-        /* No-speaker branch */
+        /* Nobody seated AND nobody queued (on deck covers every other case). */
         <div className="relative flex-1 flex flex-col items-center justify-center px-4 py-3 overflow-hidden">
           <div className="shrink-0 w-full">
-            <DraggableSpeakersQueue
-              list={queue}
-              header={caucusStripHeader}
-              onReorder={handleCaucusReorderQueue}
-              onRemove={handleCaucusRemoveFromQueue}
-              isRoomOrderTdT={isRoomOrderTdT}
-            />
+            <DraggableSpeakersQueue list={[]} header={caucusStripHeader} isRoomOrderTdT={isRoomOrderTdT} />
           </div>
           {/* The shouty "No Current Speaker" heading is gone (owner, 16 Sep 2026); the marker
               above already says where the room is, so this is just the next step to take. */}
@@ -1476,7 +1518,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
    * itself does not even come through here — ChairSidebarShell paints the slot and
    * panel straight onto the DOM per frame and commits once on release.
    */
-  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
+  // null = no stored preference: ChairSidebarShell then uses a proportion of the screen.
+  const [sidebarWidth, setSidebarWidth] = useState<number | null>(null);
   /** The sidebar folded to its floating flag column (per reader, localStorage). Same isolation as the width. */
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showSliders, setShowSliders] = useState(false);
@@ -3580,7 +3623,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     );
   };
   const identityBadge = renderIdentityBadge(false);
-  const gslRequireNextSpeaker = settings.gslRequireNextSpeaker;
+  // `gslRequireNextSpeaker` no longer does anything on the floor (owner, 17 Sep 2026): the GSL
+  // may always run dry, Start is never blocked on the last name and Finish is always offered.
+  // The field stays on CommitteeSettings and in old rows' settings JSONB so they still load.
 
   // ── Optimistic action handlers ──────────────────────────────────────────────
 
@@ -3975,6 +4020,54 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     localUpdateTime.current = Date.now();
   };
 
+  // Start with a delegation ON DECK in a moderated caucus / Tour de Table (the head of the
+  // queue drawn on the floor with nobody seated, see ModeratedCaucusMain). One press seats
+  // them and starts BOTH clocks, with one anchor string: the caucus JSONB (currentSpeaker,
+  // the capped slot, the total re-anchored running at its live value) and ONE current_speaker
+  // update that seats and starts together (`nextSpeakerInDB(..., seatedAt, startedAt)`, like
+  // the GSL's `handleStartOnDeck`), so a Pause pressed while the seat is in flight can never
+  // land between a seat and a separate start. Nobody was on the floor, so nothing is logged.
+  const handleStartCaucusOnDeck = async () => {
+    const c = committee;
+    if (!c || isViewOnly || !gavelRoleOf(c).isModerator) return;
+    if (c.phase !== 'moderated-caucus' || !c.caucus || c.caucus.currentSpeaker) return;
+    if (belowQuorum || sessionEnded || sessionSuspended || c.endedAt || c.suspendedAt) return;
+    const next = (c.caucusQueue ?? [])[0];
+    if (!next) return;
+    const { base: anchorBase, startedAt: anchorStarted } = speakerAnchorRef.current;
+    const totalLeft = moderatedCaucusRemainingNow(c.caucus, anchorBase, anchorStarted);
+    if (totalLeft <= 0) return;   // out of time: the expiry effect ends the caucus
+    const speakTime = capSpeakerSlot(c.caucus.speakingTime, totalLeft);
+    if (speakTime <= 0) return;
+    const startedAt = serverNowIso();   // database clock (RULE 6b); also the seat nonce (S7)
+    const code = c.code;
+    const suffix = c.dbChairJoinSuffix ?? undefined;
+    setTimerRunning(true);
+    setExtraTimeAdded(false);
+    extraTimeAddedSecsRef.current = 0;
+    seatSpeakerClock(speakTime, startedAt);
+    const updatedCaucus: CaucusState = {
+      ...c.caucus,
+      currentSpeaker: next.country,
+      speakerTimeRemaining: speakTime,
+      remainingTime: Math.max(0, Math.round(totalLeft)),
+      totalStartedAt: startedAt,
+    };
+    localUpdateTime.current = Date.now();
+    updateLocal(setCommittee, (x) => ({
+      ...x,
+      caucusQueue: (x.caucusQueue ?? []).filter((s) => s.delegateId !== next.delegateId),
+      caucus: updatedCaucus,
+      currentSpeaker: next,
+      speakerSeatedAt: startedAt,
+      speakerTimeRemaining: speakTime,
+    }), true);
+    updateCaucusInDB(c.id, updatedCaucus, code, suffix);
+    removeFromCaucusListInDB(c.id, next.delegateId, code, suffix);
+    await nextSpeakerInDB(c.id, speakTime, next.delegateId, next.country, null, code, suffix, startedAt, startedAt);
+    localUpdateTime.current = Date.now();
+  };
+
   const handleEndCaucus = () => {
     setTimerRunning(false);
     // The speaker holding the floor when the chair ends the caucus spoke too: log it.
@@ -4250,20 +4343,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // and the drag for that. Add time works on deck (`onDeckGrant`).
   const onDeck = !committee.currentSpeaker ? (committee.speakersList[0] ?? null) : null;
   const onDeckGrantSecs = onDeck && onDeckGrant?.id === onDeck.delegateId ? onDeckGrant.secs : 0;
-  // Delegations left queued once the floor holder (seated or on deck) is speaking. This is
-  // what `gslRequireNextSpeaker` guards: it must not be possible to open the last name on
-  // the list when the chair asked for the GSL never to run dry.
-  const gslQueueBehindFloor = committee.currentSpeaker ? committee.speakersList.length : Math.max(0, committee.speakersList.length - 1);
-  const isLastGSLSpeaker = gslQueueBehindFloor === 0;
 
   // The GSL speaker buttons, rendered with AND without a speaker on the floor (the owner's
   // rule: they never disappear). With nobody seated, Start calls the delegation on deck and
-  // Next is unavailable; with a speaker and nobody queued it becomes Finish (G-1), except when
-  // gslRequireNextSpeaker is on, which keeps the GSL from running dry.
+  // Next is unavailable; with a speaker and nobody queued it becomes Finish (G-1).
   const gslHasSpeaker = !!committee.currentSpeaker;
   const toggleGslRtr = () => setPopover('rightToReply', 'toggle');
   // The same reasons the Start button cannot start; the clickable countdown obeys them too.
-  const gslStartBlockedReason = belowQuorum ? t('speaker_ctl_below_quorum') : gslRequireNextSpeaker && isLastGSLSpeaker ? t('gsl_never_empty_warning') : null;
+  const gslStartBlockedReason = belowQuorum ? t('speaker_ctl_below_quorum') : null;
   const gslListLen = committee.speakersList.length;
   // A bare icon and "General Speaker's List" (owner, 16 Sep 2026): no count, no topic.
   const gslStripHeader: StripHeader = {
@@ -4280,7 +4367,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const handleStartOnDeck = async () => {
     if (isViewOnly || committee.phase !== 'speakers-list') return;
     if (belowQuorum || sessionEnded || sessionSuspended) return;
-    if (gslRequireNextSpeaker && isLastGSLSpeaker) return;
     const next = committee.speakersList[0];
     if (!next || committee.currentSpeaker) return;
     // Time granted while on deck is part of their slot: `time_granted` starts at it, so the
@@ -4321,7 +4407,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     ? [{ delegateId: committee.currentSpeaker.delegateId, country: committee.currentSpeaker.country }, ...committee.speakersList]
     : committee.speakersList;
   const gslNext = gslHasSpeaker
-    ? (gslListLen === 0 && !gslRequireNextSpeaker
+    ? (gslListLen === 0
       ? { label: t('gsl_yield'), title: t('gsl_yield_title'), onClick: () => { void handleYieldFloor(); }, finish: true, blockedReason: null }
       : { label: t('gsl_next'), title: t('speaker_ctl_next_title'), onClick: () => { void handleNextSpeaker(); }, blockedReason: gslListLen === 0 ? t('speaker_ctl_list_empty') : null })
     : {
@@ -4368,6 +4454,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // The delegation the GSL floor draws as "Ready to speak", mirrored in the sidebar at #1
   // (expanded list and collapsed rail). Presentation only: they stay in speakersList.
   const gslReadyDelegateId = showSpeakersListView && onDeck ? onDeck.delegateId : null;
+  // The moderated caucus / Tour de Table equivalent: the head of the caucus queue while nobody
+  // holds the caucus floor (ModeratedCaucusMain draws them on deck). Presentation only.
+  const caucusReadyDelegateId = committee.phase === 'moderated-caucus' && committee.caucus && !committee.caucus.currentSpeaker
+    ? (committee.caucusQueue?.[0]?.delegateId ?? null) : null;
 
   // Blocked modal handler — only allow after roll call
   const handleMotionsClick = () => {
@@ -4421,7 +4511,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   : (caucusPanelLocked || committee.caucus?.type === 'moderated') ? handleReorderCaucusQueue
                   : (committee.phase === 'unmoderated-caucus' && committee.caucus) ? undefined
                   : handleReorderSpeakersList}
-                readyDelegateId={(caucusPanelLocked || committee.caucus?.type === 'moderated') ? null : gslReadyDelegateId}
+                readyDelegateId={(caucusPanelLocked || committee.caucus?.type === 'moderated') ? caucusReadyDelegateId : gslReadyDelegateId}
               />
             );
           })()}
@@ -4458,6 +4548,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 removeFromCaucusListInDB(committee.id, delegateId, committee.code, committee.dbChairJoinSuffix ?? undefined);
               }}
               onReorderList={handleReorderCaucusQueue}
+              readyDelegateId={caucusReadyDelegateId}
               onRemoveCurrentSpeaker={stableRemoveCurrentSpeaker}
               onCycleStatus={handleCycleStatus}
               onStatusChange={handleStatusChange}
@@ -4557,10 +4648,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           aria-expanded={!!codePresenterOrigin}
           aria-label={t('chair_hdr_show_code', { code: committee.code })}
           title={t('chair_hdr_show_code', { code: committee.code })}
-          className="shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[#EDE7D8] hover:bg-[#E2DAC8] text-[#1C1410] transition-[background-color,transform] duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] active:scale-[0.96] ms-1 me-1"
+          // Never wider than 9.5rem: a long custom code (up to 20 characters) or wide glyphs
+          // (WWMMWW) truncate with an ellipsis instead of pushing the icons off the bar. The
+          // full code is in the title and aria-label, and on the presenter.
+          className="shrink min-w-0 max-w-[9.5rem] inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[#EDE7D8] hover:bg-[#E2DAC8] text-[#1C1410] transition-[background-color,transform] duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] active:scale-[0.96] ms-1 me-1"
           style={{ fontFamily: "'Outfit', sans-serif", fontSize: 14, fontWeight: 800, letterSpacing: '0.08em' }}>
-          <Maximize2 size={13} strokeWidth={2.4} aria-hidden style={{ opacity: 0.6 }} />
-          <span className="tabular-nums">{committee.code}</span>
+          <Maximize2 size={13} strokeWidth={2.4} aria-hidden className="shrink-0" style={{ opacity: 0.6 }} />
+          <span className="tabular-nums truncate min-w-0">{committee.code}</span>
         </button>
         {codePresenterOrigin && (
           <SessionCodePresenter code={committee.code} origin={codePresenterOrigin} onClose={closeCodePresenter} />
@@ -4793,7 +4887,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         )}
         {committee.phase !== 'pre-session' && (
           <>
-            <main className="flex-1 overflow-hidden flex flex-col min-w-0 min-h-0">
+            {/* relative + isolate: FloorEmblemBackdrop sits at z-index -1 inside this stacking
+                context, above the page ground and below every piece of floor content. */}
+            <main className="relative isolate flex-1 overflow-hidden flex flex-col min-w-0 min-h-0">
+              <FloorEmblemBackdrop />
               {committee.phase === 'moderated-caucus' && committee.caucus && (
                 caucusLoading ? (() => {
                   const isTdTParent = committee.caucus?.purpose?.startsWith('Tour de Table') ?? false;
@@ -4875,6 +4972,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     handleToggleTimer={handleToggleTimer}
                     handleRestartTime={handleRestartTime}
                     handleNextCaucusSpeaker={handleNextCaucusSpeaker}
+                    handleStartOnDeck={handleStartCaucusOnDeck}
                     handleEndCaucus={handleEndCaucus}
                     sessionEnded={sessionEnded}
                     isViewOnly={isViewOnly}
@@ -4948,6 +5046,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           size={FLOOR_FLAG_PX}
                           decorative
                           loading="eager"
+                          className="floor-emblem-anchor"
                           style={{ boxShadow: FLOOR_FLAG_SHADOW }}
                         />
                         <h1 className="font-black text-[#1C1410] text-center" style={{ fontSize: '1.8rem', margin: '8px 0' }}>{getCountryDisplayName(gslFloor.country, language)}</h1>
@@ -4976,11 +5075,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                               rtr={!sessionEnded ? { onClick: toggleGslRtr, active: openPopovers.rightToReply, tutorial: 'rtr-button' } : null}
                             />
                           </>
-                        )}
-                        {gslRequireNextSpeaker && isLastGSLSpeaker && (
-                          <div className="mb-1 px-4 py-1.5 bg-[#B6871F]/10 border border-[#B6871F]/30 rounded-lg text-[#B6871F] text-xs text-center">
-                            {t('gsl_never_empty_warning')}
-                          </div>
                         )}
                       </div>
                       {/* ZONE 3 — Action buttons locked just above bottom bar */}
@@ -5179,6 +5273,16 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       {/* Exactly ONE per surface — this host owns the interval that advances every
           notification's TTL, so a second mount would halve every countdown. */}
       {agenda.picker}
+      {/* One-time Gavelling Conferences invitation: standalone rooms, Moderator only, a plain
+          unmoderated caucus that has run 3 minutes (ConferencePromoDialog.tsx). */}
+      <ConferencePromoDialog
+        code={committee.code}
+        caucus={committee.caucus}
+        eligible={!isViewOnly && committee.sessionOrigin !== 'conference'
+          && committee.phase === 'unmoderated-caucus' && !!committee.caucus && !committee.caucus.isConsultation
+          && !unmodLoading && !sessionSuspended && !sessionEnded && !committee.suspendedAt && !committee.endedAt}
+        blocked={showMotions || showDocuments || showSettings || showScoreboard || showChat || showTutorial || !!codePresenterOrigin}
+      />
       {settingsSync.notice}
       <NotificationStack extras={broadcastExtras} />
       {showTutorial && committee && (

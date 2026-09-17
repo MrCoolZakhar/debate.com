@@ -438,6 +438,10 @@ export function ScoreboardTable({
   circleFlags = false,
   flagSize,
   renderDetail,
+  hideNotesColumn = false,
+  columnWidths,
+  wrapHeaders = false,
+  renderScore,
 }: {
   rows: ScoreboardDelegateRow[];
   /** Translated strings. Omitted by every organiser caller → English literals. */
@@ -469,8 +473,22 @@ export function ScoreboardTable({
   /** Replaces the whole expanded drill-in. The chair's scoreboard passes its
    *  icon-led delegate profile; omitted → `DelegateDetail`, unchanged. */
   renderDetail?: (row: ScoreboardDelegateRow) => React.ReactNode;
+  /** Drops the NOTES column (header, cell and the phone line's note count). The
+   *  chair's board does not count chair notes per delegation. */
+  hideNotesColumn?: boolean;
+  /** Wider figure columns, in px. Omitted → 70 / 78 / 62, as always. */
+  columnWidths?: { speeches?: number; time?: number; score?: number };
+  /** Header labels wrap onto a second line instead of being cut off with an
+   *  ellipsis. Translated labels ("DISCURSOS", "المداخلات") do not fit a
+   *  fixed 70px column on one line. */
+  wrapHeaders?: boolean;
+  /** Replaces the forest score badge on each row. */
+  renderScore?: (row: ScoreboardDelegateRow) => React.ReactNode;
 }) {
   const px = flagSize ?? 20;
+  const wSpeeches = columnWidths?.speeches ?? 70;
+  const wTime = columnWidths?.time ?? 78;
+  const wScore = columnWidths?.score ?? 62;
   const sortable = !!onSortChange;
   const activeDir = sortDir ?? naturalSortDir(sortKey);
 
@@ -510,10 +528,17 @@ export function ScoreboardTable({
           // the label, which stays on the grid the data columns below sit on.
           paddingBlock: 6, marginBlock: -6, paddingInline: 4, marginInline: -4,
           transition: `color 140ms ${EASE}`,
+          ...(wrapHeaders ? { letterSpacing: '0.06em', lineHeight: 1.2 } : {}),
         }}
       >
         {alignEnd && <Arrow size={11} strokeWidth={3} style={{ opacity: active ? 1 : 0, flexShrink: 0 }} aria-hidden />}
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+        <span
+          style={wrapHeaders
+            ? { whiteSpace: 'normal', overflowWrap: 'anywhere', textAlign: alignEnd ? 'end' : 'start', minWidth: 0 }
+            : { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+        >
+          {label}
+        </span>
         {!alignEnd && <Arrow size={11} strokeWidth={3} style={{ opacity: active ? 1 : 0, flexShrink: 0 }} aria-hidden />}
       </button>
       </span>
@@ -543,10 +568,10 @@ export function ScoreboardTable({
         <span style={{ width: Math.max(22, px + 2) }} />
         {header(labels.colDelegation, 'name', { flex: 1, minWidth: 0 })}
         {showCommitteeColumn && <span style={{ ...HEADER_CELL, width: 120 }}>{labels.colCommittee}</span>}
-        {header(labels.colSpeeches, 'speeches', { width: 70, textAlign: 'end' })}
-        {header(labels.colTime, 'time', { width: 78, textAlign: 'end' })}
-        {header(labels.colNotes, 'comments', { width: 62, textAlign: 'end' })}
-        {header(labels.colScore, 'score', { width: 62, textAlign: 'end' })}
+        {header(labels.colSpeeches, 'speeches', { width: wSpeeches, textAlign: 'end' })}
+        {header(labels.colTime, 'time', { width: wTime, textAlign: 'end' })}
+        {!hideNotesColumn && header(labels.colNotes, 'comments', { width: 62, textAlign: 'end' })}
+        {header(labels.colScore, 'score', { width: wScore, textAlign: 'end' })}
         <span style={{ width: 16 }} />
       </div>
 
@@ -642,9 +667,11 @@ export function ScoreboardTable({
                   {r.gslSpeeches + r.caucusSpeeches} {r.gslSpeeches + r.caucusSpeeches === 1 ? labels.speechOne : labels.speechMany}
                   <span aria-hidden style={{ opacity: 0.5 }}>·</span>
                   {formatSpeakingTime(r.speakingSeconds)}
+                  {!hideNotesColumn && (<>
                   <span aria-hidden style={{ opacity: 0.5 }}>·</span>
                   <MessageSquareQuote size={11} strokeWidth={2.2} style={{ flexShrink: 0, color: noteCount ? NEU.forest : SOFT, opacity: noteCount ? 1 : 0.55 }} />
                   {noteCount}
+                  </>)}
                 </span>
               </span>
               {showCommitteeColumn && (
@@ -658,18 +685,25 @@ export function ScoreboardTable({
               )}
               <span
                 className="hidden md:inline-block"
-                style={{ width: 70, flexShrink: 0, fontFamily: OUTFIT, fontSize: 12.5, color: SOFT, fontVariantNumeric: 'tabular-nums', textAlign: 'end' }}
+                style={{ width: wSpeeches, flexShrink: 0, fontFamily: OUTFIT, fontSize: 12.5, color: SOFT, fontVariantNumeric: 'tabular-nums', textAlign: 'end' }}
                 title={fmt(labels.titleRowSpeeches, { gsl: r.gslSpeeches, caucus: r.caucusSpeeches })}
               >
                 {r.gslSpeeches + r.caucusSpeeches}
               </span>
-              <span className="hidden md:inline-block" style={{ width: 78, flexShrink: 0, fontFamily: OUTFIT, fontSize: 12.5, color: SOFT, fontVariantNumeric: 'tabular-nums', textAlign: 'end' }}>
+              <span className="hidden md:inline-block" style={{ width: wTime, flexShrink: 0, fontFamily: OUTFIT, fontSize: 12.5, color: SOFT, fontVariantNumeric: 'tabular-nums', textAlign: 'end' }}>
                 {formatSpeakingTime(r.speakingSeconds)}
               </span>
+              {!hideNotesColumn && (
               <span className="hidden md:inline-flex" style={{ width: 62, flexShrink: 0, fontFamily: OUTFIT, fontSize: 12.5, color: noteCount ? NEU.forest : SOFT, opacity: noteCount ? 1 : 0.55, fontVariantNumeric: 'tabular-nums', textAlign: 'end', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
                 <MessageSquareQuote size={12} strokeWidth={2.2} />
                 {noteCount}
               </span>
+              )}
+              {renderScore ? (
+                <span className="w-auto md:w-[var(--sb-score-w)]" style={{ flexShrink: 0, textAlign: 'end', ['--sb-score-w' as string]: `${wScore}px` }}>
+                  {renderScore(r)}
+                </span>
+              ) : (
               <span className="w-auto md:w-[62px]" style={{ flexShrink: 0, textAlign: 'end' }}>
                 <span
                   style={{
@@ -684,6 +718,7 @@ export function ScoreboardTable({
                   {r.headline}
                 </span>
               </span>
+              )}
               <span style={{ width: 16, flexShrink: 0, display: 'inline-flex', color: SOFT }}>
                 <ChevronRight
                   size={14}
