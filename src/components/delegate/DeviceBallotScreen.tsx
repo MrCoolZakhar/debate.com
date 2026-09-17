@@ -48,12 +48,13 @@ export default function DeviceBallotScreen({ code, country, committee, accessTok
   const [pick, setPick] = useState<VoteChoice | null>(null);
   const [changing, setChanging] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<null | 'failed' | 'closed' | 'not_holder'>(null);
+  const [error, setError] = useState<null | 'failed' | 'closed' | 'not_holder' | 'voted_elsewhere'>(null);
   const [visible, setVisible] = useState(() => typeof document === 'undefined' || document.visibilityState === 'visible');
   const tokenRef = useRef(accessToken);
   useEffect(() => { tokenRef.current = accessToken; }, [accessToken]);
   const seqRef = useRef(0);
   const ballotIdRef = useRef<string | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const voting = committee.phase === 'voting' && !committee.endedAt && !committee.suspendedAt;
   const myStatus = committee.delegates.find((d) => d.country.trim().toLowerCase() === country.trim().toLowerCase())?.status;
@@ -87,6 +88,13 @@ export default function DeviceBallotScreen({ code, country, committee, accessTok
     return () => clearInterval(timer);
   }, [voting, visible, refresh]);
 
+  // Move focus into the ballot when it opens (or a re-vote replaces it), so keyboard and
+  // screen-reader users land on it instead of the board it covers.
+  const openBallotId = voting && ballot ? ballot.ballot : null;
+  useEffect(() => {
+    if (openBallotId) rootRef.current?.focus({ preventScroll: true });
+  }, [openBallotId]);
+
   if (!voting || !ballot) return null;
 
   const cast = async (choice: VoteChoice) => {
@@ -104,10 +112,11 @@ export default function DeviceBallotScreen({ code, country, committee, accessTok
     }
     if (r === 'closed' || r === 'revealed' || r === 'no_ballot' || r === 'not_in_ballot') { setError('closed'); setPick(null); void refresh(); return; }
     if (r === 'not_holder') { setError('not_holder'); setPick(null); return; }
+    if (r === 'voted_elsewhere') { setError('voted_elsewhere'); setPick(null); setChanging(false); void refresh(); return; }
     setError('failed');
   };
 
-  const showChoices = ballot.holder && !ballot.revealed && (!ballot.choice || changing);
+  const showChoices = ballot.holder && !ballot.votedElsewhere && !ballot.revealed && (!ballot.choice || changing);
   const options: { choice: VoteChoice; tone: 'for' | 'against' | 'neutral'; label: string; sub?: string }[] = [
     { choice: 'for', tone: 'for', label: t('voting_in_favour') },
     { choice: 'for-rights', tone: 'for', label: t('voting_in_favour'), sub: t('voting_with_rights_label') },
@@ -123,10 +132,12 @@ export default function DeviceBallotScreen({ code, country, committee, accessTok
 
   return (
     <div
+      ref={rootRef}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
       aria-labelledby="dvote-title"
-      className="fixed inset-0 overflow-y-auto"
+      className="fixed inset-0 overflow-y-auto focus:outline-none"
       style={{ zIndex: 1100, background: DG.ivory, fontFamily: OUTFIT }}
     >
       <DelegateStyles />
@@ -141,7 +152,7 @@ export default function DeviceBallotScreen({ code, country, committee, accessTok
 
         {error && (
           <p role="alert" style={{ margin: '16px 0 0', padding: '10px 12px', borderRadius: 12, background: 'rgba(139,32,32,0.10)', color: DG.danger, fontSize: 14, fontWeight: 700 }}>
-            {t(error === 'failed' ? 'dvote_failed' : error === 'closed' ? 'dvote_closed' : 'dvote_not_holder')}
+            {t(error === 'failed' ? 'dvote_failed' : error === 'closed' ? 'dvote_closed' : error === 'voted_elsewhere' ? 'dvote_voted_elsewhere' : 'dvote_not_holder')}
           </p>
         )}
 
@@ -149,6 +160,13 @@ export default function DeviceBallotScreen({ code, country, committee, accessTok
           <div className="flex flex-col items-center text-center" style={{ marginTop: 40, gap: 12 }}>
             <Smartphone size={40} strokeWidth={1.8} aria-hidden style={{ color: DG.faint }} />
             <p style={{ margin: 0, fontSize: 16, fontWeight: 600, color: DG.body }}>{t('dvote_not_holder')}</p>
+          </div>
+        )}
+
+        {ballot.holder && ballot.votedElsewhere && !ballot.revealed && error !== 'voted_elsewhere' && (
+          <div className="flex flex-col items-center text-center" style={{ marginTop: 40, gap: 12 }}>
+            <Smartphone size={40} strokeWidth={1.8} aria-hidden style={{ color: DG.faint }} />
+            <p role="status" style={{ margin: 0, fontSize: 16, fontWeight: 600, color: DG.body }}>{t('dvote_voted_elsewhere')}</p>
           </div>
         )}
 
@@ -161,7 +179,7 @@ export default function DeviceBallotScreen({ code, country, committee, accessTok
           </div>
         )}
 
-        {ballot.holder && !ballot.revealed && ballot.choice && !changing && (
+        {ballot.holder && !ballot.votedElsewhere && !ballot.revealed && ballot.choice && !changing && (
           <div className="flex flex-col items-center text-center" style={{ marginTop: 36, gap: 14 }}>
             <span className="inline-flex items-center justify-center" style={{ width: 72, height: 72, borderRadius: 999, background: DG.forest, color: DG.gold }}>
               <Check size={36} strokeWidth={3} aria-hidden />

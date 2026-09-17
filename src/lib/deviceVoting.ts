@@ -16,9 +16,14 @@
 //     account on THIS device, or this device's token), the delegation must be in the frozen
 //     ballot order, the ballot must be a device ballot at status 'voting', the room in the
 //     voting phase, and the ballot not yet revealed. A choice can be changed until the reveal.
-//     Abstain only when abstentions are allowed and the delegation is Present (not P+V).
+//     Abstain only when abstentions are allowed and the delegation was Present (not P+V) when
+//     the ballot opened (`vote_state.order[].status`; older entries fall back to the live status).
+//     The first cast stores the voter's holder hash: a later cast for that delegation on that
+//     ballot from a different holder is `not_holder` with detail `voted_elsewhere`
+//     (migration `device_voting_review_fixes`).
 //   • `my_device_ballot(p_code, p_country, p_token)`: the open device ballot this delegation
-//     is in (doc code, title), and ONLY its own choice, and only for the seat's holder.
+//     is in (doc code, title), and ONLY its own choice, and only for the seat's holder. A
+//     revealed ballot is never open, even if the chair used Back to the all-voted screen.
 //   • `device_vote_status(p_code, p_document)`: chair-gated (is_session_chair). Counts and,
 //     per seat in the order, voted / joined / active. Never a direction.
 //   • `reveal_device_votes(p_code, p_document, p_force)`: chair-gated. Refuses with
@@ -59,6 +64,9 @@ export interface MyDeviceBallot {
   ballot: string;
   /** This device holds the seat's live claim (otherwise it cannot vote). */
   holder: boolean;
+  /** Another holder already voted for this delegation on this ballot (a seat re-claimed
+   *  mid-ballot, or a co-delegate's device): only that holder can change it. */
+  votedElsewhere: boolean;
   choice: VoteChoice | null;
   revealed: boolean;
   mayAbstain: boolean;
@@ -80,6 +88,7 @@ export async function getMyDeviceBallot(code: string, country: string, accessTok
       title: String(d.title ?? ''),
       ballot: String(d.ballot ?? ''),
       holder: d.holder === true,
+      votedElsewhere: d.voted_elsewhere === true,
       choice: isChoice(d.choice) ? d.choice : null,
       revealed: d.revealed === true,
       mayAbstain: d.may_abstain === true,
@@ -89,7 +98,7 @@ export async function getMyDeviceBallot(code: string, country: string, accessTok
   }
 }
 
-export type CastResult = 'ok' | 'closed' | 'revealed' | 'not_holder' | 'not_in_ballot' | 'no_abstain' | 'no_ballot' | 'error';
+export type CastResult = 'ok' | 'closed' | 'revealed' | 'not_holder' | 'voted_elsewhere' | 'not_in_ballot' | 'no_abstain' | 'no_ballot' | 'error';
 
 export async function castDeviceVote(code: string, documentId: string, country: string, choice: VoteChoice, accessToken?: string | null): Promise<CastResult> {
   try {
@@ -101,6 +110,7 @@ export async function castDeviceVote(code: string, documentId: string, country: 
     const d = data as Raw;
     if (d.ok === true) return 'ok';
     const r = String(d.reason ?? 'error');
+    if (r === 'not_holder' && d.detail === 'voted_elsewhere') return 'voted_elsewhere';
     return (['closed', 'revealed', 'not_holder', 'not_in_ballot', 'no_abstain', 'no_ballot'] as string[]).includes(r) ? r as CastResult : 'error';
   } catch {
     return 'error';

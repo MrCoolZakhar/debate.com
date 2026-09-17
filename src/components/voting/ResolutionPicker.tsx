@@ -21,7 +21,7 @@
  * press; all of it is off under prefers-reduced-motion.
  */
 
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, Check, ClipboardList, FileText, Radio, X } from 'lucide-react';
 import { PdfThumb } from '@/components/documents/PdfViewer';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
@@ -29,6 +29,7 @@ import { SeatCircleFlag } from '@/components/CircleFlag';
 import { getCountryDisplayName } from '@/lib/countries';
 import type { CommitteeDocument } from '@/lib/types';
 import type { VoteStateV1 } from '@/lib/voteState';
+import { getDeviceVoteStatus } from '@/lib/deviceVoting';
 
 const INK = '#1C1410';
 const INK_SOFT = '#6A5A4A';
@@ -56,6 +57,10 @@ export interface ResolutionPickerProps {
   /** Commenter who stopped following: go back to the live vote. */
   onFollowLive?: () => void;
   onBackToSession: () => void;
+  /** Session code and chair code: a live DEVICE ballot's card reads its cast count through the
+   *  chair-gated `device_vote_status` (choices are not in vote_state until the reveal). */
+  code: string;
+  chairSuffix?: string | null;
   /** Banners, notices: rendered above the heading. */
   children?: ReactNode;
 }
@@ -165,6 +170,30 @@ function ProgressLine({ value, total, tone }: { value: number; total: number; to
   );
 }
 
+/** Cast count of an unrevealed device ballot. null = not read (yet): the count is hidden
+ *  rather than shown as 0. A light 5 s poll while the tab is visible. */
+function useDeviceCast(code: string, chairSuffix: string | null | undefined, documentId: string, ballot: string | null): number | null {
+  const [read, setRead] = useState<{ key: string; cast: number } | null>(null);
+  const key = ballot ? `${documentId}:${ballot}` : null;
+  useEffect(() => {
+    if (!key || !chairSuffix) return;
+    let alive = true;
+    const load = async () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      const st = await getDeviceVoteStatus(code, documentId, chairSuffix);
+      if (!alive || !st) return;
+      if (`${documentId}:${st.ballot}` !== key) return;
+      setRead((prev) => (prev?.key === key && prev.cast === st.cast ? prev : { key, cast: st.cast }));
+    };
+    void load();
+    const timer = setInterval(() => { void load(); }, 5000);
+    const onVis = () => { if (document.visibilityState === 'visible') void load(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { alive = false; clearInterval(timer); document.removeEventListener('visibilitychange', onVis); };
+  }, [code, chairSuffix, documentId, key]);
+  return read && read.key === key ? read.cast : null;
+}
+
 function Card({ doc, state, index, props }: { doc: CommitteeDocument; state: PickCardState; index: number; props: ResolutionPickerProps }) {
   const t = useT();
   const { isViewOnly, hideTally, onOpen, sponsorWord } = props;
@@ -180,6 +209,11 @@ function Card({ doc, state, index, props }: { doc: CommitteeDocument; state: Pic
   const forCount = vote ? vote.votes.filter((v) => v.choice === 'for' || v.choice === 'for-rights').length : 0;
   const againstCount = vote ? vote.votes.filter((v) => v.choice === 'against' || v.choice === 'against-rights').length : 0;
   const live = state.kind === 'live';
+  // An unrevealed device ballot has no votes in vote_state; its count comes from the devices.
+  const deviceBallot = live && vote?.method === 'device' && vote.status === 'voting' && vote.currentVoterIndex < vote.order.length
+    ? vote.startedAt : null;
+  const deviceCast = useDeviceCast(props.code, props.chairSuffix, doc.id, deviceBallot);
+  const liveCast = deviceBallot ? deviceCast : vote ? vote.votes.length : 0;
 
   return (
     <button
@@ -213,12 +247,12 @@ function Card({ doc, state, index, props }: { doc: CommitteeDocument; state: Pic
       </div>
 
       <div className="mt-auto flex flex-col gap-3">
-        {live && vote && (
+        {live && vote && liveCast !== null && (
           <div className="flex flex-col gap-1.5">
             <span className="text-[13px] font-medium tabular-nums" style={{ color: INK_SOFT }}>
-              {t('voting_voted_of', { cast: vote.votes.length, total: vote.order.length })}
+              {t('voting_voted_of', { cast: liveCast, total: vote.order.length })}
             </span>
-            <ProgressLine value={vote.votes.length} total={vote.order.length} tone="forest" />
+            <ProgressLine value={liveCast} total={vote.order.length} tone="forest" />
           </div>
         )}
         {state.kind === 'voted' && vote && !hideTally && (

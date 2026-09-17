@@ -451,7 +451,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
    *  the roll call; confirming it starts the ballot. Every new ballot passes through it. */
   const [pendingDocId, setPendingDocId] = useState<string | null>(null);
   /** Device ballot: how many delegations have voted, as DeviceVotingPanel last read it (header progress). */
-  const [deviceCast, setDeviceCast] = useState(0);
+  const [deviceCast, setDeviceCast] = useState<{ ballot: string; cast: number } | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   // Local delegate statuses for roll call modal (mirrors committee.delegates)
   const [rollCallStatuses, setRollCallStatuses] = useState<Record<string, DelegateStatus>>({});
@@ -1049,7 +1049,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   // change under `currentVoterIndex`.
   const liveSeatById = new Map(committee.delegates.map((d) => [d.id, d]));
   const liveSeat = (f: FrozenSeat): Delegate => liveSeatById.get(f.id) ?? { id: f.id, country: f.country, status: 'present' };
-  const freeze = (list: Delegate[]): FrozenSeat[] => list.map((d) => ({ id: d.id, country: d.country }));
+  const freeze = (list: Delegate[]): FrozenSeat[] => list.map((d) => ({ id: d.id, country: d.country, status: seatStatus(d) }));
   // The vote on screen: the persisted state for the selected draft resolution.
   const vote: VoteStateV1 | null = selectedDoc ? voteStates[selectedDoc.id] ?? null : null;
   const votes: DelegateVote[] = vote?.votes ?? [];
@@ -1874,6 +1874,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           onOpenRollCall={isViewOnly ? undefined : () => setRollCallOpen(true)}
           onFollowLive={isViewOnly && !followLive && anyOpenVote ? () => { setFollowLive(true); setSelectedDocId(null); } : undefined}
           onBackToSession={() => { void handleBackToSession(); }}
+          code={committee.code}
+          chairSuffix={suffix}
         >
           {rosterNotice}
           {statusBanners}
@@ -1974,7 +1976,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         docsLabel={drPlural}
         onDocs={() => { setSelectedDocId(null); if (isViewOnly) setFollowLive(false); }}
         doc={{ code: selectedDoc.docCode, title: selectedDoc.title }}
-        progress={{ stage, cast: deviceBallotOpen ? deviceCast : votes.length, total: presentDelegates.length }}
+        progress={{ stage, cast: deviceBallotOpen ? (deviceCast?.ballot === `${selectedDoc.id}:${vote.startedAt}` ? deviceCast.cast : 0) : votes.length, total: presentDelegates.length }}
       />
       {rollCallModal}
       {observerFailBanner}
@@ -1992,7 +1994,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           seats={presentDelegates}
           isViewOnly={isViewOnly}
           headName={gavelRole.head}
-          onCount={(cast) => setDeviceCast(cast)}
+          onCount={(cast) => { const ballot = `${selectedDoc.id}:${vote.startedAt}`; setDeviceCast((prev) => (prev?.ballot === ballot && prev.cast === cast ? prev : { ballot, cast })); }}
           onRevealed={(list) => applyDeviceReveal(selectedDoc.id, list)}
         />
       )}
@@ -2051,7 +2053,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'for-rights')}
                 />
                 {settings.allowAbstentions && (
-                  seatStatus(currentDelegate) === 'present' ? (
+                  (vote?.order.find((f) => f.id === currentDelegate.id)?.status ?? seatStatus(currentDelegate)) === 'present' ? (
                     <BallotButton
                       tone="neutral" icon={<Minus size={20} strokeWidth={3} />} label={t('voting_abstain')}
                       recorded={!hideVotes && recordedMark === 'abstain'}
@@ -2116,7 +2118,10 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       {phase === 'voting' && !currentDelegate && (
         <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-8 gap-7">
           <h2 className="text-[28px] font-bold text-[#1C1410] text-center leading-tight tracking-[-0.012em] [text-wrap:balance]">
-            {t('voting_all_voted', { n: presentDelegates.length })}
+            {votes.length >= presentDelegates.length
+              ? t('voting_all_voted', { n: presentDelegates.length })
+              // An early device reveal (then Back) lands here with delegations that never voted.
+              : t('voting_some_voted', { cast: votes.length, n: presentDelegates.length })}
           </h2>
           {hideVotes ? (
             <p className="text-[15px] font-medium text-[#6A5A4A]">{t('voting_tally_hidden')}</p>

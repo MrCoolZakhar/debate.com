@@ -21,7 +21,7 @@
  * draws the page inside `scale()`.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { GripVertical } from 'lucide-react';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
@@ -67,9 +67,11 @@ export function RightsQueue({ speakers, currentIndex, hideTally, onMove }: Right
   const canMove = !!onMove && upcoming.length > 1;
 
   // Window listeners while a pointer is armed: a drag never depends on pointer capture or
-  // on the pointer staying over its row.
+  // on the pointer staying over its row. A LAYOUT effect, so the listeners are attached in the
+  // same flush as the pointerdown: a fast click's pointerup can never be missed, which would
+  // leave armedRef set and refuse every later drag.
   const [armedTick, setArmedTick] = useState(0);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const a = armedRef.current;
     if (!a) return;
     const el = rowRefs.current.get(a.id);

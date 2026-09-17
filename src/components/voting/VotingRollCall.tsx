@@ -225,7 +225,7 @@ export function VotingRollCall({
   const [shownTab, setShownTab] = useState<RuleTab>('threshold');
   const rootRef = useRef<HTMLDivElement>(null);
 
-  // Focus lands inside the dialog, so Escape and Tab start here, and goes back to whatever
+  // Focus lands inside the roll call, so Escape and Tab start here, and goes back to whatever
   // opened it (the Vote Again button, a picker card) when it closes.
   useEffect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -235,34 +235,10 @@ export function VotingRollCall({
     };
   }, []);
 
-  // Tab stays inside the roll call. Focus in a portaled popover of its own (the veto picker's
-  // list) is left alone; focus that fell to the page is pulled back in.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return;
-      const root = rootRef.current;
-      if (!root) return;
-      const focusables = Array.from(root.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      )).filter((el) => el.getClientRects().length > 0 && !el.closest('[inert], [aria-hidden="true"]'));
-      const active = document.activeElement;
-      if (focusables.length === 0) { e.preventDefault(); root.focus({ preventScroll: true }); return; }
-      const first = focusables[0];
-      const last = focusables[focusables.length - 1];
-      if (!active || active === document.body || !(active instanceof Node)) {
-        e.preventDefault(); (e.shiftKey ? last : first).focus(); return;
-      }
-      if (!root.contains(active)) {
-        // A portaled popover of this dialog (the veto picker's list) handles its own keys.
-        if (active instanceof Element && active.closest('[role="listbox"], [role="menu"], [role="dialog"]')) return;
-        e.preventDefault(); (e.shiftKey ? last : first).focus(); return;
-      }
-      if (e.shiftKey && (active === first || active === root)) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  // No Tab trap and no aria-modal: the roll call sits BELOW the page's top bar (session code,
+  // Chat, Scoreboard, Settings, End debate), which stays usable, so keyboard and screen-reader
+  // users must be able to reach it too. It is a labelled region; the top bar comes before it in
+  // the document, so Shift+Tab from the first control lands there.
 
   // Escape folds the open drawer first, then leaves the roll call. On the window, not the
   // dialog, so it works wherever focus is (a click on a row's background leaves it on the
@@ -380,8 +356,7 @@ export function VotingRollCall({
         className="gv-rc fixed inset-x-0 bottom-0 top-11 z-50 flex flex-col focus:outline-none"
         style={{ backgroundColor: '#EDE7D8', ['--gv-dir' as string]: rtl ? -1 : 1 }}
         dir={rtl ? 'rtl' : undefined}
-        role="dialog"
-        aria-modal="true"
+        role="region"
         aria-labelledby="gv-rc-title"
       >
         <style>{`

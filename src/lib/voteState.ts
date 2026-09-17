@@ -32,8 +32,10 @@ export type VoteChoice = 'for' | 'against' | 'for-rights' | 'against-rights' | '
 export interface DelegateVote { delegateId: string; country: string; choice: VoteChoice }
 export type VoteStatus = 'voting' | 'rights-speakers' | 'result';
 
-/** A frozen seat: enough to render a row if the delegation is later removed. */
-export interface FrozenSeat { id: string; country: string }
+/** A frozen seat: enough to render a row if the delegation is later removed. `status` is the
+ *  seat's roll-call status when the ballot opened (who may abstain); absent on ballots started
+ *  before 17 Sep 2026, which fall back to the live status. */
+export interface FrozenSeat { id: string; country: string; status?: 'present' | 'present-voting' | 'absent' }
 
 export interface VoteStateV1 {
   v: 1;
@@ -66,8 +68,13 @@ const CHOICES: VoteChoice[] = ['for', 'against', 'for-rights', 'against-rights',
 function asSeats(v: unknown): FrozenSeat[] {
   if (!Array.isArray(v)) return [];
   return v
-    .filter((x): x is { id: unknown; country: unknown } => !!x && typeof x === 'object')
-    .map((x) => ({ id: String(x.id ?? ''), country: String(x.country ?? '') }))
+    .filter((x): x is { id: unknown; country: unknown; status?: unknown } => !!x && typeof x === 'object')
+    .map((x) => {
+      const seat: FrozenSeat = { id: String(x.id ?? ''), country: String(x.country ?? '') };
+      // Kept through parse so every later save writes the frozen status back unchanged.
+      if (x.status === 'present' || x.status === 'present-voting' || x.status === 'absent') seat.status = x.status;
+      return seat;
+    })
     .filter((x) => x.id);
 }
 

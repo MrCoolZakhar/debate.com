@@ -178,6 +178,10 @@ export function DeviceVotingPanel({ code, chairSuffix, documentId, ballotId, sea
   const [revealing, setRevealing] = useState(false);
   const [revealFailed, setRevealFailed] = useState(false);
   const revealedBallotRef = useRef<string | null>(null);
+  const revealBtnRef = useRef<HTMLButtonElement>(null);
+  const confirmRef = useRef<HTMLDivElement>(null);
+  const revealingRef = useRef(false);
+  useEffect(() => { revealingRef.current = revealing; });
   const onRevealedRef = useRef(onRevealed);
   const onCountRef = useRef(onCount);
   useEffect(() => { onRevealedRef.current = onRevealed; onCountRef.current = onCount; });
@@ -226,6 +230,37 @@ export function DeviceVotingPanel({ code, chairSuffix, documentId, ballotId, sea
     return () => { cancelled = true; clearInterval(timer); };
   }, [visible, code, documentId, chairSuffix, ballotId]);
 
+  // The reveal confirmation is modal: Tab stays inside it, Escape closes it wherever focus is
+  // (capture phase, so no page-level Escape handler sees it), and focus goes back to Reveal.
+  useEffect(() => {
+    if (!confirmOpen) return;
+    const opener = revealBtnRef.current;
+    const onKey = (e: KeyboardEvent) => {
+      const root = confirmRef.current;
+      if (!root) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!revealingRef.current) setConfirmOpen(false);
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const focusables = Array.from(root.querySelectorAll<HTMLElement>('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'));
+      const active = document.activeElement;
+      if (focusables.length === 0) { e.preventDefault(); root.focus({ preventScroll: true }); return; }
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (!(active instanceof Node) || !root.contains(active)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); return; }
+      if (e.shiftKey && (active === first || active === root)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      if (opener && opener.isConnected && !opener.disabled) opener.focus({ preventScroll: true });
+    };
+  }, [confirmOpen]);
+
   const byId = new Map((status?.seats ?? []).map((s) => [s.id, s]));
   const total = status?.total ?? seats.length;
   const cast = status?.cast ?? 0;
@@ -273,6 +308,7 @@ export function DeviceVotingPanel({ code, chairSuffix, documentId, ballotId, sea
         <div className="shrink-0 flex flex-col items-center gap-2">
           {revealFailed && <p role="alert" className="text-[13.5px] font-semibold" style={{ color: RED }}>{t('device_vote_reveal_failed')}</p>}
           <button
+            ref={revealBtnRef}
             type="button"
             disabled={revealing}
             onClick={() => { if (notVoted > 0) setConfirmOpen(true); else void reveal(false); }}
@@ -289,11 +325,10 @@ export function DeviceVotingPanel({ code, chairSuffix, documentId, ballotId, sea
         <Portal>
           <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: 'rgba(20,24,18,0.55)' }}
             onClick={() => { if (!revealing) setConfirmOpen(false); }}>
-            <div role="alertdialog" aria-modal="true" aria-labelledby="gv-reveal-title" aria-describedby="gv-reveal-body"
-              className="rounded-[28px] w-full max-w-md flex flex-col overflow-hidden"
+            <div ref={confirmRef} tabIndex={-1} role="alertdialog" aria-modal="true" aria-labelledby="gv-reveal-title" aria-describedby="gv-reveal-body"
+              className="rounded-[28px] w-full max-w-md flex flex-col overflow-hidden focus:outline-none"
               style={{ backgroundColor: '#FAF8F3', boxShadow: '0 0 0 1px rgba(27,56,40,0.08), 0 24px 64px rgba(20,24,18,0.35)' }}
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => { if (e.key === 'Escape' && !revealing) setConfirmOpen(false); }}>
+              onClick={(e) => e.stopPropagation()}>
               <div className="px-7 pt-7 pb-2">
                 <h2 id="gv-reveal-title" className="text-[22px] font-bold leading-tight" style={{ color: INK }}>{t('device_vote_reveal_title')}</h2>
                 <p id="gv-reveal-body" className="text-[15px] leading-relaxed mt-2" style={{ color: INK_SOFT }}>{t('device_vote_reveal_body', { n: notVoted })}</p>
