@@ -15,7 +15,10 @@
 // the raw mark, e.g. the assignment page.
 //
 // When there is no logo (or the image fails to load) the disc falls back to
-// the house monogram language: forest gradient disc + gold initials.
+// the house monogram language: forest gradient disc + gold initials. The
+// monogram fallback follows the conference theme through the --gv-* variables
+// (--gv-main-dark, --gv-main-mid, --gv-on-main) and falls back to the
+// Gavelling literals when none are set.
 // `fallbackTone="plain"` drops that disc so the initials float on their own —
 // for DARK surfaces (the chair sidebar) where a forest disc on forest reads as
 // nothing at all. Everything else keeps the default 'disc'.
@@ -111,8 +114,8 @@ export function LogoDisc({
       aria-label={alt}
       style={{
         ...base,
-        background: plain ? 'none' : 'linear-gradient(135deg, #16301F 0%, #2A5A3C 100%)',
-        border: bare || plain ? 'none' : '1px solid rgba(238,217,138,0.35)',
+        background: plain ? 'none' : 'linear-gradient(135deg, var(--gv-main-dark, #16301F) 0%, var(--gv-main-mid, #2A5A3C) 100%)',
+        border: bare || plain ? 'none' : '1px solid color-mix(in srgb, var(--gv-on-main, #EED98A) 35%, transparent)',
         ...(plain ? { boxShadow: 'none' } : null),
         ...style,
       }}
@@ -123,7 +126,7 @@ export function LogoDisc({
           fontWeight: plain ? 900 : 700,
           fontVariantNumeric: 'tabular-nums',
           letterSpacing: '0.06em',
-          color: '#EED98A',
+          color: 'var(--gv-on-main, #EED98A)',
           // No disc means no inner margin to respect, so the letters can own
           // the whole box and still read at a glance.
           fontSize: `${Math.max(9, Math.round(size * (plain ? (text.length > 2 ? 0.34 : 0.44) : text.length > 2 ? 0.24 : 0.3)))}px`,

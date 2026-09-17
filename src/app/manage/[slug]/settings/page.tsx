@@ -4396,7 +4396,6 @@ export default function SettingsPage() {
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
               placeholder="Company name"
-              maxLength={120}
               style={{ ...inputStyle, marginBottom: '10px' }}
               onFocus={fgInput}
               onBlur={bgInput}

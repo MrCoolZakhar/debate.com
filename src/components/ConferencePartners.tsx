@@ -178,8 +178,10 @@ function PartnerPopup({
               {meta}
             </p>
             <p
-              className="truncate"
-              style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 16, color: 'var(--gv-on-surface)', margin: '2px 0 0 0', letterSpacing: '0.01em' }}
+              style={{
+                fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 16, color: 'var(--gv-on-surface)', margin: '2px 0 0 0', letterSpacing: '0.01em',
+                display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden', lineHeight: 1.25,
+              }}
             >
               {entry.name}
             </p>
@@ -280,7 +282,6 @@ function PartnerButton({
 
   const name = (
     <span
-      className="truncate"
       style={{
         fontFamily: "'Outfit', sans-serif",
         fontWeight: 800,
@@ -289,6 +290,11 @@ function PartnerButton({
         color: 'var(--gv-on-surface)',
         maxWidth: '100%',
         textAlign: 'left',
+        display: '-webkit-box',
+        WebkitBoxOrient: 'vertical',
+        WebkitLineClamp: 2,
+        overflow: 'hidden',
+        lineHeight: 1.3,
       }}
     >
       {entry.name}
