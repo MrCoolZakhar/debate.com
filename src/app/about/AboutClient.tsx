@@ -150,11 +150,11 @@ export default function AboutClient() {
       <section className="relative z-10 w-full flex items-end"
         style={{ height: 340, background: 'linear-gradient(135deg, #1B3828 0%, #2A5A3C 50%, #1B3828 100%)', borderBottom: '1px solid rgba(27, 56, 40, 0.3)' }}>
 <div className="relative z-10 w-full text-center px-12 pb-10">
-          <p className="font-black text-white tracking-tight leading-none" style={{ fontSize: 'clamp(36px, 5vw, 72px)' }}>
+          <h1 className="font-black text-white tracking-tight leading-none" style={{ fontSize: 'clamp(36px, 5vw, 72px)' }}>
             {t('about_banner_tagline')}{' '}
             <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: '#EED98A' }}>{t('about_banner_love')}</span>
             {' '}{t('about_banner_mun')}
-          </p>
+          </h1>
         </div>
       </section>
 

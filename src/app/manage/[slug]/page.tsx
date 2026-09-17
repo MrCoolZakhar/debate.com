@@ -90,7 +90,7 @@ function PublishModal({
           Publish Conference?
         </h2>
         <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-          Your conference will appear publicly on gavelling.com/conferences and delegates will be able to apply.
+          Your conference will appear publicly on gavelling.com/conferences/explore and delegates will be able to apply.
         </p>
         {publishError && (
           <p className="text-sm mb-4" style={{ color: RED, fontFamily: OUTFIT }}>{publishError}</p>

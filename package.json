@@ -9,6 +9,7 @@
     "lint": "eslint",
     "check:og": "node scripts/check-og.mjs",
     "check:og:build": "next build && node scripts/check-og.mjs --start",
+    "check:indexability": "node scripts/check-indexability.mjs",
     "check:brand": "node scripts/check-brand-marks.mjs",
     "prebuild": "node scripts/check-brand-marks.mjs"
   },

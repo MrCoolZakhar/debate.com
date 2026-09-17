@@ -14,8 +14,7 @@ import { pageMetadata } from '@/lib/seo';
 // and nothing telling Google it is a distinct page rather than a duplicate.
 //
 // Indexable on purpose. It is public, needs no account, and "create a Model UN
-// committee" is exactly the intent it serves. robots.ts disallows `/create/`
-// (with the trailing slash), which blocks sub-paths without blocking this page.
+// committee" is exactly the intent it serves, and it is in the sitemap.
 export const metadata: Metadata = pageMetadata({
   title: 'Create a MUN Committee',
   description:

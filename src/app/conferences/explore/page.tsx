@@ -137,6 +137,10 @@ export default function ConferencesExplorePage() {
             className="flex items-center justify-center"
             style={{ minHeight: '100vh', backgroundColor: '#EDE7D8' }}
           >
+            {/* The grid bails out to client rendering (useSearchParams), so
+                this fallback IS the server HTML. Its heading gives crawlers the
+                page's h1; the client grid replaces it with its own. */}
+            <h1 className="sr-only">Explore Model UN conferences</h1>
             <Loader size={72} label="Loading conferences" />
           </div>
         }

@@ -10,9 +10,10 @@ import { pageMetadata } from '@/lib/seo';
 //
 // The bare path is indexable. IMPORTANT: the parameterised form is not, and
 // must not become so — `/join?code=ABC123` is a real URL this page reads, so an
-// indexed query string would publish a live session code. robots.ts blocks
-// `/join?` for that reason, and the canonical below points every variant back
-// at the bare path so Google consolidates rather than indexing codes.
+// indexed query string would publish a live session code. next.config.ts
+// sends `X-Robots-Tag: noindex` for `/join` with a code, mode or idle param
+// (crawlable, so Google sees it; a robots.txt Disallow would hide the noindex),
+// and the canonical below points every variant back at the bare path.
 export const metadata: Metadata = pageMetadata({
   title: 'Join a MUN Session',
   description:

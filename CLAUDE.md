@@ -70,12 +70,20 @@ long invoice list hit them in production:
 
 ## 4. Growth loops (what the code is built to do)
 
-1. **Content SEO**: 32 posts in `src/app/blog/posts.ts`, the competitor-alternative posts carry the highest sitemap priority. Bare `/join` and `/create` stay indexable; anything with a code does not (`robots.ts`).
-2. **Public conference pages** as landing pages: hourly ISR sitemap, IndexNow ping on publish, dynamic OG cards (`/api/og/*`), `pageMetadata()` makes a missing OG image structurally impossible (`src/lib/seo.ts`; `npm run check:og`).
+1. **Content SEO**: 34 posts in `src/app/blog/posts.ts` (the sitemap is generated from that manifest), the competitor-alternative posts carry the highest sitemap priority. Bare `/join` and `/create` stay indexable; `/join?code=...` is noindex by header.
+2. **Public conference pages** as landing pages: dynamic sitemap (was ISR, which froze for days on Vercel), IndexNow ping on publish, dynamic OG cards (`/api/og/*`), `pageMetadata()` makes a missing OG image structurally impossible (`src/lib/seo.ts`; `npm run check:og`).
 3. **The MUN CV as a credential**: every profile link resolves to `/cv/<name>-<hex>`; `ShareAchievementModal` fires after a new entry; `PublicCVSignupPrompt` converts the reader. **Awards are the first thing that writes a `gavelling_verified` entry**; before that every CV entry was self-reported, which is why the awards pipeline matters commercially.
 4. **Job board** for chairs and secretariat, cross-conference.
 5. **Ambassadors** (`/about` form, platform fee waived) and **delegation invite links**.
 6. **Draft-recovery emails** for abandoned applications.
+
+**Indexability rules (17 Sep 2026, after Search Console kept reopening the same issues).** `npm run check:indexability` (`scripts/check-indexability.mjs`, default https://gavelling.com, `-- --base=http://localhost:3000`) enforces them and must pass after any routing or SEO change:
+- The sitemap (`src/app/sitemap.ts`, `force-dynamic`) lists only URLs that answer 200 without a redirect, are self-canonical, not noindex, and have a title, an h1 and real text in the RAW HTML. Never a redirecting path (`/conferences` 308s to `/`; link `/conferences/explore`), never a query string. `lastmod` is the content date, never `new Date()`.
+- Private pages are noindex by the `X-Robots-Tag` header list `NOINDEX_ROUTES` in `next.config.ts` and stay CRAWLABLE. `robots.ts` blocks only what has a side effect when rendered (the session runtimes, which claim seats; `/unsubscribe`; `/drafts/*?stop=1`) and `/api/`. A Disallow on a noindex page is what produced "Indexed, though blocked by robots.txt".
+- `/_next/static/*`, `*.pdf` and `*.txt` carry `X-Robots-Tag: noindex` and are never disallowed (Google needs them to render).
+- No hreflang until real, indexable, self-canonical locale URLs exist; the languages are a client-side preference.
+- Every sitemap URL must be reachable by a plain server-rendered `<a href>` from another sitemap page: the homepage's crawl nav (conferences + hubs), `/conferences/explore`'s directory, `/blog`, and `FooterLegal` (Explore Conferences, MUN Guides on every public footer). A client-rendered list is not a link.
+- `www.gavelling.com` must 308 to `https://gavelling.com` at the Vercel domain level with a valid certificate.
 
 There is **no analytics or tracking** by policy (`/privacy`). The admin console (`/admin`, DB-gated by `is_platform_admin()`) is the only observability surface.
 
@@ -283,9 +291,10 @@ npm run dev          # localhost:3000
 npm run build        # runs `prebuild` first: scripts/check-brand-marks.mjs fails the build on brand-mark violations
 npm run lint
 npm run check:og     # validates pageMetadata / OG rules against a running production server
+npm run check:indexability   # sitemap, canonicals, noindex, robots, crawl links (default https://gavelling.com; -- --base=http://localhost:3000)
 ```
 
-No unit or end-to-end test suite and no CI. The build, the brand-mark gate and `check:og` are the quality gates; verify behaviour in the browser.
+No unit or end-to-end test suite and no CI. The build, the brand-mark gate, `check:og` and `check:indexability` are the quality gates; verify behaviour in the browser.
 
 `.env.local` needs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Payments, email and account deletion run in Supabase edge functions with their own secrets; nothing in this repo deploys them.
 

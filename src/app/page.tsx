@@ -35,13 +35,27 @@ export const metadata: Metadata = pageMetadata({
   description:
     'Find your next Model UN conference on Gavelling: real conferences, real committee rooms, from London to San Salvador. Apply as a delegate, chair, or advisor. Organisers list free.',
   path: '/',
-  languages: {
-    'en-US': 'https://gavelling.com',
-    'es': 'https://gavelling.com?lang=es',
-    'fr': 'https://gavelling.com?lang=fr',
-    'ar': 'https://gavelling.com?lang=ar',
-  },
+  // NO hreflang. The site has one URL per page; es/fr/ar are a client-side
+  // preference, not separate server-rendered pages. The old alternates pointed
+  // at `?lang=xx`, which nothing reads and which canonicalise back to `/`, so
+  // Search Console filed them as "Alternative page with proper canonical tag".
+  // Only add `languages` if real, indexable, self-canonical locale URLs exist.
 });
+
+// Server-rendered links to every hub, so a crawler reaches the blog, the job
+// board and the session tools from the strongest page on the site (the
+// composition above renders client-side and its links are not in the HTML).
+const HUB_LINKS: { href: string; label: string }[] = [
+  { href: '/conferences/explore', label: 'Explore conferences' },
+  { href: '/conferences/map', label: 'Conference map' },
+  { href: '/conferences/roles', label: 'Chair and staff roles' },
+  { href: '/blog', label: 'MUN guides' },
+  { href: '/sessions', label: 'Committee session software' },
+  { href: '/create', label: 'Create a committee' },
+  { href: '/join', label: 'Join a session' },
+  { href: '/about', label: 'About' },
+  { href: '/contact', label: 'Contact' },
+];
 
 const organizationSchema = {
   '@context': 'https://schema.org',
@@ -149,6 +163,23 @@ export default async function HomePage() {
           </div>
         </nav>
       )}
+      <nav aria-label="Gavelling" style={{ backgroundColor: '#FAF8F3' }}>
+        <ul
+          className="mx-auto w-full max-w-6xl px-5 pb-7 flex flex-wrap gap-x-5 gap-y-2"
+          style={{ listStyle: 'none', margin: '0 auto', paddingTop: conferences.length > 0 ? 0 : 28 }}
+        >
+          {HUB_LINKS.map((l) => (
+            <li key={l.href}>
+              <Link
+                href={l.href}
+                style={{ fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 600, color: '#5C5140', textDecoration: 'none' }}
+              >
+                {l.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
     </>
   );
 }
