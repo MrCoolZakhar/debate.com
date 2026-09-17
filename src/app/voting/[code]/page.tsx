@@ -801,7 +801,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   useEffect(() => {
     if (autoRollCallRef.current || loading || !accessGranted || !committee) return;
     autoRollCallRef.current = true;
-    if (isViewOnly || committee.endedAt || selectedDocId) return;
+    // Never over a suspended or ended room: no ballot can start there.
+    if (isViewOnly || committee.endedAt || committee.suspendedAt || selectedDocId) return;
     if (Object.values(voteStates).some(isVoteOpen)) return;
     const ready = (committee.documents ?? []).filter(
       (d) => d.type === 'draft-resolution' && d.status === 'introduced' && !voteStates[d.id],
@@ -1289,6 +1290,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   const startNewVote = (docId: string) => {
     if (isViewOnly) return;
+    // A suspended or ended room takes no new ballot; say why instead of freezing a vote.
+    if (committee?.endedAt || committee?.suspendedAt) { setPhaseNotice('closed'); return; }
     setSelectedDocId(docId);
     // Freeze the room as it stands right now. "Vote again" comes through here too,
     // so a re-vote is judged against the room as it is at that moment.

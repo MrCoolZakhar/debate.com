@@ -31,12 +31,18 @@ export function FlagCircle({ country, size = 'md' }: { country: string; size?: '
 // 1280x720, 1366x768, 1024x768) do rows get a further 5%, which still keeps ten rows in view.
 export const QUEUE_ROW_SCALE = 1.1;
 export const QUEUE_ROW_SCALE_SHORT_SCREEN = 1.155;
+function queueRowScaleNow(): number {
+  if (typeof window === 'undefined') return QUEUE_ROW_SCALE;
+  const fit = window.innerHeight / 820; // FitToScreen BASE_H
+  return fit > 0 && fit < 0.95 ? QUEUE_ROW_SCALE_SHORT_SCREEN : QUEUE_ROW_SCALE;
+}
 function useQueueRowScale(): number {
-  const [k, setK] = useState(QUEUE_ROW_SCALE);
+  // Read synchronously on the first client render (the panel only mounts after the committee
+  // has loaded in the browser), so a short screen never draws 1.1 and then jumps to 1.155.
+  const [k, setK] = useState(queueRowScaleNow);
   useEffect(() => {
     const update = () => {
-      const fit = window.innerHeight / 820; // FitToScreen BASE_H
-      const next = fit > 0 && fit < 0.95 ? QUEUE_ROW_SCALE_SHORT_SCREEN : QUEUE_ROW_SCALE;
+      const next = queueRowScaleNow();
       setK((prev) => (prev === next ? prev : next));
     };
     update();

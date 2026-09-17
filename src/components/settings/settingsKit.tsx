@@ -561,8 +561,12 @@ export function TimeChooser({ value, min, max, step = 5, onChange, label, lessLa
     setDraft(formatClock(c));
     if (c !== value) onChange(c);
   };
+  // Escape blurs the field synchronously, before its own setDraft has rendered: this ref
+  // makes that blur a cancel, not a commit of the half-typed text.
+  const cancelRef = useRef(false);
   const commit = () => {
     setEditing(false);
+    if (cancelRef.current) { cancelRef.current = false; setDraft(formatClock(liveRef.current)); return; }
     const n = parseClock(draft);
     if (n === null) { setDraft(formatClock(liveRef.current)); return; }
     set(n);
@@ -609,7 +613,7 @@ export function TimeChooser({ value, min, max, step = 5, onChange, label, lessLa
           onBlur={commit}
           onKeyDown={(e) => {
             if (e.key === 'Enter') { e.preventDefault(); (e.currentTarget as HTMLInputElement).blur(); }
-            else if (e.key === 'Escape') { e.preventDefault(); setDraft(formatClock(liveRef.current)); setEditing(false); (e.currentTarget as HTMLInputElement).blur(); }
+            else if (e.key === 'Escape') { e.preventDefault(); cancelRef.current = true; setDraft(formatClock(liveRef.current)); setEditing(false); (e.currentTarget as HTMLInputElement).blur(); }
             else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
               e.preventDefault();
               const d = (e.key === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? 10 : 1);

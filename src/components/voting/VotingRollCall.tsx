@@ -210,8 +210,44 @@ export function VotingRollCall({
   const [shownTab, setShownTab] = useState<RuleTab>('threshold');
   const rootRef = useRef<HTMLDivElement>(null);
 
-  // Focus lands inside the dialog, so Escape and Tab start here.
-  useEffect(() => { rootRef.current?.focus({ preventScroll: true }); }, []);
+  // Focus lands inside the dialog, so Escape and Tab start here, and goes back to whatever
+  // opened it (the Vote Again button, a picker card) when it closes.
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    rootRef.current?.focus({ preventScroll: true });
+    return () => {
+      if (opener && opener.isConnected && opener !== document.body) opener.focus({ preventScroll: true });
+    };
+  }, []);
+
+  // Tab stays inside the roll call. Focus in a portaled popover of its own (the veto picker's
+  // list) is left alone; focus that fell to the page is pulled back in.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const root = rootRef.current;
+      if (!root) return;
+      const focusables = Array.from(root.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )).filter((el) => el.getClientRects().length > 0 && !el.closest('[inert], [aria-hidden="true"]'));
+      const active = document.activeElement;
+      if (focusables.length === 0) { e.preventDefault(); root.focus({ preventScroll: true }); return; }
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (!active || active === document.body || !(active instanceof Node)) {
+        e.preventDefault(); (e.shiftKey ? last : first).focus(); return;
+      }
+      if (!root.contains(active)) {
+        // A portaled popover of this dialog (the veto picker's list) handles its own keys.
+        if (active instanceof Element && active.closest('[role="listbox"], [role="menu"], [role="dialog"]')) return;
+        e.preventDefault(); (e.shiftKey ? last : first).focus(); return;
+      }
+      if (e.shiftKey && (active === first || active === root)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // Escape folds the open drawer first, then leaves the roll call. On the window, not the
   // dialog, so it works wherever focus is (a click on a row's background leaves it on the
@@ -297,7 +333,9 @@ export function VotingRollCall({
     if (next < 0) return;
     e.preventDefault();
     const key = tabs[next].key;
-    rootRef.current?.querySelector<HTMLButtonElement>(`#gv-rc-tab-${key}`)?.focus();
+    // Within the tablist the key was pressed in: below lg the ribbons (which carry the ids) are
+    // hidden, so an id lookup focused nothing there.
+    (e.currentTarget as HTMLElement).closest('[role="tablist"]')?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
     if (tab !== null) { setShownTab(key); setTab(key); }
   };
 

@@ -16,13 +16,16 @@
  *   are remembered on every scroll and restored after the new layout.
  * - Stateless about the stage: mount it once and it keeps its scroll and zoom (the zoom is a
  *   prop owned by the caller). Nothing here touches committee state.
- * - Any pdf.js failure (worker, CORS, a broken file) falls back to the browser's iframe.
+ * - Any pdf.js failure (worker, CORS, a broken file) falls back to the browser's iframe, and so
+ *   does any URL outside this project's public storage (`isPdfJsUrl`).
+ * - Every drawn page carries a pdf.js text layer (transparent, selectable, read by screen
+ *   readers), sized by `--total-scale-factor` on the page box so it follows the zoom.
  */
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
+import type { PDFDocumentProxy, RenderTask, TextLayer } from 'pdfjs-dist';
 import { ChevronDown, ChevronUp, Download, ExternalLink, MoveHorizontal, Minus, Plus } from 'lucide-react';
 import { useT } from '@/contexts/LanguageContext';
-import { loadPdf, outputScale, fitRootScale, PDF_TO_CSS } from './pdfLoader';
+import { acquirePdf, isPdfJsUrl, loadPdfLib, outputScale, fitRootScale, PDF_TO_CSS } from './pdfLoader';
 
 export type PdfZoom = 'fit' | number;
 export const PDF_ZOOM_STEPS = [0.5, 0.67, 0.8, 1, 1.25, 1.5, 2, 2.5, 3] as const;
@@ -32,6 +35,69 @@ export function stepPdfZoom(current: number, dir: 1 | -1): number {
   const eps = 0.001;
   if (dir > 0) return PDF_ZOOM_STEPS.find((s) => s > current + eps) ?? PDF_ZOOM_STEPS[PDF_ZOOM_STEPS.length - 1];
   return [...PDF_ZOOM_STEPS].reverse().find((s) => s < current - eps) ?? PDF_ZOOM_STEPS[0];
+}
+
+/** The text layer's rules: a minimal copy of pdfjs-dist's `.textLayer` CSS (transparent text over
+ *  the canvas, selectable, read by screen readers). Injected once into <head> by the first viewer
+ *  so it ships with the component. `--total-scale-factor` is set on each page box. */
+const TEXT_LAYER_CSS = `
+.pdfTextLayer {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  text-align: initial;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-size-adjust: none;
+  -webkit-text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  z-index: 0;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
+}
+.pdfTextLayer span,
+.pdfTextLayer br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.pdfTextLayer > :not(.markedContent),
+.pdfTextLayer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+.pdfTextLayer .markedContent { display: contents; }
+.pdfTextLayer ::selection { background: rgba(0, 0, 255, 0.25); color: transparent; }
+.pdfTextLayer br::selection { background: transparent; }
+.pdfTextLayer .endOfContent {
+  display: block;
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: 0;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+}
+`;
+function ensureTextLayerCss() {
+  if (typeof document === 'undefined' || document.getElementById('gv-pdf-text-layer-css')) return;
+  const el = document.createElement('style');
+  el.id = 'gv-pdf-text-layer-css';
+  el.textContent = TEXT_LAYER_CSS;
+  document.head.appendChild(el);
 }
 
 const PAGE_GAP = 20;
@@ -60,12 +126,15 @@ export default function PdfViewer({
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const pageEls = useRef<(HTMLDivElement | null)[]>([]);
+  const trusted = isPdfJsUrl(url);
 
-  // Load.
+  // Load (held until unmount or a new url, so the shared document is never destroyed under us).
   useEffect(() => {
     let cancelled = false;
     setDoc(null); setFailed(false); setSizes([]); setPage(1);
-    loadPdf(url)
+    if (!trusted) return;
+    const handle = acquirePdf(url);
+    handle.promise
       .then(async (d) => {
         const vs = await Promise.all(Array.from({ length: d.numPages }, (_, i) =>
           d.getPage(i + 1).then((p) => { const v = p.getViewport({ scale: 1 }); return { w: v.width, h: v.height }; })));
@@ -78,8 +147,8 @@ export default function PdfViewer({
         console.warn('pdf.js could not open the paper, using the browser viewer', err);
         setFailed(true);
       });
-    return () => { cancelled = true; };
-  }, [url]);
+    return () => { cancelled = true; handle.release(); };
+  }, [url, trusted]);
 
   // Width of the reading column (for fit width).
   useLayoutEffect(() => {
@@ -90,7 +159,7 @@ export default function PdfViewer({
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [failed]);
+  }, [failed, trusted]);
 
   const padX = compact ? 14 : PAD_X;
   const maxW = useMemo(() => sizes.reduce((m, s) => Math.max(m, s.w), 0), [sizes]);
@@ -154,6 +223,7 @@ export default function PdfViewer({
   const near = useRef<Set<number>>(new Set());
   const drawn = useRef<Map<number, number>>(new Map()); // page index -> css scale drawn at
   const tasks = useRef<Map<number, RenderTask>>(new Map());
+  const textLayers = useRef<Map<number, TextLayer>>(new Map());
   const scaleRef = useRef(scale);
   scaleRef.current = scale;
 
@@ -163,6 +233,9 @@ export default function PdfViewer({
     const host = pageEls.current[i]?.querySelector<HTMLElement>('[data-canvas-host]');
     host?.replaceChildren();
     drawn.current.delete(i);
+    textLayers.current.get(i)?.cancel();
+    textLayers.current.delete(i);
+    pageEls.current[i]?.querySelector<HTMLElement>('[data-text-host]')?.replaceChildren();
   };
 
   const draw = useCallback(async (i: number) => {
@@ -189,6 +262,30 @@ export default function PdfViewer({
       // Swap in only once finished, so the stretched old canvas stays until then.
       pageEls.current[i]?.querySelector<HTMLElement>('[data-canvas-host]')?.replaceChildren(canvas);
       drawn.current.set(i, s);
+      // The text layer: built once per rendered page, re-laid out at a new zoom.
+      const existing = textLayers.current.get(i);
+      if (existing) {
+        existing.update({ viewport: cssVp });
+      } else {
+        const textHost = pageEls.current[i]?.querySelector<HTMLElement>('[data-text-host]');
+        if (textHost) {
+          const { TextLayer: TextLayerImpl } = await loadPdfLib();
+          if (!near.current.has(i) || textLayers.current.has(i)) return;
+          ensureTextLayerCss();
+          const layer = document.createElement('div');
+          layer.className = 'pdfTextLayer';
+          textHost.replaceChildren(layer);
+          const tl = new TextLayerImpl({
+            textContentSource: pg.streamTextContent({ includeMarkedContent: true, disableNormalization: true }),
+            container: layer,
+            viewport: cssVp,
+          });
+          textLayers.current.set(i, tl);
+          await tl.render().catch((err: unknown) => {
+            if ((err as { name?: string })?.name !== 'AbortException') console.warn('pdf text layer failed', err);
+          });
+        }
+      }
     } catch (err) {
       if ((err as { name?: string })?.name !== 'RenderingCancelledException') console.warn('pdf page render failed', err);
     }
@@ -212,10 +309,15 @@ export default function PdfViewer({
     const taskMap = tasks.current;
     const drawnMap = drawn.current;
     const nearSet = near.current;
+    const textMap = textLayers.current;
+    const pages = pageEls.current;
     return () => {
       io.disconnect();
       taskMap.forEach((tk) => tk.cancel());
       taskMap.clear();
+      textMap.forEach((tl) => tl.cancel());
+      textMap.clear();
+      pages.forEach((el) => el?.querySelector<HTMLElement>('[data-text-host]')?.replaceChildren());
       drawnMap.clear();
       nearSet.clear();
     };
@@ -285,7 +387,7 @@ export default function PdfViewer({
   };
 
   // ── Fallback: the browser's own viewer ───────────────────────────────────────
-  if (failed) {
+  if (failed || !trusted) {
     const z = zoom === 'fit' ? 1 : zoom;
     const size = `${100 / z}%`;
     return (
@@ -339,9 +441,12 @@ export default function PdfViewer({
                 height: Math.round(s.h * scale),
                 borderRadius: 3,
                 boxShadow: '0 0 0 1px rgba(0,0,0,0.06), 0 1px 2px rgba(27,56,40,0.10), 0 10px 28px rgba(27,56,40,0.14)',
+                // The text layer's font sizes and box follow this, so it tracks the zoom at once.
+                ['--total-scale-factor' as string]: scale,
               }}
             >
               <div data-canvas-host className="absolute inset-0 overflow-hidden" style={{ borderRadius: 3 }} />
+              <div data-text-host className="absolute inset-0" />
             </div>
           ))}
         </div>
@@ -429,16 +534,20 @@ export function PdfThumb({ url, width, height, fallback }: { url: string; width:
   const [state, setState] = useState<'idle' | 'ready' | 'failed'>('idle');
   const [box, setBox] = useState<Size | null>(null);
 
+  const trusted = isPdfJsUrl(url);
+
   useEffect(() => {
     const host = hostRef.current;
-    if (!host) return;
+    if (!host || !trusted) return;
     let cancelled = false;
     let task: RenderTask | null = null;
+    let handle: ReturnType<typeof acquirePdf> | null = null;
     const io = new IntersectionObserver(async (entries) => {
       if (!entries.some((e) => e.isIntersecting)) return;
       io.disconnect();
       try {
-        const d = await loadPdf(url);
+        handle = acquirePdf(url);
+        const d = await handle.promise;
         const pg = await d.getPage(1);
         if (cancelled) return;
         const base = pg.getViewport({ scale: 1 });
@@ -454,6 +563,8 @@ export function PdfThumb({ url, width, height, fallback }: { url: string; width:
         canvas.setAttribute('aria-hidden', 'true');
         task = pg.render({ canvas, viewport: vp, background: '#FFFFFF' });
         await task.promise;
+        // The canvas is ours now; the document may go back to the cache's care.
+        handle.release();
         if (cancelled) return;
         setBox({ w: cssW, h: cssH });
         setState('ready');
@@ -463,12 +574,12 @@ export function PdfThumb({ url, width, height, fallback }: { url: string; width:
       }
     }, { rootMargin: '200px' });
     io.observe(host);
-    return () => { cancelled = true; io.disconnect(); task?.cancel(); };
-  }, [url, width, height]);
+    return () => { cancelled = true; io.disconnect(); task?.cancel(); handle?.release(); };
+  }, [url, width, height, trusted]);
 
   return (
     <div ref={hostRef} className="flex items-center justify-center" style={{ width, height }}>
-      {state === 'failed' ? fallback : (
+      {state === 'failed' || !trusted ? fallback : (
         <div
           data-thumb
           className="bg-white overflow-hidden"
