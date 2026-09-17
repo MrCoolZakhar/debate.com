@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import PdfViewer, { PdfThumb, PDF_ZOOM_STEPS, stepPdfZoom, type PdfZoom } from '@/components/documents/PdfViewer';
 import StageTimerDevice from '@/components/documents/StageTimerDevice';
+import StageSwitcher from '@/components/documents/StageSwitcher';
 import ProceedingsSetup from '@/components/documents/ProceedingsSetup';
 import { Committee, CommitteeDocument, DocIntroState, DocumentType, DocumentStatus } from '@/lib/types';
 import { requireDocApproval as readRequireDocApproval, updateDocumentFlow, deleteDocumentChecked } from '@/lib/documentFlow';
@@ -641,8 +642,16 @@ function DocCard({ doc, committee, onRemove, onStartPresentation, requireApprova
 }
 
 // ── Main Modal ────────────────────────────────────────────────────────────────
-export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, isViewOnly = false, chairName = '' }: {
+/** The chair page's top bar (h-11). The introduction screens start BELOW it, so its Gavel,
+ *  session code, Chat, Scoreboard and Settings stay on screen and work exactly as on the floor
+ *  (17 Sep 2026). The chair page lifts that bar above the introduction while one is open. */
+const CHAIR_TOP_BAR_H = 44;
+
+export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, isViewOnly = false, chairName = '', onIntroChange }: {
   committee: Committee; onClose: () => void;
+  /** Told when the full-screen introduction (setup or a timed stage) opens and closes, so the
+   *  chair page can keep its top bar above it. Called with false on unmount. */
+  onIntroChange?: (active: boolean) => void;
   onCommitteeUpdate?: (updater: (c: Committee) => Committee) => void;
   isViewOnly?: boolean;
   // The acting chair's name, so "Go to voting" can hand it on to /voting/[code] and the
@@ -673,6 +682,14 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
   const [zoom, setZoomState] = useState<PdfZoom>(() => (typeof window === 'undefined' ? 'fit' : readZoom()));
   const setZoom = useCallback((z: PdfZoom) => { setZoomState(z); writeZoom(z); }, []);
   const [timerOpen, setTimerOpen] = useState(true);
+  /** Stages this introduction has finished (Next / Continue out of them), for the switcher's
+   *  check marks. Local to this screen, like the stage itself. */
+  const [doneStages, setDoneStages] = useState<TimedStage[]>([]);
+  const introActive = !!(activeDocSnap && stage);
+  const onIntroChangeRef = useRef(onIntroChange);
+  useEffect(() => { onIntroChangeRef.current = onIntroChange; }, [onIntroChange]);
+  useEffect(() => { onIntroChangeRef.current?.(introActive); }, [introActive]);
+  useEffect(() => () => onIntroChangeRef.current?.(false), []);
   const [flowError, setFlowError] = useState(false);
   /** Write order for this modal, and the failures still standing (doc id -> seq of the
    *  failed write). A success clears ONLY failures of the same document issued before it:
@@ -747,6 +764,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
     setActiveDocSnap(doc);
     setStage('setup');
     setTimerOpen(true);
+    setDoneStages([]);
   };
 
   const stageMinutes = (s: TimedStage, tm = timings) => tm[s];
@@ -768,6 +786,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
     if (!activeDoc) return;
     const tm = { reading: readingMins, presentation: presentationMins, qa: qaMins };
     setTimings(tm);
+    setDoneStages([]);
     const first = STAGE_ORDER.find((s) => tm[s] > 0);
     // One write: timings and status together. `introState: null` also clears a stage left by
     // the retired Resume flow, so no row keeps a stale introduction.
@@ -782,6 +801,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
 
   const advanceFromStage = (from: TimedStage) => {
     if (!activeDoc) return;
+    setDoneStages((d) => (d.includes(from) ? d : [...d, from]));
     const after = STAGE_ORDER.slice(STAGE_ORDER.indexOf(from) + 1).find((s) => timings[s] > 0);
     if (after) enterStage(after);
     else finishIntroduction(activeDoc);
@@ -809,33 +829,54 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
     closeFlow();
   };
 
+  /** Jump straight to a stage from the switcher: a fresh paused clock, like Next and Back. */
+  const jumpToStage = (s: TimedStage) => {
+    if (!activeDoc || timings[s] <= 0 || s === stage) return;
+    enterStage(s);
+  };
+
   const flowErrorBanner = flowError ? (
     <p role="alert" className="text-xs text-center px-6 py-2" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)' }}>
       {t('documents_intro_save_failed')}
     </p>
   ) : null;
 
+  /** Both introduction screens share this frame: z 45, BELOW every dialog (z 50 and up) so
+   *  Chat, Scoreboard and Settings open over it, and starting under the chair page's top bar,
+   *  which the page lifts to z 46 while an introduction is open. The strip under that bar is
+   *  painted in the bar's own ivory, so the bar reads full width over the hidden sidebar. */
+  const introFrame = (ground: string, children: React.ReactNode) => (
+    <Portal>
+      <div className="fixed inset-0 z-[45] flex flex-col" style={{ backgroundColor: ground }} data-doc-intro>
+        <div aria-hidden className="shrink-0 bg-[#FAF8F3]" style={{ height: CHAIR_TOP_BAR_H, boxShadow: '0 1px 0 rgba(28,20,16,0.07)' }} />
+        {children}
+      </div>
+    </Portal>
+  );
+
+  const switchLabel = (s: TimedStage) =>
+    s === 'reading' ? t('documents_switch_reading') : s === 'presentation' ? t('documents_switch_presentation') : t('documents_switch_qa');
+
   // Fullscreen stages. The paper is the page; the clock floats over it (16 Sep 2026).
   if (activeDoc && stage && stage !== 'setup') {
     const stageLabel = stage === 'reading' ? t('documents_stage_reading') : stage === 'presentation' ? t('documents_stage_presentation') : t('documents_stage_qa');
-    return (
-      <Portal><div className="fixed inset-0 z-50 bg-[#EDE7D8] flex flex-col">
-        <div className="flex items-center gap-3 px-5 py-2.5 shrink-0" style={{ boxShadow: '0 1px 0 rgba(28,20,16,0.10)' }}>
+    return introFrame('#EDE7D8', (<>
+        <div className="grid items-center gap-3 px-4 h-14 shrink-0 bg-[#F6F1E6]"
+          style={{ gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', boxShadow: '0 1px 0 rgba(28,20,16,0.08)' }}>
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="text-sm font-black shrink-0" style={{ color: '#1B3828' }}>{activeDoc.docCode}</span>
-            <span className="text-sm font-semibold truncate min-w-0" style={{ color: '#1C1410' }}>{activeDoc.title}</span>
+            <span className="shrink-0 h-6 px-2 rounded-md flex items-center text-[12px] font-semibold tabular-nums"
+              style={{ color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.08)', fontFamily: "'Outfit', sans-serif" }}>{activeDoc.docCode}</span>
+            <span className="text-sm font-semibold truncate min-w-0" style={{ color: '#1C1410' }} title={activeDoc.title}>{activeDoc.title}</span>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            {STAGE_ORDER.map((s) => (
-              <span key={s} className="text-[11px] px-2 py-0.5 rounded-full font-bold"
-                style={{ backgroundColor: stage === s ? '#1B3828' : 'transparent', color: stage === s ? '#EED98A' : '#9A8A78', boxShadow: stage === s ? 'none' : 'inset 0 0 0 1px #DDD4C0', fontFamily: "'Outfit', sans-serif" }}>
-                {s === 'reading' ? t('documents_stage_reading_short') : s === 'presentation' ? t('documents_stage_presentation') : t('documents_stage_qa')}
-              </span>
-            ))}
-          </div>
+          <StageSwitcher
+            current={stage}
+            onSelect={(k) => jumpToStage(k as TimedStage)}
+            onTimings={() => setStage('setup')}
+            stages={STAGE_ORDER.map((s) => ({ key: s, label: switchLabel(s), minutes: timings[s], done: doneStages.includes(s) }))}
+          />
           {/* Zoom belongs to the chair, not to the stage: it survives every stage change. A PDF
               carries its own toolbar (PdfViewer); these controls serve a text paper only. */}
-          <div className="ms-auto flex items-center gap-1 shrink-0">
+          <div className="flex items-center justify-end gap-1 min-w-0">
             {!activeDoc.fileUrl && activeDoc.content && (<>
             <button type="button" onClick={() => setZoom(stepPdfZoom(zoom === 'fit' ? 1 : zoom, -1))}
               disabled={zoom !== 'fit' && zoom <= PDF_ZOOM_STEPS[0]}
@@ -858,15 +899,17 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
             {!timerOpen && (
               <button type="button" onClick={() => setTimerOpen(true)}
                 aria-label={t('documents_timer_show')} title={t('documents_timer_show')}
-                className="ms-1 h-9 ps-2.5 pe-3 rounded-lg flex items-center gap-1.5 text-xs font-bold bg-[#1B3828] text-[#EED98A] transition-[background-color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]/40">
+                className="ms-1 h-9 ps-2.5 pe-3 rounded-lg flex items-center gap-1.5 text-xs font-semibold bg-[#1B3828] hover:bg-[#244A36] text-[#FAF8F3] transition-[background-color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]/40">
                 <Timer size={15} strokeWidth={2.4} aria-hidden />
                 {t('documents_timer_show')}
               </button>
             )}
             {/* Closing leaves the paper introduced. A working paper's card offers Introduce
                 again; a draft resolution goes to the voting page. */}
-            <button onClick={() => { closeFlow(); onClose(); }} aria-label={t('sb_close')}
-              className="ms-1 w-9 h-9 rounded-lg flex items-center justify-center text-[#9A8A78] hover:text-[#1C1410] hover:bg-[#1B3828]/[0.07] transition-colors text-lg leading-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">✕</button>
+            <button onClick={() => { closeFlow(); onClose(); }} aria-label={t('sb_close')} title={t('sb_close')}
+              className="ms-1 w-9 h-9 shrink-0 rounded-lg flex items-center justify-center text-[#6A5A4A] hover:text-[#1C1410] hover:bg-[#1B3828]/[0.07] transition-[background-color,color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">
+              <X size={18} strokeWidth={2.4} aria-hidden />
+            </button>
           </div>
         </div>
         {flowErrorBanner}
@@ -877,27 +920,21 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
           {/* A stage with a 0-minute timer renders as already complete (Continue), never blank. */}
           {timerOpen && (
             <StageTimerDevice label={stageLabel}
-              totalSeconds={timings[stage] * 60} docCode={activeDoc.docCode}
-              stages={STAGE_ORDER.map((s) => ({
-                key: s,
-                label: s === 'reading' ? t('documents_stage_reading') : s === 'presentation' ? t('documents_stage_presentation') : t('documents_stage_qa'),
-                active: s === stage,
-                skipped: timings[s] === 0,
-              }))}
+              totalSeconds={timings[stage] * 60}
+              sponsors={activeDoc.sponsors}
+              sponsorsWord={sponsorLabel(committee, t('documents_sponsors_label_card'))}
               clock={clock} onClockChange={handleClockChange}
               onComplete={() => advanceFromStage(stage)}
               onBack={() => backFromStage(stage)}
               onHide={() => setTimerOpen(false)} />
           )}
         </div>
-      </div></Portal>
-    );
+    </>));
   }
 
   // Timing setup screen: the order of proceedings (17 Sep 2026).
   if (activeDoc && stage === 'setup') {
-    return (
-      <Portal><div className="fixed inset-0 z-50 bg-[#F6F1E9] flex flex-col">
+    return introFrame('#F6F1E9', (<>
         <div className="flex items-center justify-between gap-3 px-5 h-12 shrink-0" style={{ boxShadow: '0 1px 0 rgba(28,20,16,0.08)' }}>
           <span className="text-[13px] font-semibold uppercase" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.14em' }}>{t('documents_introduce')}</span>
           <button onClick={closeFlow} aria-label={t('sb_close')}
@@ -907,8 +944,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
         </div>
         {flowErrorBanner}
         <ProceedingsSetup doc={activeDoc} committee={committee} onStart={handleTimingConfirmed} onSkip={handleSkipToVote} />
-      </div></Portal>
-    );
+    </>));
   }
 
   return (

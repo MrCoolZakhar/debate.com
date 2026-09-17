@@ -55,6 +55,10 @@ export interface VoteStateV1 {
   updatedAt: string;
   /** Chair name that drove the last write (display only). */
   driver: string | null;
+  /** How ballots are cast, frozen when the vote opened (src/lib/deviceVoting.ts). Absent = roll call.
+   *  'device': choices are cast on delegates' own devices into document_device_votes and only
+   *  enter `votes` when revealed; there is no pass round. */
+  method?: 'rollcall' | 'device';
 }
 
 const CHOICES: VoteChoice[] = ['for', 'against', 'for-rights', 'against-rights', 'abstain'];
@@ -98,6 +102,7 @@ export function parseVoteState(raw: unknown): VoteStateV1 | null {
     startedAt: typeof r.startedAt === 'string' ? r.startedAt : '',
     updatedAt: typeof r.updatedAt === 'string' ? r.updatedAt : '',
     driver: typeof r.driver === 'string' ? r.driver : null,
+    method: r.method === 'device' ? 'device' : 'rollcall',
   };
 }
 

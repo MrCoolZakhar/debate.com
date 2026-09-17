@@ -44,6 +44,7 @@ import { claimDelegateSeat, leaveDelegateSeat, seatKey } from '@/lib/seatClaims'
 import { seatKickTopic } from '@/lib/sessionParticipants';
 import { useDelegateIdleLogout, markDelegateActivity } from '@/lib/delegateIdle';
 import DelegateIdleWarning from '@/components/delegate/DelegateIdleWarning';
+import DeviceBallotScreen from '@/components/delegate/DeviceBallotScreen';
 import { safeStorageKey } from '@/lib/storageKey';
 import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 
@@ -2408,6 +2409,11 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           </div>
         )}
       </Sheet>
+
+      {/* Device voting: the whole screen becomes the ballot while one is open for this delegation. */}
+      {seatAllowed && !sessionEnded && country && (
+        <DeviceBallotScreen code={code} country={country} committee={committee} accessToken={session?.access_token ?? null} />
+      )}
 
       {idleWarning}
 

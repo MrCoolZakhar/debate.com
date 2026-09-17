@@ -15,11 +15,13 @@
  * owns Begin Session (`beginSessionAfterRollCall`, a phase change) and writes observers
  * itself, neither of which this page may do.
  *
- * On the card's inline-end edge hang four bookmark ribbons (Threshold, Abstentions, Veto,
- * Quorum), in the manner of the Settings spine. Each shows the rule in force; pressing one
- * slides a drawer out from under the card with that rule's controls, pressing it again (or
- * the drawer's X, or Escape) folds it away. Below lg the ribbons sit in a row above the card
- * and the drawer opens beneath them.
+ * The card is centred on the screen; the rules sit to its right (owner, 17 Sep 2026). Three
+ * icon ribbons (Threshold with quorum, Abstentions, Veto), in the manner of the Settings
+ * spine, hang off a drawer that slides out from under the card. Threshold is open on arrival;
+ * pressing an open ribbon again (or the drawer's X, or Escape) folds it away. The veto holders
+ * are a vertical list of large rows. From xl the page reserves the drawer + ribbons' width on
+ * the card's other side too, so opening or folding the drawer never moves the card. Below xl
+ * the ribbons sit in a row above the card and the drawer opens beneath them.
  *
  * It owns no rule state and writes nothing. Statuses go through `onSetStatus` /
  * `onBulkStatus`, observers through `onToggleObserver`, rules through `onRulesChange` with
@@ -31,7 +33,7 @@
  */
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { ArrowLeft, CircleSlash, Megaphone, Scale, ShieldCheck, Users, X, type LucideIcon } from 'lucide-react';
+import { ArrowLeft, CircleSlash, Megaphone, Scale, ShieldCheck, X, type LucideIcon } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { SeatCircleFlag, SIDEBAR_MONOGRAM } from '@/components/CircleFlag';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
@@ -46,14 +48,21 @@ const INK = '#1C1410';
 const INK_SOFT = '#6A5A4A';
 const FOREST = '#1B3828';
 const GOLD = '#EED98A';
-/** The drawer's visible width, and how far it tucks under the card's rounded edge. */
-const DRAWER_W = 380;
+/** The drawer's visible width, how far it tucks under the card's rounded edge, and the
+ *  icon ribbons' width. Side by side from xl (1280px): the card stays centred on the screen,
+ *  so the same width is reserved on its inline-start side as the drawer + ribbons take on its
+ *  inline-end side. Wider screens get a wider drawer. */
+const DRAWER_W = 300;
+const DRAWER_W_2XL = 380;
+const RIBBON_W = 76;
+const RIBBON_W_ON = 84;
 const TUCK = 24;
 const EASE = 'cubic-bezier(0.32,0.72,0,1)';
 const PRESS = 'transition-[background-color,color,box-shadow,transform] duration-150 active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100';
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
-type RuleTab = 'threshold' | 'abstentions' | 'veto' | 'quorum';
+/** Quorum is part of the Threshold bookmark (owner, 17 Sep 2026). */
+type RuleTab = 'threshold' | 'abstentions' | 'veto';
 
 export interface VotingRollCallProps {
   delegates: Delegate[];
@@ -74,6 +83,10 @@ export interface VotingRollCallProps {
   /** The veto seats in force (P5 list or the custom list). */
   vetoEntries: string[];
   readOnly?: boolean;
+  /** Drawn above the primary action: the device-voting switch and join check (DeviceVoteGate). */
+  footerExtra?: ReactNode;
+  /** Start is not allowed yet (a device ballot with delegations not joined on a device). */
+  confirmBlocked?: boolean;
 }
 
 // ── The session roll call's slider, projector size ───────────────────────────
@@ -201,11 +214,13 @@ function Note({ children, warn = false }: { children: ReactNode; warn?: boolean 
 export function VotingRollCall({
   delegates, rollCallStatuses, isObserverSeat, onToggleObserver, onSetStatus, onBulkStatus, onConfirm, onClose,
   doc = null, settings, onRulesChange, onVetoModeChange, vetoEntries, readOnly = false,
+  footerExtra = null, confirmBlocked = false,
 }: VotingRollCallProps) {
   const t = useT();
   const { language } = useLanguage();
   const rtl = language === 'ar';
-  const [tab, setTab] = useState<RuleTab | null>(null);
+  // The pass threshold is open on arrival (owner, 17 Sep 2026).
+  const [tab, setTab] = useState<RuleTab | null>('threshold');
   // The drawer keeps showing the last tab while it folds away.
   const [shownTab, setShownTab] = useState<RuleTab>('threshold');
   const rootRef = useRef<HTMLDivElement>(null);
@@ -257,6 +272,12 @@ export function VotingRollCall({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return;
+      // A dialog opened from the top bar over the roll call (Chat, Scoreboard, Settings, the
+      // session code) closes on its own Escape; the roll call stays.
+      const root = rootRef.current;
+      const other = Array.from(document.querySelectorAll('[role="dialog"], [role="alertdialog"], [aria-modal="true"]'))
+        .some((el) => root && el !== root && !root.contains(el));
+      if (other) return;
       e.preventDefault();
       if (escRef.current.drawerOpen) setTab(null); else escRef.current.onClose();
     };
@@ -314,10 +335,9 @@ export function VotingRollCall({
   const quorumValue = settings.quorumThreshold === 'none' ? t('voting_rules_quorum_none_short') : settings.quorumThreshold.replace('-', '/');
 
   const tabs: { key: RuleTab; label: string; value: string; icon: LucideIcon; warn?: boolean }[] = [
-    { key: 'threshold', label: t('voting_rules_threshold_info_title'), value: thresholdValue, icon: Scale },
+    { key: 'threshold', label: t('voting_rules_threshold_info_title'), value: `${thresholdValue} · ${t('voting_rules_quorum_info_title')} ${quorumValue}`, icon: Scale, warn: quorumFact.warn },
     { key: 'abstentions', label: t('voting_abstain_label'), value: abstValue, icon: CircleSlash },
     { key: 'veto', label: t('voting_rules_veto_info_title'), value: vetoValue, icon: ShieldCheck, warn: vetoFact.warn },
-    { key: 'quorum', label: t('voting_rules_quorum_info_title'), value: quorumValue, icon: Users, warn: quorumFact.warn },
   ];
   const openTab = (key: RuleTab) => {
     if (tab === key) { setTab(null); return; }
@@ -339,7 +359,7 @@ export function VotingRollCall({
     if (tab !== null) { setShownTab(key); setTab(key); }
   };
 
-  const canConfirm = presentCount > 0 && !readOnly;
+  const canConfirm = presentCount > 0 && !readOnly && !(doc && confirmBlocked);
   const drawerOpen = tab !== null;
   const active = tabs.find((x) => x.key === shownTab) ?? tabs[0];
 
@@ -347,15 +367,17 @@ export function VotingRollCall({
 
   // Ribbon: square where it meets the card or drawer, a swallowtail notch at its free end.
   const ribbon = rtl
-    ? 'polygon(0 0, 100% 0, 100% 100%, 0 100%, 14px 50%)'
-    : 'polygon(0 0, 100% 0, calc(100% - 14px) 50%, 100% 100%, 0 100%)';
+    ? 'polygon(0 0, 100% 0, 100% 100%, 0 100%, 10px 50%)'
+    : 'polygon(0 0, 100% 0, calc(100% - 10px) 50%, 100% 100%, 0 100%)';
 
   return (
     <Portal>
       <div
         ref={rootRef}
         tabIndex={-1}
-        className="gv-rc fixed inset-0 z-50 flex flex-col focus:outline-none"
+        // Below the page's 44px top bar, never over it: the session code, Chat, Scoreboard and
+        // Settings stay on screen through the roll call too (owner, 17 Sep 2026).
+        className="gv-rc fixed inset-x-0 bottom-0 top-11 z-50 flex flex-col focus:outline-none"
         style={{ backgroundColor: '#EDE7D8', ['--gv-dir' as string]: rtl ? -1 : 1 }}
         dir={rtl ? 'rtl' : undefined}
         role="dialog"
@@ -371,11 +393,17 @@ export function VotingRollCall({
           .gv-rc-drawer[data-open="true"] { display: block; max-height: 46% }
           .gv-rc-tab:not([aria-selected="true"]):hover { filter: brightness(1.18) }
           .gv-rc-tab:focus-visible .gv-rc-stitch { border: 2px solid #B6871F !important }
-          @media (min-width: 1024px) {
-            .gv-rc-panel { width: ${DRAWER_W + TUCK}px !important; padding-inline-start: ${TUCK}px }
+          .gv-rc-side-l { display: none } .gv-rc-side-r { display: contents }
+          @media (min-width: 1280px) {
+            .gv-rc { --gv-rc-d: ${DRAWER_W}px }
+            .gv-rc-side-l { display: block; flex: 0 0 calc(var(--gv-rc-d) + ${RIBBON_W_ON}px - 12px) }
+            .gv-rc-side-r { display: flex; flex: 0 0 calc(var(--gv-rc-d) + ${RIBBON_W_ON}px - 12px); min-height: 0 }
+            .gv-rc-card { flex: 0 1 672px !important; width: auto !important }
+            .gv-rc-panel { width: calc(var(--gv-rc-d) + ${TUCK}px) !important; padding-inline-start: ${TUCK}px }
             .gv-rc-drawer, .gv-rc-drawer[data-open="true"] { display: block; max-height: none; width: ${TUCK}px; margin-inline-start: -${TUCK}px; transition: width 300ms ${EASE} }
-            .gv-rc-drawer[data-open="true"] { width: ${DRAWER_W + TUCK}px }
+            .gv-rc-drawer[data-open="true"] { width: calc(var(--gv-rc-d) + ${TUCK}px) }
           }
+          @media (min-width: 1536px) { .gv-rc { --gv-rc-d: ${DRAWER_W_2XL}px } }
           @media (prefers-reduced-motion: reduce) { .gv-rc .gv-rc-in { animation: none } .gv-rc-drawer, .gv-rc-drawer[data-open="true"] { transition: none } }
         `}</style>
 
@@ -397,10 +425,10 @@ export function VotingRollCall({
         </div>
 
         <div className="flex-1 min-h-0 px-4 sm:px-6 pb-4 sm:pb-5 flex justify-center">
-          <div className="gv-rc-in gv-rc-in-2 h-full min-h-0 w-full lg:w-auto flex flex-col lg:flex-row items-stretch" style={{ maxWidth: '100%' }}>
+          <div className="gv-rc-in gv-rc-in-2 h-full min-h-0 w-full max-w-[720px] xl:max-w-none flex flex-col xl:flex-row xl:justify-center items-stretch">
 
             {/* Bookmarks, small screens: a row above the card */}
-            <div role="tablist" aria-label={t('voting_rules_title')} className="lg:hidden shrink-0 flex gap-1.5 overflow-x-auto pb-2 [scrollbar-width:none]">
+            <div role="tablist" aria-label={t('voting_rules_title')} className="xl:hidden shrink-0 flex gap-1.5 overflow-x-auto pb-2 [scrollbar-width:none]">
               {tabs.map((x, i) => {
                 const on = tab === x.key;
                 return (
@@ -415,9 +443,13 @@ export function VotingRollCall({
               })}
             </div>
 
+            {/* xl and up: the same width as the drawer + ribbons on the other side, so the card
+                sits in the middle of the screen whether the drawer is open or folded. */}
+            <div aria-hidden className="gv-rc-side-l" />
+
             {/* ── The roll call card (the session's pre-session card) ── */}
             <section
-              className="order-3 lg:order-none relative flex flex-col min-h-0 flex-1 lg:flex-none rounded-3xl overflow-hidden lg:w-[672px] lg:shrink"
+              className="gv-rc-card order-3 xl:order-none relative flex flex-col min-h-0 flex-1 rounded-3xl overflow-hidden"
               style={{ minWidth: 0, backgroundColor: FOREST, border: '1.5px solid #3D7A52', boxShadow: '0 32px 80px rgba(27,56,40,0.40)', zIndex: 2 }}
               aria-label={t('voting_roll_call_heading')}
             >
@@ -509,6 +541,7 @@ export function VotingRollCall({
                 })}
               </div>
 
+              {footerExtra}
               {/* The one primary action, where Begin Session sits on the session's roll call */}
               <div className="relative z-[2] shrink-0 px-4 py-3.5 flex items-center gap-4" style={{ backgroundColor: 'rgba(0,0,0,0.14)' }}>
                 {doc && presentCount > 0 && (
@@ -528,10 +561,13 @@ export function VotingRollCall({
               </div>
             </section>
 
+            {/* The settings side: the drawer and its ribbons, to the right of the card from xl
+                (display: contents below that, so the drawer takes its place above the card). */}
+            <div className="gv-rc-side-r">
             {/* ── The drawer: the controls of the bookmark pressed ── */}
             <div
               id="gv-rc-drawer"
-              className="gv-rc-drawer order-2 lg:order-none shrink-0 relative overflow-hidden mb-2 lg:mb-0 lg:py-6"
+              className="gv-rc-drawer order-2 xl:order-none shrink-0 relative overflow-hidden mb-2 xl:mb-0 xl:py-6"
               data-open={drawerOpen}
               inert={!drawerOpen}
               style={{ zIndex: 1 }}
@@ -539,7 +575,7 @@ export function VotingRollCall({
               <div
                 role="tabpanel"
                 aria-labelledby={`gv-rc-tab-${active.key}`}
-                className="gv-rc-panel h-full w-full flex flex-col rounded-3xl lg:rounded-s-none"
+                className="gv-rc-panel h-full w-full flex flex-col rounded-3xl xl:rounded-s-none"
                 style={{
                   backgroundColor: '#F6F1E6',
                   boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.08)',
@@ -579,6 +615,24 @@ export function VotingRollCall({
                         ]}
                       />
                       <Note>{thresholdFact}</Note>
+                      {/* Quorum lives under the threshold (owner, 17 Sep 2026): both decide whether
+                          the room can pass the paper at all. */}
+                      <div className="mt-6 pt-5" style={{ boxShadow: 'inset 0 1px 0 rgba(27,56,40,0.10)' }}>
+                        <h3 className="text-[16px] font-bold leading-tight mb-3" style={{ color: INK }}>{t('voting_rules_quorum_info_title')}</h3>
+                        <Choice
+                          label={t('settings_quorum_label')}
+                          value={settings.quorumThreshold}
+                          disabled={readOnly}
+                          onChange={(v) => onRulesChange({ quorumThreshold: v })}
+                          options={[
+                            { value: 'none', label: t('voting_rules_quorum_none_short') },
+                            { value: '1-4', label: '1/4' },
+                            { value: '1-3', label: '1/3' },
+                            { value: '1-2', label: '1/2' },
+                          ]}
+                        />
+                        <Note warn={quorumFact.warn}>{quorumFact.text}</Note>
+                      </div>
                     </>
                   )}
                   {shownTab === 'abstentions' && (
@@ -609,8 +663,11 @@ export function VotingRollCall({
                         ]}
                       />
                       {vetoOn && (
-                        <div className="mt-4">
+                        <div className="mt-5">
+                          {/* One large row per veto holder, stacked (owner, 17 Sep 2026: "the P5
+                              vote should be vertical and bigger, more important"). */}
                           <VetoCountryPicker
+                            layout="list"
                             selected={vetoEntries}
                             roster={votable}
                             readOnly={readOnly || settings.vetoMode === 'p5'}
@@ -624,29 +681,13 @@ export function VotingRollCall({
                       <Note warn={vetoFact.warn}>{vetoFact.text}</Note>
                     </>
                   )}
-                  {shownTab === 'quorum' && (
-                    <>
-                      <Choice
-                        label={t('settings_quorum_label')}
-                        value={settings.quorumThreshold}
-                        disabled={readOnly}
-                        onChange={(v) => onRulesChange({ quorumThreshold: v })}
-                        options={[
-                          { value: 'none', label: t('voting_rules_quorum_none_short') },
-                          { value: '1-4', label: '1/4' },
-                          { value: '1-3', label: '1/3' },
-                          { value: '1-2', label: '1/2' },
-                        ]}
-                      />
-                      <Note warn={quorumFact.warn}>{quorumFact.text}</Note>
-                    </>
-                  )}
                 </div>
               </div>
             </div>
 
-            {/* ── Bookmarks, lg and up: ribbons hanging off the edge ── */}
-            <div role="tablist" aria-orientation="vertical" aria-label={t('voting_rules_title')} className="hidden lg:flex shrink-0 flex-col gap-2.5 pt-20" style={{ width: 188, marginInlineStart: -12, zIndex: 0 }}>
+            {/* ── Bookmarks, xl and up: icon ribbons hanging off the drawer's edge, in the manner
+                of the Settings spine (an icon over a short label, gold when open). ── */}
+            <div role="tablist" aria-orientation="vertical" aria-label={t('voting_rules_title')} className="hidden xl:flex shrink-0 flex-col gap-2.5 pt-16" style={{ width: RIBBON_W_ON, marginInlineStart: -12, zIndex: 0 }}>
               {tabs.map((x, i) => {
                 const on = tab === x.key;
                 const Icon = x.icon;
@@ -659,16 +700,18 @@ export function VotingRollCall({
                       aria-selected={on}
                       aria-controls="gv-rc-drawer"
                       aria-expanded={on}
+                      aria-label={`${x.label}: ${x.value}`}
+                      title={`${x.label}: ${x.value}`}
                       tabIndex={on || (tab === null && i === 0) ? 0 : -1}
                       onClick={() => openTab(x.key)}
                       onKeyDown={(e) => onTabKey(e, i)}
-                      className="gv-rc-tab relative flex items-center gap-2.5 text-start focus:outline-none"
+                      className="gv-rc-tab relative flex flex-col items-center justify-center gap-1 focus:outline-none"
                       style={{
-                        width: on ? 188 : 174,
-                        height: 62,
+                        width: on ? RIBBON_W_ON : RIBBON_W,
+                        height: 74,
                         clipPath: ribbon,
-                        paddingInlineStart: 24,
-                        paddingInlineEnd: 24,
+                        paddingInlineStart: 12,
+                        paddingInlineEnd: 16,
                         background: on
                           ? `linear-gradient(100deg, #D9BC5E 0%, ${GOLD} 45%, #F6E7A8 100%)`
                           : 'linear-gradient(100deg, #17301F 0%, #1B3828 60%, #24503A 100%)',
@@ -676,16 +719,17 @@ export function VotingRollCall({
                         transition: `width 220ms ${EASE}`,
                       }}
                     >
-                      <span aria-hidden className="gv-rc-stitch absolute pointer-events-none" style={{ top: 5, bottom: 5, insetInlineStart: 4, insetInlineEnd: 18, borderRadius: 7, border: `1px dashed ${on ? 'rgba(27,56,40,0.28)' : 'rgba(238,217,138,0.18)'}` }} />
-                      <Icon aria-hidden size={17} strokeWidth={on ? 2.5 : 2.1} style={{ position: 'relative', flexShrink: 0 }} />
-                      <span className="relative min-w-0 flex-1">
-                        <span className="block text-[11.5px] font-semibold truncate leading-tight" style={{ opacity: on ? 0.8 : 0.72 }}>{x.label}</span>
-                        <span className="block text-[15px] font-bold truncate leading-tight mt-0.5 tabular-nums" style={{ color: x.warn ? (on ? '#8B2020' : '#F6B4B4') : undefined }}>{x.value}</span>
-                      </span>
+                      <span aria-hidden className="gv-rc-stitch absolute pointer-events-none" style={{ top: 5, bottom: 5, insetInlineStart: 4, insetInlineEnd: 13, borderRadius: 7, border: `1px dashed ${on ? 'rgba(27,56,40,0.28)' : 'rgba(238,217,138,0.18)'}` }} />
+                      <Icon aria-hidden size={21} strokeWidth={on ? 2.5 : 2.1} style={{ position: 'relative', flexShrink: 0 }} />
+                      <span aria-hidden className="relative block max-w-full text-center text-[10px] font-semibold leading-[1.15] line-clamp-2">{x.label}</span>
+                      {x.warn && (
+                        <span aria-hidden className="absolute rounded-full" style={{ top: 9, insetInlineEnd: 18, width: 8, height: 8, backgroundColor: on ? '#8B2020' : '#F6B4B4', boxShadow: `0 0 0 2px ${on ? GOLD : FOREST}` }} />
+                      )}
                     </button>
                   </div>
                 );
               })}
+            </div>
             </div>
           </div>
         </div>

@@ -22,7 +22,8 @@
  */
 
 import type { ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Check, ClipboardList, Radio, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ClipboardList, FileText, Radio, X } from 'lucide-react';
+import { PdfThumb } from '@/components/documents/PdfViewer';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { getCountryDisplayName } from '@/lib/countries';
@@ -82,12 +83,36 @@ function StatusPill({ state }: { state: PickCardState }) {
       </span>
     );
   }
-  // "Ready to vote" needs no icon: it is the resting state, and an icon here only
-  // competed with the two that do carry meaning (passed / failed).
-  return (
-    <span className={base} style={{ backgroundColor: 'rgba(182,135,31,0.15)', color: '#6A4A0A' }}>
-      {t('voting_pick_status_ready')}
+  // A paper with no vote yet carries no pill at all (owner, 17 Sep 2026: "remove the
+  // 'ready to vote'"): the resting state needs no label, the card's action already says it.
+  return null;
+}
+
+/** Page one of the paper, small: the PDF through pdf.js (`PdfThumb`, lazy, shared document
+ *  cache), a text paper as a miniature page of its opening lines, otherwise a page glyph.
+ *  Decorative: the title beside it names the paper. */
+const THUMB_W = 92;
+const THUMB_H = 120;
+function PaperPreview({ doc }: { doc: CommitteeDocument }) {
+  const glyph = (
+    <span className="w-full h-full rounded-[3px] flex items-center justify-center" style={{ backgroundColor: '#FFFFFF', boxShadow: '0 0 0 1px rgba(0,0,0,0.07), 0 4px 10px rgba(27,56,40,0.12)' }}>
+      <FileText size={28} strokeWidth={1.8} style={{ color: FOREST, opacity: 0.45 }} />
     </span>
+  );
+  return (
+    <div aria-hidden className="gv-pick-paper shrink-0 flex items-center justify-center" style={{ width: THUMB_W, height: THUMB_H }}>
+      {doc.fileUrl ? (
+        <PdfThumb url={doc.fileUrl} width={THUMB_W} height={THUMB_H} fallback={glyph} />
+      ) : doc.content?.trim() ? (
+        <span
+          className="block w-full h-full overflow-hidden rounded-[3px] px-2 py-2.5"
+          style={{ backgroundColor: '#FFFFFF', boxShadow: '0 0 0 1px rgba(0,0,0,0.07), 0 1px 2px rgba(27,56,40,0.10), 0 4px 10px rgba(27,56,40,0.12)' }}
+        >
+          <span className="block text-[6.5px] font-bold leading-[1.25] mb-1 line-clamp-2" style={{ color: INK }}>{doc.title || doc.docCode}</span>
+          <span className="block whitespace-pre-wrap text-[5px] leading-[1.45]" style={{ color: '#4A3F33' }}>{doc.content.slice(0, 900)}</span>
+        </span>
+      ) : glyph}
+    </div>
   );
 }
 
@@ -177,11 +202,15 @@ function Card({ doc, state, index, props }: { doc: CommitteeDocument; state: Pic
         <StatusPill state={state} />
       </div>
 
-      <h2 className="text-[19px] leading-[1.28] font-bold line-clamp-3 [text-wrap:balance]" style={{ color: INK, letterSpacing: '-0.006em' }}>
-        {doc.title || doc.docCode}
-      </h2>
-
-      <Sponsors sponsors={doc.sponsors} word={sponsorWord} />
+      <div className="flex items-start gap-4 min-w-0">
+        <PaperPreview doc={doc} />
+        <div className="flex-1 min-w-0 flex flex-col gap-3">
+          <h2 className="text-[19px] leading-[1.28] font-bold line-clamp-3 [text-wrap:balance]" style={{ color: INK, letterSpacing: '-0.006em' }}>
+            {doc.title || doc.docCode}
+          </h2>
+          <Sponsors sponsors={doc.sponsors} word={sponsorWord} />
+        </div>
+      </div>
 
       <div className="mt-auto flex flex-col gap-3">
         {live && vote && (
@@ -286,7 +315,6 @@ export function ResolutionPicker(props: ResolutionPickerProps) {
   const { docs, stateOf, isViewOnly, docSingular, docPlural, onOpenRollCall, onFollowLive, onBackToSession, children } = props;
   const states = docs.map((d) => stateOf(d));
   const counts = {
-    ready: states.filter((s) => s.kind === 'ready').length,
     live: states.filter((s) => s.kind === 'live').length,
     passed: states.filter((s) => s.kind === 'voted' && s.result === 'passed').length,
     failed: states.filter((s) => s.kind === 'voted' && s.result === 'failed').length,
@@ -313,13 +341,15 @@ export function ResolutionPicker(props: ResolutionPickerProps) {
         .gv-pick .gv-pick-arrow { transition: transform 200ms cubic-bezier(0.2,0,0,1) }
         .gv-pick .gv-pick-arrow-icon { transform: scaleX(var(--gv-dir, 1)) }
         .gv-pick .gv-pick-card:not(:disabled):hover .gv-pick-arrow { transform: translateX(calc(var(--gv-dir, 1) * 3px)) }
+        .gv-pick .gv-pick-paper { transition: transform 200ms cubic-bezier(0.2,0,0,1) }
+        .gv-pick .gv-pick-card:not(:disabled):hover .gv-pick-paper { transform: translateY(-2px) rotate(calc(var(--gv-dir, 1) * -1.5deg)) }
         .gv-pick .gv-pick-flag { transition: transform 200ms cubic-bezier(0.2,0,0,1) }
         .gv-pick .gv-pick-card:not(:disabled):hover .gv-pick-flag { transform: translateY(-2px) }
         @media (prefers-reduced-motion: reduce) {
           .gv-pick .gv-pick-in, .gv-pick .gv-pick-ping { animation: none }
-          .gv-pick .gv-pick-card, .gv-pick .gv-pick-arrow, .gv-pick .gv-pick-flag { transition: none }
+          .gv-pick .gv-pick-card, .gv-pick .gv-pick-arrow, .gv-pick .gv-pick-flag, .gv-pick .gv-pick-paper { transition: none }
           .gv-pick .gv-pick-card:not(:disabled):hover, .gv-pick .gv-pick-card:not(:disabled):active { transform: none }
-          .gv-pick .gv-pick-card:not(:disabled):hover .gv-pick-arrow, .gv-pick .gv-pick-card:not(:disabled):hover .gv-pick-flag { transform: none }
+          .gv-pick .gv-pick-card:not(:disabled):hover .gv-pick-arrow, .gv-pick .gv-pick-card:not(:disabled):hover .gv-pick-flag, .gv-pick .gv-pick-card:not(:disabled):hover .gv-pick-paper { transform: none }
         }
       `}</style>
       {children}
@@ -339,7 +369,6 @@ export function ResolutionPicker(props: ResolutionPickerProps) {
           {docs.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap">
               {counts.live > 0 && <Count n={counts.live} label={t('voting_pick_status_live')} tone="forest" />}
-              {counts.ready > 0 && <Count n={counts.ready} label={t('voting_pick_status_ready')} tone="gold" />}
               {counts.passed > 0 && <Count n={counts.passed} label={t('voting_pick_status_passed')} tone="green" />}
               {counts.failed > 0 && <Count n={counts.failed} label={t('voting_pick_status_failed')} tone="red" />}
               {onOpenRollCall && (

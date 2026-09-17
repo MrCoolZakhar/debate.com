@@ -11,12 +11,20 @@ import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 import { SeatArtProvider } from '@/components/SeatFlag';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { Emoji } from '@/components/Emoji';
-import { Check, CornerDownRight, Flag, Minus, ShieldAlert, SkipForward, Undo2, X } from 'lucide-react';
+import { Check, CornerDownRight, Eye, EyeOff, Flag, Minus, ShieldAlert, SkipForward, Undo2, X } from 'lucide-react';
 import { VotingRollCall } from '@/components/voting/VotingRollCall';
+import { DeviceVoteGate, DeviceVotingPanel } from '@/components/voting/DeviceVotingPanel';
 import { VotingHeader } from '@/components/voting/VotingHeader';
 import { ResolutionPicker, type PickCardState } from '@/components/voting/ResolutionPicker';
 import { VoterCarousel, type SeatMark as CarouselMark } from '@/components/voting/VoterCarousel';
-import { useCommitteeIdentity } from '@/components/voting/useCommitteeEmblem';
+import { RightsQueue } from '@/components/voting/RightsQueue';
+import ChatDialog from '@/components/chat/ChatDialog';
+import ChatPanel from '@/components/ChatPanel';
+import ChatDisabledNotice from '@/components/ChatDisabledNotice';
+import ScoreboardPanel from '@/components/ScoreboardPanel';
+import { getCommitteeFlags } from '@/lib/committeeFlags';
+import { chatUnreadTotal, mergeMessagesById } from '@/lib/chatConversations';
+import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
 import { serverNowIso } from '@/lib/serverClock';
 import { startSessionSync, rowFields } from '@/lib/sessionSync';
 import { getCommitteeByCodeWithRetry, setDelegateStatus as setDelegateStatusInDB, setDelegateStatusesBulk, setDelegateObserver as setDelegateObserverInDB, updateDocumentStatus as updateDocumentStatusInDB, saveCommitteeSettings, endDebate as endDebateInDB } from '@/lib/committeeService';
@@ -442,6 +450,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   /** The draft resolution a new vote is about to open on. Choosing one (or Vote again) opens
    *  the roll call; confirming it starts the ballot. Every new ballot passes through it. */
   const [pendingDocId, setPendingDocId] = useState<string | null>(null);
+  /** Device ballot: how many delegations have voted, as DeviceVotingPanel last read it (header progress). */
+  const [deviceCast, setDeviceCast] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   // Local delegate statuses for roll call modal (mirrors committee.delegates)
   const [rollCallStatuses, setRollCallStatuses] = useState<Record<string, DelegateStatus>>({});
@@ -463,7 +473,6 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   };
   /** A follower (view-only) tracks the live vote unless they picked a document themselves. */
   const [followLive, setFollowLive] = useState(true);
-  const dragIndexRef = useRef<number | null>(null);
   const enteredVotingRef = useRef(false);
   const [gavelDeviceId] = useState(() => getGavelDeviceId(code));
   // D-1: another chair's settings change reaches this screen's rules as well.
@@ -474,8 +483,24 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   /** Latest role for async continuations (a queued vote save outliving a gavel handover). */
   const isViewOnlyRef = useRef(isViewOnly);
   useEffect(() => { isViewOnlyRef.current = isViewOnly; }, [isViewOnly]);
-  // The committee's emblem and acronym for the header (same resolution as the chair masthead).
-  const identity = useCommitteeIdentity(code, committee?.name, committee?.sessionOrigin === 'conference', language);
+  // ── The chair console's top-bar dialogs, on every voting screen ────────────
+  // Chat and the scoreboard, exactly as on /chair/[code]: the chat is ChatDialog + ChatPanel
+  // with this chair's own read counts (src/lib/chatReadKey.ts, keyed by reader: role chair,
+  // identity ?chairName=), and the scoreboard re-reads feedback on every realtime `feedback`
+  // event through `feedbackVersion` (the chair page's counter, outside any debounce).
+  const [showChat, setShowChat] = useState(false);
+  const [showScoreboard, setShowScoreboard] = useState(false);
+  const [feedbackVersion, setFeedbackVersion] = useState(0);
+  const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (!committee?.code) return;
+    const stored = loadChatReadCounts(committee.code, { role: 'chair', identity: urlChairName });
+    if (stored) setChatReadCounts(stored);
+  }, [committee?.code, urlChairName]);
+  useEffect(() => {
+    if (!committee?.code) return;
+    saveChatReadCounts(committee.code, { role: 'chair', identity: urlChairName }, chatReadCounts);
+  }, [chatReadCounts, committee?.code, urlChairName]);
 
   const followDocId = isViewOnly && followLive
     ? (Object.entries(voteStates)
@@ -658,19 +683,32 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       // The roster used to be frozen at mount: nothing refreshed committee.delegates,
       // so a delegation added mid-session (chair sidebar, or the organiser's committee
       // editor) stayed invisible and the quorum denominator here disagreed with the
-      // chair page's. speakers_list, current_speaker and messages are deliberately
-      // ignored: this page renders none of them.
+      // chair page's. speakers_list and current_speaker are deliberately ignored: this page
+      // renders neither.
       //
       // The same pipeline as the chair, delegate and advisor pages (src/lib/sessionSync.ts):
       // one fetch per SLICE, coalesced 200 ms, per-slice sequencing, catch-up on reconnect,
       // wake and online. A ballot write fires a documents event on every chair device; it
       // now costs one documents read (plus the light vote-state read), never a whole
       // committee refetch per vote.
+      // Chat and the scoreboard live in the header on every voting screen (owner, 17 Sep
+      // 2026), so `messages` and `feedback` are bound too: a message INSERT is merged from its
+      // payload by id (never a refetch outside a catch-up), a feedback event only bumps the
+      // counter the scoreboard's own query is keyed on (RULE 4, as on the chair page).
       const sync = startSessionSync({
         committeeId: found.id,
-        tables: ['committees', 'delegates', 'documents'],
-        slices: ['row', 'delegates', 'documents'],
-        onEvent: (table) => { if (table === 'documents') void refetchVotes(found.id); return false; },
+        tables: ['committees', 'delegates', 'documents', 'messages', 'feedback'],
+        slices: ['row', 'delegates', 'documents', 'messages'],
+        onMessage: (m) => setCommittee((prev) => {
+          if (!prev) return prev;
+          const merged = mergeMessagesById(prev.messages, [m]);
+          return merged === prev.messages ? prev : { ...prev, messages: merged };
+        }),
+        onEvent: (table) => {
+          if (table === 'feedback') { setFeedbackVersion((v) => v + 1); return true; }
+          if (table === 'documents') void refetchVotes(found.id);
+          return false;
+        },
         onCatchUp: (phase) => { if (phase === 'start') void refetchVotes(found.id); },
         apply: (slice, data) => {
           if (cancelled) return;
@@ -683,6 +721,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               return;
             }
             case 'documents': setCommittee((prev) => (prev ? { ...prev, documents: withRecordedDocs(data as Committee['documents']) } : prev)); return;
+            case 'messages': setCommittee((prev) => {
+              if (!prev) return prev;
+              // Append-only: merge by id, never replace (a catch-up of identical rows keeps identity).
+              const merged = mergeMessagesById(prev.messages, data as Committee['messages']);
+              return merged === prev.messages ? prev : { ...prev, messages: merged };
+            }); return;
           }
         },
       });
@@ -1307,6 +1351,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       rightsTimerLimit: voteStatesRef.current[docId]?.rightsTimerLimit ?? 60,
       result: null,
       startedAt: serverNowIso(),   // database clock (T-1): compared across chair devices
+      // Frozen with the ballot: changing the setting later never changes a vote in progress.
+      method: settings.votingMethod === 'device' ? 'device' : 'rollcall',
     }));
   };
 
@@ -1369,6 +1415,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
    */
   const stepBack = () => {
     if (isViewOnly || !vote || !selectedDoc) return;
+    // A device ballot has no pointer to step back through: choices come from the devices.
+    if (vote.method === 'device' && vote.status === 'voting') return;
     const docId = selectedDoc.id;
     const fromResult = vote.status === 'result' && (() => {
       const docStatus = committee.documents.find((d) => d.id === docId)?.status;
@@ -1404,6 +1452,48 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     } else {
       finishWithResult();
     }
+  };
+
+  /** Move an upcoming rights speaker to `slot` among the speakers still to come (owner, 17 Sep
+   *  2026). One `updateVote`, so the seq grows and every chair device follows. Re-checked
+   *  against the state it patches: the delegation must still be upcoming there. */
+  const moveRightsSpeaker = (delegateId: string, slot: number) => {
+    if (isViewOnly) return;
+    updateVote((prev) => {
+      if (prev.status !== 'rights-speakers') return {};
+      const head = prev.rightsOrder.slice(0, prev.rightsIndex + 1);
+      const upcoming = prev.rightsOrder.slice(prev.rightsIndex + 1);
+      const item = upcoming.find((v) => v.delegateId === delegateId);
+      if (!item) return {};
+      const rest = upcoming.filter((v) => v.delegateId !== delegateId);
+      const at = Math.max(0, Math.min(slot, rest.length));
+      rest.splice(at, 0, item);
+      if (rest.every((v, i) => v.delegateId === upcoming[i].delegateId)) return {};
+      return { rightsOrder: [...head, ...rest] };
+    });
+  };
+
+  /** A device ballot was revealed (DeviceVotingPanel): the choices enter vote_state in ONE
+   *  write, straight to the rights speakers or the result. No pass round in device mode. The
+   *  verdict is `evaluate` over the revealed list, exactly as for a roll call. */
+  const applyDeviceReveal = (docId: string, revealed: DelegateVote[]) => {
+    if (isViewOnly || !selectedDoc || selectedDoc.id !== docId) return;
+    const cur = voteStatesRef.current[docId];
+    if (!cur || cur.method !== 'device' || cur.status !== 'voting' || cur.currentVoterIndex >= cur.order.length) return;
+    const inOrder = new Set(cur.order.map((s) => s.id));
+    const list = revealed.filter((v) => inOrder.has(v.delegateId));
+    const rights = list
+      .filter((v) => v.choice === 'for-rights' || v.choice === 'against-rights')
+      .sort((a, b) => compareCountryNames(a.country, b.country, language))
+      .slice(0, 10);
+    const base = { votes: list, passedIds: [] as string[], currentVoterIndex: cur.order.length };
+    if (rights.length > 0) {
+      updateVote(() => ({ ...base, status: 'rights-speakers', rightsOrder: rights, rightsIndex: 0 }));
+      return;
+    }
+    const ok = evaluate(settings, list).outcome.passed;
+    persistResult(docId, ok ? 'passed' : 'failed');
+    updateVote(() => ({ ...base, status: 'result', result: ok ? 'passed' : 'failed' }));
   };
 
   const handleNextRightsSpeaker = () => {
@@ -1455,17 +1545,63 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   // hosts therefore keeps its open state while votes are being cast.
   const drPlural = docName(committee, 'draft-resolution', 'plural', t('documents_draft_resolutions_tab'));
   const drSingular = docName(committee, 'draft-resolution', 'singular', t('documents_draft_resolution_type'));
+  const chatUnread = committee.endedAt ? 0 : chatUnreadTotal(committee.messages, urlChairName || 'Chair', true, committee.chairNames ?? [], chatReadCounts);
   const headerProps = {
-    identity,
     onBack: () => { void handleBackToSession(); },
     backBusy,
     onEndDebate: () => { setEndDebateState('idle'); setShowEndDebateConfirm(true); },
     onOpenSettings: () => setShowSettings(true),
+    onOpenScoreboard: () => setShowScoreboard(true),
+    sessionCode: committee.code,
+    chat: committee.endedAt ? null : { unread: chatUnread, open: showChat, onToggle: () => setShowChat((v) => !v) },
     rules: <VotingRulesPopover {...rulesProps} trigger="icon" />,
-    tally: { hidden: hideVotes, onToggle: () => setHideVotes(!hideVotes) },
     isViewOnly,
-    headName: gavelRole.head,
   };
+
+  // The header's dialogs, mounted on every screen. Each portals and grows out of its icon.
+  const headerDialogs = (
+    <>
+      {showChat && !committee.endedAt && (
+        <ChatDialog onClose={() => setShowChat(false)}>
+          {(requestClose) => getCommitteeFlags(committee).disableChat ? (
+            <ChatDisabledNotice onClose={requestClose} />
+          ) : (
+            <ChatPanel
+              committee={committee}
+              senderName={urlChairName || 'Chair'}
+              isChair={true}
+              readOnly={!!committee.endedAt}
+              readCounts={chatReadCounts}
+              onReadCountsChange={setChatReadCounts}
+            />
+          )}
+        </ChatDialog>
+      )}
+      {showScoreboard && (
+        <ScoreboardPanel
+          committee={committee}
+          onClose={() => setShowScoreboard(false)}
+          feedbackVersion={feedbackVersion}
+          isViewOnly={isViewOnly}
+        />
+      )}
+    </>
+  );
+
+  /** Show / hide the running tally, under the ballot (owner: "moved to the bottom, below
+   *  voting"). Per device, as before. */
+  const tallyToggle = (
+    <button
+      type="button"
+      onClick={() => setHideVotes(!hideVotes)}
+      aria-pressed={hideVotes}
+      className="inline-flex items-center gap-2 h-10 ps-3.5 pe-4 rounded-full text-[13.5px] font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,color,transform] duration-150 active:scale-[0.96] motion-reduce:transition-none"
+      style={{ backgroundColor: hideVotes ? '#1B3828' : 'rgba(27,56,40,0.06)', color: hideVotes ? '#EED98A' : '#4A3F33' }}
+    >
+      {hideVotes ? <EyeOff size={17} strokeWidth={2.25} aria-hidden /> : <Eye size={17} strokeWidth={2.25} aria-hidden />}
+      {hideVotes ? t('voting_show_tally') : t('voting_hide_tally')}
+    </button>
+  );
 
   // ── The roll call before a ballot (VotingRollCall): statuses + rule bookmarks ──
   /** Set one seat's roll-call status directly (the roll call's slider). */
@@ -1540,6 +1676,15 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const showRollCall = !isViewOnly && (rollCallOpen || !!pendingDoc);
   const closeRollCall = () => { setRollCallOpen(false); setPendingDocId(null); };
   const rollCallModal = showRollCall ? (
+    <DeviceVoteGate
+      code={committee.code}
+      chairSuffix={suffix}
+      method={settings.votingMethod === 'device' ? 'device' : 'rollcall'}
+      onMethodChange={(next) => applyRules({ votingMethod: next })}
+      seats={livePresent}
+      starting={!!pendingDoc}
+      readOnly={isViewOnly}
+    >{(gateNode, gateBlocked) => (
     <VotingRollCall
       delegates={committee.delegates}
       rollCallStatuses={rollCallStatuses}
@@ -1560,7 +1705,10 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       onVetoModeChange={changeVetoMode}
       vetoEntries={vetoListFor(settings)}
       readOnly={isViewOnly}
+      footerExtra={gateNode}
+      confirmBlocked={gateBlocked}
     />
+    )}</DeviceVoteGate>
   ) : null;
 
   const observerFailBanner = observerWriteFailed
@@ -1713,6 +1861,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         {observerFailBanner}
         {endDebateModal}
         {showSettings && <SettingsPanel committee={committee} onClose={() => setShowSettings(false)} isViewOnly={isViewOnly} myChairName={urlChairName} />}
+        {headerDialogs}
         <ResolutionPicker
           docs={[...allDRs].sort((a, b) => a.docCode.localeCompare(b.docCode, undefined, { numeric: true }))}
           stateOf={cardState}
@@ -1768,7 +1917,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       : m === 'against' ? 'voting_choice_against'
       : 'voting_choice_pass',
   );
-  const canStepBack = !isViewOnly && (phase !== 'voting' || currentVoterIndex > 0 || passVoterIndex > 0);
+  // A device ballot not yet revealed: the delegations vote on their own devices (DeviceVotingPanel).
+  const deviceBallotOpen = vote.method === 'device' && phase === 'voting' && currentVoterIndex < presentDelegates.length;
+  const canStepBack = !isViewOnly && !(vote.method === 'device' && phase === 'voting') && (phase !== 'voting' || currentVoterIndex > 0 || passVoterIndex > 0);
 
   const stage = phase === 'result' ? t('voting_stage_result')
     : phase === 'rights-speakers' ? t('voting_stage_rights')
@@ -1823,15 +1974,31 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         docsLabel={drPlural}
         onDocs={() => { setSelectedDocId(null); if (isViewOnly) setFollowLive(false); }}
         doc={{ code: selectedDoc.docCode, title: selectedDoc.title }}
-        progress={{ stage, cast: votes.length, total: presentDelegates.length }}
+        progress={{ stage, cast: deviceBallotOpen ? deviceCast : votes.length, total: presentDelegates.length }}
       />
       {rollCallModal}
       {observerFailBanner}
       {rosterNotice}
       {statusBanners}
 
+      {/* ── Device voting: counts only until the reveal ── */}
+      {deviceBallotOpen && (
+        <DeviceVotingPanel
+          key={`${selectedDoc.id}:${vote.startedAt}`}
+          code={committee.code}
+          chairSuffix={suffix}
+          documentId={selectedDoc.id}
+          ballotId={vote.startedAt}
+          seats={presentDelegates}
+          isViewOnly={isViewOnly}
+          headName={gavelRole.head}
+          onCount={(cast) => setDeviceCast(cast)}
+          onRevealed={(list) => applyDeviceReveal(selectedDoc.id, list)}
+        />
+      )}
+
       {/* ── Active voting: one delegation at a time ── */}
-      {phase === 'voting' && currentDelegate && (
+      {phase === 'voting' && currentDelegate && !deviceBallotOpen && (
         <div className="flex-1 min-h-0 flex flex-col items-center px-8 pt-4 pb-8">
           <div className="h-9 shrink-0 flex items-center">
             {inPassRound ? (
@@ -1933,11 +2100,13 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   <span className="w-[120px] shrink-0" aria-hidden />
                 )}
               </div>
+              <div className="flex justify-center">{tallyToggle}</div>
             </div>
           )}
-          {isViewOnly && !hideVotes && (
-            <div className="shrink-0 w-full max-w-xl">
-              <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+          {isViewOnly && (
+            <div className="shrink-0 w-full max-w-xl flex flex-col items-center gap-3">
+              {!hideVotes && <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />}
+              {tallyToggle}
             </div>
           )}
         </div>
@@ -1986,6 +2155,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               </button>
             </div>
           )}
+          {tallyToggle}
         </div>
       )}
 
@@ -2047,43 +2217,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             </div>
 
             <div className="w-[380px] shrink-0 flex flex-col justify-center gap-3 min-h-0">
-              <div className="min-h-0 overflow-y-auto rounded-[20px] p-2 space-y-1" style={{ backgroundColor: '#FAF8F3', boxShadow: '0 0 0 1px rgba(27,56,40,0.07), 0 10px 28px rgba(27,56,40,0.08)' }}>
-                {orderedRights.map((v, absIdx) => {
-                  const done = absIdx < rightsIndex;
-                  const isCurrent = absIdx === rightsIndex;
-                  const movable = !isCurrent && !done && !isViewOnly;
-                  return (
-                    <div
-                      key={v.delegateId}
-                      draggable={movable}
-                      onDragStart={() => { dragIndexRef.current = absIdx; }}
-                      onDragOver={(e) => { if (movable) e.preventDefault(); }}
-                      onDrop={() => {
-                        const from = dragIndexRef.current;
-                        if (from === null || from === absIdx || from <= rightsIndex || absIdx <= rightsIndex) return;
-                        updateVote((prev) => {
-                          const arr = [...prev.rightsOrder];
-                          const [item] = arr.splice(from, 1);
-                          arr.splice(absIdx, 0, item);
-                          return { rightsOrder: arr };
-                        });
-                        dragIndexRef.current = null;
-                      }}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-2xl transition-[background-color,opacity] duration-200 ${movable ? 'cursor-grab' : ''}`}
-                      style={{ backgroundColor: isCurrent ? '#1B3828' : 'transparent', opacity: done ? 0.45 : 1 }}
-                    >
-                      <span className="text-[12px] w-5 font-medium text-end tabular-nums" style={{ color: isCurrent ? 'rgba(238,217,138,0.8)' : '#9A8A78' }}>{absIdx + 1}</span>
-                      <SeatCircleFlag country={v.country} size={30} decorative ring={!isCurrent} />
-                      <span className="flex-1 min-w-0 truncate text-[15px] font-medium" style={{ color: isCurrent ? '#FFFFFF' : '#1C1410' }}>{getCountryDisplayName(v.country, language)}</span>
-                      <span className="text-[12.5px] font-medium shrink-0" style={{
-                        color: isCurrent ? '#EED98A' : hideVotes ? '#6A5A4A' : v.choice === 'for-rights' ? '#2F6B45' : '#8B2020',
-                      }}>
-                        {isCurrent ? t('voting_speaking') : hideVotes ? t('voting_with_rights_label') : v.choice === 'for-rights' ? t('voting_for_rights_list') : t('voting_against_rights_list')}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+              <RightsQueue
+                speakers={orderedRights}
+                currentIndex={rightsIndex}
+                hideTally={hideVotes}
+                onMove={isViewOnly ? undefined : moveRightsSpeaker}
+              />
               {!isViewOnly && (
                 <div className="shrink-0 flex items-center gap-2">
                   {backButton(t('voting_step_back'))}
@@ -2194,6 +2333,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         );
       })()}
       {showSettings && <SettingsPanel committee={committee} onClose={() => setShowSettings(false)} isViewOnly={isViewOnly} myChairName={urlChairName} />}
+      {headerDialogs}
 
       {endDebateModal}
     </div>

@@ -1,14 +1,14 @@
 'use client';
 
-import { Ban, CircleDashed, Crown, Handshake, ListChecks, Scale, ShieldBan, Users, Check } from 'lucide-react';
+import { Ban, CircleDashed, Crown, Handshake, ListChecks, MonitorSmartphone, Scale, ShieldBan, Users, Check } from 'lucide-react';
 import type { CommitteeSettings } from '@/lib/settingsStore';
 import { getCountryByName, getCountryDisplayName } from '@/lib/countries';
 import { SeatCircleFlag, CircleFlag } from '@/components/CircleFlag';
-import { K, T, W, Section, SettingRow, GavelSwitch, SealChoice, HoverHint, InfoHint } from './settingsKit';
+import { K, T, W, LH, Section, GavelSwitch, SealChoice, HoverHint, InfoHint } from './settingsKit';
 import type { TabProps } from './settingsTypes';
 
 /** A hemicycle of 15 seats with the share needed to pass filled in forest. */
-function Hemicycle({ share, on }: { share: number; on?: boolean }) {
+function Hemicycle({ share, on, size = 30 }: { share: number; on?: boolean; size?: number }) {
   const seats: { x: number; y: number }[] = [];
   const rows = [{ r: 13, n: 7 }, { r: 8, n: 5 }, { r: 3.5, n: 3 }];
   rows.forEach(({ r, n }) => {
@@ -20,7 +20,7 @@ function Hemicycle({ share, on }: { share: number; on?: boolean }) {
   seats.sort((a, b) => a.x - b.x);
   const filled = Math.ceil(share * seats.length);
   return (
-    <svg width="30" height="20" viewBox="0 0 32 20" aria-hidden>
+    <svg width={size} height={(size * 20) / 32} viewBox="0 0 32 20" aria-hidden>
       {seats.map((p, i) => (
         <circle key={i} cx={p.x} cy={p.y} r="1.7" fill={i < filled ? (on ? K.gold : K.forest) : (on ? 'rgba(238,217,138,0.28)' : 'rgba(27,56,40,0.2)')} />
       ))}
@@ -60,21 +60,49 @@ export default function VotingTab({ committee, s, upd, t, language, isViewOnly }
   return (
     <div style={dim} aria-disabled={isViewOnly || undefined}>
       <Section icon={Scale} title={t('settings_substantive_threshold')} hint={t('stg_threshold_hint')} lead>
-        <div style={{ padding: '10px 0' }}>
+        {/* Three large panes (the hemicycle big, the name and a short caption beneath) with
+            abstentions in their own pane at the side (17 Sep 2026). */}
+        <div className="stg-vote-top" style={{ padding: '14px 0' }}>
           <SealChoice
+            variant="pane"
             label={t('settings_substantive_threshold')}
             colsClass="sm:grid-cols-3"
             value={s.substantiveThreshold}
             onChange={(v) => upd('substantiveThreshold', v)}
             options={[
-              { value: 'simple', title: t('settings_majority_simple'), note: t('stg_simple_note'), art: <Hemicycle share={8 / 15} on={s.substantiveThreshold === 'simple'} /> },
-              { value: 'supermajority-2-3', title: t('settings_majority_supermajority'), note: t('stg_super_note'), art: <Hemicycle share={2 / 3} on={s.substantiveThreshold === 'supermajority-2-3'} /> },
-              { value: 'consensus', title: t('settings_majority_consensus'), note: t('stg_consensus_note'), art: <Hemicycle share={1} on={s.substantiveThreshold === 'consensus'} /> },
+              { value: 'simple', title: t('settings_majority_simple'), note: t('stg_simple_note'), art: <Hemicycle size={116} share={8 / 15} on={s.substantiveThreshold === 'simple'} /> },
+              { value: 'supermajority-2-3', title: t('settings_majority_supermajority'), note: t('stg_super_note'), art: <Hemicycle size={116} share={2 / 3} on={s.substantiveThreshold === 'supermajority-2-3'} /> },
+              { value: 'consensus', title: t('settings_majority_consensus'), note: t('stg_consensus_note'), art: <Hemicycle size={116} share={1} on={s.substantiveThreshold === 'consensus'} /> },
+            ]}
+          />
+          <div className="flex flex-col items-center justify-center text-center" style={{ borderRadius: 18, background: K.ivory, boxShadow: K.inSm, padding: '18px 14px' }}>
+            <CircleDashed aria-hidden size={40} strokeWidth={1.8} style={{ color: s.allowAbstentions ? K.forest : K.inkSoft }} />
+            <span className="inline-flex items-center gap-1.5" style={{ marginTop: 10 }}>
+              <span id="stg-abst" style={{ fontSize: T.body, fontWeight: W.section, color: K.ink, lineHeight: LH.body }}>{t('settings_allow_abstentions_label')}</span>
+              <InfoHint text={t('settings_allow_abstentions_note')} />
+            </span>
+            <span style={{ marginTop: 12 }}>
+              <GavelSwitch icon={CircleDashed} labelledBy="stg-abst" checked={s.allowAbstentions} onChange={(v) => upd('allowAbstentions', v)} />
+            </span>
+          </div>
+        </div>
+      </Section>
+
+      {/* Device voting (src/lib/deviceVoting.ts): off by default. Frozen into each ballot when it opens. */}
+      <Section icon={MonitorSmartphone} title={t('voting_method_title')} hint={t('voting_method_hint')} delay={20}>
+        <div style={{ padding: '10px 0' }}>
+          <SealChoice
+            compact
+            colsClass="grid-cols-2"
+            label={t('voting_method_title')}
+            value={s.votingMethod === 'device' ? 'device' : 'rollcall'}
+            onChange={(v) => upd('votingMethod', v)}
+            options={[
+              { value: 'rollcall', title: t('voting_method_rollcall'), icon: ListChecks },
+              { value: 'device', title: t('voting_method_device'), icon: MonitorSmartphone },
             ]}
           />
         </div>
-        <SettingRow dense labelId="stg-abst" label={t('settings_allow_abstentions_label')} hint={t('settings_allow_abstentions_note')}
-          control={<GavelSwitch size="sm" icon={CircleDashed} labelledBy="stg-abst" checked={s.allowAbstentions} onChange={(v) => upd('allowAbstentions', v)} />} />
       </Section>
 
       <Section icon={ShieldBan} title={t('stg_veto_title')} hint={t('stg_veto_hint')} lead delay={40}>

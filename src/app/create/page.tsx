@@ -8,13 +8,17 @@ import { createCommittee as createCommitteeInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { UN_COUNTRIES, getCountryByName, getCountryDisplayName, countryMatchRank, findCountryFlexible, compareCountryNames } from '@/lib/countries';
 import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS, ICC_ROLES, ICJ_ROLES, CRISIS_MEMBERS, FIFA_MEMBERS, HOUSE_OF_COMMONS_ROLES, US_SENATE_MEMBERS, PRESS_ROLES, EUROPEAN_PARLIAMENT_MEMBERS } from '@/lib/presets';
-import { ArrowRight, Check, ChevronDown, ChevronLeft, ClipboardList, CornerDownLeft, Gavel, Globe, Loader2, Megaphone, PenLine, Plus, Search, UserRound, Wand2, X } from 'lucide-react';
+import { ArrowRight, Check, ChevronDown, ChevronLeft, ClipboardList, CornerDownLeft, Globe, Loader2, LogIn, Megaphone, PenLine, Plus, Search, UserRound, Wand2, X } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import Loader from '@/components/Loader';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
-import { getCommitteeDisplayName } from '@/lib/presetNames';
-import { Chip, Eyebrow, FieldLabel, GhostAction, PageBackdrop, PrimaryAction } from '../join/joinUi';
-import { C, GroupLabel, INPUT_CLS, OUTFIT, RowIconButton, SHADOW, StepCard } from './createUi';
+import { getCommitteeDisplayName, committeeDisplayName, deriveCommitteeAcronym, matchPresetEmblem } from '@/lib/presetNames';
+import { useAuth } from '@/components/AuthProvider';
+import { Chip, GhostAction, PageBackdrop, PrimaryAction } from '../join/joinUi';
+import { C, ChairTokenField, CreateStyles, INPUT_CLS, LiveCommitteePreview, OUTFIT, Panel, RowIconButton, SHADOW, SmallLabel } from './createUi';
+
+/** A dais rarely has more than this; the chips stay on one line of the field. */
+const MAX_CHAIRS = 5;
 
 /** Older button strings end in an arrow glyph; the build screen draws an icon instead. */
 const stripArrow = (s: string) => s.replace(/\s*[→←]\s*$/, '');
@@ -464,7 +468,19 @@ function CreatePageInner() {
   const [showLangMenu, setShowLangMenu] = useState(false);
   const router = useRouter();
   const { updateSetting } = useSettingsStore();
-  const [chairNames, setChairNames] = useState<string[]>(['']);
+  const { user } = useAuth();
+  // Chairs: committed chips plus the text still in the field. `chairNames` keeps the
+  // exact shape handleCreate always used (the draft last), so one typed name and no
+  // chip creates the committee exactly as the old single field did.
+  const [chairs, setChairs] = useState<string[]>([]);
+  const [chairDraft, setChairDraft] = useState('');
+  const chairNames = [...chairs, chairDraft];
+  const commitChairDraft = () => {
+    const name = chairDraft.trim();
+    if (!name) return;
+    setChairs((prev) => (prev.length >= MAX_CHAIRS || prev.some((n) => n.toLowerCase() === name.toLowerCase()) ? prev : [...prev, name]));
+    setChairDraft('');
+  };
   const [committeeMode, setCommitteeMode] = useState<'select' | 'build'>('select');
   const [committeeName, setCommitteeName] = useState('');
   const [topic, setTopic] = useState('');
@@ -647,13 +663,12 @@ function CreatePageInner() {
     );
   }
 
-  // ── Build screen: one column, top to bottom ────────────────────────────────
-  // No FitToScreen here (it re-scaled the whole page to the window and made the
-  // type shrink as the roster grew). An ordinary scrolling page, like /join.
+  // ── Build screen: one screen, two panels ───────────────────────────────────
+  // No FitToScreen (it re-scaled the whole page to the window). From lg up the
+  // page is exactly the window height and nothing scrolls but the country list;
+  // below lg the panels stack and the page scrolls, like /join. See createUi.tsx.
   const delegateCount = delegates.length;
   const observerCount = delegates.filter((d) => observers.has(d)).length;
-  const presetLogo = COMMITTEE_PRESETS.find((p) => p.name === committeeName)?.logoPath ?? null;
-  const summaryName = committeeName.trim() ? getPresetDisplayName(committeeName.trim(), language) : t('create_untitled');
   const countLabel = delegateCount === 1 ? t('create_delegations_count_one') : t('create_delegations_count', { n: delegateCount });
   const observerLabel = observerCount === 1 ? t('create_observers_count_one') : t('create_observers_count', { n: observerCount });
   const ctaLabel = creating ? t('create_creating') : canProceed ? t('create_cta_start') : t('create_cta_needs');
@@ -662,306 +677,331 @@ function CreatePageInner() {
     setObservers((prev) => { const n = new Set(prev); n.delete(name); return n; });
   };
 
-  return (
-    <div className="relative min-h-screen w-full" style={{ backgroundColor: C.page, WebkitFontSmoothing: 'antialiased', fontFamily: OUTFIT }}>
-      <PageBackdrop />
+  // The live preview resolves the committee exactly as the chair masthead will
+  // (chair/[code]/page.tsx renderIdentityBadge): localized full name, derived
+  // acronym, matchPresetEmblem. A preset's own logo is the fallback for the rare
+  // preset the matcher does not know, so the preview never looks emptier than the
+  // typeahead row the chair just picked.
+  const rawName = committeeName.trim();
+  const previewFull = rawName ? getPresetDisplayName(rawName, language) : '';
+  const previewAcronym = rawName ? deriveCommitteeAcronym(rawName) : '';
+  const previewPrimary = rawName ? committeeDisplayName(previewFull, previewAcronym) : '';
+  const previewSecondary = previewPrimary && previewPrimary !== previewFull ? previewFull : null;
+  const presetLogo = COMMITTEE_PRESETS.find((p) => p.name === rawName)?.logoPath ?? null;
+  const previewLogo = rawName ? (matchPresetEmblem(rawName) ?? presetLogo) : null;
+  const chairList = chairNames.map((n) => n.trim()).filter(Boolean);
+  const chairsLine = chairList.length > 0 ? t('create_preview_chairs', { names: chairList.join(', ') }) : null;
+  const signedIn = !!user;
+  const conferenceHref = signedIn ? '/my-conferences' : `/auth/signin?next=${encodeURIComponent('/my-conferences')}`;
+  const sortedDelegates = [...delegates].sort((a, b) => compareCountryNames(a, b, language));
 
-      <nav className="relative z-20 mx-auto flex h-16 w-full max-w-[920px] items-center gap-3 px-4 sm:px-6">
+  return (
+    <div className="relative min-h-screen w-full lg:flex lg:h-dvh lg:min-h-0 lg:flex-col lg:overflow-hidden" style={{ backgroundColor: C.page, WebkitFontSmoothing: 'antialiased', fontFamily: OUTFIT }}>
+      <PageBackdrop />
+      <CreateStyles />
+
+      <nav className="relative z-20 mx-auto flex h-14 w-full max-w-[1440px] flex-shrink-0 items-center gap-2 px-4 sm:gap-3 sm:px-6">
         <Link href="/sessions" className="flex flex-shrink-0 items-center focus:outline-none">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/GavellingLogo.png" alt="Gavelling" className="h-auto w-[118px] object-contain sm:w-[140px]" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          <img src="/GavellingLogo.png" alt="Gavelling" className="h-auto w-[112px] object-contain sm:w-[132px]" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </Link>
+        <button
+          type="button"
+          onClick={() => setCommitteeMode('select')}
+          className="ms-1 flex h-9 items-center gap-1 rounded-xl ps-1.5 pe-3 text-[13px] font-bold transition-[background-color,transform] duration-150 hover:bg-[#1B3828]/[0.07] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828] sm:ms-3"
+          style={{ color: C.forest }}
+        >
+          <ChevronLeft size={16} strokeWidth={2.4} className="rtl:rotate-180" />
+          {t('create_back')}
+        </button>
+        <h1 className="sr-only">{t('create_title')}</h1>
         {langMenu}
       </nav>
 
-      <main className="relative z-10 mx-auto w-full max-w-[920px] px-4 pt-1 sm:px-6 sm:pt-3">
-        <header className="mb-5 sm:mb-7">
-          <GhostAction onClick={() => setCommitteeMode('select')} icon={<ChevronLeft size={16} strokeWidth={2.4} className="rtl:rotate-180" />}>
-            {t('create_back')}
-          </GhostAction>
-          <div className="mt-4">
-            <Eyebrow tone="forest">{t('create_mun_title')}</Eyebrow>
-            <h1
-              className="mt-1.5"
-              style={{ fontFamily: OUTFIT, fontSize: 'clamp(28px, 5vw, 40px)', fontWeight: 800, letterSpacing: '-0.025em', lineHeight: 1.05, color: C.forest, margin: 0, textWrap: 'balance' }}
+      <main className="relative z-10 mx-auto grid w-full max-w-[1440px] grid-cols-[minmax(0,1fr)] gap-4 px-4 pb-4 sm:px-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-5 lg:pb-5">
+        {/* ── 1. Committee ───────────────────────────────────────────────── */}
+        <Panel
+          step={1}
+          labelledBy="create-step-committee"
+          title={t('create_step_committee')}
+          className="lg:min-h-0"
+          aside={
+            <Link
+              href={conferenceHref}
+              className="group inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[12.5px] transition-[background-color,transform] duration-150 hover:bg-[#1B3828]/[0.06] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
+              style={{ color: C.inkSoft }}
             >
-              {t('create_title')}
-            </h1>
+              <span className="sr-only sm:not-sr-only">{t('create_conference_prompt')}</span>
+              <span className="inline-flex items-center gap-1 font-extrabold" style={{ color: C.forest }}>
+                <LogIn size={14} strokeWidth={2.4} className="rtl:-scale-x-100" />
+                {signedIn ? t('create_conference_open') : t('create_conference_login')}
+              </span>
+            </Link>
+          }
+        >
+          <LiveCommitteePreview
+            src={previewLogo}
+            primary={previewPrimary}
+            secondary={previewSecondary}
+            placeholder={t('create_untitled')}
+            topic={topic.trim()}
+            topicLabel={t('rollcall_topic')}
+            topicEmpty={t('create_preview_topic_empty')}
+            chairsLine={chairsLine}
+          />
+
+          <div className="mt-4 flex flex-shrink-0 flex-col gap-3">
+            <div>
+              <SmallLabel htmlFor="create-committee-name">{t('create_committee_name')}</SmallLabel>
+              <CommitteeNameInput id="create-committee-name" value={committeeName} onChange={setCommitteeName} onPresetSelect={handleCommitteePreset} />
+            </div>
+            <div>
+              <SmallLabel htmlFor="create-topic">{t('create_topic')}</SmallLabel>
+              <input id="create-topic" type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
+                placeholder={language === 'ar' ? 'مثال: الحق في التعليم' : language === 'fr' ? "ex. Le droit à l'éducation" : language === 'es' ? 'ej. El derecho a la educación' : 'e.g. The right to education'}
+                className={INPUT_CLS} />
+            </div>
+            <div>
+              <SmallLabel htmlFor="create-chair-name">
+                {t('create_chairs')} <span style={{ fontWeight: 600, color: C.inkSoft, letterSpacing: '0.06em' }}>{t('create_optional')}</span>
+              </SmallLabel>
+              <ChairTokenField
+                id="create-chair-name"
+                chairs={chairs}
+                draft={chairDraft}
+                onDraft={setChairDraft}
+                onCommit={commitChairDraft}
+                onRemove={(i) => setChairs((p) => p.filter((_, j) => j !== i))}
+                onPopLast={() => { const last = chairs[chairs.length - 1]; setChairs((p) => p.slice(0, -1)); setChairDraft(last ?? ''); }}
+                max={MAX_CHAIRS}
+                placeholder={language === 'ar' ? 'اسمك' : language === 'fr' ? 'Votre nom' : language === 'es' ? 'Tu nombre' : 'Your name'}
+                morePlaceholder={t('create_chair_more')}
+                addLabel={t('create_chair_add')}
+                removeLabel={(name) => t('create_chair_remove', { name })}
+              />
+            </div>
           </div>
-        </header>
+        </Panel>
 
-        <div className="flex flex-col gap-4 sm:gap-5">
-          {/* ── 1. Committee ─────────────────────────────────────────────── */}
-          <StepCard step={1} labelledBy="create-step-committee" title={t('create_step_committee')} hint={t('create_step_committee_hint')}>
-            <div className="flex flex-col gap-4">
-              <div>
-                <FieldLabel htmlFor="create-committee-name">{t('create_committee_name')}</FieldLabel>
-                <CommitteeNameInput id="create-committee-name" value={committeeName} onChange={setCommitteeName} onPresetSelect={handleCommitteePreset} />
-              </div>
-              <div className="grid gap-4 sm:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-                <div>
-                  <FieldLabel htmlFor="create-topic">{t('create_topic')}</FieldLabel>
-                  <input id="create-topic" type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
-                    placeholder={language === 'ar' ? 'مثال: الحق في التعليم' : language === 'fr' ? "ex. Le droit à l'éducation" : language === 'es' ? 'ej. El derecho a la educación' : 'e.g. The right to education'}
-                    className={INPUT_CLS} />
-                </div>
-                <div>
-                  <FieldLabel htmlFor="create-chair-name">
-                    {t('create_chair_name')} <span style={{ fontWeight: 600, color: C.muted, letterSpacing: '0.06em' }}>{t('create_optional')}</span>
-                  </FieldLabel>
-                  <input id="create-chair-name" type="text" value={chairNames[0]} onChange={(e) => setChairNames([e.target.value])}
-                    placeholder={language === 'ar' ? 'اسمك' : language === 'fr' ? 'Votre nom' : language === 'es' ? 'Tu nombre' : 'Your name'}
-                    className={INPUT_CLS} />
-                </div>
-              </div>
+        {/* ── 2. Delegations ─────────────────────────────────────────────── */}
+        <Panel
+          step={2}
+          labelledBy="create-step-delegations"
+          title={t('create_step_delegations')}
+          className="lg:min-h-0"
+          aside={
+            <>
+              {observerCount > 0 && <Chip tone="gold" style={{ fontVariantNumeric: 'tabular-nums' }}>{observerLabel}</Chip>}
+              <Chip tone={delegateCount > 0 ? 'green' : 'muted'} style={{ fontVariantNumeric: 'tabular-nums' }}>{countLabel}</Chip>
+            </>
+          }
+        >
+          {/* Add a country: the one add path (+ button, Enter, first typeahead row). */}
+          <div className="relative z-30 flex-shrink-0">
+            <label htmlFor="create-add-country" className="sr-only">{t('create_add_country')}</label>
+            <div className="flex h-[48px] items-center gap-2 rounded-[14px] bg-white/80 ps-3.5 pe-1.5 shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] transition-[box-shadow] duration-150 focus-within:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] lg:h-[46px]">
+              <Search size={17} strokeWidth={2.2} className="shrink-0" style={{ color: C.inkSoft }} />
+              <input id="create-add-country" type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+                autoComplete="off"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); addTyped(); }
+                  if (e.key === 'Escape') setSearch('');
+                }}
+                placeholder={t('create_add_country_placeholder')}
+                className="h-full min-w-0 flex-1 bg-transparent text-base text-[#1C1410] placeholder-[#8A7C6B] focus:outline-none sm:text-[15px]" />
+              <button type="button" onClick={addTyped} disabled={!typedIsAddable} aria-label={t('create_add_btn')}
+                className="flex h-[36px] min-w-[36px] shrink-0 items-center justify-center gap-1.5 rounded-[10px] px-2.5 text-[13px] font-extrabold tracking-[0.02em] transition-[background-color,transform,opacity] duration-150 enabled:hover:bg-[#2A5A3C] enabled:active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-35 focus:outline-none sm:px-3.5"
+                style={{ backgroundColor: C.forest, color: C.gold }}>
+                <Plus size={15} strokeWidth={2.8} /> <span className="hidden sm:inline">{t('create_add_btn')}</span>
+              </button>
             </div>
-          </StepCard>
-
-          {/* ── 2. Delegations ───────────────────────────────────────────── */}
-          <StepCard
-            step={2}
-            labelledBy="create-step-delegations"
-            title={t('create_step_delegations')}
-            hint={t('create_step_delegations_hint')}
-            aside={<Chip tone={delegateCount > 0 ? 'gold' : 'muted'} style={{ fontVariantNumeric: 'tabular-nums' }}>{countLabel}</Chip>}
-          >
-            {/* Add a country: the one add path (+ button, Enter, first typeahead row). */}
-            <GroupLabel htmlFor="create-add-country">{t('create_add_country')}</GroupLabel>
-            <div className="relative">
-              <div className="flex items-center gap-2 rounded-[14px] bg-white/80 ps-3.5 pe-1.5 shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] focus-within:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] transition-[box-shadow] duration-150" style={{ height: 50 }}>
-                <Search size={17} strokeWidth={2.2} className="shrink-0" style={{ color: C.muted }} />
-                <input id="create-add-country" type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-                  autoComplete="off"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') { e.preventDefault(); addTyped(); }
-                    if (e.key === 'Escape') setSearch('');
-                  }}
-                  placeholder={t('create_add_country_placeholder')}
-                  className="flex-1 min-w-0 bg-transparent h-full text-base sm:text-[15px] text-[#1C1410] placeholder-[#8A7C6B] focus:outline-none" />
-                <button type="button" onClick={addTyped} disabled={!typedIsAddable} aria-label={t('create_add_btn')}
-                  className="shrink-0 flex items-center justify-center gap-1.5 h-[38px] min-w-[38px] px-2.5 sm:px-3.5 rounded-[10px] font-extrabold text-[13px] tracking-[0.02em] transition-[background-color,transform,opacity] duration-150 enabled:active:scale-[0.96] enabled:hover:bg-[#2A5A3C] disabled:opacity-35 disabled:cursor-not-allowed focus:outline-none"
-                  style={{ backgroundColor: C.forest, color: C.gold }}>
-                  <Plus size={15} strokeWidth={2.8} /> <span className="hidden sm:inline">{t('create_add_btn')}</span>
-                </button>
-              </div>
-              {search && (available.length > 0 || search.trim()) && (
-                <div className="absolute top-full inset-x-0 mt-2 rounded-2xl overflow-hidden z-40 p-1"
-                  style={{ backgroundColor: C.surface, boxShadow: '0 12px 32px rgba(27,56,40,0.18), 0 2px 8px rgba(27,56,40,0.08), inset 0 0 0 1px rgba(27,56,40,0.10)' }}>
-                  {available.slice(0, 5).map((c, i) => (
-                    <button key={c.code} type="button" onMouseDown={(e) => { e.preventDefault(); addDelegate(c.name); setSearch(''); }}
-                      className={`w-full flex items-center gap-3 px-3 h-11 rounded-xl text-start transition-colors focus:outline-none text-[#1C1410] ${i === 0 ? '' : 'hover:bg-[#1B3828]/[0.05]'}`}
-                      style={i === 0 ? { backgroundColor: 'rgba(27,56,40,0.07)' } : {}}>
-                      <CircleFlag code={c.code} size={26} decorative />
-                      <span className="text-[15px] font-semibold flex-1 truncate">{getCountryDisplayName(c.name, language)}</span>
-                      {i === 0 && <CornerDownLeft size={14} strokeWidth={2.2} className="shrink-0 rtl:-scale-x-100" style={{ color: C.muted }} />}
-                    </button>
-                  ))}
-                  {/* "Add as custom" only when the text is not already an exact country: rank 0 covers accents, aliases and the localised name, so typing "turkiye" or "Turquía" no longer offers to add a custom delegation beside the real Türkiye. */}
-                  {search.trim() && !delegates.includes(search.trim()) && !available.some((c) => countryMatchRank(c.name, search, language) === 0) && (
-                    <button type="button" onMouseDown={(e) => { e.preventDefault(); addDelegate(search.trim()); setSearch(''); }}
-                      className="w-full flex items-center gap-3 px-3 h-11 rounded-xl text-start transition-colors text-[#1C1410] hover:bg-[#1B3828]/[0.05] focus:outline-none">
-                      <span className="flex items-center justify-center shrink-0 rounded-full" style={{ width: 26, height: 26, backgroundColor: 'rgba(27,56,40,0.08)', color: C.forest }}>
-                        <UserRound size={15} strokeWidth={2} />
-                      </span>
-                      <span className="text-[15px] font-semibold flex-1 truncate">{search.trim()}</span>
-                      <span className="text-[12px] shrink-0 font-bold" style={{ color: C.forest }}>{t('create_custom_add')}</span>
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Presets. One row that scrolls sideways on a phone, wraps from sm. */}
-            <div className="mt-5">
-              <GroupLabel id="create-presets-label">{t('create_quick_bundles')}</GroupLabel>
-              <div role="group" aria-labelledby="create-presets-label" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
-                {Object.entries(BUNDLES).map(([key, bundle]) => (
-                  <button key={key} type="button" onClick={() => addBundle(key)}
-                    className="group flex flex-shrink-0 items-center gap-2 h-10 ps-1.5 pe-3 rounded-full text-[13px] font-bold transition-[background-color,color,box-shadow,transform] duration-150 active:scale-[0.96] focus:outline-none bg-[#1B3828]/[0.055] text-[#1B3828] shadow-[inset_0_0_0_1px_rgba(27,56,40,0.10)] hover:bg-[#1B3828] hover:text-[#EED98A] hover:shadow-[0_4px_14px_rgba(27,56,40,0.22)]">
-                    <span className="flex items-center justify-center shrink-0 rounded-full bg-white" style={{ width: 28, height: 28, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)' }}>
-                      {bundle.logoPath ? (
-                        <img src={bundle.logoPath} alt="" width={18} height={18} className="object-contain" onError={(e) => {
-                          // Two bundles (G7, BRICS+) name logos that are not in /public: drop the empty disc.
-                          const disc = e.currentTarget.parentElement;
-                          const chip = disc?.parentElement;
-                          if (disc) disc.style.display = 'none';
-                          if (chip) chip.style.paddingInlineStart = '14px';
-                        }} />
-                      ) : null}
-                    </span>
-                    <span>{bundle.label}</span>
-                    <span className="text-[11.5px] font-semibold tabular-nums text-[#544B3E] group-hover:text-[#EED98A]/70 transition-colors">+{bundle.members.length}</span>
+            {search && (available.length > 0 || search.trim()) && (
+              <div className="absolute inset-x-0 top-full z-40 mt-2 overflow-hidden rounded-2xl p-1"
+                style={{ backgroundColor: C.surface, boxShadow: '0 12px 32px rgba(27,56,40,0.18), 0 2px 8px rgba(27,56,40,0.08), inset 0 0 0 1px rgba(27,56,40,0.10)' }}>
+                {available.slice(0, 5).map((c, i) => (
+                  <button key={c.code} type="button" onMouseDown={(e) => { e.preventDefault(); addDelegate(c.name); setSearch(''); }}
+                    className={`flex h-11 w-full items-center gap-3 rounded-xl px-3 text-start text-[#1C1410] transition-colors focus:outline-none ${i === 0 ? '' : 'hover:bg-[#1B3828]/[0.05]'}`}
+                    style={i === 0 ? { backgroundColor: 'rgba(27,56,40,0.07)' } : {}}>
+                    <CircleFlag code={c.code} size={26} decorative />
+                    <span className="flex-1 truncate text-[15px] font-semibold">{getCountryDisplayName(c.name, language)}</span>
+                    {i === 0 && <CornerDownLeft size={14} strokeWidth={2.2} className="shrink-0 rtl:-scale-x-100" style={{ color: C.inkSoft }} />}
                   </button>
                 ))}
-              </div>
-            </div>
-
-            {/* The roster: full width, FIXED height, scrolls inside. */}
-            <div className="mt-5">
-              <div className="mb-2 flex items-center justify-between gap-3" style={{ minHeight: 32 }}>
-                <p className="min-w-0 truncate uppercase" title={t('create_selected_delegates')} style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: C.inkSoft }}>{t('create_selected_delegates')}</p>
-                <div className="flex flex-shrink-0 items-center gap-2">
-                  {observerCount > 0 && <Chip tone="gold" style={{ fontVariantNumeric: 'tabular-nums' }}>{observerLabel}</Chip>}
-                  {delegateCount > 0 && (
-                    <button type="button" onClick={() => setDelegates([])}
-                      className="h-8 px-2.5 rounded-lg whitespace-nowrap text-[11px] font-extrabold uppercase tracking-[0.1em] transition-[color,background-color,transform] duration-150 active:scale-[0.96] hover:bg-[#8B2020]/[0.07] hover:text-[#8B2020] focus:outline-none"
-                      style={{ color: C.inkSoft }}>
-                      {t('create_clear_all')}
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div className="h-[340px] sm:h-[400px] rounded-[18px] overflow-hidden" style={{ backgroundColor: C.surfaceAlt, boxShadow: 'inset 0 1px 2px rgba(27,56,40,0.07), inset 0 0 0 1px rgba(27,56,40,0.08)' }}>
-                {delegateCount === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full gap-2.5 px-8 text-center">
-                    <span className="flex items-center justify-center rounded-full" style={{ width: 52, height: 52, backgroundColor: 'rgba(27,56,40,0.07)', color: C.forest }}>
-                      <Globe size={24} strokeWidth={1.75} />
+                {/* "Add as custom" only when the text is not already an exact country: rank 0 covers accents, aliases and the localised name. */}
+                {search.trim() && !delegates.includes(search.trim()) && !available.some((c) => countryMatchRank(c.name, search, language) === 0) && (
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); addDelegate(search.trim()); setSearch(''); }}
+                    className="flex h-11 w-full items-center gap-3 rounded-xl px-3 text-start text-[#1C1410] transition-colors hover:bg-[#1B3828]/[0.05] focus:outline-none">
+                    <span className="flex shrink-0 items-center justify-center rounded-full" style={{ width: 26, height: 26, backgroundColor: 'rgba(27,56,40,0.08)', color: C.forest }}>
+                      <UserRound size={15} strokeWidth={2} />
                     </span>
-                    <p style={{ fontSize: 16, fontWeight: 800, color: C.forest, textWrap: 'balance' }}>{t('create_no_delegates')}</p>
-                    <p style={{ fontSize: 13, color: C.inkSoft, maxWidth: 280, lineHeight: 1.5, textWrap: 'pretty' }}>{t('create_no_delegates_hint')}</p>
-                  </div>
-                ) : (
-                  <ul className="overflow-y-auto h-full p-2 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-1.5 content-start">
-                    {[...delegates].sort((a, b) => compareCountryNames(a, b, language)).map((name) => {
-                      const found = getCountryByName(name);
-                      const isCustom = !found;
-                      const isEditing = editingName === name;
-                      const commitRename = (raw: string) => {
-                        const trimmed = raw.trim();
-                        if (!trimmed) {
-                          setDelegates((p) => p.filter((d) => d !== name));
-                          setObservers((prev) => { const n = new Set(prev); n.delete(name); return n; });
-                        } else if (trimmed !== name && !delegates.some((d) => d !== name && d === trimmed)) {
-                          setDelegates((p) => p.map((d) => d === name ? trimmed : d));
-                          setObservers((prev) => { if (!prev.has(name)) return prev; const n = new Set(prev); n.delete(name); n.add(trimmed); return n; });
-                        }
-                        setEditingName(null);
-                      };
-                      const isObserver = observers.has(name);
-                      const display = getCountryDisplayName(name, language);
-                      return (
-                        <li key={name} className="flex items-center gap-2.5 ps-2.5 pe-1 rounded-xl bg-white/65 hover:bg-white transition-colors" style={{ minHeight: 50, boxShadow: '0 1px 2px rgba(27,56,40,0.05)' }}>
-                          <CircleFlag
-                            country={name}
-                            label={display}
-                            size={28}
-                            ring={isObserver ? 'rgba(182,135,31,0.7)' : true}
-                          />
-                          <div className="min-w-0 flex-1">
-                            {isEditing ? (
-                              <input
-                                autoFocus
-                                aria-label={display}
-                                className="w-full text-[14px] bg-transparent border-b-2 border-[#1B3828] outline-none font-semibold py-0.5"
-                                style={{ color: C.ink }}
-                                value={editDraft}
-                                onChange={(e) => setEditDraft(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') { commitRename(editDraft); }
-                                  else if (e.key === 'Escape') { setEditingName(null); }
-                                }}
-                                onBlur={() => commitRename(editDraft)}
-                              />
-                            ) : (
-                              <span className="block truncate text-[14px] font-semibold leading-tight" style={{ color: C.ink }} title={display}>{display}</span>
-                            )}
-                            {!isEditing && isObserver && (
-                              <span className="block text-[10px] font-extrabold uppercase tracking-[0.12em] mt-0.5" style={{ color: '#8A6414' }}>{t('rollcall_observer')}</span>
-                            )}
-                          </div>
-                          {!isEditing && (
-                            <RowIconButton
-                              onClick={() => setObservers((prev) => { const n = new Set(prev); n.has(name) ? n.delete(name) : n.add(name); return n; })}
-                              label={t('create_observer_toggle')}
-                              pressed={isObserver}
-                              tone={isObserver ? 'gold' : 'neutral'}
-                            >
-                              <Megaphone size={16} strokeWidth={isObserver ? 2.2 : 1.8} />
-                            </RowIconButton>
-                          )}
-                          {/* Rename and remove are always visible: hover-only made both unreachable on touch. */}
-                          {!isEditing && isCustom && (
-                            <RowIconButton onClick={() => { setEditingName(name); setEditDraft(name); }} label={display}>
-                              <PenLine size={16} strokeWidth={1.8} />
-                            </RowIconButton>
-                          )}
-                          {!isEditing && (
-                            <RowIconButton onClick={() => removeDelegate(name)} label={display} tone="danger">
-                              <X size={16} strokeWidth={2} />
-                            </RowIconButton>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
+                    <span className="flex-1 truncate text-[15px] font-semibold">{search.trim()}</span>
+                    <span className="shrink-0 text-[12px] font-bold" style={{ color: C.forest }}>{t('create_custom_add')}</span>
+                  </button>
                 )}
               </div>
-            </div>
+            )}
+          </div>
 
-            {/* Paste a list: secondary, last, so opening it moves nothing above. */}
-            <div className="mt-4">
-              <button type="button" onClick={() => setPasteOpen((v) => !v)} aria-expanded={pasteOpen} aria-controls="create-paste-panel"
-                className="flex w-full items-center gap-2.5 h-11 px-3 rounded-xl text-start transition-[background-color,transform] duration-150 active:scale-[0.99] hover:bg-[#1B3828]/[0.05] focus:outline-none"
-                style={{ color: C.forest }}>
-                <ClipboardList size={17} strokeWidth={2} />
-                <span className="flex-1 text-[14px] font-bold">{t('create_paste_toggle')}</span>
-                <ChevronDown size={17} strokeWidth={2.2} className="transition-transform duration-200" style={{ transform: pasteOpen ? 'rotate(180deg)' : undefined }} />
-              </button>
-              {pasteOpen && (
-                <div id="create-paste-panel" className="px-1 pt-2">
-                  <label htmlFor="create-paste" className="block text-[13px] mb-2" style={{ color: C.inkSoft, textWrap: 'pretty' }}>{t('create_paste_hint')}</label>
-                  <textarea id="create-paste" value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
-                    placeholder={t('create_paste_placeholder')}
-                    rows={5}
-                    className="w-full rounded-[14px] bg-white/80 px-4 py-3 text-base sm:text-[15px] leading-relaxed text-[#1C1410] placeholder-[#8A7C6B] resize-y shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] focus:outline-none focus:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] transition-[box-shadow] duration-150" />
-                  <div className="mt-2 flex flex-wrap items-center gap-3">
-                    <button type="button" onClick={handlePaste} disabled={!pasteText.trim()}
-                      className="flex items-center gap-2 h-10 px-4 rounded-xl text-[13px] font-extrabold transition-[background-color,color,transform,opacity] duration-150 enabled:active:scale-[0.96] enabled:hover:bg-[#1B3828] enabled:hover:text-[#EED98A] disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none"
-                      style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: C.forest, boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.14)' }}>
-                      <Wand2 size={15} strokeWidth={2.2} />
-                      {stripArrow(t('create_auto_match'))}
-                    </button>
-                    {pasteError && <p role="alert" className="text-[13px] font-semibold" style={{ color: '#8A6414' }}>{pasteError}</p>}
-                  </div>
-                </div>
-              )}
-            </div>
-          </StepCard>
-        </div>
-
-        {/* ── Sticky action bar ────────────────────────────────────────────── */}
-        <div
-          className="sticky bottom-0 z-30 -mx-4 mt-2 px-4 pt-8 sm:-mx-6 sm:px-6"
-          style={{ background: `linear-gradient(to top, ${C.page} 58%, rgba(237,231,216,0))`, paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}
-        >
-          <div className="flex items-center gap-4 rounded-[24px] p-2 sm:p-2.5" style={{ backgroundColor: C.surface, boxShadow: '0 2px 6px rgba(27,56,40,0.08), 0 16px 40px rgba(27,56,40,0.16), inset 0 0 0 1px rgba(27,56,40,0.08)' }}>
-            <div className="hidden min-w-0 flex-1 items-center gap-3 ps-1.5 sm:flex" aria-live="polite">
-              <span className="flex flex-shrink-0 items-center justify-center rounded-full bg-white" style={{ width: 42, height: 42, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)' }}>
-                {presetLogo
-                  // eslint-disable-next-line @next/next/no-img-element
-                  ? <img src={presetLogo} alt="" width={26} height={26} className="object-contain" />
-                  : <Gavel size={19} strokeWidth={2} style={{ color: C.forest }} />}
-              </span>
-              <div className="min-w-0">
-                <p className="truncate" style={{ fontSize: 15, fontWeight: 800, color: committeeName.trim() ? C.forest : C.muted, lineHeight: 1.25 }}>{summaryName}</p>
-                <p className="truncate tabular-nums" style={{ fontSize: 12.5, fontWeight: 600, color: C.inkSoft, lineHeight: 1.3 }}>
-                  {topic.trim() ? `${topic.trim()} · ${countLabel}` : countLabel}
-                </p>
-              </div>
-            </div>
-            <div className="w-full sm:w-auto sm:min-w-[260px]">
-              <PrimaryAction
-                onClick={handleCreate}
-                disabled={!canProceed || creating}
-                icon={creating
-                  ? <Loader2 size={18} strokeWidth={2.6} className="animate-spin" />
-                  : canProceed ? <ArrowRight size={18} strokeWidth={2.6} className="rtl:rotate-180" /> : null}
-              >
-                {stripArrow(ctaLabel)}
-              </PrimaryAction>
+          {/* Quick bundles: one row that scrolls sideways on a phone, wraps from sm. */}
+          <div className="mt-3 flex-shrink-0">
+            <p id="create-presets-label" className="sr-only">{t('create_quick_bundles')}</p>
+            <div role="group" aria-labelledby="create-presets-label" className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 [&::-webkit-scrollbar]:hidden">
+              {Object.entries(BUNDLES).map(([key, bundle]) => (
+                <button key={key} type="button" onClick={() => addBundle(key)} title={t('create_quick_bundles')}
+                  className="group flex h-9 flex-shrink-0 items-center gap-1.5 rounded-full bg-[#1B3828]/[0.055] ps-1 pe-2.5 text-[12.5px] font-bold text-[#1B3828] shadow-[inset_0_0_0_1px_rgba(27,56,40,0.10)] transition-[background-color,color,box-shadow,transform] duration-150 hover:bg-[#1B3828] hover:text-[#EED98A] hover:shadow-[0_4px_14px_rgba(27,56,40,0.22)] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]">
+                  <span className="flex shrink-0 items-center justify-center rounded-full bg-white" style={{ width: 26, height: 26, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)' }}>
+                    {bundle.logoPath ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={bundle.logoPath} alt="" width={17} height={17} className="object-contain" onError={(e) => {
+                        // Two bundles (G7, BRICS+) name logos that are not in /public: drop the empty disc.
+                        const disc = e.currentTarget.parentElement;
+                        const chip = disc?.parentElement;
+                        if (disc) disc.style.display = 'none';
+                        if (chip) chip.style.paddingInlineStart = '12px';
+                      }} />
+                    ) : null}
+                  </span>
+                  <span>{bundle.label}</span>
+                  <span className="text-[11px] font-semibold tabular-nums text-[#544B3E] transition-colors group-hover:text-[#EED98A]/80">+{bundle.members.length}</span>
+                </button>
+              ))}
             </div>
           </div>
-        </div>
+
+          {/* List header: paste and clear sit here, so opening paste only shrinks the list. */}
+          <div className="mt-3 flex flex-shrink-0 items-center gap-2" style={{ minHeight: 32 }}>
+            <p className="me-auto min-w-0 truncate uppercase" title={t('create_selected_delegates')} style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: C.inkSoft }}>{t('create_selected_delegates')}</p>
+            <button type="button" onClick={() => setPasteOpen((v) => !v)} aria-expanded={pasteOpen} aria-controls="create-paste-panel"
+              className="flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-[12.5px] font-bold transition-[background-color,transform] duration-150 hover:bg-[#1B3828]/[0.07] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
+              style={{ color: C.forest, backgroundColor: pasteOpen ? 'rgba(27,56,40,0.07)' : undefined }}>
+              <ClipboardList size={15} strokeWidth={2.1} />
+              {t('create_paste_toggle')}
+              <ChevronDown size={14} strokeWidth={2.4} className="transition-transform duration-200" style={{ transform: pasteOpen ? 'rotate(180deg)' : undefined }} />
+            </button>
+            {delegateCount > 0 && (
+              <button type="button" onClick={() => setDelegates([])}
+                className="h-8 whitespace-nowrap rounded-lg px-2.5 text-[11px] font-extrabold uppercase tracking-[0.1em] transition-[color,background-color,transform] duration-150 hover:bg-[#8B2020]/[0.07] hover:text-[#8B2020] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
+                style={{ color: C.inkSoft }}>
+                {t('create_clear_all')}
+              </button>
+            )}
+          </div>
+
+          {pasteOpen && (
+            <div id="create-paste-panel" className="mt-1.5 flex-shrink-0">
+              <label htmlFor="create-paste" className="sr-only">{t('create_paste_hint')}</label>
+              <textarea id="create-paste" value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
+                placeholder={t('create_paste_placeholder')}
+                title={t('create_paste_hint')}
+                rows={3}
+                className="block w-full resize-none rounded-[14px] bg-white/80 px-3.5 py-2.5 text-base leading-relaxed text-[#1C1410] placeholder-[#8A7C6B] shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] transition-[box-shadow] duration-150 focus:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] focus:outline-none sm:text-[14px]" />
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <button type="button" onClick={handlePaste} disabled={!pasteText.trim()}
+                  className="flex h-9 items-center gap-2 rounded-xl px-3.5 text-[13px] font-extrabold transition-[background-color,color,transform,opacity] duration-150 enabled:hover:bg-[#1B3828] enabled:hover:text-[#EED98A] enabled:active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none"
+                  style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: C.forest, boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.14)' }}>
+                  <Wand2 size={15} strokeWidth={2.2} />
+                  {stripArrow(t('create_auto_match'))}
+                </button>
+                {pasteError
+                  ? <p role="alert" className="text-[13px] font-semibold" style={{ color: '#8A6414' }}>{pasteError}</p>
+                  : <p className="min-w-0 flex-1 text-[12.5px] leading-snug" style={{ color: C.inkSoft, textWrap: 'pretty' }}>{t('create_paste_hint')}</p>}
+              </div>
+            </div>
+          )}
+
+          {/* The countries: ONE column, scrolls inside, so the page never scrolls. */}
+          <div className="mt-2 h-[380px] overflow-hidden rounded-[18px] lg:h-auto lg:min-h-[140px] lg:flex-1" style={{ backgroundColor: C.surfaceAlt, boxShadow: 'inset 0 1px 2px rgba(27,56,40,0.07), inset 0 0 0 1px rgba(27,56,40,0.08)' }}>
+            {delegateCount === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center">
+                <span className="flex items-center justify-center rounded-full" style={{ width: 48, height: 48, backgroundColor: 'rgba(27,56,40,0.07)', color: C.forest }}>
+                  <Globe size={22} strokeWidth={1.75} />
+                </span>
+                <p style={{ fontSize: 15.5, fontWeight: 800, color: C.forest, textWrap: 'balance' }}>{t('create_no_delegates')}</p>
+                <p style={{ fontSize: 13, color: C.inkSoft, maxWidth: 300, lineHeight: 1.5, textWrap: 'pretty' }}>{t('create_no_delegates_hint')}</p>
+              </div>
+            ) : (
+              <ul className="flex h-full flex-col gap-1 overflow-y-auto p-1.5 [scrollbar-width:thin]">
+                {sortedDelegates.map((name) => {
+                  const found = getCountryByName(name);
+                  const isCustom = !found;
+                  const isEditing = editingName === name;
+                  const commitRename = (raw: string) => {
+                    const trimmed = raw.trim();
+                    if (!trimmed) {
+                      setDelegates((p) => p.filter((d) => d !== name));
+                      setObservers((prev) => { const n = new Set(prev); n.delete(name); return n; });
+                    } else if (trimmed !== name && !delegates.some((d) => d !== name && d === trimmed)) {
+                      setDelegates((p) => p.map((d) => d === name ? trimmed : d));
+                      setObservers((prev) => { if (!prev.has(name)) return prev; const n = new Set(prev); n.delete(name); n.add(trimmed); return n; });
+                    }
+                    setEditingName(null);
+                  };
+                  const isObserver = observers.has(name);
+                  const display = getCountryDisplayName(name, language);
+                  return (
+                    <li key={name} className="flex flex-shrink-0 items-center gap-3 rounded-xl bg-white/65 ps-2.5 pe-1 transition-colors hover:bg-white" style={{ minHeight: 48, boxShadow: '0 1px 2px rgba(27,56,40,0.05)', contentVisibility: 'auto', containIntrinsicSize: '48px' }}>
+                      <CircleFlag country={name} label={display} size={30} ring={isObserver ? 'rgba(182,135,31,0.7)' : true} />
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                        {isEditing ? (
+                          <input
+                            autoFocus
+                            aria-label={display}
+                            className="w-full border-b-2 border-[#1B3828] bg-transparent py-0.5 text-[14.5px] font-semibold outline-none"
+                            style={{ color: C.ink }}
+                            value={editDraft}
+                            onChange={(e) => setEditDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') { commitRename(editDraft); }
+                              else if (e.key === 'Escape') { setEditingName(null); }
+                            }}
+                            onBlur={() => commitRename(editDraft)}
+                          />
+                        ) : (
+                          <span className="min-w-0 truncate text-[14.5px] font-semibold leading-tight" style={{ color: C.ink }} title={display}>{display}</span>
+                        )}
+                        {!isEditing && isObserver && <Chip tone="gold">{t('rollcall_observer')}</Chip>}
+                      </div>
+                      {!isEditing && (
+                        <RowIconButton
+                          onClick={() => setObservers((prev) => { const n = new Set(prev); if (n.has(name)) n.delete(name); else n.add(name); return n; })}
+                          label={t('create_observer_toggle')}
+                          pressed={isObserver}
+                          tone={isObserver ? 'gold' : 'neutral'}
+                        >
+                          <Megaphone size={16} strokeWidth={isObserver ? 2.2 : 1.8} />
+                        </RowIconButton>
+                      )}
+                      {/* Rename and remove are always visible: hover-only made both unreachable on touch. */}
+                      {!isEditing && isCustom && (
+                        <RowIconButton onClick={() => { setEditingName(name); setEditDraft(name); }} label={display}>
+                          <PenLine size={16} strokeWidth={1.8} />
+                        </RowIconButton>
+                      )}
+                      {!isEditing && (
+                        <RowIconButton onClick={() => removeDelegate(name)} label={display} tone="danger">
+                          <X size={16} strokeWidth={2} />
+                        </RowIconButton>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
+          {/* The one primary action, pinned at the foot of the layout. */}
+          <div className="mt-3 flex-shrink-0">
+            <PrimaryAction
+              onClick={handleCreate}
+              disabled={!canProceed || creating}
+              icon={creating
+                ? <Loader2 size={18} strokeWidth={2.6} className="animate-spin" />
+                : canProceed ? <ArrowRight size={18} strokeWidth={2.6} className="rtl:rotate-180" /> : null}
+            >
+              {stripArrow(ctaLabel)}
+            </PrimaryAction>
+          </div>
+        </Panel>
       </main>
 
       {/* Paste review modal */}

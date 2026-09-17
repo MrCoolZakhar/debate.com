@@ -1525,6 +1525,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [showSliders, setShowSliders] = useState(false);
   const [showMotions, setShowMotions] = useState(false);
   const [showDocuments, setShowDocuments] = useState(false);
+  /** A document introduction (order of proceedings or a timed stage) is on screen. It sits
+   *  under the top bar, and the bar is lifted over it so its Gavel, code, Chat, Scoreboard
+   *  and Settings keep working (17 Sep 2026). Set by DocumentsModal. */
+  const [docIntroActive, setDocIntroActive] = useState(false);
   // The session-code presenter: the rect of the button it grows from, null = closed.
   const [codePresenterOrigin, setCodePresenterOrigin] = useState<DOMRect | null>(null);
   const closeCodePresenter = useCallback(() => setCodePresenterOrigin(null), []);
@@ -4587,8 +4591,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       {/* Everything right of the sidebar: the top bar, the banners and the floor. The
           sidebar runs the full height of the screen, so this column starts at its edge. */}
       <div className="relative flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
-      <header className="bg-[#FAF8F3] ps-2 pe-3 h-11 flex items-center gap-1.5 shrink-0" data-tutorial="topbar">
-        {committee.phase !== 'pre-session' && !sessionEnded ? (
+      <header className={`bg-[#FAF8F3] ps-2 pe-3 h-11 flex items-center gap-1.5 shrink-0${docIntroActive ? ' relative z-[46]' : ''}`} data-tutorial="topbar">
+        {docIntroActive ? (
+          // During a document introduction the tabs step aside (the screen below is the
+          // Documents flow); the right-hand cluster stays exactly as it is.
+          <div className="flex-1 min-w-0" />
+        ) : committee.phase !== 'pre-session' && !sessionEnded ? (
           <nav aria-label={t('chair_hdr_controls')} className="flex flex-1 min-w-0 h-full items-center gap-1 py-1">
             <TopBarTab
               tutorial="tab-rollcall"
@@ -5192,6 +5200,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         <DocumentsModal
           committee={committee}
           onClose={() => setShowDocuments(false)}
+          onIntroChange={setDocIntroActive}
           onCommitteeUpdate={(updater) => updateLocal(setCommittee, updater, true)}
           isViewOnly={isViewOnly}
           // Carried into /voting/[code] so its "Back to Session" can hand the identity

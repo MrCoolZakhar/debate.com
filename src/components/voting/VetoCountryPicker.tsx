@@ -53,10 +53,14 @@ export interface VetoCountryPickerProps {
   tone?: Tone;
   /** Chip and text size. `lg` is the projector-sized pre-vote screen. */
   size?: 'md' | 'lg';
+  /** `list`: one large row per veto holder, stacked vertically, with a full-width add row
+   *  (the roll call's Veto drawer, owner 17 Sep 2026: "vertical and bigger, more important").
+   *  `chips` (default): the compact wrap of chips. */
+  layout?: 'chips' | 'list';
 }
 
 export function VetoCountryPicker({
-  selected, roster, onChange, readOnly = false, tone = 'light', size = 'md',
+  selected, roster, onChange, readOnly = false, tone = 'light', size = 'md', layout = 'chips',
 }: VetoCountryPickerProps) {
   const t = useT();
   const { language } = useLanguage();
@@ -121,63 +125,7 @@ export function VetoCountryPicker({
   };
   const remove = (entry: string) => onChange(selected.filter((e) => e !== entry));
 
-  const flagSize = lg ? 28 : 20;
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {selected.map((entry) => {
-        const seat = seatFor(entry);
-        const name = getCountryDisplayName(seat?.country ?? entry, language);
-        return (
-          <span
-            key={entry}
-            className={`inline-flex items-center gap-2 rounded-full ${lg ? 'ps-1.5 pe-2 py-1.5 text-[15px]' : 'ps-1 pe-1.5 py-1 text-[12px]'} font-semibold max-w-full`}
-            style={{
-              backgroundColor: seat ? c.chipBg : c.warnBg,
-              color: seat ? c.chipFg : c.warnFg,
-              boxShadow: `0 0 0 1px ${c.chipRing}`,
-            }}
-            title={seat ? undefined : t('voting_veto_not_seated')}
-          >
-            <SeatCircleFlag seat={seat ?? { country: entry }} size={flagSize} decorative ring={tone === 'light'} />
-            <span className="truncate">{name}</span>
-            {!seat && <span className={`${lg ? 'text-[12px]' : 'text-[10px]'} font-bold opacity-80 whitespace-nowrap`}>{t('voting_veto_not_seated')}</span>}
-            {!readOnly && (
-              <button
-                type="button"
-                onClick={() => remove(entry)}
-                aria-label={t('voting_veto_remove', { name })}
-                className={`relative shrink-0 rounded-full flex items-center justify-center ${lg ? 'w-7 h-7' : 'w-5 h-5'} opacity-60 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[opacity,transform] duration-150 active:scale-[0.96] motion-reduce:transition-none after:absolute after:-inset-2 after:content-['']`}
-              >
-                <X size={lg ? 16 : 12} strokeWidth={2.5} aria-hidden />
-              </button>
-            )}
-          </span>
-        );
-      })}
-
-      {selected.length === 0 && (
-        <span className={`${lg ? 'text-[15px]' : 'text-[11px]'} leading-snug`} style={{ color: c.muted }}>
-          {readOnly ? t('voting_veto_none_seated') : t('voting_veto_custom_empty')}
-        </span>
-      )}
-
-      {!readOnly && (
-        <button
-          ref={btnRef}
-          type="button"
-          onClick={() => (open ? close() : setOpen(true))}
-          aria-label={t('voting_veto_add')}
-          title={t('voting_veto_add')}
-          aria-haspopup="listbox"
-          aria-expanded={open}
-          className={`shrink-0 rounded-full flex items-center justify-center ${lg ? 'w-11 h-11' : 'w-8 h-8'} focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 transition-transform duration-150 active:scale-[0.96] motion-reduce:transition-none`}
-          style={{ backgroundColor: c.addBg, color: c.addFg, boxShadow: `0 1px 2px ${c.addRing}, 0 4px 12px ${c.addRing}` }}
-        >
-          <Plus size={lg ? 22 : 16} strokeWidth={2.75} aria-hidden />
-        </button>
-      )}
-
-      {open && pos && (
+  const popover = open && pos && (
         <Portal>
           <div
             ref={panelRef}
@@ -243,7 +191,132 @@ export function VetoCountryPicker({
             </ul>
           </div>
         </Portal>
+      );
+
+  if (layout === 'list') {
+    return (
+      <div className="flex flex-col gap-2" role="list" aria-label={t('voting_rules_veto_info_title')}>
+        {selected.map((entry) => {
+          const seat = seatFor(entry);
+          const name = getCountryDisplayName(seat?.country ?? entry, language);
+          return (
+            <div
+              key={entry}
+              role="listitem"
+              className="flex items-center gap-3.5 rounded-2xl ps-2.5 pe-2 min-h-[68px] py-2"
+              style={{
+                backgroundColor: seat ? '#FCFAF5' : c.warnBg,
+                boxShadow: seat ? '0 0 0 1px rgba(27,56,40,0.10), 0 1px 2px rgba(27,56,40,0.06), 0 6px 14px rgba(27,56,40,0.06)' : 'none',
+              }}
+            >
+              <SeatCircleFlag
+                seat={seat ?? { country: entry }}
+                size={48}
+                decorative
+                style={{ boxShadow: '0 1px 2px rgba(27,56,40,0.22), 0 3px 8px rgba(27,56,40,0.16)' }}
+              />
+              <span className="flex-1 min-w-0">
+                <span className="block truncate text-[18px] font-semibold leading-tight" style={{ color: seat ? '#1C1410' : c.warnFg }}>{name}</span>
+                {!seat && <span className="block text-[12.5px] font-semibold mt-0.5" style={{ color: c.warnFg }}>{t('voting_veto_not_seated')}</span>}
+              </span>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => remove(entry)}
+                  aria-label={t('voting_veto_remove', { name })}
+                  title={t('voting_veto_remove', { name })}
+                  className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] hover:bg-[rgba(27,56,40,0.08)] transition-[background-color,transform] duration-150 active:scale-[0.96] motion-reduce:transition-none"
+                  style={{ color: '#6A5A4A' }}
+                >
+                  <X size={18} strokeWidth={2.4} aria-hidden />
+                </button>
+              )}
+            </div>
+          );
+        })}
+        {selected.length === 0 && (
+          <p className="text-[14px] leading-snug px-1 py-2" style={{ color: c.muted }}>
+            {readOnly ? t('voting_veto_none_seated') : t('voting_veto_custom_empty')}
+          </p>
+        )}
+        {!readOnly && (
+          <button
+            ref={btnRef}
+            type="button"
+            onClick={() => (open ? close() : setOpen(true))}
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            className="flex items-center gap-3 ps-2.5 pe-4 min-h-[60px] rounded-2xl text-[15px] font-semibold text-start focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] hover:bg-[rgba(27,56,40,0.05)] transition-[background-color,transform] duration-150 active:scale-[0.98] motion-reduce:transition-none"
+            style={{ color: '#1B3828', boxShadow: 'inset 0 0 0 1.5px rgba(27,56,40,0.22)' }}
+          >
+            <span className="shrink-0 w-11 h-11 rounded-full flex items-center justify-center" style={{ backgroundColor: c.addBg, color: c.addFg }} aria-hidden>
+              <Plus size={20} strokeWidth={2.75} />
+            </span>
+            {t('voting_veto_add')}
+          </button>
+        )}
+        {popover}
+      </div>
+    );
+  }
+
+  const flagSize = lg ? 28 : 20;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {selected.map((entry) => {
+        const seat = seatFor(entry);
+        const name = getCountryDisplayName(seat?.country ?? entry, language);
+        return (
+          <span
+            key={entry}
+            className={`inline-flex items-center gap-2 rounded-full ${lg ? 'ps-1.5 pe-2 py-1.5 text-[15px]' : 'ps-1 pe-1.5 py-1 text-[12px]'} font-semibold max-w-full`}
+            style={{
+              backgroundColor: seat ? c.chipBg : c.warnBg,
+              color: seat ? c.chipFg : c.warnFg,
+              boxShadow: `0 0 0 1px ${c.chipRing}`,
+            }}
+            title={seat ? undefined : t('voting_veto_not_seated')}
+          >
+            <SeatCircleFlag seat={seat ?? { country: entry }} size={flagSize} decorative ring={tone === 'light'} />
+            <span className="truncate">{name}</span>
+            {!seat && <span className={`${lg ? 'text-[12px]' : 'text-[10px]'} font-bold opacity-80 whitespace-nowrap`}>{t('voting_veto_not_seated')}</span>}
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => remove(entry)}
+                aria-label={t('voting_veto_remove', { name })}
+                className={`relative shrink-0 rounded-full flex items-center justify-center ${lg ? 'w-7 h-7' : 'w-5 h-5'} opacity-60 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[opacity,transform] duration-150 active:scale-[0.96] motion-reduce:transition-none after:absolute after:-inset-2 after:content-['']`}
+              >
+                <X size={lg ? 16 : 12} strokeWidth={2.5} aria-hidden />
+              </button>
+            )}
+          </span>
+        );
+      })}
+
+      {selected.length === 0 && (
+        <span className={`${lg ? 'text-[15px]' : 'text-[11px]'} leading-snug`} style={{ color: c.muted }}>
+          {readOnly ? t('voting_veto_none_seated') : t('voting_veto_custom_empty')}
+        </span>
       )}
+
+      {!readOnly && (
+        <button
+          ref={btnRef}
+          type="button"
+          onClick={() => (open ? close() : setOpen(true))}
+          aria-label={t('voting_veto_add')}
+          title={t('voting_veto_add')}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          className={`shrink-0 rounded-full flex items-center justify-center ${lg ? 'w-11 h-11' : 'w-8 h-8'} focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 transition-transform duration-150 active:scale-[0.96] motion-reduce:transition-none`}
+          style={{ backgroundColor: c.addBg, color: c.addFg, boxShadow: `0 1px 2px ${c.addRing}, 0 4px 12px ${c.addRing}` }}
+        >
+          <Plus size={lg ? 22 : 16} strokeWidth={2.75} aria-hidden />
+        </button>
+      )}
+
+      {popover}
     </div>
   );
 }

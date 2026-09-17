@@ -76,6 +76,10 @@ export interface CommitteeSettings {
   p5Delegations: string[];
   vetoCountries: string[];
   quorumThreshold: 'none' | '1-4' | '1-3' | '1-2';
+  // 'rollcall' (default): the chair reads the delegations out one by one. 'device': every
+  // delegation votes on its own device and the chair sees only counts until the reveal
+  // (src/lib/deviceVoting.ts). Frozen into each ballot as vote_state.method when it opens.
+  votingMethod: 'rollcall' | 'device';
   // Tab 2 — Motions
   motionModeratedCaucus: boolean;
   motionUnmoderatedCaucus: boolean;
@@ -136,6 +140,7 @@ export const DEFAULT_SETTINGS: CommitteeSettings = {
   p5Delegations: ['China', 'France', 'Russia', 'United Kingdom', 'United States'],
   vetoCountries: ['China', 'France', 'Russia', 'United Kingdom', 'United States'],
   quorumThreshold: 'none',
+  votingMethod: 'rollcall',
   motionModeratedCaucus: true,
   motionUnmoderatedCaucus: true,
   motionCoW: true,

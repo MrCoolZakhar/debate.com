@@ -14,6 +14,10 @@
  *  - a barely-there face so the silhouette reads as one raised form.
  * A small blur softens both rims, which is what makes it read as neumorphic instead of drawn.
  *
+ * Strength (17 Sep 2026, owner: "make it even more subtle, literally barely visible"): about
+ * a third of the first version (face 0.035, shadow 0.024, highlight 0.17). It should be found
+ * on a close look, never noticed while chairing. Do not raise these without being asked.
+ *
  * Placement: centred on the element carrying the `floor-emblem-anchor` class inside the same
  * parent (the speaker flag on the GSL and in a moderated caucus / Tour de Table, the number
  * disc in a Room Order tour, the unmoderated countdown), or on the parent's centre when there
@@ -162,13 +166,13 @@ export default function FloorEmblemBackdrop({ anchorSelector = '.floor-emblem-an
             maskSize: '100% 100%',
             WebkitMaskRepeat: 'no-repeat',
             maskRepeat: 'no-repeat',
-            backgroundColor: 'rgba(255, 252, 244, 0.12)',
+            backgroundColor: 'rgba(255, 252, 244, 0.035)',
           }}
         />
         {/* Shadow rim, outside the bottom-right edge. */}
-        <div ref={shadowRef} className="absolute inset-0" style={{ backgroundColor: 'rgba(27, 56, 40, 0.075)', filter: 'blur(1.6px)' }} />
+        <div ref={shadowRef} className="absolute inset-0" style={{ backgroundColor: 'rgba(27, 56, 40, 0.024)', filter: 'blur(1.6px)' }} />
         {/* Highlight rim, the top-left inner edge. */}
-        <div ref={highlightRef} className="absolute inset-0" style={{ backgroundColor: 'rgba(255, 253, 247, 0.55)', filter: 'blur(1.4px)' }} />
+        <div ref={highlightRef} className="absolute inset-0" style={{ backgroundColor: 'rgba(255, 253, 247, 0.17)', filter: 'blur(1.4px)' }} />
       </div>
     </div>
   );

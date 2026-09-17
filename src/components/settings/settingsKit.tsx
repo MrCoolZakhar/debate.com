@@ -95,6 +95,14 @@ export function SettingsKitStyles() {
       .stg-cols-2, .stg-cols-3 { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 20px; align-items: start; }
       @container (min-width: 720px) { .stg-cols-2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
       @container (min-width: 900px) { .stg-cols-3 { grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr) minmax(0, 0.92fr); } }
+      /* Motions: Documents spans the page with its three parts side by side. Voting: the
+         three threshold panes with the abstentions pane beside them. */
+      .stg-docs, .stg-vote-top { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px 16px; align-items: stretch; }
+      @container (min-width: 720px) {
+        .stg-docs { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+        .stg-vote-top { grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); }
+      }
+      @container (min-width: 900px) { .stg-docs { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.95fr); } }
       @media (prefers-reduced-motion: reduce) {
         .stg-root *, .stg-root *::before, .stg-root *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; animation-delay: 0ms !important; }
         .stg-press:active:not(:disabled) { transform: none; }
@@ -222,10 +230,13 @@ export function GavelSwitch({ checked, onChange, label, labelledBy, glyph = 'che
  *  printed on the card. */
 export interface SealOption<V extends string> { value: V; title: string; note?: string; icon?: LucideIcon; art?: React.ReactNode }
 
-export function SealChoice<V extends string>({ value, options, onChange, label, colsClass = 'sm:grid-cols-2', compact = false }: {
+export function SealChoice<V extends string>({ value, options, onChange, label, colsClass = 'sm:grid-cols-2', compact = false, variant = 'card' }: {
   value: V; options: SealOption<V>[]; onChange: (v: V) => void; label: string;
   /** Tailwind column classes from the sm breakpoint up; one column below it. */
   colsClass?: string; compact?: boolean;
+  /** 'pane': a tall centred pane, the glyph or diagram LARGE on top, the title beneath and the
+   *  note printed small under it (the Voting threshold). 'card': the compact row card. */
+  variant?: 'card' | 'pane';
 }) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const baseId = useId();
@@ -249,6 +260,46 @@ export function SealChoice<V extends string>({ value, options, onChange, label, 
       {options.map((o, i) => {
         const on = o.value === value;
         const Icon = o.icon;
+        if (variant === 'pane') {
+          return (
+            <button
+              key={o.value}
+              ref={(el) => { refs.current[i] = el; }}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              tabIndex={i === idx ? 0 : -1}
+              onClick={() => onChange(o.value)}
+              onKeyDown={(e) => onKey(e, i)}
+              aria-describedby={o.note ? `${baseId}-${i}` : undefined}
+              className="stg-focus stg-press relative flex flex-col items-center text-center h-full"
+              style={{
+                borderRadius: 18, border: 'none', cursor: 'pointer', padding: '18px 14px 16px',
+                background: on ? `linear-gradient(160deg, ${K.forest}, #22472F)` : K.surface,
+                color: on ? '#F3EAD0' : K.ink,
+                boxShadow: on ? '0 12px 26px -14px rgba(27,56,40,0.75), inset 0 1px 0 rgba(255,255,255,0.08)' : K.outSm,
+              }}
+            >
+              <span aria-hidden className="inline-flex items-center justify-center" style={{ height: 78, width: '100%', color: on ? K.gold : K.forest }}>
+                {o.art ?? (Icon && <Icon size={56} strokeWidth={1.6} />)}
+              </span>
+              <span style={{ display: 'block', marginTop: 10, fontSize: T.body, fontWeight: W.section, lineHeight: LH.body }}>{o.title}</span>
+              {o.note && (
+                <span id={`${baseId}-${i}`} className="stg-body" style={{ display: 'block', marginTop: 4, fontSize: T.caption, fontWeight: W.body, lineHeight: LH.body, color: on ? 'rgba(243,234,208,0.78)' : K.inkSoft }}>
+                  {o.note}
+                </span>
+              )}
+              <span aria-hidden className="absolute inline-flex items-center justify-center" style={{
+                top: 12, insetInlineEnd: 12, width: 22, height: 22, borderRadius: 999,
+                background: on ? `radial-gradient(circle at 35% 30%, #F7EBB5, ${K.gold} 60%, ${K.deepGold})` : 'transparent',
+                boxShadow: on ? '0 2px 6px rgba(0,0,0,0.3)' : 'inset 0 0 0 1.5px rgba(28,20,16,0.18)',
+                color: K.forest,
+              }}>
+                {on && <Check size={13} strokeWidth={3.2} />}
+              </span>
+            </button>
+          );
+        }
         return (
           <button
             key={o.value}

@@ -1,26 +1,31 @@
 'use client';
 
 /**
- * StageTimerDevice: the introduction's stage clock as a physical timer (17 Sep 2026).
+ * StageTimerDevice: the introduction's stage clock, floating over the paper.
  *
- * A forest bezel with a recessed LCD window and gold seven-segment digits (the unlit segments
- * stay faintly visible, like a real display), a status LED, three stage lamps, and small raised
- * keys: previous stage, reset, start / pause, next stage. Floating over the paper.
+ * 17 Sep 2026, second pass (owner: "too tacky, make it a more neutral colour and visible, make
+ * sure Resume is not cut off, add the flags of the sponsors"): a calm warm-white card with a
+ * soft forest-tinted shadow, large ink tabular digits, one thin progress bar, a status dot
+ * (forest while running), quiet keys and ONE forest primary key (Start / Pause / Resume /
+ * Continue). The sponsors sit in the header as overlapping round flags with +N.
  *
- * - Resizable on BOTH axes from all four edges and corners; minimum 176 x 64, so it can be a
- *   slim strip. Below about 150 px high and wide enough it lays out in one row (display | keys);
- *   taller it stacks. Everything scales with the box, and when the row is too short for every
- *   key the least used ones (previous stage, then reset) fold away first.
- * - Moved by dragging the bezel anywhere that is not a key; keyboard: Arrow keys on the focused
- *   label strip move it, on the focused corner grip resize it (Shift = 64 px).
+ * - Resizable on BOTH axes from all four edges and corners; minimum 176 x 64. A short box lays
+ *   out in one row (clock | keys), a taller one stacks. Every text that has to fit is MEASURED
+ *   (hidden 100 px rulers), never guessed: the keys fold away in the order previous stage,
+ *   reset, next, and only then does the primary key drop its label to its icon. A label is
+ *   never clipped. The sponsor flags fold away before the stage label does.
+ * - Moved by dragging the card anywhere that is not a key; keyboard: Arrow keys on the focused
+ *   header move it, on the focused corner grip resize it (Shift = 64 px).
  * - The box is remembered per device in `localStorage gavelling-intro-timer-device`.
  * - Anchor-based (V-5, RULE 6b): the clock is {base, startedAt} on the database clock and the
  *   remaining time is DERIVED. The 500 ms interval only refreshes `now` inside this component;
  *   it never writes anything, and moving or resizing writes nothing but localStorage.
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, ChevronsRight, Minimize2, Pause, Play, RotateCcw } from 'lucide-react';
-import { useT } from '@/contexts/LanguageContext';
+import { useT, useLanguage } from '@/contexts/LanguageContext';
+import { SeatCircleFlag } from '@/components/CircleFlag';
+import { getCountryDisplayName } from '@/lib/countries';
 import { serverNow, serverNowIso } from '@/lib/serverClock';
 import { introRemainingNow } from '@/lib/documentFlow';
 
@@ -30,8 +35,8 @@ type Edge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 const MARGIN = 12;
 export const DEVICE_MIN_W = 176;
 export const DEVICE_MIN_H = 64;
-const DEF_W = 300;
-const DEF_H = 176;
+const DEF_W = 320;
+const DEF_H = 204;
 const BOX_KEY = 'gavelling-intro-timer-device';
 
 const clampN = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
@@ -70,67 +75,28 @@ function writeBox(b: Box) {
   } catch { /* storage blocked */ }
 }
 
-// ── Seven-segment display ─────────────────────────────────────────────────────
-const DIGIT_SEGMENTS: Record<string, string> = {
-  '0': 'abcdef', '1': 'bc', '2': 'abged', '3': 'abgcd', '4': 'fgbc',
-  '5': 'afgcd', '6': 'afgedc', '7': 'abc', '8': 'abcdefg', '9': 'abcdfg',
-};
-const SEG_W = 10; const SEG_H = 18; const SEG_T = 2.1; const SEG_GAP = 0.35;
-
-function hSeg(cx: number, cy: number, len: number) {
-  const t = SEG_T / 2;
-  return `${cx - len / 2},${cy} ${cx - len / 2 + t},${cy - t} ${cx + len / 2 - t},${cy - t} ${cx + len / 2},${cy} ${cx + len / 2 - t},${cy + t} ${cx - len / 2 + t},${cy + t}`;
-}
-function vSeg(cx: number, cy: number, len: number) {
-  const t = SEG_T / 2;
-  return `${cx},${cy - len / 2} ${cx + t},${cy - len / 2 + t} ${cx + t},${cy + len / 2 - t} ${cx},${cy + len / 2} ${cx - t},${cy + len / 2 - t} ${cx - t},${cy - len / 2 + t}`;
-}
-const t2 = SEG_T / 2;
-const hLen = SEG_W - SEG_T - 2 * SEG_GAP;
-const vLen = SEG_H / 2 - t2 - 2 * SEG_GAP;
-const SEGMENTS: Record<string, string> = {
-  a: hSeg(SEG_W / 2, t2, hLen),
-  g: hSeg(SEG_W / 2, SEG_H / 2, hLen),
-  d: hSeg(SEG_W / 2, SEG_H - t2, hLen),
-  f: vSeg(t2, SEG_H / 4 + t2 / 2, vLen),
-  b: vSeg(SEG_W - t2, SEG_H / 4 + t2 / 2, vLen),
-  e: vSeg(t2, (3 * SEG_H) / 4 - t2 / 2, vLen),
-  c: vSeg(SEG_W - t2, (3 * SEG_H) / 4 - t2 / 2, vLen),
-};
-
-function SegmentDigits({ text, lit, glow }: { text: string; lit: string; glow: boolean }) {
-  // "MM:SS": digits at 0, 13, 33, 46; colon centred at 28.
-  const xs = [0, 13, 33, 46];
-  const digits = text.replace(':', '').split('');
-  return (
-    <svg viewBox="-2.5 -1 61 20" preserveAspectRatio="xMidYMid meet" className="w-full h-full block" aria-hidden
-      style={{ overflow: 'visible', filter: glow ? `drop-shadow(0 0 0.35px ${lit}) drop-shadow(0 0 3px ${lit}55)` : undefined }}>
-      <g transform="skewX(-6) translate(1.2 0)">
-        {xs.map((x, i) => (
-          <g key={i} transform={`translate(${x} 0)`}>
-            {Object.entries(SEGMENTS).map(([k, pts]) => (
-              <polygon key={k} points={pts}
-                fill={DIGIT_SEGMENTS[digits[i]]?.includes(k) ? lit : 'rgba(238,217,138,0.075)'} />
-            ))}
-          </g>
-        ))}
-        <circle cx={28} cy={SEG_H * 0.32} r={1.25} fill={lit} />
-        <circle cx={28} cy={SEG_H * 0.68} r={1.25} fill={lit} />
-      </g>
-    </svg>
-  );
-}
+// ── Palette: calm and neutral (17 Sep 2026, owner: "too tacky, a more neutral colour") ──
+const BODY = '#FFFDF8';
+const INK = '#1C1410';
+const INK_SOFT = '#5C4E40';
+const FOREST = '#1B3828';
+const DONE = '#8B2020';
+const OUTFIT = "'Outfit', sans-serif";
 
 const two = (n: number) => String(n).padStart(2, '0');
-const lcdText = (s: number) => `${two(Math.min(99, Math.floor(s / 60)))}:${two(s % 60)}`;
+const clockText = (s: number) => `${two(Math.min(99, Math.floor(s / 60)))}:${two(s % 60)}`;
 const spoken = (s: number) => `${Math.floor(s / 60)}:${two(s % 60)}`;
 
+/** Every text the device fits is measured once at 100 px in hidden spans and scaled linearly,
+ *  so a label is never cut off: it is shown only when its real width fits, otherwise the key
+ *  folds to its icon. Re-measured when the fonts finish loading (a ResizeObserver on the spans). */
+const MEASURE_PX = 100;
+
 // ── Keys ─────────────────────────────────────────────────────────────────────
-function Key({ size, wide = 1, gold = false, label, onClick, children, showLabel }: {
-  size: number; wide?: number; gold?: boolean; label: string; onClick: () => void;
-  children: React.ReactNode; showLabel?: string;
+function Key({ size, width, primary = false, label, onClick, children, text, textSize }: {
+  size: number; width: number; primary?: boolean; label: string; onClick: () => void;
+  children: React.ReactNode; text?: string; textSize: number;
 }) {
-  const depth = Math.max(1.5, Math.round(size * 0.06));
   return (
     <button
       type="button"
@@ -138,40 +104,40 @@ function Key({ size, wide = 1, gold = false, label, onClick, children, showLabel
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="group relative shrink-0 flex items-center justify-center gap-1.5 font-bold select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A] focus-visible:ring-offset-1 focus-visible:ring-offset-[#1B3828] transition-[transform,box-shadow] duration-100 ease-out active:scale-[0.96] active:translate-y-[1px]"
+      className={`shrink-0 flex items-center justify-center font-semibold whitespace-nowrap select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FFFDF8] transition-[transform,background-color,color] duration-150 ease-out active:scale-[0.96] ${
+        primary
+          ? 'bg-[#1B3828] hover:bg-[#244A36] text-[#FAF8F3]'
+          : 'bg-[rgba(28,20,16,0.05)] hover:bg-[rgba(27,56,40,0.10)] text-[#5C4E40] hover:text-[#1B3828]'
+      }`}
       style={{
-        width: size * wide, height: size,
-        borderRadius: Math.max(6, size * 0.26),
-        color: gold ? '#1B3828' : '#EDE3C8',
-        background: gold
-          ? 'linear-gradient(180deg,#F5E7AC 0%,#E9D17A 55%,#DDBF5C 100%)'
-          : 'linear-gradient(180deg,#34644A 0%,#264D38 55%,#20432F 100%)',
-        boxShadow: gold
-          ? `inset 0 1px 0 rgba(255,255,255,0.55), 0 ${depth}px 0 #9C7F28, 0 ${depth + 2}px 6px rgba(0,0,0,0.28)`
-          : `inset 0 1px 0 rgba(255,255,255,0.13), 0 ${depth}px 0 #0D2016, 0 ${depth + 2}px 6px rgba(0,0,0,0.30)`,
-        fontFamily: "'Outfit', sans-serif",
-        fontSize: clampN(size * 0.3, 10, 14),
-        letterSpacing: '0.06em',
+        width, height: size,
+        gap: Math.round(size * 0.18),
+        borderRadius: Math.round(size * 0.3),
+        fontFamily: OUTFIT,
+        fontSize: textSize,
+        boxShadow: primary ? '0 1px 2px rgba(27,56,40,0.20), 0 4px 10px rgba(27,56,40,0.14)' : undefined,
       }}
     >
       {children}
-      {showLabel && <span className="truncate uppercase">{showLabel}</span>}
+      {text && <span>{text}</span>}
     </button>
   );
 }
 
-export type StageLamp = { key: string; label: string; active: boolean; skipped: boolean };
-
 export default function StageTimerDevice({
-  label, totalSeconds, docCode, stages, clock, onClockChange, onComplete, onBack, onHide,
+  label, totalSeconds, sponsors, sponsorsWord, clock, onClockChange, onComplete, onBack, onHide,
 }: {
-  label: string; totalSeconds: number; docCode: string;
-  stages: StageLamp[];
+  label: string; totalSeconds: number;
+  /** The paper's sponsors (country names), drawn as round flags in the header. */
+  sponsors: string[];
+  /** The committee's word for sponsors (renameable), for the flags' accessible name. */
+  sponsorsWord: string;
   clock: { base: number; startedAt: string | null };
   onClockChange: (next: { base: number; startedAt: string | null }) => void;
   onComplete: () => void; onBack: () => void; onHide: () => void;
 }) {
   const t = useT();
+  const { language } = useLanguage();
   const [now, setNow] = useState(() => serverNow());
   const running = !!clock.startedAt;
   useEffect(() => {
@@ -262,115 +228,158 @@ export default function StageTimerDevice({
     apply(mode === 'move' ? { ...b, x: b.x + m[0], y: b.y + m[1] } : { ...b, w: b.w + m[0], h: b.h + m[1] }, true);
   };
 
+  // ── Measurement ──
+  const labels = {
+    start: t('documents_timer_start'), resume: t('documents_timer_resume'),
+    pause: t('documents_timer_pause'), cont: t('documents_timer_continue'),
+  };
+  const digitsRef = useRef<HTMLSpanElement>(null);
+  const labelsRef = useRef<HTMLSpanElement>(null);
+  const [metrics, setMetrics] = useState<{ digits: number; label: number } | null>(null);
+  const labelKey = `${labels.start}|${labels.resume}|${labels.pause}|${labels.cont}`;
+  useLayoutEffect(() => {
+    const measure = () => {
+      const d = digitsRef.current?.getBoundingClientRect().width ?? 0;
+      const spans = labelsRef.current ? Array.from(labelsRef.current.children) as HTMLElement[] : [];
+      const l = Math.max(0, ...spans.map((el) => el.getBoundingClientRect().width));
+      const scale = space().scale || 1;
+      if (d > 0) setMetrics((m) => {
+        const next = { digits: d / scale, label: l / scale };
+        return m && Math.abs(m.digits - next.digits) < 0.5 && Math.abs(m.label - next.label) < 0.5 ? m : next;
+      });
+    };
+    measure();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    if (digitsRef.current) ro?.observe(digitsRef.current);
+    labelsRef.current?.childNodes.forEach((n) => ro?.observe(n as Element));
+    let alive = true;
+    void document.fonts?.ready.then(() => { if (alive) measure(); });
+    return () => { alive = false; ro?.disconnect(); };
+  }, [labelKey]);
+  // Fallbacks until measured: Outfit's tabular "88:88" is about 2.6 em wide.
+  const digitsPerPx = (metrics?.digits ?? 262) / MEASURE_PX;
+  const labelPerPx = (metrics?.label ?? 330) / MEASURE_PX;
+
   // ── Layout from the box ──
   const w = box?.w ?? DEF_W;
   const h = box?.h ?? DEF_H;
-  const slim = h < 150 && w / h >= 1.7;
-  const pad = Math.round(clampN(Math.min(w, h) * 0.07, 6, 14));
-  const radius = Math.round(clampN(Math.min(w, h) * 0.14, 12, 22));
-  const headH = Math.round(slim ? clampN(h * 0.2, 14, 22) : clampN(h * 0.085, 18, 28));
-  const gap = Math.round(clampN(pad * 0.75, 5, 10));
+  /** Short boxes lay out in one row (clock | keys); taller ones stack (clock over keys). */
+  const row = h < 124 || (w / h >= 2.8 && h < 170);
+  const pad = Math.round(clampN(Math.min(w, h) * 0.075, 7, 16));
+  const gap = Math.round(clampN(pad * 0.7, 4, 12));
+  const headH = Math.round(row ? clampN(h * 0.2, 14, 24) : clampN(h * 0.13, 22, 32));
+  const innerW = w - 2 * pad;
+  const barH = row ? 3 : Math.round(clampN(h * 0.02, 3, 6));
 
-  // Keys: in the slim row they are as tall as the row; stacked they get their own row.
-  const rowH = h - headH - pad * 2 - (slim ? gap * 0.5 : 0);
-  let keySize: number;
-  let lcdH: number;
-  if (slim) {
-    keySize = Math.round(clampN(rowH * 0.45, 22, 44));
-    lcdH = rowH;
-  } else {
-    keySize = Math.round(clampN(Math.min(h * 0.19, (w - 2 * pad) / 5.4), 26, 64));
-    lcdH = rowH - keySize - gap - 4;
+  const keySize = Math.round(row
+    ? clampN((h - 2 * pad - headH - gap) * 0.8, 22, 44)
+    : clampN(Math.min(h * 0.22, innerW / 4.1), 28, 56));
+  const keyGap = Math.round(clampN(keySize * 0.18, 4, 10));
+  const textSize = Math.round(clampN(keySize * 0.36, 12, 17) * 2) / 2;
+  const iconPx = Math.round(keySize * 0.4);
+  const primaryIconW = Math.round(keySize * 1.3);
+  const primaryLabelW = Math.ceil(2 * keySize * 0.36 + iconPx + keySize * 0.18 + labelPerPx * textSize + 4);
+
+  const primaryText = done ? labels.cont : running ? labels.pause : started ? labels.resume : labels.start;
+  // Candidates in order of preference: every key with the label, then the least used keys fold
+  // away (previous stage, reset), then next, and only then does the primary lose its label.
+  type Keys = { back: boolean; reset: boolean; next: boolean; text: boolean };
+  const candidates: Keys[] = [
+    { back: true, reset: true, next: true, text: true },
+    { back: false, reset: true, next: true, text: true },
+    { back: false, reset: false, next: true, text: true },
+    { back: false, reset: false, next: false, text: true },
+    { back: false, reset: false, next: true, text: false },
+    { back: false, reset: false, next: false, text: false },
+  ];
+  const keysWidth = (k: Keys) => {
+    const widths = [k.back ? keySize : 0, k.reset ? keySize : 0, k.text ? primaryLabelW : primaryIconW, k.next && !done ? keySize : 0].filter((x) => x > 0);
+    return widths.reduce((a, b) => a + b, 0) + (widths.length - 1) * keyGap;
+  };
+  // Row: the clock shares the width with the keys and must stay readable.
+  const rowH = h - 2 * pad - headH - gap;
+  const rowDigitsCap = rowH * 1.05;
+  const rowDigitsMin = Math.min(rowDigitsCap, 26);
+  let chosen = candidates[candidates.length - 1];
+  for (const c of candidates) {
+    const avail = row ? innerW - keysWidth(c) - gap : innerW - keysWidth(c);
+    if (row ? avail / digitsPerPx >= rowDigitsMin : avail >= 0) { chosen = c; break; }
   }
-  const playWide = slim ? 1.35 : 1.8;
-  const keyGap = Math.round(clampN(keySize * 0.2, 4, 10));
-  // How many keys fit beside (slim) or under (stacked) the display. Priority: play, next, reset, back.
-  const availKeysW = slim ? w - 2 * pad - Math.max(lcdH * 1.5, 70) - gap : w - 2 * pad;
-  const widthFor = (n: number) => keySize * playWide + (n - 1) * keySize + (n - 1) * keyGap;
-  let keyCount = 4;
-  while (keyCount > 1 && widthFor(keyCount) > availKeysW) keyCount--;
-  const showNext = keyCount >= 2 && !done;
-  const showReset = keyCount >= 3;
-  const showBack = keyCount >= 4;
-  const showPlayLabel = !slim && widthFor(keyCount) + keySize * 1.4 < availKeysW;
-  const showLamps = w >= 230;
-  const showCode = !slim && w >= 300;
+  const digitsH = row ? rowH : h - 2 * pad - headH - keySize - barH - 3 * gap;
+  const digitsFont = Math.max(12, Math.floor(row
+    ? Math.min(rowDigitsCap, (innerW - keysWidth(chosen) - gap) / digitsPerPx)
+    : Math.min(digitsH * 1.1, (innerW * 0.92) / digitsPerPx, 220)));
+  const radius = Math.round(keySize * 0.3 + pad);
 
-  const lit = done ? '#F2C77A' : warn ? '#F4A259' : '#EED98A';
-  const ticks = 24;
-  const litTicks = totalSeconds > 0 ? Math.ceil((remaining / totalSeconds) * ticks) : 0;
-  const tickH = Math.round(clampN(lcdH * 0.05, 2, 4));
-  const showTicks = lcdH >= 34;
-  const lcdPadY = Math.round(clampN(lcdH * 0.1, 3, 12));
+  // Sponsors in the header, overlapping, with +N; they fold away before the stage label does.
+  const hideW = Math.max(22, headH + 4);
+  const flagSize = Math.round(clampN(headH * 0.92, 16, 28));
+  const flagStep = Math.round(flagSize * 0.74);
+  const flagRoom = innerW - hideW - 96 - 8;
+  let flagSlots = headH >= 16 && flagRoom >= flagSize ? Math.floor((flagRoom - flagSize) / flagStep) + 1 : 0;
+  flagSlots = Math.min(flagSlots, 5);
+  let shownFlags = Math.min(sponsors.length, flagSlots);
+  if (shownFlags < sponsors.length && shownFlags > 0) shownFlags = flagSlots - 1;
+  const extraFlags = sponsors.length - shownFlags;
+  const showFlags = shownFlags > 0;
+  const sponsorNames = sponsors.map((s) => getCountryDisplayName(s, language)).join(language === 'ar' ? '، ' : ', ');
 
   const toggle = () => {
     const live = introRemainingNow(clock, serverNow());
     onClockChange(running ? { base: live, startedAt: null } : { base: live, startedAt: serverNowIso() });
   };
 
-  const startLabel = started ? t('documents_resume_btn').replace(/▶\s*/g, '').trim() : t('documents_start_btn').replace(/\s*[→←]\s*/g, ' ').trim();
+  const digitColor = done ? DONE : running || !started ? INK : INK_SOFT;
+  const fraction = totalSeconds > 0 ? remaining / totalSeconds : 0;
 
   const keys = (
-    <div className="flex items-center shrink-0" style={{ gap: keyGap, paddingBottom: Math.max(2, Math.round(keySize * 0.06)) }}>
-      {showBack && (
-        <Key size={keySize} label={t('documents_stage_back_title')} onClick={onBack}>
-          <ChevronLeft size={keySize * 0.42} strokeWidth={2.6} aria-hidden className="rtl:rotate-180" />
+    <div className="flex items-center shrink-0" style={{ gap: keyGap }}>
+      {chosen.back && (
+        <Key size={keySize} width={keySize} textSize={textSize} label={t('documents_stage_back_title')} onClick={onBack}>
+          <ChevronLeft size={iconPx + 2} strokeWidth={2.2} aria-hidden className="rtl:rotate-180" />
         </Key>
       )}
-      {showReset && (
-        <Key size={keySize} label={t('documents_timer_reset_title')} onClick={() => onClockChange({ base: totalSeconds, startedAt: null })}>
-          <RotateCcw size={keySize * 0.36} strokeWidth={2.6} aria-hidden />
+      {chosen.reset && (
+        <Key size={keySize} width={keySize} textSize={textSize} label={t('documents_timer_reset_title')} onClick={() => onClockChange({ base: totalSeconds, startedAt: null })}>
+          <RotateCcw size={iconPx - 2} strokeWidth={2.2} aria-hidden />
         </Key>
       )}
-      {done ? (
-        <Key size={keySize} wide={playWide} gold label={t('documents_continue_btn').replace(/\s*[→←]\s*/g, ' ').trim()} onClick={onComplete}
-          showLabel={showPlayLabel ? t('documents_continue_btn').replace(/\s*[→←]\s*/g, ' ').trim() : undefined}>
-          <ChevronsRight size={keySize * 0.42} strokeWidth={2.6} aria-hidden className="rtl:rotate-180 shrink-0" />
-        </Key>
-      ) : (
-        <Key size={keySize} wide={playWide} gold label={running ? t('documents_pause_btn') : startLabel} onClick={toggle}
-          showLabel={showPlayLabel ? (running ? t('documents_pause_btn') : startLabel) : undefined}>
-          {running
-            ? <Pause size={keySize * 0.36} strokeWidth={2.6} fill="currentColor" aria-hidden className="shrink-0" />
-            : <Play size={keySize * 0.36} strokeWidth={2.6} fill="currentColor" aria-hidden className="rtl:rotate-180 shrink-0" style={{ marginInlineStart: keySize * 0.04 }} />}
-        </Key>
-      )}
-      {showNext && (
-        <Key size={keySize} label={t('documents_stage_skip_title')} onClick={onComplete}>
-          <ChevronRight size={keySize * 0.42} strokeWidth={2.6} aria-hidden className="rtl:rotate-180" />
+      <Key size={keySize} width={chosen.text ? primaryLabelW : primaryIconW} primary textSize={textSize}
+        label={primaryText} onClick={done ? onComplete : toggle} text={chosen.text ? primaryText : undefined}>
+        {done
+          ? <ChevronsRight size={iconPx} strokeWidth={2.4} aria-hidden className="rtl:rotate-180 shrink-0" />
+          : running
+            ? <Pause size={iconPx - 2} strokeWidth={2.4} fill="currentColor" aria-hidden className="shrink-0" />
+            : <Play size={iconPx - 2} strokeWidth={2.4} fill="currentColor" aria-hidden className="rtl:rotate-180 shrink-0" style={{ marginInlineStart: 1 }} />}
+      </Key>
+      {chosen.next && !done && (
+        <Key size={keySize} width={keySize} textSize={textSize} label={t('documents_stage_skip_title')} onClick={onComplete}>
+          <ChevronRight size={iconPx + 2} strokeWidth={2.2} aria-hidden className="rtl:rotate-180" />
         </Key>
       )}
     </div>
   );
 
-  const lcd = (
-    <div
-      className="relative min-w-0 flex flex-col"
-      style={{
-        flex: slim ? '1 1 0' : undefined,
-        height: Math.max(20, lcdH),
-        borderRadius: Math.max(4, radius - pad),
-        padding: `${lcdPadY}px ${Math.round(clampN(lcdH * 0.18, 6, 18))}px`,
-        background: 'radial-gradient(120% 90% at 30% 0%, #173524 0%, #0C1D14 55%, #08150E 100%)',
-        boxShadow: 'inset 0 2px 5px rgba(0,0,0,0.65), inset 0 0 0 1px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.07)',
-      }}
-    >
-      <div className={`flex-1 min-h-0 ${done ? 'gv-device-blink' : ''}`}>
-        <SegmentDigits text={lcdText(remaining)} lit={lit} glow />
-      </div>
-      {showTicks && (
-        <div className="flex shrink-0" style={{ gap: Math.max(1, tickH * 0.6), marginTop: Math.max(2, tickH) }} aria-hidden>
-          {Array.from({ length: ticks }, (_, i) => (
-            <span key={i} className="flex-1" style={{ height: tickH, borderRadius: 1, backgroundColor: i < litTicks ? lit : 'rgba(238,217,138,0.09)', opacity: i < litTicks ? 0.85 : 1 }} />
-          ))}
-        </div>
-      )}
-      {/* Glass: one soft highlight across the top of the window. */}
-      <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0" style={{ height: '45%', borderRadius: 'inherit', background: 'linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0))' }} />
+  const digits = (
+    <div className="min-w-0 flex items-center" style={{ justifyContent: row ? 'flex-start' : 'center', height: row ? rowH : Math.max(16, digitsH), flex: row ? '1 1 0' : undefined }}>
+      <span className="tabular-nums whitespace-nowrap" aria-hidden
+        style={{ fontSize: digitsFont, lineHeight: 1, fontWeight: 600, letterSpacing: '-0.02em', color: digitColor, transition: 'color 200ms ease-out', fontFamily: OUTFIT }}>
+        {clockText(remaining)}
+      </span>
     </div>
   );
 
-  const labelSize = clampN(headH * 0.52, 9, 12.5);
+  const bar = (
+    <div aria-hidden className="relative overflow-hidden rounded-full shrink-0" style={{ height: barH, backgroundColor: 'rgba(28,20,16,0.08)' }}>
+      <div className="absolute inset-0 rounded-full origin-left rtl:origin-right"
+        style={{
+          transform: `scaleX(${fraction})`,
+          backgroundColor: done ? DONE : warn ? '#9A4A2A' : running ? FOREST : 'rgba(27,56,40,0.45)',
+          transition: running ? 'transform 500ms linear, background-color 200ms' : 'background-color 200ms',
+        }} />
+    </div>
+  );
+
   const edge = 7;
   const edges: { e: Edge; style: React.CSSProperties; cursor: string }[] = [
     { e: 'n', style: { top: -edge / 2, left: radius, right: radius, height: edge }, cursor: 'ns-resize' },
@@ -382,85 +391,100 @@ export default function StageTimerDevice({
     { e: 'ne', style: { top: -edge / 2, right: -edge / 2, width: radius + edge / 2, height: radius + edge / 2 }, cursor: 'nesw-resize' },
     { e: 'sw', style: { bottom: -edge / 2, left: -edge / 2, width: radius + edge / 2, height: radius + edge / 2 }, cursor: 'nesw-resize' },
   ];
+  const labelSize = clampN(headH * 0.5, 10, 13);
 
   return (
     <div
       role="group"
       aria-label={t('documents_timer_panel')}
+      data-stage-timer
       onPointerDown={begin('move')}
       className={`fixed flex flex-col select-none ${busy === 'move' ? 'cursor-grabbing' : 'cursor-grab'}`}
       style={{
         left: box?.x ?? 0, top: box?.y ?? 0, width: w, height: h, zIndex: 20,
         visibility: box ? 'visible' : 'hidden',
-        padding: pad, gap: slim ? gap * 0.5 : gap,
+        padding: pad, gap,
         borderRadius: radius,
-        background: 'linear-gradient(180deg,#2A5540 0%,#1E3F2D 38%,#183424 100%)',
+        backgroundColor: BODY,
         boxShadow: busy
-          ? '0 0 0 1px rgba(6,16,10,0.7), inset 0 1px 0 rgba(255,255,255,0.14), inset 0 -2px 0 rgba(0,0,0,0.25), 0 8px 16px rgba(27,56,40,0.26), 0 30px 64px rgba(27,56,40,0.40)'
-          : '0 0 0 1px rgba(6,16,10,0.6), inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -2px 0 rgba(0,0,0,0.22), 0 3px 8px rgba(27,56,40,0.22), 0 18px 42px rgba(27,56,40,0.34)',
+          ? '0 0 0 1px rgba(28,20,16,0.10), 0 2px 6px rgba(27,56,40,0.10), 0 24px 56px rgba(27,56,40,0.26)'
+          : '0 0 0 1px rgba(28,20,16,0.08), 0 1px 3px rgba(27,56,40,0.08), 0 14px 36px rgba(27,56,40,0.20)',
         transition: 'box-shadow 180ms cubic-bezier(0.22,1,0.36,1)',
         touchAction: 'none',
-        fontFamily: "'Outfit', sans-serif",
+        fontFamily: OUTFIT,
       }}
     >
-      <style>{`@keyframes gvDeviceBlink{0%,55%{opacity:1}56%,100%{opacity:.25}}.gv-device-blink{animation:gvDeviceBlink 1.1s steps(1,end) infinite}@media (prefers-reduced-motion: reduce){.gv-device-blink{animation:none}}`}</style>
+      {/* Hidden rulers at 100 px: the clock digits and the longest primary label. */}
+      <span aria-hidden className="absolute invisible pointer-events-none whitespace-nowrap" style={{ left: 0, top: 0 }}>
+        <span ref={digitsRef} className="tabular-nums inline-block" style={{ fontSize: MEASURE_PX, lineHeight: 1, fontWeight: 600, letterSpacing: '-0.02em', fontFamily: OUTFIT }}>88:88</span>
+        <span ref={labelsRef}>
+          {[labels.start, labels.resume, labels.pause, labels.cont].map((l, i) => (
+            <span key={i} className="inline-block font-semibold" style={{ fontSize: MEASURE_PX, fontFamily: OUTFIT }}>{l}</span>
+          ))}
+        </span>
+      </span>
 
-      {/* Label strip: LED, stage, lamps, hide. Focus it and use the Arrow keys to move the timer. */}
-      <div className="flex items-center min-w-0 shrink-0" style={{ height: headH, gap: Math.max(4, headH * 0.3) }}>
+      {/* Header: status dot, stage, sponsors, hide. Focus the label and use the Arrow keys to move the timer. */}
+      <div className="flex items-center min-w-0 shrink-0" style={{ height: headH, gap: 8 }}>
         <div
           role="button"
           tabIndex={0}
           aria-label={t('documents_timer_move')}
           title={t('documents_timer_move')}
           onKeyDown={onKey('move')}
-          className="flex-1 min-w-0 h-full flex items-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]"
-          style={{ gap: Math.max(5, headH * 0.35), paddingInlineStart: Math.max(2, radius * 0.25) }}
+          className="flex-1 min-w-0 h-full flex items-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+          style={{ gap: Math.max(6, headH * 0.35), paddingInlineStart: 2 }}
         >
           <span aria-hidden className="shrink-0 rounded-full"
             style={{
-              width: clampN(headH * 0.32, 5, 8), height: clampN(headH * 0.32, 5, 8),
-              backgroundColor: running ? '#8BE39E' : done ? '#F2C77A' : '#35513F',
-              boxShadow: running ? '0 0 6px rgba(139,227,158,0.8), inset 0 0 0 1px rgba(0,0,0,0.25)' : 'inset 0 1px 1px rgba(0,0,0,0.45)',
+              width: clampN(headH * 0.34, 6, 8), height: clampN(headH * 0.34, 6, 8),
+              backgroundColor: running ? '#2F7A4F' : done ? DONE : 'rgba(28,20,16,0.22)',
+              boxShadow: running ? '0 0 0 3px rgba(47,122,79,0.16)' : 'none',
               transition: 'background-color 200ms, box-shadow 200ms',
             }} />
-          <span className="min-w-0 truncate uppercase font-bold leading-none" aria-live="polite"
-            style={{ fontSize: labelSize, letterSpacing: '0.14em', color: '#E9DDB6' }}>
+          <span className="min-w-0 truncate uppercase font-semibold leading-none" aria-live="polite"
+            style={{ fontSize: labelSize, letterSpacing: '0.1em', color: done ? DONE : INK_SOFT }}>
             {done ? t('documents_stage_complete').replace('{stage}', label) : label}
           </span>
-          {showCode && (
-            <span className="shrink-0 tabular-nums leading-none" style={{ fontSize: labelSize * 0.92, letterSpacing: '0.08em', color: 'rgba(233,221,182,0.55)' }}>{docCode}</span>
-          )}
         </div>
-        {showLamps && (
-          <div className="flex items-center shrink-0" style={{ gap: Math.max(3, headH * 0.22) }} aria-hidden>
-            {stages.map((s) => (
-              <span key={s.key} title={s.label} className="rounded-full"
-                style={{
-                  width: clampN(headH * 0.26, 4, 7), height: clampN(headH * 0.26, 4, 7),
-                  backgroundColor: s.active ? '#EED98A' : s.skipped ? 'transparent' : 'rgba(238,217,138,0.22)',
-                  boxShadow: s.active ? '0 0 5px rgba(238,217,138,0.7)' : s.skipped ? 'inset 0 0 0 1px rgba(238,217,138,0.25)' : 'none',
-                }} />
+        {showFlags && (
+          <span role="img" aria-label={t('documents_timer_sponsors', { label: sponsorsWord, names: sponsorNames })} title={`${sponsorsWord}: ${sponsorNames}`}
+            className="shrink-0 flex items-center" style={{ paddingInlineStart: Math.round(flagSize * 0.26) }}>
+            {sponsors.slice(0, shownFlags).map((s, i) => (
+              <span key={`${s}-${i}`} className="rounded-full flex" style={{ marginInlineStart: -Math.round(flagSize * 0.26), zIndex: shownFlags - i, boxShadow: `0 0 0 2px ${BODY}` }}>
+                <SeatCircleFlag country={s} size={flagSize} decorative />
+              </span>
             ))}
-          </div>
+            {extraFlags > 0 && (
+              <span className="rounded-full flex items-center justify-center tabular-nums font-semibold"
+                style={{ marginInlineStart: -Math.round(flagSize * 0.26), height: flagSize, minWidth: flagSize, paddingInline: 4, fontSize: clampN(flagSize * 0.45, 9, 11), color: INK_SOFT, backgroundColor: '#EDE7D8', boxShadow: `0 0 0 2px ${BODY}` }}>
+                +{extraFlags}
+              </span>
+            )}
+          </span>
         )}
         <button type="button" data-device-key onClick={onHide}
           aria-label={t('documents_timer_hide')} title={t('documents_timer_hide')}
-          className="shrink-0 rounded-md flex items-center justify-center text-[#C9BD98] hover:text-[#FFF6DA] hover:bg-white/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]"
-          style={{ width: Math.max(22, headH + 2), height: Math.max(22, headH + 2), marginBlock: -2 }}>
-          <Minimize2 size={clampN(headH * 0.55, 11, 15)} strokeWidth={2.4} aria-hidden />
+          className="shrink-0 rounded-md flex items-center justify-center text-[#8A7B6A] hover:text-[#1C1410] hover:bg-[rgba(28,20,16,0.06)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+          style={{ width: hideW, height: hideW, marginBlock: -4 }}>
+          <Minimize2 size={clampN(headH * 0.6, 12, 16)} strokeWidth={2.2} aria-hidden />
         </button>
       </div>
 
       <span className="sr-only" role="timer">{spoken(remaining)}</span>
 
-      {slim ? (
-        <div className="flex-1 min-h-0 flex items-center" style={{ gap }}>
-          {lcd}
-          {keys}
-        </div>
+      {row ? (
+        <>
+          <div className="flex-1 min-h-0 flex items-center" style={{ gap }}>
+            {digits}
+            {keys}
+          </div>
+          <div className="absolute" style={{ left: radius, right: radius, bottom: Math.max(2, Math.round(pad * 0.35)) }}>{bar}</div>
+        </>
       ) : (
         <>
-          {lcd}
+          {digits}
+          {bar}
           <div className="flex justify-center shrink-0">{keys}</div>
         </>
       )}
@@ -477,8 +501,8 @@ export default function StageTimerDevice({
         title={t('documents_timer_resize')}
         onPointerDown={begin('se')}
         onKeyDown={onKey('resize')}
-        className="absolute bottom-0 right-0 flex items-end justify-end cursor-nwse-resize text-[#C9BD98]/60 hover:text-[#EED98A] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]"
-        style={{ width: Math.max(14, radius), height: Math.max(14, radius), padding: 3, borderBottomRightRadius: radius, zIndex: 3, touchAction: 'none' }}
+        className="absolute bottom-0 right-0 flex items-end justify-end cursor-nwse-resize text-[rgba(28,20,16,0.28)] hover:text-[#1B3828] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+        style={{ width: Math.max(14, radius * 0.8), height: Math.max(14, radius * 0.8), padding: 4, borderBottomRightRadius: radius, zIndex: 3, touchAction: 'none' }}
       >
         <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden fill="none">
           <path d="M7 3v4H3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
