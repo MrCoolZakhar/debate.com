@@ -4067,7 +4067,7 @@ function CommunicationsPageInner() {
                               <div className="flex flex-wrap gap-4 mb-3">
                                 <div>
                                   <label className="block text-xs font-semibold mb-1" style={{ color: template.recurring_enabled ? '#1C1410' : SOFT, fontFamily: OUTFIT }}>
-                                    Send every N days
+                                    Days between reminders
                                   </label>
                                   <input
                                     type="number"
@@ -4089,7 +4089,7 @@ function CommunicationsPageInner() {
                                 </div>
                                 <div>
                                   <label className="block text-xs font-semibold mb-1" style={{ color: template.recurring_enabled ? '#1C1410' : SOFT, fontFamily: OUTFIT }}>
-                                    Stop after N reminders
+                                    Stop after this many
                                   </label>
                                   <input
                                     type="number"
