@@ -172,6 +172,12 @@ interface EmailComposerProps {
   /** The audience, already grouped, for the Recipients rail section. Same
    *  array the audience modal is given; this panel only ever reads it. */
   recipients?: { groups: ReachGroup[]; reachCount: number };
+
+  /** How many of the real recipients would get a ⚠field⚠ marker, and which
+   *  fields (computed by the page from the live subject and blocks). Shown by
+   *  the test send, because a test to the organiser fills every field with a
+   *  stand-in and would otherwise look fine. The real send skips them. */
+  unresolvedRecipients?: { affected: number; total: number; fields: { label: string; count: number }[] };
 }
 
 type LocalBlock = EmailBlock & { _id: string };
@@ -575,7 +581,7 @@ function useImageUpload(conferenceId: string, accessToken: string | null) {
 type PaletteTab = 'blocks' | 'details' | 'files' | 'starters' | 'design' | 'people';
 
 export default function EmailComposer({
-  conference, conferenceId, initialSubject, initialBlocks, previewCandidates, onChange,
+  conference, conferenceId, initialSubject, initialBlocks, previewCandidates, onChange, unresolvedRecipients,
   testSendContext, accessToken, organizerEmail, reachSlot,
   backSlot, actionsSlot, name, onNameChange, design, recipients,
 }: EmailComposerProps) {
@@ -1023,7 +1029,10 @@ export default function EmailComposer({
     setSendingTest(false);
     if (error) { setTestMessage(`Couldn't send the test: ${error.message}`); return; }
     triggerEmailDelivery(supabase);
-    setTestMessage(`Test sent to ${organizerEmail}`);
+    const missing = unresolvedRecipients && unresolvedRecipients.affected > 0
+      ? ` ${unresolvedRecipients.affected} of ${unresolvedRecipients.total} real recipients are missing ${unresolvedRecipients.fields.map(f => f.label).join(', ')} and will not be sent it.`
+      : '';
+    setTestMessage(`Test sent to ${organizerEmail}.${missing}`);
     setTimeout(() => setTestMessage(m => (m?.startsWith('Test sent') ? null : m)), 4500);
   }
 
@@ -1786,6 +1795,11 @@ export default function EmailComposer({
           <div style={{ height: 1, backgroundColor: 'rgba(27,56,40,0.1)', margin: '4px 0 14px' }} />
 
           <PanelTitle hint="Goes to your own inbox, so you can read it the way they will.">TRY IT ON YOURSELF</PanelTitle>
+          {unresolvedRecipients && unresolvedRecipients.affected > 0 && (
+            <p role="alert" className="mb-2" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: RED, lineHeight: 1.45, textWrap: 'pretty' }}>
+              {unresolvedRecipients.affected} of {unresolvedRecipients.total} recipients are missing {unresolvedRecipients.fields.map(f => `${f.label} (${f.count})`).join(', ')}. Your test fills these in, but they will not be sent this email.
+            </p>
+          )}
           <ActionButton icon={Send} onClick={handleSendTest} disabled={sendingTest || !accessToken || !organizerEmail} style={{ width: '100%' }}>
             {sendingTest ? 'SENDING…' : 'SEND ME A TEST'}
           </ActionButton>

@@ -6,6 +6,7 @@
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { fold, getCountryByName, getCountryByCode } from '@/lib/countries';
+import { matchCommitteeCell, type CommitteeMatchVia } from '@/lib/committeeMatch';
 
 // ── Canonical columns ────────────────────────────────────────────────────────
 
@@ -170,6 +171,11 @@ export interface ClassifiedImportRow {
   /** True when an update row would change nothing at all, so the result table
    *  can say "unchanged" rather than implying work was done. */
   noop: boolean;
+  /** True when, after this import, the person will hold an allocation: either
+   *  this row allocates them, or (on update) they already had one. The preview
+   *  counts delegates for whom this is false, so an organiser sees before
+   *  importing that a column did not resolve. */
+  allocatedAfterImport: boolean;
   resolved: {
     email: string;
     name: string;
@@ -178,6 +184,10 @@ export interface ClassifiedImportRow {
     paymentStatus: 'paid' | 'unpaid' | 'waived';
     committeeId: string | null;
     committeeLabel: string | null;
+    /** How the committee cell was resolved, when it was: 'name' / 'abbreviation'
+     *  are exact, 'parenthetical' / 'normalised' are the tolerant steps in
+     *  committeeMatch.ts, shown in the preview so the organiser can check them. */
+    committeeMatchedVia: CommitteeMatchVia | null;
     countryCode: string | null;
     countryName: string | null;
     /** 1 or 2 in a double-delegation committee, 1 in a single-delegation
@@ -225,14 +235,6 @@ export interface ClassifyContext {
   existingAllocations: Set<string>;
   /** Every committee's roster (committee_country_slots), keyed by committee id — the single source of truth for what's assignable in that committee, standard or crisis alike. */
   committeeSlots: Map<string, RosterSlot[]>;
-}
-
-function matchCommittee(committees: CommitteeLite[], value: string): CommitteeLite | null {
-  const v = value.trim().toLowerCase();
-  if (!v) return null;
-  return committees.find(c =>
-    c.name.trim().toLowerCase() === v || (c.abbreviation && c.abbreviation.trim().toLowerCase() === v)
-  ) ?? null;
 }
 
 /** Matches a raw assignment value against ONE committee's roster — never
@@ -326,16 +328,25 @@ export function classifyImportRows(rows: ParsedImportRow[], ctx: ClassifyContext
     // Committee / country resolution (computed for display even on errored rows).
     let committeeId: string | null = null;
     let committeeLabel: string | null = null;
+    let committeeMatchedVia: CommitteeMatchVia | null = null;
     let countryCode: string | null = null;
     let countryName: string | null = null;
     let seat: number | null = null;
 
     if (raw.committee.trim()) {
-      const committee = matchCommittee(ctx.committees, raw.committee);
-      if (!committee) {
-        reasons.push({ severity: 'warning', message: `Committee "${raw.committee}" not found, so imported without allocation.` });
-      } else {
+      // Exact name, abbreviation, a trailing "(ABBR)", then a normalised name
+      // (see committeeMatch.ts). Never a guess between two committees.
+      const match = matchCommitteeCell(ctx.committees, raw.committee);
+      const committee = match.kind === 'match' ? match.committee : null;
+      if (match.kind === 'ambiguous') {
+        const names = match.candidates.map(c => c.abbreviation ?? c.name).join(' or ');
+        reasons.push({ severity: 'warning', message: `Committee "${raw.committee.trim()}" could be ${names}, so imported without allocation. Use the exact committee name or abbreviation.` });
+      } else if (!committee) {
+        reasons.push({ severity: 'warning', message: `Committee "${raw.committee.trim()}" not found, so imported without allocation. Use a committee name or abbreviation from Committees.` });
+      }
+      if (committee) {
         committeeLabel = committee.abbreviation ?? committee.name;
+        committeeMatchedVia = match.kind === 'match' ? match.via : null;
         if (raw.country.trim()) {
           // Validated against THIS committee's own roster, never the global
           // country list — the only source of truth for what's assignable
@@ -471,6 +482,7 @@ export function classifyImportRows(rows: ParsedImportRow[], ctx: ClassifyContext
       mode,
       existingId: existing?.id ?? null,
       noop,
+      allocatedAfterImport: !!committeeId || (!!existing?.committeeId && !!existing?.countryCode),
       resolved: {
         email: emailLower,
         name: raw.name.trim(),
@@ -479,6 +491,7 @@ export function classifyImportRows(rows: ParsedImportRow[], ctx: ClassifyContext
         paymentStatus: payment.status,
         committeeId,
         committeeLabel,
+        committeeMatchedVia,
         countryCode,
         countryName,
         seat,

@@ -18,6 +18,7 @@ import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import DelegationsView from '@/app/manage/[slug]/assignment/DelegationsView';
 import IndependentsView from '@/app/manage/[slug]/assignment/IndependentsView';
 import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
+import { AssignConfirmDialog } from '@/app/manage/[slug]/assignment/AssignConfirmDialog';
 import {
   queueAllocationEmails, allocationSendMessage, AllocationEmailBar, type AllocationTarget,
 } from '@/app/manage/[slug]/assignment/allocationEmails';
@@ -3554,6 +3555,9 @@ export default function AssignmentPage() {
   // assignment path (drop modal, slot-first assign modal, one-click
   // suggestion) hits a double country whose other seat belongs to a
   // delegation the incoming applicant isn't part of.
+  // The suggestion awaiting confirmation (AssignConfirmDialog). ASSIGN on a
+  // suggestion card only opens this; nothing is written until it is confirmed.
+  const [confirmSuggestion, setConfirmSuggestion] = useState<Suggestion | null>(null);
   const [conflict, setConflict] = useState<{ committee: CommitteeData; app: AcceptedApp; slot: SlotRow; seat: number; sibling: AllocationRow } | null>(null);
   // Chairs board interactions
   const [selectedChairAppId, setSelectedChairAppId] = useState<string | null>(null);
@@ -3934,7 +3938,7 @@ export default function AssignmentPage() {
   // DIFFERENT committee is exactly the collision that has to be blocked, and
   // the old app+slot key waved it straight through.
   const inFlightAssignKeys = useRef(new Set<string>());
-  function quickAssign(sug: Suggestion) {
+  function quickAssign(sug: Suggestion, emailNow: boolean = conference?.allocation_email_auto ?? true) {
     if (!session || !conference) return;
     const key = sug.app.id;
     const cardKey = `${sug.app.id}-${sug.slot.id}`;
@@ -3974,13 +3978,13 @@ export default function AssignmentPage() {
     const supabase = getAuthedClient(session.access_token);
     const conferenceId = conference.id;
 
-    const tempRow = applyLocalAllocation(sug.committee, sug.app, sug.slot, seat, conference.allocation_email_auto);
+    const tempRow = applyLocalAllocation(sug.committee, sug.app, sug.slot, seat, emailNow);
     showFlash('ok', `${sug.app.profiles?.display_name ?? sug.app.invited_name} assigned to ${sug.slot.country_name} in ${sug.committee.abbreviation ?? sug.committee.name}.`);
 
     (async () => {
       const err = await insertAllocation(
         supabase, conferenceId, sug.committee, sug.app, sug.slot, seat, session.user.id,
-        conference.allocation_email_auto, pushDraftNotice,
+        emailNow, pushDraftNotice,
       );
       if (err) {
         rollbackLocalAllocation(sug.committee.id, sug.app, tempRow.id);
@@ -4819,7 +4823,7 @@ export default function AssignmentPage() {
                             {sug.score}
                           </span>
                         )}
-                        <NeuButton onClick={() => quickAssign(sug)} disabled={busy} style={{ padding: '8px 16px', fontSize: 11 }}>
+                        <NeuButton onClick={() => setConfirmSuggestion(sug)} disabled={busy || confirmSuggestion !== null} style={{ padding: '8px 16px', fontSize: 11 }}>
                           {busy ? '...' : 'ASSIGN'}
                         </NeuButton>
                       </div>
@@ -5282,6 +5286,21 @@ export default function AssignmentPage() {
 
       {/* Delegation-purity safeguard: another delegation holds the other seat
           of this double country. */}
+      {confirmSuggestion && (
+        <AssignConfirmDialog
+          delegateName={confirmSuggestion.app.profiles?.display_name ?? confirmSuggestion.app.invited_name ?? 'This delegate'}
+          countryName={confirmSuggestion.slot.country_name}
+          committeeLabel={confirmSuggestion.committee.abbreviation ?? confirmSuggestion.committee.name}
+          emailsOnAssign={conference?.allocation_email_auto ?? true}
+          remainingSuggestions={Math.max(0, suggestions.length - 1)}
+          onCancel={() => setConfirmSuggestion(null)}
+          onConfirm={emailNow => {
+            const sug = confirmSuggestion;
+            setConfirmSuggestion(null);
+            quickAssign(sug, emailNow);
+          }}
+        />
+      )}
       {conflict && (
         <DelegationConflictModal
           committee={conflict.committee}

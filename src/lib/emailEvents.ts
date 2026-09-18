@@ -3,7 +3,7 @@
 // delivery happens here, just email_outbox rows with status 'pending'.
 
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { resolveTokens, type EmailTokenContext } from '@/lib/emailTokens';
+import { resolveTokens, UNRESOLVED_MARKER_PATTERN, EMAIL_TOKEN_LABELS, type EmailTokenContext } from '@/lib/emailTokens';
 import { normalizeBlocks, flattenBlocksToPlainText, getSiteUrl, type EmailBlock } from '@/lib/emailBlocks';
 import { renderEmailHtml, type EmailRenderConference, type EmailTheme } from '@/lib/emailHtml';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
@@ -196,6 +196,13 @@ export type PreferenceRow = Partial<Record<PreferenceField, boolean | null>>;
 // invitation the recipient's own organizer sent, they stop the moment that
 // invitation is answered or an account exists, and they stop for good after
 // the third. Their real opt-out is answering the invite.
+// Events queueEventEmail still sends when a merge field is unresolved (see the
+// guard there). Everything else is held back rather than showing ⚠field⚠.
+const UNRESOLVED_HOLD_EXEMPT = new Set<string>([
+  'payment_available', 'payment_received', 'fee_waived', 'aid_approved', 'aid_denied',
+  'session_chair_invite', 'session_join_invite',
+]);
+
 const ALWAYS_SEND_EVENTS = new Set([
   'committee_chair_invite', 'organizer_invite', 'import_join_invite', 'request_reply',
   'chair_invite_reminder_1', 'chair_invite_reminder_2', 'chair_invite_reminder_3',
@@ -257,6 +264,14 @@ export interface QueueEventEmailResult {
   queuedApplicationIds?: string[];
   eventKey?: string;
   eventLabel?: string;
+  /** Recipients NOT queued because their subject or visible body would still
+   *  carry a ⚠field⚠ marker (a {{country}} for someone with no allocation).
+   *  KenyaMUN, 18 Sep 2026: an edited application_accepted template reading
+   *  "⚠country⚠ to ⚠committee⚠" went to 281 people. Facts-panel rows whose
+   *  value is nothing but a marker do not count: the HTML drops those rows. */
+  heldUnresolved?: number;
+  /** The fields missing for the held recipients, e.g. ['committee', 'country']. */
+  unresolvedFields?: string[];
 }
 
 /** True when the outcome should surface a DraftNotice-style nudge, the two
@@ -274,6 +289,16 @@ export function notifyIfNeeded(
   push: (eventKey: string, outcome: 'unconfigured' | 'sent-default') => void
 ) {
   if (shouldNotify(result.outcome)) push(result.eventKey ?? '', result.outcome);
+}
+
+/** A sentence for the organiser when queueEventEmail held emails back because
+ *  a merge field had no value, or null when nothing was held. Pure, so the
+ *  server route can import this module; the page decides how to show it. */
+export function heldUnresolvedMessage(result: QueueEventEmailResult): string | null {
+  const n = result.heldUnresolved ?? 0;
+  if (n === 0) return null;
+  const fields = (result.unresolvedFields ?? []).map(k => EMAIL_TOKEN_LABELS[k as keyof typeof EMAIL_TOKEN_LABELS] ?? k).join(', ');
+  return `The "${result.eventLabel ?? result.eventKey}" email was not sent to ${n === 1 ? '1 person' : `${n} people`}: it uses ${fields || 'a field'} and they have none yet. Edit the email in Communications, or assign them first.`;
 }
 
 /** A template row counts as "drafted" only once it actually has content, a
@@ -532,10 +557,40 @@ export async function queueEventEmail(
     };
   });
 
-  const { error } = await supabase.from('email_outbox').insert(rows);
+  // Merge-field guard: never queue a row whose subject or rendered HTML still
+  // shows a ⚠field⚠ marker. Checked on body_html rather than the plain body on
+  // purpose: renderEmailHtml already drops a facts row whose value is only a
+  // marker (a receipt legitimately goes out before an allocation exists), so
+  // only a marker a recipient would actually SEE holds the email back.
+  // Exempt: money and access emails. A receipt, a payment link or a session
+  // invite with one broken field is still worth more to its recipient than no
+  // email at all, so those send as before (with a console warning).
+  const holdExempt = ALWAYS_SEND_EVENTS.has(eventKey) || UNRESOLVED_HOLD_EXEMPT.has(eventKey);
+  const missing = new Set<string>();
+  const sendable = rows.filter(r => {
+    const keys = [
+      ...r.subject.matchAll(new RegExp(UNRESOLVED_MARKER_PATTERN)),
+      ...r.body_html.matchAll(new RegExp(UNRESOLVED_MARKER_PATTERN)),
+    ].map(m => m[1]);
+    for (const k of keys) missing.add(k);
+    return keys.length === 0 || holdExempt;
+  });
+  const heldUnresolved = rows.length - sendable.length;
+  if (holdExempt && missing.size > 0) {
+    console.warn(`[queueEventEmail] "${eventKey}" sent with unresolved fields (exempt from the hold): ${[...missing].sort().join(', ')}`);
+  }
+  const unresolvedFields = [...missing].sort();
+  if (heldUnresolved > 0) {
+    console.warn(`[queueEventEmail] held ${heldUnresolved} "${eventKey}" email(s) with unresolved fields: ${unresolvedFields.join(', ')}`);
+  }
+  if (sendable.length === 0) {
+    return { outcome, drafted: useDraft, queued: 0, queuedApplicationIds: [], eventKey, eventLabel, heldUnresolved, unresolvedFields };
+  }
+
+  const { error } = await supabase.from('email_outbox').insert(sendable);
   if (error) {
-    console.error(`[queueEventEmail] email_outbox insert failed for "${eventKey}" (${rows.length} row${rows.length === 1 ? '' : 's'}):`, error.message);
-    return { outcome, drafted: useDraft, queued: 0, queuedApplicationIds: [], eventKey, eventLabel };
+    console.error(`[queueEventEmail] email_outbox insert failed for "${eventKey}" (${sendable.length} row${sendable.length === 1 ? '' : 's'}):`, error.message);
+    return { outcome, drafted: useDraft, queued: 0, queuedApplicationIds: [], eventKey, eventLabel, heldUnresolved, unresolvedFields };
   }
 
   // A scheduled row (send_after set) is left for the server-side cron to
@@ -548,10 +603,12 @@ export async function queueEventEmail(
   return {
     outcome,
     drafted: useDraft,
-    queued: rows.length,
-    queuedApplicationIds: rows.map(r => r.recipient_application_id),
+    queued: sendable.length,
+    queuedApplicationIds: sendable.map(r => r.recipient_application_id),
     eventKey,
     eventLabel,
+    heldUnresolved,
+    unresolvedFields,
   };
 }
 

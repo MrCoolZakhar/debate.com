@@ -32,6 +32,7 @@ import { type EmailBlock, normalizeBlocks, flattenBlocksToPlainText } from '@/li
 import { renderEmailHtml, resolveEmailTheme, type EmailTheme } from '@/lib/emailHtml';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import { queueAdHocEmail } from '@/lib/adHocEmail';
+import { summarizeUnresolved, unresolvedFieldLabel } from '@/lib/emailUnresolved';
 import EmailComposer, { type PreviewCandidate } from '@/components/EmailComposer';
 import AudienceReach, {
   type AudienceSection, type AudienceSectionDef, type DotState, type ReachGroup,
@@ -2986,7 +2987,9 @@ function CommunicationsPageInner() {
       return;
     }
     if (result.queued === 0) {
-      setBuilderError(result.optedOut > 0
+      setBuilderError(result.skippedUnresolved > 0
+        ? `Nothing was sent. ${result.skippedUnresolved} recipient${result.skippedUnresolved === 1 ? ' is' : 's are'} missing ${result.unresolvedFields.map(unresolvedFieldLabel).join(', ')}, which this email uses.`
+        : result.optedOut > 0
         ? `Nothing was sent — every matched recipient (${result.optedOut}) has opted out of marketing emails.`
         : 'Nothing was sent — no eligible recipients.');
       setSending(false);
@@ -3017,7 +3020,7 @@ function CommunicationsPageInner() {
     setSendConfirmOpen(false);
     setSendConfirmText('');
     closeBuilder();
-    showFlash('ok', `Queued ${result.queued} email${result.queued === 1 ? '' : 's'}, sending now.`);
+    showFlash('ok', `Queued ${result.queued} email${result.queued === 1 ? '' : 's'}, sending now.${result.skippedUnresolved > 0 ? ` ${result.skippedUnresolved} not sent, missing ${result.unresolvedFields.map(unresolvedFieldLabel).join(', ')}.` : ''}`);
     void loadTemplates();
     void loadEmailSends();
     void loadOutboxPending();
@@ -3359,7 +3362,19 @@ function CommunicationsPageInner() {
     || autoDefaultCount > 0;
 
   const eventDef = builderEventKey ? EVENT_REGISTRY.find(e => e.key === builderEventKey) ?? null : null;
-  const requireTypedConfirm = finalRecipients.length > 200;
+  // Recipients whose copy would still carry a ⚠field⚠ marker (a {{country}}
+  // for someone with no allocation). queueAdHocEmail refuses them whatever
+  // happens here; this is what lets the dialog say so before the send.
+  const unresolvedSummary = builderOpen
+    ? summarizeUnresolved(
+        builderSubject,
+        builderBlocks,
+        finalRecipients.map(a => ({ id: a.id, ctx: buildContext(a) })),
+      )
+    : { affectedIds: [], fields: [] };
+  const unresolvedCount = unresolvedSummary.affectedIds.length;
+  const sendableCount = finalRecipients.length - unresolvedCount;
+  const requireTypedConfirm = sendableCount > 200;
   const confirmDisabled = requireTypedConfirm && sendConfirmText.trim().toUpperCase() !== 'SEND';
   const namesPreview = finalRecipients.slice(0, 5).map(a => a.profiles?.display_name ?? a.invited_name ?? 'Unknown').join(', ');
 
@@ -5135,6 +5150,7 @@ function CommunicationsPageInner() {
               previewCandidates={previewCandidates}
               onChange={handleComposerChange}
               testSendContext={testSendContext}
+              unresolvedRecipients={{ affected: unresolvedCount, total: finalRecipients.length, fields: unresolvedSummary.fields }}
               accessToken={session?.access_token ?? null}
               organizerEmail={profile?.email ?? null}
               /* THE EMAIL THEME, handed to the composer's Design rail.
@@ -5201,15 +5217,31 @@ function CommunicationsPageInner() {
       {/* Send confirmation */}
       {sendConfirmOpen && (
         <ConfirmModal
-          title="Send this email?"
+          title={unresolvedCount > 0 ? 'Some recipients are missing details' : 'Send this email?'}
           body={
             <div className="flex flex-col gap-2">
               <p><strong>{builderName || eventDef?.label || '(untitled)'}</strong></p>
               <p>{finalRecipients.length} recipient{finalRecipients.length !== 1 ? 's' : ''}{namesPreview ? `: ${namesPreview}${finalRecipients.length > 5 ? `, +${finalRecipients.length - 5} more` : ''}` : ''}</p>
+              {unresolvedCount > 0 && (
+                <div role="alert" className="rounded-xl px-3 py-2.5" style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.35)' }}>
+                  <p className="font-semibold" style={{ color: '#8B2020' }}>
+                    {unresolvedCount === finalRecipients.length
+                      ? `Nobody here has every detail this email uses.`
+                      : `${unresolvedCount} of ${finalRecipients.length} recipients are missing details this email uses.`}
+                  </p>
+                  <p className="text-xs mt-1" style={{ color: '#6B2A1E' }}>
+                    Missing: {unresolvedSummary.fields.map(f => `${f.label} (${f.count})`).join(', ')}.
+                    {' '}Their email would show a blank marker such as &ldquo;⚠{unresolvedSummary.fields[0]?.key ?? 'country'}⚠&rdquo; instead, so they will not be sent this email.
+                    {unresolvedCount === finalRecipients.length
+                      ? ' Assign them first, or remove those fields from the email.'
+                      : ` Send to the ${sendableCount} with complete details, or cancel and fix the data first.`}
+                  </p>
+                </div>
+              )}
               {requireTypedConfirm && (
                 <div className="mt-1">
                   <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410' }}>
-                    Type SEND to confirm sending to {finalRecipients.length} people
+                    Type SEND to confirm sending to {sendableCount} people
                   </label>
                   <input
                     autoFocus
@@ -5223,10 +5255,10 @@ function CommunicationsPageInner() {
               )}
             </div>
           }
-          confirmLabel={sending ? 'Sending' : 'Send'}
+          confirmLabel={sending ? 'Sending' : unresolvedCount > 0 ? `Send to ${sendableCount}` : 'Send'}
           cancelLabel="Cancel"
           loading={sending}
-          confirmDisabled={confirmDisabled}
+          confirmDisabled={confirmDisabled || sendableCount === 0}
           onConfirm={handleConfirmSend}
           onCancel={() => { if (!sending) setSendConfirmOpen(false); }}
         />
