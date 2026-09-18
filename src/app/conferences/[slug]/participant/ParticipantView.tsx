@@ -318,7 +318,7 @@ export default function ParticipantView({
                   </p>
                   <p className="text-[12.5px] mb-3" style={{ color: '#6B5F52', fontFamily: OUTFIT, lineHeight: 1.65 }}>
                     It stops being reviewed by the organizing team. Any Gavelling credit
-                    you spent is refunded. You can apply again while the role is still open.
+                    you spent is refunded. This cannot be undone from your account.
                   </p>
                   {withdrawError && (
                     <p className="text-[12.5px] mb-3" style={{ color: '#8B2020', fontFamily: OUTFIT }}>

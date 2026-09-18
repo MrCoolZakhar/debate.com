@@ -2384,7 +2384,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           'checked-in': { label: 'CHECKED IN',   bg: 'color-mix(in srgb, var(--gv-main-light) 35%, transparent)',   color: '#A8D5B8',              hint: '' },
                           waitlisted:   { label: 'WAITLISTED',   bg: 'rgba(237,231,216,0.12)', color: 'color-mix(in srgb, var(--gv-on-main) 80%, transparent)', hint: 'You are on the waitlist. We will notify you if a spot opens.' },
                           rejected:     { label: 'NOT ACCEPTED', bg: 'rgba(139,32,32,0.35)',   color: '#E8A9A9',              hint: 'Your application was not accepted this time.' },
-                          withdrawn:    { label: 'WITHDRAWN',    bg: 'rgba(237,231,216,0.12)', color: 'color-mix(in srgb, var(--gv-on-main) 80%, transparent)', hint: 'You withdrew this application. You can apply again while the role is open.' },
+                          withdrawn:    { label: 'WITHDRAWN',    bg: 'rgba(237,231,216,0.12)', color: 'color-mix(in srgb, var(--gv-on-main) 80%, transparent)', hint: 'You withdrew this application. Contact the organizing team if you want to take part after all.' },
                         };
                         const meta = STATUS_META[myApp.status] ?? { label: myApp.status.toUpperCase(), bg: 'rgba(237,231,216,0.12)', color: 'color-mix(in srgb, var(--gv-on-main) 80%, transparent)', hint: '' };
                         const allocCountry = myAllocation ? getCountryByName(myAllocation.country_name) : null;

@@ -8,6 +8,7 @@ import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { getScoringConfig, RATING_MIN } from '@/lib/scoring';
 import { factorName } from '@/lib/scoringNames';
 import { addFeedback, updateFeedback, getFeedbackForCommittee } from '@/lib/committeeService';
+import { serverNow } from '@/lib/serverClock';
 
 type ItemKind = 'past' | 'live' | 'next';
 interface FeedItem {
@@ -147,7 +148,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
   // turn. React re-renders immediately on a set during render, so the key is right from the
   // first paint and never moves within a turn.
   const [turn, setTurn] = useState<{ country: string | null; at: number }>(
-    () => ({ country: currentCountry, at: Date.now() }),
+    () => ({ country: currentCountry, at: serverNow() }),
   );
   /** The turn that has just left the floor, drained into `recent` by an effect below. */
   const pendingHoldRef = useRef<FeedItem | null>(null);
@@ -158,9 +159,11 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
         context: ctxRef.current, topic: topicRef.current, spokenAt: new Date(turn.at).toISOString(),
       };
     }
-    setTurn({ country: currentCountry, at: Date.now() });
+    // Database clock (RULE 6b): this instant becomes `spoken_at` and is compared with
+    // logged speech timestamps, which are stamped with serverNowIso().
+    setTurn({ country: currentCountry, at: serverNow() });
   }
-  const turnStart = turn.country === currentCountry ? turn.at : Date.now();
+  const turnStart = turn.country === currentCountry ? turn.at : serverNow();
 
   // Live card key, a fresh turn (even same country, e.g. right of reply) gets a new card.
   const liveKey = currentCountry ? `live|${currentCountry}|${turnStart}` : null;
@@ -189,7 +192,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
       pendingHoldRef.current = null;
       const merged = held ? [...prev.filter((r) => r.key !== held.key), held].slice(-4) : prev;
       const next = merged.filter((r) => !past.some((p) =>
-        p.country === r.country && (!r.spokenAt || !p.timestamp || p.timestamp >= r.spokenAt)));
+        p.country === r.country && (!r.spokenAt || !p.timestamp || Date.parse(p.timestamp) >= Date.parse(r.spokenAt))));
       return next.length === prev.length && next.every((r, i) => r === prev[i]) ? prev : next;
     });
   }, [past, turn]);
@@ -288,7 +291,9 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
       const ORPHAN_SLACK_MS = 120_000;
       const orphanFits = (f: typeof fb[number], p: PastSpeech) => {
         if (!p.timestamp) return true;
-        if (f.spokenAt) return f.spokenAt <= p.timestamp;
+        // Compared as instants, never as strings: `spoken_at` reads back as "+00:00" while log
+        // timestamps are "Z", with different fraction lengths.
+        if (f.spokenAt) return Date.parse(f.spokenAt) <= Date.parse(p.timestamp);
         if (!f.createdAt) return true;
         return new Date(f.createdAt).getTime() <= new Date(p.timestamp).getTime() + ORPHAN_SLACK_MS;
       };

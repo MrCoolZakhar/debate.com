@@ -101,10 +101,13 @@ export function RejectedCard({
 /** Final state after the applicant withdraws their own pending application
  *  (withdraw_application). Rendered by ParticipantView in place of the
  *  payment panel and role content, exactly as RejectedCard is: a withdrawn
- *  application has no fee to settle and no committee to prepare for. The
- *  apply route is offered back, since withdrawing is a change of mind, not a
- *  decision made about them. */
-export function WithdrawnCard({ conferenceSlug, role }: { conferenceSlug: string; role: string }) {
+ *  application has no fee to settle and no committee to prepare for.
+ *
+ *  No "apply again" here: `applications` is unique on (conference, user, role)
+ *  and resubmit_application only reopens 'submitted' / 'rejected' rows, so the
+ *  apply page answers a withdrawn row with "You've already applied". Offering
+ *  the route back would be a dead end until the database allows it. */
+export function WithdrawnCard({ conferenceSlug }: { conferenceSlug: string; role?: string }) {
   return (
     <SectionCard>
       <div className="flex flex-col items-center text-center py-10">
@@ -118,17 +121,16 @@ export function WithdrawnCard({ conferenceSlug, role }: { conferenceSlug: string
           You withdrew this application.
         </p>
         <p className="text-[13px] max-w-[340px] mb-6" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.7 }}>
-          The organizing team no longer has it under review. Any Gavelling credit you spent is refunded.
+          The organizing team no longer has it under review. Any Gavelling credit you spent is refunded. To take part after all, contact the organizing team.
         </p>
         <Link
-          href={`/conferences/${conferenceSlug}/apply?role=${role}`}
+          href={`/conferences/${conferenceSlug}`}
           className="inline-flex items-center gap-2 rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none transition-colors"
           style={{ backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: OUTFIT, letterSpacing: '0.06em' }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
         >
-          <RotateCcw size={15} />
-          APPLY AGAIN
+          VIEW CONFERENCE
         </Link>
       </div>
     </SectionCard>
