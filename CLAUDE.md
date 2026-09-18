@@ -46,7 +46,7 @@ Design consequences: mobile-first on every delegate and applicant surface; the c
 | **Conference fees**: Stripe Connect; 5% platform fee (`PLATFORM_FEE_RATE`) + 3% + fixed processing pass-through; every amount recomputed server-side in the `create-checkout` edge function. Manual payments with proof review exist as a fallback. | `src/lib/finance.ts`, `manage/[slug]/financials/*` |
 | **Gavelling Points**: earned (welcome bonus, awards at paid conferences), stored in `profiles.points_balance` via the `points_ledger` trigger. Spending is not built. | `points_ledger`, `publish_conference_awards()` |
 
-Hard rules: organisers are never charged; Unlimited status is server-verified; public price display goes through `displayDelegatePrice` / `fetchDelegatePrices` in `src/lib/publicFees.ts` (reading the read-only `conference_public_fees` view), because `conferences.fee_amount` is a stale denormalised column: "TBD" until delegate applications are launched (delegate role config `is_enabled` and `applications_open_at` unset or passed), then the delegate price of the current fee stage, "Free" at 0. The creation wizard asks no price.
+Hard rules: organisers are never charged; Unlimited status is server-verified; public price display goes through `displayDelegatePrice` / `fetchDelegatePrices` in `src/lib/publicFees.ts` (reading the read-only `conference_public_fees` view), because `conferences.fee_amount` is a stale denormalised column: "TBD" and no Pricing details list until delegate applications are set up (delegate role config `is_enabled`, open now or opening later); once set up, the delegate price of the current fee stage (for an upcoming opening, the stage that applies at opening) with the Pricing details list ("Applications open {date}" when upcoming), "Free" at 0. The creation wizard asks no price.
 
 **Stripe's own limits are the thing that breaks a big bill, and they live only in
 the edge function.** `create-checkout` (v18, 8 Sep 2026; not in git, read it with
@@ -153,7 +153,7 @@ Rules:
 
 One seal, the one social media uses (`src/components/VerifiedCheck.tsx`). Blue means verified, grey means not yet. Two things carry it:
 
-- **A conference** is verified automatically once every set-up stage is done: page, committees with enough seats, chairs, emails explored, secretariat, a payment method, published. The **secretariat** stage is a union of three routes: a second organiser, a pending co-organizer invite, or `conferences.solo_secretariat_ack_at` being set. That third route exists because the stage used to require a second person, which made the checkmark unreachable for the 167 conferences genuinely run by one organiser. It is stamped only when the organiser says so, from the dashboard checklist row or the Settings → Organizers tick, and it is reversible from Settings. "Get your first delegate" is on the checklist but is not a criterion. ("Set up awards" was the other non-criterion; it was removed from the checklist entirely when awards went behind the coming-soon screen, which changed nothing about verification.) The truth is `conference_setup_status()` in the database (`scratch-setup-status.sql` is a reference copy), which also reports minutes per stage and `verification_minutes_left`. `refresh_conference_verification()` stores the mark (dashboard calls it; cron sweeps hourly); a guard trigger rejects any direct write to `conferences.is_verified`. Public surfaces show the seal only when verified. The organiser's own screens (manage rail, dashboard) always show it, grey with "About N minutes to your checkmark" until earned.
+- **A conference** is verified automatically once every set-up stage is done: page, committees with enough seats, chairs, emails explored, secretariat, a payment method, published. The **secretariat** stage is a union of three routes: a second organiser, a pending co-organizer invite, or `conferences.solo_secretariat_ack_at` being set. That third route exists because the stage used to require a second person, which made the checkmark unreachable for the 167 conferences genuinely run by one organiser. It is stamped only when the organiser says so, from the dashboard checklist row or the Settings → Organizers tick, and it is reversible from Settings. The checklist has exactly these 7 stages (`setup_total` 7), all of them verification criteria. "Get your first delegate" (removed 8 Sep 2026) and "Set up awards" (removed when awards went behind the coming-soon screen) were the two former non-criteria. The truth is `conference_setup_status()` in the database (`scratch-setup-status.sql` is a reference copy), which also reports minutes per stage and `verification_minutes_left`. `refresh_conference_verification()` stores the mark (dashboard calls it; cron sweeps hourly); a guard trigger rejects any direct write to `conferences.is_verified`. Public surfaces show the seal only when verified. The organiser's own screens (manage rail, dashboard) always show it, grey with "About N minutes to your checkmark" until earned.
 - **An MUN CV entry** is blue when `source = 'gavelling_verified'` (written by the awards pipeline), grey when self-reported.
 
 Reminders: `queue_checkmark_emails()` (cron 10:30 daily) sends one "N minutes from its checkmark" email per organiser per conference, a follow-up after two weeks, and a congratulations when the mark lands, all through `email_outbox` and paced 48h from the organiser drip. `SetupReminderGate` (root layout) shows the same list once a day when an organiser with an unverified conference enters the site, via `my_incomplete_conferences()`.
@@ -180,17 +180,22 @@ paths, `/account/profile` and every live-session route (a chair must never get a
 a running committee). It publishes its state through `src/lib/basicsGateState.ts` so
 `CreditsWelcomeGate` and `SetupReminderGate` never open on top of it.
 
-**Log in / sign up is a pop-up (18 Sep 2026).** `src/components/auth/AuthModal.tsx`, mounted once in the
-root layout, opened by `openAuth({ next?, step?, email?, apply? })` from `src/lib/authModal.ts` (or
-`<AuthLink>` for links). Airbnb's flow: one email field, Continue asks the SECURITY DEFINER RPC
-`auth_email_status(email)` (`new` | `password` | `google` | `invalid`, nothing else; it does disclose
-whether an address has an account, a deliberate trade-off) and the same dialog moves to the password step,
-a "signs in with Google" step, or "Finish signing up" (name, date of birth, nationality, password). Google
-and email links return through `/auth/callback?via=modal`, which lands back on the page the visitor was on
-(never `/auth/onboarding`) with `?auth=finish` when nationality or date of birth is missing; the modal's
-finish step is then non-dismissable (Sign out is the only exit). `/auth/signin`, `/auth/signup` and
-`/auth/forgot` only redirect to `/?auth=...&next=...`; redirect guards still go through them. While the
-modal is open `CompleteBasicsGate` stands down and `useBasicsGateBlocking()` is true, so no two modals stack.
+**Log in / sign up is a pop-up (18 Sep 2026), Airbnb's exactly, in green.** `src/components/auth/AuthModal.tsx`
+(steps), `authModalKit.tsx` (white surfaces, floating-label fields, the green gradient button, KIT_CSS) and
+`AuthQuestionnaire.tsx`, mounted once in the root layout, opened by `openAuth({ next?, step?, email?, apply? })`
+from `src/lib/authModal.ts` (or `<AuthLink>` for links). First screen: X, gavel mark, "Log in or sign up",
+one Email field, Continue, "or", a square Google tile (no Apple). Continue asks the SECURITY DEFINER RPC
+`auth_email_status(email)` (`new` | `password` | `google` | `invalid`; it discloses whether an address has an
+account, a trade-off the owner approved) and the dialog moves to the password step, a "signs in with Google"
+step, or "Finish signing up" (name, date of birth, nationality, password) then the 6-digit code. A new
+account (made here, or under a day old with no `education_level`) then gets the /auth/onboarding
+questionnaire as four skippable steps in the same pop-up (same writes: `education_level`, `mun_countries`,
+`mun_experience_level`, `mun_cv_entries` via CVEntryModal). Google and email links return through
+`/auth/callback?via=modal` to the page the visitor was on (never `/auth/onboarding`), with `?auth=finish` when
+basics are missing or the account is new; the basics step is non-dismissable (Sign out is the only exit).
+`/auth/signin`, `/auth/signup` and `/auth/forgot` only redirect to `/?auth=...&next=...`; redirect guards
+still go through them. While the modal is open `CompleteBasicsGate` stands down and `useBasicsGateBlocking()`
+is true, so no two modals stack.
 
 ## 5c. Custom (parliamentary) committees
 

@@ -2,36 +2,33 @@
 
 // ── "Log in or sign up": the whole auth flow in one pop-up ───────────────────
 //
-// Owner, 18 Sep 2026: "Instead of the log in and sign up page being a complete
-// separate page, simply make it a pop-up, so the user never goes to a different
-// page ... Airbnb's flow, exactly that." One field first (email). Continue asks
-// the database which way to go (`auth_email_status`, below) and the next step
-// opens in the same dialog:
+// Owner, 18 Sep 2026: make it a pop-up so the user never leaves the page, and
+// "literally do EXACTLY as Airbnb, except don't have Apple and make it green".
+// First screen: X top right, the gavel mark, "Log in or sign up", ONE email
+// field, a green Continue, "or", and a square Google tile. Continue asks the
+// database which way to go (`auth_email_status`) and the same dialog moves on:
 //
 //   email ─┬─ 'password' ── password ── (forgot → forgotSent)
-//          ├─ 'google'   ── "You signed up with Google" ── Continue with Google
-//          └─ 'new'      ── signup ("Finish signing up") ── confirm (6-digit code)
+//          ├─ 'google'   ── "signs in with Google" ── Google
+//          └─ 'new'      ── signup ("Finish signing up") ── code
 //   Google (any time) ── /auth/callback?via=modal ── back on the same page;
-//          missing nationality / date of birth → `?auth=finish` → finish step
+//          a missing nationality / date of birth, or a brand-new account,
+//          comes back with `?auth=finish` → the finish step
+//   new accounts, after the basics ── the questionnaire (4 steps, skippable)
 //
-// Every signed-in exit goes through `afterSignedIn`: nationality and date of
-// birth missing → the finish step (no X, no Escape, no backdrop, Sign out is
-// the only other way out: the same rule as CompleteBasicsGate); otherwise the
+// `afterSignedIn` is the one exit: missing basics → finish (no X, no Escape,
+// no backdrop; Sign out is the only other way out, the CompleteBasicsGate
+// rule); a new account with no education level → the questionnaire; else the
 // dialog closes and the visitor stays on the page (or goes to `next`).
 //
-// Account-existence: `auth_email_status` is a SECURITY DEFINER RPC returning
-// only 'new' | 'password' | 'google' | 'invalid' for an email. That is the
-// Airbnb trade-off, stated plainly: anyone can learn whether an address has a
-// Gavelling account, and whether it uses Google. Supabase already disclosed as
-// much before (signUp answers an existing address with an empty `identities`
-// list, and the old sign-in page said "email not confirmed" for an unconfirmed
-// one), the platform holds no sensitive account types, and forgot-password
-// still answers neutrally. If that ever matters, swap the RPC for "always show
-// the password step, with a Create an account link" and nothing else changes.
+// Account existence: `auth_email_status` (SECURITY DEFINER) answers only
+// 'new' | 'password' | 'google' | 'invalid'. Anyone can learn whether an
+// address has an account and whether it uses Google. That is Airbnb's
+// trade-off and the owner approved it (18 Sep 2026). Forgot-password still
+// answers neutrally.
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, LogOut, Mail, X } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -44,27 +41,12 @@ import { useScrollLock } from '@/hooks/useScrollLock';
 import { clearPendingBasics, validateBasics } from '@/lib/pendingBasics';
 import { setBasicsGateStatus } from '@/lib/basicsGateState';
 import { closeAuth, openAuth, useAuthModal, type AuthRequest } from '@/lib/authModal';
+import { CODE_LENGTH, GoogleIcon, isValidEmail, useCooldown } from '@/app/auth/authUi';
 import {
-  CheckEmailScreen,
-  CodeVerifyScreen,
-  EyeIcon,
-  EyeOffIcon,
-  GoogleIcon,
-  isValidEmail,
-} from '@/app/auth/authUi';
-
-// ── Tokens ──────────────────────────────────────────────────────────────────
-
-const OUTFIT = "'Outfit', sans-serif";
-const INK = '#1C1410';
-const INK_SOFT = '#5E5246'; // 7:1 on the panel, for real sentences
-const HAIR = '#E6DECC';
-const FIELD_BORDER = '#B9AE98';
-const FOREST = '#1B3828';
-const GOLD = '#EED98A';
-const DANGER = '#8B2020';
-const PANEL = '#FFFDF8';
-const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FFFDF8]';
+  BORDER, ErrorLine, FOCUS, FloatInput, FloatPassword, GreenButton, Hint, INK, INK_SOFT,
+  KIT_CSS, OUTFIT, TermsLine, TextButton,
+} from './authModalKit';
+import AuthQuestionnaire from './AuthQuestionnaire';
 
 type Step =
   | 'email'
@@ -74,13 +56,17 @@ type Step =
   | 'confirm'
   | 'forgot'
   | 'forgotSent'
-  | 'finish';
+  | 'finish'
+  | 'questions';
 
 type EmailStatus = 'new' | 'password' | 'google' | 'invalid';
 
-const TODAY_ISO = () => new Date().toISOString().slice(0, 10);
+/** An account younger than this, still without an education level, gets the
+ *  questionnaire. Older accounts that skipped it are not asked again. */
+const NEW_ACCOUNT_MS = 24 * 60 * 60 * 1000;
 
-/** Where the visitor should end up after signing in. */
+const todayIso = () => new Date().toISOString().slice(0, 10);
+
 function targetOf(req: AuthRequest): string {
   if (req.next) return req.next;
   if (typeof window === 'undefined') return '/';
@@ -94,13 +80,12 @@ function callbackUrl(next: string): string {
 /** Plain-language versions of the Supabase auth errors people actually hit. */
 function friendlyAuthError(raw: string): string {
   const m = raw.toLowerCase();
-  if (m.includes('invalid login credentials')) return 'That password is not right. Try again, or reset it below.';
+  if (m.includes('invalid login credentials')) return 'That password is not right. Try again, or reset it.';
   if (m.includes('rate limit') || m.includes('security purposes') || m.includes('only request this after')) {
     return 'That is a few too many tries in a row. Wait a minute and try again.';
   }
-  if (m.includes('already registered') || m.includes('already been registered')) {
-    return 'This email already has an account. Log in instead.';
-  }
+  if (m.includes('already registered') || m.includes('already been registered')) return 'This email already has an account. Log in instead.';
+  if (m.includes('already confirmed')) return 'This email is already confirmed. Go back and log in.';
   if (m.includes('password') && m.includes('at least')) return 'Your password needs at least 8 characters.';
   if (m.includes('failed to fetch') || m.includes('network')) return 'We could not reach Gavelling. Check your connection and try again.';
   return raw;
@@ -118,16 +103,10 @@ export default function AuthModalHost() {
   );
 }
 
-function AuthQueryOpener() {
-  useAuthQueryOpener();
-  return null;
-}
-
 /** Opens the modal from `?auth=` (the /auth/signin redirect, an OAuth return
  *  with `auth=finish`, a guard's redirect) and strips those keys from the bar.
- *  Keyed on the search params, so a client navigation to such a URL opens it
- *  too. The host sits in a Suspense boundary for useSearchParams. */
-function useAuthQueryOpener() {
+ *  Keyed on the search params, so a client navigation to such a URL opens it. */
+function AuthQueryOpener() {
   const searchParams = useSearchParams();
   const auth = searchParams.get('auth');
   useEffect(() => {
@@ -141,13 +120,7 @@ function useAuthQueryOpener() {
     if (p.get('error') === 'auth_callback_failed') notice = 'That sign-in did not go through. Please try again.';
     const req: AuthRequest = step === 'finish'
       ? { step }
-      : {
-          step,
-          next: p.get('next') ?? undefined,
-          email: p.get('email') ?? undefined,
-          apply: p.get('apply') === '1',
-          notice,
-        };
+      : { step, next: p.get('next') ?? undefined, email: p.get('email') ?? undefined, apply: p.get('apply') === '1', notice };
     // `auth=finish` is appended to the page's own URL by /auth/callback, so
     // only that key goes. The others were put there for the modal alone.
     const keys = step === 'finish' ? ['auth'] : ['auth', 'next', 'email', 'apply', 'verified', 'error'];
@@ -156,9 +129,35 @@ function useAuthQueryOpener() {
     window.history.replaceState(window.history.state, '', clean);
     openAuth(req);
   }, [auth]);
+  return null;
 }
 
 // ── The dialog ──────────────────────────────────────────────────────────────
+
+type ProfileCheck = { basicsMissing: boolean; wantsQuestions: boolean } | null;
+
+/** Reads what the exit needs to know. Null = could not read (fail open). */
+async function checkProfile(fresh: boolean): Promise<ProfileCheck> {
+  const { data: { user } } = await supabaseAuthClient.auth.getUser();
+  if (!user) return null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await supabaseAuthClient
+      .from('profiles')
+      .select('nationality, date_of_birth, education_level')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (!res.error && res.data) {
+      const row = res.data as { nationality: string | null; date_of_birth: string | null; education_level: string | null };
+      const isNew = fresh || (Date.now() - Date.parse(user.created_at ?? '') < NEW_ACCOUNT_MS);
+      return {
+        basicsMissing: !row.nationality?.trim() || !row.date_of_birth,
+        wantsQuestions: isNew && row.education_level == null,
+      };
+    }
+    if (attempt < 3) await new Promise((r) => setTimeout(r, 350 * (attempt + 1)));
+  }
+  return null;
+}
 
 function AuthModal({ request }: { request: AuthRequest }) {
   const router = useRouter();
@@ -177,17 +176,43 @@ function AuthModal({ request }: { request: AuthRequest }) {
   // True when the account check failed and the password step is a guess: only
   // then does it offer "New here? Create an account".
   const [statusUnknown, setStatusUnknown] = useState(false);
+  // Questionnaire position and whether the account was just made here.
+  const [q, setQ] = useState(0);
+  const [fresh, setFresh] = useState(false);
+  const saveQuestionsRef = useRef<() => Promise<void>>(async () => {});
+  const [nestedOpen, setNestedOpen] = useState(false);
 
   const panelRef = useRef<HTMLDivElement>(null);
   const next = useMemo(() => targetOf(request), [request]);
 
-  const dismissable = step !== 'finish';
-  const close = useCallback(() => { if (dismissable) closeAuth(); }, [dismissable]);
+  const locked = step === 'finish';
+  const inQuestions = step === 'questions';
+
+  /** Close and land. Staying on this page = refresh its server data. */
+  const land = useCallback(() => {
+    setBasicsGateStatus('ok');
+    closeAuth();
+    const here = window.location.pathname + window.location.search + window.location.hash;
+    if (request.next && request.next !== here) router.push(request.next);
+    else router.refresh();
+  }, [request.next, router]);
+
+  const skipQuestions = useCallback(async () => {
+    try { await saveQuestionsRef.current(); } catch { /* optional */ }
+    land();
+  }, [land]);
+
+  const close = useCallback(() => {
+    if (locked) return;
+    if (inQuestions) { void skipQuestions(); return; }
+    closeAuth();
+  }, [locked, inQuestions, skipQuestions]);
 
   useScrollLock(true);
-  // The finish step registers a no-op on purpose: top of the shared Escape
-  // stack, so Escape neither closes it nor anything hidden behind it.
-  useModalEscape(dismissable ? close : () => {}, true);
+  // Registered even when locked (with a no-op), so Escape neither closes the
+  // finish step nor anything hidden behind it. Stands down while the
+  // conference form is open over the questionnaire, so its own Escape wins.
+  useModalEscape(locked || nestedOpen ? () => {} : close, !nestedOpen);
 
   // Focus: first field on every step, back to the opener on close.
   useEffect(() => {
@@ -198,17 +223,18 @@ function AuthModal({ request }: { request: AuthRequest }) {
     const panel = panelRef.current;
     if (!panel) return;
     const t = window.setTimeout(() => {
-      const first = panel.querySelector<HTMLElement>('[data-autofocus], input:not([type=hidden]):not([disabled]), button[data-primary]');
+      const first = panel.querySelector<HTMLElement>('[data-autofocus], .gv-auth-body input:not([type=hidden]):not([disabled]):not([readonly]), .gv-auth-body button');
       first?.focus({ preventScroll: true });
-    }, 30);
+    }, 40);
     return () => window.clearTimeout(t);
-  }, [step]);
+  }, [step, q]);
 
-  // Focus trap: Tab cycles inside the panel.
+  // Focus trap: Tab cycles inside the panel (events from a portaled child
+  // dialog bubble here through React and are left alone).
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key !== 'Tab') return;
     const panel = panelRef.current;
-    if (!panel) return;
+    if (!panel || !panel.contains(e.target as Node)) return;
     const items = Array.from(panel.querySelectorAll<HTMLElement>(
       'a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])',
     )).filter((el) => el.offsetParent !== null || el === document.activeElement);
@@ -226,52 +252,33 @@ function AuthModal({ request }: { request: AuthRequest }) {
   };
   const back = () => {
     setError('');
-    setHistory((h) => {
-      const prev = h[h.length - 1];
-      if (prev) setStep(prev);
-      return h.slice(0, -1);
-    });
+    if (inQuestions && q > 0) { setQ(q - 1); return; }
+    const prev = history[history.length - 1];
+    if (!prev) return;
+    setHistory(history.slice(0, -1));
+    setStep(prev);
   };
 
-  /** Close and land. Staying on this page = refresh its server data. */
-  const land = useCallback(() => {
-    setBasicsGateStatus('ok');
-    closeAuth();
-    const here = window.location.pathname + window.location.search + window.location.hash;
-    if (request.next && request.next !== here) router.push(request.next);
-    else router.refresh();
-  }, [request.next, router]);
-
-  /** Every signed-in exit. Missing basics → the finish step. */
-  const afterSignedIn = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { land(); return; }
-    let row: { nationality: string | null; date_of_birth: string | null } | null = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const res = await supabase.from('profiles').select('nationality, date_of_birth').eq('id', user.id).maybeSingle();
-      if (!res.error && res.data) { row = res.data; break; }
-      if (attempt < 2) await new Promise((r) => setTimeout(r, 350 * (attempt + 1)));
-    }
-    // A row we could not read is not a row with blanks in it (same rule as
-    // CompleteBasicsGate): land, and the gate re-reads on the next page.
-    if (!row || (row.nationality?.trim() && row.date_of_birth)) { land(); return; }
+  /** Every signed-in exit. */
+  const afterSignedIn = useCallback(async (justCreated = false) => {
+    if (justCreated) setFresh(true);
+    const check = await checkProfile(justCreated || fresh);
     setBusy(false);
+    if (!check) { land(); return; }
     setHistory([]);
     setError('');
-    setStep('finish');
-  }, [land, supabase]);
+    if (check.basicsMissing) { setStep('finish'); return; }
+    if (check.wantsQuestions) { setQ(0); setStep('questions'); return; }
+    land();
+  }, [fresh, land]);
 
   async function startGoogle() {
     if (oauthBusy) return;
     setError('');
-    // Answers another visitor left on the old sign-up page in this browser
-    // belong to the account THEY were creating.
+    // Answers another visitor left in a pending sign-up belong to them.
     clearPendingBasics();
     setOauthBusy(true);
-    const { error: e } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: callbackUrl(next) },
-    });
+    const { error: e } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: callbackUrl(next) } });
     // On success the browser is already on its way to Google.
     if (e) { setOauthBusy(false); setError(friendlyAuthError(e.message)); }
   }
@@ -281,18 +288,18 @@ function AuthModal({ request }: { request: AuthRequest }) {
     if (busy) return;
     setError('');
     const clean = email.trim();
-    if (!isValidEmail(clean)) { setError('Enter a valid email address, like name@example.com.'); return; }
+    if (!isValidEmail(clean)) { setError('Enter a valid email, like name@example.com.'); return; }
     setEmail(clean);
     setBusy(true);
     const { data, error: rpcError } = await supabase.rpc('auth_email_status', { p_email: clean });
     setBusy(false);
     const status = (rpcError ? null : data) as EmailStatus | null;
     setStatusUnknown(!status);
-    // If the check itself fails, the password step is the safe guess: it links
-    // to sign-up for anyone who turns out to be new.
+    // If the check itself fails, the password step is the safe guess: it
+    // links to sign-up for anyone who turns out to be new.
     if (status === 'new') go('signup');
     else if (status === 'google') go('google');
-    else if (status === 'invalid') setError('Enter a valid email address, like name@example.com.');
+    else if (status === 'invalid') setError('Enter a valid email, like name@example.com.');
     else go('password');
   }
 
@@ -303,16 +310,15 @@ function AuthModal({ request }: { request: AuthRequest }) {
       .catch((e) => (e instanceof Error ? friendlyAuthError(e.message) : 'Could not resend right now. Please try again.'));
   }
 
-  const title =
-    step === 'email' ? 'Log in or sign up'
-    : step === 'password' ? 'Log in'
-    : step === 'google' ? 'Log in'
-    : step === 'signup' ? 'Finish signing up'
+  const headTitle =
+    step === 'email' ? null
+    : step === 'password' || step === 'google' ? 'Log in'
+    : step === 'signup' || step === 'finish' ? 'Finish signing up'
     : step === 'confirm' ? 'Confirm your email'
     : step === 'forgot' || step === 'forgotSent' ? 'Reset your password'
-    : 'Finish signing up';
+    : null; // the questionnaire titles itself, large, in the body
 
-  const showBack = dismissable && history.length > 0;
+  const showBack = !locked && (inQuestions ? q > 0 : history.length > 0);
 
   const node = (
     <div
@@ -320,48 +326,69 @@ function AuthModal({ request }: { request: AuthRequest }) {
       onMouseDown={(e) => {
         // Only a press on the backdrop itself. Clicks inside portaled
         // popovers (country list, calendar) bubble here through React.
-        if (e.target === e.currentTarget && dismissable) close();
+        if (e.target === e.currentTarget && !locked && !inQuestions) closeAuth();
       }}
     >
-      <style>{MODAL_CSS}</style>
+      <style>{KIT_CSS}</style>
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="gv-auth-title"
-        className="gv-auth-panel"
+        className={`gv-auth-panel${inQuestions ? ' gv-wide' : ''}`}
         onKeyDown={onKeyDown}
       >
-        {/* Header: X (or back) at the inline start, the title centred. */}
         <div className="gv-auth-head">
-          <div className="gv-auth-head-slot">
-            {showBack ? (
+          <div className="gv-auth-head-l">
+            {showBack && (
               <button type="button" onClick={back} aria-label="Back" className={`gv-auth-icon ${FOCUS}`}>
-                <ArrowLeft size={18} strokeWidth={2.4} aria-hidden />
+                <ArrowLeft size={18} strokeWidth={2.2} aria-hidden />
               </button>
-            ) : dismissable ? (
+            )}
+          </div>
+          {headTitle ? <h2 id="gv-auth-title" className="gv-auth-head-title">{headTitle}</h2> : <span />}
+          <div className="gv-auth-head-r">
+            {inQuestions ? (
+              <button type="button" onClick={() => void skipQuestions()} className={`gv-auth-skip ${FOCUS}`}>Skip for now</button>
+            ) : !locked ? (
               <button type="button" onClick={close} aria-label="Close" className={`gv-auth-icon ${FOCUS}`}>
-                <X size={18} strokeWidth={2.4} aria-hidden />
+                <X size={18} strokeWidth={2.2} aria-hidden />
               </button>
             ) : null}
           </div>
-          <h2 id="gv-auth-title" className="gv-auth-title">{title}</h2>
-          <div className="gv-auth-head-slot" />
         </div>
 
         <div className="gv-auth-body">
           {step === 'email' && (
-            <EmailStep
-              email={email}
-              setEmail={(v) => { setEmail(v); if (error) setError(''); }}
-              error={error}
-              busy={busy}
-              oauthBusy={oauthBusy}
-              apply={!!request.apply}
-              notice={request.notice}
-              onSubmit={submitEmail}
-              onGoogle={startGoogle}
-            />
+            <form className="gv-auth-screen" onSubmit={submitEmail} noValidate>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/gavelling-mark.png" alt="" className="gv-auth-mark" />
+              <h2 id="gv-auth-title" className="gv-auth-big">Log in or sign up</h2>
+              {request.apply && <p className="gv-notice" role="status">Log in or sign up to carry on with your application. We will bring you straight back to it.</p>}
+              {request.notice && <p className="gv-notice" role="status">{request.notice}</p>}
+              <FloatInput
+                id="gv-auth-email"
+                label="Email"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => { setEmail(e.target.value); if (error) setError(''); }}
+                invalid={!!error}
+                aria-describedby={error ? 'gv-auth-email-error' : undefined}
+                data-autofocus
+              />
+              {error && <ErrorLine id="gv-auth-email-error">{error}</ErrorLine>}
+              <div style={{ marginTop: 8 }}>
+                <GreenButton busy={busy} busyText="Checking…">Continue</GreenButton>
+              </div>
+              <div className="gv-or" aria-hidden><span /><em>or</em><span /></div>
+              <div className="gv-socials">
+                <button type="button" onClick={startGoogle} disabled={oauthBusy} aria-label="Continue with Google" title="Continue with Google" className={`gv-social ${FOCUS}`}>
+                  <GoogleIcon />
+                </button>
+              </div>
+            </form>
           )}
 
           {step === 'password' && (
@@ -370,7 +397,7 @@ function AuthModal({ request }: { request: AuthRequest }) {
               onChangeEmail={back}
               onForgot={() => go('forgot')}
               onNew={statusUnknown ? () => go('signup') : undefined}
-              onSignedIn={afterSignedIn}
+              onSignedIn={() => afterSignedIn(false)}
               onUnconfirmed={async () => {
                 const err = await resendSignupCode();
                 setConfirmMode('unconfirmed');
@@ -381,86 +408,75 @@ function AuthModal({ request }: { request: AuthRequest }) {
           )}
 
           {step === 'google' && (
-            <GoogleAccountStep
-              email={email}
-              busy={oauthBusy}
-              error={error}
-              onGoogle={startGoogle}
-              onSetPassword={() => go('forgot')}
-            />
+            <div className="gv-auth-screen">
+              <p className="gv-auth-lead"><strong>{email}</strong> signs in with Google.</p>
+              {error && <ErrorLine>{error}</ErrorLine>}
+              <button type="button" onClick={startGoogle} disabled={oauthBusy} className={`gv-social ${FOCUS}`} style={{ width: '100%', gap: 12, fontFamily: OUTFIT, fontSize: 16, fontWeight: 600, color: INK }} data-autofocus>
+                <GoogleIcon />
+                {oauthBusy ? 'Opening Google…' : 'Continue with Google'}
+              </button>
+              <Hint>Rather use a password? <TextButton onClick={() => go('forgot')}>Email me a link to set one</TextButton></Hint>
+            </div>
           )}
 
           {step === 'signup' && (
             <SignupStep
               email={email}
               next={next}
-              onDone={afterSignedIn}
+              onDone={() => afterSignedIn(true)}
               onAwaitingCode={() => { setConfirmMode('signup'); go('confirm'); }}
               onExisting={() => go('password')}
             />
           )}
 
           {step === 'confirm' && (
-            <div className="gv-auth-screen">
-              {error && <ErrorLine>{error}</ErrorLine>}
-              <CodeVerifyScreen
-                email={email}
-                startCooldown
-                intro={confirmMode === 'unconfirmed'
-                  ? 'Your email is not confirmed yet. We sent a 6-digit code to'
-                  : 'We sent a 6-digit code to'}
-                onVerify={async (token) => {
-                  const { error: e } = await supabase.auth.verifyOtp({ email, token, type: 'signup' });
-                  if (e) return 'That code is not right, or it has expired. Request a new one below.';
-                  await afterSignedIn();
-                  return null;
-                }}
-                onResend={resendSignupCode}
-                footer={
-                  <p className="gv-auth-small">
-                    You can also open the link in the email. It brings you back here, signed in.
-                  </p>
-                }
-              />
-            </div>
-          )}
-
-          {step === 'forgot' && (
-            <ForgotStep
+            <CodeStep
               email={email}
-              setEmail={setEmail}
-              onSent={() => go('forgotSent')}
+              intro={confirmMode === 'unconfirmed' ? 'Your email is not confirmed yet. Enter the code we sent to' : 'Enter the code we sent to'}
+              initialError={error}
+              onVerify={async (token) => {
+                const { error: e } = await supabase.auth.verifyOtp({ email, token, type: 'signup' });
+                if (e) return 'That code is not right, or it has expired. Request a new one below.';
+                await afterSignedIn(confirmMode === 'signup');
+                return null;
+              }}
+              onResend={resendSignupCode}
             />
           )}
 
+          {step === 'forgot' && <ForgotStep email={email} setEmail={setEmail} onSent={() => go('forgotSent')} />}
+
           {step === 'forgotSent' && (
-            <div className="gv-auth-screen">
-              <CheckEmailScreen
-                email={email}
-                intro="If an account exists for this address, we sent a link to choose a new password. It expires after a short while."
-                onResend={async () => {
-                  // Never reveal whether an account exists: always "sent".
-                  await sendResetEmail(email);
-                  return null;
-                }}
-                footer={
-                  <button type="button" onClick={() => { setHistory([]); setStep('email'); }} className={`gv-auth-link ${FOCUS}`}>
-                    Back to log in
-                  </button>
-                }
-              />
-            </div>
+            <CheckEmailStep
+              email={email}
+              onResend={async () => { await sendResetEmail(email); return null; }}
+              onBackToLogin={() => { setHistory([]); setStep('email'); }}
+            />
           )}
 
           {step === 'finish' && (
             <FinishStep
-              onDone={land}
+              onDone={async (wantsQuestions) => {
+                if (wantsQuestions) { setQ(0); setStep('questions'); return; }
+                land();
+              }}
+              fresh={fresh}
               onNoSession={() => closeAuth()}
               onSignOut={async () => {
                 await signOut();
                 closeAuth();
                 window.location.href = '/';
               }}
+            />
+          )}
+
+          {step === 'questions' && (
+            <AuthQuestionnaire
+              q={q}
+              setQ={setQ}
+              onDone={land}
+              registerSave={(fn) => { saveQuestionsRef.current = fn; }}
+              onNestedOpen={setNestedOpen}
             />
           )}
         </div>
@@ -478,174 +494,17 @@ function sendResetEmail(email: string) {
     .catch((e) => (e instanceof Error ? e.message : 'Something went wrong.'));
 }
 
-// ── Pieces ──────────────────────────────────────────────────────────────────
+// ── Steps ───────────────────────────────────────────────────────────────────
 
-function ErrorLine({ children, id }: { children: React.ReactNode; id?: string }) {
+function EmailChip({ email, onChange }: { email: string; onChange: () => void }) {
   return (
-    <p id={id} role="alert" className="gv-auth-error">{children}</p>
-  );
-}
-
-function Field({
-  label, id, children, note,
-}: { label: string; id: string; children: React.ReactNode; note?: React.ReactNode }) {
-  return (
-    <div className="gv-auth-field">
-      <label htmlFor={id} className="gv-auth-label">{label}</label>
-      {children}
-      {note}
+    <div className="gv-chip">
+      <Mail size={16} strokeWidth={2} aria-hidden style={{ color: INK_SOFT, flexShrink: 0 }} />
+      <span className="gv-chip-text">{email}</span>
+      <span style={{ marginLeft: 'auto' }}><TextButton onClick={onChange}>Change</TextButton></span>
     </div>
   );
 }
-
-function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={`gv-auth-input ${props.className ?? ''}`} />;
-}
-
-function PasswordInput({
-  id, value, onChange, autoComplete, placeholder, describedBy,
-}: {
-  id: string; value: string; onChange: (v: string) => void; autoComplete: string; placeholder?: string; describedBy?: string;
-}) {
-  const [show, setShow] = useState(false);
-  return (
-    <div className="relative">
-      <TextInput
-        id={id}
-        type={show ? 'text' : 'password'}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        autoComplete={autoComplete}
-        placeholder={placeholder}
-        aria-describedby={describedBy}
-        style={{ paddingRight: 46 }}
-        required
-      />
-      <button
-        type="button"
-        onClick={() => setShow((v) => !v)}
-        aria-label={show ? 'Hide password' : 'Show password'}
-        className={`gv-auth-eye ${FOCUS}`}
-      >
-        {show ? <EyeOffIcon /> : <EyeIcon />}
-      </button>
-    </div>
-  );
-}
-
-function ContinueButton({
-  children, busy, busyText, type = 'submit', onClick, disabled,
-}: {
-  children: React.ReactNode; busy?: boolean; busyText?: string; type?: 'submit' | 'button'; onClick?: () => void; disabled?: boolean;
-}) {
-  const [spot, setSpot] = useState<{ x: number; y: number } | null>(null);
-  return (
-    <button
-      type={type}
-      data-primary
-      onClick={onClick}
-      disabled={busy || disabled}
-      aria-busy={busy || undefined}
-      className={`gv-auth-cta ${FOCUS}`}
-      onMouseMove={(e) => {
-        const r = e.currentTarget.getBoundingClientRect();
-        setSpot({ x: ((e.clientX - r.left) / r.width) * 100, y: ((e.clientY - r.top) / r.height) * 100 });
-      }}
-      onMouseLeave={() => setSpot(null)}
-      style={spot ? { ['--spot-x' as string]: `${spot.x}%`, ['--spot-y' as string]: `${spot.y}%` } : undefined}
-    >
-      <span className="gv-auth-cta-shine" aria-hidden style={{ opacity: spot ? 1 : 0 }} />
-      <span className="relative">{busy ? busyText ?? 'One moment…' : children}</span>
-    </button>
-  );
-}
-
-function GoogleButtonRow({ onClick, busy, label = 'Continue with Google' }: { onClick: () => void; busy: boolean; label?: string }) {
-  return (
-    <button type="button" onClick={onClick} disabled={busy} className={`gv-auth-social ${FOCUS}`}>
-      <span className="gv-auth-social-icon"><GoogleIcon /></span>
-      <span>{busy ? 'Opening Google…' : label}</span>
-    </button>
-  );
-}
-
-function OrLine() {
-  return (
-    <div className="gv-auth-or" aria-hidden>
-      <span />
-      <em>or</em>
-      <span />
-    </div>
-  );
-}
-
-function TermsLine({ action }: { action: string }) {
-  return (
-    <p className="gv-auth-terms">
-      By selecting <strong>{action}</strong>, you agree to Gavelling&apos;s{' '}
-      <Link href="/terms" target="_blank" rel="noopener" className={FOCUS}>Terms of Service</Link>{' '}
-      and acknowledge the{' '}
-      <Link href="/privacy" target="_blank" rel="noopener" className={FOCUS}>Privacy Policy</Link>.
-    </p>
-  );
-}
-
-// ── Step: email ─────────────────────────────────────────────────────────────
-
-function EmailStep({
-  email, setEmail, error, busy, oauthBusy, apply, notice, onSubmit, onGoogle,
-}: {
-  email: string; setEmail: (v: string) => void; error: string; busy: boolean; oauthBusy: boolean;
-  apply: boolean; notice?: string; onSubmit: (e: React.FormEvent) => void; onGoogle: () => void;
-}) {
-  return (
-    <div className="gv-auth-screen">
-      <div className="gv-auth-welcome">
-        <img src="/gavelling-mark.png" alt="" width={44} height={44} className="gv-auth-mark" />
-        <h3>Welcome to Gavelling</h3>
-      </div>
-
-      {apply && (
-        <p className="gv-auth-notice" role="status">
-          Log in or sign up to carry on with your application. We will bring you straight back to it.
-        </p>
-      )}
-      {notice && <p className="gv-auth-notice" role="status">{notice}</p>}
-
-      <form onSubmit={onSubmit} noValidate>
-        <Field label="Email" id="gv-auth-email">
-          <TextInput
-            id="gv-auth-email"
-            type="email"
-            inputMode="email"
-            autoComplete="email"
-            placeholder="name@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            aria-invalid={!!error || undefined}
-            aria-describedby={error ? 'gv-auth-email-error' : 'gv-auth-email-hint'}
-            data-autofocus
-          />
-        </Field>
-        {error ? (
-          <ErrorLine id="gv-auth-email-error">{error}</ErrorLine>
-        ) : (
-          <p id="gv-auth-email-hint" className="gv-auth-small">
-            We will check whether you already have an account. If not, we will set one up.
-          </p>
-        )}
-        <div style={{ marginTop: 16 }}>
-          <ContinueButton busy={busy} busyText="Checking…">Continue</ContinueButton>
-        </div>
-      </form>
-
-      <OrLine />
-      <GoogleButtonRow onClick={onGoogle} busy={oauthBusy} />
-    </div>
-  );
-}
-
-// ── Step: password (existing account) ───────────────────────────────────────
 
 function PasswordStep({
   email, onChangeEmail, onForgot, onNew, onSignedIn, onUnconfirmed,
@@ -680,63 +539,25 @@ function PasswordStep({
   return (
     <form className="gv-auth-screen" onSubmit={submit} noValidate>
       <EmailChip email={email} onChange={onChangeEmail} />
-      <Field label="Password" id="gv-auth-password">
-        <PasswordInput
-          id="gv-auth-password"
-          value={password}
-          onChange={(v) => { setPassword(v); if (error) setError(''); }}
-          autoComplete="current-password"
-          describedBy={error ? 'gv-auth-password-error' : undefined}
-        />
-      </Field>
+      <FloatPassword
+        id="gv-auth-password"
+        value={password}
+        onChange={(v) => { setPassword(v); if (error) setError(''); }}
+        autoComplete="current-password"
+        invalid={!!error}
+        describedBy={error ? 'gv-auth-password-error' : undefined}
+      />
       {error && <ErrorLine id="gv-auth-password-error">{error}</ErrorLine>}
-      <div style={{ marginTop: 16 }}>
-        <ContinueButton busy={busy} busyText="Logging in…">Log in</ContinueButton>
+      <div style={{ marginTop: 8 }}>
+        <GreenButton busy={busy} busyText="Logging in…">Log in</GreenButton>
       </div>
-      <div className="gv-auth-row">
-        <button type="button" onClick={onForgot} className={`gv-auth-link ${FOCUS}`}>Forgot password?</button>
-        {onNew && (
-          <button type="button" onClick={onNew} className={`gv-auth-link gv-auth-link-quiet ${FOCUS}`}>New here? Create an account</button>
-        )}
+      <div className="gv-row" style={{ marginTop: 4 }}>
+        <TextButton onClick={onForgot}>Forgot password?</TextButton>
+        {onNew && <TextButton onClick={onNew} quiet>New here? Create an account</TextButton>}
       </div>
     </form>
   );
 }
-
-function EmailChip({ email, onChange }: { email: string; onChange: () => void }) {
-  return (
-    <div className="gv-auth-chip">
-      <Mail size={15} strokeWidth={2.3} aria-hidden style={{ color: FOREST, flexShrink: 0 }} />
-      <span className="gv-auth-chip-text">{email}</span>
-      <button type="button" onClick={onChange} className={`gv-auth-link ${FOCUS}`} style={{ marginInlineStart: 'auto' }}>
-        Change
-      </button>
-    </div>
-  );
-}
-
-// ── Step: an account that signs in with Google ──────────────────────────────
-
-function GoogleAccountStep({
-  email, busy, error, onGoogle, onSetPassword,
-}: { email: string; busy: boolean; error: string; onGoogle: () => void; onSetPassword: () => void }) {
-  return (
-    <div className="gv-auth-screen">
-      <h3 className="gv-auth-h3">Welcome back</h3>
-      <p className="gv-auth-lead">
-        <strong>{email}</strong> signs in with Google.
-      </p>
-      {error && <ErrorLine>{error}</ErrorLine>}
-      <GoogleButtonRow onClick={onGoogle} busy={busy} />
-      <p className="gv-auth-small" style={{ marginTop: 14 }}>
-        Rather use a password?{' '}
-        <button type="button" onClick={onSetPassword} className={`gv-auth-link ${FOCUS}`}>Email me a link to set one</button>
-      </p>
-    </div>
-  );
-}
-
-// ── Step: a new account ─────────────────────────────────────────────────────
 
 function SignupStep({
   email, next, onDone, onAwaitingCode, onExisting,
@@ -783,11 +604,11 @@ function SignupStep({
       setError(friendlyAuthError(err.message));
       return;
     }
-    // Email confirmation off: a live session, straight in. On (the normal
-    // case): the 6-digit code step, the email link works too.
+    // Email confirmation off: a live session, straight on. On (the normal
+    // case): the 6-digit code step; the email link works too.
     if (data.session) { await onDone(); return; }
     // An address that already has an account comes back as a user with no
-    // identities (Supabase's enumeration guard). Send them to the password.
+    // identities (Supabase's enumeration guard): send them to the password.
     if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
       setBusy(false);
       onExisting();
@@ -799,48 +620,102 @@ function SignupStep({
 
   return (
     <form className="gv-auth-screen" onSubmit={submit} noValidate>
-      <div className="gv-auth-group">
-        <Field label="First name" id="gv-auth-first">
-          <TextInput id="gv-auth-first" value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="given-name" data-autofocus />
-        </Field>
-        <Field label="Last name" id="gv-auth-last">
-          <TextInput id="gv-auth-last" value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="family-name" />
-        </Field>
+      <FloatInput id="gv-auth-first" label="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="given-name" data-autofocus />
+      <FloatInput id="gv-auth-last" label="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="family-name" />
+      <Hint>Make sure it matches how it should read on a certificate or an award.</Hint>
+
+      <div className="gv-static gv-dp" style={{ marginTop: 8 }}>
+        <label className="gv-static-label" htmlFor="gv-auth-dob">Date of birth</label>
+        <DatePicker id="gv-auth-dob" value={dob} onChange={setDob} max={todayIso()} initialView="2005-06-15" placeholder="Select your date of birth" />
       </div>
-      <p className="gv-auth-small" style={{ marginTop: -4 }}>As it should read on a certificate or an award.</p>
+      <Hint>You must be at least 13. Conferences only ever see your age.</Hint>
 
-      <Field
-        label="Date of birth"
-        id="gv-auth-dob"
-        note={<p className="gv-auth-small">You must be at least 13. Conferences only ever see your age.</p>}
-      >
-        <DatePicker id="gv-auth-dob" value={dob} onChange={setDob} max={TODAY_ISO()} initialView="2005-06-15" placeholder="Select your date of birth" />
-      </Field>
+      <div className="gv-static" style={{ marginTop: 8 }}>
+        <label className="gv-static-label" htmlFor="gv-auth-nat">Nationality</label>
+        <CountryField id="gv-auth-nat" value={nationality} onChange={setNationality} placeholder="Start typing a country" inputStyle={COUNTRY_INPUT} />
+      </div>
+      {guessed ? <GeoGuessNote countryName={guessed} /> : <Hint>Conferences allocate seats by nationality.</Hint>}
 
-      <Field
-        label="Nationality"
-        id="gv-auth-nat"
-        note={guessed ? <GeoGuessNote countryName={guessed} /> : <p className="gv-auth-small">Conferences allocate seats by nationality.</p>}
-      >
-        <CountryField id="gv-auth-nat" value={nationality} onChange={setNationality} placeholder="Start typing a country..." inputStyle={COUNTRY_INPUT} />
-      </Field>
-
-      <Field label="Email" id="gv-auth-email-ro">
-        <TextInput id="gv-auth-email-ro" value={email} readOnly aria-readonly className="gv-auth-input-ro" />
-      </Field>
-
-      <Field label="Password" id="gv-auth-new-password" note={<p className="gv-auth-small">At least 8 characters.</p>}>
-        <PasswordInput id="gv-auth-new-password" value={password} onChange={setPassword} autoComplete="new-password" />
-      </Field>
+      <div style={{ marginTop: 8 }} className="gv-auth-screen">
+        <FloatInput id="gv-auth-email-ro" label="Email" value={email} readOnly aria-readonly />
+        <FloatPassword id="gv-auth-new-password" value={password} onChange={setPassword} autoComplete="new-password" />
+        <Hint>At least 8 characters.</Hint>
+      </div>
 
       {error && <ErrorLine>{error}</ErrorLine>}
-      <TermsLine action="Agree and continue" />
-      <ContinueButton busy={busy} busyText="Creating your account…">Agree and continue</ContinueButton>
+      <TermsLine />
+      <GreenButton busy={busy} busyText="Creating your account…">Agree and continue</GreenButton>
     </form>
   );
 }
 
-// ── Step: forgot password ───────────────────────────────────────────────────
+function CodeStep({
+  email, intro, initialError, onVerify, onResend,
+}: {
+  email: string; intro: string; initialError?: string;
+  onVerify: (code: string) => Promise<string | null>; onResend: () => Promise<string | null>;
+}) {
+  const { remaining, active, start } = useCooldown(60);
+  const [code, setCode] = useState('');
+  const [error, setError] = useState(initialError ?? '');
+  const [verifying, setVerifying] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  // A code was sent on the way in, so the first resend waits.
+  useEffect(() => { start(); }, [start]);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (verifying || code.length !== CODE_LENGTH) { if (code.length !== CODE_LENGTH) setError(`Enter all ${CODE_LENGTH} digits.`); return; }
+    setError('');
+    setVerifying(true);
+    const err = await onVerify(code);
+    setVerifying(false);
+    if (err) setError(err);
+  }
+
+  async function resend() {
+    if (active || resending) return;
+    setError('');
+    setSent(false);
+    setResending(true);
+    const err = await onResend();
+    setResending(false);
+    if (err) { setError(err); return; }
+    start();
+    setSent(true);
+  }
+
+  return (
+    <form className="gv-auth-screen" onSubmit={submit} noValidate>
+      <p className="gv-auth-lead">{intro} <strong>{email}</strong>.</p>
+      <FloatInput
+        id="gv-auth-code"
+        label={`${CODE_LENGTH}-digit code`}
+        value={code}
+        onChange={(e) => { setCode(e.target.value.replace(/\D/g, '').slice(0, CODE_LENGTH)); if (error) setError(''); }}
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        maxLength={CODE_LENGTH}
+        invalid={!!error}
+        style={{ letterSpacing: '0.3em', fontVariantNumeric: 'tabular-nums' }}
+        data-autofocus
+      />
+      {error && <ErrorLine>{error}</ErrorLine>}
+      <div style={{ marginTop: 8 }}>
+        <GreenButton busy={verifying} busyText="Checking…">Continue</GreenButton>
+      </div>
+      <p className="gv-hint" aria-live="polite">
+        {sent ? 'Sent. Check your inbox and spam. ' : 'Did not get it? '}
+        {active
+          ? <>You can send another in {remaining}s.</>
+          : <TextButton onClick={() => void resend()}>{resending ? 'Sending…' : 'Send a new code'}</TextButton>}
+      </p>
+      <Hint>The link in the email works too. It brings you back here, signed in.</Hint>
+    </form>
+  );
+}
 
 function ForgotStep({ email, setEmail, onSent }: { email: string; setEmail: (v: string) => void; onSent: () => void }) {
   const [error, setError] = useState('');
@@ -848,7 +723,7 @@ function ForgotStep({ email, setEmail, onSent }: { email: string; setEmail: (v: 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (busy) return;
-    if (!isValidEmail(email)) { setError('Enter a valid email address, like name@example.com.'); return; }
+    if (!isValidEmail(email)) { setError('Enter a valid email, like name@example.com.'); return; }
     setBusy(true);
     const err = await sendResetEmail(email.trim());
     setBusy(false);
@@ -857,24 +732,38 @@ function ForgotStep({ email, setEmail, onSent }: { email: string; setEmail: (v: 
   }
   return (
     <form className="gv-auth-screen" onSubmit={submit} noValidate>
-      <p className="gv-auth-lead">We will email you a link to choose a new password.</p>
-      <Field label="Email" id="gv-auth-forgot-email">
-        <TextInput id="gv-auth-forgot-email" type="email" autoComplete="email" value={email} onChange={(e) => { setEmail(e.target.value); setError(''); }} />
-      </Field>
+      <p className="gv-auth-lead">Enter your email and we will send you a link to choose a new password.</p>
+      <FloatInput id="gv-auth-forgot-email" label="Email" type="email" autoComplete="email" value={email} onChange={(e) => { setEmail(e.target.value); setError(''); }} invalid={!!error} data-autofocus />
       {error && <ErrorLine>{error}</ErrorLine>}
-      <div style={{ marginTop: 16 }}>
-        <ContinueButton busy={busy} busyText="Sending…">Send reset link</ContinueButton>
+      <div style={{ marginTop: 8 }}>
+        <GreenButton busy={busy} busyText="Sending…">Send reset link</GreenButton>
       </div>
     </form>
   );
 }
 
-// ── Step: finish signing up (after Google, or an old account) ───────────────
+function CheckEmailStep({ email, onResend, onBackToLogin }: { email: string; onResend: () => Promise<string | null>; onBackToLogin: () => void }) {
+  const { remaining, active, start } = useCooldown(60);
+  const [sent, setSent] = useState(false);
+  useEffect(() => { start(); }, [start]);
+  return (
+    <div className="gv-auth-screen">
+      <p className="gv-auth-lead">
+        If an account exists for <strong>{email}</strong>, we sent it a link to choose a new password. It expires after a short while.
+      </p>
+      <GreenButton type="button" onClick={onBackToLogin}>Back to log in</GreenButton>
+      <p className="gv-hint" aria-live="polite">
+        {sent ? 'Sent again. ' : 'Nothing yet? Check spam, or '}
+        {active ? <>send another in {remaining}s.</> : <TextButton onClick={async () => { await onResend(); setSent(true); start(); }}>send it again</TextButton>}
+      </p>
+    </div>
+  );
+}
 
 function FinishStep({
-  onDone, onNoSession, onSignOut,
-}: { onDone: () => void; onNoSession: () => void; onSignOut: () => Promise<void> }) {
-  const [loaded, setLoaded] = useState<null | { id: string; email: string | null; name: string | null; needNat: boolean; needDob: boolean }>(null);
+  onDone, onNoSession, onSignOut, fresh,
+}: { onDone: (wantsQuestions: boolean) => void; onNoSession: () => void; onSignOut: () => Promise<void>; fresh: boolean }) {
+  const [loaded, setLoaded] = useState<null | { id: string; email: string | null; name: string | null; needNat: boolean; needDob: boolean; wantsQuestions: boolean }>(null);
   const [nationality, setNationality] = useState('');
   const [dob, setDob] = useState('');
   const [error, setError] = useState('');
@@ -888,21 +777,24 @@ function FinishStep({
       const { data: { user } } = await supabaseAuthClient.auth.getUser();
       if (cancelled) return;
       if (!user) { onNoSession(); return; }
-      let row: { nationality: string | null; date_of_birth: string | null; display_name: string | null } | null = null;
+      type Row = { nationality: string | null; date_of_birth: string | null; display_name: string | null; education_level: string | null };
+      let row: Row | null = null;
       for (let attempt = 0; attempt < 4; attempt++) {
-        const res = await supabaseAuthClient.from('profiles').select('nationality, date_of_birth, display_name').eq('id', user.id).maybeSingle();
+        const res = await supabaseAuthClient.from('profiles').select('nationality, date_of_birth, display_name, education_level').eq('id', user.id).maybeSingle();
         if (cancelled) return;
-        if (!res.error && res.data) { row = res.data; break; }
+        if (!res.error && res.data) { row = res.data as Row; break; }
         await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
       }
       if (cancelled) return;
       // Unreadable: fail open, CompleteBasicsGate asks on the next page.
-      if (!row) { onDone(); return; }
+      if (!row) { onDone(false); return; }
+      const isNew = fresh || (Date.now() - Date.parse(user.created_at ?? '') < NEW_ACCOUNT_MS);
+      const wantsQuestions = isNew && row.education_level == null;
       const needNat = !row.nationality || !row.nationality.trim();
       const needDob = !row.date_of_birth;
-      if (!needNat && !needDob) { onDone(); return; }
+      if (!needNat && !needDob) { onDone(wantsQuestions); return; }
       const meta = user.user_metadata as { full_name?: string; name?: string } | undefined;
-      setLoaded({ id: user.id, email: user.email ?? null, name: row.display_name || meta?.full_name || meta?.name || null, needNat, needDob });
+      setLoaded({ id: user.id, email: user.email ?? null, name: row.display_name || meta?.full_name || meta?.name || null, needNat, needDob, wantsQuestions });
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -912,7 +804,7 @@ function FinishStep({
     e.preventDefault();
     if (!loaded || saving || signingOut) return;
     setError('');
-    // validateBasics checks the pair; each half is checked alone here with a
+    // validateBasics checks the pair; each half is checked alone with a
     // harmless stand-in for the other, and only what was missing is written.
     const natCheck = loaded.needNat ? validateBasics(nationality, '2000-01-01') : null;
     if (natCheck && !natCheck.ok) { setError(natCheck.error); return; }
@@ -931,58 +823,51 @@ function FinishStep({
       return;
     }
     clearPendingBasics();
-    onDone();
+    onDone(loaded.wantsQuestions);
   }
 
   if (!loaded) {
-    return (
-      <div className="gv-auth-screen" aria-busy="true">
-        <p className="gv-auth-lead" role="status">Getting your account ready…</p>
-      </div>
-    );
+    return <div className="gv-auth-screen" aria-busy="true"><p className="gv-auth-lead" role="status">Getting your account ready…</p></div>;
   }
 
   return (
     <form className="gv-auth-screen" onSubmit={save} noValidate>
       <p className="gv-auth-lead">
         {loaded.name ? <>Welcome, <strong>{loaded.name.split(' ')[0]}</strong>. </> : null}
-        Conferences allocate seats by nationality, and some set an age range, so we need {loaded.needNat && loaded.needDob ? 'both' : 'this'} before you carry on.
+        Conferences allocate seats by nationality, and some set an age range, so we need {loaded.needNat && loaded.needDob ? 'both of these' : 'this'} before you carry on.
       </p>
-
-      {loaded.needNat && (
-        <Field
-          label="Nationality"
-          id="gv-auth-finish-nat"
-          note={guessed ? <GeoGuessNote countryName={guessed} /> : <p className="gv-auth-small">Your nationality, not where you study.</p>}
-        >
-          <CountryField id="gv-auth-finish-nat" value={nationality} onChange={(v) => { setNationality(v); setError(''); }} placeholder="Start typing a country..." inputStyle={COUNTRY_INPUT} />
-        </Field>
-      )}
       {loaded.needDob && (
-        <Field
-          label="Date of birth"
-          id="gv-auth-finish-dob"
-          note={<p className="gv-auth-small">You must be at least 13. Conferences only ever see your age.</p>}
-        >
-          <DatePicker id="gv-auth-finish-dob" value={dob} onChange={(v) => { setDob(v); setError(''); }} max={TODAY_ISO()} initialView="2005-06-15" placeholder="Select your date of birth" />
-        </Field>
+        <>
+          <div className="gv-static gv-dp">
+            <label className="gv-static-label" htmlFor="gv-auth-finish-dob">Date of birth</label>
+            <DatePicker id="gv-auth-finish-dob" value={dob} onChange={(v) => { setDob(v); setError(''); }} max={todayIso()} initialView="2005-06-15" placeholder="Select your date of birth" />
+          </div>
+          <Hint>You must be at least 13. Conferences only ever see your age.</Hint>
+        </>
       )}
-
+      {loaded.needNat && (
+        <>
+          <div className="gv-static" style={{ marginTop: 8 }}>
+            <label className="gv-static-label" htmlFor="gv-auth-finish-nat">Nationality</label>
+            <CountryField id="gv-auth-finish-nat" value={nationality} onChange={(v) => { setNationality(v); setError(''); }} placeholder="Start typing a country" inputStyle={COUNTRY_INPUT} />
+          </div>
+          {guessed ? <GeoGuessNote countryName={guessed} /> : <Hint>Your nationality, not where you study.</Hint>}
+        </>
+      )}
       {error && <ErrorLine>{error}</ErrorLine>}
-      <TermsLine action="Agree and continue" />
-      <ContinueButton busy={saving} busyText="Saving…">Agree and continue</ContinueButton>
-
-      <div className="gv-auth-row" style={{ marginTop: 14 }}>
-        <span className="gv-auth-small" style={{ margin: 0, overflowWrap: 'anywhere' }}>
+      <TermsLine />
+      <GreenButton busy={saving} busyText="Saving…">Agree and continue</GreenButton>
+      <div className="gv-row" style={{ marginTop: 6 }}>
+        <span className="gv-hint" style={{ overflowWrap: 'anywhere' }}>
           {loaded.email ? <>Signed in as <strong style={{ color: INK }}>{loaded.email}</strong></> : null}
         </span>
         <button
           type="button"
           onClick={async () => { if (signingOut) return; setSigningOut(true); await onSignOut(); }}
-          className={`gv-auth-link gv-auth-link-quiet ${FOCUS}`}
+          className={`gv-textbtn gv-textbtn-quiet ${FOCUS}`}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
         >
-          <LogOut size={14} strokeWidth={2.4} aria-hidden />
+          <LogOut size={14} strokeWidth={2.2} aria-hidden />
           {signingOut ? 'Signing out…' : 'Sign out'}
         </button>
       </div>
@@ -990,74 +875,13 @@ function FinishStep({
   );
 }
 
-// ── Styles ──────────────────────────────────────────────────────────────────
-
 const COUNTRY_INPUT: React.CSSProperties = {
   backgroundColor: '#FFFFFF',
-  border: `1px solid ${FIELD_BORDER}`,
+  border: `1px solid ${BORDER}`,
   borderRadius: 12,
   color: INK,
   fontFamily: OUTFIT,
   fontSize: 16,
-  paddingTop: 13,
-  paddingBottom: 13,
+  height: 56,
+  boxSizing: 'border-box',
 };
-
-const MODAL_CSS = `
-.gv-auth-backdrop{position:fixed;inset:0;z-index:9100;display:flex;align-items:center;justify-content:center;padding:24px 16px;background:rgba(28,20,16,0.46);animation:gvAuthFade 200ms ease;font-family:${OUTFIT}}
-.gv-auth-panel{position:relative;width:100%;max-width:568px;max-height:calc(100dvh - 48px);display:flex;flex-direction:column;background:${PANEL};border-radius:20px;box-shadow:0 24px 70px rgba(27,56,40,0.28),0 2px 8px rgba(27,56,40,0.12);overflow:hidden;animation:gvAuthRise 280ms cubic-bezier(0.2,0.8,0.2,1);color:${INK}}
-.gv-auth-head{display:grid;grid-template-columns:48px 1fr 48px;align-items:center;min-height:64px;padding:0 12px;border-bottom:1px solid ${HAIR};flex-shrink:0}
-.gv-auth-head-slot{display:flex;align-items:center;justify-content:center}
-.gv-auth-title{margin:0;text-align:center;font-size:16px;font-weight:800;color:${INK};letter-spacing:-0.005em}
-.gv-auth-icon{width:36px;height:36px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;color:${INK};background:transparent;border:none;cursor:pointer;transition:background-color 160ms ease}
-.gv-auth-icon:hover{background:rgba(27,56,40,0.07)}
-.gv-auth-body{overflow-y:auto;padding:24px 24px 28px;overscroll-behavior:contain}
-.gv-auth-screen{display:flex;flex-direction:column;gap:12px}
-.gv-auth-welcome{display:flex;align-items:center;gap:12px;margin-bottom:10px}
-.gv-auth-welcome h3{margin:0;font-size:22px;font-weight:800;letter-spacing:-0.015em;color:${INK}}
-.gv-auth-mark{width:44px;height:44px;object-fit:contain;flex-shrink:0}
-.gv-auth-h3{margin:0;font-size:20px;font-weight:800;letter-spacing:-0.01em}
-.gv-auth-lead{margin:0 0 4px;font-size:15px;line-height:1.5;color:${INK_SOFT};text-wrap:pretty}
-.gv-auth-lead strong{color:${INK}}
-.gv-auth-notice{margin:0 0 4px;padding:10px 14px;border-radius:12px;background:rgba(27,56,40,0.07);color:${FOREST};font-size:14px;line-height:1.45}
-.gv-auth-field{display:flex;flex-direction:column;gap:6px}
-.gv-auth-label{font-size:13.5px;font-weight:700;color:${INK}}
-.gv-auth-input{width:100%;box-sizing:border-box;padding:13px 14px;border-radius:12px;border:1px solid ${FIELD_BORDER};background:#FFFFFF;color:${INK};font-family:${OUTFIT};font-size:16px;line-height:1.3;outline:none;transition:border-color 160ms ease,box-shadow 160ms ease}
-.gv-auth-input:focus{border-color:${FOREST};box-shadow:0 0 0 3px rgba(27,56,40,0.14)}
-.gv-auth-input[aria-invalid="true"]{border-color:${DANGER}}
-.gv-auth-input-ro{background:#F6F1E5;color:${INK_SOFT}}
-.gv-auth-eye{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border:none;background:none;color:${INK_SOFT};border-radius:8px;cursor:pointer}
-.gv-auth-group{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.gv-auth-small{margin:2px 0 0;font-size:12.5px;line-height:1.45;color:${INK_SOFT}}
-.gv-auth-error{margin:2px 0 0;font-size:13.5px;line-height:1.45;color:${DANGER}}
-.gv-auth-cta{position:relative;overflow:hidden;width:100%;min-height:50px;padding:14px 20px;border:none;border-radius:12px;cursor:pointer;color:${GOLD};font-family:${OUTFIT};font-size:16px;font-weight:800;letter-spacing:0.01em;background:linear-gradient(90deg,#132A1D 0%,#1B3828 38%,#2A5A3C 74%,#4E6A2E 100%);box-shadow:0 8px 20px rgba(27,56,40,0.22);transition:transform 140ms ease,box-shadow 200ms ease,opacity 160ms ease}
-.gv-auth-cta:hover{box-shadow:0 10px 26px rgba(27,56,40,0.3)}
-.gv-auth-cta:active{transform:scale(0.985)}
-.gv-auth-cta:disabled{cursor:default;opacity:0.72}
-.gv-auth-cta-shine{position:absolute;inset:0;background:radial-gradient(circle at var(--spot-x,50%) var(--spot-y,50%),rgba(238,217,138,0.32) 0%,rgba(238,217,138,0) 55%);transition:opacity 200ms ease;pointer-events:none}
-.gv-auth-social{position:relative;width:100%;min-height:50px;display:flex;align-items:center;justify-content:center;padding:12px 20px;border-radius:12px;border:1px solid ${INK};background:#FFFFFF;color:${INK};font-family:${OUTFIT};font-size:15px;font-weight:700;cursor:pointer;transition:background-color 160ms ease,transform 140ms ease}
-.gv-auth-social:hover{background:#F7F3EA}
-.gv-auth-social:active{transform:scale(0.985)}
-.gv-auth-social:disabled{opacity:0.65;cursor:default}
-.gv-auth-social-icon{position:absolute;left:18px;top:50%;transform:translateY(-50%);display:inline-flex}
-.gv-auth-or{display:flex;align-items:center;gap:14px;margin:20px 0}
-.gv-auth-or span{flex:1;height:1px;background:${HAIR}}
-.gv-auth-or em{font-style:normal;font-size:12.5px;color:${INK_SOFT}}
-.gv-auth-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;margin-top:6px}
-.gv-auth-link{background:none;border:none;padding:4px 2px;border-radius:6px;color:${FOREST};font-family:${OUTFIT};font-size:14px;font-weight:700;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
-.gv-auth-link-quiet{color:${INK_SOFT};font-weight:600}
-.gv-auth-chip{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:#F6F1E5;margin-bottom:4px}
-.gv-auth-chip-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14.5px;font-weight:600}
-.gv-auth-terms{margin:4px 0 2px;font-size:12.5px;line-height:1.5;color:${INK_SOFT}}
-.gv-auth-terms a{color:${INK};font-weight:700;text-decoration:underline;text-underline-offset:2px}
-@keyframes gvAuthFade{from{opacity:0}to{opacity:1}}
-@keyframes gvAuthRise{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
-@media (max-width:639px){
-  .gv-auth-backdrop{padding:0;align-items:flex-end}
-  .gv-auth-panel{max-width:none;height:100dvh;max-height:100dvh;border-radius:0;animation:gvAuthSheet 320ms cubic-bezier(0.2,0.8,0.2,1)}
-  .gv-auth-body{padding:20px 16px calc(24px + env(safe-area-inset-bottom))}
-  .gv-auth-group{grid-template-columns:1fr}
-}
-@keyframes gvAuthSheet{from{transform:translateY(100%)}to{transform:none}}
-@media (prefers-reduced-motion:reduce){.gv-auth-backdrop,.gv-auth-panel{animation:none}}
-`;

@@ -9,20 +9,22 @@
 // conference columns therefore advertise stale — sometimes free — prices.
 //
 // THE RULE (owner, 18 Sep 2026), implemented once in displayDelegatePrice():
-//   1. Until DELEGATE APPLICATIONS ARE LAUNCHED the price is "TBD". Launched
-//      means the conference's `delegate` role config exists, `is_enabled` is
-//      true (the organiser opened delegate applications; the role-config
-//      trigger only lets that happen once financial setup is done), and its
-//      `applications_open_at` is unset or already passed. A conference with
-//      no delegate role config at all is TBD too: the conference-level
-//      `fee_amount` is never shown any more (the creation wizard no longer
-//      asks for a price, so that column is always 0 for new conferences).
-//   2. After launch it is the DELEGATE price of the CURRENT fee stage: the
-//      `fee_phases` entry whose dates contain today (early bird / regular /
-//      late), else the flat `fee_amount` (what checkout charges between
-//      phases). A phased config whose flat fee is 0 and has no active phase
-//      shows the next stage, or the last one, rather than a false "Free".
-//   3. A launched delegate price of 0 is "Free".
+//   1. Until DELEGATE APPLICATIONS ARE SET UP the price is "TBD" (and the
+//      public page renders no pricing details). Set up means the
+//      conference's `delegate` role config exists and `is_enabled` is true
+//      (the role-config trigger only allows that once financial setup is
+//      done), whether applications are already open or open in the future.
+//      A conference with no delegate role config is TBD too: the
+//      conference-level `fee_amount` is never shown any more (the creation
+//      wizard no longer asks for a price).
+//   2. Once set up it is the DELEGATE price of the CURRENT fee stage, taken
+//      at today or, when applications open later, at the opening date (the
+//      stage that will apply then): the `fee_phases` entry whose dates
+//      contain that day (early bird / regular / late), else the flat
+//      `fee_amount` (what checkout charges between phases). A phased config
+//      whose flat fee is 0 and has no phase on that day shows the next
+//      stage, or the last one, rather than a false "Free".
+//   3. A set-up delegate price of 0 is "Free".
 //
 // Reads the `conference_public_fees` VIEW, not `application_role_configs`
 // directly, and that distinction matters. The table's SELECT policy is
@@ -81,30 +83,52 @@ function isoDay(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** Delegate applications are launched: enabled, and the opening time (if any) has passed. */
-export function delegateApplicationsLaunched(
-  cfg: DelegatePriceConfig | null | undefined,
-  today: Date = new Date(),
-): boolean {
-  if (!cfg || !cfg.is_enabled) return false;
-  if (!cfg.applications_open_at) return true;
-  const openAt = new Date(cfg.applications_open_at);
-  return Number.isNaN(openAt.getTime()) || openAt.getTime() <= today.getTime();
+/** Applications for this role are set up (enabled), open now or opening later. */
+export function applicationsSetUp(cfg: DelegatePriceConfig | null | undefined): boolean {
+  return !!cfg && !!cfg.is_enabled;
 }
 
-/** The delegate amount of the current fee stage, and that stage. */
-function currentStageAmount(cfg: DelegatePriceConfig, today: Date): { amount: number; phase: FeePhase | null } {
+/** Applications are set up but open later than `today`: the opening instant, else null. */
+export function upcomingOpening(cfg: DelegatePriceConfig | null | undefined, today: Date = new Date()): Date | null {
+  if (!cfg?.applications_open_at) return null;
+  const openAt = new Date(cfg.applications_open_at);
+  return !Number.isNaN(openAt.getTime()) && openAt.getTime() > today.getTime() ? openAt : null;
+}
+
+/** The day whose fee stage is shown: today, or the opening date when that is later. */
+export function priceDate(cfg: DelegatePriceConfig, today: Date = new Date()): Date {
+  return upcomingOpening(cfg, today) ?? today;
+}
+
+/** The fee stage that applies on `day`, and its amount. */
+export function currentStageAmount(cfg: DelegatePriceConfig, day: Date = new Date()): { amount: number; phase: FeePhase | null } {
   const phases = (cfg.fee_phases ?? []).filter(p => p && p.start_date && p.end_date);
-  const active = activeFeePhase(phases, today);
+  const active = activeFeePhase(phases, day);
   if (active) return { amount: Number(active.amount) || 0, phase: active };
   const flat = Number(cfg.fee_amount) || 0;
   if (flat > 0 || phases.length === 0) return { amount: flat, phase: null };
-  // Phased pricing with a 0 flat fee and today in no phase (before the first,
-  // in a gap, or after the last): the next stage, else the last one.
-  const iso = isoDay(today);
-  const sorted = [...phases].sort((a, b) => a.start_date.localeCompare(b.start_date));
+  // Phased pricing with a 0 flat fee and no phase on that day (before the
+  // first, in a gap, or after the last): the next stage, else the last one.
+  const iso = isoDay(day);
+  const sorted = [...phases].sort((x, y) => x.start_date.localeCompare(y.start_date));
   const next = sorted.find(p => p.start_date > iso) ?? sorted[sorted.length - 1];
   return { amount: Number(next.amount) || 0, phase: next };
+}
+
+/**
+ * The public price of ONE role config under the rule above (TBD unless the
+ * role is enabled). The delegate headline, and on the public conference page
+ * every role in the pricing list and the role picker, go through this.
+ */
+export function displayRolePrice(
+  cfg: DelegatePriceConfig | null | undefined,
+  fallbackCurrency: string,
+  today: Date = new Date(),
+): DelegatePrice {
+  if (!cfg || !applicationsSetUp(cfg)) return TBD_PRICE;
+  const { amount, phase } = currentStageAmount(cfg, priceDate(cfg, today));
+  if (!(amount > 0)) return { kind: 'free' };
+  return { kind: 'paid', amount, currency: cfg.fee_currency || fallbackCurrency || 'USD', phase };
 }
 
 /**
@@ -117,10 +141,7 @@ export function displayDelegatePrice(
   fallbackCurrency: string,
   today: Date = new Date(),
 ): DelegatePrice {
-  if (!cfg || !delegateApplicationsLaunched(cfg, today)) return TBD_PRICE;
-  const { amount, phase } = currentStageAmount(cfg, today);
-  if (!(amount > 0)) return { kind: 'free' };
-  return { kind: 'paid', amount, currency: cfg.fee_currency || fallbackCurrency || 'USD', phase };
+  return displayRolePrice(cfg, fallbackCurrency, today);
 }
 
 /** Plain-text label: "TBD", "Free" or the compact price ("£120", "₹2.5k"). */

@@ -17,6 +17,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Info } from 'lucide-react';
 import { NeuCard, NEU, OUTFIT } from '@/components/neu';
+import { BENTO_BORDER } from '@/components/conferences/bento';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { TRAFFIC_SOURCES, TRAFFIC_SOURCE_LABEL, type TrafficSource } from '@/lib/trafficSource';
@@ -132,7 +133,7 @@ export function TrafficSourcesView({ summary }: { summary: TrafficSummary | null
   const empty = !!summary && !summary.first_day;
 
   return (
-    <NeuCard className="flex flex-col flex-shrink-0" style={{ padding: '14px 18px 16px' }}>
+    <NeuCard className="flex flex-col flex-shrink-0" style={{ padding: '14px 18px 16px', border: BENTO_BORDER }}>
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
           <h2 className="flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>

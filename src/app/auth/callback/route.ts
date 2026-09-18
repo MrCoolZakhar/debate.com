@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
    * forward them on afterwards. Users who already onboarded skip this and go
    * straight to next, so nobody loops.
    */
-  async function destinationFor(userId: string): Promise<string> {
+  async function destinationFor(userId: string, createdAt?: string | null): Promise<string> {
     // A recovery link exists to reach the reset form. Putting onboarding in
     // front of it interrupts a repair with a survey, and the session behind it
     // is a recovery session, so anyone who wanders off inside onboarding can
@@ -134,8 +134,12 @@ export async function GET(request: NextRequest) {
     if (viaModal) {
       // No row yet (the signup trigger has not committed) is treated as
       // missing basics too: the modal's finish step re-reads and closes itself
-      // if it turns out complete.
-      if (!profile || needsBasics) return `${origin}${withAuthFinish(next)}`;
+      // if it turns out complete. A brand-new account (under a day old) with
+      // no education level gets the questionnaire in the same pop-up, the
+      // modal's stand-in for /auth/onboarding.
+      const created = createdAt ? Date.parse(createdAt) : NaN;
+      const isNew = Number.isFinite(created) && Date.now() - created < 24 * 60 * 60 * 1000;
+      if (!profile || needsBasics || (isNew && needsOnboarding)) return `${origin}${withAuthFinish(next)}`;
       return `${origin}${next}`;
     }
     if (needsOnboarding || needsBasics) {
@@ -186,7 +190,7 @@ export async function GET(request: NextRequest) {
   /** Every signed-in exit of this route goes through here. */
   async function land(user: User): Promise<string> {
     await applyPendingBasics(user);
-    return destinationFor(user.id);
+    return destinationFor(user.id, user.created_at);
   }
 
   // ── Email links (signup confirmation, magic link, recovery, email change) ──

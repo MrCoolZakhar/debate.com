@@ -84,10 +84,11 @@ export interface AdminConferenceRow {
 }
 
 // ── Set-up steps ────────────────────────────────────────────────────────────
-// THE SAME EIGHT PRIORITIES THE ORGANISER IS SHOWN, in the same journey order
+// THE SAME SEVEN PRIORITIES THE ORGANISER IS SHOWN (18 Sep 2026: 7, all of them
+// verification stages; "Get your first delegate" was removed on 8 Sep), in the same journey order
 // (src/app/manage/[slug]/page.tsx `checklist`). conference_setup_status() now
-// builds all eight, reports setup_total as the length of its own item list, and
-// counts setup_done and pending_keys over the same eight with no exception for
+// builds all seven, reports setup_total as the length of its own item list, and
+// counts setup_done and pending_keys over the same seven with no exception for
 // `publish` — so the ring, the hover list and the organiser's own ring can no
 // longer disagree, and there is nothing left for this file to patch.
 //

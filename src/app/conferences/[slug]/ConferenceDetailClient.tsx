@@ -25,7 +25,7 @@ import { uploadConferenceAsset } from '@/lib/conferenceAssets';
 // Checkout/invoice surfaces deliberately keep the exact formatFee.
 import { formatFeeCompact } from '@/lib/utils';
 import { activeFeePhase, activePhaseFee, type FeePhase } from '@/lib/finance';
-import { fetchDelegatePrices, displayDelegatePrice, type DelegatePrice } from '@/lib/publicFees';
+import { fetchDelegatePrices, displayDelegatePrice, displayRolePrice, delegatePriceLabel, priceDate, upcomingOpening, type DelegatePrice } from '@/lib/publicFees';
 import { hasNothingToPay } from '@/lib/freeRegistration';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { normalizeBlocks } from '@/lib/customQuestions';
@@ -1384,6 +1384,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   const heroPrice: DelegatePrice | null = delegateRoleConfig
     ? displayDelegatePrice(delegateRoleConfig, conference.fee_currency, now)
     : viewPrice;
+  // Pricing details (and the role picker's prices) only once delegate
+  // applications are set up (enabled), open now or opening later.
+  const pricingVisible = heroPrice !== null && heroPrice.kind !== 'tbd' && enabledRoles.length > 0;
 
   function getRoleWindowStatus(r: RoleConfig): 'open' | 'closed' | 'opens-soon' | 'open-always' {
     if (!r.applications_open_at && !r.applications_close_at) return 'open-always';
@@ -2523,12 +2526,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                             {enabledRoles.map(r => {
                               const windowStatus = getRoleWindowStatus(r);
                               const open = windowStatus === 'open' || windowStatus === 'open-always';
-                              // Today's price: the active fee phase when one covers
-                              // today's date, otherwise the flat role fee.
-                              const resolved = activePhaseFee({ fee_amount: r.fee_amount, fee_phases: r.fee_phases });
-                              const fee = resolved.amount > 0
-                                ? formatFeeCompact(resolved.amount, r.fee_currency ?? conference.fee_currency)
-                                : 'Free';
+                              // The current stage's price (or the stage that applies
+                              // at opening), same rule as the headline: publicFees.
+                              const fee = delegatePriceLabel(displayRolePrice(r, conference.fee_currency, now));
                               const reason = windowStatus === 'closed'
                                 ? 'Applications closed'
                                 : windowStatus === 'opens-soon' && r.applications_open_at
@@ -2602,6 +2602,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       </span>
                     </div>
 
+                    {pricingVisible && (<>
                     <button
                       onClick={() => setPricingOpen(v => !v)}
                       className="mt-4 flex items-center gap-1.5 text-[11px] font-bold focus:outline-none transition-colors"
@@ -2620,8 +2621,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       <div className="w-full mt-4 pt-3" style={{ borderTop: '1px solid color-mix(in srgb, var(--gv-border) 60%, transparent)' }}>
                         {enabledRoles.map((r, i) => {
                           const phases = r.fee_phases ?? [];
-                          const activePhase = activeFeePhase(phases);
+                          // Highlight the stage that applies now, or at opening.
+                          const activePhase = activeFeePhase(phases, priceDate(r, now));
                           const currency = r.fee_currency ?? conference.fee_currency;
+                          const opensAt = upcomingOpening(r, now);
                           const fmtPhaseDate = (iso: string) =>
                             new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
                           return (
@@ -2631,12 +2634,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                   {capitalize(r.role.replace(/-/g, ' '))}
                                 </span>
                                 <span className="text-[13px] font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
-                                  {(() => {
-                                    const resolved = activePhaseFee({ fee_amount: r.fee_amount, fee_phases: phases });
-                                    return resolved.amount > 0 ? formatFeeCompact(resolved.amount, currency) : 'Free';
-                                  })()}
+                                  {delegatePriceLabel(displayRolePrice(r, conference.fee_currency, now))}
                                 </span>
                               </div>
+                              {opensAt && r.applications_open_at && (
+                                <p className="text-[11px] -mt-1 pb-1.5" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
+                                  Applications open {fmtWindowDate(r.applications_open_at)}
+                                </p>
+                              )}
                               {/* Fee phases breakdown, rendered only when the
                                   organizer configured date-windowed pricing */}
                               {phases.length > 0 && (
@@ -2691,6 +2696,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         })}
                       </div>
                     )}
+                    </>)}
                   </div>
                 </SectionCard>
 

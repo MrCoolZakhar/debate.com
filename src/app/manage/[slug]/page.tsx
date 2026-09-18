@@ -27,6 +27,7 @@ import DecorativeBleed from '@/components/DecorativeBleed';
 import ParticipantsChart, { toCumulativeSeries } from '@/components/conferences/ParticipantsChart';
 import ApplicantsDial from '@/components/conferences/ApplicantsDial';
 import TrafficSourcesCard from '@/components/conferences/TrafficSourcesCard';
+import { BENTO_BORDER } from '@/components/conferences/bento';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
 import { hasExploredEmails } from '@/lib/emailsExplored';
 import { getConferenceIntent, intentRank } from '@/lib/conferenceIntent';
@@ -633,7 +634,7 @@ export function RecentActivity({ events, now }: { events: ActivityEvent[]; now: 
            keyboard user gets no indication that Enter does anything. */
         className="flex flex-col focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
         style={{
-          backgroundColor: NEU.surface, borderRadius: 22,
+          backgroundColor: NEU.surface, borderRadius: 22, border: BENTO_BORDER,
           padding: '13px 16px 14px', gap: 10, flex: 1, minHeight: 168,
           cursor: openable ? 'pointer' : 'default',
           boxShadow: openable && hovered ? NEU.outHover : NEU.out,
@@ -1476,7 +1477,8 @@ export default function DashboardPage() {
   // in Settings, so nudging an organiser to configure them would be nudging
   // them at a holding page. The same row was removed from the SQL twin
   // `conference_setup_status()` (which drives the nudge emails and /admin) in
-  // the same change, so setup_total is 8 in both places. It was never a
+  // the same change. ("Get your first delegate" was removed on 8 Sep, so
+  // setup_total is now 7 in both places, all of them verification stages.) It was never a
   // verification criterion, so the blue checkmark is untouched.
   // Client twin of conference_setup_status()'s 'page' item: real dates are
   // now part of what "set up" means, because a TBD conference can never be
@@ -1776,7 +1778,7 @@ export default function DashboardPage() {
             chip without truncating them to nothing. */}
         <div className="flex flex-col w-full xl:basis-[34%] xl:shrink-0 xl:min-w-[320px]" style={{ gap: 14 }}>
 
-        <NeuCard className="flex flex-col flex-shrink-0" style={{ padding: '14px 15px 11px' }}>
+        <NeuCard className="flex flex-col flex-shrink-0" style={{ padding: '14px 15px 11px', border: BENTO_BORDER }}>
           <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginBottom: 9 }}>
             <div className="min-w-0">
               <h2 style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>Set-up priorities</h2>
@@ -1879,7 +1881,7 @@ export default function DashboardPage() {
             used to need their own tile row (allocation alert, money) so the
             card is full edge to edge instead of a big ring beside a
             paragraph. */}
-        <NeuCard className="flex-shrink-0" style={{ padding: '15px 18px' }}>
+        <NeuCard className="flex-shrink-0" style={{ padding: '15px 18px', border: BENTO_BORDER }}>
           <div className="flex items-stretch flex-wrap" style={{ gap: 20 }}>
             {/* 224, not the 236 default: the dial's height IS this card's
                 height, and 224 is what the vertical budget affords once the
@@ -1936,7 +1938,7 @@ export default function DashboardPage() {
             is why `title` was empty before).
             Full right-column width on purpose: its SVG is a scaled viewBox,
             so squeezing it sideways shrinks the axis type with it. */}
-        <NeuCard className="flex flex-col flex-shrink-0" style={{ padding: '12px 16px 12px' }}>
+        <NeuCard className="flex flex-col flex-shrink-0" style={{ padding: '12px 16px 12px', border: BENTO_BORDER }}>
           <ParticipantsChart points={participantSeries} />
         </NeuCard>
 
