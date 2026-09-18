@@ -24,6 +24,7 @@ import { CountryField } from '@/components/CountryField';
 import { DatePicker } from '@/components/DatePicker';
 import { ageAt } from '@/lib/age';
 import { GeoGuessNote, useNationalityPrefill } from '@/components/GeoCountryGuess';
+import { clearPendingBasics, pendingBasicsFor, readPendingBasicsCookie } from '@/lib/pendingBasics';
 
 const TOTAL_STEPS = 4;
 
@@ -122,8 +123,35 @@ export default function OnboardingPage() {
       if (cancelled) return;
       if (!profile) { setBasicsNeeded(false); return; }
       const row = profile;
-      setBasicsNationality(row.nationality ?? '');
-      setBasicsDob(row.date_of_birth ?? '');
+
+      // Answers given on /auth/signup before "Sign up with Google" normally
+      // land in /auth/callback. If that write did not, the cookie is still
+      // here: fill only the empty columns from it, then drop it either way.
+      const rawPending = readPendingBasicsCookie();
+      let prefill: { nationality: string; dateOfBirth: string } | null = null;
+      if (rawPending) {
+        const pending = (!row.nationality || !row.date_of_birth)
+          ? pendingBasicsFor(rawPending, data.user.created_at)
+          : null;
+        if (pending) {
+          const patch: Record<string, string> = {};
+          if (!row.nationality) patch.nationality = pending.nationality;
+          if (!row.date_of_birth) patch.date_of_birth = pending.dateOfBirth;
+          const res = await supabase.from('profiles').update(patch).eq('id', data.user.id).select('id');
+          if (cancelled) return;
+          if (!res.error && res.data && res.data.length > 0) {
+            row.nationality = row.nationality || pending.nationality;
+            row.date_of_birth = row.date_of_birth || pending.dateOfBirth;
+          } else {
+            // Not saved: show their own answers on the basics screen, so one
+            // press of Continue finishes it.
+            prefill = pending;
+          }
+        }
+        clearPendingBasics();
+      }
+      setBasicsNationality(row.nationality || prefill?.nationality || '');
+      setBasicsDob(row.date_of_birth || prefill?.dateOfBirth || '');
       setBasicsNeeded(!row.nationality || !row.date_of_birth);
     });
     return () => { cancelled = true; };

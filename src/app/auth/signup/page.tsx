@@ -4,12 +4,11 @@ import { useEffect, useMemo, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createAuthClient } from '@/lib/supabase-auth';
-import { ageAt } from '@/lib/age';
 import { DatePicker } from '@/components/DatePicker';
 import { CountryField } from '@/components/CountryField';
-import { getCountryByName } from '@/lib/countries';
 import { GeoGuessNote, useNationalityPrefill } from '@/components/GeoCountryGuess';
 import Loader from '@/components/Loader';
+import { stashPendingBasics, validateBasics } from '@/lib/pendingBasics';
 import {
   AuthLayout,
   CardHeading,
@@ -220,6 +219,18 @@ function SignUpInner() {
 
   async function handleGoogleSignUp() {
     if (oauthLoading) return;
+    // Google creates the account before we get another chance to ask, and
+    // people who then left the onboarding screen stayed blank for good. So
+    // both are asked here first, and carried through the round trip in a
+    // short-lived cookie that /auth/callback writes into the new profile
+    // (src/lib/pendingBasics.ts). Signing IN with Google never needs this.
+    setError('');
+    const basics = validateBasics(nationality, dob);
+    if (!basics.ok) {
+      setError(basics.error);
+      return;
+    }
+    stashPendingBasics(basics.value);
     setOauthLoading(true);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -255,27 +266,16 @@ function SignUpInner() {
       setError('Please enter your last name.');
       return;
     }
-    if (!dob) {
-      setError('Please enter your date of birth.');
-      return;
-    }
-    const dateOfBirth = dob; // already 'YYYY-MM-DD' from the DatePicker
-    const age = ageAt(dateOfBirth);
-    if (age === null || age < 0 || age > 120) {
-      setError('That date of birth doesn’t look right. Please double-check it.');
-      return;
-    }
-    if (age < 13) {
-      setError('You need to be at least 13 years old to create a Gavelling account.');
-      return;
-    }
-    // Free text is accepted while typing; only a real UN country name gets
+    // Same checks as the Google path and the onboarding basics screen. Free
+    // text is accepted while typing; only a real country from our list gets
     // through, so allocation and eligibility checks can rely on the value.
-    const country = getCountryByName(nationality);
-    if (!country) {
-      setError('Please choose your nationality from the list.');
+    const basics = validateBasics(nationality, dob);
+    if (!basics.ok) {
+      setError(basics.error);
       return;
     }
+    const dateOfBirth = basics.value.dateOfBirth;
+    const country = { name: basics.value.nationality };
 
     setLoading(true);
     const { data, error } = await supabase.auth.signUp({
@@ -377,6 +377,12 @@ function SignUpInner() {
               Create your account to continue your application and we&apos;ll take you straight back to it.
             </div>
           )}
+          {/* Asked before either way of signing up. Both are shared by the
+              Google button and the e-mail form below. */}
+          <div className="space-y-4 mb-5">
+            <NationalityField value={nationality} onChange={setNationality} guessed={guessedNationality} />
+            <DobField value={dob} onChange={setDob} />
+          </div>
           <GoogleButton label="SIGN UP WITH GOOGLE" onClick={handleGoogleSignUp} disabled={oauthLoading} />
           <OrDivider />
 
@@ -419,8 +425,6 @@ function SignUpInner() {
                 </p>
               )}
             </div>
-            <NationalityField value={nationality} onChange={setNationality} guessed={guessedNationality} />
-            <DobField value={dob} onChange={setDob} />
             <PasswordField
               label="Password"
               value={password}

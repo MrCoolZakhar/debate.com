@@ -151,6 +151,16 @@ One seal, the one social media uses (`src/components/VerifiedCheck.tsx`). Blue m
 
 Reminders: `queue_checkmark_emails()` (cron 10:30 daily) sends one "N minutes from its checkmark" email per organiser per conference, a follow-up after two weeks, and a congratulations when the mark lands, all through `email_outbox` and paced 48h from the organiser drip. `SetupReminderGate` (root layout) shows the same list once a day when an organiser with an unverified conference enters the site, via `my_incomplete_conferences()`.
 
+**Sign-up asks first (18 Sep 2026).** `/auth/signup` shows nationality and date of birth
+ABOVE "Sign up with Google" and refuses both ways of signing up without them (same rules as
+onboarding, `validateBasics` in `src/lib/pendingBasics.ts`). For Google the confirmed answers
+ride through the round trip in a 30-minute first-party cookie (`gv_pending_basics`, SameSite
+Lax); `/auth/callback` writes them into the new profile (only empty columns, only for an
+account created after the answers were given) and clears it, and `/auth/onboarding` retries
+from it if that write did not land. "Sign in with Google" clears it and still asks nothing
+before signing in, so a brand-new account made from the SIGN-IN page still meets the
+unskippable basics screen in onboarding and this gate. Invite pages link to one of those two.
+
 `CompleteBasicsGate` (root layout, 11 Sep 2026) is the backstop for accounts with no
 nationality or date of birth. Google sign-up creates the account before anything can be
 asked, and a user who closes the onboarding tab used to stay blank forever (1,777 of 2,627

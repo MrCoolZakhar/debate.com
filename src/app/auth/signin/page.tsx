@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createAuthClient } from '@/lib/supabase-auth';
 import Loader from '@/components/Loader';
+import { clearPendingBasics } from '@/lib/pendingBasics';
 import {
   AuthLayout,
   CardHeading,
@@ -45,6 +46,9 @@ function SignInInner() {
 
   async function handleGoogleSignIn() {
     if (oauthLoading) return;
+    // Answers someone left on /auth/signup in this browser belong to the
+    // account THEY were creating, not to whoever signs in next.
+    clearPendingBasics();
     setOauthLoading(true);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
