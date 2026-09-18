@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, FileText, Gavel, GripVertical, Hourglass, Infinity as InfinityIcon, ListOrdered, Sparkles, Timer } from 'lucide-react';
 import { DEFAULT_DOCUMENT_NAMES, DEFAULT_MOTION_NAMES, type CommitteeSettings, type DocumentNames, type MotionNames } from '@/lib/settingsStore';
 import { localizedMotionDefaults } from '@/lib/committeeFlags';
-import { K, T, W, Section, SettingRow, GavelSwitch, ClockStepper, InlineRename, HoverHint, InfoHint, TallyStepper } from './settingsKit';
+import { K, T, W, GLYPH, Section, SettingRow, GavelSwitch, ClockStepper, InlineRename, HoverHint, InfoHint, TallyStepper } from './settingsKit';
 import type { TabProps } from './settingsTypes';
 
 type OrderableType = 'moderated' | 'unmoderated' | 'consultation' | 'tour';
@@ -149,7 +149,7 @@ export default function MotionsTab({ s, upd, t, language, isViewOnly }: TabProps
       <Section icon={Gavel} title={t('stg_other_motions')} hint={t('settings_procedural_motions_desc')} delay={40}>
         {/* Custom motions: outside the ranking on purpose (no motionOrder position). */}
         <div className="flex items-center gap-3" style={{ minHeight: 58, padding: '8px 0' }}>
-          <Sparkles aria-hidden size={18} strokeWidth={2.3} className="shrink-0" style={{ color: K.deepGold }} />
+          <Sparkles aria-hidden size={18} strokeWidth={2.3} className="shrink-0" style={{ color: GLYPH.amber }} />
           <span className="flex-1 min-w-0">
             <InlineRename {...renameProps} defaultName={locName('custom', DEFAULT_MOTION_NAMES.custom)} resetValue={DEFAULT_MOTION_NAMES.custom}
               value={s.motionNames.custom ?? DEFAULT_MOTION_NAMES.custom} onChange={(v) => upd('motionNames', { ...s.motionNames, custom: v })} />
@@ -164,7 +164,7 @@ export default function MotionsTab({ s, upd, t, language, isViewOnly }: TabProps
           { key: 'endDebate' as keyof MotionNames, defaultName: 'End Debate', icon: Gavel },
         ]).map(({ key, defaultName, icon: Icon }) => (
           <div key={key} className="flex items-center gap-3" style={{ minHeight: 58, padding: '8px 0', borderTop: `1px solid ${K.hair}` }}>
-            <Icon aria-hidden size={18} strokeWidth={2.3} className="shrink-0" style={{ color: K.danger }} />
+            <Icon aria-hidden size={18} strokeWidth={2.3} className="shrink-0" style={{ color: GLYPH.danger }} />
             <span className="flex-1 min-w-0">
               <InlineRename {...renameProps} defaultName={locName(key, defaultName)} resetValue={defaultName} value={s.motionNames[key] ?? defaultName}
                 onChange={(v) => upd('motionNames', { ...s.motionNames, [key]: v })} />

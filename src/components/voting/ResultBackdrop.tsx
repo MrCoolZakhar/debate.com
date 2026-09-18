@@ -9,7 +9,9 @@
  * The three were picked once through the GIPHY search API (rating g) and are hardcoded here,
  * so the page never calls the API and never needs the key:
  *   passed  3fiimcA0K0ifzoL7FF  a standing ovation (Film Independent Spirit Awards)
- *   failed  xTeV7ycHGuPnKX92cE  SpongeBob: "Well, back to the drawing board."
+ *   failed  jPFrxnj14Wv5IKV12T  Abraham Lincoln shaking his head: no (owner, 17 Sep 2026:
+ *                               "change the GIF of a failed vote". It replaced SpongeBob's
+ *                               "back to the drawing board", xTeV7ycHGuPnKX92cE)
  *   vetoed  ur8pcK1C73Lqw       Schoolhouse Rock's Bill, the classic civics lesson in a bill
  *                               that does not become law
  *
@@ -30,7 +32,7 @@ const MEDIA = 'https://media.giphy.com/media';
 
 export const RESULT_GIFS: Record<ResultKind, { id: string; animated: string; still: string }> = {
   passed: { id: '3fiimcA0K0ifzoL7FF', animated: `${MEDIA}/3fiimcA0K0ifzoL7FF/giphy.webp`, still: `${MEDIA}/3fiimcA0K0ifzoL7FF/480w_s.jpg` },
-  failed: { id: 'xTeV7ycHGuPnKX92cE', animated: `${MEDIA}/xTeV7ycHGuPnKX92cE/giphy.webp`, still: `${MEDIA}/xTeV7ycHGuPnKX92cE/480w_s.jpg` },
+  failed: { id: 'jPFrxnj14Wv5IKV12T', animated: `${MEDIA}/jPFrxnj14Wv5IKV12T/giphy.webp`, still: `${MEDIA}/jPFrxnj14Wv5IKV12T/480w_s.jpg` },
   vetoed: { id: 'ur8pcK1C73Lqw', animated: `${MEDIA}/ur8pcK1C73Lqw/giphy.webp`, still: `${MEDIA}/ur8pcK1C73Lqw/480w_s.jpg` },
 };
 

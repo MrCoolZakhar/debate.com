@@ -46,6 +46,9 @@ import {
 const MONO = 'ui-monospace, monospace';
 const DANGER: [string, string] = ['#9A3030', '#7A1F1F'];
 const ATTENTION: [string, string] = ['#C79A52', '#B8844A'];
+/** Pledged delegation spots, the same gold ApplicantsDial gives them on the
+ *  organiser dashboard: people who are coming without an application row. */
+const PLEDGED_GOLD = '#8A6614';
 
 export interface AdminConferenceRow {
   id: string; slug: string; acronym: string | null; full_name: string;
@@ -642,13 +645,16 @@ function countFilters(f: Filters) {
 // ── The tab ─────────────────────────────────────────────────────────────────
 
 export default function ConferencesTab({
-  rows, logos, avatars = {},
+  rows, logos, avatars = {}, pledged = {},
 }: {
   rows: AdminConferenceRow[];
   /** conference id → logo_url, loaded separately (the overview RPC has no logo). */
   logos: Record<string, string | null>;
   /** conference id → its organiser's profiles.avatar_url, likewise. */
   avatars?: Record<string, string | null>;
+  /** conference id → delegation spots pledged and not yet filled, loaded
+   *  separately for the same reason (see AdminClient). Missing means none. */
+  pledged?: Record<string, number>;
 }) {
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   // Peter #2: newest listed first, by created_at desc.
@@ -747,13 +753,17 @@ export default function ConferencesTab({
                                   ? ts(b.verified_at) - ts(a.verified_at)
                                   : (b.setup_done / Math.max(b.setup_total, 1)) - (a.setup_done / Math.max(a.setup_total, 1)))
                             || ts(b.created_at) - ts(a.created_at);
-        case 'apps':    return b.applications - a.applications || ts(b.created_at) - ts(a.created_at);
+        // Sorted by PEOPLE, so the order matches the headline the rows print:
+        // a conference of pledged delegations outranks one with more loose
+        // applications, which is the true size ordering.
+        case 'apps':    return (b.applications + (pledged[b.id] ?? 0)) - (a.applications + (pledged[a.id] ?? 0))
+                            || ts(b.created_at) - ts(a.created_at);
         case 'name':    return (a.acronym || a.full_name).localeCompare(b.acronym || b.full_name);
         default:        return ts(b.created_at) - ts(a.created_at);
       }
     });
     return sorted;
-  }, [rows, filters, search, sort]);
+  }, [rows, filters, search, sort, pledged]);
 
   const activeCount = countFilters(filters);
 
@@ -971,6 +981,7 @@ export default function ConferencesTab({
               r={r}
               logo={logos[r.id] ?? null}
               avatar={avatars[r.id] ?? r.organizer_avatar ?? null}
+              pledged={pledged[r.id] ?? 0}
               filters={filters}
               onFilterState={v => only('state', v)}
               onFilterCountry={v => only('country', v)}
@@ -987,11 +998,13 @@ export default function ConferencesTab({
 // ── One conference ──────────────────────────────────────────────────────────
 
 function ConferenceRow({
-  r, logo, avatar, filters, onFilterState, onFilterCountry, onFilterOrganizer, onFilterIntent,
+  r, logo, avatar, pledged, filters, onFilterState, onFilterCountry, onFilterOrganizer, onFilterIntent,
 }: {
   r: AdminConferenceRow;
   logo: string | null;
   avatar: string | null;
+  /** Delegation spots pledged that nobody has registered against yet. */
+  pledged: number;
   filters: Filters;
   onFilterState: (v: string) => void;
   onFilterCountry: (v: string) => void;
@@ -1252,7 +1265,16 @@ function ConferenceRow({
         <NeuInset small style={{ padding: '8px 14px', borderRadius: 14, flexShrink: 0 }}>
           <div className="flex items-center" style={{ gap: 16 }}>
             <Count value={r.committees} label="cttee" />
-            <Count value={r.applications} label="apps" strong />
+            {/* PEOPLE, not rows: an application row is one person, a pledge of
+                20 delegation spots is twenty. The headline adds the pledged
+                spots nobody has registered against yet, and the "apps" count
+                stays beside it so the real registration figure is never lost.
+                Arithmetic and the netting-off: src/lib/pledgedSpots.ts. */}
+            {pledged > 0 && (
+              <Count value={r.applications + pledged} label="people" strong />
+            )}
+            <Count value={r.applications} label="apps" strong={pledged === 0} />
+            {pledged > 0 && <Count value={pledged} label="pledged" tone={PLEDGED_GOLD} />}
             <Count value={r.paid_applications} label="paid" tone={NEU.green} />
           </div>
         </NeuInset>

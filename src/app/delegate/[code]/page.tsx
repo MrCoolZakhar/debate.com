@@ -70,6 +70,7 @@ function formatTime(seconds: number): string {
 }
 
 function GavelLoader() {
+  const t = useT();
   return (
     <div className="min-h-screen bg-[#EDE7D8] flex flex-col items-center justify-center gap-4">
       <style>{`
@@ -91,7 +92,7 @@ function GavelLoader() {
         <rect x="10" y="16" width="36" height="7" rx="3" transform="rotate(-45 10 16)" fill="#6A5A4A" opacity="0.4" />
         <circle cx="56" cy="56" r="3" fill="#1B3828" opacity="0.5" />
       </svg>
-      <p className="text-[#9A8A78] text-sm font-mono tracking-widest">LOADING…</p>
+      <p className="text-[#9A8A78] text-sm font-mono tracking-widest">{t('session_loading')}</p>
     </div>
   );
 }
@@ -147,16 +148,6 @@ function autoDocCode(type: DocumentType, existingDocs: { type: DocumentType }[])
   const sameType = existingDocs.filter((d) => d.type === type);
   return `${prefix} 1${sep}${sameType.length + 1}`;
 }
-
-const PHASE_LABELS: Record<string, string> = {
-  'pre-session': 'Pre-Session',
-  'roll-call': 'Roll Call',
-  'speakers-list': "General Speakers' List",
-  'moderated-caucus': 'Moderated Caucus',
-  'unmoderated-caucus': 'Unmoderated Caucus',
-  'voting': 'Voting Procedure',
-  'adjourned': 'Debate Closed',
-};
 
 // How long a locally-written delegate status stays pinned against an incoming refetch before
 // control goes back to the DB row. Same number as the chair page's STATUS_PIN_TTL_MS — both
@@ -349,7 +340,7 @@ function SponsorsInput({
                 className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-start transition-colors ${i === 0 ? 'bg-[#DDD4C0] text-[#1C1410]' : 'text-[#6A5A4A] hover:bg-[#DDD4C0]'}`}
               >
                 {<SeatMark country={c} />} {getCountryDisplayName(c, language)}
-                {i === 0 && <span className="ms-auto text-xs text-[#9A8A78]">↵ Enter</span>}
+                {i === 0 && <span className="ms-auto text-xs text-[#9A8A78]">{t('delegate_enter_hint')}</span>}
               </button>
             ))}
           </div>
@@ -797,10 +788,16 @@ type DelegateSheet = null | 'stats' | 'documents' | 'chat' | 'queue';
 function DelegateSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const t = useT();
   const { language, setLanguage } = useLanguage();
+  // Every phase label is translated. The caucus rows are the FALLBACK only: `phaseDisplay`
+  // below still prefers `caucus.motionLabel` and the chair's `motionNames` rename.
   const PHASE_LABEL: Record<string, string> = {
     'pre-session': t('delegate_phase_pre_session'),
     'roll-call': t('delegate_phase_roll_call'),
     'speakers-list': t('delegate_phase_gsl'),
+    'moderated-caucus': t('delegate_phase_moderated'),
+    'unmoderated-caucus': t('delegate_phase_unmoderated'),
+    'voting': t('delegate_phase_voting'),
+    'adjourned': t('delegate_phase_adjourned'),
   };
   const { code } = use(params);
   const router = useRouter();
@@ -824,6 +821,12 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // neither restarts its interval nor leaves it sending a stale token.
   const seatAccessTokenRef = useRef<string | null>(null);
   useEffect(() => { seatAccessTokenRef.current = session?.access_token ?? null; }, [session?.access_token]);
+  // This seat is not ours: a stop screen is on, and the room feed must come down with it
+  // (see the effect beside the loader). 'error' is NOT a verdict, so it is not in here.
+  const seatLost = accessState === 'taken' || accessState === 'kicked' || accessState === 'elsewhere'
+    || accessState === 'denied' || accessState === 'signin';
+  // The live room subscription, so losing the seat can stop it from outside the loader.
+  const syncRef = useRef<{ stop: () => void } | null>(null);
 
   const [committee, setCommittee] = useState<Committee | null>(null);
   /* Latest committee, for callbacks that fire on a delay. The delayed denial
@@ -987,12 +990,23 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           },
         });
         if (cancelled) { sync.stop(); return; }
-        unsubscribe = sync.stop;
+        syncRef.current = sync;
+        unsubscribe = () => { sync.stop(); if (syncRef.current === sync) syncRef.current = null; };
       }
     }
     load();
     return () => { cancelled = true; unsubscribe?.(); };
   }, [code, loadAttempt]);
+
+  // Losing the seat stops the room, not just the screen. Until this existed a removed
+  // delegate's page went on holding a live Realtime subscription to the committee behind
+  // the stop screen: every chat message, document and motion still streamed into that
+  // device for as long as the tab stayed open. "Removed" has to mean the feed ends too.
+  // The seat guard's own screens are all reachable again through retrySeat, which bumps
+  // loadAttempt and brings the room back.
+  useEffect(() => {
+    if (seatLost) { syncRef.current?.stop(); syncRef.current = null; }
+  }, [seatLost]);
 
   // Seat guard. Runs independently of the committee load. claim_delegate_seat is the one
   // authority for who may sit here (src/lib/seatClaims.ts):
@@ -1079,12 +1093,20 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   useEffect(() => {
     if (!seatAllowed || sessionEnded || authLoading || !country || idleLoggedOut) return;
     let alive = true;
-    let busy = false;
-    const check = async (takeover = false) => {
-      if (busy || idleIsIdle()) return;
-      busy = true;
+    // 0 = nothing in flight. Timestamped, not a boolean: a check that never answers must
+    // not wedge every later one (claimDelegateSeat has its own timeout; this is the belt
+    // beside that brace). A stuck flag used to mean the 30 s tick, the tab-visible check
+    // AND the chair's kick were dropped for the rest of the page's life.
+    let busyAt = 0;
+    // `force` skips the idle guard: a chair's removal is not a routine heartbeat and must
+    // land whether or not this delegate has gone quiet. Without it the kick broadcast was
+    // swallowed on exactly the page most likely to be removed, a quiet one.
+    const check = async (takeover = false, force = false) => {
+      if (busyAt && Date.now() - busyAt < 15_000) return;
+      if (!force && idleIsIdle()) return;
+      busyAt = Date.now();
       const res = await claimDelegateSeat(code, country, seatAccessTokenRef.current, { takeover });
-      busy = false;
+      busyAt = 0;
       if (!alive) return;
       if (res.reason === 'taken') setAccessState('taken');
       else if (res.reason === 'kicked') setAccessState('kicked');
@@ -1099,7 +1121,13 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     // server reached the takeover step), so it takes over like a fresh open would.
     if (hasMySeatRow && seatNoSeat) check(true);
     const id = setInterval(() => check(), 30_000);
-    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+    // Coming back to the tab, and coming back online, are both moments when this page may
+    // have missed a removal while it was not listening. Forced, because a phone that slept
+    // past the idle threshold would otherwise skip the check and keep the room on screen
+    // until the idle logout happens to fire.
+    const onVisible = () => { if (document.visibilityState === 'visible') check(false, true); };
+    const onOnline = () => check(false, true);
+    window.addEventListener('online', onOnline);
     document.addEventListener('visibilitychange', onVisible);
     // A chair removed a seat (Settings → People): re-verify now instead of within 30 s. The
     // broadcast is only a hint and is never trusted: the page stops only if the server
@@ -1107,13 +1135,14 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     const kickChannel = seatCommitteeId
       ? supabase.channel(seatKickTopic(seatCommitteeId))
           .on('broadcast', { event: 'kicked' }, ({ payload }) => {
-            if ((payload as { c?: unknown } | null)?.c === seatKey(country)) check();
+            if ((payload as { c?: unknown } | null)?.c === seatKey(country)) check(false, true);
           })
           .subscribe()
       : null;
     return () => {
       alive = false;
       clearInterval(id);
+      window.removeEventListener('online', onOnline);
       document.removeEventListener('visibilitychange', onVisible);
       if (kickChannel) void supabase.removeChannel(kickChannel);
     };
@@ -1370,7 +1399,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // Seat guard screens (see the claim effect above). Every one of them has a way back.
   const backToJoin = () => router.push('/join?code=' + encodeURIComponent(code.toUpperCase()));
   const signInThenJoin = () => router.push('/auth/signin?next=' + encodeURIComponent('/join?code=' + code.toUpperCase()));
-  const retrySeat = () => setSeatRetry((n) => n + 1);
+  // Also bumps loadAttempt, because losing the seat stopped the room subscription: without
+  // this a delegate who took the seat back with "Use this device instead" would sit in a
+  // room that never updates again.
+  const retrySeat = () => { setSeatRetry((n) => n + 1); setLoadAttempt((n) => n + 1); };
   // Signed in with the wrong account: "Sign in" would bounce straight back here, so
   // sign out first and then sign in.
   const switchAccountThenJoin = () => { void signOut().finally(signInThenJoin); };
@@ -1460,8 +1492,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         <DelegateStyles />
         <Panel className="dgv-rise w-full max-w-sm text-center">
           <h1 style={{ margin: 0, fontFamily: OUTFIT, fontSize: 24, fontWeight: 900, color: DG.forest }}>{t('delegate_session_not_found')}</h1>
-          <p style={{ margin: '10px 0 20px', fontFamily: OUTFIT, fontSize: 14, color: DG.body }}>Code &quot;{code}&quot; is invalid or the session has ended.</p>
-          <ChunkyButton onClick={() => router.push('/join')}>TRY AGAIN</ChunkyButton>
+          <p style={{ margin: '10px 0 20px', fontFamily: OUTFIT, fontSize: 14, color: DG.body }}>{t('delegate_session_not_found_body', { code })}</p>
+          <ChunkyButton onClick={() => router.push('/join')}>{t('session_try_again')}</ChunkyButton>
         </Panel>
       </div>
     );
@@ -1483,9 +1515,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     // `caucus.motionLabel` still wins where it is set: it records WHICH motion opened
     // the caucus, and a Tour de Table is stored as a moderated caucus, so the caucus
     // type alone would mislabel it. `mn` is the fallback and covers every other surface.
-    if (committee.phase === 'moderated-caucus') return committee.caucus?.motionLabel || mn.moderated || PHASE_LABELS['moderated-caucus'];
-    if (committee.phase === 'unmoderated-caucus') return committee.caucus?.motionLabel || mn.unmoderated || PHASE_LABELS['unmoderated-caucus'];
-    return PHASE_LABEL[committee.phase] ?? PHASE_LABELS[committee.phase] ?? committee.phase;
+    if (committee.phase === 'moderated-caucus') return committee.caucus?.motionLabel || mn.moderated || PHASE_LABEL['moderated-caucus'];
+    if (committee.phase === 'unmoderated-caucus') return committee.caucus?.motionLabel || mn.unmoderated || PHASE_LABEL['unmoderated-caucus'];
+    return PHASE_LABEL[committee.phase] ?? committee.phase;
   })();
 
   // ── Status change handler — optimistic update to avoid visible lag
@@ -1716,7 +1748,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       <div className="relative shrink-0">
         <button
           type="button"
-          aria-label="Language"
+          aria-label={t('delegate_language_label')}
           aria-expanded={langOpen}
           onClick={() => setLangOpen((v) => !v)}
           className="dgv-tap dgv-focus"

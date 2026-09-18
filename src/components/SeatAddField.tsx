@@ -145,7 +145,7 @@ export default function SeatAddField({
 
   if (locked) {
     return (
-      <div className="relative w-full" style={{ maxWidth: large ? 300 : undefined }}>
+      <div className="relative w-full" data-tutorial="seat-add" style={{ maxWidth: large ? 300 : undefined }}>
         <button
           type="button"
           aria-disabled
@@ -165,7 +165,7 @@ export default function SeatAddField({
   }
 
   return (
-    <div className="relative w-full" style={{ maxWidth: large ? 300 : undefined }}>
+    <div className="relative w-full" data-tutorial="seat-add" style={{ maxWidth: large ? 300 : undefined }}>
       <div
         className="flex items-center gap-1.5 rounded-full cursor-text transition-shadow shadow-[inset_0_0_0_1px_rgba(237,231,216,0.18)] focus-within:shadow-[inset_0_0_0_1.5px_rgba(238,217,138,0.65)]"
         style={{ height: h, paddingInline: large ? 12 : 8, backgroundColor: 'rgba(237,231,216,0.08)' }}

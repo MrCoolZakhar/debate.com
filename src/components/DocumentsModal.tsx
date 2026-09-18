@@ -202,7 +202,7 @@ function SponsorSelect({ candidates, selected, onChange, committee }: {
           {selected.map((c) => {
             return (
               <button key={c} onClick={() => onChange(selected.filter((s) => s !== c))}
-                title={`Remove ${c}`}
+                title={t('documents_sponsor_remove', { country: c })}
                 className="relative group focus:outline-none">
                 <SeatFlag
                   country={c}
@@ -405,13 +405,13 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
       </div>
       <div>
         <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">
-          {t('documents_attachment_label')} <span className="text-[#9A8A78] font-normal">(optional)</span>
+          {t('documents_attachment_label')} <span className="text-[#9A8A78] font-normal">({t('documents_google_docs_optional')})</span>
         </label>
         {fileName ? (
           <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3">
             <span className="text-sm text-[#1C1410] flex-1 truncate flex items-center gap-2">
               {isUploading
-                ? <><div className="w-3.5 h-3.5 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin shrink-0" /> Uploading…</>
+                ? <><div className="w-3.5 h-3.5 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin shrink-0" /> {t('documents_uploading')}</>
                 : <>📎 {fileName}</>
               }
             </span>
@@ -432,7 +432,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
             }`}
           >
             <span className="block text-xl mb-1">📎</span>
-            {isDragging ? 'Drop PDF here' : 'Click to upload or drag & drop a PDF'}
+            {isDragging ? t('documents_drop_pdf') : t('documents_upload_hint')}
           </div>
         )}
         <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleFileChange} style={{ position: 'fixed', top: '-9999px', left: '-9999px', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }} />
@@ -452,7 +452,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
       )}
       {isSubmitting ? (
         <button disabled className="w-full bg-[#9A8A78] text-white py-3.5 rounded-xl font-bold cursor-not-allowed gv-lift">
-          Uploading…
+          {t('documents_uploading')}
         </button>
       ) : (
         <button onClick={handleSubmit} disabled={!canSubmit}
@@ -460,7 +460,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
           {limitReached
             ? t('documents_limit_reached').replace('{current}', String(existingCount)).replace('{limit}', String(limit))
             : isDuplicate
-              ? 'A document with this title already exists'
+              ? t('documents_duplicate_title')
               : t('documents_submit_document')}
         </button>
       )}
@@ -599,7 +599,7 @@ function DocCard({ doc, committee, onRemove, onStartPresentation, requireApprova
             <div>
               <button onClick={() => setExpanded((v) => !v)}
                 className="text-xs text-[#1B3828] hover:text-[#6A5A4A] transition-colors">
-                {expanded ? '▲ Hide content' : '▼ Show content'}
+                {expanded ? `▲ ${t('documents_hide_content')}` : `▼ ${t('documents_show_content')}`}
               </button>
               {expanded && (
                 <pre className="mt-2 text-xs text-[#1C1410] bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 whitespace-pre-wrap font-sans leading-relaxed max-h-48 overflow-y-auto">
@@ -888,9 +888,12 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
     finishIntroduction(activeDoc);
   };
 
-  // Escape: on the setup screen it goes back to the documents list (the bar with its X is
-  // gone); on a stage it only folds an open Finish question. Never while a dialog is over the
-  // introduction (Chat, Settings, Scoreboard handle their own Escape) or inside a field.
+  // Escape: on the setup screen it goes back to the documents list (the keyboard twin of the
+  // docket's Back key; nothing has been written there yet, so leaving costs only the draft
+  // minutes). On a STAGE it never leaves: a running presentation must not end by a stray key
+  // press (17 Sep 2026, owner), so it only folds an open Finish question. Never while a dialog
+  // is over the introduction (Chat, Settings, Scoreboard handle their own Escape) or inside a
+  // field.
   const introStage = activeDoc ? stage : null;
   useEffect(() => {
     if (!introStage) return;
@@ -937,6 +940,9 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
   // Fullscreen stages. The paper is the page; the clock floats over it (16 Sep 2026).
   if (activeDoc && stage && stage !== 'setup') {
     const stageLabel = stage === 'reading' ? t('documents_stage_reading') : stage === 'presentation' ? t('documents_stage_presentation') : t('documents_stage_qa');
+    /** No file and no text: there is nothing to project, so the clock becomes the screen
+     *  (17 Sep 2026, owner: "just have a big timer appear in the middle"). */
+    const paperEmpty = !activeDoc.fileUrl && !activeDoc.content;
     return introFrame('#EDE7D8', (<>
         <div className="relative z-[30] grid items-center gap-3 px-4 h-14 shrink-0 bg-[#F6F1E6]"
           style={{ gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', boxShadow: '0 1px 0 rgba(28,20,16,0.08)' }}>
@@ -1004,7 +1010,8 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
               <Plus size={16} strokeWidth={2.6} aria-hidden />
             </button>
             </>)}
-            {!timerOpen && (
+            {/* A centred timer IS the screen, so it is never hidden and this never shows. */}
+            {!timerOpen && !paperEmpty && (
               <button type="button" onClick={() => setTimerOpen(true)}
                 aria-label={t('documents_timer_show')} title={t('documents_timer_show')}
                 className="ms-1 h-9 ps-2.5 pe-3 rounded-lg flex items-center gap-1.5 text-xs font-semibold bg-[#1B3828] hover:bg-[#244A36] text-[#FAF8F3] transition-[background-color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]/40">
@@ -1012,29 +1019,28 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
                 {t('documents_timer_show')}
               </button>
             )}
-            {/* Closing leaves the paper introduced. A working paper's card offers Introduce
-                again; a draft resolution goes to the voting page. */}
-            <button onClick={() => { closeFlow(); onClose(); }} aria-label={t('sb_close')} title={t('sb_close')}
-              className="ms-1 w-9 h-9 shrink-0 rounded-lg flex items-center justify-center text-[#6A5A4A] hover:text-[#1C1410] hover:bg-[#1B3828]/[0.07] transition-[background-color,color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">
-              <X size={18} strokeWidth={2.4} aria-hidden />
-            </button>
+            {/* No close X here any more (17 Sep 2026, owner: "the only way out is either clicking
+                Finish or the next arrows"). A presentation is left by Finish, by the timer's
+                Continue / next out of the last stage, or by the Timings key back to the order of
+                proceedings, whose Back key returns to the documents list. */}
           </div>
         </div>
         {flowErrorBanner}
         <div className="flex-1 min-h-0 relative">
           {/* Mounted once for the whole introduction: a stage change never remounts it, so the
               zoom and the scroll position stay exactly where the chair left them. */}
-          <IntroDocument doc={activeDoc} zoom={zoom} onZoomChange={setZoom} />
+          {!paperEmpty && <IntroDocument doc={activeDoc} zoom={zoom} onZoomChange={setZoom} />}
           {/* A stage with a 0-minute timer renders as already complete (Continue), never blank. */}
-          {timerOpen && (
+          {(timerOpen || paperEmpty) && (
             <StageTimerDevice label={stageLabel}
+              centred={paperEmpty}
               totalSeconds={timings[stage] * 60}
               sponsors={activeDoc.sponsors}
               sponsorsWord={sponsorLabel(committee, t('documents_sponsors_label_card'))}
               clock={clock} onClockChange={handleClockChange}
               onComplete={() => advanceFromStage(stage)}
               onBack={() => backFromStage(stage)}
-              onHide={() => setTimerOpen(false)}
+              onHide={paperEmpty ? undefined : () => setTimerOpen(false)}
               onTimings={() => { setFinishAsk(false); setStage('setup'); }} />
           )}
         </div>

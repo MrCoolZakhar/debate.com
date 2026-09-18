@@ -28,6 +28,7 @@ import ApplicantsDial from '@/components/conferences/ApplicantsDial';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
 import { hasExploredEmails } from '@/lib/emailsExplored';
 import { getConferenceIntent, intentRank } from '@/lib/conferenceIntent';
+import { outstandingPledgedSpots } from '@/lib/pledgedSpots';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import VerifiedCheck, { minutesToCheckmarkLabel } from '@/components/VerifiedCheck';
 
@@ -270,6 +271,12 @@ interface AppRow {
   payment_status: string | null;
   role: string;
   society_id: string | null;
+  /** Pledge columns, so the headline can count a delegation's spots as the
+   *  people they are. Arithmetic lives in src/lib/pledgedSpots.ts. */
+  id: string;
+  pledge_type: string | null;
+  spots_pledged: number | null;
+  advisors_pledged: number | null;
 }
 
 // ── Unallocated-delegates alert tile ───────────────────────────────────────
@@ -1034,7 +1041,7 @@ export default function DashboardPage() {
       const [appsRes, allocRes, committeesRes, orgRes, emailRes, chairInvRes, orgInvRes] = await Promise.all([
         supabase
           .from('applications')
-          .select('submitted_at, status, payment_status, role, society_id')
+          .select('id, submitted_at, status, payment_status, role, society_id, pledge_type, spots_pledged, advisors_pledged')
           .eq('conference_id', confId),
         // created_at, not a head-only count: the Assigned series on
         // ParticipantsChart is plotted from these instants. The count the
@@ -1353,6 +1360,11 @@ export default function DashboardPage() {
   const paidApps = dash.apps.filter(a => a.payment_status === 'paid').length;
   const delegateApps = dash.apps.filter(a => a.role === 'delegate' || a.role === 'head-delegate').length;
   const societies = new Set(dash.apps.map(a => a.society_id).filter(Boolean)).size;
+  // People a delegation has pledged to bring who have no application row yet.
+  // Net of anyone already registered under that delegation, so a spot is never
+  // counted as two people (src/lib/pledgedSpots.ts). Sits OUTSIDE the funnel:
+  // the four dial stages stay counts of real rows.
+  const pledgedSpots = outstandingPledgedSpots(dash.apps);
   const committeeCount = dash.committees.length;
   // A dais counts as handled once a chair is ASSIGNED (chair_user_ids) or
   // INVITED (a pending conference_chair_invites row). Chasing an organiser about
@@ -1817,6 +1829,7 @@ export default function DashboardPage() {
               <ApplicantsDial
                 stages={dialStages}
                 expected={expectedDelegates}
+                pledged={pledgedSpots}
                 size={224}
                 onNavigate={(href) => router.push(href)}
               />

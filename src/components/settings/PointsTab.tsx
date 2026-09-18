@@ -1,6 +1,6 @@
 'use client';
 
-import { Blend, Coins, Plus, Star, Trash2 } from 'lucide-react';
+import { Blend, Calculator, Plus, Star, Trash2 } from 'lucide-react';
 import type { RankingFactor, ScoreSource } from '@/lib/settingsStore';
 import { factorName, sourceName } from '@/lib/scoringNames';
 import { K, T, W, Section, SettingRow, GavelSwitch, NotchDial, TallyStepper } from './settingsKit';
@@ -80,7 +80,7 @@ export default function PointsTab({ scoring, updScoring, t, language, isViewOnly
           Custom sources a committee already stores still render (name, points, enable,
           remove); there is no way to create a new one. */}
       <div className="min-w-0">
-      <Section icon={Coins} title={t('settings_points_sources_heading')} hint={t('settings_points_sources_desc')}>
+      <Section icon={Calculator} title={t('settings_points_sources_heading')} hint={t('settings_points_sources_desc')}>
         <ul style={{ listStyle: 'none', margin: 0, padding: '4px 0' }}>
           {scoring.sources.map((src, i) => {
             const label = src.builtin ? sourceName(src, language) : src.name;

@@ -19,10 +19,10 @@
  * as a visible sentence under the label.
  *
  * ICONS. A glyph in this dialog is a CRISP LUCIDE LINE at one of three sizes (14 inline or in
- * a hint, 16 in a row, 18-20 beside a group title) in forest, deep gold or ink.
- * It NEVER sits in a decorative rounded-square tile: those tiles are what made the panel
- * look generated. The only round or plated things left are the ones that really are an
- * object: a person's avatar, a wax seal on a chosen card, a join-code ticket, a switch knob.
+ * a hint, 16 in a row, 18-20 beside a group title), COLOURED by the tab it belongs to (see
+ * ICON below). It NEVER sits in a decorative rounded-square tile: those tiles are what made
+ * the panel look generated. The only round or plated things left are the ones that really are
+ * an object: a person's avatar, a wax seal on a chosen card, a join-code ticket, a switch knob.
  */
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Check, Info, Lock, Minus, Plus, Pencil, RotateCcw, Timer } from 'lucide-react';
@@ -55,6 +55,54 @@ export const K = {
   card: '0 0 0 1px rgba(27,56,40,0.06), 0 1px 2px rgba(27,56,40,0.06), 0 8px 24px -12px rgba(27,56,40,0.18)',
   ring: '0 0 0 2px #FBF8F1, 0 0 0 4px #B6871F',
 } as const;
+
+// ── Icon colour ───────────────────────────────────────────────────────────────
+/**
+ * ONE hue per tab, so the glyphs read as an index rather than as decoration: a chair sees at
+ * a glance that a group belongs to Access, Motions, Voting, Points or People. Every hue is a
+ * deep, desaturated member of the forest/gold family (or its muted slate and rust cousins),
+ * and every one clears 4.4:1 on the ivory page AND on the gold ribbon, so a glyph is never
+ * the faint thing on the row. K.deepGold is 2.8:1 there and is NEVER used for a glyph; it
+ * stays correct for fills (seals, arcs, weight bars).
+ *
+ * COLOUR IS NEVER THE SIGNAL. Every coloured glyph is aria-hidden and sits beside its own
+ * text label (a group title, a card title, a switch's name), so the tab reads identically in
+ * greyscale. Do not introduce a state that is told apart by hue alone.
+ */
+export const ICON = {
+  /** codes, keys, the dais, the knock: amber */
+  access: '#7A5812',
+  /** procedure and documents: forest */
+  motions: '#2A5A3C',
+  /** ballots and thresholds: slate */
+  voting: '#2F6076',
+  /** points and ratings: rust */
+  points: '#8A3B12',
+  /** the room: a lighter forest */
+  people: '#3D7A52',
+  /** awards share the amber of their metal */
+  awards: '#7A5812',
+} as const;
+
+/** The same hues lifted for the forest spine (#1B3828), where the dark ones would vanish. */
+export const ICON_ON_FOREST = {
+  access: '#EFD08C',
+  motions: '#A6DCBB',
+  voting: '#A9D2E6',
+  points: '#F0B78F',
+  people: '#B4E2C6',
+  awards: '#EFD08C',
+} as const;
+
+export type IconTone = keyof typeof ICON;
+
+/** Two glyph colours that belong to no tab: the amber that marks one row out of a list, and
+ *  the red of the two motions that close the room. Both clear 4.5:1 on the ivory page. */
+export const GLYPH = { amber: '#7A5812', danger: K.danger } as const;
+
+/** The accent a tab publishes to its groups, as a CSS custom property on `.stg-page`. Read by
+ *  Section, so a group never has to be told which tab it is on. */
+export const ACCENT_VAR = '--stg-accent';
 
 // ── Type scale ────────────────────────────────────────────────────────────────
 /**
@@ -114,10 +162,11 @@ export function SettingsKitStyles() {
 // ── Section and rows ──────────────────────────────────────────────────────────
 type LucideIcon = React.ComponentType<{ size?: number; strokeWidth?: number; className?: string; style?: React.CSSProperties; 'aria-hidden'?: boolean | 'true' }>;
 
-/** A labelled group. ONE heading shape on every tab: a Lucide glyph and the group title at
- *  T.section in forest, with its explanation behind an InfoHint and an optional aside at the
- *  inline-end. The lead groups of a tab sit on a raised ivory plate, the rest on a faint
- *  forest tint, so the surface says which settings matter. */
+/** A labelled group. ONE heading shape on every tab: a Lucide glyph in the TAB'S OWN hue
+ *  (`--stg-accent`, set once by SettingsPanel; see ICON) and the group title at T.section in
+ *  forest, with its explanation behind an InfoHint and an optional aside at the inline-end.
+ *  The lead groups of a tab sit on a raised ivory plate, the rest on a faint forest tint, so
+ *  the SURFACE says which settings matter; the hue says which tab they belong to. */
 export function Section({ icon: Icon, title, hint, lead = false, children, delay = 0, aside }: {
   icon?: LucideIcon; title: string; hint?: string; lead?: boolean; children: React.ReactNode; delay?: number; aside?: React.ReactNode;
 }) {
@@ -125,7 +174,7 @@ export function Section({ icon: Icon, title, hint, lead = false, children, delay
   return (
     <section aria-labelledby={id} className="stg-rise" style={{ animationDelay: `${delay}ms`, marginBottom: 26 }}>
       <div className="flex items-center gap-2.5" style={{ marginBottom: 10, paddingInline: 2, minHeight: 34 }}>
-        {Icon && <Icon aria-hidden size={18} strokeWidth={2.2} style={{ color: lead ? K.deepGold : K.forestLight, flexShrink: 0 }} />}
+        {Icon && <Icon aria-hidden size={lead ? 19 : 18} strokeWidth={lead ? 2.4 : 2.1} style={{ color: `var(${ACCENT_VAR}, ${K.forestLight})`, flexShrink: 0 }} />}
         <h3 id={id} className="stg-title min-w-0" style={{ margin: 0, fontSize: T.section, fontWeight: W.section, lineHeight: LH.section, letterSpacing: '-0.01em', color: K.forest }}>
           {title}
         </h3>
@@ -647,7 +696,7 @@ export function TimeChooser({ value, min, max, step = 5, onChange, label, lessLa
     <div className="flex flex-wrap items-center gap-2">
       {stepBtn(-1)}
       <span className="inline-flex items-center gap-1.5 shrink-0" style={{ height: 40, padding: '0 12px 0 10px', borderRadius: 12, background: K.ivory, boxShadow: K.inSm }}>
-        <Timer aria-hidden size={16} strokeWidth={2.3} style={{ color: K.deepGold }} />
+        <Timer aria-hidden size={16} strokeWidth={2.3} style={{ color: GLYPH.amber }} />
         <input
           type="text"
           inputMode="numeric"
@@ -762,7 +811,7 @@ export function InlineRename({ defaultName, value, onChange, resetValue, resetLa
           style={{ fontSize: T.body, fontWeight: W.label, color: K.ink, background: 'transparent', border: 'none', padding: '4px 2px', borderRadius: 8, cursor: 'text' }}
         >
           <span className="truncate">{shown}</span>
-          <Pencil aria-hidden size={12} strokeWidth={2.4} className="shrink-0 opacity-30 group-hover:opacity-80" style={{ color: K.forestLight, transitionProperty: 'opacity', transitionDuration: '150ms' }} />
+          <Pencil aria-hidden size={12} strokeWidth={2.4} className="shrink-0 opacity-30 group-hover:opacity-80" style={{ color: `var(${ACCENT_VAR}, ${K.forestLight})`, transitionProperty: 'opacity', transitionDuration: '150ms' }} />
         </button>
       )}
       {isCustom && !editing && (

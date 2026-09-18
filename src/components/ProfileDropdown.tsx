@@ -35,7 +35,7 @@
  */
 
 import Link from 'next/link';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { compareStartDate, hasConcluded } from '@/lib/conferenceDates';
@@ -44,6 +44,7 @@ import { createPortal } from 'react-dom';
 import { useDraftCount, draftResumeHref } from '@/hooks/useDraftCount';
 import { usePendingInvites, inviteAcceptHref } from '@/hooks/usePendingInvites';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
+import { invoiceDueCents, isInvoicePayable, type InvoiceStatus } from '@/lib/invoices';
 
 /** One row in the dropdown's "YOUR CONFERENCES" section. */
 interface NavConference {
@@ -56,7 +57,21 @@ interface NavConference {
    *  because a dates-TBD conference has neither date. */
   end_date: string | null;
   role: 'DELEGATE' | 'CHAIR' | 'ORGANIZER';
+  /** An application that is in but not decided yet. The row still lists the
+   *  conference (that was the bug: applying as a delegate made a conference
+   *  vanish from this menu until somebody accepted you), and says APPLIED
+   *  rather than claiming a role nobody has given yet. */
+  pending?: boolean;
+  /** Something here is waiting on this person. One short phrase, shown as a
+   *  quiet gold dot whose accessible name is this text. */
+  attention?: string;
 }
+
+/** Attention, most urgent first: money the conference is waiting for, then work
+ *  an organiser owes their applicants, then a decision this person is waiting
+ *  on. Only one shows per row — a menu row is a signpost, not a to-do list. */
+const ATTENTION_RANK = ['pay', 'review', 'waiting'] as const;
+type AttentionKind = (typeof ATTENTION_RANK)[number];
 
 /** Supabase joins come back as object or array depending on cardinality. */
 function firstRow<T>(v: T | T[] | null | undefined): T | null {
@@ -166,8 +181,16 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
   }, [cancelClose]);
 
   // Batched fetch of the user's conferences the first time the menu opens:
-  // accepted/assigned/checked-in applications + organizer memberships + owned
-  // conferences, merged per conference (organizer wins), soonest first.
+  // applications that are IN (submitted included, see below) + organizer
+  // memberships + owned conferences, merged per conference (organizer wins),
+  // soonest first, with anything waiting on this person marked.
+  //
+  // 'submitted' is in the status list on purpose. It used to be missing, so
+  // applying as a delegate put a conference NOWHERE in this menu: not under
+  // drafts (it is submitted), not here (it is not accepted). The person who had
+  // just applied had no way back to the conference they applied to. Rejected
+  // and withdrawn stay out — /my-conferences is where a closed application is
+  // reviewed and resubmitted.
   useEffect(() => {
     if (!open || confsFetched.current) return;
     if (!user || !session) return;
@@ -184,9 +207,9 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
         const [appsRes, orgRes, ownedRes] = await Promise.all([
           supabase
             .from('applications')
-            .select(`role, conferences (${CONF})`)
+            .select(`id, role, status, conferences (${CONF})`)
             .eq('user_id', userId)
-            .in('status', ['accepted', 'assigned', 'checked-in']),
+            .in('status', ['submitted', 'accepted', 'assigned', 'checked-in']),
           supabase
             .from('conference_organizers')
             .select(`conferences (${CONF})`)
@@ -199,19 +222,31 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
 
         type ConfRow = { id: string; slug: string; acronym: string; logo_url: string | null; start_date: string; end_date: string | null };
         const byId = new Map<string, NavConference>();
-        const add = (conf: ConfRow | null, role: NavConference['role']) => {
+        const add = (conf: ConfRow | null, role: NavConference['role'], pending = false) => {
           if (!conf) return;
           const existing = byId.get(conf.id);
           if (existing) {
             // Organizer trumps attendee roles (row links to /manage).
-            if (role === 'ORGANIZER') existing.role = 'ORGANIZER';
+            if (role === 'ORGANIZER') { existing.role = 'ORGANIZER'; existing.pending = false; }
+            // A decided application anywhere on this conference outranks a
+            // pending one, so two applications never leave the row saying
+            // APPLIED when one of them was accepted.
+            else if (!pending) existing.pending = false;
             return;
           }
-          byId.set(conf.id, { id: conf.id, slug: conf.slug, acronym: conf.acronym, logo_url: conf.logo_url, start_date: conf.start_date, end_date: conf.end_date, role });
+          byId.set(conf.id, { id: conf.id, slug: conf.slug, acronym: conf.acronym, logo_url: conf.logo_url, start_date: conf.start_date, end_date: conf.end_date, role, pending });
         };
 
-        for (const row of (appsRes.data ?? []) as { role: string; conferences: ConfRow | ConfRow[] | null }[]) {
-          add(firstRow(row.conferences), row.role === 'chair' ? 'CHAIR' : 'DELEGATE');
+        type AppRow = { id: string; role: string; status: string; conferences: ConfRow | ConfRow[] | null };
+        const appRows = (appsRes.data ?? []) as AppRow[];
+        /** application id → the conference it belongs to and its status, so an
+         *  unpaid invoice (which is keyed by application, never by user) can be
+         *  attributed to the right row below. */
+        const appMeta = new Map<string, { confId: string; status: string }>();
+        for (const row of appRows) {
+          const conf = firstRow(row.conferences);
+          add(conf, row.role === 'chair' ? 'CHAIR' : 'DELEGATE', row.status === 'submitted');
+          if (conf) appMeta.set(row.id, { confId: conf.id, status: row.status });
         }
         for (const row of (orgRes.data ?? []) as { conferences: ConfRow | ConfRow[] | null }[]) {
           add(firstRow(row.conferences), 'ORGANIZER');
@@ -232,6 +267,66 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
         const list = Array.from(byId.values())
           .filter(c => !hasConcluded(c))
           .sort((a, b) => compareStartDate(a.start_date, b.start_date));
+
+        // ── What is waiting on this person ──────────────────────────────────
+        // Two follow-up reads, each scoped to rows this menu already knows
+        // about, and each one optional: if either fails the menu still lists
+        // every conference, just without its marker. A marker is never
+        // invented — no fee, no dot.
+        const attention = new Map<string, AttentionKind>();
+        const mark = (confId: string, kind: AttentionKind) => {
+          const had = attention.get(confId);
+          if (!had || ATTENTION_RANK.indexOf(kind) < ATTENTION_RANK.indexOf(had)) attention.set(confId, kind);
+        };
+
+        // A pending application is a decision this person is waiting for.
+        for (const c of list) if (c.pending) mark(c.id, 'waiting');
+
+        const appIds = Array.from(appMeta.keys());
+        const organiserIds = list.filter(c => c.role === 'ORGANIZER').map(c => c.id);
+        const [invRes, reviewRes] = await Promise.all([
+          appIds.length
+            ? supabase
+                .from('invoices')
+                .select('application_id, conference_id, status, amount_cents, amount_paid_cents, payable_before_acceptance')
+                .in('application_id', appIds)
+                .in('status', ['open', 'partial'])
+            : Promise.resolve({ data: [] as never[] }),
+          organiserIds.length
+            ? supabase
+                .from('applications')
+                .select('conference_id')
+                .in('conference_id', organiserIds)
+                .eq('status', 'submitted')
+            : Promise.resolve({ data: [] as never[] }),
+        ]);
+
+        // Money owed. `isInvoicePayable` is the shared rule the pay page uses,
+        // so a fee that is not collectable yet (payable only after acceptance,
+        // on an application still being decided) raises nothing here.
+        type InvRow = { application_id: string | null; conference_id: string; status: InvoiceStatus; amount_cents: number; amount_paid_cents: number; payable_before_acceptance: boolean };
+        for (const inv of ((invRes.data ?? []) as InvRow[])) {
+          const meta = inv.application_id ? appMeta.get(inv.application_id) : null;
+          if (!meta) continue;
+          if (invoiceDueCents(inv) <= 0) continue;
+          if (!isInvoicePayable(inv, meta.status)) continue;
+          mark(meta.confId, 'pay');
+        }
+
+        // Applications an organiser has not decided on.
+        for (const row of ((reviewRes.data ?? []) as { conference_id: string }[])) {
+          mark(row.conference_id, 'review');
+        }
+
+        const ATTENTION_TEXT: Record<AttentionKind, string> = {
+          pay: 'Payment due',
+          review: 'Applications to review',
+          waiting: 'Waiting for a decision',
+        };
+        for (const c of list) {
+          const kind = attention.get(c.id);
+          if (kind) c.attention = ATTENTION_TEXT[kind];
+        }
         setMyConfs(list);
       } catch {
         setMyConfs([]);
@@ -240,6 +335,19 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
       }
     })();
   }, [open, user, session]);
+
+  /** The five rows the menu has room for. Order on screen is always soonest
+   *  first — that is what this list is for. The choice of WHICH five is where
+   *  outstanding business counts: a conference that needs this person must not
+   *  fall off the bottom behind ones that do not, so anything marked is taken
+   *  into the five first and the five are then put back into date order. With
+   *  five or fewer conferences this changes nothing at all. */
+  const visibleConfs = useMemo(() => {
+    const all = myConfs ?? [];
+    if (all.length <= 5) return all;
+    const picked = [...all.filter(c => c.attention), ...all.filter(c => !c.attention)].slice(0, 5);
+    return picked.sort((a, b) => compareStartDate(a.start_date, b.start_date));
+  }, [myConfs]);
 
   const avatarInitial = profile?.display_name
     ? profile.display_name[0].toUpperCase()
@@ -579,7 +687,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                   </div>
                 ) : (
                   <>
-                    {(myConfs ?? []).slice(0, 5).map((conf) => (
+                    {visibleConfs.map((conf) => (
                       <Link
                         key={conf.id}
                         href={conf.role === 'ORGANIZER' ? `/manage/${conf.slug}` : `/conferences/${conf.slug}`}
@@ -623,11 +731,24 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                         >
                           {conferenceAcronymLabel({ acronym: conf.acronym, start_date: conf.start_date })}
                         </span>
+                        {/* One quiet gold dot, never a number: what it means
+                            is in its accessible name and its tooltip. The
+                            printed word stays the role, so scanning the menu
+                            still answers "what am I here" first. */}
+                        {conf.attention && (
+                          <span
+                            role="img"
+                            aria-label={conf.attention}
+                            title={conf.attention}
+                            className="shrink-0"
+                            style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#B6871F' }}
+                          />
+                        )}
                         <span
                           className="font-bold uppercase shrink-0"
-                          style={{ color: '#9A8A78', fontSize: '9px', letterSpacing: '0.06em', fontFamily: "'Outfit', sans-serif" }}
+                          style={{ color: conf.pending ? '#8A6614' : '#9A8A78', fontSize: '9px', letterSpacing: '0.06em', fontFamily: "'Outfit', sans-serif" }}
                         >
-                          {conf.role}
+                          {conf.pending ? 'APPLIED' : conf.role}
                         </span>
                       </Link>
                     ))}

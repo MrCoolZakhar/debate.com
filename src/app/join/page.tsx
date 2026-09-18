@@ -363,8 +363,14 @@ function JoinPageInner() {
   // An ended session is read-only, so a full seat never stops anyone looking at it.
   const seatsEnforced = !foundCommittee?.endedAt;
   const seatState = (c: string) => seatAvail[seatKey(c)];
+  // A chair removed THIS device from the seat less than 10 minutes ago, so
+  // claim_delegate_seat will answer `kicked`. Offering the seat here only sent them to the
+  // stop screen on /delegate, so the picker says so instead (migration
+  // `seat_availability_reports_chair_removal`).
+  const seatRemoved = (c: string) => seatsEnforced && seatState(c)?.removed === true;
   const seatBlocked = (c: string) => {
     if (isReservedSeat(c)) return true;
+    if (seatRemoved(c)) return true;
     const st = seatState(c);
     return seatsEnforced && !!st && st.full && !st.mine;
   };
@@ -458,6 +464,7 @@ function JoinPageInner() {
     // delegate
     if (!country) return;
     if (isReservedSeat(country)) { setError(t('join_seat_reserved_note')); return; }
+    if (seatRemoved(country)) { setError(t('join_seat_removed_note', { n: seatState(country)?.removedMinutes ?? 10 })); return; }
     // Re-read just before routing, so a seat taken a moment ago is caught here rather than
     // on the delegate page (which still re-checks: its claim is the authority).
     if (seatsEnforced) {
@@ -465,6 +472,7 @@ function JoinPageInner() {
       if (fresh) {
         setSeatAvail(fresh);
         const st = fresh[seatKey(country)];
+        if (st?.removed) { setError(t('join_seat_removed_note', { n: st.removedMinutes || 10 })); return; }
         if (st && st.full && !st.mine) { setError(t('join_seat_now_taken')); return; }
       }
     }
@@ -571,7 +579,7 @@ function JoinPageInner() {
             <span className="hidden sm:inline">{t('join_nav_create')}</span>
           </Link>
           {user ? (
-            <ProfileAvatarMenu size={40} />
+            <ProfileAvatarMenu size={52} />
           ) : (
             <button
               type="button"
@@ -794,19 +802,22 @@ function JoinPageInner() {
                     const seats: JoinSeatRow[] = foundCommittee.delegates.map((d) => {
                       const st = seatState(d.country);
                       const reserved = isReservedSeat(d.country);
-                      const taken = !reserved && seatsEnforced && !!st && st.full && !st.mine;
+                      const removed = !reserved && seatRemoved(d.country);
+                      const taken = !reserved && !removed && seatsEnforced && !!st && st.full && !st.mine;
                       return {
                         country: d.country,
                         logoUrl: d.logoUrl ?? null,
                         isObserver: d.isObserver,
-                        state: reserved ? 'reserved' : taken ? 'taken' : st?.mine ? 'mine' : 'open',
+                        state: reserved ? 'reserved' : removed ? 'removed' : taken ? 'taken' : st?.mine ? 'mine' : 'open',
                       };
                     });
                     const openCount = seats.filter((s) => s.state === 'open' || s.state === 'mine').length;
                     const anyTaken = seats.some((s) => s.state === 'taken');
+                    const removedSeat = seats.find((s) => s.state === 'removed');
                     const anyReserved = isConferenceSession && reservedSet.size > 0;
-                    const note = (anyTaken || (anyReserved && !user)) ? (
+                    const note = (anyTaken || removedSeat || (anyReserved && !user)) ? (
                       <div className="space-y-2">
+                        {removedSeat && <p>{t('join_seat_removed_note', { n: seatState(removedSeat.country)?.removedMinutes ?? 10 })}</p>}
                         {anyTaken && <p>{t('join_seat_taken_note')}</p>}
                         {anyReserved && !user && (
                           <div className="flex flex-wrap items-center gap-2.5">
@@ -828,6 +839,7 @@ function JoinPageInner() {
                             search: t('join_seat_search'),
                             taken: t('join_seat_taken'),
                             reserved: t('join_seat_reserved'),
+                            removed: t('join_seat_removed'),
                             yours: t('join_seat_yours'),
                             observer: t('join_observer'),
                             empty: t('join_seat_none'),

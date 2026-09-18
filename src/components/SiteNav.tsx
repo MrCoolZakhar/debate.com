@@ -322,7 +322,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
           {user ? (
             /* Account button + shared dropdown */
             /* The avatar alone (picture, else initials) opens the shared menu. */
-            <ProfileAvatarMenu size={40} />
+            <ProfileAvatarMenu size={60} />
           ) : (
             /* Signed-out: SIGN IN only */
             <Link
@@ -345,7 +345,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
 
         {/* Mobile: avatar (signed in) + hamburger */}
         <div className="md:hidden flex items-center gap-2">
-        {user && <ProfileAvatarMenu size={36} />}
+        {user && <ProfileAvatarMenu size={56} />}
         <button
           className="flex flex-col justify-center items-center w-10 h-10 gap-1.5"
           onClick={() => setMenuOpen((v) => !v)}

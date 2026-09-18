@@ -15,6 +15,18 @@
  * owns Begin Session (`beginSessionAfterRollCall`, a phase change) and writes observers
  * itself, neither of which this page may do.
  *
+ * It has no top line of its own (owner, 17 Sep 2026: "there are two Backs in the top left,
+ * just have one, and no need for 'Draft Resolutions' and 'Roll call for X'"). While it is
+ * open the page's own top bar carries the single Back (it calls `onClose`) and names the
+ * paper; the card starts straight at its masthead. `onClose` is still the Escape route.
+ *
+ * Its masthead carries the session sidebar's QuorumRings (owner, 17 Sep 2026: "add the quorum
+ * indicators in the final roll call on the top as well, just like in the sidebar"): the same
+ * three half-circle bookmark tabs (Present, 2/3, 1/2+1) growing out of the list, counted the
+ * way the sidebar counts them — everyone in the room, OBSERVERS INCLUDED — plus the quorum
+ * pill when Settings → Voting → Quorum is set. They are a read-out of the room, not of the
+ * ballot: the vote's own maths (which drops observers) stays in the Threshold drawer.
+ *
  * The card is centred on the screen; the rules sit to its right (owner, 17 Sep 2026). Three
  * icon ribbons (Threshold with quorum, Abstentions, Veto), in the manner of the Settings
  * spine, hang off a drawer that slides out from under the card. Threshold is open on arrival;
@@ -33,8 +45,9 @@
  */
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { ArrowLeft, CircleSlash, Megaphone, Scale, ShieldCheck, X, type LucideIcon } from 'lucide-react';
+import { CircleSlash, Megaphone, Scale, ShieldCheck, X, type LucideIcon } from 'lucide-react';
 import Portal from '@/components/Portal';
+import QuorumRings from '@/components/QuorumRings';
 import { SeatCircleFlag, SIDEBAR_MONOGRAM } from '@/components/CircleFlag';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
@@ -64,6 +77,9 @@ const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'
 
 /** Quorum is part of the Threshold bookmark (owner, 17 Sep 2026). */
 type RuleTab = 'threshold' | 'abstentions' | 'veto';
+
+/** The same map the chair page keeps for its masthead read-out. */
+const QUORUM_FRACTION: Record<string, number> = { none: 0, '1-4': 1 / 4, '1-3': 1 / 3, '1-2': 1 / 2 };
 
 export interface VotingRollCallProps {
   delegates: Delegate[];
@@ -271,6 +287,13 @@ export function VotingRollCall({
   const votable = seats.filter((d) => !isObserverSeat(d));
   const presentCount = votable.filter((d) => statusOf(d) !== 'absent').length;
   const roomPresent = seats.filter((d) => statusOf(d) !== 'absent').length;
+  // The masthead read-out counts the ROOM, observers included, exactly as the chair sidebar
+  // does (AGENTS.md COMPONENT: Chair top bar and sidebar masthead). Its quorum figure is
+  // therefore ceil(fraction x every seat), not the ballot's observer-free denominator.
+  const roomQuorumFraction = QUORUM_FRACTION[settings.quorumThreshold ?? 'none'] ?? 0;
+  const roomQuorumNeeded = roomQuorumFraction > 0 && seats.length > 0
+    ? Math.ceil(roomQuorumFraction * seats.length)
+    : null;
 
   const outcome = computeVoteOutcome({
     tally: { forCount: presentCount, againstCount: 0, abstainCount: 0 },
@@ -362,7 +385,7 @@ export function VotingRollCall({
         style={{ backgroundColor: '#EDE7D8', ['--gv-dir' as string]: rtl ? -1 : 1 }}
         dir={rtl ? 'rtl' : undefined}
         role="region"
-        aria-labelledby="gv-rc-title"
+        aria-label={t('voting_roll_call_heading')}
       >
         <style>{`
           @keyframes gvRcIn { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
@@ -387,24 +410,9 @@ export function VotingRollCall({
           @media (prefers-reduced-motion: reduce) { .gv-rc .gv-rc-in { animation: none } .gv-rc-drawer, .gv-rc-drawer[data-open="true"] { transition: none } }
         `}</style>
 
-        {/* Top line: the way back and what this roll call is for */}
-        <div className="gv-rc-in shrink-0 flex items-center gap-3 px-4 sm:px-6 h-16">
-          <button
-            type="button"
-            onClick={onClose}
-            className={`inline-flex items-center gap-2 h-10 ps-2.5 pe-4 rounded-full text-[14px] font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] hover:bg-[rgba(27,56,40,0.08)] ${PRESS}`}
-            style={{ color: INK_SOFT }}
-          >
-            <ArrowLeft size={17} strokeWidth={2.25} aria-hidden style={{ transform: rtl ? 'scaleX(-1)' : undefined }} />
-            {t('voting_rc_back')}
-          </button>
-          <h1 id="gv-rc-title" className="min-w-0 flex-1 truncate text-[19px] sm:text-[21px] font-bold leading-tight" style={{ color: INK, letterSpacing: '-0.01em' }}>
-            {doc ? t('voting_rc_for_doc', { code: doc.code }) : t('voting_roll_call_heading')}
-            {doc?.title && <span className="font-medium text-[15px] sm:text-[16px] ms-3" style={{ color: INK_SOFT, letterSpacing: 0 }}>{doc.title}</span>}
-          </h1>
-        </div>
-
-        <div className="flex-1 min-h-0 px-4 sm:px-6 pb-4 sm:pb-5 flex justify-center">
+        {/* No top line of its own: the page's top bar above carries the one Back and names the
+            paper (owner, 17 Sep 2026). */}
+        <div className="flex-1 min-h-0 px-4 sm:px-6 pt-4 sm:pt-5 pb-4 sm:pb-5 flex justify-center">
           <div className="gv-rc-in gv-rc-in-2 h-full min-h-0 w-full max-w-[720px] xl:max-w-none flex flex-col xl:flex-row xl:justify-center items-stretch">
 
             {/* Bookmarks, small screens: a row above the card */}
@@ -434,18 +442,22 @@ export function VotingRollCall({
               aria-label={t('voting_roll_call_heading')}
             >
               <div className="pointer-events-none absolute inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundSize: '300px 300px', mixBlendMode: 'overlay', opacity: 0.07 }} />
-              <div className="relative z-[2] shrink-0 px-5 pt-4 pb-2.5">
+              {/* The masthead: the same lifted strip the chair sidebar uses, so the quorum tabs
+                  read as growing out of the list below rather than floating on it. No bottom
+                  padding, because the tabs sit flush on its edge. */}
+              <div className="relative z-[2] shrink-0 px-5 pt-4 pb-0" style={{ backgroundColor: 'rgba(255,255,255,0.035)' }}>
                 <div className="flex items-baseline justify-between gap-3 mb-3">
                   <p className="text-[18px] font-black leading-tight truncate" style={{ color: GOLD }}>{t('voting_roll_call_heading')}</p>
                   <p className="shrink-0 text-[14px] font-bold tabular-nums" style={{ color: 'rgba(237,231,216,0.8)' }} aria-live="polite">
                     {roomPresent}/{seats.length} {t('voting_rc_present')}
                   </p>
                 </div>
-                <div className="grid grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-3 gap-2.5 mb-3">
                   <button type="button" disabled={readOnly || seats.length === 0} onClick={() => onBulkStatus('absent')} className={bulkBtn} style={{ backgroundColor: 'rgba(139,32,32,0.30)', color: '#F6B4B4' }}>{t('rollcall_clear_all')}</button>
                   <button type="button" disabled={readOnly || seats.length === 0} onClick={() => onBulkStatus('present')} className={bulkBtn} style={{ backgroundColor: 'rgba(61,122,82,0.40)', color: '#EDE7D8' }}>{t('rollcall_all_present')}</button>
                   <button type="button" disabled={readOnly || seats.length === 0} onClick={() => onBulkStatus('present-voting')} className={bulkBtn} style={{ backgroundColor: 'rgba(182,135,31,0.30)', color: GOLD }}>{t('rollcall_all_pv')}</button>
                 </div>
+                <QuorumRings present={roomPresent} total={seats.length} quorumNeeded={roomQuorumNeeded} ground={FOREST} />
               </div>
 
               <div

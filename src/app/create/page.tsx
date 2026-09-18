@@ -8,12 +8,11 @@ import { createCommittee as createCommitteeInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { UN_COUNTRIES, getCountryByName, getCountryDisplayName, countryMatchRank, findCountryFlexible, compareCountryNames } from '@/lib/countries';
 import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS, ICC_ROLES, ICJ_ROLES, CRISIS_MEMBERS, FIFA_MEMBERS, HOUSE_OF_COMMONS_ROLES, US_SENATE_MEMBERS, PRESS_ROLES, EUROPEAN_PARLIAMENT_MEMBERS } from '@/lib/presets';
-import { Check, ChevronDown, ChevronLeft, ClipboardList, CornerDownLeft, Globe, LogIn, Megaphone, PenLine, Plus, Search, UserRound, Wand2, X } from 'lucide-react';
+import { Check, ChevronLeft, ClipboardList, CornerDownLeft, Globe, Megaphone, PenLine, Plus, Search, UserRound, Wand2, X } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import Loader from '@/components/Loader';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCommitteeDisplayName, committeeDisplayName, deriveCommitteeAcronym, matchPresetEmblem } from '@/lib/presetNames';
-import { useAuth } from '@/components/AuthProvider';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
 import { GhostAction, PageBackdrop } from '../join/joinUi';
 import { C, ChairTokenField, CreateStyles, DelegationCount, INPUT_CLS, LiveCommitteeIdentity, OUTFIT, Panel, RowIconButton, SHADOW, SmallLabel, StartSessionButton, StepHeading } from './createUi';
@@ -469,7 +468,6 @@ function CreatePageInner() {
   const [showLangMenu, setShowLangMenu] = useState(false);
   const router = useRouter();
   const { updateSetting } = useSettingsStore();
-  const { user } = useAuth();
   // Chairs: committed chips plus the text still in the field. `chairNames` keeps the
   // exact shape handleCreate always used (the draft last), so one typed name and no
   // chip creates the committee exactly as the old single field did.
@@ -494,7 +492,6 @@ function CreatePageInner() {
   const [editingName, setEditingName] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState('');
   const [creating, setCreating] = useState(false);
-  const [pasteOpen, setPasteOpen] = useState(false);
   // The country typeahead opens upward when the add bar sits low in the window
   // (1280x800), so its rows are never cut off by the bottom edge.
   const addWrapRef = useRef<HTMLDivElement>(null);
@@ -667,7 +664,7 @@ function CreatePageInner() {
           </Link>
           {langMenu}
           {/* Signed-in: the shared account avatar. Renders nothing signed out. */}
-          <span className="ms-2 empty:hidden"><ProfileAvatarMenu size={40} /></span>
+          <span className="ms-2 empty:hidden"><ProfileAvatarMenu size={60} /></span>
         </nav>
         <div className="flex-1 flex overflow-hidden">
           <SelectScreen onSelect={() => setCommitteeMode('build')} />
@@ -720,8 +717,6 @@ function CreatePageInner() {
   const previewLogo = rawName ? (matchPresetEmblem(rawName) ?? presetLogo) : null;
   const chairList = chairNames.map((n) => n.trim()).filter(Boolean);
   const chairsLine = chairList.length > 0 ? t('create_preview_chairs', { names: chairList.join(', ') }) : null;
-  const signedIn = !!user;
-  const conferenceHref = signedIn ? '/my-conferences' : `/auth/signin?next=${encodeURIComponent('/my-conferences')}`;
   const sortedDelegates = [...delegates].sort((a, b) => compareCountryNames(a, b, language));
 
   return (
@@ -745,28 +740,17 @@ function CreatePageInner() {
         </button>
         <h1 className="sr-only">{t('create_title')}</h1>
         {langMenu}
-        <ProfileAvatarMenu size={40} />
+        <ProfileAvatarMenu size={44} />
       </nav>
 
       <main className="relative z-10 mx-auto grid w-full max-w-[1440px] grid-cols-[minmax(0,1fr)] gap-4 px-4 pb-4 sm:px-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,11fr)_minmax(0,10fr)] lg:gap-5 lg:pb-5">
         {/* ── Left: 1. Committee, then 2. Delegations (the controls) ─────────── */}
+        {/* No conference sign-in prompt here (17 Sep 2026, owner: "not needed").
+            A chair setting up a room is not looking for the organiser side. */}
         <Panel
           step={1}
           labelledBy="create-step-committee"
           title={t('create_step_committee')}
-          aside={
-            <Link
-              href={conferenceHref}
-              className="group inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[12.5px] transition-[background-color,transform] duration-150 hover:bg-[#1B3828]/[0.06] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
-              style={{ color: C.inkSoft }}
-            >
-              <span className="sr-only sm:not-sr-only">{t('create_conference_prompt')}</span>
-              <span className="inline-flex items-center gap-1 font-extrabold" style={{ color: C.forest }}>
-                <LogIn size={14} strokeWidth={2.4} className="rtl:-scale-x-100" />
-                {signedIn ? t('create_conference_open') : t('create_conference_login')}
-              </span>
-            </Link>
-          }
         >
           <LiveCommitteeIdentity
             src={previewLogo}
@@ -861,8 +845,9 @@ function CreatePageInner() {
               )}
             </div>
 
-            {/* Quick bundles, then Paste a list at the end of the same row. One row that
-                scrolls sideways on a phone, wraps from sm. */}
+            {/* Quick bundles. One row that scrolls sideways on a phone, wraps from sm.
+                The Paste a list toggle used to sit at the end of this row; the paste
+                area is now always on screen (below), so there is nothing to open. */}
             <div className="mt-3 flex-shrink-0">
               <p id="create-presets-label" className="sr-only">{t('create_quick_bundles')}</p>
               <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 [&::-webkit-scrollbar]:hidden">
@@ -887,37 +872,36 @@ function CreatePageInner() {
                     </button>
                   ))}
                 </div>
-                <button type="button" onClick={() => setPasteOpen((v) => !v)} aria-expanded={pasteOpen} aria-controls="create-paste-panel"
-                  className="flex h-9 flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[12.5px] font-bold transition-[background-color,box-shadow,transform] duration-150 hover:bg-[#1B3828]/[0.07] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
-                  style={{ color: C.forest, backgroundColor: pasteOpen ? 'rgba(27,56,40,0.09)' : undefined, boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.22)' }}>
-                  <ClipboardList size={15} strokeWidth={2.1} />
-                  {t('create_paste_toggle')}
-                  <ChevronDown size={14} strokeWidth={2.4} className="transition-transform duration-200" style={{ transform: pasteOpen ? 'rotate(180deg)' : undefined }} />
-                </button>
               </div>
             </div>
 
-            {pasteOpen && (
-              <div id="create-paste-panel" className="mt-2 flex-shrink-0">
-                <label htmlFor="create-paste" className="sr-only">{t('create_paste_hint')}</label>
-                <textarea id="create-paste" value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
-                  placeholder={t('create_paste_placeholder')}
-                  title={t('create_paste_hint')}
-                  rows={3}
-                  className="block w-full resize-none rounded-[14px] bg-white/80 px-3.5 py-2.5 lg:h-[62px] lg:py-2 text-base leading-relaxed text-[#1C1410] placeholder-[#8A7C6B] shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] transition-[box-shadow] duration-150 focus:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] focus:outline-none sm:text-[14px]" />
-                <div className="mt-2 flex flex-wrap items-center gap-3">
-                  <button type="button" onClick={handlePaste} disabled={!pasteText.trim()}
-                    className="flex h-9 items-center gap-2 rounded-xl px-3.5 text-[13px] font-extrabold transition-[background-color,color,transform,opacity] duration-150 enabled:hover:bg-[#1B3828] enabled:hover:text-[#EED98A] enabled:active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none"
-                    style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: C.forest, boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.14)' }}>
-                    <Wand2 size={15} strokeWidth={2.2} />
-                    {stripArrow(t('create_auto_match'))}
-                  </button>
-                  {pasteError
-                    ? <p role="alert" className="text-[13px] font-semibold" style={{ color: '#8A6414' }}>{pasteError}</p>
-                    : <p className="min-w-0 flex-1 text-[12.5px] leading-snug" style={{ color: C.inkSoft, textWrap: 'pretty' }}>{t('create_paste_hint')}</p>}
-                </div>
+            {/* Paste a list: always here, never behind a button (17 Sep 2026, owner:
+                "make the paste a list removed, but add the entire tab already").
+                Same matching as before: Auto-match opens the review modal. */}
+            <div className="mt-3 flex-shrink-0">
+              <div className="mb-1.5 flex items-center gap-1.5" style={{ color: C.inkSoft }}>
+                <ClipboardList size={14} strokeWidth={2.1} />
+                <label htmlFor="create-paste" className="uppercase" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em' }}>
+                  {t('create_paste_toggle')}
+                </label>
               </div>
-            )}
+              <textarea id="create-paste" value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
+                placeholder={t('create_paste_placeholder')}
+                title={t('create_paste_hint')}
+                rows={3}
+                className="block w-full resize-none rounded-[14px] bg-white/80 px-3.5 py-2.5 lg:h-[58px] lg:py-2 text-base leading-relaxed text-[#1C1410] placeholder-[#8A7C6B] shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] transition-[box-shadow] duration-150 focus:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] focus:outline-none sm:text-[14px]" />
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <button type="button" onClick={handlePaste} disabled={!pasteText.trim()}
+                  className="flex h-9 items-center gap-2 rounded-xl px-3.5 text-[13px] font-extrabold transition-[background-color,color,transform,opacity] duration-150 enabled:hover:bg-[#1B3828] enabled:hover:text-[#EED98A] enabled:active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none"
+                  style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: C.forest, boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.14)' }}>
+                  <Wand2 size={15} strokeWidth={2.2} />
+                  {stripArrow(t('create_auto_match'))}
+                </button>
+                {pasteError
+                  ? <p role="alert" className="text-[13px] font-semibold" style={{ color: '#8A6414' }}>{pasteError}</p>
+                  : <p className="min-w-0 flex-1 text-[12.5px] leading-snug" style={{ color: C.inkSoft, textWrap: 'pretty' }}>{t('create_paste_hint')}</p>}
+              </div>
+            </div>
           </section>
         </Panel>
 

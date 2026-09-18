@@ -12,6 +12,7 @@ import SpeakerControls, { FloorProgress, SpeakerClock, POPOVER_TONES, type Contr
 import { moderatorNameOf, notifyCommenterOnly } from '@/lib/commenterNotice';
 import DraggablePopover from '@/components/DraggablePopover';
 import SpeakerStrip, { type StripHeader } from '@/components/SpeakerStrip';
+import CommenterFloor from '@/components/CommenterFloor';
 import SessionCodePresenter from '@/components/SessionCodePresenter';
 import FloorEmblemBackdrop from '@/components/FloorEmblemBackdrop';
 import ConferencePromoDialog from '@/components/ConferencePromoDialog';
@@ -142,6 +143,7 @@ function formatTime(seconds: number) {
 }
 
 function GavelLoader() {
+  const t = useT();
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: '#EDE7D8' }}>
       <style>{`
@@ -163,7 +165,7 @@ function GavelLoader() {
         <rect x="10" y="16" width="36" height="7" rx="3" transform="rotate(-45 10 16)" fill="#6A5A4A" opacity="0.4" />
         <circle cx="56" cy="56" r="3" fill="#1B3828" opacity="0.5" />
       </svg>
-      <p className="text-[#9A8A78] text-sm font-mono tracking-widest">LOADING…</p>
+      <p className="text-[#9A8A78] text-sm font-mono tracking-widest">{t('session_loading')}</p>
     </div>
   );
 }
@@ -349,7 +351,7 @@ function AddSpeakerInput({ committee, onAdd, onRecognise }: { committee: Committ
                   <SeatFlag country={d.country} size={20} className="object-contain" fallback={<UnknownSeatIcon size={20} />} />
                 </span>
                   <span className="text-sm flex-1 text-[#9A8A78]">{getCountryDisplayName(d.country, language)}</span>
-                  <span className="text-xs text-[#9A8A78]">already on list</span>
+                  <span className="text-xs text-[#9A8A78]">{t('gsl_already_on_list')}</span>
                 </div>
               );
             }
@@ -362,7 +364,7 @@ function AddSpeakerInput({ committee, onAdd, onRecognise }: { committee: Committ
                 </span>
                 <span className="text-sm">{getCountryDisplayName(d.country, language)}</span>
                 {d.status === 'absent' && <span className="text-[10px] text-[#B6871F] shrink-0">{t('rollcall_absent')}</span>}
-                {isFirst && <span className="ms-auto text-xs text-[#9A8A78]">Enter ↵</span>}
+                {isFirst && <span className="ms-auto text-xs text-[#9A8A78]">{t('gsl_enter_hint')}</span>}
               </button>
             );
           })}
@@ -383,6 +385,7 @@ function RtrCountryInput({
   onChange: (v: string) => void;
 }) {
   const { language } = useLanguage();
+  const t = useT();
   const [query, setQuery] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
   const eligible = committee.delegates.filter((d) => d.status !== 'absent');
@@ -466,7 +469,7 @@ function RtrCountryInput({
                     <SeatFlag country={d.country} size={16} className="object-contain" fallback={<UnknownSeatIcon size={16} />} />
                   </span>
                   <span className="flex-1">{getCountryDisplayName(d.country, language)}</span>
-                  {i === 0 && <span className="text-[#9A8A78] shrink-0">Enter ↵</span>}
+                  {i === 0 && <span className="text-[#9A8A78] shrink-0">{t('gsl_enter_hint')}</span>}
                 </button>
               );
             })}
@@ -480,7 +483,15 @@ function RtrCountryInput({
 // ── Draggable GSL Speakers Queue ──────────────────────────────────────────────
 /** The speaker holding the floor (GSL, moderated caucus, Tour de Table): a round seat flag
  *  (crest, then flag, then monogram) with a soft forest-tinted lift. */
-const FLOOR_FLAG_PX = 164;
+// 17 Sep 2026 (owner: "increase the size of the current speaker by another 20%, don't move
+// anything else"): 164 -> 197 and the name 1.8rem -> 2.16rem. ONLY the flag and the name grow;
+// the clock, the progress bar, the strip and the buttons are untouched, and zone 2 still
+// centres inside `flex-1 min-h-0`, so nothing else on the floor moves.
+const FLOOR_FLAG_PX = 197;
+/** The name under the floor flag, grown with it. */
+const FLOOR_NAME_REM = '2.16rem';
+/** The Room Order Tour de Table number disc, the floor "flag" of a numbered turn. */
+const FLOOR_DISC_PX = 173;
 const FLOOR_FLAG_SHADOW = '0 0 0 4px #F0EBDD, 0 2px 6px rgba(27,56,40,0.12), 0 12px 28px rgba(27,56,40,0.20)';
 
 function DraggableSpeakersQueue({ list, onReorder, onRemove, onRemoveCurrent, lastSpeakerDelegateId, currentSpeakerDelegateId, onDeckDelegateId, header, isRoomOrderTdT, onLockedAttempt }: {
@@ -676,7 +687,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
                     <SeatFlag country={d.country} size={20} className="object-contain" fallback={<UnknownSeatIcon size={20} />} />
                 </span>
                   <span className="text-sm flex-1 text-[#9A8A78]">{getCountryDisplayName(d.country, language)}</span>
-                  <span className="text-xs text-[#9A8A78]">{isCurrent ? 'currently speaking' : 'already on list'}</span>
+                  <span className="text-xs text-[#9A8A78]">{isCurrent ? t('caucus_currently_speaking') : t('gsl_already_on_list')}</span>
                 </div>
               );
             }
@@ -689,22 +700,22 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
                 </span>
                 <span className="text-sm flex-1">{getCountryDisplayName(d.country, language)}</span>
                 {d.status === 'absent' && <span className="text-[10px] text-[#B6871F] shrink-0">{t('rollcall_absent')}</span>}
-                {spoke && <span className="text-[10px] text-[#B6871F] shrink-0">already spoke</span>}
+                {spoke && <span className="text-[10px] text-[#B6871F] shrink-0">{t('caucus_already_spoke')}</span>}
                 {isFirst && !spoke && (
                   <div className="flex items-center gap-1 shrink-0">
                     {onAddFirst && (
                       <button onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); if (refuseIfFull() || !recogniseIfAbsent(d)) return; onAddFirst(d.id); setQuery(''); }}
                         className="text-[10px] px-1.5 py-0.5 rounded bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#B6871F] font-bold border border-[#C8BAA8] transition-colors gv-lift">
-                        ↑ First
+                        {t('caucus_add_first')}
                       </button>
                     )}
                     {onAddLast && (
                       <button onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); if (refuseIfFull() || !recogniseIfAbsent(d)) return; onAddLast(d.id); setQuery(''); }}
                         className="text-[10px] px-1.5 py-0.5 rounded bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#B6871F] font-bold border border-[#C8BAA8] transition-colors gv-lift">
-                        ↓ Last
+                        {t('caucus_add_last')}
                       </button>
                     )}
-                    <span className="text-xs text-[#9A8A78]">Enter ↵</span>
+                    <span className="text-xs text-[#9A8A78]">{t('gsl_enter_hint')}</span>
                   </div>
                 )}
               </button>
@@ -1006,7 +1017,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
               <button
                 onClick={() => { const s = parseInt(cowCustom, 10); if (s > 0) { setCowActive(false); setCowRemaining(s); setCowSetSecs(s); setCowCustom(''); } }}
                 className="px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide bg-[#B8844A] hover:bg-[#B8844A]/80 text-[#1C1410] transition-colors focus:outline-none shrink-0 gv-lift"
-                aria-label="Set custom time"
+                aria-label={t('cow_timer_set_custom')}
               >
                 ✓
               </button>
@@ -1073,9 +1084,13 @@ function ModeratedCaucusMain({
   speakerTimeRemaining, timerRunning, caucusSeconds,
   openPopovers, setPopover, extraTimeAdded,
   handleToggleTimer, handleRestartTime, handleNextCaucusSpeaker, handleEndCaucus, handleStartOnDeck,
-  sessionEnded, isViewOnly = false, onRecognise, commenterLock = null,
+  sessionEnded, isViewOnly = false, onRecognise, commenterLock = null, onRemoveFloorSpeaker,
 }: {
   committee: Committee; setCommittee: CommitteeSetter;
+  /** Take the delegation holding the caucus floor off it (the page's
+   *  `handleRemoveCurrentSpeaker`: pause at the live value, log the speech, conditional clear,
+   *  the total re-anchored paused with nobody on its floor). Omitted = no removal here. */
+  onRemoveFloorSpeaker?: () => void;
   /** A real Commenter: the Moderator's controls drawn disabled, a press raises the notice. */
   commenterLock?: ControlLock | null;
   /** Start with a delegation on deck: seat the head of the queue AND start both clocks in one
@@ -1207,6 +1222,20 @@ function ModeratedCaucusMain({
   // middle by the next delegation at once, and the empty hint shows only for an empty queue.
   const onDeck = !caucusHasSpeaker ? (queue[0] ?? null) : null;
   const floorCountry = committee.caucus?.currentSpeaker ?? onDeck?.country ?? null;
+  // The seated caucus speaker as a strip entry. `caucus.currentSpeaker` is a country STRING,
+  // so the delegate row is looked up by country; a Room Order placeholder ("Speaker 3") matches
+  // nothing, which is exactly right — it is not a delegation.
+  const caucusFloorEntry = (() => {
+    const country = committee.caucus?.currentSpeaker;
+    if (!country || isRoomOrderTdT) return null;
+    const d = committee.delegates.find((x) => x.country === country);
+    return d ? { delegateId: d.id, country } : null;
+  })();
+  // #1 is the floor holder, then the queue. Deduped, because a stale realtime row could leave
+  // the seated delegation in the queue for a moment and two chips with one id break the drag.
+  const caucusStripList = caucusFloorEntry
+    ? [caucusFloorEntry, ...queue.filter((s) => s.delegateId !== caucusFloorEntry.delegateId)]
+    : queue;
   // The slot Start will give them: the speaking time, capped to what the caucus has left.
   const onDeckSlot = capSpeakerSlot(speakerTime, liveRemaining);
   const toggleRtr = () => setPopover('rightToReply', 'toggle');
@@ -1245,18 +1274,63 @@ function ModeratedCaucusMain({
     />
   ) : null;
 
+  // A Commenter reads the caucus floor the same way as the GSL: the delegation on the floor
+  // big on the inline-start side, the queue beside it (owner, 17 Sep 2026). The total-time bar
+  // below is unchanged, so they still see how much of the caucus is left.
+  const roomOrderNumber = isRoomOrderTdT && floorCountry ? (floorCountry.match(/(\d+)$/)?.[1] ?? '1') : null;
+  if (isViewOnly) {
+    return (
+      <>
+        <CommenterFloor
+          header={caucusStripHeader}
+          floorCountry={floorCountry}
+          floorNumber={roomOrderNumber}
+          floorLabel={floorCountry ? (caucusHasSpeaker ? t('view_is_speaking') : t('gsl_on_deck')) : null}
+          upcoming={queue.filter((s) => s.delegateId !== onDeck?.delegateId && s.country !== committee.caucus?.currentSpeaker)}
+          formatName={(c) => (isRoomOrderTdT ? c : getCountryDisplayName(c, language))}
+          onLockedAttempt={commenterLock?.onAttempt}
+          emptyHint={<p className="text-center text-sm font-semibold" style={{ color: '#6A5A4A' }}>{t('gsl_no_speakers_queued')}</p>}
+        />
+        {!sessionEnded && !isTdT && (
+          // How much of the caucus is left, nothing else: Extend, End and the add bar are the
+          // Moderator's and a disabled copy of each only takes room from the comment dock.
+          <div className="shrink-0 border-t border-[#DDD4C0] px-6 py-2 flex items-center gap-3" style={{ backgroundColor: '#F6F1E9' }}>
+            <span className="text-xs text-[#9A8A78] font-mono shrink-0">{t('gsl_total')}</span>
+            <p className={`text-lg font-black font-mono shrink-0 ${liveRemaining <= 30 ? 'text-red-500' : 'text-[#1C1410]'}`}>{formatTime(liveRemaining)}</p>
+            <div className="flex-1 h-2 bg-[#DDD4C0] rounded-full overflow-hidden">
+              <div className="h-full bg-[#B6871F]/60 rounded-full transition-all" style={{ width: `${totalProgress}%` }} />
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
   return (
     <>
       {floorCountry ? (
         <>
-          {/* ZONE 1 — mode marker + queue locked at top */}
+          {/* ZONE 1 — mode marker + queue locked at top.
+              The delegation HOLDING the caucus floor is drawn at #1 here (17 Sep 2026, owner:
+              "move the current speaker away even if they have already started their speech").
+              Before this the caucus strip showed the queue only, so the only way off the floor
+              was their sidebar row — unreachable with the sidebar collapsed or the Roll Call
+              tab open, and invisible mid-speech. This is NOT an X beside the caucus speaker's
+              name (owner, 15 Sep 2026, still respected): it is the same #1 chip, gold ring and
+              always-visible X the GSL already has. Room Order tours are excluded — their
+              "Speaker N" placeholders are not delegations and the strip numbers from 2. */}
           <div className="shrink-0">
             <DraggableSpeakersQueue
-              list={queue}
+              list={caucusStripList}
               header={caucusStripHeader}
+              currentSpeakerDelegateId={caucusFloorEntry?.delegateId ?? null}
               onDeckDelegateId={onDeck?.delegateId ?? null}
-              onReorder={isViewOnly ? undefined : handleCaucusReorderQueue}
+              // The floor holder is not a queue row: strip them back out before the write, the
+              // same way the GSL does, or the reorder would insert them into `caucusQueue`.
+              onReorder={isViewOnly ? undefined
+                : (newList) => handleCaucusReorderQueue(newList.filter((s) => s.delegateId !== caucusFloorEntry?.delegateId))}
               onRemove={isViewOnly ? undefined : handleCaucusRemoveFromQueue}
+              onRemoveCurrent={isViewOnly || sessionEnded || !caucusFloorEntry || !onRemoveFloorSpeaker ? undefined : onRemoveFloorSpeaker}
               isRoomOrderTdT={isRoomOrderTdT}
               onLockedAttempt={commenterLock?.onAttempt}
             />
@@ -1264,8 +1338,8 @@ function ModeratedCaucusMain({
           {/* ZONE 2 — Flag + name + timer + progress: compresses as viewport shrinks */}
           <div className="relative flex-1 min-h-0 flex flex-col items-center justify-center px-4 py-2">
             {isRoomOrderTdT ? (
-              <div className="floor-emblem-anchor relative w-36 h-36 rounded-full bg-[#DDD4C0] shrink-0 flex items-center justify-center">
-                <span className="text-6xl font-black" style={{ color: '#1B3828' }}>{(() => {
+              <div className="floor-emblem-anchor relative rounded-full bg-[#DDD4C0] shrink-0 flex items-center justify-center" style={{ width: FLOOR_DISC_PX, height: FLOOR_DISC_PX }}>
+                <span className="font-black" style={{ color: '#1B3828', fontSize: '4.5rem' }}>{(() => {
                   const match = floorCountry.match(/(\d+)$/);
                   return match ? match[1] : '1';
                 })()}</span>
@@ -1282,7 +1356,7 @@ function ModeratedCaucusMain({
             )}
             {/* No X beside the caucus speaker's name (owner, 15 Sep 2026): taking a delegation
                 off the caucus floor stays on its sidebar row. */}
-            <h1 className="font-black text-[#1C1410] text-center" style={{ fontSize: '1.8rem', margin: '8px 0' }}>
+            <h1 className="font-black text-[#1C1410] text-center" style={{ fontSize: FLOOR_NAME_REM, margin: '8px 0' }}>
               {getCountryDisplayName(floorCountry, language)}
             </h1>
             {onDeck && (
@@ -2185,6 +2259,49 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [committee?.dbHeadChair, committee?.dbHeadChairDevice, committee?.chairNames, committee?.id, myChairName, accessState, gavelPinTick, deviceLock.kicked]);
 
+  // ── "Who is moderating now": one glass card on EVERY chair device ───────────
+  // (17 Sep 2026, owner: "add some sort of notification in the top right when a chair takes
+  // control over the session or they get the gavel".)
+  //
+  // The handover toast below only reaches the two devices whose OWN role flipped. A third
+  // chair on the dais stays a Commenter through a handover and used to be told nothing at
+  // all, so "who has control" was something you had to open Settings to find out. This fires
+  // on the MODERATOR'S NAME changing, so all three devices report the same event, and says
+  // whether it is you.
+  //
+  // Keyed on the holder (`notifyKey.gavel`), so a realtime re-delivery, a device claim under
+  // the same name and two same-second claims collapse onto one card (store rule 1). `urgent`,
+  // because the stack is suppressed while a speech runs and a chair still pressing Next on a
+  // session they no longer drive needs this now, not after the speech. The first loaded value
+  // is only a baseline: opening the page announces nothing.
+  //
+  // Read-only, like every other notification producer: no setCommittee, no updateLocal, no
+  // localUpdateTime, no DB write (RULES 3 to 5).
+  const gavelHolderRef = useRef<string | null>(null);
+  /** When the last name-change card fired, so the ROLE TRANSITION toast below does not say
+   *  the same thing a second time on the two devices whose role flipped. */
+  const gavelCardAtRef = useRef(0);
+  useEffect(() => {
+    if (!committee?.id || accessState !== 'allowed' || !myChairName) return;
+    const holder = (committee.dbHeadChair || committee.chairNames?.[0] || '').trim();
+    if (!holder) return;
+    const prev = gavelHolderRef.current;
+    gavelHolderRef.current = holder;
+    if (prev === null || prev === holder) return;       // baseline, or nothing moved
+    if (sessionEnded || deviceLock.kicked) return;      // the overlay / modal owns the screen
+    const mine = holder === myChairName;
+    gavelCardAtRef.current = Date.now();
+    notify({
+      key: notifyKey.gavel(holder),
+      kind: 'info',
+      title: mine ? t('gavel_notify_mine_title') : t('gavel_notify_taken_title', { name: holder }),
+      body: mine ? t('gavel_notify_mine_body') : t('gavel_notify_taken_body'),
+      ttlMs: NOTIFY_TTL.notice,
+      urgent: true,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [committee?.id, committee?.dbHeadChair, committee?.chairNames, accessState, myChairName, sessionEnded, deviceLock.kicked, t]);
+
   // Agenda: a conference committee with 2+ topics opens on the topic the Moderator picks
   // (src/components/AgendaPicker.tsx). Inert for standalone sessions and 0/1 topics.
   const applyAgendaLocal = useCallback((u: (c: Committee) => Committee) => updateLocal(setCommittee, u), []);
@@ -2217,7 +2334,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
     const newHead = committee?.dbHeadChair || committee?.chairNames?.[0] || '';
     // Kicked by the account rule: the modal says it, a toast under it would only linger.
-    if (!deviceLock.kicked) setGavelToast({
+    // A NAME change is already announced by the "who is moderating" card (every device, top
+    // right), so the toast is kept only for a same-name DEVICE move, which that card cannot
+    // see (the holder's name did not change).
+    const cardJustFired = Date.now() - gavelCardAtRef.current < 3000;
+    if (!deviceLock.kicked && !cardJustFired) setGavelToast({
       tone: lost ? 'lost' : 'gained',
       // Routed through translations: this fires at the exact moment control changes
       // hands, so it is the worst possible place to fall back to English.
@@ -2866,6 +2987,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const stableRemoveCurrentSpeaker = useCallback((delegateId: string) => {
     removeCurrentSpeakerRef.current?.(delegateId);
   }, []);
+  /** "Whoever holds the floor right now", for the strip X (no delegate id to check against). */
+  const stableRemoveFloorSpeaker = useCallback(() => {
+    removeCurrentSpeakerRef.current?.();
+  }, []);
   // The speaker holding the floor was marked ABSENT (sidebar status, the Roll Call tab, the
   // delegate's own phone, another chair device): they leave the floor too. Their speech is
   // logged first; both lists already drop an absent delegate. Never in pre-session roll call
@@ -3500,14 +3625,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     return (
       <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
         <div className="text-center max-w-sm">
-          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>Sign in to join this session</h1>
-          <p className="mb-6" style={{ color: '#6A5A4A' }}>This is a conference session. Sign in to verify you chair this committee.</p>
+          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>{t('session_signin_title')}</h1>
+          <p className="mb-6" style={{ color: '#6A5A4A' }}>{t('session_signin_chair_body')}</p>
           <button
             onClick={() => router.push('/auth/signin?next=' + encodeURIComponent('/join?code=' + code))}
             className="font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none gv-lift"
             style={{ backgroundColor: '#1B3828' }}
           >
-            SIGN IN
+            {t('session_signin_btn')}
           </button>
         </div>
       </div>
@@ -3518,9 +3643,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     return (
       <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
         <div className="text-center max-w-sm">
-          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>You don&apos;t chair this committee</h1>
-          <p className="mb-6" style={{ color: '#6A5A4A' }}>This session is not associated with your account as a chair. Please try again, or contact your conference organisers.</p>
-          <Link href="/sessions" className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>BACK TO HOME</Link>
+          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>{t('session_denied_title')}</h1>
+          <p className="mb-6" style={{ color: '#6A5A4A' }}>{t('session_denied_chair_body')}</p>
+          <Link href="/sessions" className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>{t('session_back_home')}</Link>
         </div>
       </div>
     );
@@ -4468,6 +4593,31 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   };
   // Who the floor is drawn around: the seated speaker, else the delegation on deck.
   const gslFloor = committee.currentSpeaker ?? onDeck;
+  // ── Which delegation the comment dock writes about ─────────────────────────
+  //
+  // 17 Sep 2026 (owner: "currently there is always a speaker on the floor, so always have a
+  // chat to type in open"). The dock's writing bubble follows whoever holds the floor, and it
+  // used to be handed `caucus.currentSpeaker ?? currentSpeaker?.country` only — both null
+  // while a delegation is ON DECK. On deck is now the normal state between speeches, so the
+  // Commenter was routinely left with no open note field at all, exactly when the delegation
+  // in the middle of their screen is the one they want to write about.
+  //
+  // So the on-deck delegation counts as the floor here. A note written on them carries no
+  // `speech_seconds` (nothing has been spoken), which is the same shape as a note written
+  // while a delegate holds the floor, so the orphan repair and the reconcile pass adopt it
+  // onto the speech when it is logged. Room Order placeholders are excluded: "Speaker 3" is
+  // not a delegation and nothing can ever be filed against it.
+  const dockFloorCountry = (() => {
+    const lc = liveCaucus(committee);
+    if (lc) {
+      if (lc.currentSpeaker) return lc.currentSpeaker;
+      if (committee.phase !== 'moderated-caucus') return null;
+      if (lc.purpose?.includes('Room Order')) return null;
+      return committee.caucusQueue?.[0]?.country ?? null;
+    }
+    return committee.currentSpeaker?.country
+      ?? (committee.phase === 'speakers-list' ? committee.speakersList[0]?.country ?? null : null);
+  })();
   // The strip shows the floor holder first. With a seated speaker they are prepended (they
   // are not a `speakers_list` row); on deck they already ARE the head of the list.
   const gslDisplayList = committee.currentSpeaker
@@ -4974,7 +5124,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       {isTdTParent ? (
                         <>
                           <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>{t('caucus_starting_tdt')}</p>
-                          <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>Tour de Table</h1>
+                          <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>{t('caucus_tdt_title')}</h1>
                           <p className="text-[#6A5A4A] text-sm mb-6">
                             {committee.caucus.purpose?.includes('Room Order')
                               ? t('caucus_tdt_room_order')
@@ -5006,7 +5156,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       ) : (
                         <>
                           <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>{t('caucus_starting_moderated')}</p>
-                          <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>{committee.caucus.purpose || 'Moderated Caucus'}</h1>
+                          <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>{committee.caucus.purpose || t('caucus_moderated_title')}</h1>
                           <p className="text-[#6A5A4A] text-sm mb-6">{committee.topic}</p>
                           <div className="flex justify-center gap-8 mb-8">
                             <div className="text-center">
@@ -5052,6 +5202,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     isViewOnly={isViewOnly}
                     commenterLock={commenterLock}
                     onRecognise={recogniseAbsentDelegate}
+                    onRemoveFloorSpeaker={stableRemoveFloorSpeaker}
                   />
                 )
               )}
@@ -5100,7 +5251,21 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden">
                   {/* The floating "GSL" caption is gone: the strip's marker says
                       "General Speaker's List" in full, with the topic beneath (owner). */}
-                  {gslFloor ? (
+                  {isViewOnly ? (
+                    /* A Commenter reads the floor as one ROW: the delegation on the floor big
+                       on the inline-start side, the queue beside it (owner, 17 Sep 2026). No
+                       strip, no clock, no controls — half the height, so the comment dock
+                       underneath gets the room it needs. See CommenterFloor.tsx. */
+                    <CommenterFloor
+                      header={gslStripHeader}
+                      floorCountry={gslFloor?.country ?? null}
+                      floorLabel={gslFloor ? (committee.currentSpeaker ? t('view_is_speaking') : t('gsl_on_deck')) : null}
+                      upcoming={committee.speakersList.filter((s) => s.delegateId !== gslFloor?.delegateId)}
+                      formatName={(c) => getCountryDisplayName(c, language)}
+                      onLockedAttempt={commenterLock?.onAttempt}
+                      emptyHint={<p className="text-center text-sm font-semibold" style={{ color: '#6A5A4A' }}>{t('gsl_no_speakers_queued')}</p>}
+                    />
+                  ) : gslFloor ? (
                     <>
                       {/* ZONE 1 — mode marker + queue locked at top */}
                       <div className="shrink-0">
@@ -5125,7 +5290,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           className="floor-emblem-anchor"
                           style={{ boxShadow: FLOOR_FLAG_SHADOW }}
                         />
-                        <h1 className="font-black text-[#1C1410] text-center" style={{ fontSize: '1.8rem', margin: '8px 0' }}>{getCountryDisplayName(gslFloor.country, language)}</h1>
+                        <h1 className="font-black text-[#1C1410] text-center" style={{ fontSize: FLOOR_NAME_REM, margin: '8px 0' }}>{getCountryDisplayName(gslFloor.country, language)}</h1>
                         {isViewOnly ? (
                           <div className={`font-bold text-[#6A5A4A] text-center ${commenterLock ? 'cursor-not-allowed' : ''}`} style={{ fontSize: '1.5rem', marginBottom: '8px' }}
                             title={commenterLock?.reason} onClick={commenterLock?.onAttempt}>
@@ -5239,7 +5404,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 <FeedbackLogPanel
                   committee={committee}
                   chairName={myChairName || committee.chairNames[0] || 'Chair'}
-                  currentCountry={liveCaucus(committee)?.currentSpeaker ?? committee.currentSpeaker?.country ?? null}
+                  currentCountry={dockFloorCountry}
                   feedbackVersion={feedbackVersion}
                 />
               )}
@@ -5293,6 +5458,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           onClose={() => setShowScoreboard(false)}
           feedbackVersion={feedbackVersion}
           isViewOnly={isViewOnly}
+          chairName={myChairName}
         />
       )}
       {/* EXTRA TIME OVERLAY: a movable panel (src/components/DraggablePopover.tsx), Portal +

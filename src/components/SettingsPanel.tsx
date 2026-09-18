@@ -22,7 +22,7 @@ import { Committee } from '@/lib/types';
 import { updateCommitteeChairSuffixInDB, saveCommitteeSettings, updateCommitteeScoringInDB } from '@/lib/committeeService';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import type { Language } from '@/lib/translations';
-import { K, T, W, LH, SettingsKitStyles, ConfirmSheet } from '@/components/settings/settingsKit';
+import { K, T, W, LH, ICON, ICON_ON_FOREST, ACCENT_VAR, SettingsKitStyles, ConfirmSheet, type IconTone } from '@/components/settings/settingsKit';
 import type { SettingsTab, TabProps } from '@/components/settings/settingsTypes';
 import AccessTab from '@/components/settings/AccessTab';
 import MotionsTab from '@/components/settings/MotionsTab';
@@ -142,16 +142,19 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
   const displayChairSuffix = dbChairSuffix || s.chairJoinSuffix || '????';
 
   // ── Tabs ────────────────────────────────────────────────────────────────────
+  // `tone` is the tab's hue: it colours the bookmark's glyph and, through --stg-accent, every
+  // group glyph on that tab (settingsKit ICON). Never the only signal: each glyph is
+  // aria-hidden beside its own text.
   const tabs = useMemo(() => {
-    const list: { id: SettingsTab; label: string; title: string; desc: string; icon: Icon }[] = [
-      { id: 'access', label: t('stg_tab_access'), title: t('stg_access_title'), desc: t('stg_access_desc'), icon: KeyRound },
-      { id: 'motions', label: t('settings_tab_motions'), title: t('stg_motions_title'), desc: t('stg_motions_desc'), icon: ListOrdered },
-      { id: 'voting', label: t('settings_tab_voting'), title: t('stg_voting_title'), desc: t('stg_voting_desc'), icon: Vote },
-      { id: 'points', label: t('settings_tab_points'), title: t('stg_points_title'), desc: t('stg_points_desc'), icon: Star },
-      { id: 'people', label: t('stg_tab_people'), title: t('stg_people_title'), desc: t('stg_people_desc'), icon: Users },
+    const list: { id: SettingsTab; label: string; title: string; desc: string; icon: Icon; tone: IconTone }[] = [
+      { id: 'access', label: t('stg_tab_access'), title: t('stg_access_title'), desc: t('stg_access_desc'), icon: KeyRound, tone: 'access' },
+      { id: 'motions', label: t('settings_tab_motions'), title: t('stg_motions_title'), desc: t('stg_motions_desc'), icon: ListOrdered, tone: 'motions' },
+      { id: 'voting', label: t('settings_tab_voting'), title: t('stg_voting_title'), desc: t('stg_voting_desc'), icon: Vote, tone: 'voting' },
+      { id: 'points', label: t('settings_tab_points'), title: t('stg_points_title'), desc: t('stg_points_desc'), icon: Star, tone: 'points' },
+      { id: 'people', label: t('stg_tab_people'), title: t('stg_people_title'), desc: t('stg_people_desc'), icon: Users, tone: 'people' },
     ];
     // Awards only exist for a committee run through a conference (PRD rule 8).
-    if (isConference) list.push({ id: 'awards', label: t('stg_tab_awards'), title: t('stg_awards_title'), desc: t('stg_awards_desc'), icon: Award });
+    if (isConference) list.push({ id: 'awards', label: t('stg_tab_awards'), title: t('stg_awards_title'), desc: t('stg_awards_desc'), icon: Award, tone: 'awards' });
     return list;
   }, [t, isConference]);
   const active = tabs.find((x) => x.id === tab) ?? tabs[0];
@@ -214,9 +217,11 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
             {/* The dialog's own masthead: the Gavelling gavel mark, not a tiled glyph. */}
             <div className="flex items-center gap-2.5" style={{ padding: '20px 18px 16px 20px' }}>
               <Brand markOnly size={30} />
+              {/* The dialog's name and nothing else. The committee's own name was here until
+                  17 Sep 2026 (owner): the masthead behind the dialog already states it, so a
+                  second copy only crowded the spine. */}
               <span className="hidden md:block min-w-0">
                 <span className="block" style={{ fontSize: T.section, fontWeight: W.section, color: '#FFF8E4', lineHeight: LH.section }}>{t('stg_dialog_title')}</span>
-                <span className="block truncate" style={{ marginTop: 2, fontSize: T.caption, fontWeight: W.label, color: 'rgba(243,234,208,0.72)' }} title={committee.name}>{committee.name}</span>
               </span>
             </div>
 
@@ -253,7 +258,10 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
                     >
                       {/* Stitching along the ribbon. */}
                       <span aria-hidden className="stg-stitch absolute" style={{ top: 5, bottom: 5, insetInlineStart: 5, insetInlineEnd: 20, borderRadius: 8, border: `1px dashed ${on ? 'rgba(27,56,40,0.22)' : 'rgba(238,217,138,0.12)'}`, pointerEvents: 'none' }} />
-                      <TabIcon aria-hidden size={18} strokeWidth={on ? 2.5 : 2.1} style={{ position: 'relative', flexShrink: 0 }} />
+                      {/* The tab's hue: the dark version on the gold ribbon, the lifted one on
+                          the forest spine. Set explicitly so the hover rule's light text
+                          colour cannot wash the glyph out. */}
+                      <TabIcon aria-hidden size={18} strokeWidth={on ? 2.5 : 2.1} style={{ position: 'relative', flexShrink: 0, color: on ? ICON[x.tone] : ICON_ON_FOREST[x.tone] }} />
                       <span className="relative hidden md:block truncate" style={{ fontSize: T.body, fontWeight: on ? W.section : W.label }}>{x.label}</span>
                       {x.id === 'awards' && !on && <Sparkles aria-hidden size={12} strokeWidth={2.4} style={{ position: 'relative', color: K.gold, marginInlineStart: 'auto', flexShrink: 0 }} />}
                     </button>
@@ -327,7 +335,13 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
 
             <div ref={scrollRef} id={panelId} role="tabpanel" aria-labelledby={`stg-tab-${active.id}`} tabIndex={-1}
               className="flex-1 min-h-0 overflow-y-auto" style={{ padding: '4px 26px 24px 28px', overscrollBehavior: 'contain' }}>
-              <div key={active.id} className="stg-page" style={{ maxWidth: active.id === 'motions' || active.id === 'points' || active.id === 'people' ? 1080 : 880 }}>
+              {/* NO max width. Access, Voting and Awards used to stop at 880 while the dialog
+                  ran to 1320, which left a dead ivory column of 130-150px down the whole
+                  inline-end of those tabs (owner, 17 Sep 2026: "a random big gap on the
+                  right"). Every group here is a fluid auto-fit grid, so the page simply
+                  fills the dialog and all six tabs share one measure. A paragraph that needs
+                  a reading measure caps itself (the tab lead at 560, the Awards card at 540). */}
+              <div key={active.id} className="stg-page" style={{ [ACCENT_VAR]: ICON[active.tone] } as React.CSSProperties}>
                 {active.id === 'access' && <AccessTab {...tabProps} displayChairSuffix={displayChairSuffix} onlineChairs={onlineChairs} />}
                 {active.id === 'motions' && <MotionsTab {...tabProps} />}
                 {active.id === 'voting' && <VotingTab {...tabProps} />}

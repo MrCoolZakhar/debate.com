@@ -67,6 +67,8 @@ import {
 } from '@/lib/conferenceScoreboard';
 import type { LedgerRow } from '@/lib/scoring';
 import { logEvent, getFeedbackForCommittee, type FeedbackEntry } from '@/lib/committeeService';
+import { updateFeedbackContent } from '@/lib/feedbackEdit';
+import { NoteEditingProvider } from '@/components/scoreboard/EditableNote';
 import { resolveChairAwardsHref } from '@/lib/sessionAwardsLink';
 import { Trophy, ListOrdered, Grid3x3, History } from 'lucide-react';
 
@@ -75,10 +77,12 @@ function csvEscape(v: string | number): string {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 0, isViewOnly = false }: {
+export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 0, isViewOnly = false, chairName = '' }: {
   committee: Committee; onClose: () => void; feedbackVersion?: number;
   /** A Commenter reads the board; only the Moderator awards and deducts points. */
   isViewOnly?: boolean;
+  /** This device's chair name (`?chairName=`). Only comments written under it are editable. */
+  chairName?: string;
 }) {
   const { language } = useLanguage();
   const t = useT();
@@ -230,6 +234,36 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
     return out;
   }, [history]);
 
+  // ── Correcting a comment already written ─────────────────────────────────
+  // The History tab and the profile both read their notes out of `feedback`, so
+  // one optimistic patch of that array changes the text on both at once. Then the
+  // row-counted write (`updateFeedbackContent`, which is itself conditional on
+  // `chair_name`) says whether it landed; if it did not, the old text goes back
+  // and `EditableNote` keeps the editor open with what the chair typed.
+  //
+  // A chair may only correct their OWN row (AGENTS.md: a feedback row is owned by
+  // its author). The check is here, in the statement, and in the UI — three places
+  // on purpose, because the chair suffix is the only write credential and every
+  // chair device has it (rule 15).
+  const saveNote = async (id: string, content: string): Promise<boolean> => {
+    const row = feedback.find((f) => f.id === id);
+    if (!row || !chairName || row.chairName !== chairName) return false;
+    const before = row.content;
+    if (before === content) return true;
+    setFeedback((prev) => prev.map((f) => (f.id === id ? { ...f, content } : f)));
+    const ok = await updateFeedbackContent(
+      id, chairName, content, committee.code, committee.dbChairJoinSuffix ?? undefined,
+    );
+    if (!ok) setFeedback((prev) => prev.map((f) => (f.id === id ? { ...f, content: before } : f)));
+    return ok;
+  };
+  const noteEditing = useMemo(
+    () => (chairName ? { chairName, save: saveNote } : null),
+    // `saveNote` closes over the current `feedback`, so it is rebuilt with it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [chairName, feedback, committee.code, committee.dbChairJoinSuffix],
+  );
+
   // Same write as the old Award / Deduct form: one manual ledger row, absolute
   // value, the reason (now optional) as its note.
   const applyManual = (country: string, delta: number, reason: string) => {
@@ -327,7 +361,11 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
       panelStyle={{ backgroundColor: NEU.surface, border: `1px solid ${CARD_BORDER_COLOR}`, boxShadow: NEU.out, fontFamily: OUTFIT }}
       backdropStyle={{ background: 'rgba(28,20,16,0.45)' }}
     >
-      {(requestClose) => (<>
+      {(requestClose) => (
+        // No DOM node of its own, so the panel's flex column is untouched. It
+        // carries this chair's name and the checked save down to every comment
+        // the History tab and the profiles render.
+        <NoteEditingProvider value={noteEditing}>
           {/* `gv-sort-th` styles the shared table's pressable column headers, and
               `gv-sb-seg` the History tab's segment headers. Both live here because
               this panel is the only place either renders: the organiser board
@@ -340,6 +378,13 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
             .gv-sb-seg{transition:background 160ms cubic-bezier(0.22,1,0.36,1),transform 160ms cubic-bezier(0.22,1,0.36,1)}
             .gv-sb-seg:hover{background:rgba(27,56,40,0.05)}
             .gv-sb-seg:active{transform:scale(0.995)}
+            /* A chair's own comment, clickable in place. Quiet until pointed at:
+               the note must still read as a note, not as a form field. */
+            .gv-note-edit{transition:background 140ms cubic-bezier(0.22,1,0.36,1)}
+            .gv-note-edit:hover{background:rgba(238,217,138,0.20)}
+            .gv-note-pen{opacity:0;transition:opacity 140ms ease-out}
+            .gv-note-edit:hover .gv-note-pen,.gv-note-edit:focus-visible .gv-note-pen{opacity:0.8}
+            @media (hover:none){.gv-note-pen{opacity:0.55}}
           `}</style>
           {/* Header */}
           <div className="px-5 py-3 flex items-center gap-3 shrink-0 sticky top-0 z-10" style={{ backgroundColor: NEU.forest }}>
@@ -546,7 +591,8 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
               </div>
             )}
           </div>
-      </>)}
+        </NoteEditingProvider>
+      )}
     </GrowDialog>
   );
 }

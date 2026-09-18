@@ -1737,7 +1737,9 @@ function PayInvoiceAndActions({
   const roleFeeAwaitingReview = !!roleFeeInvoice && pendingProofInvoiceIds.has(roleFeeInvoice.id);
   const roleFeeSelectable = !!roleFeeInvoice && !isInvoiceSettled(roleFeeInvoice) && dueCents > 0 && !roleFeeAwaitingReview;
   const isCovered = roleFeeInvoice?.status === 'waived';
-  const gateState = getGateState(roleConfig?.payment_timing ?? 'anytime', application.status, application.payment_status);
+  // `fee` is already today's phase-resolved role fee — hand it over so a
+  // free role can never come back 'locked' (see getGateState).
+  const gateState = getGateState(roleConfig?.payment_timing ?? 'anytime', application.status, application.payment_status, fee);
   const payableNow = gateState !== 'under_review';
   const paymentsEnabled = conference.payment_method === 'stripe' && conference.connect_onboarding_status === 'complete';
   const externalPaymentUrl = conference.payment_method === 'manual' ? conference.external_payment_url : null;

@@ -14,7 +14,7 @@ import { Emoji } from '@/components/Emoji';
 import { Check, CornerDownRight, Eye, EyeOff, Flag, Minus, RotateCcw, ShieldAlert, SkipForward, Undo2, X } from 'lucide-react';
 import { VotingRollCall } from '@/components/voting/VotingRollCall';
 import { DeviceVoteGate, DeviceVotingPanel } from '@/components/voting/DeviceVotingPanel';
-import { VotingHeader } from '@/components/voting/VotingHeader';
+import { VotingHeader, type VotingHeaderProps } from '@/components/voting/VotingHeader';
 import { ResolutionPicker, type PickCardState } from '@/components/voting/ResolutionPicker';
 import { VoterCarousel, type SeatMark as CarouselMark } from '@/components/voting/VoterCarousel';
 import { RightsQueue, RightsTimeField } from '@/components/voting/RightsQueue';
@@ -158,7 +158,7 @@ function RosterNotice({ names, notInVote, onOpenRollCall, onDismiss }: {
         </button>
         <button
           onClick={onDismiss}
-          aria-label="Dismiss"
+          aria-label={t('voting_dismiss')}
           className="shrink-0 text-[#9A8A78] hover:text-[#1C1410] transition-colors focus:outline-none"
         >
           ✕
@@ -177,6 +177,7 @@ function VotingBanner({ tone, text, actionLabel, onAction, onDismiss }: {
   onAction?: () => void;
   onDismiss?: () => void;
 }) {
+  const t = useT();
   const palette = tone === 'red'
     ? { bg: 'rgba(139,32,32,0.10)', border: 'rgba(139,32,32,0.32)', fg: '#8B2020' }
     : tone === 'amber'
@@ -200,7 +201,7 @@ function VotingBanner({ tone, text, actionLabel, onAction, onDismiss }: {
           </button>
         )}
         {onDismiss && (
-          <button onClick={onDismiss} aria-label="Dismiss" className="shrink-0 text-[#9A8A78] hover:text-[#1C1410] focus:outline-none">✕</button>
+          <button onClick={onDismiss} aria-label={t('voting_dismiss')} className="shrink-0 text-[#9A8A78] hover:text-[#1C1410] focus:outline-none">✕</button>
         )}
       </div>
     </div>
@@ -219,7 +220,7 @@ function ObserverWriteFailedBanner({ onDismiss }: { onDismiss: () => void }) {
         role="alert"
       >
         <span className="flex-1 text-sm font-semibold leading-snug">{t('voting_observer_write_failed')}</span>
-        <button onClick={onDismiss} aria-label="Dismiss" className="shrink-0 opacity-80 hover:opacity-100 focus:outline-none">✕</button>
+        <button onClick={onDismiss} aria-label={t('voting_dismiss')} className="shrink-0 opacity-80 hover:opacity-100 focus:outline-none">✕</button>
       </div>
     </Portal>
   );
@@ -297,6 +298,7 @@ function VoteScale({ forCount, againstCount, totalVoted }: {
 }
 
 function GavelLoader() {
+  const t = useT();
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: '#EDE7D8' }}>
       <style>{`
@@ -318,7 +320,7 @@ function GavelLoader() {
         <rect x="10" y="16" width="36" height="7" rx="3" transform="rotate(-45 10 16)" fill="#6A5A4A" opacity="0.4" />
         <circle cx="56" cy="56" r="3" fill="#1B3828" opacity="0.5" />
       </svg>
-      <span className="sr-only" role="status">Loading</span>
+      <span className="sr-only" role="status">{t('session_loading')}</span>
     </div>
   );
 }
@@ -514,10 +516,16 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const activeDocId = selectedDocId ?? followDocId;
   const activeVote: VoteStateV1 | null = activeDocId ? voteStates[activeDocId] ?? null : null;
   const rightsIndex = activeVote?.rightsIndex ?? 0;
+  /**
+   * ONE rights speaking time for the whole round (owner, 17 Sep 2026: "the rights speaker
+   * timer needs to use a similar rationale as the GSL timer. No per-speaker timer, just the
+   * default timer"). `vote_state.rightsTimes` is no longer read or written; a ballot stored
+   * with per-speaker overrides simply runs on the default now. Presets plus a typed field,
+   * exactly like the GSL's speaking time.
+   */
   const rightsTimerLimit = activeVote?.rightsTimerLimit ?? 60;
-  /** The delegation holding the rights floor now, and its own time (override or the default). */
+  /** The delegation holding the rights floor now. */
   const rightsSpeakerId = activeVote?.status === 'rights-speakers' ? activeVote.rightsOrder[rightsIndex]?.delegateId ?? null : null;
-  const rightsSpeakerLimit = (rightsSpeakerId && activeVote?.rightsTimes?.[rightsSpeakerId]) || rightsTimerLimit;
   const anyOpenVote = Object.values(voteStates).some(isVoteOpen);
 
   // ── Live roster plumbing ───────────────────────────────────────────────────
@@ -812,10 +820,10 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   // Keyed on the speaker's id (not only the index): moving the not-yet-started speaker away
   // puts someone else at the same index.
   useEffect(() => {
-    setRightsSpeakerTime(rightsSpeakerLimit);
+    setRightsSpeakerTime(rightsTimerLimit);
     setRightsRunning(false);
     setRightsStarted(false);
-  }, [rightsIndex, rightsSpeakerId, rightsSpeakerLimit, activeDocId]);
+  }, [rightsIndex, rightsSpeakerId, rightsTimerLimit, activeDocId]);
 
   // ── V-3: the room enters voting mode when the Moderator opens this screen ──────
   // `set_committee_voting_phase` remembers the phase the room was in and sets 'voting' in
@@ -877,9 +885,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     return (
       <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
         <div className="text-center max-w-sm">
-          <h1 className="text-2xl font-bold mb-2" style={{ color: '#1B3828' }}>Sign in to view this session</h1>
-          <p className="mb-6" style={{ color: '#6A5A4A' }}>This is a conference session. Sign in to verify your access.</p>
-          <Link href={'/auth/signin?next=' + encodeURIComponent('/join?code=' + code)} className="inline-block font-semibold text-white px-6 py-3 rounded-full transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>Sign in</Link>
+          <h1 className="text-2xl font-bold mb-2" style={{ color: '#1B3828' }}>{t('voting_signin_title')}</h1>
+          <p className="mb-6" style={{ color: '#6A5A4A' }}>{t('voting_signin_body')}</p>
+          <Link href={'/auth/signin?next=' + encodeURIComponent('/join?code=' + code)} className="inline-block font-semibold text-white px-6 py-3 rounded-full transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>{t('session_signin_btn')}</Link>
         </div>
       </div>
     );
@@ -889,9 +897,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     return (
       <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
         <div className="text-center max-w-sm">
-          <h1 className="text-2xl font-bold mb-2" style={{ color: '#1B3828' }}>You don&apos;t chair this committee</h1>
-          <p className="mb-6" style={{ color: '#6A5A4A' }}>The voting screen is part of the chair session. Only the committee&apos;s chair can open it.</p>
-          <Link href="/sessions" className="inline-block font-semibold text-white px-6 py-3 rounded-full transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>Back to home</Link>
+          <h1 className="text-2xl font-bold mb-2" style={{ color: '#1B3828' }}>{t('session_denied_title')}</h1>
+          <p className="mb-6" style={{ color: '#6A5A4A' }}>{t('voting_denied_body')}</p>
+          <Link href="/sessions" className="inline-block font-semibold text-white px-6 py-3 rounded-full transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>{t('session_back_home')}</Link>
         </div>
       </div>
     );
@@ -931,10 +939,10 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       <div className="min-h-screen bg-[#F6F1E9] flex items-center justify-center">
         <div className="text-center">
           <div className="mb-4"><Emoji size="2.5rem">🔍</Emoji></div>
-          <h1 className="text-2xl font-bold text-[#1C1410] mb-2">Committee not found</h1>
-          <p className="text-[#6A5A4A] mb-6">Code &ldquo;{code}&rdquo; is invalid or the session ended.</p>
+          <h1 className="text-2xl font-bold text-[#1C1410] mb-2">{t('voting_not_found_title')}</h1>
+          <p className="text-[#6A5A4A] mb-6">{t('voting_not_found_body', { code })}</p>
           <Link href="/sessions" className="bg-[#1B3828] hover:bg-[#2A5A3C] text-white px-6 py-3 rounded-lg font-semibold transition-colors">
-            Go Home
+            {t('session_back_home')}
           </Link>
         </div>
       </div>
@@ -961,7 +969,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       // Accept the full printed chair code ("UNSC26-4821") as well as the bare suffix.
       const bare = entered.includes('-') ? (entered.split('-').pop() ?? '').trim() : entered;
       if (!expectedSuffix || bare !== expectedSuffix) {
-        setChairCodeError('Incorrect chair code. Ask your Moderator.');
+        setChairCodeError(t('voting_chair_code_wrong'));
         return;
       }
       setChairCodeError('');
@@ -971,11 +979,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
         <div className="w-full max-w-sm text-center">
           <div className="mb-3"><Emoji size="2.25rem">🪑</Emoji></div>
-          <h1 className="text-2xl font-bold mb-2" style={{ color: '#1B3828' }}>Chairs only</h1>
+          <h1 className="text-2xl font-bold mb-2" style={{ color: '#1B3828' }}>{t('voting_chair_gate_title')}</h1>
           <p className="mb-6 text-sm leading-relaxed" style={{ color: '#6A5A4A' }}>
-            The voting screen records resolution results, changes the committee&apos;s rules and can end
-            debate. Enter the chair code for{' '}
-            <span className="font-semibold" style={{ color: '#1B3828' }}>{committee.code}</span> to open it.
+            {t('voting_chair_gate_body', { code: committee.code })}
           </p>
           {expectedSuffix ? (
             <form
@@ -989,7 +995,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 value={chairCodeInput}
                 onChange={(e) => { setChairCodeInput(e.target.value); setChairCodeError(''); }}
                 placeholder="0000"
-                aria-label="Chair code"
+                aria-label={t('voting_chair_code_field')}
                 className="w-full text-center rounded-xl px-4 py-3 font-black tracking-[0.4em] focus:outline-none"
                 style={{
                   backgroundColor: '#FAF8F3',
@@ -1008,13 +1014,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
               >
-                Open voting
+                {t('voting_chair_gate_open')}
               </button>
             </form>
           ) : (
             <p className="text-sm leading-relaxed" style={{ color: '#6A5A4A' }}>
-              This committee has no chair code. Open the voting screen from the chair session itself —
-              Documents → Go to voting.
+              {t('voting_chair_gate_no_code')}
             </p>
           )}
           <Link
@@ -1022,7 +1027,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             className="inline-block mt-5 text-xs font-semibold underline"
             style={{ color: '#6A5A4A' }}
           >
-            Re-join as chair
+            {t('voting_rejoin_chair')}
           </Link>
         </div>
       </div>
@@ -1339,7 +1344,6 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       rightsOrder: [],
       rightsIndex: 0,
       rightsTimerLimit: voteStatesRef.current[docId]?.rightsTimerLimit ?? 60,
-      rightsTimes: {},
       result: null,
       vetoed: false,
       startedAt: serverNowIso(),   // database clock (T-1): compared across chair devices
@@ -1465,6 +1469,27 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     if (fromResult && pendingSeqRef.current[docId] != null) backStatusSeqRef.current[docId] = pendingSeqRef.current[docId];
   };
 
+  /**
+   * Back to a delegation already asked, by clicking its flag in the carousel (owner, 17 Sep
+   * 2026: "make sure you are able to click on previous voters and move back in the queue").
+   * Exactly Back's semantics, only further: ONE `updateVote`, so the seq grows and every chair
+   * device follows; nothing is removed, so the seat arrives with its recorded choice shown and
+   * Keep and continue on offer. Moderator only, ballot only, never a device ballot, and never
+   * forwards (that would skip a delegation that has not been asked).
+   */
+  const goToVoter = (index: number) => {
+    if (isViewOnly || !vote || !selectedDoc) return;
+    if (vote.method === 'device' && vote.status === 'voting') return;
+    if (vote.status !== 'voting') return;
+    updateVote((prev) => {
+      if (prev.status !== 'voting') return {};
+      const lineLen = prev.order.length + prev.passedIds.length;
+      const to = Math.max(0, Math.min(index, lineLen - 1));
+      if (to >= prev.currentVoterIndex) return {};
+      return { currentVoterIndex: to };
+    });
+  };
+
   const finishWithResult = () => {
     if (isViewOnly || !selectedDoc) return;
     const v = verdictOf(settings, votes);
@@ -1504,15 +1529,10 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     });
   };
 
-  /** Speaking time of one rights speaker, seconds; null = back to the default. */
-  const setRightsTime = (delegateId: string, seconds: number | null) => {
+  /** The one rights speaking time, seconds. Every rights speaker runs on it. */
+  const setRightsTimerLimit = (seconds: number) => {
     if (isViewOnly) return;
-    updateVote((prev) => {
-      const times = { ...(prev.rightsTimes ?? {}) };
-      if (seconds == null || seconds === prev.rightsTimerLimit) delete times[delegateId];
-      else times[delegateId] = seconds;
-      return { rightsTimes: times };
-    });
+    updateVote(() => ({ rightsTimerLimit: seconds }));
   };
 
   /** A device ballot was revealed (DeviceVotingPanel): the choices enter vote_state in ONE
@@ -1627,6 +1647,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           onClose={() => setShowScoreboard(false)}
           feedbackVersion={feedbackVersion}
           isViewOnly={isViewOnly}
+          chairName={urlChairName}
         />
       )}
     </>
@@ -1754,6 +1775,29 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     />
     )}</DeviceVoteGate>
   ) : null;
+
+  /**
+   * While the roll call is open the page's top bar IS the roll call's header (owner, 17 Sep
+   * 2026: "there are two Backs in the top left, just have one, and no need for 'Draft
+   * Resolutions' and 'Roll call for X'"). Its Back closes the roll call, the document-list
+   * crumb and the previous ballot's progress are dropped, and the paper the roll call is for
+   * is named by the code chip + title the bar already draws. It is merged AFTER the per-screen
+   * props (`headerFor`), so it wins on both screens. The inline-end cluster is untouched.
+   */
+  const rollCallHeader: Partial<VotingHeaderProps> | null = showRollCall
+    ? {
+        onBack: closeRollCall,
+        backBusy: false,
+        backLabel: t('voting_rc_back'),
+        docsLabel: undefined,
+        onDocs: undefined,
+        progress: null,
+        doc: pendingDoc ? { code: pendingDoc.docCode, title: pendingDoc.title } : null,
+      }
+    : null;
+  /** Every VotingHeader on this page: the shared props, this screen's, then the roll call's. */
+  const headerFor = (screen: Partial<VotingHeaderProps>): VotingHeaderProps =>
+    ({ ...headerProps, ...screen, ...(rollCallHeader ?? {}) });
 
   const observerFailBanner = observerWriteFailed
     ? <ObserverWriteFailedBanner onDismiss={() => setObserverWriteFailed(false)} />
@@ -1900,7 +1944,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     return (
       <SeatArtProvider delegates={committee.delegates}>
       <div className="h-[100dvh] bg-[#EDE7D8] flex flex-col overflow-hidden">
-        <VotingHeader {...headerProps} docsLabel={drPlural} />
+        <VotingHeader {...headerFor({ docsLabel: drPlural })} />
         {rollCallModal}
         {observerFailBanner}
         {endDebateModal}
@@ -2011,11 +2055,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         }
       `}</style>
       <VotingHeader
-        {...headerProps}
-        docsLabel={drPlural}
-        onDocs={() => { setSelectedDocId(null); if (isViewOnly) setFollowLive(false); }}
-        doc={{ code: selectedDoc.docCode, title: selectedDoc.title }}
-        progress={{ stage, cast: deviceBallotOpen ? (deviceCast?.ballot === `${selectedDoc.id}:${vote.startedAt}` ? deviceCast.cast : 0) : votes.length, total: mainCount }}
+        {...headerFor({
+          docsLabel: drPlural,
+          onDocs: () => { setSelectedDocId(null); if (isViewOnly) setFollowLive(false); },
+          doc: { code: selectedDoc.docCode, title: selectedDoc.title },
+          progress: { stage, cast: deviceBallotOpen ? (deviceCast?.ballot === `${selectedDoc.id}:${vote.startedAt}` ? deviceCast.cast : 0) : votes.length, total: mainCount },
+        })}
       />
       {rollCallModal}
       {observerFailBanner}
@@ -2065,7 +2110,13 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
           {/* The line of delegations, voting now in the centre */}
           <div className="flex-1 min-h-0 w-full flex flex-col items-center justify-center">
-            <VoterCarousel seats={lineSeats} current={Math.min(currentVoterIndex, Math.max(0, lineLength - 1))} markOf={markOf} hideTally={hideVotes} />
+            <VoterCarousel
+              seats={lineSeats}
+              current={Math.min(currentVoterIndex, Math.max(0, lineLength - 1))}
+              markOf={markOf}
+              hideTally={hideVotes}
+              onPick={canStepBack ? goToVoter : undefined}
+            />
             <h1
               key={`${currentDelegate.key}`}
               className="gv-name-in text-[36px] font-bold text-[#1C1410] text-center leading-[1.1] tracking-[-0.015em] mt-3 max-w-4xl [text-wrap:balance]"
@@ -2222,8 +2273,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       {phase === 'rights-speakers' && orderedRights.length > rightsIndex && (() => {
         const speaker = orderedRights[rightsIndex];
         const rightsSeat = committee.delegates.find((d) => d.id === speaker.delegateId) ?? { country: speaker.country };
-        const custom = !!vote.rightsTimes?.[speaker.delegateId];
         const presets = [30, 45, 60, 90, 120];
+        const lastRights = rightsIndex + 1 >= orderedRights.length;
         return (
           <div className="flex-1 min-h-0 flex gap-8 px-10 py-6">
             <div className="flex-1 min-w-0 flex flex-col items-center justify-center">
@@ -2251,7 +2302,20 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   >
                     {clock(rightsSpeakerTime)}
                   </div>
-                  <div className="flex gap-2 mt-5 items-center">
+                  {/* The controls in the GSL's manner (owner, 17 Sep 2026: "next speaker and
+                      back next to the Start button"): Back, Restart, Start / Pause, Next. */}
+                  <div className="flex gap-2 mt-5 items-center flex-wrap justify-center">
+                    {backButton(t('voting_step_back'))}
+                    <button
+                      type="button"
+                      onClick={() => { setRightsRunning(false); setRightsSpeakerTime(rightsTimerLimit); }}
+                      aria-label={t('voting_rights_restart')}
+                      title={t('voting_rights_restart')}
+                      className="h-12 w-12 rounded-full flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] hover:bg-[rgba(27,56,40,0.13)]"
+                      style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: '#1B3828' }}
+                    >
+                      <RotateCcw size={19} strokeWidth={2.4} aria-hidden />
+                    </button>
                     <button
                       type="button"
                       onClick={() => { if (!rightsRunning) setRightsStarted(true); setRightsRunning((r) => !r); }}
@@ -2262,87 +2326,50 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setRightsRunning(false); setRightsSpeakerTime(rightsSpeakerLimit); }}
-                      aria-label={t('voting_rights_restart')}
-                      title={t('voting_rights_restart')}
-                      className="h-12 w-12 rounded-full flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] hover:bg-[rgba(27,56,40,0.13)]"
-                      style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: '#1B3828' }}
+                      onClick={() => { setRightsRunning(false); handleNextRightsSpeaker(); }}
+                      className="inline-flex items-center gap-2 h-12 ps-5 pe-6 rounded-full font-semibold text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] motion-reduce:transition-none"
+                      style={{ backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 4px rgba(27,56,40,0.2), 0 8px 18px rgba(27,56,40,0.2)' }}
                     >
-                      <RotateCcw size={19} strokeWidth={2.4} aria-hidden />
+                      {lastRights ? t('voting_see_result') : t('voting_next_rights')}
+                      <SkipForward size={17} strokeWidth={2.5} aria-hidden style={{ transform: language === 'ar' ? 'scaleX(-1)' : undefined }} />
                     </button>
                   </div>
-                  <div className="mt-5 flex flex-col items-center gap-2.5">
-                    <div className="flex items-center gap-2 flex-wrap justify-center">
-                      <span className="text-[13px] font-semibold" style={{ color: '#6A5A4A' }}>{t('voting_rights_this_speaker')}</span>
-                      <RightsTimeField
-                        seconds={rightsSpeakerLimit}
-                        custom={custom}
-                        disabled={rightsRunning}
-                        label={t('voting_rights_time_for', { name: getCountryDisplayName(speaker.country, language) })}
-                        onCommit={(secs) => setRightsTime(speaker.delegateId, secs)}
-                      />
-                      {custom && (
-                        <button
-                          type="button"
-                          disabled={rightsRunning}
-                          onClick={() => setRightsTime(speaker.delegateId, null)}
-                          className="h-9 px-3 rounded-full text-[12.5px] font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] disabled:opacity-40 hover:bg-[rgba(27,56,40,0.07)]"
-                          style={{ color: '#6A5A4A' }}
-                        >
-                          {t('voting_rights_use_default')}
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap justify-center">
-                      <span className="text-[13px] font-semibold" style={{ color: '#6A5A4A' }}>{t('voting_rights_default_time')}</span>
-                      {presets.map((p) => (
-                        <button
-                          key={p}
-                          type="button"
-                          onClick={() => updateVote(() => ({ rightsTimerLimit: p }))}
-                          aria-pressed={rightsTimerLimit === p}
-                          className="h-9 min-w-10 px-3 rounded-full font-medium text-[13px] tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,transform] duration-150 active:scale-[0.96]"
-                          style={{ backgroundColor: rightsTimerLimit === p ? '#1B3828' : 'rgba(27,56,40,0.07)', color: rightsTimerLimit === p ? '#EED98A' : '#4A3F33' }}
-                        >
-                          {p}s
-                        </button>
-                      ))}
-                      <RightsTimeField
-                        seconds={rightsTimerLimit}
-                        custom={!presets.includes(rightsTimerLimit)}
-                        label={t('voting_rights_default_time')}
-                        onCommit={(secs) => { if (secs != null) updateVote(() => ({ rightsTimerLimit: secs })); }}
-                      />
-                    </div>
+                  {/* ONE speaking time for the whole rights round, the GSL's presets plus a
+                      typed field. No per-speaker override any more. */}
+                  <div className="mt-5 flex items-center gap-2 flex-wrap justify-center">
+                    <span className="text-[13px] font-semibold" style={{ color: '#6A5A4A' }}>{t('voting_rights_default_time')}</span>
+                    {presets.map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setRightsTimerLimit(p)}
+                        aria-pressed={rightsTimerLimit === p}
+                        className="h-9 min-w-10 px-3 rounded-full font-medium text-[13px] tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,transform] duration-150 active:scale-[0.96]"
+                        style={{ backgroundColor: rightsTimerLimit === p ? '#1B3828' : 'rgba(27,56,40,0.07)', color: rightsTimerLimit === p ? '#EED98A' : '#4A3F33' }}
+                      >
+                        {p}s
+                      </button>
+                    ))}
+                    <RightsTimeField
+                      seconds={rightsTimerLimit}
+                      custom={!presets.includes(rightsTimerLimit)}
+                      label={t('voting_rights_default_time')}
+                      onCommit={(secs) => { if (secs != null) setRightsTimerLimit(secs); }}
+                    />
                   </div>
                 </>
               )}
             </div>
 
-            <div className="w-[400px] shrink-0 flex flex-col justify-center gap-3 min-h-0">
+            <div className="w-[400px] shrink-0 flex flex-col justify-center min-h-0">
               <RightsQueue
                 speakers={orderedRights}
                 currentIndex={rightsIndex}
                 hideTally={hideVotes}
                 currentMovable={!rightsStarted && !rightsRunning}
-                timeOf={(id) => vote.rightsTimes?.[id] || rightsTimerLimit}
-                isCustomTime={(id) => !!vote.rightsTimes?.[id]}
-                onTime={isViewOnly ? undefined : setRightsTime}
+                seconds={rightsTimerLimit}
                 onMove={isViewOnly ? undefined : moveRightsSpeaker}
               />
-              {!isViewOnly && (
-                <div className="shrink-0 flex items-center gap-2">
-                  {backButton(t('voting_step_back'))}
-                  <button
-                    type="button"
-                    onClick={() => { setRightsRunning(false); handleNextRightsSpeaker(); }}
-                    className="flex-1 h-11 rounded-full font-semibold text-[14px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96]"
-                    style={{ backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 4px rgba(27,56,40,0.2), 0 8px 18px rgba(27,56,40,0.2)' }}
-                  >
-                    {rightsIndex + 1 < orderedRights.length ? t('voting_next_rights') : t('voting_see_result')}
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         );
@@ -2382,16 +2409,21 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               <p className="text-[16px] font-medium mt-3 mb-6 leading-snug [text-wrap:balance]" style={{ color: soft }}>
                 {selectedDoc.title}
               </p>
-              <div className="flex justify-center gap-10">
+              {/* Equal columns (owner, 17 Sep 2026: "in the voting result, the number of votes is
+                  not centred"). Each cell used to be exactly as wide as its own label, so the big
+                  numbers marched at uneven intervals (72, 85, 94 px apart) and none of them lined
+                  up with anything. `min-w` puts them on one rhythm, the way the all-voted screen's
+                  bigCount already does. */}
+              <div className="flex justify-center gap-6 flex-wrap">
                 {[
                   { n: forCount, label: t('voting_for_label'), color: '#9BE3B4', show: true },
                   { n: againstCount, label: t('voting_against_label'), color: '#FFB4A8', show: true },
                   { n: abstainCount, label: t('voting_abstain_label'), color: 'rgba(255,255,255,0.7)', show: abstainCount > 0 },
                   { n: withRights.length, label: t('voting_with_rights_label'), color: '#F3D98A', show: allowRights && withRights.length > 0 },
                 ].filter((c) => c.show).map((c) => (
-                  <div key={c.label} className="text-center">
+                  <div key={c.label} className="text-center min-w-[96px]">
                     <div className="text-[34px] font-bold leading-none tabular-nums" style={{ color: c.color }}>{c.n}</div>
-                    <div className="text-[13px] font-medium mt-2" style={{ color: soft }}>{c.label}</div>
+                    <div className="text-[13px] font-medium mt-2 leading-snug" style={{ color: soft }}>{c.label}</div>
                   </div>
                 ))}
               </div>

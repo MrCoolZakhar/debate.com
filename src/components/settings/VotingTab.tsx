@@ -4,7 +4,7 @@ import { Ban, CircleDashed, Crown, Handshake, ListChecks, MonitorSmartphone, Sca
 import type { CommitteeSettings } from '@/lib/settingsStore';
 import { getCountryByName, getCountryDisplayName } from '@/lib/countries';
 import { SeatCircleFlag, CircleFlag } from '@/components/CircleFlag';
-import { K, T, W, LH, Section, GavelSwitch, SealChoice, HoverHint, InfoHint } from './settingsKit';
+import { K, T, W, LH, ICON, Section, GavelSwitch, SealChoice, HoverHint, InfoHint } from './settingsKit';
 import type { TabProps } from './settingsTypes';
 
 /** A hemicycle of 15 seats with the share needed to pass filled in forest. Also drawn on the
@@ -77,7 +77,7 @@ export default function VotingTab({ committee, s, upd, t, language, isViewOnly }
             ]}
           />
           <div className="flex flex-col items-center justify-center text-center" style={{ borderRadius: 18, background: K.ivory, boxShadow: K.inSm, padding: '18px 14px' }}>
-            <CircleDashed aria-hidden size={40} strokeWidth={1.8} style={{ color: s.allowAbstentions ? K.forest : K.inkSoft }} />
+            <CircleDashed aria-hidden size={40} strokeWidth={1.8} style={{ color: s.allowAbstentions ? ICON.voting : K.inkSoft }} />
             <span className="inline-flex items-center gap-1.5" style={{ marginTop: 10 }}>
               <span id="stg-abst" style={{ fontSize: T.body, fontWeight: W.section, color: K.ink, lineHeight: LH.body }}>{t('settings_allow_abstentions_label')}</span>
               <InfoHint text={t('settings_allow_abstentions_note')} />

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Award, MonitorOff, Trophy, ScrollText, Crown } from 'lucide-react';
 import { resolveChairAwardsHref } from '@/lib/sessionAwardsLink';
-import { K, T, W, LH, Section, InfoHint } from './settingsKit';
+import { K, T, W, LH, ICON, Section, InfoHint } from './settingsKit';
 import type { ConfirmRequest } from './PeopleTab';
 import type { TabProps } from './settingsTypes';
 
@@ -80,7 +80,7 @@ export default function AwardsTab({ committee, t, requestConfirm }: TabProps & {
             <li key={i} style={{ borderRadius: 13, padding: 12, background: K.surface, boxShadow: K.outSm }}>
               <span className="flex items-center gap-2">
                 <span aria-hidden className="stg-num" style={{ fontSize: T.section, fontWeight: W.section, lineHeight: 1, color: K.deepGold }}>{i + 1}</span>
-                <s.icon size={16} strokeWidth={2.3} aria-hidden style={{ color: K.forestLight }} />
+                <s.icon size={16} strokeWidth={2.3} aria-hidden style={{ color: ICON.awards }} />
                 <span style={{ fontSize: T.body, fontWeight: W.section, color: K.ink }}>{s.title}</span>
                 <InfoHint text={s.body} />
               </span>

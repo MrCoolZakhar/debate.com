@@ -13,7 +13,9 @@
  * it, the ballot, the rights speakers and the result.
  *
  * Inline-start stays simple: Session (the way back) and the draft resolution on the floor
- * (the list crumb goes back to the list). Between them and the cluster: where the vote stands
+ * (the list crumb goes back to the list). While the roll call is open the page hands this
+ * bar the roll call's own Back (`backLabel` + `onBack`) and drops the list crumb, so there
+ * is ONE Back in the top left and no "Draft Resolutions" (owner, 17 Sep 2026). Between them and the cluster: where the vote stands
  * (cast / total, never the direction) and End debate, a solid red button with its label
  * (owner, 17 Sep 2026: "Make End debate more striking"), still behind the page's
  * confirmation. There is no voting-rules popover any more (owner: "remove 'voting rules'
@@ -39,6 +41,9 @@ const QUIET_BTN =
 
 export interface VotingHeaderProps {
   onBack: () => void;
+  /** Overrides the inline-start button's label. The roll call passes its own Back here, so
+   *  there is ONE Back in the top left while it is open (owner, 17 Sep 2026). */
+  backLabel?: string;
   backBusy?: boolean;
   /** The document on the floor, when one is open. */
   doc?: { code: string; title: string } | null;
@@ -59,12 +64,13 @@ export interface VotingHeaderProps {
 }
 
 export function VotingHeader({
-  onBack, backBusy = false, doc, docsLabel, onDocs, progress,
+  onBack, backLabel, backBusy = false, doc, docsLabel, onDocs, progress,
   isViewOnly, onEndDebate, sessionCode, chat, onOpenScoreboard, onOpenSettings,
 }: VotingHeaderProps) {
   const t = useT();
   const { language } = useLanguage();
   const rtl = language === 'ar';
+  const backText = backLabel ?? t('voting_hdr_back');
   const pct = progress && progress.total > 0 ? Math.min(1, progress.cast / progress.total) : 0;
   const [codeOrigin, setCodeOrigin] = useState<DOMRect | null>(null);
   const closeCode = useCallback(() => setCodeOrigin(null), []);
@@ -80,13 +86,13 @@ export function VotingHeader({
         type="button"
         onClick={onBack}
         disabled={backBusy}
-        title={t('voting_hdr_back_title')}
-        aria-label={t('voting_hdr_back_title')}
+        title={backLabel ?? t('voting_hdr_back_title')}
+        aria-label={backLabel ?? t('voting_hdr_back_title')}
         className={`${QUIET_BTN} sm:ps-2 sm:pe-3 hover:bg-[rgba(27,56,40,0.07)] hover:text-[#1C1410]`}
         style={{ color: INK_SOFT }}
       >
         <ArrowLeft size={17} strokeWidth={2.25} aria-hidden style={{ transform: rtl ? 'scaleX(-1)' : undefined }} />
-        <span className="hidden sm:inline">{t('voting_hdr_back')}</span>
+        <span className="hidden sm:inline">{backText}</span>
       </button>
 
       {/* The document on the floor */}

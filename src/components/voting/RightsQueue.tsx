@@ -15,8 +15,10 @@
  * A speaker who has started and those who already spoke never move, and nothing can be dropped
  * above them.
  *
- * Every row shows that speaker's time. With `onTime` the chair can give one speaker a custom
- * time (RightsTimeField: click the time, type m:ss or seconds, Enter); a custom time is gold.
+ * Every row shows the speaking time, which is ONE time for the whole round (owner, 17 Sep
+ * 2026: "the rights speaker timer needs to use a similar rationale as the GSL timer. No
+ * per-speaker timer, just the default timer"). The per-speaker override and its RightsTimeField
+ * on each row are gone; `RightsTimeField` is still exported for the page's one typed field.
  *
  * It writes nothing itself. `onMove(delegateId, slot)` hands the page the new position among
  * the MOVABLE speakers; the page persists it through `updateVote` (one vote_state write, the
@@ -46,11 +48,8 @@ export interface RightsQueueProps {
   currentMovable?: boolean;
   /** Moderator only; absent = read only. `slot` is the 0-based place among the movable speakers. */
   onMove?: (delegateId: string, slot: number) => void;
-  /** Speaking time of a speaker, seconds. */
-  timeOf?: (delegateId: string) => number;
-  isCustomTime?: (delegateId: string) => boolean;
-  /** Moderator only: a custom time for one speaker (null = the default). */
-  onTime?: (delegateId: string, seconds: number | null) => void;
+  /** The one speaking time of the round, seconds. Drawn on every speaker still to come. */
+  seconds?: number;
 }
 
 const clampSecs = (n: number) => Math.max(5, Math.min(900, Math.round(n)));
@@ -138,7 +137,7 @@ interface Armed {
   lifted: boolean;
 }
 
-export function RightsQueue({ speakers, currentIndex, hideTally, currentMovable = false, onMove, timeOf, isCustomTime, onTime }: RightsQueueProps) {
+export function RightsQueue({ speakers, currentIndex, hideTally, currentMovable = false, onMove, seconds }: RightsQueueProps) {
   const t = useT();
   const { language } = useLanguage();
   const listRef = useRef<HTMLDivElement>(null);
@@ -297,20 +296,8 @@ export function RightsQueue({ speakers, currentIndex, hideTally, currentMovable 
                   {isCurrent ? (currentMovable ? t('voting_rights_up_now') : t('voting_speaking')) : hideTally ? t('voting_with_rights_label') : v.choice === 'for-rights' ? t('voting_for_rights_list') : t('voting_against_rights_list')}
                 </span>
               </span>
-              {timeOf && !done && (
-                onTime ? (
-                  <RightsTimeField
-                    size="sm"
-                    dark={isCurrent && !dragging}
-                    seconds={timeOf(v.delegateId)}
-                    custom={isCustomTime?.(v.delegateId) ?? false}
-                    disabled={isCurrent && !currentMovable}
-                    label={t('voting_rights_time_for', { name })}
-                    onCommit={(secs) => onTime(v.delegateId, secs)}
-                  />
-                ) : (
-                  <span className="shrink-0 text-[12.5px] font-semibold tabular-nums" style={{ color: isCurrent ? 'rgba(255,255,255,0.8)' : '#6A5A4A' }}>{fmt(timeOf(v.delegateId))}</span>
-                )
+              {seconds !== undefined && !done && (
+                <span className="shrink-0 text-[12.5px] font-semibold tabular-nums pe-1" style={{ color: isCurrent ? 'rgba(255,255,255,0.8)' : '#6A5A4A' }}>{fmt(seconds)}</span>
               )}
               {canMove && (
                 movable ? (

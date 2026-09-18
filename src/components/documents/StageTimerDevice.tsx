@@ -20,6 +20,11 @@
  *   proceedings, 17 Sep 2026, owner: "it could be in the timer itself, no need to say the
  *   words"; tooltip + accessible name only) and Hide.
  * - The box is remembered per device in `localStorage gavelling-intro-timer-device`.
+ * - `centred` (17 Sep 2026, owner: "when there is no document in a presentation, just have a big
+ *   timer appear in the middle"): the same card and the same controls, laid out to fill the
+ *   introduction's floor instead of floating over the paper. It is not moved, not resized, not
+ *   remembered and cannot be hidden (there would be nothing left on screen); the digits may grow
+ *   far larger. Everything else, the clock included, is identical.
  * - Anchor-based (V-5, RULE 6b): the clock is {base, startedAt} on the database clock and the
  *   remaining time is DERIVED. The 500 ms interval only refreshes `now` inside this component;
  *   it never writes anything, and moving or resizing writes nothing but localStorage.
@@ -40,6 +45,12 @@ export const DEVICE_MIN_W = 176;
 export const DEVICE_MIN_H = 64;
 const DEF_W = 320;
 const DEF_H = 204;
+/** Centred (no paper): the card fills the floor up to this, so a very wide screen keeps a card
+ *  rather than a stretched band. */
+const CENTRED_MAX_W = 1080;
+const CENTRED_MAX_H = 620;
+/** Breathing room between the card and the edges of the floor it is centred in. */
+const CENTRED_PAD = 24;
 const BOX_KEY = 'gavelling-intro-timer-device';
 
 const clampN = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
@@ -129,6 +140,7 @@ function Key({ size, width, primary = false, label, onClick, children, text, tex
 
 export default function StageTimerDevice({
   label, totalSeconds, sponsors, sponsorsWord, clock, onClockChange, onComplete, onBack, onHide, onTimings,
+  centred = false,
 }: {
   label: string; totalSeconds: number;
   /** The paper's sponsors (country names), drawn as round flags in the header. */
@@ -137,9 +149,14 @@ export default function StageTimerDevice({
   sponsorsWord: string;
   clock: { base: number; startedAt: string | null };
   onClockChange: (next: { base: number; startedAt: string | null }) => void;
-  onComplete: () => void; onBack: () => void; onHide: () => void;
+  onComplete: () => void; onBack: () => void;
+  /** Hide the floating timer. Not offered when `centred`: it is the whole screen. */
+  onHide?: () => void;
   /** Back to the order of proceedings (the timings screen). Icon only. */
   onTimings?: () => void;
+  /** Fill the introduction's floor instead of floating over the paper (a paper with no file and
+   *  no text). Not movable, not resizable, not remembered, cannot be hidden. */
+  centred?: boolean;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -158,11 +175,30 @@ export default function StageTimerDevice({
 
   // ── Box ──
   const [box, setBox] = useState<Box | null>(() => {
-    if (typeof window === 'undefined') return null;
+    if (typeof window === 'undefined' || centred) return null;
     const { w: fw, h: fh } = space();
     const rtl = document.documentElement.dir === 'rtl';
     return clampBox(readBox() ?? { w: DEF_W, h: DEF_H, x: rtl ? 24 : fw - DEF_W - 24, y: Math.max(MARGIN, fh - DEF_H - 24) });
   });
+  /** Centred: the card is laid out from the floor it is given, measured here (never state per
+   *  frame: the observer writes only when the size really changed). */
+  const areaRef = useRef<HTMLDivElement>(null);
+  const [area, setArea] = useState<{ w: number; h: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!centred) return;
+    const el = areaRef.current;
+    if (!el) return;
+    const measure = () => {
+      // clientWidth / clientHeight are layout pixels (never FitToScreen's scaled rect) and
+      // include the padding, which the card may not use.
+      const next = { w: el.clientWidth - 2 * CENTRED_PAD, h: el.clientHeight - 2 * CENTRED_PAD };
+      setArea((a) => (a && Math.abs(a.w - next.w) < 0.5 && Math.abs(a.h - next.h) < 0.5 ? a : next));
+    };
+    measure();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, [centred]);
   const boxRef = useRef<Box | null>(box);
   const [busy, setBusy] = useState<'move' | 'resize' | null>(null);
 
@@ -265,20 +301,20 @@ export default function StageTimerDevice({
   const digitsPerPx = (metrics?.digits ?? 262) / MEASURE_PX;
   const labelPerPx = (metrics?.label ?? 330) / MEASURE_PX;
 
-  // ── Layout from the box ──
-  const w = box?.w ?? DEF_W;
-  const h = box?.h ?? DEF_H;
+  // ── Layout from the box (or, centred, from the floor it was given) ──
+  const w = centred ? Math.max(DEVICE_MIN_W, Math.min(area?.w ?? DEF_W, CENTRED_MAX_W)) : (box?.w ?? DEF_W);
+  const h = centred ? Math.max(DEVICE_MIN_H, Math.min(area?.h ?? DEF_H, CENTRED_MAX_H)) : (box?.h ?? DEF_H);
   /** Short boxes lay out in one row (clock | keys); taller ones stack (clock over keys). */
   const row = h < 124 || (w / h >= 2.8 && h < 170);
-  const pad = Math.round(clampN(Math.min(w, h) * 0.075, 7, 16));
-  const gap = Math.round(clampN(pad * 0.7, 4, 12));
-  const headH = Math.round(row ? clampN(h * 0.2, 14, 24) : clampN(h * 0.13, 22, 32));
+  const pad = Math.round(clampN(Math.min(w, h) * 0.075, 7, centred ? 28 : 16));
+  const gap = Math.round(clampN(pad * 0.7, 4, centred ? 18 : 12));
+  const headH = Math.round(row ? clampN(h * 0.2, 14, 24) : clampN(h * 0.13, 22, centred ? 44 : 32));
   const innerW = w - 2 * pad;
   const barH = row ? 3 : Math.round(clampN(h * 0.02, 3, 6));
 
   const keySize = Math.round(row
     ? clampN((h - 2 * pad - headH - gap) * 0.8, 22, 44)
-    : clampN(Math.min(h * 0.22, innerW / 4.1), 28, 56));
+    : clampN(Math.min(h * 0.22, innerW / 4.1), 28, centred ? 68 : 56));
   const keyGap = Math.round(clampN(keySize * 0.18, 4, 10));
   const textSize = Math.round(clampN(keySize * 0.36, 12, 17) * 2) / 2;
   const iconPx = Math.round(keySize * 0.4);
@@ -313,14 +349,16 @@ export default function StageTimerDevice({
   const digitsH = row ? rowH : h - 2 * pad - headH - keySize - barH - 3 * gap;
   const digitsFont = Math.max(12, Math.floor(row
     ? Math.min(rowDigitsCap, (innerW - keysWidth(chosen) - gap) / digitsPerPx)
-    : Math.min(digitsH * 1.1, (innerW * 0.92) / digitsPerPx, 220)));
+    : Math.min(digitsH * 1.1, (innerW * 0.92) / digitsPerPx, centred ? 460 : 220)));
   const radius = Math.round(keySize * 0.3 + pad);
 
   // Sponsors in the header, overlapping, with +N; they fold away before the stage label does.
   const hideW = Math.max(22, headH + 4);
   const flagSize = Math.round(clampN(headH * 0.92, 16, 28));
   const flagStep = Math.round(flagSize * 0.74);
-  const flagRoom = innerW - hideW * (onTimings ? 2 : 1) - 96 - 8;
+  // Header keys at the inline end: Timings (when offered) and Hide (floating only).
+  const headKeys = (onTimings ? 1 : 0) + (centred || !onHide ? 0 : 1);
+  const flagRoom = innerW - hideW * headKeys - 96 - 8;
   let flagSlots = headH >= 16 && flagRoom >= flagSize ? Math.floor((flagRoom - flagSize) / flagStep) + 1 : 0;
   flagSlots = Math.min(flagSlots, 5);
   let shownFlags = Math.min(sponsors.length, flagSlots);
@@ -396,18 +434,21 @@ export default function StageTimerDevice({
     { e: 'ne', style: { top: -edge / 2, right: -edge / 2, width: radius + edge / 2, height: radius + edge / 2 }, cursor: 'nesw-resize' },
     { e: 'sw', style: { bottom: -edge / 2, left: -edge / 2, width: radius + edge / 2, height: radius + edge / 2 }, cursor: 'nesw-resize' },
   ];
-  const labelSize = clampN(headH * 0.5, 10, 13);
+  const labelSize = clampN(headH * (centred ? 0.6 : 0.5), 10, centred ? 20 : 13);
 
-  return (
+  const card = (
     <div
       role="group"
       aria-label={t('documents_timer_panel')}
       data-stage-timer
-      onPointerDown={begin('move')}
-      className={`fixed flex flex-col select-none ${busy === 'move' ? 'cursor-grabbing' : 'cursor-grab'}`}
+      onPointerDown={centred ? undefined : begin('move')}
+      className={centred
+        ? 'relative flex flex-col select-none'
+        : `fixed flex flex-col select-none ${busy === 'move' ? 'cursor-grabbing' : 'cursor-grab'}`}
       style={{
-        left: box?.x ?? 0, top: box?.y ?? 0, width: w, height: h, zIndex: 20,
-        visibility: box ? 'visible' : 'hidden',
+        ...(centred
+          ? { width: w, height: h, visibility: (area ? 'visible' : 'hidden') as React.CSSProperties['visibility'] }
+          : { left: box?.x ?? 0, top: box?.y ?? 0, width: w, height: h, zIndex: 20, visibility: (box ? 'visible' : 'hidden') as React.CSSProperties['visibility'] }),
         padding: pad, gap,
         borderRadius: radius,
         backgroundColor: BODY,
@@ -415,7 +456,7 @@ export default function StageTimerDevice({
           ? '0 0 0 1px rgba(28,20,16,0.10), 0 2px 6px rgba(27,56,40,0.10), 0 24px 56px rgba(27,56,40,0.26)'
           : '0 0 0 1px rgba(28,20,16,0.08), 0 1px 3px rgba(27,56,40,0.08), 0 14px 36px rgba(27,56,40,0.20)',
         transition: 'box-shadow 180ms cubic-bezier(0.22,1,0.36,1)',
-        touchAction: 'none',
+        touchAction: centred ? undefined : 'none',
         fontFamily: OUTFIT,
       }}
     >
@@ -432,11 +473,11 @@ export default function StageTimerDevice({
       {/* Header: status dot, stage, sponsors, hide. Focus the label and use the Arrow keys to move the timer. */}
       <div className="flex items-center min-w-0 shrink-0" style={{ height: headH, gap: 8 }}>
         <div
-          role="button"
-          tabIndex={0}
-          aria-label={t('documents_timer_move')}
-          title={t('documents_timer_move')}
-          onKeyDown={onKey('move')}
+          {...(centred ? {} : {
+            role: 'button' as const, tabIndex: 0,
+            'aria-label': t('documents_timer_move'), title: t('documents_timer_move'),
+            onKeyDown: onKey('move'),
+          })}
           className="flex-1 min-w-0 h-full flex items-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
           style={{ gap: Math.max(6, headH * 0.35), paddingInlineStart: 2 }}
         >
@@ -476,12 +517,15 @@ export default function StageTimerDevice({
             <SlidersHorizontal size={clampN(headH * 0.6, 12, 16)} strokeWidth={2.2} aria-hidden />
           </button>
         )}
-        <button type="button" data-device-key onClick={onHide}
-          aria-label={t('documents_timer_hide')} title={t('documents_timer_hide')}
-          className="shrink-0 rounded-md flex items-center justify-center text-[#8A7B6A] hover:text-[#1C1410] hover:bg-[rgba(28,20,16,0.06)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-          style={{ width: hideW, height: hideW, marginBlock: -4 }}>
-          <Minimize2 size={clampN(headH * 0.6, 12, 16)} strokeWidth={2.2} aria-hidden />
-        </button>
+        {/* Hiding a centred timer would leave an empty screen: it is the introduction. */}
+        {!centred && onHide && (
+          <button type="button" data-device-key onClick={onHide}
+            aria-label={t('documents_timer_hide')} title={t('documents_timer_hide')}
+            className="shrink-0 rounded-md flex items-center justify-center text-[#8A7B6A] hover:text-[#1C1410] hover:bg-[rgba(28,20,16,0.06)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+            style={{ width: hideW, height: hideW, marginBlock: -4 }}>
+            <Minimize2 size={clampN(headH * 0.6, 12, 16)} strokeWidth={2.2} aria-hidden />
+          </button>
+        )}
       </div>
 
       <span className="sr-only" role="timer">{spoken(remaining)}</span>
@@ -503,24 +547,34 @@ export default function StageTimerDevice({
       )}
 
       {/* Edges and corners resize. The lower inline-end corner also takes the Arrow keys. */}
-      {edges.map(({ e, style, cursor }) => (
+      {!centred && edges.map(({ e, style, cursor }) => (
         <div key={e} data-device-edge aria-hidden onPointerDown={begin(e)} className="absolute" style={{ ...style, cursor, touchAction: 'none', zIndex: 2 }} />
       ))}
-      <div
-        role="button"
-        tabIndex={0}
-        data-device-edge
-        aria-label={t('documents_timer_resize')}
-        title={t('documents_timer_resize')}
-        onPointerDown={begin('se')}
-        onKeyDown={onKey('resize')}
-        className="absolute bottom-0 right-0 flex items-end justify-end cursor-nwse-resize text-[rgba(28,20,16,0.28)] hover:text-[#1B3828] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-        style={{ width: Math.max(14, radius * 0.8), height: Math.max(14, radius * 0.8), padding: 4, borderBottomRightRadius: radius, zIndex: 3, touchAction: 'none' }}
-      >
-        <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden fill="none">
-          <path d="M7 3v4H3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-        </svg>
-      </div>
+      {!centred && (
+        <div
+          role="button"
+          tabIndex={0}
+          data-device-edge
+          aria-label={t('documents_timer_resize')}
+          title={t('documents_timer_resize')}
+          onPointerDown={begin('se')}
+          onKeyDown={onKey('resize')}
+          className="absolute bottom-0 right-0 flex items-end justify-end cursor-nwse-resize text-[rgba(28,20,16,0.28)] hover:text-[#1B3828] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+          style={{ width: Math.max(14, radius * 0.8), height: Math.max(14, radius * 0.8), padding: 4, borderBottomRightRadius: radius, zIndex: 3, touchAction: 'none' }}
+        >
+          <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden fill="none">
+            <path d="M7 3v4H3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </div>
+      )}
+    </div>
+  );
+
+  if (!centred) return card;
+  // Centred: the card is laid out from this box, so it is measured, not guessed.
+  return (
+    <div ref={areaRef} className="absolute inset-0 flex items-center justify-center" style={{ padding: CENTRED_PAD }}>
+      {card}
     </div>
   );
 }

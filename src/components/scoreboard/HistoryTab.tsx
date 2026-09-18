@@ -23,6 +23,14 @@
 // Motions raised, rights of reply and manual awards sit in the segment that was
 // running when they happened, in time order with the speeches.
 //
+// NEWEST FIRST, THROUGHOUT (17 Sep 2026, owner: "the most recent at the top").
+// The segments read newest first, and so do the rows inside each one. Nothing else
+// in the scoreboard reads the other way: a delegation's profile timeline has always
+// been newest first.
+//
+// THE COMMENTS ARE EDITABLE IN PLACE. A chair clicks their OWN note and corrects it
+// (`EditableNote`); another chair's note is read-only and says whose it is on hover.
+//
 // COLLAPSIBLE, NEWEST OPEN. The segment the committee is in (or has just left) is
 // expanded on arrival and every older one is closed, because that is the one a
 // chair opening the board is almost always looking for. Opening another leaves
@@ -50,6 +58,7 @@ import {
   buildSessionHistory, type HistorySpeech, type HistoryEvent, type SegmentKind,
 } from '@/lib/sessionHistory';
 import { eventIcon, TINT } from './SessionScoreboardParts';
+import EditableNote from './EditableNote';
 
 const KIND_ICON: Record<SegmentKind, LucideIcon> = {
   'speakers-list': ListOrdered,
@@ -141,18 +150,10 @@ export default function HistoryTab({ committee, feedback }: {
             {formatSpeakingTime(s.seconds)}
           </span>
         </span>
+        {/* A chair's own comment edits in place here (EditableNote); another
+            chair's is read-only and says whose it is on hover. */}
         {s.notes.map((n) => (
-          <span
-            key={n.id}
-            style={{
-              display: 'block', marginBlockStart: 2, paddingInlineStart: 9,
-              borderInlineStart: `2px solid ${TINT.amber.fg}`,
-              fontFamily: OUTFIT, fontSize: 12.5, color: NEU.ink, lineHeight: 1.45, textWrap: 'pretty',
-            }}
-          >
-            {n.content}
-            <span style={{ color: SOFT, fontSize: 11, whiteSpace: 'nowrap' }}>{` · ${n.chairName || t('fb_chair')}`}</span>
-          </span>
+          <EditableNote key={n.id} id={n.id} content={n.content} author={n.chairName} style={{ marginBlockStart: 2 }} />
         ))}
       </span>
     </li>
@@ -188,12 +189,16 @@ export default function HistoryTab({ committee, feedback }: {
       {segments.map((seg, i) => {
         const open = isOpen(seg.id, i);
         const Icon = KIND_ICON[seg.kind];
-        // One chronological stream: speeches and events interleaved as they
-        // happened, which is how a chair reads a caucus back.
+        // One stream, NEWEST FIRST — speeches and events interleaved, the most
+        // recent at the top (17 Sep 2026, owner). The segments themselves already
+        // read that way (`buildSessionHistory` returns them reversed) and a
+        // delegation's profile timeline always did, so the rows inside a segment
+        // were the one place still running oldest-first: opening the caucus a
+        // chair had just left put its last speech at the bottom of the list.
         const items: ({ kind: 'speech'; at: string; s: HistorySpeech } | { kind: 'event'; at: string; e: HistoryEvent })[] = [
           ...seg.speeches.map((s) => ({ kind: 'speech' as const, at: s.timestamp, s })),
           ...seg.events.map((e) => ({ kind: 'event' as const, at: e.timestamp, e })),
-        ].sort((a, b) => (a.at || '').localeCompare(b.at || ''));
+        ].sort((a, b) => (b.at || '').localeCompare(a.at || ''));
 
         return (
           <section

@@ -15,9 +15,12 @@
 //   • Beside it: the acronym big with the full name small beneath (AGENTS.md UI
 //     RULE, resolved by the caller via committeeDisplayName), and the topic. The
 //     topic is smaller than the name, and always starts with a fixed "Topic:" label
-//     (`topicLabel`, 16 Sep 2026) that is never part of the edit. For the Moderator (`onTopicSave`) a click turns
-//     it into an inline editor: Enter or blur saves, Escape cancels, 150 characters
-//     max; only the text after the label edits. On a conference committee with 2+ topics a separate small "switch topic"
+//     (`topicLabel`, 16 Sep 2026) that is never part of the edit. For the Moderator
+//     (`onTopicSave`) a click on the text, or the small pencil button beside it (17 Sep
+//     2026), writes IN PLACE: the label keeps its spot and the topic becomes a bare
+//     one-line field in the same type, growing to 3 lines, with only a gold hairline under
+//     it. No panel, no plate, no change of shape. Enter or blur saves, Escape cancels, 150
+//     characters max; only the text after the label edits. On a conference committee with 2+ topics a separate small "switch topic"
 //     control (`onSwitchAgenda`) opens the agenda picker, so the text edits and the
 //     picker stays one click away.
 //   • QuorumRings: three half-circle bookmark tabs (Present, 2/3, 1/2+1) flush on the list
@@ -41,6 +44,9 @@ import QuorumRings from '@/components/QuorumRings';
 export const DEFAULT_EMBLEM = '/logos/un.svg';
 
 const EMBLEM = 84;
+
+/** The topic's own line height in px (11.5px at 1.28), so the inline field can grow by lines. */
+const TOPIC_LINE = 15;
 
 /** Light rim (follows the artwork's alpha) plus a grounding shadow. */
 const FLOAT_FILTER =
@@ -164,12 +170,23 @@ export default function CommitteeIdentityBadge({
   // Escape and Enter both end the edit, and the blur that follows must not save again.
   const doneRef = useRef(false);
 
+  // The field is the topic's own line, not a box over it: it starts one line tall and grows
+  // with what is typed, to the same 3 lines the text itself is clamped to. Written straight
+  // to the node (no state, nothing per keystroke re-rendering the masthead).
+  const fitField = () => {
+    const el = fieldRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, TOPIC_LINE * 3)}px`;
+  };
+
   useEffect(() => {
     if (!editing) return;
     const el = fieldRef.current;
     if (!el) return;
     el.focus();
     el.setSelectionRange(el.value.length, el.value.length);
+    fitField();
   }, [editing]);
 
   // The editor's permission can go away mid-edit (gavel handed over, session ended): the
@@ -210,24 +227,37 @@ export default function CommitteeIdentityBadge({
 
   let topicNode: React.ReactNode = null;
   if (isEditing) {
+    // WRITING IN PLACE, not in a panel (owner, 17 Sep 2026: "no big bubble, just inline
+    // write"). The fixed label keeps its spot at the start of the line and the field takes
+    // the rest of it, in the topic's own type and colour with nothing behind it but a gold
+    // hairline, so the line does not move or change shape when the edit begins. It was a
+    // 3-row textarea on a dark plate before.
     topicNode = (
-      <div className="mt-0.5 flex flex-col gap-0.5">
-      {labelNode && <span style={topicStyle}>{labelNode}</span>}
-      <textarea
-        ref={fieldRef}
-        value={draft}
-        rows={3}
-        maxLength={topicMaxLength}
-        aria-label={labels?.field}
-        onChange={(e) => setDraft(e.target.value.replace(/\n/g, ' '))}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') { e.preventDefault(); finish(true); }
-          else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
-        }}
-        onBlur={() => finish(true)}
-        className="w-full resize-none rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70"
-        style={{ ...topicStyle, padding: '2px 4px', marginInlineStart: -4, color: '#F4EFE3', backgroundColor: 'rgba(0,0,0,0.22)', boxShadow: 'inset 0 0 0 1px rgba(238,217,138,0.35)' }}
-      />
+      <div className="mt-0.5 flex items-start gap-1">
+        {topicLabel && (
+          <span className="shrink-0" style={{ ...topicStyle, fontWeight: 800, color: NEU.gold }}>{topicLabel}</span>
+        )}
+        <textarea
+          ref={fieldRef}
+          value={draft}
+          rows={1}
+          maxLength={topicMaxLength}
+          aria-label={labels?.field}
+          onChange={(e) => { setDraft(e.target.value.replace(/\n/g, ' ')); fitField(); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+            else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
+          }}
+          onBlur={() => finish(true)}
+          className="flex-1 min-w-0 resize-none overflow-hidden bg-transparent p-0 focus:outline-none"
+          style={{
+            ...topicStyle,
+            color: '#F4EFE3',
+            height: TOPIC_LINE,
+            border: 'none',
+            borderBottom: '1px solid rgba(238,217,138,0.7)',
+          }}
+        />
       </div>
     );
   } else if (onTopicSave) {
@@ -248,8 +278,21 @@ export default function CommitteeIdentityBadge({
           style={{ color: topic ? topicStyle.color : 'rgba(238,217,138,0.6)', boxDecorationBreak: 'clone', WebkitBoxDecorationBreak: 'clone', padding: '0 2px' }}
         >
           {topic || labels?.add}
-          <Pencil size={10} aria-hidden className="inline-block ms-1 align-[-1px] opacity-0 group-hover/topic:opacity-70 group-focus-visible/topic:opacity-70 transition-opacity" />
         </span>
+        {/* The pencil is its own button and is always there (owner, 17 Sep 2026): the topic
+            text still edits on a click, but a chair should not have to discover that. It is
+            inline-flex, so it sits at the end of the topic's last line rather than on a line
+            of its own. */}
+        <button
+          type="button"
+          onClick={startEdit}
+          aria-label={labels?.edit}
+          title={labels?.edit}
+          className="inline-flex items-center justify-center rounded ms-1 align-[-3px] opacity-60 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70 transition-opacity"
+          style={{ width: 16, height: 16, color: 'rgba(238,217,138,0.9)' }}
+        >
+          <Pencil size={10} aria-hidden />
+        </button>
       </p>
     );
   } else if (topic) {

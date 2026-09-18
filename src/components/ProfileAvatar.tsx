@@ -6,7 +6,17 @@
  *
  * Only the picture (`profiles.avatar_url`), or 1 to 2 initials on a calm
  * forest-tinted ground when there is none or it fails to load. A very faint
- * forest-green gradient ring sits around it. Nothing else: no name, no pill.
+ * forest-green gradient ring sits around it, over a soft forest-tinted drop
+ * shadow that lifts it off the bar. Nothing else: no name, no pill.
+ *
+ * SIZE (17 Sep 2026, owner: "increase the size by 100%"). The avatar is as large
+ * as its bar allows: the rule is the bar's height less 12px of clearance, capped
+ * at 80 (the doubled 40). No bar in the app is tall enough for the full 80 today,
+ * so each call site passes the number that rule gives for its own bar:
+ * 60 in SiteNav (72px) and the /create select bar,
+ * 56 on the SiteNav phone row, 52 on /join (64px), 48 on the public CV (60px),
+ * 44 in the /manage bar and the /create build bar (both 56px). Never pass a size
+ * larger than the bar less 12: it overhangs the bar's own edge.
  *
  * `ProfileAvatarMenu` is the drop-in for a top bar: the avatar as the trigger of
  * the shared `ProfileDropdown` (hover-open, click-toggle, portaled panel), and
@@ -37,6 +47,16 @@ export function profileInitials(name: string | null | undefined, email?: string 
 
 export type ProfileAvatarTone = 'light' | 'dark';
 
+/** A soft drop shadow, forest-tinted on ivory and plain dark on the forest bar.
+ *  It grows with the circle, so a 44px avatar is not wearing a 60px avatar's lift. */
+function avatarShadow(size: number, tone: ProfileAvatarTone): string {
+  const y = Math.max(2, Math.round(size * 0.085));
+  const blur = Math.max(6, Math.round(size * 0.26));
+  return tone === 'dark'
+    ? `0 1px 2px rgba(0,0,0,0.22), 0 ${y}px ${blur}px rgba(0,0,0,0.34)`
+    : `0 1px 2px rgba(27,56,40,0.12), 0 ${y}px ${blur}px rgba(27,56,40,0.22)`;
+}
+
 const RING: Record<ProfileAvatarTone, string> = {
   // On ivory: a faint forest wash, a touch stronger at the top-left.
   light: 'linear-gradient(145deg, rgba(61,122,82,0.42) 0%, rgba(27,56,40,0.14) 100%)',
@@ -66,14 +86,16 @@ export function ProfileAvatar({
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const showImage = !!url && failedUrl !== url;
   const initials = profileInitials(name, email);
-  const ring = 1.5;
+  // The ring keeps its weight relative to the circle, so a bigger avatar does not
+  // look like a thin hairline around a big disc.
+  const ring = Math.max(1.5, size * 0.04);
   const inner = size - ring * 2;
 
   return (
     <span
       aria-hidden
       className="inline-flex flex-shrink-0 items-center justify-center rounded-full"
-      style={{ width: size, height: size, padding: ring, background: RING[tone] }}
+      style={{ width: size, height: size, padding: ring, background: RING[tone], boxShadow: avatarShadow(size, tone) }}
     >
       {showImage ? (
         /* eslint-disable-next-line @next/next/no-img-element */

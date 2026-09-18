@@ -67,7 +67,7 @@ export default function PublicCVClient({ profile, entries }: { profile: PublicPr
             Build your MUN CV <ArrowRight size={15} strokeWidth={2.5} />
           </Link>
           {/* Signed-in readers get their own avatar menu; nothing while signed out. */}
-          <ProfileAvatarMenu size={40} />
+          <ProfileAvatarMenu size={48} />
         </div>
       </header>
 

@@ -54,6 +54,7 @@ function useQueueRowScale(): number {
 
 // ── 3-state slider ────────────────────────────────────────────────────────────
 function StatusSlider({ status, onCycle, isObserver = false, large = false }: { status: DelegateStatus; onCycle: () => void; isObserver?: boolean; large?: boolean }) {
+  const t = useT();
   // Observers can only be Absent or Present, no present-voting (PV) segment.
   // `large`: the full-screen roll call (pre-session and the resume roll call), sized for a
   // projector and a finger: 44px tall, 44px per segment. The mid-session Roll Call tab in
@@ -82,7 +83,7 @@ function StatusSlider({ status, onCycle, isObserver = false, large = false }: { 
       onClick={(e) => { e.stopPropagation(); onCycle(); }}
       className="relative rounded-full cursor-pointer shrink-0 select-none transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/80"
       style={{ width: seg * segments.length, height: h, backgroundColor: 'rgba(255,255,255,0.10)', border: '1.5px solid rgba(255,255,255,0.22)' }}
-      title={isObserver ? 'Tap to cycle: Absent → Present' : 'Tap to cycle: Absent → Present → PV'}
+      title={isObserver ? t('rollcall_slider_hint_observer') : t('rollcall_slider_hint')}
     >
       <div className="absolute inset-0 grid items-center pointer-events-none" style={{ gridTemplateColumns: `repeat(${segments.length}, 1fr)` }}>
         {segments.map((s) => (

@@ -449,11 +449,11 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
     const isSuspendOrEnd = type === 'suspend-debate' || type === 'end-debate';
     if (!isSuspendOrEnd) {
       if ((type === 'moderated' || type === 'unmoderated') && totalTime === 0) {
-        setError('Total caucus time cannot be zero.');
+        setError(t('motions_error_no_total_time'));
         return;
       }
       if (type === 'moderated' && speakingTime === 0) {
-        setError('Speaking time per delegate cannot be zero.');
+        setError(t('motions_error_no_speaking_time'));
         return;
       }
     }
@@ -905,7 +905,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
               <button
                 onClick={(e) => { e.stopPropagation(); if (!acceptBlocked) onEdit(m.id); }}
                 disabled={acceptBlocked}
-                title={acceptBlocked ? t('motions_saving') : 'Edit motion'}
+                title={acceptBlocked ? t('motions_saving') : t('motions_edit_label')}
                 className={`opacity-40 hover:opacity-80 transition-opacity focus:outline-none shrink-0 ${acceptBlocked ? 'cursor-not-allowed' : ''}`}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -984,7 +984,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
               {fmtTime(0, m.speakingTime)} {t('motions_per_delegate')}
             </span>
             <span className={`${large ? 'text-sm' : 'text-xs'} text-[#9A8A78]`}>
-              {m.tourOrder === 'desc' ? 'Z→A' : m.tourOrder === 'custom' ? 'Custom' : 'A→Z'}
+              {m.tourOrder === 'desc' ? 'Z→A' : m.tourOrder === 'custom' ? t('motions_tour_order_custom') : 'A→Z'}
             </span>
           </div>
         )}
@@ -1013,7 +1013,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
             </button>
             <button onClick={(e) => { e.stopPropagation(); if (!acceptBlocked) onEdit(m.id); }}
               disabled={acceptBlocked}
-              title={acceptBlocked ? t('motions_saving') : 'Edit motion'}
+              title={acceptBlocked ? t('motions_saving') : t('motions_edit_label')}
               className="disabled:opacity-40 disabled:cursor-not-allowed bg-[#B6871F]/20 hover:bg-[#B6871F]/40 border border-[#B6871F]/50 hover:border-[#B6871F] text-[#B6871F] py-2.5 px-4 rounded-xl font-bold text-sm transition-colors shrink-0 focus:outline-none gv-lift" style={{ fontFamily: "'DM Mono', monospace" }}>
               {t('motions_edit_label')}
             </button>

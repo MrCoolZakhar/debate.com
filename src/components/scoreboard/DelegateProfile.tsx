@@ -21,9 +21,11 @@
 //   2. ONE STACKED BAR of where the points came from, with a legend of source
 //      names and values (`sessionPointSlices`, which sums to the objective).
 //   3. RATINGS, one line per factor, and only when a chair has rated anything.
-//   4. THE TIMELINE: every speech (context, duration, time, points) with the
-//      chair comments written on it inline, and the other scored events. Notes
-//      that belong to no speech follow under "Other comments".
+//   4. THE TIMELINE, NEWEST FIRST: every speech (context, duration, time, points)
+//      with the chair comments written on it inline, and the other scored events.
+//      Notes that belong to no speech follow under "Other comments". A chair's OWN
+//      comment edits in place with a click (`EditableNote`); another chair's is
+//      read-only, because a feedback row belongs to its author.
 //
 // Then the Moderator's plus / minus (`extra`). No chair-note count anywhere: the
 // owner does not want notes tallied.
@@ -48,7 +50,8 @@ import { formatSpeakingTime, type ScoreboardDelegateRow } from '@/lib/conference
 import type { PointSlice } from '@/lib/sessionScoreboard';
 import { speechKey, type HistorySpeech, type HistoryNote } from '@/lib/sessionHistory';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
-import { eventIcon, TINT } from './SessionScoreboardParts';
+import { eventIcon } from './SessionScoreboardParts';
+import EditableNote from './EditableNote';
 
 const fmt = (tpl: string, vars: Record<string, string | number>): string =>
   tpl.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
@@ -140,19 +143,10 @@ export default function DelegateProfile({ row, rank, rankTotal, slices, speeches
 
   const signed = (n: number) => (n > 0 ? `+${n}` : String(n));
 
+  // A chair's own comment is editable where it is read (EditableNote); another
+  // chair's renders exactly as before and names its author on hover.
   const noteLine = (n: Pick<HistoryNote, 'id' | 'content' | 'chairName'>) => (
-    <p
-      key={n.id}
-      style={{
-        fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.45, color: NEU.ink, textWrap: 'pretty',
-        marginBlockStart: 3, paddingInlineStart: 9, borderInlineStart: `2px solid ${TINT.amber.fg}`,
-      }}
-    >
-      {n.content}
-      {n.chairName && (
-        <span style={{ color: SOFT, fontSize: 11, whiteSpace: 'nowrap' }}>{` · ${n.chairName}`}</span>
-      )}
-    </p>
+    <EditableNote key={n.id} id={n.id} content={n.content} author={n.chairName} />
   );
 
   const eventTitle = (r: ScoreboardDelegateRow['ledger'][number]): string => {

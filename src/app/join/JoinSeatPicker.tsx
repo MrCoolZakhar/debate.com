@@ -10,8 +10,8 @@
 // and its state as a chip.
 //
 // CONTRACT. This component decides NOTHING about who may sit where. The caller
-// passes each seat's `state` ('open' | 'taken' | 'reserved' | 'mine') already
-// resolved from `seatClaims` + the conference's reserved list, and a blocked
+// passes each seat's `state` ('open' | 'taken' | 'reserved' | 'removed' | 'mine')
+// already resolved from `seatClaims` + the conference's reserved list, and a blocked
 // seat is simply not selectable here. /delegate still claims the seat and is
 // the authority for races (AGENTS.md, JOIN PAGE).
 //
@@ -27,12 +27,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Check, Lock, Megaphone, Search, UserRound, X } from 'lucide-react';
+import { Check, Lock, Megaphone, Search, UserRound, UserX, X } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import { countryMatchRank, getCountryDisplayName } from '@/lib/countries';
 import { C, OUTFIT } from './joinUi';
 
-export type SeatTone = 'open' | 'taken' | 'reserved' | 'mine';
+/** 'removed' = a chair removed this device from this seat in the last 10 minutes. */
+export type SeatTone = 'open' | 'taken' | 'reserved' | 'removed' | 'mine';
 
 export interface JoinSeatRow {
   /** The roster value, exactly as `delegates.country` stores it. */
@@ -46,6 +47,7 @@ export interface SeatPickerLabels {
   search: string;
   taken: string;
   reserved: string;
+  removed: string;
   yours: string;
   observer: string;
   empty: string;
@@ -169,6 +171,7 @@ export default function JoinSeatPicker({
   const chipFor = (s: JoinSeatRow) => {
     if (s.state === 'mine') return stateText(<Check size={12} strokeWidth={3} />, labels.yours, C.moss);
     if (s.state === 'reserved') return stateText(<Lock size={11} strokeWidth={2.6} />, labels.reserved, '#8A6414');
+    if (s.state === 'removed') return stateText(<UserX size={12} strokeWidth={2.6} />, labels.removed, '#9B2C22');
     if (s.state === 'taken') return stateText(<UserRound size={12} strokeWidth={2.6} />, labels.taken, C.inkSoft);
     return null;
   };

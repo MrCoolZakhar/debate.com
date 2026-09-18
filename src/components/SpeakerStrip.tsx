@@ -23,9 +23,11 @@
 //     replaced the node ended silently. It is tracked on window listeners now.
 // Keyboard: each queued flag has a grip button; Arrow Left / Right move it one place.
 //
-// Removal: every flag has an X (on hover, always visible on touch screens). On the speaker
-// holding the floor it calls `onRemoveCurrent`, which the chair page implements as "log
-// the speech, pause, clear the floor".
+// Removal: a queued flag has an X on hover (always visible on touch screens). The flag of the
+// speaker HOLDING THE FLOOR keeps its X visible at all times (17 Sep 2026, owner: "move the
+// current speaker away even if they have already started their speech") and calls
+// `onRemoveCurrent`, which the chair page implements as "pause, log the speech, clear the
+// floor".
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
@@ -332,7 +334,14 @@ export default function SpeakerStrip({
                   onClick={(e) => { e.stopPropagation(); removeHandler(); }}
                   aria-label={isCurrent ? t('speaker_remove_current', { country: name }) : t('gsl_remove_speaker', { country: name })}
                   title={isCurrent ? t('speaker_remove_current', { country: name }) : t('gsl_remove_speaker', { country: name })}
-                  className={`absolute -top-2 -end-2 w-6 h-6 rounded-full flex items-center justify-center shadow-sm opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-opacity active:scale-[0.92] ${isCurrent ? 'bg-[#8B2020] text-white' : 'bg-[#EDE7D8] text-[#1C1410] hover:bg-[#8B2020] hover:text-white'}`}
+                  // The speaker holding the floor keeps their X VISIBLE at all times (17 Sep
+                  // 2026, owner: "move the current speaker away even if they have already
+                  // started their speech"). It used to wait for hover like every other flag,
+                  // and mid-speech the chair's eye and pointer are on the big floor card, not
+                  // on a 52px chip, so the one control that takes a speaker off the floor was
+                  // effectively undiscoverable exactly when it was most needed. Queued flags
+                  // are unchanged: hover, focus, or a touch screen.
+                  className={`absolute -top-2 -end-2 w-6 h-6 rounded-full flex items-center justify-center shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-opacity active:scale-[0.92] ${isCurrent ? 'opacity-100 pointer-events-auto bg-[#8B2020] text-white hover:brightness-110' : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto bg-[#EDE7D8] text-[#1C1410] hover:bg-[#8B2020] hover:text-white'}`}
                 >
                   <X size={13} strokeWidth={3} aria-hidden />
                 </button>

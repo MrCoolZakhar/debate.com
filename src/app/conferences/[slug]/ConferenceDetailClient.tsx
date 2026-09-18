@@ -25,6 +25,7 @@ import { uploadConferenceAsset } from '@/lib/conferenceAssets';
 import { formatFeeCompact } from '@/lib/utils';
 import { activeFeePhase, activePhaseFee, type FeePhase } from '@/lib/finance';
 import { fetchDelegateFees, type ResolvedFee } from '@/lib/publicFees';
+import { hasNothingToPay } from '@/lib/freeRegistration';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { normalizeBlocks } from '@/lib/customQuestions';
 import { appendEditionYear } from '@/lib/presetNames';
@@ -2170,6 +2171,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   onSelectRole={selectRole}
                   participantDataLoading={authLoading || participantDataLoading}
                   justClaimedCount={justClaimedCount}
+                  // Patch in place rather than refetching the conference: the
+                  // RPC has already committed, and this is the only row that
+                  // changed.
+                  onApplicationWithdrawn={(applicationId) => {
+                    setMyApplications(prev => prev.map(a => (
+                      a.id === applicationId ? { ...a, status: 'withdrawn' } : a
+                    )));
+                  }}
                 />
                 </div>
                 </>
@@ -2375,6 +2384,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           'checked-in': { label: 'CHECKED IN',   bg: 'color-mix(in srgb, var(--gv-main-light) 35%, transparent)',   color: '#A8D5B8',              hint: '' },
                           waitlisted:   { label: 'WAITLISTED',   bg: 'rgba(237,231,216,0.12)', color: 'color-mix(in srgb, var(--gv-on-main) 80%, transparent)', hint: 'You are on the waitlist. We will notify you if a spot opens.' },
                           rejected:     { label: 'NOT ACCEPTED', bg: 'rgba(139,32,32,0.35)',   color: '#E8A9A9',              hint: 'Your application was not accepted this time.' },
+                          withdrawn:    { label: 'WITHDRAWN',    bg: 'rgba(237,231,216,0.12)', color: 'color-mix(in srgb, var(--gv-on-main) 80%, transparent)', hint: 'You withdrew this application. You can apply again while the role is open.' },
                         };
                         const meta = STATUS_META[myApp.status] ?? { label: myApp.status.toUpperCase(), bg: 'rgba(237,231,216,0.12)', color: 'color-mix(in srgb, var(--gv-on-main) 80%, transparent)', hint: '' };
                         const allocCountry = myAllocation ? getCountryByName(myAllocation.country_name) : null;
@@ -2383,8 +2393,24 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         // payable pre-acceptance, so the entry point shows as
                         // soon as the application is submitted, regardless of
                         // the role fee's own payment_timing.
-                        const payable = myApp.status === 'submitted' || myApp.status === 'accepted'
-                          || myApp.status === 'assigned' || myApp.status === 'checked-in';
+                        //
+                        // ...but not when there is nothing to pay. A free role
+                        // whose application the database has already stamped
+                        // 'paid'/'waived' owes nothing at all, and sending them
+                        // to a payment page was the whole "free conference
+                        // still gates behind payment" complaint. Both halves
+                        // are needed: a free role that is still 'unpaid' means
+                        // a surcharge, a delegation pledge or a leftover
+                        // invoice IS owed, so the route must stay open (see
+                        // src/lib/freeRegistration.ts).
+                        const myAppRoleConfig = roleConfigs.find(rc => rc.role === myApp.role) ?? null;
+                        const nothingToPay = hasNothingToPay(myAppRoleConfig, myApp.payment_status);
+                        const payable = !nothingToPay && (myApp.status === 'submitted' || myApp.status === 'accepted'
+                          || myApp.status === 'assigned' || myApp.status === 'checked-in');
+                        // Financial aid is a real second thing this button
+                        // leads to, so it only earns a place in the label when
+                        // the conference actually runs an aid programme.
+                        const payLabel = conference.financial_aid_enabled ? 'PAY AND REQUEST AID' : 'PAY';
                         return (
                           <>
                             <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-on-main)', margin: '0 0 8px 0' }}>
@@ -2415,7 +2441,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-accent)'; }}
                               >
                                 <CreditCard size={15} strokeWidth={2.2} />
-                                PAY AND REQUEST AID
+                                {payLabel}
                               </Link>
                             )}
                             {myAllocation && (

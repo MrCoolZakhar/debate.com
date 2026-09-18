@@ -299,4 +299,11 @@ export const notifyKey = {
   /** Prefix matching every chat card for one conversation. */
   chatConversation: (convKey: string) => `chat:${encodeURIComponent(convKey)}:`,
   broadcast: (id: string) => `broadcast:${id}`,
+  /**
+   * "Who is moderating now", one card per HOLDER (17 Sep 2026). Keyed on the name rather than
+   * on the handover event, so a realtime re-delivery, a device claim under the same name and
+   * two same-second claims all collapse onto one card (rule 1). URI-encoded, like `chat`, so a
+   * chair name containing ':' cannot fake another prefix.
+   */
+  gavel: (holder: string) => `gavel:${encodeURIComponent(holder)}`,
 } as const;

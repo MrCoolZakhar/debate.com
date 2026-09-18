@@ -18,6 +18,10 @@
 //   • One DEVICE per account per committee: a signed-in claim also records the device's
 //     token hash, so the same account on a phone and a laptop cannot both drive the seat
 //     (see claimDelegateSeat's `takeover`).
+//   • A chair can remove whoever holds a seat (Settings → People, kick_delegate_seat). For
+//     10 minutes after that, claim_delegate_seat answers `kicked` to that holder and to
+//     that device, and getSeatAvailability reports the seat as `removed` so the join page
+//     stops offering it to them. Anyone else may take the seat at once.
 //
 // `delegate_seat_claims` has RLS on and NO policies: every read and write goes through
 // the SECURITY DEFINER RPCs wrapped here, and none of them returns a name, an email or
@@ -120,6 +124,14 @@ export interface SeatState {
   full: boolean;
   /** This account, or this device, is one of the holders. */
   mine: boolean;
+  /**
+   * A chair removed THIS holder (or this device) from this seat less than 10 minutes ago,
+   * so `claim_delegate_seat` will answer `kicked`. Only ever true for the caller: the RPC
+   * returns nothing about anyone else's removal.
+   */
+  removed: boolean;
+  /** Whole minutes until this seat opens to this holder again (0 when not removed). */
+  removedMinutes: number;
 }
 /** Keyed by seatKey(country). */
 export type SeatAvailability = Record<string, SeatState>;
@@ -148,6 +160,8 @@ export async function getSeatAvailability(
           claimed: s.claimed === true,
           full: s.full === true,
           mine: s.mine === true,
+          removed: (raw as { removed?: unknown }).removed === true,
+          removedMinutes: Math.max(0, Number((raw as { removed_minutes?: unknown }).removed_minutes) || 0),
         };
       }
     }
@@ -158,6 +172,9 @@ export async function getSeatAvailability(
 }
 
 // ── Claim / release ───────────────────────────────────────────────────────────
+/** A seat RPC that has not answered in this long is treated as unanswered, not as a verdict. */
+const SEAT_RPC_TIMEOUT_MS = 12_000;
+
 export type SeatClaimReason =
   | 'claimed' | 'mine' | 'ended'                                           // ok
   | 'taken' | 'reserved' | 'signin' | 'no_seat' | 'no_token' | 'not_found' // refused
@@ -184,20 +201,30 @@ export async function claimDelegateSeat(
   accessToken?: string | null,
   opts: { takeover: boolean } = { takeover: false },
 ): Promise<SeatClaimResult> {
-  try {
-    const client = await clientFor(accessToken);
-    const { data, error } = await client.rpc('claim_delegate_seat', {
-      p_code: code.toUpperCase(),
-      p_country: country,
-      p_token: getSeatToken(code),
-      p_takeover: opts.takeover,
-    });
-    if (error || !data) return { ok: false, reason: 'error' };
-    const d = data as { ok?: boolean; reason?: string };
-    return { ok: d.ok === true, reason: (d.reason ?? 'error') as SeatClaimReason };
-  } catch {
-    return { ok: false, reason: 'error' };
-  }
+  const ask = async (): Promise<SeatClaimResult> => {
+    try {
+      const client = await clientFor(accessToken);
+      const { data, error } = await client.rpc('claim_delegate_seat', {
+        p_code: code.toUpperCase(),
+        p_country: country,
+        p_token: getSeatToken(code),
+        p_takeover: opts.takeover,
+      });
+      if (error || !data) return { ok: false, reason: 'error' };
+      const d = data as { ok?: boolean; reason?: string };
+      return { ok: d.ok === true, reason: (d.reason ?? 'error') as SeatClaimReason };
+    } catch {
+      return { ok: false, reason: 'error' };
+    }
+  };
+  // A hung fetch used to block the seat re-verify FOREVER: /delegate holds one check at a
+  // time, so one request that never settles (a phone that lost its network mid-flight)
+  // meant the 30 s tick, the tab-visible check and the chair's kick were all dropped for
+  // the life of the page. `error` is the answer nothing acts on, so timing out is always
+  // safe: the next tick simply asks again.
+  return Promise.race([ask(), new Promise<SeatClaimResult>((resolve) => {
+    setTimeout(() => resolve({ ok: false, reason: 'error' }), SEAT_RPC_TIMEOUT_MS);
+  })]);
 }
 
 /**

@@ -9,12 +9,14 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Pencil, X } from 'lucide-react';
+import { LogOut, Pencil, X } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
+import { getAuthedClient } from '@/lib/supabase-auth';
+import { roleFeeToday } from '@/lib/freeRegistration';
 import { type FormBlock } from '@/lib/customQuestions';
 import { SectionCardSkeleton } from '@/components/Skeleton';
 import { SectionCard, OUTFIT, getGateState, roleLabel, statusPriority } from './shared';
-import { PayGate, RejectedCard } from './PayGate';
+import { PayGate, RejectedCard, WithdrawnCard } from './PayGate';
 import DelegateParticipant from './DelegateParticipant';
 import AdvisorParticipant from './AdvisorParticipant';
 import ChairParticipant from './ChairParticipant';
@@ -91,18 +93,29 @@ export interface ParticipantViewProps {
    *  counterpart to the signup claim flow). Drives a one-time quiet notice
    *  below; 0 means nothing changed. */
   justClaimedCount: number;
+  /** The viewer withdrew one of their own pending applications. The parent
+   *  owns `myApplications`, so it patches that row to 'withdrawn' in place
+   *  rather than this view refetching the whole conference. */
+  onApplicationWithdrawn?: (applicationId: string) => void;
 }
 
 export default function ParticipantView({
   conferenceId, conferenceSlug, conferenceStartDate, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, isOrganizer = false,
   initialRole, onResolveRole, onSelectRole, participantDataLoading, justClaimedCount,
+  onApplicationWithdrawn,
 }: ParticipantViewProps) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const holdsInitialRole = !!initialRole && myApplications.some(a => a.role === initialRole);
   // Dismissible, not persisted anywhere, "dismissed on navigation" falls out
   // naturally: this component unmounts whenever the viewer leaves the You tab,
   // so leaving and coming back never resurrects a stale notice.
   const [claimNoticeDismissed, setClaimNoticeDismissed] = useState(false);
+
+  // Withdraw your own pending application. Two-step, because it cannot be
+  // undone from here: the applicant re-applies instead.
+  const [withdrawConfirm, setWithdrawConfirm] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [withdrawError, setWithdrawError] = useState('');
 
   // Resolver (/role) and "not holding that role" fallback (/role/[role] for
   // a role the viewer doesn't actually have) both land here: once
@@ -113,7 +126,36 @@ export default function ParticipantView({
   }, [user, myApplications, holdsInitialRole, onResolveRole]);
 
   function selectApplication(app: ParticipantApplication) {
+    setWithdrawConfirm(false);
+    setWithdrawError('');
     onSelectRole(app.role);
+  }
+
+  // `applications` has no participant DELETE policy, and the "update own
+  // submitted" RLS policy cannot move status OFF 'submitted' (its USING
+  // clause doubles as the WITH CHECK). So this goes through the same
+  // SECURITY DEFINER RPC the apply flow's edit mode already uses: it
+  // re-verifies auth.uid() owns the row, refuses anything that is not still
+  // 'submitted', flips the status and refunds any Gavelling credit that was
+  // held — the identical refund path a rejection takes
+  // (refund_credit_for_application), never a new one.
+  async function handleWithdraw(applicationId: string) {
+    if (!session) { setWithdrawError('Your session expired. Please sign in again.'); return; }
+    setWithdrawing(true);
+    setWithdrawError('');
+    try {
+      const supabase = getAuthedClient(session.access_token);
+      const { data, error } = await supabase.rpc('withdraw_application', { p_application_id: applicationId });
+      if (error) throw error;
+      const result = data as { ok?: boolean; error?: string } | null;
+      if (!result?.ok) throw new Error(result?.error ?? 'Could not withdraw your application. Please try again.');
+      setWithdrawConfirm(false);
+      onApplicationWithdrawn?.(applicationId);
+    } catch (err: unknown) {
+      setWithdrawError(err instanceof Error ? err.message : 'Could not withdraw your application. Please try again.');
+    } finally {
+      setWithdrawing(false);
+    }
   }
 
   if (participantDataLoading) {
@@ -169,7 +211,8 @@ export default function ParticipantView({
   const selected = (holdsInitialRole ? myApplications.find(a => a.role === initialRole) : null) ?? pickDefault(myApplications);
   const roleConfig = roleConfigs.find(rc => rc.role === selected.role) ?? null;
   const paymentTiming = roleConfig?.payment_timing ?? 'anytime';
-  const gateState = getGateState(paymentTiming, selected.status, selected.payment_status);
+  // A role charging nothing today can never be 'locked' behind its fee.
+  const gateState = getGateState(paymentTiming, selected.status, selected.payment_status, roleFeeToday(roleConfig));
 
   return (
     <div className="flex flex-col gap-6">
@@ -217,7 +260,12 @@ export default function ParticipantView({
         </SectionCard>
       )}
 
-      {selected.status === 'rejected' ? (
+      {selected.status === 'withdrawn' ? (
+        // Same reasoning as rejected: a withdrawn application has no fee to
+        // settle and no committee to prepare for, so this replaces the pay
+        // gate and the role content rather than sitting above them.
+        <WithdrawnCard conferenceSlug={conferenceSlug} role={selected.role} />
+      ) : selected.status === 'rejected' ? (
         // Payment and role content are meaningless once rejected, replaces
         // both rather than gating them (a rejection isn't a PayGate state).
         <RejectedCard
@@ -234,17 +282,69 @@ export default function ParticipantView({
                 <p className="text-[13px]" style={{ color: '#6B5F52', fontFamily: OUTFIT }}>
                   Need to change something before it&apos;s reviewed?
                 </p>
-                <Link
-                  href={`/conferences/${conferenceSlug}/apply?role=${selected.role}&edit=1`}
-                  className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-3.5 text-xs font-bold focus:outline-none transition-colors flex-shrink-0"
-                  style={{ border: '1px solid #DDD4C0', color: '#1C1410', textDecoration: 'none', fontFamily: OUTFIT, letterSpacing: '0.04em' }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                >
-                  <Pencil size={12} />
-                  EDIT APPLICATION
-                </Link>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Link
+                    href={`/conferences/${conferenceSlug}/apply?role=${selected.role}&edit=1`}
+                    className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-3.5 text-xs font-bold focus:outline-none transition-colors"
+                    style={{ border: '1px solid #DDD4C0', color: '#1C1410', textDecoration: 'none', fontFamily: OUTFIT, letterSpacing: '0.04em' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                  >
+                    <Pencil size={12} />
+                    EDIT APPLICATION
+                  </Link>
+                  {/* Quieter than Edit on purpose: withdrawing is the rarer
+                      choice and cannot be undone from here. */}
+                  <button
+                    onClick={() => { setWithdrawConfirm(true); setWithdrawError(''); }}
+                    className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none transition-colors"
+                    style={{ border: 'none', background: 'transparent', color: '#8B2020', fontFamily: OUTFIT, letterSpacing: '0.04em', cursor: 'pointer' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.07)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                  >
+                    <LogOut size={12} />
+                    WITHDRAW
+                  </button>
+                </div>
               </div>
+
+              {withdrawConfirm && (
+                <div
+                  className="mt-4 rounded-xl px-4 py-3.5"
+                  style={{ backgroundColor: 'rgba(139,32,32,0.05)', border: '1px solid rgba(139,32,32,0.22)' }}
+                >
+                  <p className="text-[13.5px] font-semibold mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                    Withdraw this application?
+                  </p>
+                  <p className="text-[12.5px] mb-3" style={{ color: '#6B5F52', fontFamily: OUTFIT, lineHeight: 1.65 }}>
+                    It stops being reviewed by the organizing team. Any Gavelling credit
+                    you spent is refunded. You can apply again while the role is still open.
+                  </p>
+                  {withdrawError && (
+                    <p className="text-[12.5px] mb-3" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+                      {withdrawError}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => handleWithdraw(selected.id)}
+                      disabled={withdrawing}
+                      className="rounded-lg py-2 px-4 text-xs font-bold focus:outline-none"
+                      style={{ backgroundColor: withdrawing ? 'rgba(139,32,32,0.4)' : '#8B2020', color: '#FBEDED', border: 'none', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: withdrawing ? 'not-allowed' : 'pointer' }}
+                    >
+                      {withdrawing ? 'WITHDRAWING…' : 'YES, WITHDRAW'}
+                    </button>
+                    <button
+                      onClick={() => { setWithdrawConfirm(false); setWithdrawError(''); }}
+                      disabled={withdrawing}
+                      className="rounded-lg py-2 px-4 text-xs font-bold focus:outline-none"
+                      style={{ border: '1.5px solid #C8BEA8', color: '#1C1410', background: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: withdrawing ? 'not-allowed' : 'pointer' }}
+                    >
+                      KEEP IT
+                    </button>
+                  </div>
+                </div>
+              )}
             </SectionCard>
           )}
 
