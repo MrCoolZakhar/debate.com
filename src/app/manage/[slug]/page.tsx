@@ -8,11 +8,12 @@ import Link from 'next/link';
 import {
   Building2, Rocket, Mail, Gavel, UsersRound, UserPlus, Wallet, Palette,
   Inbox, Globe2, CheckCircle2, AlertCircle, ArrowRight,
-  Activity, UserRoundCheck, MapPin, RotateCcw,
+  Activity, UserRoundCheck, MapPin, RotateCcw, CalendarDays,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
-import { getAuthedClient } from '@/lib/supabase-auth';
+import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
+import { friendlyError } from '@/lib/friendlyError';
 import { formatFee } from '@/lib/utils';
 import { LogoDisc } from '@/components/LogoDisc';
 import Avatar from '@/components/Avatar';
@@ -41,7 +42,7 @@ function PublishModal({
   onClose,
   onPublished,
 }: {
-  conference: { id: string; slug: string; full_name: string };
+  conference: { id: string; slug: string; full_name: string; dates_tbd: boolean; start_date: string | null };
   onClose: () => void;
   onPublished: () => void;
 }) {
@@ -49,20 +50,32 @@ function PublishModal({
   useScrollLock(true);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState('');
-  const { session } = useAuth();
+
+  // Mirrors the database CHECK conferences_tbd_not_public: a conference with
+  // dates still TBD, or no start date at all, can never go public. Caught
+  // here rather than left to the write, so the organizer sees why and where
+  // to fix it instead of a raw constraint error.
+  const needsDates = conference.dates_tbd || !conference.start_date;
 
   async function handlePublish() {
     setPublishing(true);
     setPublishError('');
-    if (!session) { setPublishing(false); return; }
-    const supabase = getAuthedClient(session.access_token);
-    const { error } = await supabase
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setPublishing(false);
+      setPublishError('Your session has expired. Please refresh the page and sign in again.');
+      return;
+    }
+    const { data, error } = await supabase
       .from('conferences')
       .update({ is_public: true, status: 'public' })
-      .eq('id', conference.id);
-    if (error) {
+      .eq('id', conference.id)
+      .select('id');
+    if (error || !data || data.length !== 1) {
       setPublishing(false);
-      setPublishError(error.message);
+      setPublishError(error
+        ? friendlyError(error, "Couldn't publish your conference. Please try again.")
+        : "Couldn't publish your conference. Please refresh and try again.");
       return;
     }
     // Fire-and-forget: ping search engines (IndexNow) so the newly public
@@ -87,41 +100,75 @@ function PublishModal({
         style={{ backgroundColor: NEU.surface, boxShadow: NEU.out }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="font-black text-xl mb-2" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-          Publish Conference?
-        </h2>
-        <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-          Your conference will appear publicly on gavelling.com/conferences/explore and delegates will be able to apply.
-        </p>
-        {publishError && (
-          <p className="text-sm mb-4" style={{ color: RED, fontFamily: OUTFIT }}>{publishError}</p>
+        {needsDates ? (
+          <>
+            <h2 className="font-black text-xl mb-2" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+              Add your dates first
+            </h2>
+            <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+              Your conference dates are set to TBD. A conference needs real dates before it can be listed publicly. You can keep taking applications while it stays private.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={onClose}
+                className="flex-1 rounded-xl py-2.5 font-bold text-sm tracking-widest transition-colors focus:outline-none gv-lift"
+                style={{ border: '1.5px solid #DDD4C0', color: NEU.ink, backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+              >
+                CANCEL
+              </button>
+              <Link
+                href={`/manage/${conference.slug}/settings?tab=conference&focus=dates`}
+                className="flex-1 rounded-xl py-2.5 font-bold text-sm tracking-widest transition-colors focus:outline-none gv-lift flex items-center justify-center gap-2"
+                style={{ backgroundColor: '#1B3828', color: NEU.gold, fontFamily: OUTFIT, letterSpacing: '0.06em', textDecoration: 'none' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+              >
+                <CalendarDays size={15} strokeWidth={2.2} />
+                ADD DATES
+              </Link>
+            </div>
+          </>
+        ) : (
+          <>
+            <h2 className="font-black text-xl mb-2" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+              Publish Conference?
+            </h2>
+            <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+              Your conference will appear publicly on gavelling.com/conferences/explore and delegates will be able to apply.
+            </p>
+            {publishError && (
+              <p className="text-sm mb-4" style={{ color: RED, fontFamily: OUTFIT }}>{publishError}</p>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={onClose}
+                className="flex-1 rounded-xl py-2.5 font-bold text-sm tracking-widest transition-colors focus:outline-none gv-lift"
+                style={{ border: '1.5px solid #DDD4C0', color: NEU.ink, backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+              >
+                CANCEL
+              </button>
+              <button
+                onClick={handlePublish}
+                disabled={publishing}
+                className="flex-1 rounded-xl py-2.5 font-bold text-sm tracking-widest transition-colors focus:outline-none gv-lift"
+                style={{
+                  backgroundColor: publishing ? '#DDD4C0' : '#1B3828',
+                  color: publishing ? NEU.muted : NEU.gold,
+                  fontFamily: OUTFIT,
+                  letterSpacing: '0.06em',
+                }}
+                onMouseEnter={(e) => { if (!publishing) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                onMouseLeave={(e) => { if (!publishing) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+              >
+                {publishing ? 'PUBLISHING...' : 'PUBLISH NOW'}
+              </button>
+            </div>
+          </>
         )}
-        <div className="flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 rounded-xl py-2.5 font-bold text-sm tracking-widest transition-colors focus:outline-none gv-lift"
-            style={{ border: '1.5px solid #DDD4C0', color: NEU.ink, backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
-          >
-            CANCEL
-          </button>
-          <button
-            onClick={handlePublish}
-            disabled={publishing}
-            className="flex-1 rounded-xl py-2.5 font-bold text-sm tracking-widest transition-colors focus:outline-none gv-lift"
-            style={{
-              backgroundColor: publishing ? '#DDD4C0' : '#1B3828',
-              color: publishing ? NEU.muted : NEU.gold,
-              fontFamily: OUTFIT,
-              letterSpacing: '0.06em',
-            }}
-            onMouseEnter={(e) => { if (!publishing) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-            onMouseLeave={(e) => { if (!publishing) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-          >
-            {publishing ? 'PUBLISHING...' : 'PUBLISH NOW'}
-          </button>
-        </div>
       </div>
     </div></Portal>
   );
@@ -1430,6 +1477,11 @@ export default function DashboardPage() {
   // `conference_setup_status()` (which drives the nudge emails and /admin) in
   // the same change, so setup_total is 8 in both places. It was never a
   // verification criterion, so the blue checkmark is untouched.
+  // Client twin of conference_setup_status()'s 'page' item: real dates are
+  // now part of what "set up" means, because a TBD conference can never be
+  // public (CHECK conferences_tbd_not_public) — the same rule PublishModal
+  // checks before it ever tries the write.
+  const pageNeedsDates = conference.dates_tbd || !conference.start_date;
   const checklist = [
     {
       key: 'page',
@@ -1437,9 +1489,15 @@ export default function DashboardPage() {
       emoji: 'Artist palette',
       gradient: NEU_GRADIENTS.amber,
       title: 'Set up your conference page',
-      sub: 'Add a banner and a description delegates will see.',
-      done: !!conference.banner_url && !!conference.description?.trim(),
-      onClick: () => router.push(`/manage/${slug}/settings?tab=conference`),
+      sub: pageNeedsDates
+        ? ((!conference.banner_url || !conference.description?.trim())
+          ? 'Add your conference dates, a banner and a description.'
+          : "Add your conference dates. Without them it can't be published.")
+        : 'Add a banner and a description delegates will see.',
+      done: !!conference.banner_url && !!conference.description?.trim() && !conference.dates_tbd && !!conference.start_date,
+      onClick: () => router.push(pageNeedsDates
+        ? `/manage/${slug}/settings?tab=conference&focus=dates`
+        : `/manage/${slug}/settings?tab=conference`),
     },
     {
       key: 'committees',
@@ -1452,7 +1510,7 @@ export default function DashboardPage() {
         : seatShortfall > 0
           // Only ever shown below 70% coverage, so the gap quoted is the gap to
           // that bar, not to the full expected head count.
-          ? `Only ${seatCapacity} seats for ${expectedDelegates} expected delegates — ${seatShortfall} more covers most of them.`
+          ? `Only ${seatCapacity} seats for ${expectedDelegates} expected delegates. ${seatShortfall} more covers most of them.`
           : `${committeeCount} committee${committeeCount === 1 ? '' : 's'}, ${seatCapacity} seats.`,
       done: committeeCount > 0 && seatShortfall === 0,
       onClick: () => router.push(`/manage/${slug}/committees`),
