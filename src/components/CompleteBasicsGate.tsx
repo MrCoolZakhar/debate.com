@@ -16,6 +16,7 @@ import { GeoGuessNote, useNationalityPrefill } from '@/components/GeoCountryGues
 import { getCountryByName } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
 import { setBasicsGateStatus, useBasicsGateStatus } from '@/lib/basicsGateState';
+import { useAuthModalOpen } from '@/lib/authModal';
 
 // ── "Complete your account" gate: nationality and date of birth ──────────────
 //
@@ -65,6 +66,11 @@ export default function CompleteBasicsGate() {
   const excluded = isExcludedPath(pathname);
   const { user, session, loading: authLoading, signOut } = useAuth();
   const status = useBasicsGateStatus();
+  // The "Log in or sign up" modal asks the same two questions in its own
+  // "Finish signing up" step. While it is open this gate reads nothing and
+  // renders nothing; when it closes the effect re-runs and reads fresh, so a
+  // save made in the modal is never asked for a second time.
+  const authOpen = useAuthModalOpen();
   const [missing, setMissing] = useState<Missing | null>(null);
   // The user id already known to be complete this page load. Set on a
   // complete read, a successful save, or a failed read (fail open).
@@ -81,6 +87,14 @@ export default function CompleteBasicsGate() {
       inFlightRef.current = null;
       setMissing(null);
       setBasicsGateStatus('idle');
+      return;
+    }
+    if (authOpen) {
+      // Drop any read in flight (its result is checked against inFlightRef)
+      // and forget a stale answer, so closing the modal starts a fresh read.
+      inFlightRef.current = null;
+      setMissing(null);
+      if (okForRef.current !== uid) setBasicsGateStatus('idle');
       return;
     }
     if (okForRef.current === uid) return;
@@ -128,9 +142,9 @@ export default function CompleteBasicsGate() {
       setMissing({ nationality: needNat, dob: needDob });
       setBasicsGateStatus('needed');
     })();
-  }, [authLoading, user, session, excluded]);
+  }, [authLoading, user, session, excluded, authOpen]);
 
-  if (excluded) return null;
+  if (excluded || authOpen) return null;
   if (!user || !session) return null;
   if (status !== 'needed' || !missing) return null;
 

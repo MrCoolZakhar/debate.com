@@ -1,5 +1,6 @@
 'use client';
 
+import { openAuth } from '@/lib/authModal';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -987,7 +988,7 @@ export default function ConferencesRolesClient() {
       rolesAtConference={posting.conferences?.id ? (rolesByConference[posting.conferences.id] ?? 1) : 1}
       myApp={appsByPostingId[posting.id]}
       onApply={(p) => setSelectedPosting(p)}
-      onSignIn={() => router.push('/auth/signin?next=/conferences/roles')}
+      onSignIn={() => openAuth()}
       isSignedIn={!!user}
     />
   );

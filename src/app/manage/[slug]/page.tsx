@@ -26,6 +26,7 @@ import Portal from '@/components/Portal';
 import DecorativeBleed from '@/components/DecorativeBleed';
 import ParticipantsChart, { toCumulativeSeries } from '@/components/conferences/ParticipantsChart';
 import ApplicantsDial from '@/components/conferences/ApplicantsDial';
+import TrafficSourcesCard from '@/components/conferences/TrafficSourcesCard';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
 import { hasExploredEmails } from '@/lib/emailsExplored';
 import { getConferenceIntent, intentRank } from '@/lib/conferenceIntent';
@@ -1938,6 +1939,10 @@ export default function DashboardPage() {
         <NeuCard className="flex flex-col flex-shrink-0" style={{ padding: '12px 16px 12px' }}>
           <ParticipantsChart points={participantSeries} />
         </NeuCard>
+
+        {/* Where applicants come from: anonymous page visits by source and
+            conversion. Self-contained, see TrafficSourcesCard.tsx. */}
+        <TrafficSourcesCard conferenceId={conference.id} />
 
         </div>
       </div>

@@ -7,9 +7,9 @@
 // position_paper_messages, no separate permission check here, a paper that
 // fails to load just renders the "not available" state.
 
+import AuthLink from '@/components/auth/AuthLink';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { ArrowLeft, Check, Download, Send, X } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
@@ -126,12 +126,12 @@ function SendButton({ onClick, disabled }: { onClick: () => void; disabled: bool
 
 // ── Sign-in link, same physics but stays a next/link for client nav ───────
 
-function SignInLink({ href }: { href: string }) {
+function SignInLink({ next }: { next: string }) {
   const [hovered, setHovered] = useState(false);
   const [pressed, setPressed] = useState(false);
   return (
-    <Link
-      href={href}
+    <AuthLink
+      next={next}
       className="inline-flex items-center justify-center rounded-full mt-4 focus:outline-none"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => { setHovered(false); setPressed(false); }}
@@ -148,7 +148,7 @@ function SignInLink({ href }: { href: string }) {
       }}
     >
       SIGN IN
-    </Link>
+    </AuthLink>
   );
 }
 
@@ -364,7 +364,7 @@ export default function PositionPaperPage() {
             <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted, marginTop: 6 }}>
               You need to be signed in to view this position paper.
             </p>
-            <SignInLink href={`/auth/signin?next=${encodeURIComponent(`/conferences/${slug}/papers/${paperId}`)}`} />
+            <SignInLink next={`/conferences/${slug}/papers/${paperId}`} />
           </NeuCard>
         ) : !paper ? (
           <NeuCard style={{ padding: '32px', textAlign: 'center' }}>

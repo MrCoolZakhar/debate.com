@@ -1,5 +1,6 @@
 'use client';
 
+import { openAuth } from '@/lib/authModal';
 import React, { use, useEffect, useState, useRef, useCallback, useMemo, Suspense } from 'react';
 import SessionsHeaderLogo from '@/components/SessionsHeaderLogo';
 import { Mic, FileText, MessageCircle, MessageSquare, Clock, Mic2, Languages, LogOut, Check, FolderOpen, Hand } from 'lucide-react';
@@ -1398,7 +1399,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
   // Seat guard screens (see the claim effect above). Every one of them has a way back.
   const backToJoin = () => router.push('/join?code=' + encodeURIComponent(code.toUpperCase()));
-  const signInThenJoin = () => router.push('/auth/signin?next=' + encodeURIComponent('/join?code=' + code.toUpperCase()));
+  const signInThenJoin = () => openAuth({ next: '/join?code=' + code.toUpperCase() });
   // Also bumps loadAttempt, because losing the seat stopped the room subscription: without
   // this a delegate who took the seat back with "Use this device instead" would sit in a
   // room that never updates again.

@@ -1,5 +1,6 @@
 'use client';
 
+import { openAuth } from '@/lib/authModal';
 import { use, useEffect, useState } from 'react';
 import FitToScreen from '@/components/FitToScreen';
 import CowDelegationBoard from '@/components/CowDelegationBoard';
@@ -364,7 +365,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
         <div className="text-center max-w-sm">
           <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>Sign in to view this session</h1>
           <p className="mb-6" style={{ color: '#6A5A4A' }}>This is a conference session. Sign in to verify your access.</p>
-          <Link href={'/auth/signin?next=' + encodeURIComponent('/join?code=' + code)} className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>SIGN IN</Link>
+          <button type="button" onClick={() => openAuth()} className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>SIGN IN</button>
         </div>
       </div>
     );

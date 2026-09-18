@@ -1,5 +1,6 @@
 'use client';
 
+import { openAuth } from '@/lib/authModal';
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -50,6 +51,7 @@ import {
   type DelegationSwitchRole,
 } from './CreateDelegationPrompt';
 import { type CustomAnswers, normalizeBlocks, questionsOf, validateAnswers, answerIsEmpty, displayAnswer } from '@/lib/customQuestions';
+import { readFirstTouch } from '@/lib/trafficSource';
 import {
   Gavel, Users, Sprout,
   GraduationCap, Trophy, Crown, Sparkles,
@@ -1231,17 +1233,13 @@ function ConferenceApplyInner() {
   // The sign-in href for a guest who needs to authenticate before Submit —
   // built once here and reused by the "Sign in and submit" button on
   // Overview (Option A no longer redirects on load, see the effect below).
-  const buildSignInHref = useCallback((): string => {
+  const buildSignInReturn = useCallback((): string => {
     // Round-trip the WHOLE query string, not just ?role. Rebuilding it as
     // `?role=${role}` dropped ?delegationInvite=<token> (an invited delegate
     // who had to sign in lost their invite and landed in the generic flow)
     // and ?edit=1 (an edit link bounced back as a fresh application).
     const query = searchParams.toString();
-    const returnTo = `/conferences/${slug}/apply?${query || `role=${role}`}`;
-    // `apply=1` is context, not routing: without it the sign-in page gives no
-    // reason for asking, and an applicant who followed a role link reads the
-    // bare form as the link having been wrong.
-    return `/auth/signin?next=${encodeURIComponent(returnTo)}&apply=1`;
+    return `/conferences/${slug}/apply?${query || `role=${role}`}`;
   }, [searchParams, slug, role]);
 
   // ── Auth gate + fetch
@@ -1824,14 +1822,13 @@ function ConferenceApplyInner() {
   }
 
   /** "Sign in and submit" on Overview, for a signed-out visitor. Saves
-   *  synchronously before navigating so nothing can be lost to the race, then
-   *  pushes (never replaces) so Back returns to the filled-in form. */
-  const [goingToSignIn, setGoingToSignIn] = useState(false);
+   *  synchronously before the sign-in pop-up opens, so nothing can be lost. */
   function goSignIn() {
-    if (goingToSignIn) return;
-    setGoingToSignIn(true);
     saveGuestDraft(slug, role, guestDraftAnswers, step);
-    router.push(buildSignInHref());
+    // The auth pop-up opens over the form (src/lib/authModal.ts); `apply`
+    // gives it the "carry on with your application" line. Closing it leaves
+    // the form exactly as it was.
+    openAuth({ next: buildSignInReturn(), apply: true });
   }
 
   /** Drop the draft row once the application it drafted actually exists (or
@@ -2773,6 +2770,10 @@ function ConferenceApplyInner() {
       if (showMunExperienceStep) {
         insertPayload.experience_entries = experienceEntries;
       }
+      // Where this applicant first found the conference page (a category such as
+      // 'google', never a URL). Kept in this browser only until now.
+      const firstTouch = readFirstTouch(slug);
+      if (firstTouch) insertPayload.traffic_source = firstTouch;
 
       // A previous attempt already filed this application and then failed on a
       // later step (out of credits, the preference write below). Resume from

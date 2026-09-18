@@ -46,7 +46,7 @@ Design consequences: mobile-first on every delegate and applicant surface; the c
 | **Conference fees**: Stripe Connect; 5% platform fee (`PLATFORM_FEE_RATE`) + 3% + fixed processing pass-through; every amount recomputed server-side in the `create-checkout` edge function. Manual payments with proof review exist as a fallback. | `src/lib/finance.ts`, `manage/[slug]/financials/*` |
 | **Gavelling Points**: earned (welcome bonus, awards at paid conferences), stored in `profiles.points_balance` via the `points_ledger` trigger. Spending is not built. | `points_ledger`, `publish_conference_awards()` |
 
-Hard rules: organisers are never charged; Unlimited status is server-verified; public fee display goes through the `conference_public_fees` view because `conferences.fee_amount` is a stale denormalised column (`src/lib/publicFees.ts`).
+Hard rules: organisers are never charged; Unlimited status is server-verified; public price display goes through `displayDelegatePrice` / `fetchDelegatePrices` in `src/lib/publicFees.ts` (reading the read-only `conference_public_fees` view), because `conferences.fee_amount` is a stale denormalised column: "TBD" until delegate applications are launched (delegate role config `is_enabled` and `applications_open_at` unset or passed), then the delegate price of the current fee stage, "Free" at 0. The creation wizard asks no price.
 
 **Stripe's own limits are the thing that breaks a big bill, and they live only in
 the edge function.** `create-checkout` (v18, 8 Sep 2026; not in git, read it with
@@ -85,7 +85,14 @@ long invoice list hit them in production:
 - Every sitemap URL must be reachable by a plain server-rendered `<a href>` from another sitemap page: the homepage's crawl nav (conferences + hubs), `/conferences/explore`'s directory, `/blog`, and `FooterLegal` (Explore Conferences, MUN Guides on every public footer). A client-rendered list is not a link.
 - `www.gavelling.com` must 308 to `https://gavelling.com` at the Vercel domain level with a valid certificate.
 
-There is **no analytics or tracking** by policy (`/privacy`). The admin console (`/admin`, DB-gated by `is_platform_admin()`) is the only observability surface.
+There is **no third-party analytics or tracking** by policy (`/privacy`). The admin console (`/admin`, DB-gated by `is_platform_admin()`) is the only platform observability surface.
+
+**The one exception: anonymous conference page visits (18 Sep 2026).** Organisers see where applicants come from on `/manage/[slug]` (`src/components/conferences/TrafficSourcesCard.tsx`: visits 7 / 30 days / all time, applications started and submitted, conversion, a per-source table and a daily sparkline). How it stays inside the policy, and must stay:
+- `ConferenceViewBeacon` (mounted by `/conferences/[slug]/page.tsx`; the vanity `/<acronym>` 307s there with the referrer intact) posts ONCE per browser session per conference (`sessionStorage gavelling-view:<slug>`) to `/api/conference-view` with `{slug, source, host?}` only. The source is classified in the browser by `classifyTraffic` (`src/lib/trafficSource.ts`): `google`, `gavelling` (same origin, or an in-app navigation, detected because the navigation entry's path differs from the current one, since `document.referrer` then still names the site's entry page), `social`, `other_search`, `email`, `direct`, `other` (+ referring HOSTNAME only). utm_source / utm_medium win over the referrer. Skipped on localhost, 127.0.0.1 and `*.vercel.app`, which share the production database.
+- The route drops bot user agents and rate-limits 30 per minute per IP IN MEMORY; it stores no IP, no user agent, no cookie. It forwards the viewer's bearer token only so `record_conference_page_view(p_slug, p_source, p_host)` (SECURITY DEFINER, anon + authenticated) can skip the conference's own organisers; a direct RPC call bypasses the route's rate limit, so the RPC caps counting at 20,000 views per conference per day.
+- Storage: `conference_page_views (conference_id, day, source, views)` and `conference_page_view_hosts (conference_id, host, views, last_day)`, RLS read for `is_conference_organizer` only, no anon grant. `conference_traffic_summary(p_conference)` is the dashboard's one read (organisers only; applications counted are self-submitted ones, `invited_email is null`; "started" = submitted + open `application_drafts`).
+- Attribution: the beacon also keeps the first-touch category in `localStorage gavelling-first-touch:<slug>` (90 days) and `ConferenceApplyClient` writes it to `applications.traffic_source` on insert (category only, CHECK-constrained). An applicant cannot change it afterwards (`applications_keep_traffic_source_trg`).
+- Counting began 18 Sep 2026; nothing can be backfilled, so every conference's card opens on "Views are counted from today". Never add a cookie, a per-visitor id, an IP, a user agent, a full referrer URL or a third party to this pipeline.
 
 ---
 
@@ -173,6 +180,18 @@ paths, `/account/profile` and every live-session route (a chair must never get a
 a running committee). It publishes its state through `src/lib/basicsGateState.ts` so
 `CreditsWelcomeGate` and `SetupReminderGate` never open on top of it.
 
+**Log in / sign up is a pop-up (18 Sep 2026).** `src/components/auth/AuthModal.tsx`, mounted once in the
+root layout, opened by `openAuth({ next?, step?, email?, apply? })` from `src/lib/authModal.ts` (or
+`<AuthLink>` for links). Airbnb's flow: one email field, Continue asks the SECURITY DEFINER RPC
+`auth_email_status(email)` (`new` | `password` | `google` | `invalid`, nothing else; it does disclose
+whether an address has an account, a deliberate trade-off) and the same dialog moves to the password step,
+a "signs in with Google" step, or "Finish signing up" (name, date of birth, nationality, password). Google
+and email links return through `/auth/callback?via=modal`, which lands back on the page the visitor was on
+(never `/auth/onboarding`) with `?auth=finish` when nationality or date of birth is missing; the modal's
+finish step is then non-dismissable (Sign out is the only exit). `/auth/signin`, `/auth/signup` and
+`/auth/forgot` only redirect to `/?auth=...&next=...`; redirect guards still go through them. While the
+modal is open `CompleteBasicsGate` stands down and `useBasicsGateBlocking()` is true, so no two modals stack.
+
 ## 5c. Custom (parliamentary) committees
 
 `committee_type = 'custom'` is the fourth type: seats are members of groups (political groups, parties, benches) rather than countries. Groups live in `conference_committees.groups` (jsonb), a seat's group in `committee_country_slots.group_id`, and a seat or a group can carry a crest (`logo_url`). `src/lib/slotGroups.ts` is the contract: `effectiveSlotArt` decides what a seat draws (own crest, group crest, national flag, fallback), `loadSlotArtIndex` serves surfaces that render many seats, and `PARLIAMENT_PRESETS` seeds the usual chambers. Every flag renderer that matters goes through `FlagImg` or the assignment board's `CountryFlag`, both of which accept `logoUrl`. Debate, allocation and sessions are unchanged; only the seat's identity and picture differ.
@@ -194,7 +213,7 @@ answer shapes what we lead them with afterwards.
   `{keys, other, answered_at, skipped}`. Three states must stay distinguishable: `'{}'` is
   never asked (every conference created before this shipped), `skipped: true` is asked and
   declined, a non-empty `keys` is answered. The follow-up email depends on that distinction.
-- **Asked before the insert, and required.** It is step 12 of 13 and the answer rides along
+- **Asked before the insert, and required.** It is step 11 of 12 and the answer rides along
   in `insertRow` as `intent: intentPayload(keys)`, so there is no post-create UPDATE to fail
   and nothing exists yet that a failed write could cost anyone. It was briefly the other way
   round, asked after creation to protect against exactly that; requiring it up front removes

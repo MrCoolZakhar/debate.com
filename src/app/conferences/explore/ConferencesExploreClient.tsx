@@ -17,7 +17,7 @@ import { supabase } from '@/lib/supabase';
 import { getCountryByName, UN_COUNTRIES, fold, countryIdentity, countryMatchRank } from '@/lib/countries';
 import { FlagImg } from '@/components/FlagImg';
 import { currencySymbol, formatFeeAmountCompact } from '@/lib/utils';
-import { fetchDelegateFees, applyDelegateFee } from '@/lib/publicFees';
+import { fetchDelegatePrices, withDelegatePrice, TBD_PRICE, type DelegatePrice } from '@/lib/publicFees';
 import { compareStartDate, hasConcluded, splitConferenceDates } from '@/lib/conferenceDates';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { ConferenceCard } from '../ConferenceCard';
@@ -135,6 +135,8 @@ interface Conference {
   expected_delegates: number;
   fee_amount: number;
   fee_currency: string;
+  /** Public delegate price (publicFees.displayDelegatePrice); absent = TBD. */
+  delegate_price?: DelegatePrice;
   format: string;
   student_level: string;
   logo_url: string | null;
@@ -301,6 +303,7 @@ function ConferenceListRow({
   const { range, year } = splitDateRange(conf.start_date, conf.end_date);
   const formatLabel = FORMAT_LABELS[conf.format] ?? conf.format;
   const levelLabel = LEVEL_LABELS[conf.student_level];
+  const price = conf.delegate_price ?? TBD_PRICE;
 
   // CTA navigates itself and stops the click reaching the row link.
   function onCta(e: React.MouseEvent) {
@@ -418,9 +421,21 @@ function ConferenceListRow({
         )}
       </div>
 
-      {/* Fee, a gold 3D ticket for paid conferences, forest FREE pill otherwise */}
+      {/* Fee, a gold 3D ticket for paid conferences, forest FREE pill for
+          free ones, a quiet TBD pill until delegate applications launch */}
       <div className="hidden md:flex items-center gap-2 flex-shrink-0" style={{ width: '118px' }}>
-        {conf.fee_amount === 0 ? (
+        {price.kind === 'tbd' ? (
+          <span
+            title="Price to be announced"
+            style={{
+              fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em',
+              color: '#5C4F44', backgroundColor: 'rgba(28,20,16,0.05)',
+              border: '1px solid rgba(28,20,16,0.18)', padding: '4px 12px', borderRadius: 9999,
+            }}
+          >
+            TBD
+          </span>
+        ) : price.kind === 'free' ? (
           <span
             style={{
               fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em',
@@ -435,10 +450,10 @@ function ConferenceListRow({
             <Emoji3D name="Ticket" size={20} fallback={Ticket} fallbackColor="#B6871F" />
             <span className="inline-flex items-baseline gap-0.5">
               <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '13px', color: '#B6871F' }}>
-                {currencySymbol(conf.fee_currency)}
+                {currencySymbol(price.currency)}
               </span>
               <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: '15px', color: '#1C1410' }}>
-                {formatFeeAmountCompact(conf.fee_amount)}
+                {formatFeeAmountCompact(price.amount)}
               </span>
             </span>
           </>
@@ -839,11 +854,11 @@ export default function ConferencesExploreClient() {
         .order('start_date', { ascending: true });
       const confs = (data as Conference[]) ?? [];
 
-      // Single source of truth for the fee shown on cards: the delegate role
-      // config's fee, phase-aware, falling back to the conference-level fee
-      // only when no delegate role config exists (see src/lib/publicFees.ts).
-      const fees = await fetchDelegateFees(supabase, confs.map(c => c.id));
-      setConferences(confs.map(c => applyDelegateFee(c, fees)));
+      // Single source of truth for the price shown on cards:
+      // displayDelegatePrice (src/lib/publicFees.ts). TBD until delegate
+      // applications are launched, then the current stage's delegate price.
+      const prices = await fetchDelegatePrices(supabase, confs);
+      setConferences(confs.map(c => withDelegatePrice(c, prices)));
       setLoading(false);
     }
     fetchConferences();

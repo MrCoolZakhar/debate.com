@@ -1,4 +1,5 @@
 'use client';
+import { openAuth } from '@/lib/authModal';
 import { use, useEffect, useState, useRef, useCallback, useMemo, Suspense } from 'react';
 import Portal from '@/components/Portal';
 import { anchorBox } from '@/components/voting/anchorPosition';
@@ -3639,7 +3640,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>{t('session_signin_title')}</h1>
           <p className="mb-6" style={{ color: '#6A5A4A' }}>{t('session_signin_chair_body')}</p>
           <button
-            onClick={() => router.push('/auth/signin?next=' + encodeURIComponent('/join?code=' + code))}
+            onClick={() => openAuth()}
             className="font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none gv-lift"
             style={{ backgroundColor: '#1B3828' }}
           >

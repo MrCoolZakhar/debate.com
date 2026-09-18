@@ -10,10 +10,10 @@
 //   Left   1. Committee: the emblem in a WHITE DISC with the live acronym / name,
 //          topic and chairs beside it (LiveCommitteeIdentity), then the name,
 //          topic and chairs fields (name | topic side by side, chairs beneath).
-//          2. Delegations: the heading beside the add bar, the quick bundles in one
-//          sideways row, then Paste a list filling the rest of the column (18 Sep 2026,
-//          owner: the box "must be genuinely big": 265px at 1280x800, 353 at 1440x900,
-//          525 at 1920x1080), with Auto-match inside the field's lower corner.
+//          2. Delegations: the heading beside the add bar, the quick bundles wrapping to
+//          two rows (owner: "you can have 2 rows, it's ok"), then Paste a list filling the
+//          rest of the column (18 Sep 2026, owner: the box "must be genuinely big": 245px
+//          at 1280x800, 505 at 1920x1080), with Auto-match inside the field's lower corner.
 //   Right  the delegations only: a large count (DelegationCount, plain type, no
 //          pill), ONE column of countries that scrolls inside, and Start session
 //          (StartSessionButton, centred on a forest gradient) pinned at the foot.
@@ -54,10 +54,10 @@ export function CreateStyles() {
         .create-start.is-ready:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 rgba(238,217,138,0.28), inset 0 0 0 1px rgba(238,217,138,0.22), 0 4px 8px rgba(27,56,40,0.18), 0 18px 36px rgba(27,56,40,0.30) !important; }
       }
       .create-start.is-ready:active { transform: scale(0.96); }
-      /* One screen needs about 660px of height (18 Sep 2026: the paste field runs to the foot
+      /* One screen needs about 680px of height (18 Sep 2026: the paste field runs to the foot
          of the panel and needs at least 120px). On a shorter lg window the page scrolls instead
          of cutting the paste field off below the fold. */
-      @media (min-width: 1024px) and (max-height: 659px) { .create-root { height: auto !important; min-height: 100dvh !important; overflow: visible !important; } }
+      @media (min-width: 1024px) and (max-height: 679px) { .create-root { height: auto !important; min-height: 100dvh !important; overflow: visible !important; } }
       @media (prefers-reduced-motion: reduce) { .create-emblem-in, .create-count-in { animation: none; } .create-start { transition: none; } }
     `}</style>
   );
@@ -93,7 +93,7 @@ export function StepHeading({ step, title, labelledBy, aside, className = '' }: 
   className?: string;
 }) {
   return (
-    <header className={`mb-3 ${className} flex min-h-[32px] flex-shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5`}>
+    <header className={`mb-2 ${className} flex min-h-[32px] flex-shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5`}>
       <span
         aria-hidden
         className="flex flex-shrink-0 items-center justify-center tabular-nums"
@@ -378,12 +378,16 @@ export function ChairTokenField({ id, chairs, draft, onDraft, onCommit, onRemove
   );
 }
 
-/** Square icon button used on roster rows: 36px, tinted on hover, scale on press. */
-export function RowIconButton({ onClick, label, pressed, tone = 'neutral', children }: {
+/** Square icon button used on roster rows: 36px, tinted on hover, scale on press.
+ *  `caption` (18 Sep 2026, owner: "when clicking observer, add little observer text below the
+ *  megaphone") draws a tiny uppercase word under the icon INSIDE the same 36px box (it may
+ *  overhang the box sideways into the row gap), so nothing else in the row moves. */
+export function RowIconButton({ onClick, label, pressed, tone = 'neutral', caption, children }: {
   onClick: () => void;
   label: string;
   pressed?: boolean;
   tone?: 'neutral' | 'danger' | 'gold';
+  caption?: string;
   children: ReactNode;
 }) {
   const hover =
@@ -397,10 +401,18 @@ export function RowIconButton({ onClick, label, pressed, tone = 'neutral', child
       title={label}
       aria-label={label}
       aria-pressed={pressed}
-      className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[10px] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828] active:scale-[0.96] transition-[color,background-color,transform] duration-150 ${hover}`}
+      className={`relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[10px] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828] active:scale-[0.96] transition-[color,background-color,transform] duration-150 ${hover}`}
       style={{ color: tone === 'gold' ? '#6E500F' : C.inkSoft, backgroundColor: tone === 'gold' ? 'rgba(238,217,138,0.62)' : undefined }}
     >
-      {children}
+      {caption ? (
+        <>
+          <span className="flex -translate-y-[5px]">{children}</span>
+          <span aria-hidden className="pointer-events-none absolute bottom-[3px] left-1/2 -translate-x-1/2 whitespace-nowrap uppercase"
+            style={{ fontFamily: OUTFIT, fontSize: 7.5, fontWeight: 800, letterSpacing: '0.08em', lineHeight: 1, color: tone === 'gold' ? '#6E500F' : C.inkSoft }}>
+            {caption}
+          </span>
+        </>
+      ) : children}
     </button>
   );
 }

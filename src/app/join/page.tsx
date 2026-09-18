@@ -13,7 +13,7 @@
 //     so moving from the code step to the role step to the seat step never moves
 //     the code field or the button;
 //   • a flag-led seat list (JoinSeatPicker) instead of a native <select>;
-//   • a visible Sign in, through the existing /auth/signin?next= flow, with the
+//   • a visible Sign in, through the auth pop-up (openAuth), with the
 //     code and the role carried back;
 //   • a chair code typed or linked as CODE-1234 (the homepage routes those here
 //     with &mode=chair) looks up CODE and fills the chair code in. It used to look
@@ -21,6 +21,7 @@
 // Visual kit: ./joinUi.tsx. Seat list: ./JoinSeatPicker.tsx.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { openAuth } from '@/lib/authModal';
 import { useState, useEffect, useRef, Suspense, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -394,10 +395,9 @@ function JoinPageInner() {
     }
   }, [openPath, mode, openSeatCount, chairsOpen]);
 
-  const signInHref = '/auth/signin?next=' + encodeURIComponent(
-    lookupCode ? '/join?code=' + lookupCode + '&mode=' + mode : '/join',
-  );
-  const goSignIn = () => router.push(signInHref);
+  // Sign in is a pop-up (src/lib/authModal.ts): the join page stays put, and
+  // the signed-in session lands here through AuthProvider.
+  const goSignIn = () => openAuth({ next: lookupCode ? '/join?code=' + lookupCode + '&mode=' + mode : '/join' });
 
   const handleJoin = async () => {
     // ── Conference-linked session fork ──

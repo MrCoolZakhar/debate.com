@@ -1,5 +1,6 @@
 'use client';
 
+import { openAuth } from '@/lib/authModal';
 import { use, useEffect, useRef, useState } from 'react';
 import FitToScreen from '@/components/FitToScreen';
 import Portal from '@/components/Portal';
@@ -891,7 +892,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         <div className="text-center max-w-sm">
           <h1 className="text-2xl font-bold mb-2" style={{ color: '#1B3828' }}>{t('voting_signin_title')}</h1>
           <p className="mb-6" style={{ color: '#6A5A4A' }}>{t('voting_signin_body')}</p>
-          <Link href={'/auth/signin?next=' + encodeURIComponent('/join?code=' + code)} className="inline-block font-semibold text-white px-6 py-3 rounded-full transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>{t('session_signin_btn')}</Link>
+          <button type="button" onClick={() => openAuth()} className="inline-block font-semibold text-white px-6 py-3 rounded-full transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>{t('session_signin_btn')}</button>
         </div>
       </div>
     );

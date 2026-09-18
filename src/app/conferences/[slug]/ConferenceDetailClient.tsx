@@ -1,5 +1,6 @@
 'use client';
 
+import { openAuth } from '@/lib/authModal';
 import { Fragment, useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -24,7 +25,7 @@ import { uploadConferenceAsset } from '@/lib/conferenceAssets';
 // Checkout/invoice surfaces deliberately keep the exact formatFee.
 import { formatFeeCompact } from '@/lib/utils';
 import { activeFeePhase, activePhaseFee, type FeePhase } from '@/lib/finance';
-import { fetchDelegateFees, type ResolvedFee } from '@/lib/publicFees';
+import { fetchDelegatePrices, displayDelegatePrice, type DelegatePrice } from '@/lib/publicFees';
 import { hasNothingToPay } from '@/lib/freeRegistration';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { normalizeBlocks } from '@/lib/customQuestions';
@@ -519,7 +520,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   const [roleConfigs, setRoleConfigs] = useState<RoleConfig[]>([]);
   /* Pricing read through the RLS-bypassing fees view, so an unpublished
      conference still shows its real price to a visitor holding the link. */
-  const [viewFee, setViewFee] = useState<ResolvedFee | null>(null);
+  const [viewPrice, setViewPrice] = useState<DelegatePrice | null>(null);
   const [myApplications, setMyApplications] = useState<MyApplication[]>([]);
   const [loading, setLoading] = useState(!initialConference);
   const [notFound, setNotFound] = useState(false);
@@ -957,9 +958,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     /* Only needed when the role-config read was refused — i.e. an unpublished
        conference seen by someone who is not an organiser. Skipping it when the
        configs came through keeps the published path at its current query count. */
-    if (!roleConfigsRes.data || roleConfigsRes.data.length === 0) {
-      const fees = await fetchDelegateFees(supabase, [conf.id]);
-      setViewFee(fees.get(conf.id) ?? null);
+    if (!(roleConfigsRes.data as RoleConfig[] | null)?.some(r => r.role === 'delegate')) {
+      const prices = await fetchDelegatePrices(supabase, [conf]);
+      setViewPrice(prices.get(conf.id) ?? null);
     }
 
     // Paint NOW. The hero, stat strip, committees and apply CTA only need the
@@ -1371,34 +1372,18 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   const flagUrl = countryObj ? getFlagUrl(countryObj.code) : null;
   const enabledRoles = roleConfigs.filter(r => r.is_enabled);
   const now = new Date();
-  // Single source of truth for public fee displays (hero circle, cards): the
-  // delegate role config's fee, falling back to the conference-level fee
-  // only when no delegate role config exists yet.
+  // The hero's headline price is displayDelegatePrice (src/lib/publicFees.ts):
+  // TBD until delegate applications are launched, then the delegate price of
+  // the current fee stage, "Free" at 0. Two sources for the delegate config:
+  // the role configs read above, or, when that read is RLS-refused (an
+  // unpublished conference seen by a visitor holding the link), the
+  // RLS-bypassing fees view (`viewPrice`). Null while neither has arrived
+  // (the server seed paints before the role configs), so the medallion does
+  // not flash TBD on a conference that has a price.
   const delegateRoleConfig = roleConfigs.find(r => r.role === 'delegate') ?? null;
-  // Phase-aware: a conference whose delegate fee is split into fee_phases has a
-  // flat fee_amount of 0, which would otherwise advertise it as FREE. Resolve
-  // through activePhaseFee so the hero shows today's actual price.
-  //
-  // Three sources, in order. `viewFee` exists because the role-config query
-  // above is RLS-gated on `is_public`, so on an UNPUBLISHED conference it comes
-  // back empty for anonymous visitors — while this page itself still renders,
-  // since `conferences` is readable by anyone with the link. Without the view
-  // the hero silently fell back to the stale conference column and advertised
-  // the wrong price on every private conference. The role config is still
-  // preferred when readable: it is the same data and saves a render pass.
-  const resolvedRoleFee = delegateRoleConfig
-    ? activePhaseFee({ fee_amount: delegateRoleConfig.fee_amount, fee_phases: delegateRoleConfig.fee_phases }, now)
-    : null;
-  const heroFeeAmount = resolvedRoleFee
-    ? resolvedRoleFee.amount
-    : viewFee
-      ? viewFee.amount
-      : conference.fee_amount;
-  const heroFeeCurrency = delegateRoleConfig
-    ? (delegateRoleConfig.fee_currency ?? conference.fee_currency)
-    : viewFee
-      ? viewFee.currency
-      : conference.fee_currency;
+  const heroPrice: DelegatePrice | null = delegateRoleConfig
+    ? displayDelegatePrice(delegateRoleConfig, conference.fee_currency, now)
+    : viewPrice;
 
   function getRoleWindowStatus(r: RoleConfig): 'open' | 'closed' | 'opens-soon' | 'open-always' {
     if (!r.applications_open_at && !r.applications_close_at) return 'open-always';
@@ -2483,7 +2468,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           Sign in with a free account to start your application.
                         </p>
                         <button
-                          onClick={() => router.push(`/auth/signin?next=/conferences/${slug}`)}
+                          onClick={() => openAuth()}
                           className="w-full rounded-xl py-3 font-bold text-sm focus:outline-none"
                           style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', transition: `background-color 200ms ${EASE}, transform 160ms ${EASE}` }}
                           onMouseEnter={(e) => { const el = (e.currentTarget as HTMLElement); el.style.backgroundColor = 'white'; el.style.color = 'var(--gv-main)'; }}
@@ -2601,21 +2586,17 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         boxShadow: '0 10px 30px color-mix(in srgb, var(--gv-main) 10%, transparent), 0 0 0 8px rgba(238,217,138,0.12)',
                       }}
                     >
-                      {(() => {
-                        // Headline = today's delegate price: the delegate role's
-                        // active fee phase when one covers today, else the
-                        // unified role-config flat fee (falls back to the
-                        // conference fee when no role config exists).
-                        const delegatePhase = activeFeePhase(roleConfigs.find(r => r.role === 'delegate')?.fee_phases);
-                        const headlineFee = delegatePhase ? Number(delegatePhase.amount) : heroFeeAmount;
-                        return headlineFee === 0 ? (
-                          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '30px', color: 'var(--gv-main)', lineHeight: 1 }}>FREE</span>
-                        ) : (
-                          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontVariantNumeric: 'tabular-nums', fontSize: '38px', color: 'var(--gv-on-surface)', lineHeight: 1 }}>
-                            {formatFeeCompact(headlineFee, heroFeeCurrency)}
-                          </span>
-                        );
-                      })()}
+                      {heroPrice === null ? (
+                        <span aria-hidden style={{ display: 'block', height: '30px' }} />
+                      ) : heroPrice.kind === 'tbd' ? (
+                        <span title="Price to be announced" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '30px', color: 'var(--gv-muted)', lineHeight: 1 }}>TBD</span>
+                      ) : heroPrice.kind === 'free' ? (
+                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '30px', color: 'var(--gv-main)', lineHeight: 1 }}>FREE</span>
+                      ) : (
+                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontVariantNumeric: 'tabular-nums', fontSize: '38px', color: 'var(--gv-on-surface)', lineHeight: 1 }}>
+                          {formatFeeCompact(heroPrice.amount, heroPrice.currency)}
+                        </span>
+                      )}
                       <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: 'var(--gv-muted)', marginTop: '7px' }}>
                         PER DELEGATE
                       </span>

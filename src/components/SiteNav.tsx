@@ -7,6 +7,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { Globe, FileClock } from 'lucide-react';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
+import AuthLink from '@/components/auth/AuthLink';
 import { useCredits } from '@/hooks/useCredits';
 import { CreditCoin } from '@/components/CreditCoin';
 import { useDraftCount, draftResumeHref } from '@/hooks/useDraftCount';
@@ -325,8 +326,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
             <ProfileAvatarMenu size={60} />
           ) : (
             /* Signed-out: SIGN IN only */
-            <Link
-              href="/auth/signin"
+            <AuthLink
               className="text-sm font-bold transition-colors focus:outline-none"
               style={{
                 color: overlay ? '#EDE7D8' : '#1B3828',
@@ -339,7 +339,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
             >
               SIGN IN
-            </Link>
+            </AuthLink>
           )}
         </div>
 
@@ -566,8 +566,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
               </button>
             </>
           ) : (
-            <Link
-              href="/auth/signin"
+            <AuthLink
               onClick={() => setMenuOpen(false)}
               style={{
                 display: 'block',
@@ -585,7 +584,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
               }}
             >
               SIGN IN
-            </Link>
+            </AuthLink>
           )}
         </div>
       </div>

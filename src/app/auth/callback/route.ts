@@ -14,12 +14,25 @@ function safeNext(raw: string | null): string {
   return '/';
 }
 
+/** `next` with `auth=finish` added, keeping its own query and hash. */
+function withAuthFinish(next: string): string {
+  const hashAt = next.indexOf('#');
+  const path = hashAt === -1 ? next : next.slice(0, hashAt);
+  const hash = hashAt === -1 ? '' : next.slice(hashAt);
+  return `${path}${path.includes('?') ? '&' : '?'}auth=finish${hash}`;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
   const tokenHash = searchParams.get('token_hash');
   const otpType = searchParams.get('type') as EmailOtpType | null;
   const next = safeNext(searchParams.get('next'));
+  // Started from the "Log in or sign up" modal (src/components/auth/AuthModal.tsx).
+  // Those users go back to the page they were on, never to /auth/onboarding: a
+  // missing nationality or date of birth re-opens the modal there, on its
+  // "Finish signing up" step (`?auth=finish`), which cannot be dismissed.
+  const viaModal = searchParams.get('via') === 'modal';
 
   const cookieStore = await cookies();
   const supabase = createServerClient(
@@ -118,6 +131,13 @@ export async function GET(request: NextRequest) {
     // then land on the questionnaire they can skip as usual.
     const needsOnboarding = !profile || profile.education_level == null;
     const needsBasics = !!profile && (!profile.nationality || !profile.date_of_birth);
+    if (viaModal) {
+      // No row yet (the signup trigger has not committed) is treated as
+      // missing basics too: the modal's finish step re-reads and closes itself
+      // if it turns out complete.
+      if (!profile || needsBasics) return `${origin}${withAuthFinish(next)}`;
+      return `${origin}${next}`;
+    }
     if (needsOnboarding || needsBasics) {
       if (next === '/auth/onboarding') return `${origin}/auth/onboarding`;
       return `${origin}/auth/onboarding?next=${encodeURIComponent(next)}`;

@@ -14,6 +14,7 @@
 // to 'ok', so this can never hold the other gates shut indefinitely.
 
 import { useSyncExternalStore } from 'react';
+import { useAuthModalOpen } from '@/lib/authModal';
 
 export type BasicsGateStatus = 'idle' | 'checking' | 'needed' | 'ok';
 
@@ -43,8 +44,11 @@ export function useBasicsGateStatus(): BasicsGateStatus {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
-/** True while the basics gate is deciding or open. Other gates must stay closed. */
+/** True while the basics gate is deciding or open, or while the "Log in or
+ *  sign up" modal is open (it has its own "Finish signing up" step). Other
+ *  gates must stay closed. */
 export function useBasicsGateBlocking(): boolean {
   const s = useBasicsGateStatus();
-  return s === 'checking' || s === 'needed';
+  const authOpen = useAuthModalOpen();
+  return authOpen || s === 'checking' || s === 'needed';
 }

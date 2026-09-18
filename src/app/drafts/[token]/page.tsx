@@ -30,6 +30,7 @@
 // valid" card. Secondary copy uses NEU.inkSoft; NEU.muted is 2.71:1 and is
 // decoration only.
 
+import AuthLink from '@/components/auth/AuthLink';
 import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -320,20 +321,20 @@ function DraftLandingInner() {
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          <Link
-            href={`/auth/signup?next=${encodeURIComponent(nextPath)}`}
+          <AuthLink
+            mode="signup" next={nextPath}
             className="inline-flex items-center justify-center rounded-full py-3 px-5 text-sm focus:outline-none"
             style={primaryPillStyle}
           >
             CREATE MY ACCOUNT
-          </Link>
-          <Link
-            href={`/auth/signin?next=${encodeURIComponent(nextPath)}`}
+          </AuthLink>
+          <AuthLink
+            next={nextPath}
             className="inline-flex items-center justify-center rounded-full py-3 px-5 text-sm focus:outline-none"
             style={secondaryPillStyle}
           >
             I ALREADY HAVE AN ACCOUNT
-          </Link>
+          </AuthLink>
           <p className="text-xs" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, lineHeight: 1.55 }}>
             Sign in with the address this draft was saved to if you want to finish it or delete it. Turning reminders off never needs an account.
           </p>
