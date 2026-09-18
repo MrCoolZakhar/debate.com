@@ -5,20 +5,17 @@ import FitToScreen from '@/components/FitToScreen';
 import CowDelegationBoard from '@/components/CowDelegationBoard';
 import Link from 'next/link';
 import {
-  getCommitteeByCode,
-  subscribeToCommittee,
+  getCommitteeByCodeWithRetry,
   sendMessage as sendMessageDB,
-  getCurrentSpeakerRow,
-  getDelegatesList,
-  getSpeakersLists,
-  getDocumentsList,
-  getPendingMotionsList,
   caucusRemainingNow,
+  moderatedCaucusRemainingNow,
 } from '@/lib/committeeService';
 import { mergeMessagesById } from '@/lib/chatConversations';
-import { catchUpMessages, useChatCatchUp, useReSubscribeCatchUp } from '@/lib/useChatCatchUp';
+import { startSessionSync, rowFields, withCurrentSpeaker, withLists, type ConnectionState } from '@/lib/sessionSync';
+import ConnectionPill from '@/components/ConnectionPill';
 import { useAuth } from '@/components/AuthProvider';
-import { isConferenceSession, verifyConferenceAccess } from '@/lib/conferenceAccess';
+import type { ConferenceAccess } from '@/lib/conferenceAccess';
+import { useSessionAccess } from '@/lib/useSessionAccess';
 import { getCommitteeFlags, motionNames } from '@/lib/committeeFlags';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { Committee } from '@/lib/types';
@@ -252,15 +249,21 @@ function NormalDelegateCard({ delegate, committee, onSelect }: { delegate: Commi
   );
 }
 
+const isAdvisorAccessKind = (kind: ConferenceAccess['kind']) => kind === 'advisor' || kind === 'organizer';
+
 export default function AdvisorPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
   const { language } = useLanguage();
   const t = useT();
-  const { user, session, loading: authLoading } = useAuth();
-  const [accessState, setAccessState] = useState<'checking' | 'allowed' | 'denied' | 'signin'>('checking');
+  const { loading: authLoading } = useAuth();
+  const advisorAccess = useSessionAccess({ code, gate: 'origin', allow: isAdvisorAccessKind });
+  const accessState = advisorAccess.state === 'standalone' ? 'allowed' : advisorAccess.state;
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // The initial room read failed (after its retries): an inline Retry, never "not found".
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   // Live seconds on the TOTAL caucus clock. This view used to render
   // `caucus.remainingTime` raw, with no interval at all — but that field is only the value
@@ -271,123 +274,89 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
   const [caucusSeconds, setCaucusSeconds] = useState(0);
   const advisorCaucusAnchor = committee?.caucus?.totalStartedAt ?? null;
   const advisorCaucusBase = committee?.caucus?.remainingTime ?? null;
+  // Moderated caucus: the total stops with the speaker clock (moderatedCaucusRemainingNow).
+  const advisorIsModerated = committee?.phase === 'moderated-caucus';
+  const advisorSpeakerBase = committee?.speakerTimeRemaining ?? 0;
+  const advisorSpeakerStartedAt = committee?.speakerStartedAt ?? null;
   useEffect(() => {
-    const read = () => caucusRemainingNow(
-      advisorCaucusBase === null
+    const read = () => {
+      const pair = advisorCaucusBase === null
         ? null
-        : ({ remainingTime: advisorCaucusBase, totalStartedAt: advisorCaucusAnchor } as Committee['caucus']),
-    );
+        : ({ remainingTime: advisorCaucusBase, totalStartedAt: advisorCaucusAnchor } as Committee['caucus']);
+      return advisorIsModerated
+        ? moderatedCaucusRemainingNow(pair, advisorSpeakerBase, advisorSpeakerStartedAt)
+        : caucusRemainingNow(pair);
+    };
     setCaucusSeconds(read());
     if (!advisorCaucusAnchor) return;   // null anchor IS the paused signal
     const id = setInterval(() => setCaucusSeconds(read()), 1000);
     return () => clearInterval(id);
-  }, [advisorCaucusAnchor, advisorCaucusBase]);
+  }, [advisorCaucusAnchor, advisorCaucusBase, advisorIsModerated, advisorSpeakerBase, advisorSpeakerStartedAt]);
 
-  // Realtime does not replay events missed while the socket was down. Catch chat up on
-  // reconnect, tab-visible and back-online.
-  const onRealtimeStatus = useReSubscribeCatchUp(setCommittee);
-  useChatCatchUp(committee?.id, setCommittee);
+  // Live / Reconnecting / Offline, fed by the session sync below (R-4).
+  const [connection, setConnection] = useState<ConnectionState>('reconnecting');
 
   // Conference-session access guard (#8 / #4). Standalone sessions stay anonymous; a
   // conference session requires an advisor/observer or organizer (conference-wide).
-  // Gated on session_origin, NOT on detectConferenceSession(): that one now answers "is
-  // the dais gated", and an open dais must not open this view (it can nudge delegates)
-  // to anyone holding the session code. isConferenceSession fails closed.
-  useEffect(() => {
-    let cancelled = false;
-    async function guard() {
-      if (authLoading) return;
-      const isConf = await isConferenceSession(code);
-      if (cancelled) return;
-      if (!isConf) { setAccessState('allowed'); return; }
-      if (!session || !user) { setAccessState('signin'); return; }
-      const access = await verifyConferenceAccess(code, session.access_token, user.id);
-      if (cancelled) return;
-      setAccessState(access.kind === 'advisor' || access.kind === 'organizer' ? 'allowed' : 'denied');
-    }
-    setAccessState('checking');
-    guard();
-    return () => { cancelled = true; };
-  }, [code, authLoading, session?.access_token, user?.id]);
+  // Gated on session_origin ('origin'), NOT on the dais: an open dais must not open this
+  // view (it can nudge delegates) to anyone holding the session code. useSessionAccess
+  // is keyed on the user id (a token refresh used to flash the loader over the room) and
+  // turns a failed check into an inline retry instead of a verdict.
 
   useEffect(() => {
     const upperCode = code.toUpperCase();
     let unsub: (() => void) | null = null;
 
-    getCommitteeByCode(upperCode).then((c) => {
+    let cancelled = false;
+    // A failed read is not "not found": retried with backoff, then an inline Retry.
+    getCommitteeByCodeWithRetry(upperCode, { isCancelled: () => cancelled }).then((result) => {
+      if (cancelled) return;
+      setLoadFailed(result.status === 'error');
       setLoading(false);
+      const c = result.status === 'ok' ? result.committee : null;
       if (!c) return;
       setCommittee(c);
-      const cid = c.id;
-      unsub = subscribeToCommittee(cid, async (table) => {
-        // Patch only the changed slice instead of re-pulling the whole committee on every
-        // event. Session-state lives on the `committees` table, so that one keeps the full
-        // refetch; every other table can be patched in place. Mirrors the delegate view.
-        if (table === 'current_speaker') {
-          const cs = await getCurrentSpeakerRow(cid);
-          if (!cs) return;
+      // One pipeline for every event (src/lib/sessionSync.ts): each event refetches ONLY its
+      // own slice, coalesced, with a sequence counter per slice, so a burst of writes (a
+      // caucus accept, All Present) is one small fetch per slice instead of a cancelled pile
+      // of full refetches. Messages land straight from the realtime payload. This view
+      // renders neither chair notes nor organiser broadcasts, so it does not subscribe to
+      // `feedback` / `session_broadcasts` at all (PERF-1). Wake, reconnect and back-online
+      // refetch every slice (R-4).
+      const sync = startSessionSync({
+        committeeId: c.id,
+        tables: ['committees', 'delegates', 'speakers_list', 'current_speaker', 'motions', 'documents', 'messages'],
+        slices: ['row', 'delegates', 'lists', 'currentSpeaker', 'motions', 'documents', 'messages'],
+        onConnection: setConnection,
+        onMessage: (m) => setCommittee((prev) => {
+          if (!prev) return prev;
+          const merged = mergeMessagesById(prev.messages, [m]);
+          return merged === prev.messages ? prev : { ...prev, messages: merged };
+        }),
+        apply: (slice, data) => {
           setCommittee((prev) => {
             if (!prev) return prev;
-            const patched: Committee = {
-              ...prev,
-              currentSpeaker: cs.currentSpeaker,
-              speakerTimeRemaining: cs.speakerTimeRemaining,
-              speakerStartedAt: cs.speakerStartedAt,
-              speakersList: cs.currentSpeaker
-                ? prev.speakersList.filter((s) => s.delegateId !== cs.currentSpeaker!.delegateId)
-                : prev.speakersList,
-            };
-            if (prev.caucus && prev.caucus.type === 'moderated') {
-              patched.caucus = { ...prev.caucus, currentSpeaker: cs.currentSpeaker?.country ?? null };
-              patched.caucusQueue = cs.currentSpeaker
-                ? prev.caucusQueue.filter((s) => s.delegateId !== cs.currentSpeaker!.delegateId)
-                : prev.caucusQueue;
+            switch (slice) {
+              case 'row': return { ...prev, ...rowFields(data as Committee) };
+              case 'delegates': return { ...prev, delegates: data as Committee['delegates'] };
+              case 'lists': return withLists(prev, data as Parameters<typeof withLists>[1]);
+              case 'currentSpeaker': return withCurrentSpeaker(prev, data as Parameters<typeof withCurrentSpeaker>[1], { includeRemaining: true });
+              case 'motions': return { ...prev, pendingMotions: data as Committee['pendingMotions'] };
+              case 'documents': return { ...prev, documents: data as Committee['documents'] };
+              case 'messages': {
+                const merged = mergeMessagesById(prev.messages, data as Committee['messages']);
+                return merged === prev.messages ? prev : { ...prev, messages: merged };
+              }
+              default: return prev;
             }
-            return patched;
           });
-          return;
-        }
-        if (table === 'speakers_list') {
-          const { speakersList, caucusQueue } = await getSpeakersLists(cid);
-          setCommittee((prev) => prev ? {
-            ...prev,
-            speakersList: prev.currentSpeaker
-              ? speakersList.filter((s) => s.delegateId !== prev.currentSpeaker!.delegateId)
-              : speakersList,
-            caucusQueue,
-          } : prev);
-          return;
-        }
-        if (table === 'delegates') {
-          const delegates = await getDelegatesList(cid);
-          setCommittee((prev) => prev ? { ...prev, delegates } : prev);
-          return;
-        }
-        if (table === 'messages') {
-          await catchUpMessages(cid, setCommittee);
-          return;
-        }
-        if (table === 'documents') {
-          const documents = await getDocumentsList(cid);
-          setCommittee((prev) => prev ? { ...prev, documents } : prev);
-          return;
-        }
-        if (table === 'motions') {
-          const pendingMotions = await getPendingMotionsList(cid);
-          setCommittee((prev) => prev ? { ...prev, pendingMotions } : prev);
-          return;
-        }
-        const updated = await getCommitteeByCode(upperCode);
-        // Messages are append-only: merge rather than replace so this full refetch can never
-        // drop a message the scoped messages handler already delivered.
-        if (updated) setCommittee((prev) => prev
-          ? { ...updated, messages: mergeMessagesById(prev.messages, updated.messages) }
-          : updated);
-      }, (status) => onRealtimeStatus(cid, status));
+        },
+      });
+      unsub = sync.stop;
     });
 
-    return () => { unsub?.(); };
-  }, [code, onRealtimeStatus]);
+    return () => { cancelled = true; unsub?.(); };
+  }, [code, loadAttempt]);
 
   if (accessState === 'signin') {
     return (
@@ -413,6 +382,18 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
     );
   }
 
+  if (accessState === 'error') {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-6" style={{ backgroundColor: '#EDE7D8' }}>
+        <div className="text-center max-w-sm" role="alert">
+          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>{t('session_access_error_title')}</h1>
+          <p className="mb-6" style={{ color: '#6A5A4A' }}>{t('session_access_error_body')}</p>
+          <button onClick={advisorAccess.retry} className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>{t('delegate_seat_retry')}</button>
+        </div>
+      </div>
+    );
+  }
+
   if (loading || authLoading || accessState === 'checking') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: '#EDE7D8' }}>
@@ -433,6 +414,23 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
           <circle cx="56" cy="56" r="3" fill="#1B3828" opacity="0.5" />
         </svg>
         <p className="text-[#9A8A78] text-sm font-mono tracking-widest">LOADING…</p>
+      </div>
+    );
+  }
+
+  if (!committee && loadFailed) {
+    return (
+      <div className="min-h-screen bg-[#F6F1E9] flex items-center justify-center px-6">
+        <div className="text-center max-w-sm" role="alert">
+          <p className="text-[#1C1410] text-xl font-bold mb-6">{t('session_load_failed')}</p>
+          <button
+            onClick={() => { setLoadFailed(false); setLoading(true); setLoadAttempt((n) => n + 1); }}
+            className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none"
+            style={{ backgroundColor: '#1B3828' }}
+          >
+            {t('delegate_seat_retry')}
+          </button>
+        </div>
       </div>
     );
   }
@@ -502,6 +500,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
     <FitToScreen>
     <SeatArtProvider delegates={committee.delegates}>
     <div className="h-full w-full flex flex-col overflow-hidden" style={{ backgroundColor: '#EDE7D8' }}>
+      <ConnectionPill state={connection} />
       <div className="pointer-events-none fixed inset-0 z-0" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
       {/* Header */}
       <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-3 shrink-0 relative z-[2]">

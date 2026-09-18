@@ -45,6 +45,10 @@ export interface FinRow {
   self_paid: boolean | null;
   society_id: string | null;
   stripe_payment_intent_id: string | null;
+  /** Money actually collected on this application. 0 on a free registration,
+   *  which the database stamps 'paid' on arrival — so "paid" alone no longer
+   *  means "money changed hands". */
+  amount_paid: number | null;
   assigned_country_code: string | null;
   assigned_country_name: string | null;
   profiles: { display_name: string } | null;
@@ -214,7 +218,7 @@ export function useFinancialsData() {
         .from('applications')
         .select(`
           id, role, status, payment_status, fee_waiver_source, voucher_discount, submitted_at,
-          paid_at, self_paid, society_id, stripe_payment_intent_id,
+          paid_at, self_paid, society_id, stripe_payment_intent_id, amount_paid,
           assigned_country_code, assigned_country_name,
           profiles (display_name),
           assigned_committee:conference_committees!assigned_committee_id (name, abbreviation)
@@ -231,11 +235,12 @@ export function useFinancialsData() {
   const fin = useMemo(() => {
     const all = rows ?? [];
     // Rejected and withdrawn applications drop out of the pipeline entirely,
-    // except paid ones, whose money was still collected. Withdrawal is only
-    // ever allowed while unpaid/waived (see applications/page.tsx), so this
-    // exception is defensive rather than load-bearing today, but it keeps the
-    // rule symmetric with rejected's.
-    const live = all.filter(r => (r.status !== 'rejected' && r.status !== 'withdrawn') || r.payment_status === 'paid');
+    // except ones whose money was still collected. That exception now tests
+    // amount_paid, not payment_status alone: a free registration is stamped
+    // 'paid' with nothing paid, so status alone would drag every rejected and
+    // withdrawn free applicant back into the collected figures.
+    const live = all.filter(r => (r.status !== 'rejected' && r.status !== 'withdrawn')
+      || (r.payment_status === 'paid' && (r.amount_paid ?? 0) > 0));
 
     const paidRows = live.filter(r => r.payment_status === 'paid');
     const pendingRows = live.filter(

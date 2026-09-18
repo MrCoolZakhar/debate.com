@@ -99,6 +99,16 @@ export interface CommitteeDocument {
   qaMinutes?: number;
   signatories?: string[];
   approval?: 'approved' | 'rejected'; // chair approval gate (undefined = undecided)
+  /** documents.intro_state — the introduction in progress (V-5). null/undefined = none. */
+  introState?: DocIntroState | null;
+}
+
+/** Persisted introduction stage. The clock is anchor-based: live remaining is
+ *  `base - (now - startedAt)`; `startedAt` null means paused at `base`. */
+export interface DocIntroState {
+  stage: 'reading' | 'presentation' | 'qa';
+  base: number;
+  startedAt: string | null;
 }
 
 export interface CaucusState {
@@ -115,6 +125,16 @@ export interface CaucusState {
   proposerPosition: 'first' | 'last' | null;
   spokenCountries: string[];
   isConsultation?: boolean;  // true when this caucus is a Consultation of the Whole
+  /** Consultation of the Whole: when the current floor holder took the floor (database-clock
+   *  ISO). Written with the flag tap, so a reload keeps the holder's real start. */
+  floorSince?: string | null;
+  /** Room Order Tour de Table only: the delegations in the room when the motion passed
+   *  (every delegate not absent), credited one speech each when the tour ends
+   *  (`creditRoomOrderTour`, src/lib/floorSpeech.ts). */
+  roomOrderCountries?: string[];
+  /** Room Order Tour de Table only: database-clock ISO instant the motion passed. Names the
+   *  tour instance in each credited speech's turn key. */
+  tourStartedAt?: string;
 
   // ── Wall-clock ANCHOR for the TOTAL caucus countdown ────────────────────────
   // ISO timestamp of the instant the total clock last (re)started, or null when it is
@@ -172,6 +192,10 @@ export interface Committee {
   speakerTimeLimit: number;
   speakerTimeRemaining: number;
   speakerStartedAt: string | null;
+  /** current_speaker.seated_at: when this delegation was seated (the floor turn's identity,
+   *  src/lib/floorSpeech.ts). Null or absent on an empty floor or a row seated before the
+   *  column existed. */
+  speakerSeatedAt?: string | null;
   motions: Motion[];
   pendingMotions: PendingMotion[];
   resolutions: Resolution[];
@@ -185,6 +209,7 @@ export interface Committee {
   resumingChair?: string | null;
   dbChairJoinSuffix?: string | null;
   dbHeadChair?: string | null;   // persisted head-chair name (claim-at-will); null → creator (chairNames[0]) is head
+  dbHeadChairDevice?: string | null;   // settings.headChairDevice: which device holds the gavel for that name (src/lib/gavelDevice.ts)
   dbSeparateChairCode?: boolean;
   dbSettings?: Record<string, unknown> | null;
   dbScoring?: ScoringConfig | null;

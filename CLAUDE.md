@@ -70,12 +70,20 @@ long invoice list hit them in production:
 
 ## 4. Growth loops (what the code is built to do)
 
-1. **Content SEO**: 32 posts in `src/app/blog/posts.ts`, the competitor-alternative posts carry the highest sitemap priority. Bare `/join` and `/create` stay indexable; anything with a code does not (`robots.ts`).
-2. **Public conference pages** as landing pages: hourly ISR sitemap, IndexNow ping on publish, dynamic OG cards (`/api/og/*`), `pageMetadata()` makes a missing OG image structurally impossible (`src/lib/seo.ts`; `npm run check:og`).
+1. **Content SEO**: 34 posts in `src/app/blog/posts.ts` (the sitemap is generated from that manifest), the competitor-alternative posts carry the highest sitemap priority. Bare `/join` and `/create` stay indexable; `/join?code=...` is noindex by header.
+2. **Public conference pages** as landing pages: dynamic sitemap (was ISR, which froze for days on Vercel), IndexNow ping on publish, dynamic OG cards (`/api/og/*`), `pageMetadata()` makes a missing OG image structurally impossible (`src/lib/seo.ts`; `npm run check:og`).
 3. **The MUN CV as a credential**: every profile link resolves to `/cv/<name>-<hex>`; `ShareAchievementModal` fires after a new entry; `PublicCVSignupPrompt` converts the reader. **Awards are the first thing that writes a `gavelling_verified` entry**; before that every CV entry was self-reported, which is why the awards pipeline matters commercially.
 4. **Job board** for chairs and secretariat, cross-conference.
 5. **Ambassadors** (`/about` form, platform fee waived) and **delegation invite links**.
 6. **Draft-recovery emails** for abandoned applications.
+
+**Indexability rules (17 Sep 2026, after Search Console kept reopening the same issues).** `npm run check:indexability` (`scripts/check-indexability.mjs`, default https://gavelling.com, `-- --base=http://localhost:3000`) enforces them and must pass after any routing or SEO change:
+- The sitemap (`src/app/sitemap.ts`, `force-dynamic`) lists only URLs that answer 200 without a redirect, are self-canonical, not noindex, and have a title, an h1 and real text in the RAW HTML. Never a redirecting path (`/conferences` 308s to `/`; link `/conferences/explore`), never a query string. `lastmod` is the content date, never `new Date()`.
+- Private pages are noindex by the `X-Robots-Tag` header list `NOINDEX_ROUTES` in `next.config.ts` and stay CRAWLABLE. `robots.ts` blocks only what has a side effect when rendered (the session runtimes, which claim seats; `/unsubscribe`; `/drafts/*?stop=1`) and `/api/`. A Disallow on a noindex page is what produced "Indexed, though blocked by robots.txt".
+- `/_next/static/*`, `*.pdf` and `*.txt` carry `X-Robots-Tag: noindex` and are never disallowed (Google needs them to render).
+- No hreflang until real, indexable, self-canonical locale URLs exist; the languages are a client-side preference.
+- Every sitemap URL must be reachable by a plain server-rendered `<a href>` from another sitemap page: the homepage's crawl nav (conferences + hubs), `/conferences/explore`'s directory, `/blog`, and `FooterLegal` (Explore Conferences, MUN Guides on every public footer). A client-rendered list is not a link.
+- `www.gavelling.com` must 308 to `https://gavelling.com` at the Vercel domain level with a valid certificate.
 
 There is **no analytics or tracking** by policy (`/privacy`). The admin console (`/admin`, DB-gated by `is_platform_admin()`) is the only observability surface.
 
@@ -223,9 +231,11 @@ src/lib/
 src/components/ neu.tsx (design tokens), DatePicker, Portal, SiteNav, ScoreboardTable, ScoreboardPanel, MotionsModal, DocumentsModal, RollCallPanel, ChatPanel, SettingsPanel, FeedbackLogPanel, TutorialOverlay, GuidedWalkthrough
 ```
 
-**State, honestly:** the chair page is React state + `committeeService` + a Supabase Realtime channel, with `useSettingsStore` (zustand, `localStorage: gavelling-settings`) for per-committee settings. `src/lib/store.ts` (`useCommitteeStore`, `localStorage: mun-committees`) is legacy: its only live importer is `/join`; `SpeakersListPanel`, `CaucusPanel` and `ResolutionsPanel` import it but are themselves unreferenced. The conferences layer uses no zustand at all: React state, `useAuth()` from `AuthProvider`, `getAuthedClient(session.access_token)`, and `useManage()` from the manage layout.
+**State, honestly:** the chair page is React state + `committeeService` + a Supabase Realtime channel, with `useSettingsStore` (zustand, `localStorage: gavelling-settings`) for per-committee settings. `src/lib/store.ts` (`useCommitteeStore`, `localStorage: mun-committees`) is legacy with no live importer (the join page stopped reading it on 14 Sep 2026, J-1: nothing writes it, so a hit could only be an old roster or chair code); `SpeakersListPanel`, `CaucusPanel` and `ResolutionsPanel` import it but are themselves unreferenced. Realtime on the chair, delegate, advisor and voting pages goes through `startSessionSync` (`src/lib/sessionSync.ts`; AGENTS.md RULE 4). The conferences layer uses no zustand at all: React state, `useAuth()` from `AuthProvider`, `getAuthedClient(session.access_token)`, and `useManage()` from the manage layout.
 
 **Database:** there is **no `supabase/` directory and no migrations in git**. The schema lives only in the remote project; the loose `scratch-*.sql` files at the root are drafts, not truth. Inspect with the Supabase MCP tools before assuming a column exists. RLS is the security boundary everywhere; `isViewOnly`, section permissions and hidden buttons are not.
+
+**Storage cleanup:** deleting a **conference** committee takes its CHAT attachments out of the `session-documents` bucket and leaves its submitted documents alone. Chat lives under `chat/<committee_id>/`, documents at the bucket root under `<committee_id>/`, and the cleanup only ever touches the `chat/` prefix. A BEFORE DELETE trigger queues the id in `chat_cleanup_queue` (conference rows only, RLS on with no policies, service role only) and the `cleanup-chat-attachments` edge function drains it hourly on pg_cron (`10 * * * *`). Rules and limits in AGENTS.md → FEATURE: CHAT → Attachments and GIFs.
 
 **Email:** nothing sends inline. Every email is an `email_outbox` row (rendered by a DB trigger, delivered by the `send-emails` edge function via Resend). Add an event to `EVENT_REGISTRY` in `emailEvents.ts` and TypeScript forces a category and a default body.
 
@@ -266,7 +276,9 @@ Everything else, with line numbers and the reasons behind each rule, is in `AGEN
 ## 8. Design system and copy
 
 - Tokens in `src/components/neu.tsx`: ivory `#EDE7D8` page, `#F0EBDD` surface, forest `#1B3828`, gold `#EED98A`, ink `#1C1410`; shadows are forest-tinted, never neutral; `muted` fails contrast for body text, use `inkSoft`. Font is **Outfit** everywhere on the conferences side (DM Mono is being retired, `docs/ui-audit/70-typography-rule.md`). Tailwind v4 with no config file.
-- Lucide icons only on the conferences side (Fluent 3D emoji are allowed on the organiser dashboard via `Emoji3D`). Rectangular flags only (`getFlagUrl`). Every button gets `focus:outline-none`.
+- Lucide icons only on the conferences side (Fluent 3D emoji are allowed on the organiser dashboard via `Emoji3D`). Flags come in two shapes and never mix: a **rectangle** uses `getFlagUrl` (Twemoji, 3:2 in a transparent square, so it can never fill a circle), a **circle** uses `src/components/CircleFlag.tsx` (`<CircleFlag code|country|art>` or the session `<SeatCircleFlag>`), which draws the square round-flag artwork bundled in `public/flags/1x1/` (circle-flags, MIT) so the flag fills the disc edge to edge, with crest → flag → monogram precedence. Never put a `getFlagUrl` image inside a `rounded-full` box. Every button gets `focus:outline-none`.
+- **Buttons with an icon or an indicator lead with the icon** (owner, 17 Sep 2026): a big icon, the word small beneath it (e.g. Vote in Documents, Finish in an introduction). A button that is icon only still carries a tooltip and an accessible name.
+- **No count or status pills like '15 delegations' or 'Observer' anywhere: show counts as plain typography and observer status as an icon.** (Owner, 17 Sep 2026. /create shows the count as a large tabular numeral and observers as the megaphone; the join seat picker shows seat state as icon + plain words.)
 - **No em dashes in user-facing copy.** Short sentences. Say what happened and what to do next.
 - Dates: the shared `DatePicker` only. Popovers: through `Portal` at fixed coordinates, flipped near edges, never clipped. Info hints open on hover. Long committee names show the acronym with the full name beneath (`committeeDisplayName`).
 - i18n: four locales in `src/lib/translations.ts` (en, es, fr, ar with RTL). The DB stores English; translate at render. Rules and the list of hand-maintained bypasses are in `.claude/TRANSLATIONS.md`, which must be updated when keys change. Manage surfaces are English-only by convention.
@@ -281,9 +293,10 @@ npm run dev          # localhost:3000
 npm run build        # runs `prebuild` first: scripts/check-brand-marks.mjs fails the build on brand-mark violations
 npm run lint
 npm run check:og     # validates pageMetadata / OG rules against a running production server
+npm run check:indexability   # sitemap, canonicals, noindex, robots, crawl links (default https://gavelling.com; -- --base=http://localhost:3000)
 ```
 
-No unit or end-to-end test suite and no CI. The build, the brand-mark gate and `check:og` are the quality gates; verify behaviour in the browser.
+No unit or end-to-end test suite and no CI. The build, the brand-mark gate, `check:og` and `check:indexability` are the quality gates; verify behaviour in the browser.
 
 `.env.local` needs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Payments, email and account deletion run in Supabase edge functions with their own secrets; nothing in this repo deploys them.
 

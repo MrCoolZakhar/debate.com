@@ -75,7 +75,12 @@ export default function GavelChip({
   headOffline,
   onTakeGavel,
   onHandOver,
+  heldElsewhere = false,
+  inline = false,
 }: {
+  /** Render in the flow (the chair top bar) instead of as a fixed chip under the header.
+   *  The popover is positioned from the trigger's rect either way. */
+  inline?: boolean;
   /** Every chair who has ever joined — `committee.chairNames`. Handover targets are limited to this. */
   chairNames: string[];
   /** Current gavel holder (already resolved: dbHeadChair ?? chairNames[0]). */
@@ -88,6 +93,8 @@ export default function GavelChip({
   headOffline: boolean;
   onTakeGavel: () => void;
   onHandOver: (name: string) => void;
+  /** This chair's name holds the gavel, but on ANOTHER device (src/lib/gavelDevice.ts). */
+  heldElsewhere?: boolean;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -99,7 +106,8 @@ export default function GavelChip({
   const menuRef = useRef<HTMLDivElement>(null);
   const prevHolder = useRef<string | null>(headChairName);
 
-  const iHoldIt = !!headChairName && headChairName === myChairName;
+  // Name AND device: the same name on another device does not hold it here.
+  const iHoldIt = !!headChairName && headChairName === myChairName && !heldElsewhere;
   const holderOnline = !!headChairName && (headChairName === myChairName || onlineChairs.has(headChairName));
   const showOffline = !iHoldIt && headOffline;
 
@@ -219,8 +227,8 @@ export default function GavelChip({
           the chip steps down below the cards and back up when they clear. See the
           positioning note at the top of NotificationStack.tsx. */}
       <div
-        className="fixed z-50"
-        style={{
+        className={inline ? 'relative shrink-0' : 'fixed z-50'}
+        style={inline ? { fontFamily: OUTFIT } : {
           top: 'calc(3.75rem + var(--dgn-stack-shift, 0px))', right: '0.85rem',
           fontFamily: OUTFIT, transition: 'top 240ms cubic-bezier(0.22,1,0.36,1)',
         }}
@@ -241,7 +249,7 @@ export default function GavelChip({
           onClick={() => setOpen((o) => !o)}
           aria-haspopup="menu"
           aria-expanded={open}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-full focus:outline-none"
+          className="flex items-center gap-2 px-3.5 py-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
           style={{
             ...chipStyle,
             transition: `box-shadow 180ms ${EASE}, transform 180ms ${EASE}`,
@@ -256,6 +264,8 @@ export default function GavelChip({
           <span className="text-xs font-bold whitespace-nowrap">
             {iHoldIt ? (
               <span className="font-black">{t('gavel_you_have_it')}</span>
+            ) : heldElsewhere ? (
+              <span className="font-black">{t('gavel_device_elsewhere_short')}</span>
             ) : showOffline ? (
               <>{t('gavel_chair_offline')} <span className="font-black">{t('gavel_take_over')}</span></>
             ) : (
@@ -346,12 +356,12 @@ export default function GavelChip({
                     <span className="text-xs truncate" style={{ color: NEU.ink, fontWeight: isHolder ? 800 : 600 }}>
                       {name}{isMe ? ` ${t('gavel_you')}` : ''}
                     </span>
-                    {isHolder && (
+                    {isHolder && !(heldElsewhere && isMe) && (
                       <span className="ms-auto text-[9px] font-black uppercase tracking-widest shrink-0" style={{ color: NEU.deepGold }}>
                         {t('gavel_chairing_badge')}
                       </span>
                     )}
-                    {!isHolder && isMe && (
+                    {(!isHolder || heldElsewhere) && isMe && (
                       <button
                         onClick={() => { onTakeGavel(); setOpen(false); }}
                         className="ms-auto shrink-0 text-[10px] font-black px-2.5 py-1.5 rounded-lg focus:outline-none"
@@ -362,7 +372,7 @@ export default function GavelChip({
                         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.filter = 'brightness(1.15)'; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.filter = 'none'; }}
                       >
-                        {t('gavel_take_the_gavel')}
+                        {heldElsewhere ? t('gavel_use_this_device') : t('gavel_take_the_gavel')}
                       </button>
                     )}
                     {!isHolder && !isMe && iHoldIt && (

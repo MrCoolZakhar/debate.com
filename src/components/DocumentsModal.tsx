@@ -2,42 +2,72 @@
 
 import React, { useState, useRef, useEffect, useCallback, KeyboardEvent } from 'react';
 import Portal from '@/components/Portal';
+import GrowDialog from '@/components/GrowDialog';
 import { portalFrame } from '@/components/chat/chatTokens';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
-import { Committee, CommitteeDocument, DocumentType, DocumentStatus } from '@/lib/types';
+import {
+  Ban, BadgeCheck, Check, CheckCheck, CircleDot, FileText, Minus, Plus, Presentation, Timer, Vote, X, type LucideIcon,
+} from 'lucide-react';
+import PdfViewer, { PdfThumb, PDF_ZOOM_STEPS, stepPdfZoom, type PdfZoom } from '@/components/documents/PdfViewer';
+import StageTimerDevice from '@/components/documents/StageTimerDevice';
+import StageSwitcher from '@/components/documents/StageSwitcher';
+import ProceedingsSetup from '@/components/documents/ProceedingsSetup';
+import { Committee, CommitteeDocument, DocIntroState, DocumentType, DocumentStatus } from '@/lib/types';
+import { requireDocApproval as readRequireDocApproval, updateDocumentFlow, deleteDocumentChecked, introRemainingNow } from '@/lib/documentFlow';
+import { serverNow } from '@/lib/serverClock';
+import { anchorBox } from '@/components/voting/anchorPosition';
 import { sponsorLabel } from '@/lib/committeeFlags';
 import { docName, docCount, docLimit, docLimitReached } from '@/lib/docNames';
 import { TranslationKey } from '@/lib/translations';
 import { getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import { SeatFlag } from '@/components/SeatFlag';
-import { Emoji } from '@/components/Emoji';
-import { useSettingsStore } from '@/lib/settingsStore';
 import { supabase } from '@/lib/supabase';
 import { safeStorageKey } from '@/lib/storageKey';
+import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 import {
   addDocument as addDocumentInDB,
-  updateDocumentStatus as updateDocumentStatusInDB,
-  updateDocumentTimings as updateDocumentTimingsInDB,
-  removeDocument as removeDocumentInDB,
   updateDocumentApproval as updateDocumentApprovalInDB,
-  suspendDebate as suspendDebateInDB,
 } from '@/lib/committeeService';
 
 type DocTab = 'working-paper' | 'draft-resolution';
 // Flow stages for the fullscreen presentation experience
-type PresentationStage = 'setup' | 'reading' | 'presentation' | 'qa' | 'vote' | null;
+type PresentationStage = 'setup' | 'reading' | 'presentation' | 'qa' | null;
+type TimedStage = DocIntroState['stage'];
+const STAGE_ORDER: TimedStage[] = ['reading', 'presentation', 'qa'];
 
-const STATUS_META: Record<DocumentStatus, { label: string; color: string }> = {
-  submitted:   { label: 'Submitted',  color: 'bg-[#1B3828]/20 text-[#1B3828] border-[#1B3828]/30' },
-  'on-floor':  { label: 'On Floor',   color: 'bg-transparent text-[#B8844A] border-[#B8844A]/50' },
-  introduced:  { label: 'Introduced', color: 'bg-transparent text-[#B8844A] border-[#B8844A]/50' },
-  passed:      { label: 'Passed',     color: 'bg-[#1B3828] text-[#EED98A] border-[#1B3828]' },
-  failed:      { label: 'Failed',     color: 'bg-red-950/40 text-red-500 border-red-800/40' },
+/** One pill vocabulary for a paper's lifecycle and its approval. Same shape for every state
+ *  (icon + label, tinted fill, hairline ring drawn as an inset shadow, never a border); the
+ *  colour moves from neutral ink to forest to gold as the paper advances, and only the two
+ *  verdicts are strong. Every text colour is AA (>= 4.5:1) on its own fill over the card. */
+type PillTone = { bg: string; fg: string; ring: string; Icon: LucideIcon };
+const STATUS_PILL: Record<DocumentStatus, PillTone> = {
+  submitted:  { bg: 'rgba(28,20,16,0.06)',   fg: '#4A3F35', ring: 'rgba(28,20,16,0.10)',   Icon: FileText },
+  'on-floor': { bg: 'rgba(27,56,40,0.08)',   fg: '#1B3828', ring: 'rgba(27,56,40,0.18)',   Icon: CircleDot },
+  introduced: { bg: 'rgba(238,217,138,0.60)', fg: '#5C4410', ring: 'rgba(160,120,30,0.30)', Icon: Presentation },
+  passed:     { bg: '#1B3828',               fg: '#EED98A', ring: 'rgba(27,56,40,0.00)',   Icon: Check },
+  failed:     { bg: 'rgba(139,32,32,0.10)',  fg: '#7A1C1C', ring: 'rgba(139,32,32,0.22)',  Icon: X },
+};
+const APPROVAL_PILL: Record<'approved' | 'rejected', PillTone> = {
+  approved: { bg: 'transparent', fg: '#1B3828', ring: 'rgba(27,56,40,0.30)',  Icon: BadgeCheck },
+  rejected: { bg: 'transparent', fg: '#7A1C1C', ring: 'rgba(139,32,32,0.30)', Icon: Ban },
 };
 
+function Pill({ tone, label }: { tone: PillTone; label: string }) {
+  const { Icon } = tone;
+  return (
+    <span
+      className="inline-flex items-center gap-1 h-[22px] ps-1.5 pe-2 rounded-full text-[11.5px] font-semibold leading-none whitespace-nowrap select-none"
+      style={{ backgroundColor: tone.bg, color: tone.fg, boxShadow: `inset 0 0 0 1px ${tone.ring}`, fontFamily: "'Outfit', sans-serif" }}
+    >
+      <Icon size={12} strokeWidth={2.4} aria-hidden className="shrink-0" />
+      {label}
+    </span>
+  );
+}
+
 const STATUS_NEXT: Partial<Record<DocumentStatus, DocumentStatus>> = {
-  submitted: 'introduced', 'on-floor': 'introduced', introduced: 'passed',
+  submitted: 'introduced', 'on-floor': 'introduced',
 };
 
 function getStatusLabel(status: DocumentStatus, t: (key: TranslationKey) => string): string {
@@ -53,15 +83,14 @@ function getStatusLabel(status: DocumentStatus, t: (key: TranslationKey) => stri
 
 function StatusBadge({ status }: { status: DocumentStatus }) {
   const t = useT();
-  const meta = STATUS_META[status];
-  return <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${meta.color}`}>{getStatusLabel(status, t)}</span>;
+  return <Pill tone={STATUS_PILL[status] ?? STATUS_PILL.submitted} label={getStatusLabel(status, t)} />;
 }
 
 function CountryChip({ country, onRemove }: { country: string; onRemove: () => void }) {
   const { language } = useLanguage();
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#DDD4C0] border border-[#DDD4C0] rounded-full text-xs text-[#1C1410]">
-      <SeatFlag country={country} size={16} className="object-contain inline-block me-1" fallback={'🌐'} />{getCountryDisplayName(country, language)}
+      <SeatFlag country={country} size={16} className="object-contain inline-block me-1" fallback={<UnknownSeatIcon size={16} className="me-1" />} />{getCountryDisplayName(country, language)}
       <button onClick={onRemove} className="text-[#9A8A78] hover:text-red-500 ms-0.5 leading-none">✕</button>
     </span>
   );
@@ -158,7 +187,7 @@ function SponsorSelect({ candidates, selected, onChange, committee }: {
                 return (
                   <button key={c} onMouseDown={(e) => { e.preventDefault(); add(c); }}
                     className={`w-full flex items-center gap-2 px-3 py-2 text-start transition-colors ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
-                    <SeatFlag country={c} size={20} className="object-contain inline-block" fallback={<span>🌐</span>} />
+                    <SeatFlag country={c} size={20} className="object-contain inline-block" fallback={<UnknownSeatIcon size={20} />} />
                     <span className="text-sm">{getCountryDisplayName(c, language)}</span>
                   </button>
                 );
@@ -173,13 +202,13 @@ function SponsorSelect({ candidates, selected, onChange, committee }: {
           {selected.map((c) => {
             return (
               <button key={c} onClick={() => onChange(selected.filter((s) => s !== c))}
-                title={`Remove ${c}`}
+                title={t('documents_sponsor_remove', { country: c })}
                 className="relative group focus:outline-none">
                 <SeatFlag
                   country={c}
                   className="rounded"
                   style={{ width: 40, height: 28, objectFit: 'cover', border: '1.5px solid rgba(28,20,16,0.15)' }}
-                  fallback={<span className="text-2xl">🌐</span>}
+                  fallback={<UnknownSeatIcon size={28} />}
                 />
                 <span className="absolute inset-0 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity text-xs font-bold text-white"
                   style={{ backgroundColor: 'rgba(139,32,32,0.7)' }}>✕</span>
@@ -192,327 +221,60 @@ function SponsorSelect({ candidates, selected, onChange, committee }: {
   );
 }
 
+// PREVIEW only. The saved code is assigned by the documents_assign_doc_code trigger under a
+// per-committee lock (V-6), so two simultaneous submissions can never share a code.
 function autoDocCode(type: DocumentType, existingDocs: CommitteeDocument[]): string {
   const prefix = type === 'working-paper' ? 'WP' : 'DR';
   const sep = type === 'working-paper' ? '.' : '/';
   return `${prefix} 1${sep}${existingDocs.filter((d) => d.type === type).length + 1}`;
 }
 
-function formatTime(seconds: number) {
-  const m = Math.floor(seconds / 60); const s = seconds % 60;
-  return `${m}:${s.toString().padStart(2, '0')}`;
+
+// ── The introduction screen ───────────────────────────────────────────────────
+// Document-first (16 Sep 2026). The paper fills the screen and is mounted ONCE for the whole
+// introduction; the stage clock and its controls are a floating panel the chair drags and
+// resizes over it. Moving between Reading, Presentation and Q&A now only re-labels that panel,
+// so the viewer keeps its zoom AND its scroll position: before, the viewer lived inside a
+// component keyed on the stage (remount, so a PDF reloaded to page 1) and the split ratio was
+// stage-local state that snapped back to 50% on every change.
+
+/** Zoom is the chair's, not the stage's: it lives above the stage and is remembered per device.
+ *  'fit' (fit width) is the default for a PDF; a text paper reads 'fit' as 100%. */
+const ZOOM_KEY = 'gavelling-intro-zoom';
+function readZoom(): PdfZoom {
+  try {
+    const raw = localStorage.getItem(ZOOM_KEY);
+    if (!raw || raw === 'fit') return 'fit';
+    const n = Number(raw);
+    return (PDF_ZOOM_STEPS as readonly number[]).includes(n) ? n : 'fit';
+  } catch { return 'fit'; }
+}
+function writeZoom(z: PdfZoom) {
+  try { localStorage.setItem(ZOOM_KEY, String(z)); } catch { /* storage blocked */ }
 }
 
-// ── Countdown Timer (reading / presentation / Q&A) ────────────────────────────
-function StageTimer({
-  label, color, totalSeconds, doc, committee, showDocument,
-  onComplete, onToggleDocument, onBack,
-}: {
-  label: React.ReactNode; color: string; totalSeconds: number;
-  doc: CommitteeDocument; committee: Committee; showDocument: boolean;
-  onComplete: () => void; onToggleDocument: () => void; onBack: () => void;
-}) {
+/** The paper, filling the introduction screen. Mounted once per introduction: nothing here is
+ *  keyed on the stage, so a stage change never touches the viewer or its scroll position. A PDF
+ *  is drawn by pdf.js (`PdfViewer`, its own toolbar); a text paper is a page card. */
+function IntroDocument({ doc, zoom, onZoomChange }: { doc: CommitteeDocument; zoom: PdfZoom; onZoomChange: (z: PdfZoom) => void }) {
   const t = useT();
-  const [remaining, setRemaining] = useState(totalSeconds);
-  const [running, setRunning] = useState(false);
-  const [started, setStarted] = useState(false);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const remainingRef = useRef(totalSeconds);
-  remainingRef.current = remaining;
-  const [splitPct, setSplitPct] = useState(50);
-  const isDraggingDivider = useRef(false);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-
-  const onDividerMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    isDraggingDivider.current = true;
-    const onMouseMove = (ev: MouseEvent) => {
-      if (!isDraggingDivider.current || !containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const pct = ((ev.clientX - rect.left) / rect.width) * 100;
-      setSplitPct(Math.min(65, Math.max(35, pct)));
-    };
-    const onMouseUp = () => {
-      isDraggingDivider.current = false;
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-    };
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-  };
-
-  useEffect(() => {
-    if (running) {
-      intervalRef.current = setInterval(() => {
-        if (remainingRef.current <= 0) { setRunning(false); return; }
-        setRemaining((r) => Math.max(0, r - 1));
-      }, 1000);
-    } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [running]);
-
-  const done = remaining === 0;
-  const progress = totalSeconds > 0 ? ((totalSeconds - remaining) / totalSeconds) * 100 : 100;
-
+  const z = zoom === 'fit' ? 1 : zoom;
   return (
-    <div ref={containerRef} className={`flex-1 flex ${showDocument ? 'flex-row items-stretch' : 'flex-col items-center justify-center px-8 py-8 text-center'}`}>
-      <div className={`flex flex-col items-center justify-center text-center ${showDocument ? 'px-6 py-8' : 'w-full px-8 py-8'}`} style={showDocument ? { width: `${splitPct}%` } : undefined}>
-      <p className="text-xs font-mono tracking-widest mb-2" style={{ color: '#9A8A78' }}>
-        {docName(committee, doc.type, 'singular', doc.type === 'working-paper' ? t('documents_working_paper_type') : t('documents_draft_resolution_type')).toUpperCase()} · {doc.docCode}
-      </p>
-      <h2 className="text-2xl font-black mb-1" style={{ color: '#1C1410' }}>{doc.title}</h2>
-      <p className="text-xs font-black mb-6 mt-1 tracking-widest uppercase" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{label}</p>
-
-      {!done ? (
-        <>
-          <div className="text-8xl font-black font-mono tabular-nums mb-4" style={{ color: remaining <= 30 ? '#B8844A' : '#1C1410' }}>
-            {formatTime(remaining)}
+    <div className="absolute inset-0 overflow-hidden bg-[#E4DCCA]">
+      {doc.fileUrl ? (
+        <PdfViewer url={doc.fileUrl} title={doc.title} fileName={doc.fileName} zoom={zoom} onZoomChange={onZoomChange} className="absolute inset-0" />
+      ) : doc.content ? (
+        <div className="absolute inset-0 overflow-auto px-6 py-8">
+          <div className="mx-auto bg-[#FFFDF8] rounded-[3px] px-8 py-8"
+            style={{ maxWidth: 820 * z, boxShadow: '0 0 0 1px rgba(0,0,0,0.06), 0 1px 2px rgba(27,56,40,0.10), 0 10px 28px rgba(27,56,40,0.14)' }}>
+            <p className="text-xs font-bold mb-3 tabular-nums" style={{ color: '#1B3828', fontSize: 12 * z }}>{doc.docCode}</p>
+            <h2 className="font-black mb-5" style={{ color: '#1C1410', fontSize: 20 * z, textWrap: 'balance' }}>{doc.title}</h2>
+            <pre className="whitespace-pre-wrap font-sans leading-relaxed" style={{ color: '#1C1410', fontSize: 15 * z, textWrap: 'pretty' }}>{doc.content}</pre>
           </div>
-          <div className="w-full max-w-sm h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-8">
-            <div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, backgroundColor: '#1B3828' }} />
-          </div>
-          <div className="flex gap-3 flex-wrap justify-center items-center">
-            <button onClick={onBack}
-              className="w-10 h-10 rounded-xl font-bold transition-colors focus:outline-none flex items-center justify-center"
-              style={{ backgroundColor: 'transparent', color: '#6A5A4A', border: '1px solid #DDD4C0' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.color = '#6A5A4A'; }}
-              title="Back">
-              ←
-            </button>
-            <button
-              onClick={() => { setRemaining(totalSeconds); setRunning(false); setStarted(false); }}
-              title="Reset timer"
-              className="w-10 h-10 rounded-xl font-bold transition-colors focus:outline-none flex items-center justify-center"
-              style={{ backgroundColor: 'transparent', color: '#6A5A4A', border: '1px solid #DDD4C0' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.color = '#6A5A4A'; }}>
-              ↺
-            </button>
-            <button onClick={() => { setRunning((r) => !r); setStarted(true); }}
-              className="px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none"
-              style={{ backgroundColor: running ? '#B8844A' : '#2A5A3C', color: 'white', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
-              {running ? (
-                <span className="flex items-center gap-2">
-                  <span className="flex gap-[3px]"><span className="w-[3px] h-[13px] rounded-sm bg-white inline-block" /><span className="w-[3px] h-[13px] rounded-sm bg-white inline-block" /></span>
-                  PAUSE
-                </span>
-              ) : started ? t('documents_resume_btn') : `▶ ${t('documents_start_btn').replace(' →', '')}`}
-            </button>
-            <button onClick={onToggleDocument}
-              className="px-5 py-3 rounded-xl font-bold transition-colors focus:outline-none text-sm"
-              style={{ backgroundColor: showDocument ? '#1B3828' : 'transparent', color: showDocument ? 'white' : '#6A5A4A', border: showDocument ? 'none' : '1px solid #DDD4C0', fontFamily: "'Outfit', sans-serif" }}
-              onMouseEnter={(e) => { if (!showDocument) { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.color = '#1B3828'; } }}
-              onMouseLeave={(e) => { if (!showDocument) { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.color = '#6A5A4A'; } }}>
-              {showDocument ? t('documents_hide_doc') : t('documents_show_doc')}
-            </button>
-            <button onClick={onComplete}
-              className="w-10 h-10 rounded-xl font-bold transition-colors focus:outline-none flex items-center justify-center"
-              style={{ backgroundColor: 'transparent', color: '#6A5A4A', border: '1px solid #DDD4C0' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.color = '#6A5A4A'; }}
-              title="Skip">
-              →
-            </button>
-          </div>
-        </>
+        </div>
       ) : (
-        <>
-          <p className="text-lg mb-8" style={{ color: '#6A5A4A' }}>{t('documents_stage_complete').replace('{stage}', String(label))}</p>
-          <button onClick={onComplete}
-            className="px-10 py-4 rounded-2xl font-black text-lg transition-colors focus:outline-none gv-lift" style={{ backgroundColor: '#1B3828', color: 'white' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
-            {t('documents_continue_btn')}
-          </button>
-        </>
-      )}
-
-      </div>
-
-      {showDocument && (
-        <div
-          onMouseDown={onDividerMouseDown}
-          style={{ width: '6px', cursor: 'col-resize', backgroundColor: 'transparent', flexShrink: 0, position: 'relative' }}
-          className="hover:bg-[#DDD4C0] transition-colors"
-        >
-          <div style={{ position: 'absolute', top: 0, bottom: 0, left: '2px', width: '2px', backgroundColor: '#DDD4C0', borderRadius: '1px' }} />
-        </div>
-      )}
-      {showDocument && (
-        <div className="flex flex-col p-4 overflow-hidden min-h-0" style={{ flex: 1, minWidth: 0 }}>
-          {doc.fileUrl ? (
-            <iframe
-              src={doc.fileUrl}
-              title={doc.title}
-              className="flex-1 w-full rounded-xl border border-[#DDD4C0]"
-              style={{ minHeight: 0 }}
-            />
-          ) : doc.content ? (
-            <div className="flex-1 min-h-0 overflow-y-auto bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <span className="text-xs font-mono font-bold text-[#1B3828]">{doc.docCode}</span>
-                <span className="text-sm font-bold text-[#1C1410]">{doc.title}</span>
-              </div>
-              <pre className="text-sm text-[#1C1410] whitespace-pre-wrap font-sans leading-relaxed">{doc.content}</pre>
-            </div>
-          ) : (
-            <div className="flex-1 flex items-center justify-center bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl">
-              <p className="text-[#9A8A78] text-sm text-center px-6">No document content saved.<br/>Delegates can view via shared file.</p>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Document Vote Screen (DR only) ────────────────────────────────────────────
-function DocumentVote({ doc, committee, onDone, onStatusChange }: {
-  doc: CommitteeDocument; committee: Committee;
-  onDone: () => void; onStatusChange: (docId: string, status: DocumentStatus) => void;
-}) {
-  const t = useT();
-  const router = useRouter();
-  const present = committee.delegates.filter((d) => d.status !== 'absent').length;
-  const [forVotes, setFor] = useState(0);
-  const [against, setAgainst] = useState(0);
-  const [abstain, setAbstain] = useState(0);
-  const [result, setResult] = useState<'passed' | 'failed' | null>(null);
-  const [showProceedPanel, setShowProceedPanel] = useState(false);
-  const [suspendProposer, setSuspendProposer] = useState('');
-  const [showSuspendVote, setShowSuspendVote] = useState(false);
-  const [showSuspended, setShowSuspended] = useState(false);
-  const needed = Math.floor(present / 2) + 1;
-
-  useEffect(() => {
-    if (!showSuspended) return;
-    const handler = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') router.push('/sessions'); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [showSuspended, router]);
-
-  const finalize = () => {
-    const r = forVotes > against ? 'passed' : 'failed';
-    setResult(r);
-    onStatusChange(doc.id, r);
-  };
-
-  // Suspend vote prompt
-  if (showSuspendVote && !showSuspended) {
-    return (
-      <Portal><div className="fixed inset-0 z-[70] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
-        <p className="text-xs font-mono tracking-widest text-[#9A8A78] mb-6">MOTION TO SUSPEND DEBATE · {suspendProposer}</p>
-        <h1 className="text-4xl font-black mb-14 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>DOES THIS MOTION PASS?</h1>
-        <div className="flex gap-8">
-          <button
-            onClick={async () => {
-              await suspendDebateInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
-              setShowSuspended(true);
-            }}
-            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none gv-lift" style={{ backgroundColor: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
-            YES
-          </button>
-          <button
-            onClick={() => { setShowSuspendVote(false); setShowProceedPanel(false); }}
-            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none gv-lift" style={{ backgroundColor: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#7A1C1C'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}>
-            NO
-          </button>
-        </div>
-      </div></Portal>
-    );
-  }
-
-  if (showSuspended) {
-    return (
-      <Portal><div className="fixed inset-0 z-[70] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
-        <h1 className="text-6xl font-black text-[#1C1410] mb-4">Session is now suspended.</h1>
-        <p className="text-4xl font-black text-[#1C1410] mb-16">See you again soon!</p>
-        <p className="text-lg text-[#1C1410]/40">— Press ESC to go back to main menu</p>
-      </div></Portal>
-    );
-  }
-
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center px-8 py-12 text-center">
-      <p className="text-xs font-mono tracking-widest mb-2 text-[#9A8A78]">{doc.docCode} · {t('documents_vote_label')}</p>
-      <h2 className="text-2xl font-black text-[#1C1410] mb-1">{doc.title}</h2>
-      <p className="text-sm text-[#6A5A4A] mb-8">{t('documents_vote_needs').replace('{needed}', String(needed)).replace('{present}', String(present))}</p>
-      {result ? (
-        <>
-          <div className={`w-full max-w-sm px-8 py-10 rounded-2xl ${result === 'passed' ? 'bg-green-950/40 border border-green-800/40' : 'bg-red-950/40 border border-red-800/40'}`}>
-            <p className={`text-4xl font-black mb-2 ${result === 'passed' ? 'text-green-400' : 'text-red-400'}`}>{result === 'passed' ? t('documents_vote_passed') : t('documents_vote_failed')}</p>
-            <p className="text-sm text-[#6A5A4A]">{forVotes} {t('documents_vote_result_for')} · {against} {t('documents_vote_result_against')} · {abstain} {t('documents_vote_result_abstain')}</p>
-            <button onClick={onDone} className="mt-6 px-8 py-3 rounded-xl font-bold bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] transition-colors gv-lift">{t('documents_back_to_documents')}</button>
-          </div>
-          <button
-            onClick={() => setShowProceedPanel(true)}
-            className="mt-6 text-sm text-[#1C1410]/40 hover:text-[#1C1410]/70 transition-colors">
-            {t('documents_proceed')}
-          </button>
-
-          {/* Proceed with Session panel */}
-          {showProceedPanel && (
-            <Portal><div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-              style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}>
-              <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-3xl w-full max-w-md shadow-2xl p-8 space-y-6">
-                <h2 className="text-2xl font-black text-[#1C1410]">Proceed with Session</h2>
-
-                <div className="bg-[#FAF8F3] border border-[#DDD4C0] rounded-2xl p-5 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl">⏸️</span>
-                    <span className="text-base font-bold text-[#1C1410]">Motion to Suspend Debate</span>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-[#6A5A4A] mb-2">Proposed by</label>
-                    <input
-                      type="text"
-                      value={suspendProposer}
-                      onChange={(e) => setSuspendProposer(e.target.value)}
-                      placeholder={t('documents_country_placeholder')}
-                      className="w-full bg-[#F6F1E9] border border-[#DDD4C0] focus:border-[#1B3828] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm transition-colors"
-                    />
-                  </div>
-                  <button
-                    onClick={() => { if (suspendProposer.trim()) setShowSuspendVote(true); }}
-                    disabled={!suspendProposer.trim()}
-                    className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-3 rounded-xl font-bold transition-colors gv-lift">
-                    Raise Motion →
-                  </button>
-                </div>
-
-                <button
-                  onClick={() => setShowProceedPanel(false)}
-                  className="w-full py-3 rounded-xl font-bold text-[#6A5A4A] hover:text-[#1C1410] border border-[#DDD4C0] hover:border-[#1B3828] transition-colors">
-                  Go back to Session
-                </button>
-              </div>
-            </div></Portal>
-          )}
-        </>
-      ) : (
-        <div className="w-full max-w-sm space-y-4">
-          {[
-            { label: t('documents_in_favour'), value: forVotes, set: setFor, color: 'text-green-400' },
-            { label: t('documents_against'), value: against, set: setAgainst, color: 'text-red-400' },
-            { label: t('documents_abstain'), value: abstain, set: setAbstain, color: 'text-yellow-400' },
-          ].map(({ label, value, set, color }) => (
-            <div key={label} className="flex items-center justify-between bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl px-4 py-3">
-              <span className={`font-bold text-sm ${color}`}>{label}</span>
-              <div className="flex items-center gap-3">
-                <button onClick={() => set((v) => Math.max(0, v - 1))} className="w-8 h-8 rounded-full bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] font-bold flex items-center justify-center gv-lift">−</button>
-                <span className="text-2xl font-black text-[#1C1410] w-8 text-center">{value}</span>
-                <button onClick={() => set((v) => v + 1)} className="w-8 h-8 rounded-full bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] font-bold flex items-center justify-center gv-lift">+</button>
-              </div>
-            </div>
-          ))}
-          <button onClick={finalize} className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-4 rounded-2xl font-black text-base transition-colors mt-2 gv-lift">Finalize Vote →</button>
+        <div className="absolute inset-0 flex items-center justify-center px-8">
+          <p className="max-w-sm text-center text-sm" style={{ color: '#6A5A4A', textWrap: 'pretty' }}>{t('documents_no_content')}</p>
         </div>
       )}
     </div>
@@ -545,6 +307,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docCode = autoDocCode(type, committee.documents ?? []);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitFailed, setSubmitFailed] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
   const isDuplicate = (committee.documents ?? []).some(
@@ -599,7 +362,11 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
         ...(fileUrl && fileName ? { fileUrl, fileName } : {}),
       };
       const saved = await addDocumentInDB(committee.id, newDoc, committee.code, committee.dbChairJoinSuffix ?? undefined);
-      if (saved) onDocumentAdded(saved);
+      // V-6: a failed insert used to close the form as if it had worked. Keep what the chair
+      // typed and say it was not saved.
+      if (!saved) { setSubmitFailed(true); return; }
+      setSubmitFailed(false);
+      onDocumentAdded(saved);
       onDone();
     } finally {
       setIsSubmitting(false);
@@ -638,13 +405,13 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
       </div>
       <div>
         <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">
-          {t('documents_attachment_label')} <span className="text-[#9A8A78] font-normal">(optional)</span>
+          {t('documents_attachment_label')} <span className="text-[#9A8A78] font-normal">({t('documents_google_docs_optional')})</span>
         </label>
         {fileName ? (
           <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3">
             <span className="text-sm text-[#1C1410] flex-1 truncate flex items-center gap-2">
               {isUploading
-                ? <><div className="w-3.5 h-3.5 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin shrink-0" /> Uploading…</>
+                ? <><div className="w-3.5 h-3.5 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin shrink-0" /> {t('documents_uploading')}</>
                 : <>📎 {fileName}</>
               }
             </span>
@@ -665,7 +432,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
             }`}
           >
             <span className="block text-xl mb-1">📎</span>
-            {isDragging ? 'Drop PDF here' : 'Click to upload or drag & drop a PDF'}
+            {isDragging ? t('documents_drop_pdf') : t('documents_upload_hint')}
           </div>
         )}
         <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleFileChange} style={{ position: 'fixed', top: '-9999px', left: '-9999px', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }} />
@@ -680,9 +447,12 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
           {t('documents_limit_exceeded').replace('{current}', String(existingCount)).replace('{limit}', String(limit)).replace('{type}', docName(committee, type, 'plural', type === 'working-paper' ? t('documents_type_wp') : t('documents_type_dr')))}
         </p>
       )}
+      {submitFailed && (
+        <p role="alert" className="text-xs text-center" style={{ color: '#8B2020' }}>{t('documents_submit_failed')}</p>
+      )}
       {isSubmitting ? (
         <button disabled className="w-full bg-[#9A8A78] text-white py-3.5 rounded-xl font-bold cursor-not-allowed gv-lift">
-          Uploading…
+          {t('documents_uploading')}
         </button>
       ) : (
         <button onClick={handleSubmit} disabled={!canSubmit}
@@ -690,7 +460,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
           {limitReached
             ? t('documents_limit_reached').replace('{current}', String(existingCount)).replace('{limit}', String(limit))
             : isDuplicate
-              ? 'A document with this title already exists'
+              ? t('documents_duplicate_title')
               : t('documents_submit_document')}
         </button>
       )}
@@ -698,94 +468,33 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
   );
 }
 
-// ── Timing Setup Dialog ───────────────────────────────────────────────────────
-function TimingSetup({ doc, committee, onStart, onSkip }: {
-  doc: CommitteeDocument;
-  committee: Committee;
-  onStart: (readingMins: number, presentationMins: number, qaMins: number) => void;
-  onSkip: () => void;
-}) {
-  const t = useT();
-  const isWP = doc.type === 'working-paper';
-  const typeName = docName(committee, doc.type, 'singular',
-    isWP ? t('documents_working_paper') : t('documents_draft_resolution'));
-  const typeNamePlural = docName(committee, doc.type, 'plural',
-    isWP ? t('documents_working_papers_tab') : t('documents_draft_resolutions_tab'));
-  const [readingMins, setReadingMins] = useState(0);
-  const [presentationMins, setPresentationMins] = useState(0);
-  const [qaMins, setQaMins] = useState(0);
-
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center px-8 py-12">
-      <p className="text-xs font-mono tracking-widest mb-2 text-[#9A8A78]">{doc.docCode} · {t('documents_setup_timers')}</p>
-      <h2 className="text-2xl font-black text-[#1C1410] mb-1">{doc.title}</h2>
-      <p className="text-sm text-[#6A5A4A] mb-8">
-        {isWP ? t('documents_doc_flow_auto', { doc: typeName }) : t('documents_doc_flow_vote', { doc: typeName })}
-      </p>
-
-      <div className="w-full max-w-sm space-y-4">
-        {[
-          { key: 'reading', label: t('documents_stage_reading'), value: readingMins, set: setReadingMins, note: t('documents_stage_note_reading') },
-          { key: 'presentation', label: t('documents_stage_presentation'), value: presentationMins, set: setPresentationMins, note: t('documents_stage_note_presentation') },
-          { key: 'qa', label: t('documents_stage_qa'), value: qaMins, set: setQaMins, note: isWP ? t('documents_qa_optional_doc', { doc: typeNamePlural }) : t('documents_qa_note') },
-        ].map(({ key, label, value, set, note }) => (
-          <div key={key} className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4">
-            <div className="flex items-center justify-between mb-1">
-              <span className="font-black text-sm" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{label}</span>
-              <div className="flex items-center gap-2">
-                <input type="number" min={0} max={60}
-                  value={value === 0 ? '' : value}
-                  onChange={(e) => set(e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value) || 0))}
-                  onBlur={(e) => { if (e.target.value === '') set(0); }}
-                  className="w-16 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1 text-[#1C1410] text-sm text-center focus:outline-none focus:border-[#1B3828]" />
-                <span className="text-sm text-[#9A8A78]">min</span>
-              </div>
-            </div>
-            <p className="text-xs text-[#9A8A78]">{note}</p>
-          </div>
-        ))}
-
-        <div className="flex gap-3 pt-2">
-          <button onClick={() => onStart(readingMins, presentationMins, qaMins)}
-            className="flex-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-3.5 rounded-2xl font-black transition-colors focus:outline-none gv-lift" style={{ letterSpacing: '0.05em' }}>
-            {t('documents_start_btn')}
-          </button>
-          <button onClick={onSkip}
-            className="px-6 py-3.5 rounded-2xl font-bold bg-transparent border border-[#DDD4C0] hover:border-[#1B3828] transition-colors focus:outline-none" style={{ color: '#6A5A4A' }}>
-            {t('documents_skip_btn')}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Doc Card ──────────────────────────────────────────────────────────────────
-function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation, requireApproval, onApprovalChange }: {
+function DocCard({ doc, committee, onRemove, onStartPresentation, requireApproval, onApprovalChange, isViewOnly }: {
   doc: CommitteeDocument; committee: Committee;
-  onStatusChange: (docId: string, status: DocumentStatus) => void;
   onRemove: (docId: string) => void;
   onStartPresentation: (doc: CommitteeDocument) => void;
   requireApproval: boolean;
   onApprovalChange: (docId: string, approval: 'approved' | 'rejected') => void;
+  /** D-10: a Commenter sees the card but gets no approve / reject / introduce / delete.
+   *  UI gate only (RULE 15), like every other isViewOnly. */
+  isViewOnly: boolean;
 }) {
   const t = useT();
   const { language } = useLanguage();
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [showPdf, setShowPdf] = useState(false);
+  const [pdfZoom, setPdfZoom] = useState<PdfZoom>('fit');
   const nextStatus = STATUS_NEXT[doc.status];
-  const needsPresentation = nextStatus === 'introduced';
   // Approval gate: while the setting is on and this doc isn't approved yet, offer Approve/Reject
   // (also lets a chair reverse a rejection) and hold back Introduce until approved. Once the doc has
   // been introduced/passed/failed the gate is moot.
-  const canDecide = requireApproval && doc.approval !== 'approved' && (doc.status === 'submitted' || doc.status === 'on-floor');
+  // An introduced working paper can be re-introduced (below), so the gate applies to it too,
+  // and Approve/Reject stays offered there: otherwise a paper introduced before the setting was
+  // switched on, or rejected from another device, would have no way forward.
+  const canDecide = requireApproval && doc.approval !== 'approved'
+    && (doc.status === 'submitted' || doc.status === 'on-floor' || (doc.status === 'introduced' && doc.type === 'working-paper'));
   const approvalBlocksIntroduce = requireApproval && doc.approval !== 'approved';
-
-  const handleAdvance = () => {
-    if (!nextStatus) return;
-    if (needsPresentation) onStartPresentation(doc);
-    else onStatusChange(doc.id, nextStatus);
-  };
 
   return (
     <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl overflow-hidden">
@@ -799,13 +508,8 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
           <div className="w-full rounded-lg overflow-hidden flex-1 flex items-center justify-center"
             style={{ maxHeight: '120px', minHeight: '80px' }}>
             {doc.fileUrl ? (
-              <iframe
-                src={doc.fileUrl}
-                title={doc.docCode}
-                className="w-full"
-                style={{ height: '120px', pointerEvents: 'none' }}
-                scrolling="no"
-              />
+              <PdfThumb url={doc.fileUrl} width={72} height={110}
+                fallback={<FileText size={34} strokeWidth={1.8} aria-hidden style={{ color: '#1B3828', opacity: 0.6 }} />} />
             ) : (
               <span style={{ fontSize: '5.5rem', lineHeight: 1, userSelect: 'none' }}>📋</span>
             )}
@@ -827,18 +531,31 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
               <p className="text-base font-black text-[#1C1410] leading-snug">{doc.title}</p>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <StatusBadge status={doc.status} />
-                {doc.approval === 'approved' && (
-                  <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-[#1B3828]/15 text-[#1B3828] border-[#1B3828]/40">{t('documents_status_approved')}</span>
-                )}
-                {doc.approval === 'rejected' && (
-                  <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-[#8B2020]/10 text-[#8B2020] border-[#8B2020]/40">{t('documents_status_rejected')}</span>
-                )}
+                {doc.approval === 'approved' && <Pill tone={APPROVAL_PILL.approved} label={t('documents_status_approved')} />}
+                {doc.approval === 'rejected' && <Pill tone={APPROVAL_PILL.rejected} label={t('documents_status_rejected')} />}
               </div>
             </div>
-            <button onClick={() => onRemove(doc.id)}
-              className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm shrink-0 focus:outline-none mt-0.5"
-              title="Delete">✕</button>
+            {!isViewOnly && !confirmDelete && (
+              <button onClick={() => setConfirmDelete(true)}
+                className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm shrink-0 focus:outline-none mt-0.5"
+                title={t('documents_delete_yes')}>✕</button>
+            )}
           </div>
+
+          {/* Delete asks first: it was a single click with no way back. */}
+          {!isViewOnly && confirmDelete && (
+            <div className="flex items-center gap-2 rounded-lg px-3 py-2" style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.3)' }}>
+              <span className="text-sm font-semibold flex-1 min-w-0" style={{ color: '#8B2020' }}>{t('documents_delete_confirm')}</span>
+              <button onClick={() => { setConfirmDelete(false); onRemove(doc.id); }}
+                className="px-3 py-1 rounded-lg text-xs font-bold focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#FAF8F3' }}>
+                {t('documents_delete_yes')}
+              </button>
+              <button onClick={() => setConfirmDelete(false)}
+                className="px-3 py-1 rounded-lg text-xs font-bold border focus:outline-none" style={{ borderColor: '#DDD4C0', color: '#6A5A4A' }}>
+                {t('documents_delete_no')}
+              </button>
+            </div>
+          )}
 
           {/* Sponsors with flags */}
           {doc.sponsors.length > 0 && (
@@ -870,9 +587,9 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
                 📎 {doc.fileName} {showPdf ? '▲' : '▼'}
               </button>
               {showPdf && (
-                <iframe src={doc.fileUrl} title={doc.fileName}
-                  className="w-full rounded-lg border border-[#DDD4C0]"
-                  style={{ height: '480px' }} />
+                <PdfViewer url={doc.fileUrl} title={doc.fileName} fileName={doc.fileName}
+                  zoom={pdfZoom} onZoomChange={setPdfZoom} compact
+                  className="relative w-full h-[480px] rounded-xl overflow-hidden" />
               )}
             </div>
           )}
@@ -882,7 +599,7 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
             <div>
               <button onClick={() => setExpanded((v) => !v)}
                 className="text-xs text-[#1B3828] hover:text-[#6A5A4A] transition-colors">
-                {expanded ? '▲ Hide content' : '▼ Show content'}
+                {expanded ? `▲ ${t('documents_hide_content')}` : `▼ ${t('documents_show_content')}`}
               </button>
               {expanded && (
                 <pre className="mt-2 text-xs text-[#1C1410] bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 whitespace-pre-wrap font-sans leading-relaxed max-h-48 overflow-y-auto">
@@ -893,7 +610,7 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
           )}
 
           {/* Chair approval gate, approve/reject before the doc can be introduced */}
-          {canDecide && (
+          {canDecide && !isViewOnly && (
             <div className="flex gap-2">
               <button onClick={() => onApprovalChange(doc.id, 'approved')}
                 className="flex-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none gv-lift">
@@ -909,11 +626,14 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
             </div>
           )}
 
-          {/* Introduce / advance button, withheld until approved when approval is required */}
-          {nextStatus && doc.status !== 'passed' && doc.status !== 'failed' && doc.status !== 'introduced' && !approvalBlocksIntroduce && (
-            <button onClick={handleAdvance}
+          {/* Introduce, withheld until approved when approval is required. A working paper
+              whose introduction was closed before Q&A finished is still "introduced" and
+              offers Introduce again (setup prefilled with its saved times), so it can always
+              reach its automatic pass. An introduced draft resolution goes to the voting page. */}
+          {!isViewOnly && !approvalBlocksIntroduce && (nextStatus === 'introduced' || (doc.status === 'introduced' && doc.type === 'working-paper')) && (
+            <button onClick={() => onStartPresentation(doc)}
               className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none gv-lift">
-              {needsPresentation ? `${t('documents_introduce')} →` : `${t('documents_advance')}${getStatusLabel(nextStatus, t)}`}
+              {`${t('documents_introduce')} →`}
             </button>
           )}
 
@@ -924,8 +644,16 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
 }
 
 // ── Main Modal ────────────────────────────────────────────────────────────────
-export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, isViewOnly = false, chairName = '' }: {
+/** The chair page's top bar (h-11). The introduction screens start BELOW it, so its Gavel,
+ *  session code, Chat, Scoreboard and Settings stay on screen and work exactly as on the floor
+ *  (17 Sep 2026). The chair page lifts that bar above the introduction while one is open. */
+const CHAIR_TOP_BAR_H = 44;
+
+export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, isViewOnly = false, chairName = '', onIntroChange }: {
   committee: Committee; onClose: () => void;
+  /** Told when the full-screen introduction (setup or a timed stage) opens and closes, so the
+   *  chair page can keep its top bar above it. Called with false on unmount. */
+  onIntroChange?: (active: boolean) => void;
   onCommitteeUpdate?: (updater: (c: Committee) => Committee) => void;
   isViewOnly?: boolean;
   // The acting chair's name, so "Go to voting" can hand it on to /voting/[code] and the
@@ -937,19 +665,60 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
 }) {
   const t = useT();
   const router = useRouter();
-  const { getSettings } = useSettingsStore();
-  const requireDocApproval = getSettings(committee.code).requireDocApproval;
+  // D-10: read from the committee row, so another chair's toggle applies on this device.
+  const requireDocApproval = readRequireDocApproval(committee);
   const [tab, setTab] = useState<DocTab>('working-paper');
-  const hasWPs = (committee.documents ?? []).filter((d) => d.type === 'working-paper').length > 0;
   const [showForm, setShowForm] = useState(false);
 
-  // Fullscreen presentation state
-  const [activeDoc, setActiveDoc] = useState<CommitteeDocument | null>(null);
+  // Fullscreen presentation state. The doc itself is re-read from the committee by id so a
+  // realtime refresh (title, sponsors) is reflected; `activeDocSnap` is the fallback.
+  const [activeDocSnap, setActiveDocSnap] = useState<CommitteeDocument | null>(null);
+  const activeDoc = activeDocSnap
+    ? ((committee.documents ?? []).find((d) => d.id === activeDocSnap.id) ?? activeDocSnap)
+    : null;
   const [stage, setStage] = useState<PresentationStage>(null);
   const [timings, setTimings] = useState({ reading: 0, presentation: 0, qa: 0 });
-  const [showDocContent, setShowDocContent] = useState(false);
+  const [clock, setClock] = useState<{ base: number; startedAt: string | null }>({ base: 0, startedAt: null });
+  /** Both belong to the introduction, not to a stage, so moving between Reading, Presentation
+   *  and Q&A leaves the paper exactly as the chair set it. Zoom is remembered per device. */
+  const [zoom, setZoomState] = useState<PdfZoom>(() => (typeof window === 'undefined' ? 'fit' : readZoom()));
+  const setZoom = useCallback((z: PdfZoom) => { setZoomState(z); writeZoom(z); }, []);
+  const [timerOpen, setTimerOpen] = useState(true);
+  /** Stages this introduction has finished (Next / Continue out of them), for the switcher's
+   *  check marks. Local to this screen, like the stage itself. */
+  const [doneStages, setDoneStages] = useState<TimedStage[]>([]);
+  /** Finish pressed with time still on the clock (or timed stages still ahead): ask first. */
+  const [finishAsk, setFinishAsk] = useState(false);
+  /** Vote pressed with no draft resolution to vote on: a small note above the button instead
+   *  of a whole empty voting page (owner, 17 Sep 2026). Fixed coordinates in #fit-root space. */
+  const [voteTip, setVoteTip] = useState<{ left: number; top: number } | null>(null);
+  const voteBtnRef = useRef<HTMLButtonElement>(null);
+  const voteTipRef = useRef<HTMLDivElement>(null);
+  const introActive = !!(activeDocSnap && stage);
+  const onIntroChangeRef = useRef(onIntroChange);
+  useEffect(() => { onIntroChangeRef.current = onIntroChange; }, [onIntroChange]);
+  useEffect(() => { onIntroChangeRef.current?.(introActive); }, [introActive]);
+  useEffect(() => () => onIntroChangeRef.current?.(false), []);
+  const [flowError, setFlowError] = useState(false);
+  /** Write order for this modal, and the failures still standing (doc id -> seq of the
+   *  failed write). A success clears ONLY failures of the same document issued before it:
+   *  a later success on another paper (or an older write landing late) used to hide the
+   *  banner while the failed change was still unsaved. */
+  const flowSeqRef = useRef(0);
+  const flowFailuresRef = useRef<Map<string, number>>(new Map());
+  const settleFlow = (docId: string, seq: number, ok: boolean) => {
+    const failures = flowFailuresRef.current;
+    if (ok) {
+      const failedAt = failures.get(docId);
+      if (failedAt !== undefined && failedAt < seq) failures.delete(docId);
+    } else {
+      failures.set(docId, Math.max(failures.get(docId) ?? 0, seq));
+    }
+    setFlowError(failures.size > 0);
+  };
 
   const update = (updater: (c: Committee) => Committee) => onCommitteeUpdate?.(updater);
+  const suffix = committee.dbChairJoinSuffix ?? undefined;
   const docs = (committee.documents ?? []).filter((d) => d.type === tab);
   // Chair-renameable labels for the active tab's document type.
   const tabSingularName = docName(committee, tab, 'singular',
@@ -957,151 +726,350 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
   const tabPluralName = docName(committee, tab, 'plural',
     tab === 'working-paper' ? t('documents_working_papers_tab') : t('documents_draft_resolutions_tab'));
 
+  const patchDocLocal = (docId: string, patch: Partial<CommitteeDocument>) =>
+    update((c) => ({ ...c, documents: (c.documents ?? []).map((d) => d.id === docId ? { ...d, ...patch } : d) }));
+
+  /** Optimistic first, then one checked write (RULE 5). A failure is shown, not swallowed. */
+  const writeFlow = (docId: string, patch: Parameters<typeof updateDocumentFlow>[1]) => {
+    const local: Partial<CommitteeDocument> = {};
+    if (patch.status !== undefined) local.status = patch.status;
+    if (patch.introState !== undefined) local.introState = patch.introState;
+    if (patch.readingMinutes !== undefined) local.readingMinutes = patch.readingMinutes;
+    if (patch.presentationMinutes !== undefined) local.presentationMinutes = patch.presentationMinutes;
+    if (patch.qaMinutes !== undefined) local.qaMinutes = patch.qaMinutes;
+    patchDocLocal(docId, local);
+    const seq = ++flowSeqRef.current;
+    void updateDocumentFlow(docId, patch, committee.code, suffix).then((ok) => settleFlow(docId, seq, ok));
+  };
+
   const handleDocumentAdded = (doc: CommitteeDocument) => {
     update((c) => ({ ...c, documents: [...(c.documents ?? []), doc] }));
   };
 
-  const handleStatusChange = (docId: string, status: DocumentStatus) => {
-    update((c) => ({ ...c, documents: (c.documents ?? []).map((d) => d.id === docId ? { ...d, status } : d) }));
-    updateDocumentStatusInDB(docId, status, committee.code, committee.dbChairJoinSuffix ?? undefined);
-  };
-
   const handleApprovalChange = (docId: string, approval: 'approved' | 'rejected') => {
-    update((c) => ({ ...c, documents: (c.documents ?? []).map((d) => d.id === docId ? { ...d, approval } : d) }));
-    updateDocumentApprovalInDB(docId, approval, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    patchDocLocal(docId, { approval });
+    updateDocumentApprovalInDB(docId, approval, committee.code, suffix);
   };
 
   const handleRemove = (docId: string) => {
+    const removed = (committee.documents ?? []).find((d) => d.id === docId);
     update((c) => ({ ...c, documents: (c.documents ?? []).filter((d) => d.id !== docId) }));
-    removeDocumentInDB(docId, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    const seq = ++flowSeqRef.current;
+    void deleteDocumentChecked(docId, committee.code, suffix).then((ok) => {
+      if (ok) { settleFlow(docId, seq, true); return; }
+      if (!removed) return;
+      // Put it back rather than pretend it is gone.
+      update((c) => (c.documents ?? []).some((d) => d.id === docId) ? c : { ...c, documents: [...(c.documents ?? []), removed] });
+      settleFlow(docId, seq, false);
+    });
   };
 
+  const closeFlow = () => { setStage(null); setActiveDocSnap(null); setFinishAsk(false); };
+
+  /** The voting page lists draft resolutions that are introduced, passed or failed (its picker's
+   *  own filter). With none, it would be an empty page: show a note by the button instead. */
+  const hasVotableDR = (committee.documents ?? []).some(
+    (d) => d.type === 'draft-resolution' && ['introduced', 'passed', 'failed'].includes(d.status));
+  const TIP_W = 272;
+  const TIP_H = 84;
+  const goToVoting = () => {
+    if (!hasVotableDR) {
+      const el = voteBtnRef.current;
+      if (!el) return;
+      const b = anchorBox(el);
+      const left = Math.min(Math.max(8, b.right - TIP_W), Math.max(8, b.viewW - TIP_W - 8));
+      const above = b.top - 8 - TIP_H;
+      setVoteTip({ left, top: above >= 8 ? above : b.bottom + 8 });
+      return;
+    }
+    router.push(`/voting/${committee.code}${chairName ? `?chairName=${encodeURIComponent(chairName)}` : ''}`);
+  };
+
+  // The note closes by itself, on a press anywhere else, and on Escape (which it keeps from
+  // also closing the Documents dialog underneath).
+  useEffect(() => {
+    if (!voteTip) return;
+    const timer = setTimeout(() => setVoteTip(null), 3600);
+    const onDown = (e: PointerEvent) => {
+      const tgt = e.target as Node;
+      if (voteTipRef.current?.contains(tgt) || voteBtnRef.current?.contains(tgt)) return;
+      setVoteTip(null);
+    };
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault(); e.stopPropagation();
+      setVoteTip(null);
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('keydown', onKey, true);
+    return () => { clearTimeout(timer); document.removeEventListener('pointerdown', onDown, true); document.removeEventListener('keydown', onKey, true); };
+  }, [voteTip]);
+
   const handleStartPresentation = (doc: CommitteeDocument) => {
-    setActiveDoc(doc);
+    setActiveDocSnap(doc);
     setStage('setup');
-    setShowDocContent(false);
+    setTimerOpen(true);
+    setDoneStages([]);
+  };
+
+  const stageMinutes = (s: TimedStage, tm = timings) => tm[s];
+
+  /** Enter a timed stage with a fresh, paused clock. The stage lives only on this screen:
+   *  there is no Resume from the card any more, so it is not persisted. */
+  const enterStage = (s: TimedStage, tm = timings) => {
+    setFinishAsk(false);
+    setClock({ base: stageMinutes(s, tm) * 60, startedAt: null });
+    setStage(s);
+  };
+
+  const finishIntroduction = (doc: CommitteeDocument) => {
+    // WP auto-passes. A DR stays introduced; the chair takes it to the voting page.
+    writeFlow(doc.id, doc.type === 'working-paper' ? { status: 'passed', introState: null } : { introState: null });
+    closeFlow();
   };
 
   const handleTimingConfirmed = (readingMins: number, presentationMins: number, qaMins: number) => {
     if (!activeDoc) return;
-    setTimings({ reading: readingMins, presentation: presentationMins, qa: qaMins });
-    // Save timings to DB and mark as introduced
-    const updatedDoc = { ...activeDoc, readingMinutes: readingMins, presentationMinutes: presentationMins, qaMinutes: qaMins, status: 'introduced' as DocumentStatus };
-    update((c) => ({ ...c, documents: (c.documents ?? []).map((d) => d.id === activeDoc.id ? updatedDoc : d) }));
-    updateDocumentTimingsInDB(activeDoc.id, readingMins, presentationMins, qaMins, 'introduced', committee.code, committee.dbChairJoinSuffix ?? undefined);
-    setActiveDoc(updatedDoc);
-    // Start first non-zero stage
-    if (readingMins > 0) setStage('reading');
-    else if (presentationMins > 0) setStage('presentation');
-    else if (qaMins > 0) setStage('qa');
-    else advanceFromStage('qa');
+    const tm = { reading: readingMins, presentation: presentationMins, qa: qaMins };
+    setTimings(tm);
+    setDoneStages([]);
+    const first = STAGE_ORDER.find((s) => tm[s] > 0);
+    // One write: timings and status together. `introState: null` also clears a stage left by
+    // the retired Resume flow, so no row keeps a stale introduction.
+    writeFlow(activeDoc.id, {
+      readingMinutes: readingMins, presentationMinutes: presentationMins, qaMinutes: qaMins,
+      status: first || activeDoc.type !== 'working-paper' ? 'introduced' : 'passed',
+      introState: null,
+    });
+    if (first) { setClock({ base: tm[first] * 60, startedAt: null }); setStage(first); }
+    else closeFlow();
   };
 
-  const advanceFromStage = (from: PresentationStage) => {
+  const advanceFromStage = (from: TimedStage) => {
     if (!activeDoc) return;
-    if (from === 'reading') {
-      if (timings.presentation > 0) { setStage('presentation'); return; }
-      if (timings.qa > 0) { setStage('qa'); return; }
-    }
-    if (from === 'presentation') {
-      if (timings.qa > 0) { setStage('qa'); return; }
-    }
-    // After Q&A (or if all skipped)
-    if (activeDoc.type === 'working-paper') {
-      // WP auto-passes
-      handleStatusChange(activeDoc.id, 'passed');
-      setStage(null);
-      setActiveDoc(null);
-    } else {
-      // DR: presentation complete, stay on documents page, chair navigates to voting manually
-      setStage(null);
-      setActiveDoc(null);
-    }
+    setDoneStages((d) => (d.includes(from) ? d : [...d, from]));
+    const after = STAGE_ORDER.slice(STAGE_ORDER.indexOf(from) + 1).find((s) => timings[s] > 0);
+    if (after) enterStage(after);
+    else finishIntroduction(activeDoc);
+  };
+
+  /** Back skips stages with a 0-minute timer (they used to render a blank screen) and
+   *  lands on setup when there is nothing earlier. */
+  const backFromStage = (from: TimedStage) => {
+    if (!activeDoc) return;
+    const before = STAGE_ORDER.slice(0, STAGE_ORDER.indexOf(from)).reverse().find((s) => timings[s] > 0);
+    if (before) enterStage(before);
+    else setStage('setup');
+  };
+
+  const handleClockChange = (next: { base: number; startedAt: string | null }) => {
+    if (!activeDoc || !stage || stage === 'setup') return;
+    setClock(next);
   };
 
   const handleSkipToVote = () => {
     if (!activeDoc) return;
-    if (activeDoc.type === 'working-paper') {
-      handleStatusChange(activeDoc.id, 'passed');
-      setStage(null);
-      setActiveDoc(null);
-    } else {
-      handleStatusChange(activeDoc.id, 'introduced');
-      setStage(null);
-      setActiveDoc(null);
-    }
+    writeFlow(activeDoc.id, activeDoc.type === 'working-paper'
+      ? { status: 'passed', introState: null }
+      : { status: 'introduced', introState: null });
+    closeFlow();
   };
 
-  // Fullscreen stages
-  if (activeDoc && stage && stage !== 'setup') {
-    return (
-      <Portal><div className="fixed inset-0 z-50 bg-[#F6F1E9] flex flex-col">
-        <div className="flex items-center justify-between px-6 pt-4 pb-2 border-b border-[#DDD4C0] shrink-0">
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-bold text-[#1C1410]">{activeDoc.docCode}</span>
-            {['reading', 'presentation', 'qa'].map((s) => (
-              <span key={s} className={`text-xs px-2 py-0.5 rounded-full font-bold`} style={{ backgroundColor: stage === s ? '#1B3828' : '#DDD4C0', color: stage === s ? '#EED98A' : '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                {s === 'reading' ? t('documents_stage_reading_short') : s === 'presentation' ? t('documents_stage_presentation') : t('documents_stage_qa')}
-              </span>
-            ))}
-          </div>
-          <button onClick={() => { setStage(null); setActiveDoc(null); onClose(); }} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl">✕</button>
-        </div>
+  /** Finish beside the stage switcher: completes the introduction exactly like Continue out of
+   *  the last stage (a working paper passes, a draft resolution stays introduced for its vote).
+   *  Asks first while the current clock still has time or a timed stage is still ahead. */
+  const handleFinish = () => {
+    if (!activeDoc || !stage || stage === 'setup') return;
+    // A second press folds the question; it never finishes by itself (a double click must not).
+    if (finishAsk) { setFinishAsk(false); return; }
+    const timeLeft = introRemainingNow(clock, serverNow()) > 0
+      || STAGE_ORDER.slice(STAGE_ORDER.indexOf(stage) + 1).some((s) => timings[s] > 0);
+    if (timeLeft) { setFinishAsk(true); return; }
+    finishIntroduction(activeDoc);
+  };
 
-        {stage === 'reading' && timings.reading > 0 && (
-          <StageTimer label={t('documents_stage_reading')} color="text-[#1B3828]"
-            totalSeconds={timings.reading * 60} doc={activeDoc} committee={committee}
-            showDocument={showDocContent}
-            onComplete={() => advanceFromStage('reading')}
-            onToggleDocument={() => setShowDocContent((v) => !v)}
-            onBack={() => setStage('setup')} />
-        )}
-        {stage === 'presentation' && timings.presentation > 0 && (
-          <StageTimer label={t('documents_stage_presentation')} color="text-[#1B3828]"
-            totalSeconds={timings.presentation * 60} doc={activeDoc} committee={committee}
-            showDocument={showDocContent}
-            onComplete={() => advanceFromStage('presentation')}
-            onToggleDocument={() => setShowDocContent((v) => !v)}
-            onBack={() => setStage('reading')} />
-        )}
-        {stage === 'qa' && timings.qa > 0 && (
-          <StageTimer label={t('documents_stage_qa')} color="text-[#1B3828]"
-            totalSeconds={timings.qa * 60} doc={activeDoc} committee={committee}
-            showDocument={showDocContent}
-            onComplete={() => advanceFromStage('qa')}
-            onToggleDocument={() => setShowDocContent((v) => !v)}
-            onBack={() => setStage('presentation')} />
-        )}
-        {stage === 'vote' && (
-          <DocumentVote doc={activeDoc} committee={committee}
-            onDone={() => { setStage(null); setActiveDoc(null); }}
-            onStatusChange={handleStatusChange} />
-        )}
-      </div></Portal>
-    );
+  // Escape: on the setup screen it goes back to the documents list (the keyboard twin of the
+  // docket's Back key; nothing has been written there yet, so leaving costs only the draft
+  // minutes). On a STAGE it never leaves: a running presentation must not end by a stray key
+  // press (17 Sep 2026, owner), so it only folds an open Finish question. Never while a dialog
+  // is over the introduction (Chat, Settings, Scoreboard handle their own Escape) or inside a
+  // field.
+  const introStage = activeDoc ? stage : null;
+  useEffect(() => {
+    if (!introStage) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      if (introStage === 'setup') { e.preventDefault(); setStage(null); setActiveDocSnap(null); setFinishAsk(false); }
+      else if (finishAsk) { e.preventDefault(); setFinishAsk(false); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [introStage, finishAsk]);
+
+  /** Jump straight to a stage from the switcher: a fresh paused clock, like Next and Back. */
+  const jumpToStage = (s: TimedStage) => {
+    if (!activeDoc || timings[s] <= 0 || s === stage) return;
+    enterStage(s);
+  };
+
+  const flowErrorBanner = flowError ? (
+    <p role="alert" className="text-xs text-center px-6 py-2" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)' }}>
+      {t('documents_intro_save_failed')}
+    </p>
+  ) : null;
+
+  /** Both introduction screens share this frame: z 45, BELOW every dialog (z 50 and up) so
+   *  Chat, Scoreboard and Settings open over it, and starting under the chair page's top bar,
+   *  which the page lifts to z 46 while an introduction is open. The strip under that bar is
+   *  painted in the bar's own ivory, so the bar reads full width over the hidden sidebar. */
+  const introFrame = (ground: string, children: React.ReactNode) => (
+    <Portal>
+      <div className="fixed inset-0 z-[45] flex flex-col" style={{ backgroundColor: ground }} data-doc-intro>
+        <div aria-hidden className="shrink-0 bg-[#FAF8F3]" style={{ height: CHAIR_TOP_BAR_H, boxShadow: '0 1px 0 rgba(28,20,16,0.07)' }} />
+        {children}
+      </div>
+    </Portal>
+  );
+
+  const switchLabel = (s: TimedStage) =>
+    s === 'reading' ? t('documents_switch_reading') : s === 'presentation' ? t('documents_switch_presentation') : t('documents_switch_qa');
+
+  // Fullscreen stages. The paper is the page; the clock floats over it (16 Sep 2026).
+  if (activeDoc && stage && stage !== 'setup') {
+    const stageLabel = stage === 'reading' ? t('documents_stage_reading') : stage === 'presentation' ? t('documents_stage_presentation') : t('documents_stage_qa');
+    /** No file and no text: there is nothing to project, so the clock becomes the screen
+     *  (17 Sep 2026, owner: "just have a big timer appear in the middle"). */
+    const paperEmpty = !activeDoc.fileUrl && !activeDoc.content;
+    return introFrame('#EDE7D8', (<>
+        <div className="relative z-[30] grid items-center gap-3 px-4 h-14 shrink-0 bg-[#F6F1E6]"
+          style={{ gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', boxShadow: '0 1px 0 rgba(28,20,16,0.08)' }}>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="shrink-0 h-7 px-2.5 rounded-lg flex items-center text-[14.5px] font-semibold tabular-nums"
+              style={{ color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.08)', fontFamily: "'Outfit', sans-serif" }}>{activeDoc.docCode}</span>
+            <span className="text-[17px] font-semibold truncate min-w-0" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }} title={activeDoc.title}>{activeDoc.title}</span>
+          </div>
+          <div className="flex items-center gap-2 min-w-0">
+            <StageSwitcher
+              current={stage}
+              onSelect={(k) => jumpToStage(k as TimedStage)}
+              stages={STAGE_ORDER.map((s) => ({ key: s, label: switchLabel(s), minutes: timings[s], done: doneStages.includes(s) }))}
+            />
+            {/* Finish: big icon, small word beneath (the icon-button rule, CLAUDE.md section 8). */}
+            <div className="relative shrink-0">
+              <button type="button" onClick={handleFinish} aria-expanded={finishAsk} aria-haspopup="dialog"
+                aria-label={t('documents_finish_title')} title={t('documents_finish_title')}
+                className="h-[46px] min-w-[54px] px-2 rounded-[12px] flex flex-col items-center justify-center gap-[3px] bg-[#EED98A] hover:bg-[#E6CD6E] text-[#1B3828] transition-[background-color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                style={{ fontFamily: "'Outfit', sans-serif", boxShadow: '0 1px 2px rgba(27,56,40,0.16), 0 3px 8px rgba(27,56,40,0.10)' }}>
+                <CheckCheck size={19} strokeWidth={2.4} aria-hidden />
+                <span className="text-[10.5px] font-semibold leading-none">{t('documents_finish')}</span>
+              </button>
+              {finishAsk && (
+                <div role="dialog" aria-label={t('documents_finish_title')}
+                  className="absolute top-[calc(100%+8px)] end-0 w-[280px] rounded-2xl p-4 bg-[#FFFDF8]"
+                  style={{ fontFamily: "'Outfit', sans-serif", boxShadow: '0 0 0 1px rgba(28,20,16,0.08), 0 2px 6px rgba(27,56,40,0.08), 0 16px 40px rgba(27,56,40,0.20)' }}>
+                  <p className="text-[14px] font-semibold leading-snug" style={{ color: '#1C1410', textWrap: 'balance' }}>{t('documents_finish_confirm')}</p>
+                  <p className="mt-1 text-[13px] leading-snug" style={{ color: '#5C4E40', textWrap: 'pretty' }}>
+                    {activeDoc.type === 'working-paper' ? t('documents_finish_outcome_wp') : t('documents_finish_outcome_dr')}
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <button type="button" autoFocus onClick={() => finishIntroduction(activeDoc)}
+                      className="flex-1 h-9 rounded-xl text-[13px] font-semibold bg-[#1B3828] hover:bg-[#244A36] text-[#FAF8F3] transition-[background-color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#1B3828]">
+                      {t('documents_finish_now')}
+                    </button>
+                    <button type="button" onClick={() => setFinishAsk(false)}
+                      className="flex-1 h-9 rounded-xl text-[13px] font-medium text-[#5C4E40] hover:bg-[#1B3828]/[0.07] transition-[background-color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">
+                      {t('documents_finish_keep')}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          {/* Zoom belongs to the chair, not to the stage: it survives every stage change. A PDF
+              carries its own toolbar (PdfViewer); these controls serve a text paper only. */}
+          <div className="flex items-center justify-end gap-1 min-w-0">
+            {!activeDoc.fileUrl && activeDoc.content && (<>
+            <button type="button" onClick={() => setZoom(stepPdfZoom(zoom === 'fit' ? 1 : zoom, -1))}
+              disabled={zoom !== 'fit' && zoom <= PDF_ZOOM_STEPS[0]}
+              aria-label={t('documents_zoom_out')} title={t('documents_zoom_out')}
+              className="w-9 h-9 rounded-lg flex items-center justify-center text-[#6A5A4A] hover:text-[#1B3828] hover:bg-[#1B3828]/[0.07] disabled:opacity-35 disabled:hover:bg-transparent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">
+              <Minus size={16} strokeWidth={2.6} aria-hidden />
+            </button>
+            <button type="button" onClick={() => setZoom(1)}
+              aria-label={t('documents_zoom_reset')} title={t('documents_zoom_reset')}
+              className="min-w-[52px] h-9 px-2 rounded-lg text-xs font-bold tabular-nums text-[#6A5A4A] hover:text-[#1B3828] hover:bg-[#1B3828]/[0.07] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">
+              {Math.round((zoom === 'fit' ? 1 : zoom) * 100)}%
+            </button>
+            <button type="button" onClick={() => setZoom(stepPdfZoom(zoom === 'fit' ? 1 : zoom, 1))}
+              disabled={zoom !== 'fit' && zoom >= PDF_ZOOM_STEPS[PDF_ZOOM_STEPS.length - 1]}
+              aria-label={t('documents_zoom_in')} title={t('documents_zoom_in')}
+              className="w-9 h-9 rounded-lg flex items-center justify-center text-[#6A5A4A] hover:text-[#1B3828] hover:bg-[#1B3828]/[0.07] disabled:opacity-35 disabled:hover:bg-transparent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">
+              <Plus size={16} strokeWidth={2.6} aria-hidden />
+            </button>
+            </>)}
+            {/* A centred timer IS the screen, so it is never hidden and this never shows. */}
+            {!timerOpen && !paperEmpty && (
+              <button type="button" onClick={() => setTimerOpen(true)}
+                aria-label={t('documents_timer_show')} title={t('documents_timer_show')}
+                className="ms-1 h-9 ps-2.5 pe-3 rounded-lg flex items-center gap-1.5 text-xs font-semibold bg-[#1B3828] hover:bg-[#244A36] text-[#FAF8F3] transition-[background-color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]/40">
+                <Timer size={15} strokeWidth={2.4} aria-hidden />
+                {t('documents_timer_show')}
+              </button>
+            )}
+            {/* No close X here any more (17 Sep 2026, owner: "the only way out is either clicking
+                Finish or the next arrows"). A presentation is left by Finish, by the timer's
+                Continue / next out of the last stage, or by the Timings key back to the order of
+                proceedings, whose Back key returns to the documents list. */}
+          </div>
+        </div>
+        {flowErrorBanner}
+        <div className="flex-1 min-h-0 relative">
+          {/* Mounted once for the whole introduction: a stage change never remounts it, so the
+              zoom and the scroll position stay exactly where the chair left them. */}
+          {!paperEmpty && <IntroDocument doc={activeDoc} zoom={zoom} onZoomChange={setZoom} />}
+          {/* A stage with a 0-minute timer renders as already complete (Continue), never blank. */}
+          {(timerOpen || paperEmpty) && (
+            <StageTimerDevice label={stageLabel}
+              centred={paperEmpty}
+              totalSeconds={timings[stage] * 60}
+              sponsors={activeDoc.sponsors}
+              sponsorsWord={sponsorLabel(committee, t('documents_sponsors_label_card'))}
+              clock={clock} onClockChange={handleClockChange}
+              onComplete={() => advanceFromStage(stage)}
+              onBack={() => backFromStage(stage)}
+              onHide={paperEmpty ? undefined : () => setTimerOpen(false)}
+              onTimings={() => { setFinishAsk(false); setStage('setup'); }} />
+          )}
+        </div>
+    </>));
   }
 
-  // Timing setup screen
+  // Timing setup screen: the order of proceedings (17 Sep 2026).
   if (activeDoc && stage === 'setup') {
-    return (
-      <Portal><div className="fixed inset-0 z-50 bg-[#F6F1E9] flex flex-col">
-        <div className="flex items-center justify-between px-6 pt-4 pb-2 border-b border-[#DDD4C0] shrink-0">
-          <span className="text-sm font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('documents_introduce_header')}</span>
-          <button onClick={() => { setStage(null); setActiveDoc(null); }} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl">✕</button>
-        </div>
-        <TimingSetup doc={activeDoc} committee={committee} onStart={handleTimingConfirmed} onSkip={handleSkipToVote} />
-      </div></Portal>
-    );
+    // No bar above the setup any more (owner: the "Introduce" strip and its X looked weird).
+    // Leaving is the docket's Back key or Escape; both return to the documents list.
+    return introFrame('#F6F1E9', (<>
+        {flowErrorBanner}
+        <ProceedingsSetup doc={activeDoc} committee={committee} onStart={handleTimingConfirmed} onSkip={handleSkipToVote} onBack={closeFlow} />
+    </>));
   }
 
   return (
-    <Portal><div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden max-h-[92%] flex flex-col">
+    // Grows out of the Documents tab, rendered from the documents already on the committee:
+    // nothing waits on the network, so a slow connection cannot delay the opening.
+    <GrowDialog
+      originSelector='[data-tutorial="tab-documents"]'
+      onClose={onClose}
+      ariaLabel={t('documents_title')}
+      panelClassName="bg-[#EDE7D8] border border-[#DDD4C0] rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden max-h-[92%] flex flex-col"
+    >
+      {(requestClose) => (<>
         <div className="flex items-center justify-between px-7 pt-6 pb-4 shrink-0 border-b border-[#DDD4C0]">
           <h2 className="text-2xl font-black text-[#1C1410]">{t('documents_title')}</h2>
-          <button onClick={onClose} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl leading-none">✕</button>
+          <button onClick={requestClose} aria-label={t('sb_close')} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl leading-none focus:outline-none">✕</button>
         </div>
 
         {!showForm && (
@@ -1126,16 +1094,9 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
             <SubmitForm committee={committee} type={tab} onDone={() => setShowForm(false)} onDocumentAdded={handleDocumentAdded} />
           ) : (
             <div className="px-7 pb-7 space-y-3">
-              {tab === 'draft-resolution' && (committee.documents ?? []).some((d) => d.type === 'draft-resolution' && d.status === 'introduced') && (
-                <button
-                  onClick={() => router.push(`/voting/${committee.code}${chairName ? `?chairName=${encodeURIComponent(chairName)}` : ''}`)}
-                  className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] border border-[#1B3828] text-[#EED98A] py-3 rounded-xl font-black text-sm transition-colors"
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 24px rgba(27,56,40,0.25)'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
-                >
-                  {t('documents_go_to_voting')}
-                </button>
-              )}
+              {flowErrorBanner}
+              {/* The full-width GO TO VOTING banner is gone (16 Sep 2026). The Vote tile beside
+                  the submit button is the one way to the voting page from here. */}
               {docs.length === 0 ? (
                 <div className="text-center py-10">
                   <p className="text-2xl font-black mb-1" style={{ color: '#1B3828' }}>{t('documents_empty_doc', { doc: tabPluralName })}</p>
@@ -1144,21 +1105,55 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
               ) : (
                 docs.map((doc) => (
                   <DocCard key={doc.id} doc={doc} committee={committee}
-                    onStatusChange={handleStatusChange} onRemove={handleRemove}
+                    onRemove={handleRemove}
                     onStartPresentation={handleStartPresentation}
-                    requireApproval={requireDocApproval} onApprovalChange={handleApprovalChange} />
+                    requireApproval={requireDocApproval} onApprovalChange={handleApprovalChange}
+                    isViewOnly={isViewOnly} />
                 ))
               )}
               {!isViewOnly && (
-                <button onClick={() => setShowForm(true)}
-                  className="w-full bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-all mt-2 text-center focus:outline-none gv-lift" style={{ fontFamily: "'Outfit', sans-serif" }}>
-                  + {t('documents_submit_new_doc', { doc: tabSingularName })}
-                </button>
+                <div className="flex items-stretch gap-2 mt-2">
+                  <button onClick={() => setShowForm(true)}
+                    className="flex-1 min-w-0 bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-[background-color,border-color,transform] duration-150 active:scale-[0.96] text-center focus:outline-none gv-lift" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                    + {t('documents_submit_new_doc', { doc: tabSingularName })}
+                  </button>
+                  {/* Vote: big icon, small word beneath (CLAUDE.md section 8). Opens the voting
+                      page, which picks the draft resolution and runs the roll call, or, with no
+                      draft resolution to vote on, a small note above the button. Carries
+                      ?chairName=. Moderator only (UI gate, RULE 15). */}
+                  <button
+                    ref={voteBtnRef}
+                    type="button"
+                    onClick={goToVoting}
+                    title={t('documents_vote_title')}
+                    aria-label={t('documents_vote_title')}
+                    aria-describedby={voteTip ? 'documents-no-dr-tip' : undefined}
+                    className="shrink-0 w-[64px] rounded-2xl flex flex-col items-center justify-center gap-1 bg-[#EED98A] hover:bg-[#E6CD6E] text-[#1B3828] transition-[background-color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]/40 gv-lift"
+                    style={{ fontFamily: "'Outfit', sans-serif" }}
+                  >
+                    <Vote size={22} strokeWidth={2.1} aria-hidden />
+                    <span className="text-[11px] font-semibold leading-none">{t('documents_vote_btn')}</span>
+                  </button>
+                </div>
+              )}
+              {voteTip && (
+                <Portal>
+                  <div ref={voteTipRef} id="documents-no-dr-tip" role="status"
+                    className="fixed z-[70] rounded-2xl px-4 py-3 bg-[#1B3828]"
+                    style={{ left: voteTip.left, top: voteTip.top, width: TIP_W, minHeight: TIP_H, fontFamily: "'Outfit', sans-serif", boxShadow: '0 2px 6px rgba(27,56,40,0.18), 0 16px 36px rgba(27,56,40,0.28)' }}>
+                    <p className="text-[14px] font-semibold leading-snug text-[#EED98A]">
+                      {t('documents_no_dr_title', { doc: docName(committee, 'draft-resolution', 'singular', t('documents_draft_resolution')) })}
+                    </p>
+                    <p className="mt-1 text-[12.5px] leading-snug text-[#FAF8F3]/85" style={{ textWrap: 'pretty' }}>
+                      {t('documents_no_dr_body', { doc: docName(committee, 'draft-resolution', 'singular', t('documents_draft_resolution')) })}
+                    </p>
+                  </div>
+                </Portal>
               )}
             </div>
           )}
         </div>
-      </div>
-    </div></Portal>
+      </>)}
+    </GrowDialog>
   );
 }

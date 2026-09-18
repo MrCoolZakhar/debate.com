@@ -1298,9 +1298,13 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
   // Paste. Countries → fuzzy-match + review/rename step. Characters → add all
   // pasted lines verbatim (no country matching), deduped case-insensitively.
   const handlePaste = () => {
-    // Character mode uses a gentler split (no period / double-space rules) so
-    // names with middle initials like "John F. Kennedy" survive intact.
-    const splitter = isCharacter ? /\r?\n|[,;\t·•]/ : /\r?\n|[,;\t]|\s{2,}|[·•]|\.(?=\s|$)/;
+    // Character mode splits on line breaks ONLY. A portfolio label
+    // legitimately contains commas, semicolons and middle initials —
+    // "Chairperson, Standing Committee" is one seat, "John F. Kennedy" is
+    // one name — so one portfolio per line is the only rule that cannot
+    // corrupt real input. The country branch keeps its richer splitting:
+    // country names never contain those characters.
+    const splitter = isCharacter ? /\r?\n/ : /\r?\n|[,;\t]|\s{2,}|[·•]|\.(?=\s|$)/;
     const tokens = pasteText
       .split(splitter)
       .map((s) => s.trim())
@@ -1308,15 +1312,21 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
     const seen = new Set(nameSet);
     if (isCharacter) {
       const additions: RosterEntry[] = [];
+      let skipped = 0;
       for (const tok of tokens) {
         const k = tok.toLowerCase();
-        if (seen.has(k)) continue;
+        if (seen.has(k)) { skipped++; continue; }
         seen.add(k);
         additions.push(entry(tok));
       }
       if (additions.length === 0) { setPasteError('Nothing new to add'); return; }
       onChange([...value, ...additions]);
-      setPasteError('');
+      // The dedupe is correct to skip a repeated line; it must not do so
+      // silently. Report both counts rather than leaving the organizer to
+      // notice a fragment is missing on their own.
+      setPasteError(skipped > 0
+        ? `Added ${additions.length}. Skipped ${skipped} already on the list.`
+        : '');
       setPasteText('');
       return;
     }
@@ -1447,6 +1457,11 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
         {/* Paste list */}
         <div className="flex flex-col flex-1">
           <label style={labelStyle}>{isCharacter ? 'Paste Character List' : 'Paste Country List'}</label>
+          {isCharacter && (
+            <p style={{ margin: '0 0 4px', fontSize: 10.5, color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+              One per line. Commas are kept, so &quot;Chairperson, Standing Committee&quot; stays one seat.
+            </p>
+          )}
           <textarea
             value={pasteText}
             onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}

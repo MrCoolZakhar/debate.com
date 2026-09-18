@@ -36,9 +36,28 @@ export type GateState = 'full' | 'locked' | 'under_review';
 
 const PAID_STATUSES = new Set(['paid', 'waived']);
 
-export function getGateState(paymentTiming: string, applicationStatus: string, paymentStatus: string): GateState {
+/**
+ * `roleFeeToday` is the fee this role charges today (src/lib/freeRegistration.ts,
+ * always through activePhaseFee). A role charging nothing can never reach
+ * 'locked': there is no fee to settle, so "Unlocks once your registration is
+ * paid" was a door with no key. Free applications are stamped 'paid' on
+ * arrival by the database now, so this is belt and braces — it also covers a
+ * role whose fee is dropped to zero after people have applied, which no
+ * backfill can reach. Left at -1 ("unknown") by any caller that does not know
+ * the fee, which keeps that caller's behaviour exactly as it was.
+ *
+ * 'under_review' is untouched: that one is about acceptance, not money, and a
+ * free after-acceptance role still opens up when they are accepted.
+ */
+export function getGateState(
+  paymentTiming: string,
+  applicationStatus: string,
+  paymentStatus: string,
+  roleFeeToday = -1,
+): GateState {
   if (paymentTiming === 'after_acceptance' && applicationStatus === 'submitted') return 'under_review';
   if (paymentTiming === 'anytime') return 'full';
+  if (roleFeeToday === 0) return 'full';
   return PAID_STATUSES.has(paymentStatus) ? 'full' : 'locked';
 }
 

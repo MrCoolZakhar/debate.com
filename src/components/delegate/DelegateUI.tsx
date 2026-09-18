@@ -32,7 +32,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { getFlagUrl } from '@/lib/countries';
+import { getCircleFlagUrl } from '@/lib/countries';
 import { OUTFIT, EASE } from '@/components/neu';
 import { useScrollLock } from '@/hooks/useScrollLock';
 
@@ -268,7 +268,8 @@ export function FlagDisc({
       *  cover would cut the emblem off a square badge. */
      logoUrl?: string | null }) {
   const [failed, setFailed] = useState(false);
-  const src = logoUrl || (code ? getFlagUrl(code) : '');
+  // Flags use the square round-flag artwork so they fill the disc edge to edge.
+  const src = logoUrl || getCircleFlagUrl(code) || '';
   return (
     <span
       style={{
@@ -346,7 +347,8 @@ export function FlagOrdinalDisc({
   logoUrl?: string | null;
 }) {
   const [failed, setFailed] = useState(false);
-  const src = logoUrl || (code ? getFlagUrl(code) : '');
+  // Flags use the square round-flag artwork so they fill the disc edge to edge.
+  const src = logoUrl || getCircleFlagUrl(code) || '';
   return (
     <span
       style={{
@@ -375,22 +377,26 @@ export function FlagOrdinalDisc({
               worse, as part of the flag itself. A scaled, blurred copy behind
               them is the video-player trick: the disc reads as full-bleed while
               the flag stays uncropped. Purely decorative, so aria-hidden. */}
-          <img
-            src={src}
-            alt=""
-            aria-hidden="true"
-            onError={() => setFailed(true)}
-            style={{
-              position: 'absolute', inset: 0, width: '100%', height: '100%',
-              objectFit: 'cover', filter: 'blur(14px) saturate(1.15)',
-              transform: 'scale(1.25)', opacity: 0.85,
-            }}
-          />
+          {/* Only a crest still needs the blur: a flag is round artwork
+              (getCircleFlagUrl) and already fills the disc with no letterbox. */}
+          {logoUrl && (
+            <img
+              src={src}
+              alt=""
+              aria-hidden="true"
+              onError={() => setFailed(true)}
+              style={{
+                position: 'absolute', inset: 0, width: '100%', height: '100%',
+                objectFit: 'cover', filter: 'blur(14px) saturate(1.15)',
+                transform: 'scale(1.25)', opacity: 0.85,
+              }}
+            />
+          )}
           <img
             src={src}
             alt={name ? (logoUrl ? name : `Flag of ${name}`) : ''}
             onError={() => setFailed(true)}
-            style={{ position: 'relative', width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+            style={{ position: 'relative', width: '100%', height: '100%', objectFit: logoUrl ? 'contain' : 'cover', display: 'block' }}
           />
         </>
       )}

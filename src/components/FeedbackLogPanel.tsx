@@ -8,6 +8,7 @@ import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { getScoringConfig, RATING_MIN } from '@/lib/scoring';
 import { factorName } from '@/lib/scoringNames';
 import { addFeedback, updateFeedback, getFeedbackForCommittee } from '@/lib/committeeService';
+import { serverNow } from '@/lib/serverClock';
 
 type ItemKind = 'past' | 'live' | 'next';
 interface FeedItem {
@@ -38,6 +39,16 @@ interface OtherNote { chairName: string; content: string; scores: Record<string,
  *  never disagree about what a rating is. */
 const hasRating = (scores: Record<string, number>) =>
   Object.values(scores).some((v) => (v ?? 0) >= RATING_MIN);
+
+/** Two rows minimum, six rows maximum, then it scrolls. Height is written to the node, never
+ *  held in state: a re-render per keystroke for a box height is exactly the kind of cascade
+ *  RULE 3 exists to avoid, and the value is derived from the DOM anyway. */
+const NOTE_MIN_PX = 54;
+const NOTE_MAX_PX = 132;
+function autoGrow(el: HTMLTextAreaElement) {
+  el.style.height = 'auto';
+  el.style.height = `${Math.min(NOTE_MAX_PX, Math.max(NOTE_MIN_PX, el.scrollHeight))}px`;
+}
 
 interface PastSpeech { country: string; context: string; topic: string; seconds: number; timestamp: string; }
 function pastSpeeches(committee: Committee): PastSpeech[] {
@@ -113,27 +124,92 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
   useEffect(() => { stateRef.current = state; }, [state]);
   const creatingRef = useRef<Set<string>>(new Set());
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const turnStartRef = useRef<number>(Date.now());
+
+  // What the live card is ABOUT, read when a turn is held below. Refs, not the values
+  // themselves, so a caucus label changing mid-turn cannot re-run anything.
+  const ctxRef = useRef(ctx);
+  const topicRef = useRef(liveTopicNow);
+  useEffect(() => { ctxRef.current = ctx; topicRef.current = liveTopicNow; }, [ctx, liveTopicNow]);
 
   // Focus-dock state. The focused bubble is the hero (editing UI); the live bubble is
   // primary by default. Hover lifts/sharpens any non-focused bubble.
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const [hoverKey, setHoverKey] = useState<string | null>(null);
 
+  // ── The turn on the floor ──────────────────────────────────────────────────
+  //
+  // Which delegation holds the floor and WHEN this turn began. A fresh turn gets a fresh card
+  // even for the same delegation (a right of reply, a second speech in one caucus).
+  //
+  // Derived DURING RENDER, not in an effect (fixed 17 Sep 2026). It used to be a ref written
+  // by an effect, so on the first render of a new turn the live key still carried the previous
+  // turn's instant and then silently changed under the card — the bubble remounted, losing
+  // focus and the caret mid-sentence, and anything read off the ref in between named the wrong
+  // turn. React re-renders immediately on a set during render, so the key is right from the
+  // first paint and never moves within a turn.
+  const [turn, setTurn] = useState<{ country: string | null; at: number }>(
+    () => ({ country: currentCountry, at: serverNow() }),
+  );
+  /** The turn that has just left the floor, drained into `recent` by an effect below. */
+  const pendingHoldRef = useRef<FeedItem | null>(null);
+  if (turn.country !== currentCountry) {
+    if (turn.country) {
+      pendingHoldRef.current = {
+        key: `live|${turn.country}|${turn.at}`, kind: 'past', country: turn.country,
+        context: ctxRef.current, topic: topicRef.current, spokenAt: new Date(turn.at).toISOString(),
+      };
+    }
+    // Database clock (RULE 6b): this instant becomes `spoken_at` and is compared with
+    // logged speech timestamps, which are stamped with serverNowIso().
+    setTurn({ country: currentCountry, at: serverNow() });
+  }
+  const turnStart = turn.country === currentCountry ? turn.at : serverNow();
+
   // Live card key, a fresh turn (even same country, e.g. right of reply) gets a new card.
-  const liveKey = currentCountry ? `live|${currentCountry}|${turnStartRef.current}` : null;
+  const liveKey = currentCountry ? `live|${currentCountry}|${turnStart}` : null;
+
+  // ── Turns that have LEFT the floor but are not in the log yet ──────────────
+  //
+  // "Sometimes random speakers disappear" (owner, 17 Sep 2026), second cause. The instant the
+  // Moderator presses Next, this device's `current_speaker` slice updates and the outgoing
+  // delegation's live card leaves `items` — but the speech is only in the log once the
+  // `messages` INSERT arrives, which is a separate realtime event. In that window the
+  // delegation is nowhere on the dock, and the note just typed on it is unreachable. Worse,
+  // `logFloorSpeech` writes nothing at all for a turn under a second or for a Room Order
+  // placeholder, so for those the card never comes back and the note is stranded for good.
+  //
+  // So the outgoing turn is HELD here, with its own key (the same one its note is stored
+  // under, so the text simply stays on screen), and released the moment a logged speech for
+  // that delegation at or after its start shows up — which is exactly when the real `past`
+  // card takes over. Capped at four, so a turn that is never logged rolls off instead of
+  // accumulating. Pure local memory: no fetch, no write, no committee state.
+  const [recent, setRecent] = useState<FeedItem[]>([]);
+  // Drain the turn that just left the floor into the hold, and release any hold whose speech
+  // has now reached the log (that is exactly when the real `past` card takes over).
+  useEffect(() => {
+    setRecent((prev) => {
+      const held = pendingHoldRef.current;
+      pendingHoldRef.current = null;
+      const merged = held ? [...prev.filter((r) => r.key !== held.key), held].slice(-4) : prev;
+      const next = merged.filter((r) => !past.some((p) =>
+        p.country === r.country && (!r.spokenAt || !p.timestamp || Date.parse(p.timestamp) >= Date.parse(r.spokenAt))));
+      return next.length === prev.length && next.every((r, i) => r === prev[i]) ? prev : next;
+    });
+  }, [past, turn]);
 
   const items: FeedItem[] = useMemo(() => {
     const out: FeedItem[] = [];
     for (const p of past) out.push({ key: `past|${p.country}|${p.timestamp}`, kind: 'past', country: p.country, context: p.context, topic: p.topic, spokenAt: p.timestamp, seconds: p.seconds, timestamp: p.timestamp });
+    // Held turns sit between the log and the floor, which is where they happened.
+    for (const r of recent) if (r.key !== liveKey) out.push(r);
     // The live card's speech STARTED when this turn started, which is the only
     // honest answer available before the speech is logged. `next` cards have not
     // happened yet, so they carry no time at all and get one when they reconcile.
-    if (currentCountry && liveKey) out.push({ key: liveKey, kind: 'live', country: currentCountry, context: ctx, topic: liveTopicNow, spokenAt: new Date(turnStartRef.current).toISOString() });
+    if (currentCountry && liveKey) out.push({ key: liveKey, kind: 'live', country: currentCountry, context: ctx, topic: liveTopicNow, spokenAt: new Date(turnStart).toISOString() });
     for (const u of upcoming) out.push({ key: `next|${u.delegateId}`, kind: 'next', country: u.country, context: ctx, topic: liveTopicNow });
     return out;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [past, currentCountry, liveKey, JSON.stringify(upcoming.map((u) => u.delegateId)), ctx, liveTopicNow]);
+  }, [past, recent, currentCountry, liveKey, turnStart, JSON.stringify(upcoming.map((u) => u.delegateId)), ctx, liveTopicNow]);
 
   // Load every chair's speech feedback, and re-load whenever a realtime `feedback`
   // event lands (`feedbackVersion`). This used to run exactly once per mount behind a
@@ -191,17 +267,42 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
       // the earlier speech's note. Countries speak repeatedly in a moderated caucus, so
       // this fires constantly.
       //
-      // So: adopt each orphan onto the earliest logged speech it can belong to (same
-      // country and author, created before that speech was logged), and patch the DB so it
-      // is exact from then on. This repairs rows already orphaned in production, and it
-      // consumes them BEFORE pass 3 can steal them, which is what stops the overwrite.
+      // So: adopt each orphan onto the earliest logged speech it can belong to, and patch the
+      // DB so it is exact from then on. This repairs rows already orphaned in production, and
+      // it consumes them BEFORE pass 3 can steal them, which is what stops the overwrite.
+      //
+      // WHICH ORPHAN BELONGS TO WHICH SPEECH (fixed 17 Sep 2026, "sometimes random speakers
+      // disappear"). The test used to be `f.createdAt <= p.timestamp`: the note row must have
+      // been created before the speech was logged. That is the WRONG WAY ROUND for the note
+      // this pass exists to rescue. The Moderator writes the speech log the instant they press
+      // Next; the Commenter's flush only fires when that speaker change reaches their device,
+      // a few hundred milliseconds LATER, so the row it inserts is created after the log it
+      // belongs to. The guard rejected it every time, pass 3 then handed it to the live card
+      // for the same delegation, and the next keystroke overwrote the earlier speech's note —
+      // the note vanished off the speech it was written on and turned up on a later turn.
+      //
+      // `spoken_at` is the honest key and it is already stored: it is when the TURN STARTED,
+      // recorded by the card the chair typed on. A note belongs to a speech whose log
+      // timestamp (when the speech ENDED) is at or after that instant, and a note on the
+      // delegation currently holding the floor is excluded for free, because its turn started
+      // after every logged speech. Rows with no `spoken_at` (a note written on an upcoming
+      // card, or one written before the column existed) keep the created_at test with a
+      // two-minute grace, which is what closes the race above for them too.
+      const ORPHAN_SLACK_MS = 120_000;
+      const orphanFits = (f: typeof fb[number], p: PastSpeech) => {
+        if (!p.timestamp) return true;
+        // Compared as instants, never as strings: `spoken_at` reads back as "+00:00" while log
+        // timestamps are "Z", with different fraction lengths.
+        if (f.spokenAt) return Date.parse(f.spokenAt) <= Date.parse(p.timestamp);
+        if (!f.createdAt) return true;
+        return new Date(f.createdAt).getTime() <= new Date(p.timestamp).getTime() + ORPHAN_SLACK_MS;
+      };
       for (const p of past) {
         const key = `past|${p.country}|${p.timestamp}`;
         if (mineNext[key]) continue;
         const orphan = fb.find((f) =>
           !used.has(f.id) && f.country === p.country && f.chairName === chairName &&
-          f.speechSeconds == null &&
-          (!p.timestamp || !f.createdAt || f.createdAt <= p.timestamp));
+          f.speechSeconds == null && orphanFits(f, p));
         if (!orphan) continue;
         claim(key, orphan, true);
         updateFeedback(orphan.id, { speechContext: p.context, speechSeconds: p.seconds, speechTopic: p.topic || null, spokenAt: p.timestamp || null },
@@ -241,7 +342,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
 
   // On speaker change: FLUSH FIRST, then start the new turn.
   //
-  // The order matters. Once `turnStartRef` moves, the outgoing speaker's live card has a
+  // The order matters. Once the turn moves, the outgoing speaker's live card has a
   // key nothing renders any more, so anything still unsaved is unreachable. `flushAll`
   // reads stateRef and the recorded item metadata, both of which still describe the
   // OUTGOING turn at this point, so the note lands on the right speech.
@@ -253,10 +354,10 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
   useEffect(() => {
     return () => { flushRef.current(); };   // outgoing turn, and unmount
   }, [currentCountry]);
-  useEffect(() => {
-    turnStartRef.current = Date.now();
-    setFocusKey(null);
-  }, [currentCountry]);
+  // The focus goes back to the floor on every speaker change, so a chair reading an old note
+  // is never left typing into the wrong turn. The turn instant itself is derived during render
+  // (see `turn` above), not here.
+  useEffect(() => { setFocusKey(null); }, [currentCountry]);
 
   // Reconcile live/upcoming comments onto a speech once it's actually logged.
   useEffect(() => {
@@ -320,7 +421,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
   // It used to: `persist` ran on `onBlur` only. The chair who writes notes is the
   // COMMENTER, and the chair who advances the speaker is the MODERATOR — a different
   // person on a different device. So the ordinary case is: the Commenter is mid-sentence,
-  // the Moderator clicks Next, `currentCountry` changes, `turnStartRef` resets, the live
+  // the Moderator clicks Next, `currentCountry` changes, the turn resets, the live
   // card's key changes, the card unmounts, and the text that was never blurred is gone.
   // It never reached the database at all. That is the note loss chairs reported, and it
   // gets worse the faster the committee moves.
@@ -415,9 +516,15 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
   };
 
   // Distance-based recede (index 0 = focused). Gentle on scale so pills stay wide.
-  const scaleByDist = [1, 0.98, 0.96, 0.94];
-  const opacityByDist = [1, 0.7, 0.55, 0.45];
-  const blurByDist = [0, 0.6, 1.2, 1.6];
+  //
+  // 17 Sep 2026 ("some things are clipped and random", "sometimes random speakers disappear").
+  // Rows used to fade to 0.45 opacity AND take up to 1.6px of blur, which at a glance is
+  // indistinguishable from a delegation not being there: three rows from the floor a name was
+  // unreadable, and on a long list most of the dock was mush. The blur is gone entirely — it
+  // bought nothing a small step in opacity does not — and the faintest row now sits at 0.7,
+  // which still reads as secondary and still reads as a name.
+  const scaleByDist = [1, 0.99, 0.985, 0.98];
+  const opacityByDist = [1, 0.88, 0.78, 0.7];
 
   // Qualitative ratings: sliders on the focused pill, compact greyed read-only
   // values on the nearest neighbour. The track reads low → high.
@@ -481,7 +588,10 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
           <p className="text-xs px-4" style={{ color: '#9A8A78' }}>{t('fb_empty')}</p>
         </div>
       ) : (
-        <div className="fb-dock-scroll flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+        // overflowX is pinned to hidden. `overflow-y: auto` alone computes overflow-x to `auto`
+        // too, so the focused bubble's 2px ring and its hover lift put a horizontal scrollbar
+        // under the dock and clipped the ring at the edges ("some things are clipped", owner).
+        <div className="fb-dock-scroll flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: 'none', overflowX: 'hidden' }}>
           <div className="flex flex-col justify-start gap-2 pt-2 pb-6 px-6">
             {items.map((item, idx) => {
               const rs = state[item.key] ?? { content: '', scores: {}, country: item.country };
@@ -493,13 +603,13 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
               const theirs = notes.filter((n) => !n.isMine);
               const dist = focusIdx >= 0 ? Math.min(Math.abs(idx - focusIdx), 3) : 0;
 
-              let scale = scaleByDist[dist], opacity = opacityByDist[dist], blur = blurByDist[dist];
+              let scale = scaleByDist[dist], opacity = opacityByDist[dist];
               let boxShadow = '0 3px 12px rgba(28,20,16,0.07)';
               if (isFocused) {
-                scale = 1; opacity = 1; blur = 0;
+                scale = 1; opacity = 1;
                 boxShadow = '0 0 0 2px #B8844A, 0 14px 36px rgba(28,20,16,0.18)';
               } else if (isHover) {
-                scale = 1.02; opacity = 1; blur = 0;
+                scale = 1.01; opacity = 1;
                 boxShadow = '0 10px 26px rgba(28,20,16,0.16)';
               }
 
@@ -530,14 +640,22 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
                         <span className="flex-1 min-w-0 truncate text-base font-bold" style={{ color: '#1C1410' }}>{getCountryDisplayName(item.country, language)}</span>
                         {!isLive && <button onClick={(e) => { e.stopPropagation(); setFocusKey(null); }} className="shrink-0 text-sm" style={{ color: '#9A8A78' }}>✕</button>}
                       </div>
+                      {/* GROWS WITH THE NOTE. It was a hard `rows={2}` with `resize-none`, so
+                          anything past two lines scrolled inside a box with a hidden scrollbar:
+                          the chair could not see what they had just written ("some things are
+                          clipped", owner, 17 Sep 2026). It now measures itself on every change
+                          and on mount, between two and six rows, and only scrolls past six.
+                          Written straight to the node, no state, no re-render per keystroke
+                          beyond the one `setNote` already causes. */}
                       <textarea
+                        ref={(el) => { if (el) autoGrow(el); }}
                         rows={2}
                         value={rs.content}
-                        onChange={(e) => setNote(item, e.target.value)}
+                        onChange={(e) => { autoGrow(e.currentTarget); setNote(item, e.target.value); }}
                         onBlur={() => persist(item, rs.content, rs.scores)}
                         placeholder={t('fb_private_note')}
                         className="w-full mt-2 text-sm rounded-lg px-3 py-2 outline-none resize-none"
-                        style={{ color: '#1C1410', backgroundColor: '#FAF8F3', border: '1px solid #EDE7D8' }}
+                        style={{ color: '#1C1410', backgroundColor: '#FAF8F3', border: '1px solid #EDE7D8', overflowY: 'auto' }}
                       />
                       {/* What the other chairs wrote on this same speech — read-only, in the
                           same box, so the dais reads as one record rather than N private ones.
@@ -564,7 +682,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
                       style={{
                         height: 54, borderRadius: 9999, backgroundColor: '#EDE7D8',
                         border: '1px solid rgba(221,212,192,0.85)', boxShadow,
-                        transform: `scale(${scale})`, filter: blur ? `blur(${blur}px)` : 'none',
+                        transform: `scale(${scale})`,
                         transformOrigin: 'center', transition: PILL_TRANSITION,
                         cursor: 'pointer', padding: '0 20px',
                       }}

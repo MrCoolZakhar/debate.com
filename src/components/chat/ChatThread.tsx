@@ -1,33 +1,34 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { ArrowDown, ChevronLeft } from 'lucide-react';
 import Portal from '@/components/Portal';
-import { NEU, OUTFIT, EASE } from '@/components/neu';
+import { NEU, OUTFIT } from '@/components/neu';
 import type { ChatMessage } from '@/lib/types';
 import type { OutboxMsg } from '@/lib/chatOutbox';
+import type { ChatEntryKind } from '@/lib/chatConversations';
 import ChatMessageGroup from './ChatMessageGroup';
-import { ChatAvatar, avatarKindFor } from './ChatAvatar';
-import { CHAT, buildChatRows, portalFrame, type TFn } from './chatTokens';
+import { ChatAvatar } from './ChatAvatar';
+import ChatLightbox, { type LightboxItem } from './ChatLightbox';
+import { buildChatRows, formatTime, portalFrame, type TFn } from './chatTokens';
 
+/** Day separators and the "New messages" divider: a small frosted-look pill, centred. */
 function Separator({ label, tone = 'muted' }: { label: string; tone?: 'muted' | 'unread' }) {
   const unread = tone === 'unread';
   return (
-    <div className="flex items-center gap-2.5" style={{ marginTop: 14, marginBottom: 2 }}>
-      <span className="flex-1" style={{ height: 1, backgroundColor: unread ? 'rgba(182,135,31,0.35)' : CHAT.hairline }} />
+    <div className="flex justify-center" style={{ marginTop: 14, marginBottom: 2 }} role="separator" aria-label={label}>
       <span
         style={{
-          padding: '3px 11px', borderRadius: 999,
-          backgroundColor: unread ? NEU.gold : NEU.base,
-          boxShadow: unread ? 'none' : NEU.inSm,
-          color: unread ? NEU.forest : NEU.muted,
-          fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 900,
-          letterSpacing: '0.1em', textTransform: 'uppercase',
+          padding: '4px 12px', borderRadius: 999,
+          background: unread ? NEU.gold : 'rgba(255,253,248,0.92)',
+          boxShadow: unread ? '0 1px 2px rgba(182,135,31,0.25)' : '0 1px 1px rgba(28,20,16,0.08), 0 0 0 0.5px rgba(28,20,16,0.06)',
+          color: unread ? NEU.forest : NEU.inkSoft,
+          fontFamily: OUTFIT, fontSize: 12, fontWeight: 600,
           fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
         }}
       >
         {label}
       </span>
-      <span className="flex-1" style={{ height: 1, backgroundColor: unread ? 'rgba(182,135,31,0.35)' : CHAT.hairline }} />
     </div>
   );
 }
@@ -144,28 +145,41 @@ function InfoHint({ text }: { text: string }) {
 
 export default function ChatThread({
   convKey,
+  kind,
   label,
+  subtitle,
+  info,
   messages,
   outbox,
   senderName,
   chairNames,
+  multiParty,
+  labelForSender,
   unreadAnchor,
   onRetry,
   onBack,
-  isDraft,
+  intro,
   t,
   locale,
 }: {
   convKey: string;
+  kind: ChatEntryKind;
   label: string;
+  subtitle: string;
+  info: string;
   messages: ChatMessage[];
   outbox: OutboxMsg[];
   senderName: string;
   chairNames: string[];
+  /** Show sender name + avatar on incoming runs. */
+  multiParty: boolean;
+  labelForSender: (name: string) => string;
   unreadAnchor: number;
   onRetry: (outboxId: string) => void;
-  onBack: () => void;
-  isDraft: boolean;
+  /** Present on a phone, where the thread replaces the list. */
+  onBack?: () => void;
+  /** A line shown above the first message (a group's "X created this group"). */
+  intro?: string;
   t: TFn;
   locale: string;
 }) {
@@ -173,31 +187,65 @@ export default function ChatThread({
   const atBottomRef = useRef(true);
   const [newPill, setNewPill] = useState(false);
 
-  const rows = buildChatRows(messages, outbox, senderName, unreadAnchor, t, locale);
+  const rows = useMemo(
+    () => buildChatRows(messages, outbox, senderName, unreadAnchor, t, locale),
+    [messages, outbox, senderName, unreadAnchor, t, locale],
+  );
 
   const total = messages.length + outbox.length;
   const prevTotalRef = useRef(0);
 
-  const scrollToBottom = (smooth = false) => {
+  // ── The in-app photo viewer ───────────────────────────────────────────────
+  // Every photo and GIF of THIS conversation, oldest first: that is what the arrow keys and a
+  // swipe move through. Built from the rows already folded above, so the order on screen and
+  // the order in the viewer can never disagree.
+  const [lightboxId, setLightboxId] = useState<string | null>(null);
+  const lightboxItems = useMemo<LightboxItem[]>(() => {
+    const out: LightboxItem[] = [];
+    for (const row of rows) {
+      if (row.kind !== 'group') continue;
+      for (const it of row.group.items) {
+        const a = it.attachment;
+        if (!a || a.kind === 'pdf') continue;
+        const who = row.group.isMe ? t('chat_you_prefix') : labelForSender(row.group.sender);
+        out.push({
+          id: it.id,
+          kind: a.kind,
+          url: a.url,
+          previewUrl: a.preview,
+          name: a.name || t('chat_photo'),
+          caption: `${who} · ${formatTime(it.timestamp, locale)}`,
+          width: a.width,
+          height: a.height,
+        });
+      }
+    }
+    return out;
+  }, [rows, labelForSender, t, locale]);
+  // Switching conversation closes the viewer: its photos are no longer on screen.
+  useEffect(() => { setLightboxId(null); }, [convKey]);
+
+  const scrollToBottom = useCallback((smooth = false) => {
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
     atBottomRef.current = true;
     setNewPill(false);
-  };
+  }, []);
+
+  // Before paint, so opening a thread never flashes its top first.
+  useLayoutEffect(() => {
+    prevTotalRef.current = total;
+    scrollToBottom(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [convKey]);
 
   useEffect(() => {
     const grew = total > prevTotalRef.current;
     prevTotalRef.current = total;
     if (atBottomRef.current) scrollToBottom(false);
     else if (grew) setNewPill(true);
-  }, [total]);
-
-  useEffect(() => {
-    prevTotalRef.current = total;
-    scrollToBottom(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [convKey]);
+  }, [total, scrollToBottom]);
 
   const handleScroll = () => {
     const el = scrollRef.current;
@@ -208,89 +256,99 @@ export default function ChatThread({
   };
 
   const empty = messages.length === 0 && outbox.length === 0;
-  const kind = avatarKindFor(convKey, chairNames);
 
   return (
-    <>
+    <div className="relative flex flex-col flex-1 min-h-0 min-w-0">
       {/* Header */}
-      <div
-        className="px-4 py-3 shrink-0 flex items-center gap-3"
-        style={{ borderBottom: `1px solid ${CHAT.hairline}`, backgroundColor: NEU.surface }}
-      >
-        <button
-          onClick={onBack}
-          className="sm:hidden focus:outline-none inline-flex items-center justify-center"
-          aria-label="Back"
-          style={{
-            width: 30, height: 30, borderRadius: 999, border: 'none',
-            backgroundColor: NEU.base, boxShadow: NEU.outSm, color: NEU.forest, cursor: 'pointer',
-          }}
-        >
-          <span className="inline-block rtl:-scale-x-100">←</span>
-        </button>
-
-        <ChatAvatar kind={kind} name={convKey} size={24} />
-
-        <div className="min-w-0 flex-1">
-          <h3
-            className="truncate"
-            style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 14.5, color: NEU.ink, letterSpacing: '0.01em' }}
+      <div className="shrink-0 flex items-center gap-2.5 px-3" style={{ height: 64, background: 'var(--chat-bar)', boxShadow: 'var(--chat-bar-shadow)' }}>
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label={t('chat_back')}
+            className="shrink-0 inline-flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] hover:bg-[rgba(27,56,40,0.07)] active:scale-[0.96]"
+            style={{ width: 40, height: 40, borderRadius: 999, border: 'none', background: 'transparent', color: NEU.forest, cursor: 'pointer', marginInlineStart: -4, transitionProperty: 'background-color, transform', transitionDuration: '150ms' }}
           >
+            <ChevronLeft size={26} strokeWidth={2.4} aria-hidden className="rtl:-scale-x-100" />
+          </button>
+        )}
+        <ChatAvatar kind={kind} name={convKey} size={40} />
+        <div className="min-w-0 flex-1" style={{ paddingInlineStart: onBack ? 0 : 2 }}>
+          <h3 className="truncate" style={{ fontFamily: OUTFIT, fontWeight: 750, fontSize: 16.5, color: NEU.ink, lineHeight: 1.2 }}>
             {label}
           </h3>
-          <p style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
-            {messages.length === 1
-              ? t('chat_message_count_one')
-              : t('chat_message_count_other').replace('{n}', String(messages.length))}
-          </p>
+          {subtitle && (
+            <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums', lineHeight: 1.3 }}>
+              {subtitle}
+            </p>
+          )}
         </div>
-
-        <InfoHint text={convKey === 'everyone' ? t('chat_everyone_info') : t('chat_thread_info')} />
+        <InfoHint text={info} />
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} onScroll={handleScroll} className="relative flex-1 overflow-y-auto px-4 pb-4 min-h-0">
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="relative flex-1 overflow-y-auto min-h-0 px-3 sm:px-5 pb-3"
+        style={{ overscrollBehavior: 'contain' }}
+        role="log"
+        aria-live="polite"
+        aria-label={label}
+      >
+        {intro && <Separator label={intro} />}
         {empty ? (
-          <div className="flex flex-col items-center justify-center h-full text-center gap-1 px-6">
-            <ChatAvatar kind={kind} name={convKey} size={30} />
-            <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink, marginTop: 8 }}>
-              {isDraft ? t('chat_draft_empty') : t('chat_no_messages')}
-            </p>
-            {!isDraft && (
-              <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted }}>{t('chat_send_first')}</p>
-            )}
+          <div className="flex flex-col items-center justify-center text-center gap-1 px-6" style={{ minHeight: '70%' }}>
+            <ChatAvatar kind={kind} name={convKey} size={64} />
+            <p style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 750, color: NEU.ink, marginTop: 10 }}>{label}</p>
+            <p style={{ fontFamily: OUTFIT, fontSize: 13.5, color: NEU.inkSoft, textWrap: 'balance' }}>{t('chat_draft_empty')}</p>
           </div>
         ) : rows.map((row) => {
           if (row.kind === 'day') return <Separator key={row.key} label={row.label} />;
           if (row.kind === 'unread') return <Separator key={row.key} label={t('chat_new_messages')} tone="unread" />;
+          const isChairSender = chairNames.includes(row.group.sender);
           return (
             <ChatMessageGroup
               key={row.key}
               group={row.group}
-              isChairSender={chairNames.includes(row.group.sender)}
+              isChairSender={isChairSender}
+              showIdentity={multiParty}
+              senderLabel={labelForSender(row.group.sender)}
               onRetry={onRetry}
+              onOpenImage={setLightboxId}
               t={t}
+              locale={locale}
             />
           );
         })}
       </div>
 
+      {lightboxId && lightboxItems.length > 0 && (
+        <ChatLightbox
+          items={lightboxItems}
+          openId={lightboxId}
+          onOpenId={setLightboxId}
+          onClose={() => setLightboxId(null)}
+          t={t}
+        />
+      )}
+
       {/* Jump-to-latest pill */}
       {newPill && (
         <button
+          type="button"
           onClick={() => scrollToBottom(true)}
-          className="absolute left-1/2 -translate-x-1/2 z-20 focus:outline-none"
+          className="absolute left-1/2 -translate-x-1/2 z-20 inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] active:scale-[0.96]"
           style={{
-            bottom: 84, padding: '5px 14px', borderRadius: 999, border: 'none', cursor: 'pointer',
+            bottom: 12, padding: '7px 14px', borderRadius: 999, border: 'none', cursor: 'pointer',
             background: `linear-gradient(135deg, ${NEU.forest}, ${NEU.green})`,
-            color: NEU.gold, fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 900,
+            color: NEU.gold, fontFamily: OUTFIT, fontSize: 13, fontWeight: 700,
             boxShadow: '0 6px 18px rgba(27,56,40,0.32)',
-            transition: `transform 160ms ${EASE}`,
           }}
         >
-          ↓ {t('chat_new_messages')}
+          <ArrowDown size={15} strokeWidth={2.6} aria-hidden /> {t('chat_new_messages')}
         </button>
       )}
-    </>
+    </div>
   );
 }

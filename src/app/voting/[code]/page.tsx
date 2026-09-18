@@ -3,22 +3,46 @@
 import { use, useEffect, useRef, useState } from 'react';
 import FitToScreen from '@/components/FitToScreen';
 import Portal from '@/components/Portal';
-import SessionsHeaderLogo from '@/components/SessionsHeaderLogo';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
-import { Committee, Delegate, DelegateStatus } from '@/lib/types';
+import { Committee, Delegate, DelegateStatus, CommitteeDocument } from '@/lib/types';
 import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
-import { SeatFlag, SeatArtProvider } from '@/components/SeatFlag';
-import { sessionSeatArt } from '@/lib/sessionFlags';
+import { SeatArtProvider } from '@/components/SeatFlag';
+import { SeatCircleFlag } from '@/components/CircleFlag';
 import { Emoji } from '@/components/Emoji';
-import { Megaphone } from 'lucide-react';
-import { MajorityPie } from '@/components/RollCallPanel';
-import { getCommitteeByCode, setPhase as setPhaseInDB, setDelegateStatus as setDelegateStatusInDB, setDelegateObserver as setDelegateObserverInDB, updateDocumentStatus as updateDocumentStatusInDB, saveCommitteeSettings, subscribeToCommittee } from '@/lib/committeeService';
-import { useSettingsStore, DEFAULT_SETTINGS, impliedSettings, type CommitteeSettings } from '@/lib/settingsStore';
-import { VotingRulesPanel, VotingRulesPopover, computeVoteOutcome, isVetoDelegation } from '@/components/VotingRulesPanel';
+import { Check, CornerDownRight, Eye, EyeOff, Flag, Minus, RotateCcw, ShieldAlert, SkipForward, Undo2, X } from 'lucide-react';
+import { VotingRollCall } from '@/components/voting/VotingRollCall';
+import { DeviceVoteGate, DeviceVotingPanel } from '@/components/voting/DeviceVotingPanel';
+import { VotingHeader, type VotingHeaderProps } from '@/components/voting/VotingHeader';
+import { ResolutionPicker, type PickCardState } from '@/components/voting/ResolutionPicker';
+import { VoterCarousel, type SeatMark as CarouselMark } from '@/components/voting/VoterCarousel';
+import { RightsQueue, RightsTimeField } from '@/components/voting/RightsQueue';
+import { ResultBackdrop } from '@/components/voting/ResultBackdrop';
+import ChatDialog from '@/components/chat/ChatDialog';
+import ChatPanel from '@/components/ChatPanel';
+import ChatDisabledNotice from '@/components/ChatDisabledNotice';
+import ScoreboardPanel from '@/components/ScoreboardPanel';
+import { getCommitteeFlags } from '@/lib/committeeFlags';
+import { chatUnreadTotal, mergeMessagesById } from '@/lib/chatConversations';
+import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
+import { serverNowIso } from '@/lib/serverClock';
+import { startSessionSync, rowFields } from '@/lib/sessionSync';
+import { getCommitteeByCodeWithRetry, setDelegateStatus as setDelegateStatusInDB, setDelegateStatusesBulk, setDelegateObserver as setDelegateObserverInDB, updateDocumentStatus as updateDocumentStatusInDB, saveCommitteeSettings, endDebate as endDebateInDB } from '@/lib/committeeService';
+import { useSettingsStore, DEFAULT_SETTINGS, impliedSettings, stripNonHydratedSettings, type CommitteeSettings } from '@/lib/settingsStore';
+import { supabase } from '@/lib/supabase';
+import { deriveGavelRole, getGavelDeviceId } from '@/lib/gavelDevice';
+import { useSettingsSync } from '@/lib/useSettingsSync';
+import {
+  loadVoteStates, saveVoteState, setVotingPhase, isVoteOpen,
+  type VoteChoice, type DelegateVote, type VoteStateV1, type VoteStatus, type FrozenSeat,
+} from '@/lib/voteState';
+import { computeVoteOutcome, isVetoDelegation } from '@/components/VotingRulesPanel';
 import { useAuth } from '@/components/AuthProvider';
-import { detectConferenceSession, verifyConferenceAccess } from '@/lib/conferenceAccess';
+import type { ConferenceAccess } from '@/lib/conferenceAccess';
+import { useSessionAccess } from '@/lib/useSessionAccess';
+import ChairDeviceKickModal from '@/components/ChairDeviceKickModal';
+import { useChairDeviceLock } from '@/lib/useChairDeviceLock';
 import { sponsorLabel } from '@/lib/committeeFlags';
 import { docName } from '@/lib/docNames';
 import { SettingsPanel } from '@/components/SettingsPanel';
@@ -78,14 +102,7 @@ function abbreviateCommitteeName(name: string): string {
     .replace(/^UN\s+/i, '');
 }
 
-type VoteChoice = 'for' | 'against' | 'for-rights' | 'against-rights' | 'abstain';
-interface DelegateVote {
-  delegateId: string;
-  country: string;
-  choice: VoteChoice;
-}
-
-type VotingPhase = 'voting' | 'rights-speakers' | 'result';
+type VotingPhase = VoteStatus;
 
 /**
  * `Date.now()` behind a module-scope helper.
@@ -134,18 +151,58 @@ function RosterNotice({ names, notInVote, onOpenRollCall, onDismiss }: {
         </div>
         <button
           onClick={onOpenRollCall}
-          className="shrink-0 text-xs px-3 py-1.5 rounded-lg font-black transition-colors focus:outline-none gv-lift"
+          className="shrink-0 text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors focus:outline-none gv-lift"
           style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
         >
           {t('voting_roll_call_heading')}
         </button>
         <button
           onClick={onDismiss}
-          aria-label="Dismiss"
+          aria-label={t('voting_dismiss')}
           className="shrink-0 text-[#9A8A78] hover:text-[#1C1410] transition-colors focus:outline-none"
         >
           ✕
         </button>
+      </div>
+    </div>
+  );
+}
+
+/** A slim notice under the header: the room's voting mode, a refused ballot write, the
+ *  Commenter's read-only state. */
+function VotingBanner({ tone, text, actionLabel, onAction, onDismiss }: {
+  tone: 'red' | 'amber' | 'neutral';
+  text: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  onDismiss?: () => void;
+}) {
+  const t = useT();
+  const palette = tone === 'red'
+    ? { bg: 'rgba(139,32,32,0.10)', border: 'rgba(139,32,32,0.32)', fg: '#8B2020' }
+    : tone === 'amber'
+    ? { bg: 'rgba(182,135,31,0.14)', border: 'rgba(182,135,31,0.40)', fg: '#6A4A0A' }
+    : { bg: 'rgba(27,56,40,0.06)', border: 'rgba(27,56,40,0.18)', fg: '#1B3828' };
+  return (
+    <div className="w-full flex justify-center px-4 pt-3 shrink-0">
+      <div
+        role={tone === 'red' ? 'alert' : 'status'}
+        className="w-full max-w-3xl rounded-xl px-4 py-2 flex items-center gap-3"
+        style={{ backgroundColor: palette.bg, border: `1px solid ${palette.border}` }}
+      >
+        <p className="flex-1 min-w-0 text-xs font-semibold leading-snug" style={{ color: palette.fg }}>{text}</p>
+        {actionLabel && onAction && (
+          <button
+            onClick={onAction}
+            className="shrink-0 text-xs px-3 py-1.5 rounded-lg font-semibold focus:outline-none gv-lift"
+            style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
+          >
+            {actionLabel}
+          </button>
+        )}
+        {onDismiss && (
+          <button onClick={onDismiss} aria-label={t('voting_dismiss')} className="shrink-0 text-[#9A8A78] hover:text-[#1C1410] focus:outline-none">✕</button>
+        )}
       </div>
     </div>
   );
@@ -163,219 +220,50 @@ function ObserverWriteFailedBanner({ onDismiss }: { onDismiss: () => void }) {
         role="alert"
       >
         <span className="flex-1 text-sm font-semibold leading-snug">{t('voting_observer_write_failed')}</span>
-        <button onClick={onDismiss} aria-label="Dismiss" className="shrink-0 opacity-80 hover:opacity-100 focus:outline-none">✕</button>
+        <button onClick={onDismiss} aria-label={t('voting_dismiss')} className="shrink-0 opacity-80 hover:opacity-100 focus:outline-none">✕</button>
       </div>
     </Portal>
   );
 }
 
-// ── Roll call modal — defined OUTSIDE VotingPage so React never remounts it ──
-// (defining it inside caused new function type each render → unmount/remount → no CSS transitions)
-function RollCallModal({
-  delegates,
-  rollCallStatuses,
-  isObserverSeat,
-  onToggleObserver,
-  onCycleStatus,
-  onConfirm,
-  side,
-}: {
-  delegates: Delegate[];
-  rollCallStatuses: Record<string, DelegateStatus>;
-  /** The placard as the page currently believes it, optimistic write included. */
-  isObserverSeat: (d: Delegate) => boolean;
-  onToggleObserver: (d: Delegate) => void;
-  onCycleStatus: (id: string) => void;
-  onConfirm: () => void;
-  /** Rendered immediately beside the roll call card (the voting-rules console). */
-  side?: React.ReactNode;
+/** The ballot buttons. Colour carries the direction, an icon repeats it for anyone who
+ *  cannot tell red from green, and "with rights" is a second line, never a separate hue.
+ *  `recorded` marks the choice already on record for this delegation (after Back). */
+function BallotButton({ tone, icon, label, sub, onClick, disabled, recorded, wide }: {
+  tone: 'for' | 'against' | 'neutral';
+  icon: React.ReactNode;
+  label: string;
+  sub?: string;
+  onClick: () => void;
+  disabled?: boolean;
+  recorded?: boolean;
+  wide?: boolean;
 }) {
-  const t = useT();
-  const { language } = useLanguage();
-  // Observers do not vote, so they are not part of the ballot roster — but they are
-  // listed below it. Filtering them out of the modal entirely (which this modal used
-  // to do) left no row to take a placard off, and no way to put one on, on the one
-  // screen a chair is standing on when the denominator looks wrong.
-  const votable = delegates.filter((d) => !isObserverSeat(d));
-  const observers = delegates.filter((d) => isObserverSeat(d));
-  const sorted = [...votable].sort((a, b) => compareCountryNames(a.country, b.country, language));
-  const sortedObservers = [...observers].sort((a, b) => compareCountryNames(a.country, b.country, language));
-  const observerButton = (d: Delegate, on: boolean) => (
+  const palette = tone === 'for'
+    ? { bg: '#2F6B45', hover: '#3A7F53', fg: '#FFFFFF', sub: 'rgba(238,217,138,0.95)', shadow: 'rgba(27,56,40,0.28)' }
+    : tone === 'against'
+    ? { bg: '#8B2020', hover: '#A02C2C', fg: '#FFFFFF', sub: 'rgba(255,222,190,0.95)', shadow: 'rgba(90,20,20,0.26)' }
+    : { bg: '#FAF8F3', hover: '#FFFFFF', fg: '#1C1410', sub: '#6A5A4A', shadow: 'rgba(27,56,40,0.12)' };
+  return (
     <button
-      onClick={() => onToggleObserver(d)}
-      title={on ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
-      aria-label={on ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
-      aria-pressed={on}
-      className="shrink-0 p-1.5 rounded-md transition-all active:scale-90 focus:outline-none"
-      style={{ color: on ? 'rgba(238,217,138,0.9)' : 'rgba(255,255,255,0.4)' }}
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={recorded || undefined}
+      className={`gv-ballot relative ${wide ? 'flex-[1.25]' : 'flex-1'} min-w-0 min-h-[84px] rounded-[18px] px-3 py-3 flex flex-col items-center justify-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F6F1E9] disabled:cursor-not-allowed disabled:opacity-40`}
+      style={{
+        ['--gv-b-bg' as string]: palette.bg,
+        ['--gv-b-hover' as string]: palette.hover,
+        color: palette.fg,
+        boxShadow: `${tone === 'neutral' ? '0 0 0 1px rgba(27,56,40,0.12), ' : ''}0 2px 4px ${palette.shadow}, 0 10px 24px ${palette.shadow}${recorded ? ', 0 0 0 3px #F6F1E9, 0 0 0 6px #D9B44A' : ''}`,
+      }}
     >
-      <Megaphone size={16} />
+      <span className="flex items-center gap-2 text-[17px] font-semibold leading-none">
+        <span aria-hidden className="shrink-0">{icon}</span>
+        {label}
+      </span>
+      {sub && <span className="text-[13px] font-medium leading-none" style={{ color: palette.sub }}>{sub}</span>}
     </button>
-  );
-  const thumbPos = (status: DelegateStatus) =>
-    status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[32px]' : 'left-[62px]';
-  const thumbColor = (status: DelegateStatus) =>
-    status === 'absent' ? 'bg-[#8B2020]' : status === 'present' ? 'bg-[#3D7A52]' : 'bg-[#B6871F]';
-  const presentCount = votable.filter((d) => (rollCallStatuses[d.id] ?? d.status) !== 'absent').length;
-  return (
-    <Portal><div className="fixed inset-0 z-50 flex items-center justify-center gap-4 px-4" style={{ background: 'rgba(5,4,3,0.92)', backdropFilter: 'blur(4px)' }}>
-      <div className="rounded-2xl w-full max-w-md shadow-2xl flex flex-col" style={{ maxHeight: '85%', backgroundColor: '#1B3828', border: '1px solid rgba(255,255,255,0.12)' }}>
-        <div className="px-5 py-4 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
-          <div className="flex items-center justify-between mb-1">
-            <h2 className="text-base font-black text-white">{t('voting_roll_call_heading')}</h2>
-            <div className="flex gap-1.5">
-              <MajorityPie arcFill={1}     color="#2A5A3C" label={`${presentCount}`} />
-              <MajorityPie arcFill={2 / 3} color="#B6871F" label={`${Math.ceil(presentCount * 2 / 3)}`} />
-              <MajorityPie arcFill={0.5}   color="#8A7A6A" label={`${Math.floor(presentCount / 2) + 1}`} />
-            </div>
-          </div>
-          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>
-            {t('voting_roll_call_sub').replace('{present}', String(presentCount)).replace('{total}', String(votable.length))}
-          </p>
-        </div>
-        <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
-          {sorted.map((d) => {
-            const status = rollCallStatuses[d.id] ?? d.status;
-            return (
-              <div
-                key={d.id}
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all"
-                style={{
-                  backgroundColor: status === 'present' ? 'rgba(61,122,82,0.22)' : status === 'present-voting' ? 'rgba(182,135,31,0.18)' : 'transparent',
-                  opacity: status === 'absent' ? 0.4 : 1,
-                  border: status === 'present' ? '1px solid rgba(61,122,82,0.4)' : status === 'present-voting' ? '1px solid rgba(182,135,31,0.35)' : '1px solid transparent',
-                }}
-              >
-                <div className="w-9 h-9 rounded-full bg-[#DDD4C0] border border-[#C8BAA8] flex items-center justify-center shrink-0 overflow-hidden">
-                  <SeatFlag seat={d} size={24} className="object-contain" fallback={<Emoji size="1.25rem">🌐</Emoji>} />
-                </div>
-                <span className="flex-1 text-sm text-white truncate">{getCountryDisplayName(d.country, language)}</span>
-                {observerButton(d, false)}
-                <button
-                  onClick={() => onCycleStatus(d.id)}
-                  className="relative w-[90px] h-[30px] rounded-full cursor-pointer shrink-0 select-none"
-                  style={{ backgroundColor: 'rgba(255,255,255,0.10)', border: '1.5px solid rgba(255,255,255,0.22)' }}
-                  title="Tap to cycle: Absent → Present → PV"
-                >
-                  <div className="absolute inset-0 grid grid-cols-3 items-center pointer-events-none">
-                    <span className={`text-[10px] font-bold text-center ${status === 'absent' ? 'text-white' : 'text-white/40'}`}>A</span>
-                    <span className={`text-[10px] font-bold text-center ${status === 'present' ? 'text-white' : 'text-white/40'}`}>P</span>
-                    <span className={`text-[10px] font-bold text-center ${status === 'present-voting' ? 'text-white' : 'text-white/40'}`}>PV</span>
-                  </div>
-                  <div className={`absolute top-[2px] w-[26px] h-[22px] rounded-full transition-all duration-200 shadow-sm ${thumbPos(status)} ${thumbColor(status)}`} />
-                </button>
-              </div>
-            );
-          })}
-          {/* Observers, kept clearly apart from the ballot roster. The chair needs to
-              see WHY the denominator is smaller than the room, and needs one click to
-              take a placard back off. */}
-          {sortedObservers.length > 0 && (
-            <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.12)' }}>
-              <div className="px-3 pb-2">
-                <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: 'rgba(238,217,138,0.85)' }}>
-                  {t('voting_observers_heading', { n: sortedObservers.length })}
-                </p>
-                <p className="text-[11px] mt-0.5 leading-snug" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                  {t('voting_observers_note')}
-                </p>
-              </div>
-              {sortedObservers.map((d) => (
-                <div
-                  key={d.id}
-                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl"
-                  style={{ backgroundColor: 'rgba(238,217,138,0.08)', border: '1px solid rgba(238,217,138,0.22)', marginBottom: '2px' }}
-                >
-                  <div className="w-9 h-9 rounded-full bg-[#DDD4C0] border border-[#C8BAA8] flex items-center justify-center shrink-0 overflow-hidden">
-                    <SeatFlag seat={d} size={24} className="object-contain" fallback={<Emoji size="1.25rem">🌐</Emoji>} />
-                  </div>
-                  <span className="flex-1 text-sm text-white truncate">{getCountryDisplayName(d.country, language)}</span>
-                  <span
-                    className="text-[9px] shrink-0 font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md"
-                    style={{ backgroundColor: 'rgba(238,217,138,0.15)', color: 'rgba(238,217,138,0.85)', border: '1px solid rgba(238,217,138,0.3)' }}
-                  >
-                    {t('rollcall_observer')}
-                  </span>
-                  {observerButton(d, true)}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="px-4 py-4 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.12)' }}>
-          <button
-            onClick={onConfirm}
-            disabled={presentCount === 0}
-            className="w-full py-3 rounded-xl font-black text-sm transition-colors"
-            style={{
-              backgroundColor: presentCount > 0 ? '#EDE7D8' : 'rgba(255,255,255,0.15)',
-              color: presentCount > 0 ? '#1C1410' : 'rgba(255,255,255,0.4)',
-            }}
-          >
-            {presentCount > 0 ? t('voting_start_btn').replace('{n}', String(presentCount)) : t('voting_mark_present')}
-          </button>
-        </div>
-      </div>
-      {side}
-    </div></Portal>
-  );
-}
-
-// ── Header ────────────────────────────────────────────────────────────────────
-// Declared at module scope (like RollCallModal) so React keeps the same element
-// type across renders. Nested inside VotingPage it was a brand-new component type
-// on every render, which remounted the whole bar — killing CSS transitions and
-// resetting any state a header child owns (e.g. the open voting-rules popover).
-function VotingHeader({ committeeName, onBack, onEndDebate, onOpenSettings, rules, children }: {
-  committeeName: string;
-  onBack: () => void;
-  onEndDebate: () => void;
-  onOpenSettings: () => void;
-  rules?: React.ReactNode;
-  children?: React.ReactNode;
-}) {
-  const t = useT();
-  return (
-    <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-4 shrink-0">
-      <SessionsHeaderLogo />
-      <div className="flex-1 min-w-0 flex items-center gap-2">
-        <span className="text-sm font-bold text-[#1C1410] truncate">{abbreviateCommitteeName(committeeName)}</span>
-      </div>
-      <button
-        onClick={onBack}
-        className="text-xs px-3 py-1.5 rounded-lg font-black transition-colors shrink-0 gv-lift"
-        style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-      >
-        {t('voting_back_to_session')}
-      </button>
-      <button
-        onClick={onEndDebate}
-        className="text-xs px-3 py-1.5 rounded-lg font-black transition-colors shrink-0 gv-lift"
-        style={{ backgroundColor: '#8B2020', color: 'white' }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#A03030'; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
-      >
-        {t('voting_end_debate')}
-      </button>
-      {rules}
-      <button onClick={onOpenSettings} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors shrink-0 text-2xl">⚙</button>
-      {children}
-    </header>
-  );
-}
-
-/** Inline 1em mark beside a delegation name. A component rather than the old
- *  `getFlag()` call so it can read the seat's crest off <SeatArtProvider>. */
-function SeatMark({ country }: { country: string }) {
-  return (
-    <SeatFlag
-      country={country}
-      className="inline-block object-contain"
-      style={{ width: '1em', height: '1em' }}
-      fallback={<Emoji size="1em">🌐</Emoji>}
-    />
   );
 }
 
@@ -385,55 +273,32 @@ function VoteScale({ forCount, againstCount, totalVoted }: {
   const t = useT();
   const forPct = totalVoted > 0 ? (forCount / totalVoted) * 50 : 0;
   const againstPct = totalVoted > 0 ? (againstCount / totalVoted) * 50 : 0;
+  // The bar is physical (against on the left, for on the right) in every language, and so
+  // are its labels, so the picture and the words always agree.
   return (
-    <div className="w-full px-0">
-      <div className="relative h-7 bg-[#EDE7D8] rounded-full overflow-hidden border border-[#DDD4C0]">
+    <div className="w-full px-0" dir="ltr">
+      <div className="relative h-3 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(27,56,40,0.09)' }}>
         <div
-          className="absolute right-1/2 top-0 bottom-0 bg-red-500/70 transition-all duration-300"
-          style={{ width: `${againstPct}%` }}
+          className="absolute right-1/2 top-0 bottom-0 rounded-l-full transition-[width] duration-500 [transition-timing-function:cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none"
+          style={{ width: `${againstPct}%`, backgroundColor: '#8B2020' }}
         />
         <div
-          className="absolute left-1/2 top-0 bottom-0 bg-green-500/70 transition-all duration-300"
-          style={{ width: `${forPct}%` }}
+          className="absolute left-1/2 top-0 bottom-0 rounded-r-full transition-[width] duration-500 [transition-timing-function:cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none"
+          style={{ width: `${forPct}%`, backgroundColor: '#2F6B45' }}
         />
-        <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-[#9A8A78] -translate-x-px" />
+        <div className="absolute left-1/2 -top-px -bottom-px w-[3px] -translate-x-1/2 rounded-full" style={{ backgroundColor: '#F6F1E9' }} />
       </div>
-      <div className="flex justify-between mt-1.5 text-xs font-bold">
-        <span className="text-red-400">{t('voting_against_bar').replace('{n}', String(againstCount))}</span>
-        <span className="text-[#9A8A78] text-[10px] font-normal">{t('voting_voted_count').replace('{n}', String(totalVoted))}</span>
-        <span className="text-green-400">{t('voting_for_bar').replace('{n}', String(forCount))}</span>
+      <div className="flex justify-between mt-2 text-[13px] font-semibold tabular-nums">
+        <span style={{ color: '#8B2020' }}>{t('voting_against_bar').replace('{n}', String(againstCount))}</span>
+        <span className="text-[12.5px] font-medium" style={{ color: '#6A5A4A' }}>{t('voting_voted_count').replace('{n}', String(totalVoted))}</span>
+        <span style={{ color: '#2F6B45' }}>{t('voting_for_bar').replace('{n}', String(forCount))}</span>
       </div>
     </div>
   );
 }
 
-function PieChart({ forVotes, against, abstain }: { forVotes: number; against: number; abstain: number }) {
-  const total = forVotes + against + abstain;
-  if (total === 0) return null;
-  const cx = 60, cy = 60, r = 50;
-  const slice = (startAngle: number, value: number, color: string) => {
-    if (value === 0) return null;
-    const pct = value / total;
-    const angle = pct * 2 * Math.PI;
-    const x1 = cx + r * Math.sin(startAngle);
-    const y1 = cy - r * Math.cos(startAngle);
-    const x2 = cx + r * Math.sin(startAngle + angle);
-    const y2 = cy - r * Math.cos(startAngle + angle);
-    const large = angle > Math.PI ? 1 : 0;
-    return <path key={color} d={`M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2} Z`} fill={color} />;
-  };
-  const forAngle = (forVotes / total) * 2 * Math.PI;
-  const againstAngle = (against / total) * 2 * Math.PI;
-  return (
-    <svg width="120" height="120" viewBox="0 0 120 120" className="shrink-0">
-      {slice(0, forVotes, '#4ade80')}
-      {slice(forAngle, against, '#f87171')}
-      {slice(forAngle + againstAngle, abstain, '#9A8A78')}
-    </svg>
-  );
-}
-
 function GavelLoader() {
+  const t = useT();
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: '#EDE7D8' }}>
       <style>{`
@@ -455,10 +320,12 @@ function GavelLoader() {
         <rect x="10" y="16" width="36" height="7" rx="3" transform="rotate(-45 10 16)" fill="#6A5A4A" opacity="0.4" />
         <circle cx="56" cy="56" r="3" fill="#1B3828" opacity="0.5" />
       </svg>
-      <p className="text-[#9A8A78] text-sm font-mono tracking-widest">LOADING…</p>
+      <span className="sr-only" role="status">{t('session_loading')}</span>
     </div>
   );
 }
+
+const isVotingAccessKind = (kind: ConferenceAccess['kind']) => kind === 'chair' || kind === 'organizer';
 
 export default function VotingPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
@@ -473,10 +340,14 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const settingsMap = useSettingsStore((s) => s.settings);
   const updateSetting = useSettingsStore((s) => s.updateSetting);
   const { user, session, loading: authLoading } = useAuth();
-  const [confAccess, setConfAccess] = useState<'checking' | 'standalone' | 'allowed' | 'denied' | 'signin'>('checking');
+  const votingAccess = useSessionAccess({ code, gate: 'dais', allow: isVotingAccessKind });
+  const confAccess = votingAccess.state;
   const hydrateSettings = useSettingsStore((s) => s.hydrateSettings);
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [loading, setLoading] = useState(true);
+  // The initial room read failed (after its retries): an inline Retry, never "not found".
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
 
   // ── Standalone chair gate ──────────────────────────────────────────────────
@@ -502,23 +373,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   // Conference-session access guard (#8). A conference session requires a signed-in
   // verified member of THIS committee's conference; a standalone session falls
-  // through to the chair-code gate below.
-  useEffect(() => {
-    let cancelled = false;
-    async function guard() {
-      if (authLoading) return;
-      const isConf = await detectConferenceSession(code);
-      if (cancelled) return;
-      if (!isConf) { setConfAccess('standalone'); return; }
-      if (!session || !user) { setConfAccess('signin'); return; }
-      const access = await verifyConferenceAccess(code, session.access_token, user.id);
-      if (cancelled) return;
-      setConfAccess(access.kind === 'chair' || access.kind === 'organizer' ? 'allowed' : 'denied');
-    }
-    setConfAccess('checking');
-    guard();
-    return () => { cancelled = true; };
-  }, [code, authLoading, session?.access_token, user?.id]);
+  // through to the chair-code gate below. useSessionAccess is keyed on the user id (a token
+  // refresh used to flash the loader over an open ballot) and turns a failed check into an
+  // inline retry instead of a verdict.
 
   // Standalone gate — DERIVED, not state. It is a pure function of the committee row
   // plus the credentials this device already held at first render, so there is no
@@ -540,6 +397,17 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   const accessGranted = confAccess === 'allowed' || (confAccess === 'standalone' && chairGate === 'allowed');
 
+  // One device per signed-in account (src/lib/useChairDeviceLock.ts). Same device token as
+  // the chair page, so opening voting on the SAME device never kicks the chair page, while
+  // a second device does. Anonymous chairs: inert.
+  const deviceLock = useChairDeviceLock({
+    code,
+    committeeId: committee?.id,
+    userId: user?.id,
+    accessToken: session?.access_token,
+    enabled: accessGranted && !!committee?.id && !committee?.endedAt,
+  });
+
   // Post-access side effects. Deliberately NOT in the loader:
   //  • mirroring `chairJoinSuffix` into the settings store there would hand the gate
   //    its own answer on the next load (and is only needed so SettingsPanel does not
@@ -559,24 +427,106 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       saveCommitteeSettings(committee.id, seed, committee.code, committee.dbChairJoinSuffix ?? undefined);
     }
   }, [accessGranted, committee?.id]);
-  const [votes, setVotes] = useState<DelegateVote[]>([]);
-  const [phase, setPhase] = useState<VotingPhase>('voting');
-  const [currentVoterIndex, setCurrentVoterIndex] = useState(0);
-  const [passedIds, setPassedIds] = useState<string[]>([]);
-  const [rightsIndex, setRightsIndex] = useState(0);
+  // ── Persisted votes (V-2) ──────────────────────────────────────────────────
+  // Every ballot, the voter pointer, the pass round, the rights sequence and the verdict live
+  // in `documents.vote_state` (src/lib/voteState.ts), so a reload loses nothing and every
+  // chair device sees the same vote. ONE device drives it: the Moderator's (the same
+  // `deriveGavelRole` the chair page uses). Every other chair device renders the stored
+  // state read-only and follows it live.
+  const [voteStates, setVoteStates] = useState<Record<string, VoteStateV1>>({});
+  /** Synchronous mirror, so two taps inside one render still chain their seq numbers. */
+  const voteStatesRef = useRef<Record<string, VoteStateV1>>({});
+  /** Highest seq this device wrote per document that the DB has not echoed back yet. */
+  const pendingSeqRef = useRef<Record<string, number>>({});
+  /** Writes are serialised: a later ballot can never land before an earlier one. */
+  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
+  /** Highest seq the DB has accepted from this device, per document. */
+  const savedSeqRef = useRef<Record<string, number>>({});
+  const [voteSaveError, setVoteSaveError] = useState<null | { docId: string; kind: 'denied' | 'error' | 'stale' }>(null);
+  /** A verdict whose documents.status write did not land (V2). */
+  const [resultSaveError, setResultSaveError] = useState<null | { docId: string; result: 'passed' | 'failed' | 'introduced' }>(null);
   const [rightsSpeakerTime, setRightsSpeakerTime] = useState(60);
   const [rightsRunning, setRightsRunning] = useState(false);
+  /** The speaker on the rights floor has started (the clock ran at least once). Until then
+   *  they can still be moved in the queue like anyone waiting. */
+  const [rightsStarted, setRightsStarted] = useState(false);
   const rightsTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const [rollCallDone, setRollCallDone] = useState(false);
+  /** The roll call opened on its own (resolution list, roster notice), with no vote to start. */
+  const [rollCallOpen, setRollCallOpen] = useState(false);
+  /** The draft resolution a new vote is about to open on. Choosing one (or Vote again) opens
+   *  the roll call; confirming it starts the ballot. Every new ballot passes through it. */
+  const [pendingDocId, setPendingDocId] = useState<string | null>(null);
+  /** Device ballot: how many delegations have voted, as DeviceVotingPanel last read it (header progress). */
+  const [deviceCast, setDeviceCast] = useState<{ ballot: string; cast: number } | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   // Local delegate statuses for roll call modal (mirrors committee.delegates)
   const [rollCallStatuses, setRollCallStatuses] = useState<Record<string, DelegateStatus>>({});
-  const [rightsTimerLimit, setRightsTimerLimit] = useState(60);
   const [showEndDebateConfirm, setShowEndDebateConfirm] = useState(false);
-  const [hideVotes, setHideVotes] = useState(false);
-  const [orderedRights, setOrderedRights] = useState<DelegateVote[]>([]);
-  const dragIndexRef = useRef<number | null>(null);
-  const resultPersistedRef = useRef(false);
+  const [endDebateState, setEndDebateState] = useState<'idle' | 'working' | 'failed'>('idle');
+  /** Why phones are NOT in voting mode, or why leaving it failed. */
+  const [phaseNotice, setPhaseNotice] = useState<null | 'closed' | 'enter_failed' | 'leave_failed'>(null);
+  const [backBusy, setBackBusy] = useState(false);
+  /** "Hide tally": the running count is not on screen at all (no bar, no numbers, no
+   *  verdict chip) until the result. Per device, remembered per committee so a reload
+   *  on a projector never flashes the tally. localStorage only (a per-viewer preference). */
+  const [hideVotes, setHideVotesState] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try { return localStorage.getItem(`gavelling-hide-tally:${code.toUpperCase()}`) === '1'; } catch { return false; }
+  });
+  const setHideVotes = (next: boolean) => {
+    setHideVotesState(next);
+    try { localStorage.setItem(`gavelling-hide-tally:${code.toUpperCase()}`, next ? '1' : '0'); } catch { /* storage unavailable */ }
+  };
+  /** A follower (view-only) tracks the live vote unless they picked a document themselves. */
+  const [followLive, setFollowLive] = useState(true);
+  const enteredVotingRef = useRef(false);
+  const [gavelDeviceId] = useState(() => getGavelDeviceId(code));
+  // D-1: another chair's settings change reaches this screen's rules as well.
+  const settingsSync = useSettingsSync(committee);
+  // Same derivation as the chair page. UI gate only (AGENTS.md rule 15).
+  const gavelRole = deriveGavelRole(committee, urlChairName, gavelDeviceId);
+  const isViewOnly = !!committee && !gavelRole.isModerator;
+  /** Latest role for async continuations (a queued vote save outliving a gavel handover). */
+  const isViewOnlyRef = useRef(isViewOnly);
+  useEffect(() => { isViewOnlyRef.current = isViewOnly; }, [isViewOnly]);
+  // ── The chair console's top-bar dialogs, on every voting screen ────────────
+  // Chat and the scoreboard, exactly as on /chair/[code]: the chat is ChatDialog + ChatPanel
+  // with this chair's own read counts (src/lib/chatReadKey.ts, keyed by reader: role chair,
+  // identity ?chairName=), and the scoreboard re-reads feedback on every realtime `feedback`
+  // event through `feedbackVersion` (the chair page's counter, outside any debounce).
+  const [showChat, setShowChat] = useState(false);
+  const [showScoreboard, setShowScoreboard] = useState(false);
+  const [feedbackVersion, setFeedbackVersion] = useState(0);
+  const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (!committee?.code) return;
+    const stored = loadChatReadCounts(committee.code, { role: 'chair', identity: urlChairName });
+    if (stored) setChatReadCounts(stored);
+  }, [committee?.code, urlChairName]);
+  useEffect(() => {
+    if (!committee?.code) return;
+    saveChatReadCounts(committee.code, { role: 'chair', identity: urlChairName }, chatReadCounts);
+  }, [chatReadCounts, committee?.code, urlChairName]);
+
+  const followDocId = isViewOnly && followLive
+    ? (Object.entries(voteStates)
+        .filter(([, st]) => isVoteOpen(st))
+        .sort((a, b) => b[1].updatedAt.localeCompare(a[1].updatedAt))[0]?.[0] ?? null)
+    : null;
+  const activeDocId = selectedDocId ?? followDocId;
+  const activeVote: VoteStateV1 | null = activeDocId ? voteStates[activeDocId] ?? null : null;
+  const rightsIndex = activeVote?.rightsIndex ?? 0;
+  /**
+   * ONE rights speaking time for the whole round (owner, 17 Sep 2026: "the rights speaker
+   * timer needs to use a similar rationale as the GSL timer. No per-speaker timer, just the
+   * default timer"). `vote_state.rightsTimes` is no longer read or written; a ballot stored
+   * with per-speaker overrides simply runs on the default now. Presets plus a typed field,
+   * exactly like the GSL's speaking time.
+   */
+  const rightsTimerLimit = activeVote?.rightsTimerLimit ?? 60;
+  /** The delegation holding the rights floor now. */
+  const rightsSpeakerId = activeVote?.status === 'rights-speakers' ? activeVote.rightsOrder[rightsIndex]?.delegateId ?? null : null;
+  const anyOpenVote = Object.values(voteStates).some(isVoteOpen);
 
   // ── Live roster plumbing ───────────────────────────────────────────────────
   /** Monotonic ticket, taken before every fetch and re-checked after it resolves.
@@ -595,7 +545,11 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const [newSeatIds, setNewSeatIds] = useState<string[]>([]);
   /** Verdicts this screen has already recorded, re-applied after every refetch so a
    *  refetch racing the write cannot revert a result that is already on screen. */
-  const docResultPatchRef = useRef<Record<string, 'passed' | 'failed'>>({});
+  const docResultPatchRef = useRef<Record<string, 'passed' | 'failed' | 'introduced'>>({});
+  // Back from a result puts the paper back to `introduced`, but only once THAT vote state
+  // has landed (seq per document). If another device's newer state wins instead, nothing
+  // is written to the document and the stored state is applied.
+  const backStatusSeqRef = useRef<Record<string, number>>({});
   /** Optimistic observer placards awaiting confirmation from the refetched row. */
   const observerWriteRef = useRef<Record<string, { value: boolean; at: number }>>({});
   const [observerOverrides, setObserverOverrides] = useState<Record<string, boolean>>({});
@@ -616,7 +570,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
    * rename or a new crest still flows through while the array length can never
    * change under the index. "Vote again" re-freezes from the live room.
    */
-  const [ballot, setBallot] = useState<{ docId: string; order: Delegate[]; votable: Delegate[] } | null>(null);
+  // (The frozen roster now lives in the persisted vote state: `order` and `votable`.)
 
   useEffect(() => {
     let cancelled = false;
@@ -625,22 +579,18 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     /** Re-apply verdicts this screen already recorded. `persistResult` writes them
      *  optimistically; a refetch in flight when that write went out still carries
      *  the pre-vote status, and would otherwise revert the result on screen. */
-    const withRecordedResults = (found: Committee): Committee => {
+    const withRecordedDocs = (docs: Committee['documents']): Committee['documents'] => {
       const patches = docResultPatchRef.current;
-      if (Object.keys(patches).length === 0) return found;
-      return {
-        ...found,
-        documents: (found.documents ?? []).map((d) => (patches[d.id] ? { ...d, status: patches[d.id] } : d)),
-      };
+      if (Object.keys(patches).length === 0) return docs;
+      return (docs ?? []).map((d) => (patches[d.id] ? { ...d, status: patches[d.id] } : d));
     };
 
-    const absorb = (found: Committee) => {
-      setCommittee(withRecordedResults(found));
+    const absorbDelegates = (delegates: Delegate[]) => {
       // MERGE, never re-seed: ids this chair touched on this screen keep their local
       // value, everything else follows the DB.
       setRollCallStatuses((prev) => {
         const next: Record<string, DelegateStatus> = {};
-        found.delegates.forEach((d) => {
+        delegates.forEach((d) => {
           next[d.id] = touchedStatusRef.current.has(d.id) ? (prev[d.id] ?? d.status) : d.status;
         });
         return next;
@@ -649,27 +599,50 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       // chair's decision, and this screen counts votes.
       const known = knownSeatIdsRef.current;
       if (known === null) {
-        knownSeatIdsRef.current = new Set(found.delegates.map((d) => d.id));
+        knownSeatIdsRef.current = new Set(delegates.map((d) => d.id));
         return;
       }
-      const arrivals = found.delegates.filter((d) => !known.has(d.id)).map((d) => d.id);
-      found.delegates.forEach((d) => known.add(d.id));
+      const arrivals = delegates.filter((d) => !known.has(d.id)).map((d) => d.id);
+      delegates.forEach((d) => known.add(d.id));
       if (arrivals.length > 0) {
         setNewSeatIds((prev) => [...prev, ...arrivals.filter((id) => !prev.includes(id))]);
       }
     };
 
-    const refetch = async () => {
-      const ticket = ++refetchSeqRef.current;
-      const found = await getCommitteeByCode(code);
-      if (cancelled || ticket !== refetchSeqRef.current || !found) return;
-      absorb(found);
+    const absorb = (found: Committee) => {
+      setCommittee({ ...found, documents: withRecordedDocs(found.documents) });
+      absorbDelegates(found.delegates);
+    };
+
+    // Vote states: the DB wins, except where this device has written a newer seq that has
+    // not echoed back yet (the driver's optimistic ballots).
+    let voteSeq = 0;
+    const refetchVotes = async (committeeId: string) => {
+      const ticket = ++voteSeq;
+      const loaded = await loadVoteStates(committeeId);
+      if (cancelled || ticket !== voteSeq || !loaded) return;
+      const merged: Record<string, VoteStateV1> = { ...loaded };
+      for (const [docId, local] of Object.entries(voteStatesRef.current)) {
+        const pending = pendingSeqRef.current[docId];
+        const stored = loaded[docId];
+        if (pending !== undefined && (!stored || stored.seq < pending)) {
+          merged[docId] = local;
+        } else if (pending !== undefined) {
+          delete pendingSeqRef.current[docId];
+        }
+      }
+      voteStatesRef.current = merged;
+      setVoteStates(merged);
     };
 
     async function load() {
       const ticket = ++refetchSeqRef.current;
-      const found = await getCommitteeByCode(code);
+      // A failed read is not "not found": retried with backoff, then an inline Retry.
+      const result = await getCommitteeByCodeWithRetry(code, { isCancelled: () => cancelled });
       if (cancelled || ticket !== refetchSeqRef.current) return;
+      if (result.status === 'error') { setLoadFailed(true); setLoading(false); return; }
+      setLoadFailed(false);
+      const found = result.status === 'ok' ? result.committee : null;
       if (!found) setCommittee(null);
       if (found) {
         // Defaults the committee's IDENTITY implies — today: a Security Council
@@ -695,8 +668,10 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           // `agendaTopicIndex` is stripped for the same reason as `headChair`: it is written
           // only by the chair's agenda picker (updateCommitteeAgendaInDB), and a copy
           // captured here would revert a later choice made on another device.
-          const { headChair: _hc, separateChairCode: _scc, chairJoinSuffix: _cjs, agendaTopicIndex: _ati, ...rest } = stored;
-          void _hc; void _scc; void _cjs; void _ati;
+          // `headChairDevice` (src/lib/gavelDevice.ts) is the gavel's device half: same reason.
+          // `votingReturnPhase` (set_committee_voting_phase) is stripped too: see
+          // NON_HYDRATED_SETTING_KEYS in settingsStore.ts, the one list of these keys.
+          const rest = stripNonHydratedSettings(stored);
           // Key on found.code, not the URL param: getCommitteeByCode uppercases
           // before querying, and every read below goes through committee.code.
           // A lowercase URL would otherwise hydrate a key nothing ever reads.
@@ -715,25 +690,66 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         // It is written by the access-granted effect above rather than here, so the
         // standalone chair gate cannot be satisfied by this page's own write.
         absorb(found);
+        await refetchVotes(found.id);
+        if (cancelled) return;
       }
       setLoading(false);
       if (cancelled || !found) return;
       // The roster used to be frozen at mount: nothing refreshed committee.delegates,
       // so a delegation added mid-session (chair sidebar, or the organiser's committee
       // editor) stayed invisible and the quorum denominator here disagreed with the
-      // chair page's. speakers_list, current_speaker and messages are deliberately
-      // ignored — this page renders none of them.
-      unsubscribe = subscribeToCommittee(
-        found.id,
-        (table) => { if (table === 'delegates' || table === 'documents' || table === 'committees') refetch(); },
-        // Realtime does not replay events missed while the socket was down, so every
-        // (re-)SUBSCRIBED runs a catch-up fetch.
-        (status) => { if (status === 'SUBSCRIBED') refetch(); },
-      );
+      // chair page's. speakers_list and current_speaker are deliberately ignored: this page
+      // renders neither.
+      //
+      // The same pipeline as the chair, delegate and advisor pages (src/lib/sessionSync.ts):
+      // one fetch per SLICE, coalesced 200 ms, per-slice sequencing, catch-up on reconnect,
+      // wake and online. A ballot write fires a documents event on every chair device; it
+      // now costs one documents read (plus the light vote-state read), never a whole
+      // committee refetch per vote.
+      // Chat and the scoreboard live in the header on every voting screen (owner, 17 Sep
+      // 2026), so `messages` and `feedback` are bound too: a message INSERT is merged from its
+      // payload by id (never a refetch outside a catch-up), a feedback event only bumps the
+      // counter the scoreboard's own query is keyed on (RULE 4, as on the chair page).
+      const sync = startSessionSync({
+        committeeId: found.id,
+        tables: ['committees', 'delegates', 'documents', 'messages', 'feedback'],
+        slices: ['row', 'delegates', 'documents', 'messages'],
+        onMessage: (m) => setCommittee((prev) => {
+          if (!prev) return prev;
+          const merged = mergeMessagesById(prev.messages, [m]);
+          return merged === prev.messages ? prev : { ...prev, messages: merged };
+        }),
+        onEvent: (table) => {
+          if (table === 'feedback') { setFeedbackVersion((v) => v + 1); return true; }
+          if (table === 'documents') void refetchVotes(found.id);
+          return false;
+        },
+        onCatchUp: (phase) => { if (phase === 'start') void refetchVotes(found.id); },
+        apply: (slice, data) => {
+          if (cancelled) return;
+          switch (slice) {
+            case 'row': setCommittee((prev) => (prev ? { ...prev, ...rowFields(data as Committee) } : prev)); return;
+            case 'delegates': {
+              const delegates = data as Delegate[];
+              setCommittee((prev) => (prev ? { ...prev, delegates } : prev));
+              absorbDelegates(delegates);
+              return;
+            }
+            case 'documents': setCommittee((prev) => (prev ? { ...prev, documents: withRecordedDocs(data as Committee['documents']) } : prev)); return;
+            case 'messages': setCommittee((prev) => {
+              if (!prev) return prev;
+              // Append-only: merge by id, never replace (a catch-up of identical rows keeps identity).
+              const merged = mergeMessagesById(prev.messages, data as Committee['messages']);
+              return merged === prev.messages ? prev : { ...prev, messages: merged };
+            }); return;
+          }
+        },
+      });
+      unsubscribe = sync.stop;
     }
     load();
     return () => { cancelled = true; unsubscribe?.(); };
-  }, [code]);
+  }, [code, loadAttempt]);
 
   // ── Observer write reconciliation ──────────────────────────────────────────
   // `setDelegateObserver` returns void and swallows its error, and every delegates
@@ -800,11 +816,63 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     return () => { if (rightsTimerRef.current) { clearInterval(rightsTimerRef.current); rightsTimerRef.current = null; } };
   }, [rightsRunning]);
 
-  // Reset rights timer when speaker index or limit changes
+  // Reset the rights clock when the speaker on the floor, their time or the paper changes.
+  // Keyed on the speaker's id (not only the index): moving the not-yet-started speaker away
+  // puts someone else at the same index.
   useEffect(() => {
     setRightsSpeakerTime(rightsTimerLimit);
     setRightsRunning(false);
-  }, [rightsIndex, rightsTimerLimit]);
+    setRightsStarted(false);
+  }, [rightsIndex, rightsSpeakerId, rightsTimerLimit, activeDocId]);
+
+  // ── V-3: the room enters voting mode when the Moderator opens this screen ──────
+  // `set_committee_voting_phase` remembers the phase the room was in and sets 'voting' in
+  // ONE statement, so delegate phones switch to "Vote in progress" and Request to Speak
+  // closes. Already voting (a reload) is a no-op, so the remembered phase is never
+  // overwritten with 'voting'. A suspended or ended room is refused and the chair is told.
+  // Commenters never write it. "Back to Session" restores the remembered phase (V-4).
+  // A suspended room refuses with `closed`. The latch is released on every refusal, and the
+  // effect is keyed on whether the room is closed, so the moment the room resumes (the row
+  // arrives with suspended_at cleared and a live phase) the entry is attempted again.
+  const roomClosed = !!committee?.suspendedAt || committee?.phase === 'adjourned';
+  useEffect(() => {
+    if (!accessGranted || !committee || isViewOnly || enteredVotingRef.current) return;
+    if (committee.endedAt) return;
+    enteredVotingRef.current = true;
+    const id = committee.id;
+    void setVotingPhase(id, true, committee.code, committee.dbChairJoinSuffix ?? undefined).then((r) => {
+      if (r.ok) {
+        setPhaseNotice(null);
+        setCommittee((prev) => (prev && prev.id === id ? { ...prev, phase: 'voting' } : prev));
+      } else {
+        setPhaseNotice(r.reason === 'closed' ? 'closed' : 'enter_failed');
+        // Released on every refusal: a `closed` room retries when `roomClosed` flips back.
+        enteredVotingRef.current = false;
+      }
+    });
+  // Keyed on identity and on the room opening or closing, not on every refetched committee object.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessGranted, committee?.id, committee?.endedAt, isViewOnly, roomClosed]);
+
+  // "Vote" goes straight to the roll call when there is exactly ONE paper to vote on (owner,
+  // 17 Sep 2026): a draft resolution that is introduced and has no stored vote state at all
+  // (a stored state is either a vote in progress or a recorded result), and no vote is open.
+  // With two or more the Moderator chooses one on the list first. Decided once per page load,
+  // after the vote states have loaded, so Back from the roll call lands on the list and stays.
+  const autoRollCallRef = useRef(false);
+  useEffect(() => {
+    if (autoRollCallRef.current || loading || !accessGranted || !committee) return;
+    autoRollCallRef.current = true;
+    // Never over a suspended or ended room: no ballot can start there.
+    if (isViewOnly || committee.endedAt || committee.suspendedAt || selectedDocId) return;
+    if (Object.values(voteStates).some(isVoteOpen)) return;
+    const ready = (committee.documents ?? []).filter(
+      (d) => d.type === 'draft-resolution' && d.status === 'introduced' && !voteStates[d.id],
+    );
+    if (ready.length === 1) setPendingDocId(ready[0].id);
+  // Once, when the room and its vote states are first on screen.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, accessGranted, committee?.id]);
 
   if (
     loading || authLoading || confAccess === 'checking' ||
@@ -817,9 +885,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     return (
       <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
         <div className="text-center max-w-sm">
-          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>Sign in to view this session</h1>
-          <p className="mb-6" style={{ color: '#6A5A4A' }}>This is a conference session. Sign in to verify your access.</p>
-          <Link href={'/auth/signin?next=' + encodeURIComponent('/join?code=' + code)} className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>SIGN IN</Link>
+          <h1 className="text-2xl font-bold mb-2" style={{ color: '#1B3828' }}>{t('voting_signin_title')}</h1>
+          <p className="mb-6" style={{ color: '#6A5A4A' }}>{t('voting_signin_body')}</p>
+          <Link href={'/auth/signin?next=' + encodeURIComponent('/join?code=' + code)} className="inline-block font-semibold text-white px-6 py-3 rounded-full transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>{t('session_signin_btn')}</Link>
         </div>
       </div>
     );
@@ -829,9 +897,38 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     return (
       <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
         <div className="text-center max-w-sm">
-          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>You don&apos;t chair this committee</h1>
-          <p className="mb-6" style={{ color: '#6A5A4A' }}>The voting screen is part of the chair session. Only the committee&apos;s chair can open it.</p>
-          <Link href="/sessions" className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>BACK TO HOME</Link>
+          <h1 className="text-2xl font-bold mb-2" style={{ color: '#1B3828' }}>{t('session_denied_title')}</h1>
+          <p className="mb-6" style={{ color: '#6A5A4A' }}>{t('voting_denied_body')}</p>
+          <Link href="/sessions" className="inline-block font-semibold text-white px-6 py-3 rounded-full transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>{t('session_back_home')}</Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (confAccess === 'error') {
+    return (
+      <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
+        <div className="text-center max-w-sm" role="alert">
+          <h1 className="text-2xl font-bold mb-2" style={{ color: '#1B3828' }}>{t('session_access_error_title')}</h1>
+          <p className="mb-6" style={{ color: '#6A5A4A' }}>{t('session_access_error_body')}</p>
+          <button onClick={votingAccess.retry} className="inline-block font-semibold text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>{t('delegate_seat_retry')}</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!committee && loadFailed) {
+    return (
+      <div className="min-h-screen bg-[#F6F1E9] flex items-center justify-center px-6">
+        <div className="text-center max-w-sm" role="alert">
+          <h1 className="text-xl font-bold text-[#1C1410] mb-6">{t('session_load_failed')}</h1>
+          <button
+            onClick={() => { setLoadFailed(false); setLoading(true); setLoadAttempt((n) => n + 1); }}
+            className="inline-block font-semibold text-white px-6 py-3 rounded-xl transition-colors focus:outline-none"
+            style={{ backgroundColor: '#1B3828' }}
+          >
+            {t('delegate_seat_retry')}
+          </button>
         </div>
       </div>
     );
@@ -842,12 +939,24 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       <div className="min-h-screen bg-[#F6F1E9] flex items-center justify-center">
         <div className="text-center">
           <div className="mb-4"><Emoji size="2.5rem">🔍</Emoji></div>
-          <h1 className="text-2xl font-bold text-[#1C1410] mb-2">Committee not found</h1>
-          <p className="text-[#6A5A4A] mb-6">Code &ldquo;{code}&rdquo; is invalid or the session ended.</p>
+          <h1 className="text-2xl font-bold text-[#1C1410] mb-2">{t('voting_not_found_title')}</h1>
+          <p className="text-[#6A5A4A] mb-6">{t('voting_not_found_body', { code })}</p>
           <Link href="/sessions" className="bg-[#1B3828] hover:bg-[#2A5A3C] text-white px-6 py-3 rounded-lg font-semibold transition-colors">
-            Go Home
+            {t('session_back_home')}
           </Link>
         </div>
+      </div>
+    );
+  }
+
+  // This account took the committee on another device: nothing interactive renders here.
+  if (deviceLock.kicked) {
+    return (
+      <div className="min-h-screen" style={{ backgroundColor: '#EDE7D8' }}>
+        <ChairDeviceKickModal
+          onUseThisDevice={deviceLock.takeBack}
+          onLeave={() => router.push(committee.sessionOrigin === 'conference' ? '/my-conferences' : '/join')}
+        />
       </div>
     );
   }
@@ -860,7 +969,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       // Accept the full printed chair code ("UNSC26-4821") as well as the bare suffix.
       const bare = entered.includes('-') ? (entered.split('-').pop() ?? '').trim() : entered;
       if (!expectedSuffix || bare !== expectedSuffix) {
-        setChairCodeError('Incorrect chair code. Ask your Moderator.');
+        setChairCodeError(t('voting_chair_code_wrong'));
         return;
       }
       setChairCodeError('');
@@ -870,11 +979,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
         <div className="w-full max-w-sm text-center">
           <div className="mb-3"><Emoji size="2.25rem">🪑</Emoji></div>
-          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>Chairs only</h1>
+          <h1 className="text-2xl font-bold mb-2" style={{ color: '#1B3828' }}>{t('voting_chair_gate_title')}</h1>
           <p className="mb-6 text-sm leading-relaxed" style={{ color: '#6A5A4A' }}>
-            The voting screen records resolution results, changes the committee&apos;s rules and can end
-            debate. Enter the chair code for{' '}
-            <span className="font-black" style={{ color: '#1B3828' }}>{committee.code}</span> to open it.
+            {t('voting_chair_gate_body', { code: committee.code })}
           </p>
           {expectedSuffix ? (
             <form
@@ -888,7 +995,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 value={chairCodeInput}
                 onChange={(e) => { setChairCodeInput(e.target.value); setChairCodeError(''); }}
                 placeholder="0000"
-                aria-label="Chair code"
+                aria-label={t('voting_chair_code_field')}
                 className="w-full text-center rounded-xl px-4 py-3 font-black tracking-[0.4em] focus:outline-none"
                 style={{
                   backgroundColor: '#FAF8F3',
@@ -902,18 +1009,17 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               )}
               <button
                 type="submit"
-                className="w-full font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none gv-lift"
+                className="w-full font-semibold text-white px-6 py-3 rounded-xl transition-colors focus:outline-none gv-lift"
                 style={{ backgroundColor: '#1B3828' }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
               >
-                OPEN VOTING
+                {t('voting_chair_gate_open')}
               </button>
             </form>
           ) : (
             <p className="text-sm leading-relaxed" style={{ color: '#6A5A4A' }}>
-              This committee has no chair code. Open the voting screen from the chair session itself —
-              Documents → Go to voting.
+              {t('voting_chair_gate_no_code')}
             </p>
           )}
           <Link
@@ -921,7 +1027,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             className="inline-block mt-5 text-xs font-semibold underline"
             style={{ color: '#6A5A4A' }}
           >
-            Re-join as chair
+            {t('voting_rejoin_chair')}
           </Link>
         </div>
       </div>
@@ -935,7 +1041,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     (d) => d.type === 'draft-resolution' &&
       ['introduced', 'passed', 'failed'].includes(d.status)
   );
-  const selectedDoc = allDRs.find((d) => d.id === selectedDocId) ?? null;
+  const selectedDoc = allDRs.find((d) => d.id === activeDocId) ?? null;
+  const suffix = committee.dbChairJoinSuffix ?? undefined;
 
   /** The placard as this screen currently believes it, optimistic write included,
    *  so the denominator moves the instant a chair hands one out. */
@@ -943,26 +1050,38 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const seatStatus = (d: Delegate): DelegateStatus => rollCallStatuses[d.id] ?? d.status;
 
   // The live room. Used directly whenever no ballot is open, and it is what a new
-  // ballot is frozen from.
+  // ballot is frozen from. `seatStatus` is the DB row except where this chair set a status on
+  // this screen (the roll call every new ballot passes through), so it is always the room
+  // as the roll call left it.
   const livePresent = committee.delegates
-    .filter((d) => !isObserverSeat(d) && (rollCallDone ? seatStatus(d) : d.status) !== 'absent')
+    .filter((d) => !isObserverSeat(d) && seatStatus(d) !== 'absent')
     .sort((a, b) => compareCountryNames(a.country, b.country, language));
   const livePresentAndPv = committee.delegates.filter((d) => !isObserverSeat(d) && seatStatus(d) !== 'absent');
   const liveVotable = committee.delegates.filter((d) => !isObserverSeat(d));
 
-  // A frozen row is resolved back to the live row BY ID, so a rename or a new crest
-  // still flows through, with the snapshot as the fallback — the array length can
-  // never change under `currentVoterIndex`.
+  // A frozen seat is resolved back to the live row BY ID, so a rename or a new crest
+  // still flows through, with the snapshot as the fallback: the array length can never
+  // change under `currentVoterIndex`.
   const liveSeatById = new Map(committee.delegates.map((d) => [d.id, d]));
-  const liveSeat = (d: Delegate): Delegate => liveSeatById.get(d.id) ?? d;
-  // Degrades to the live room if the selected draft resolution disappears.
-  const activeBallot = selectedDoc && ballot && ballot.docId === selectedDoc.id ? ballot : null;
+  const liveSeat = (f: FrozenSeat): Delegate => liveSeatById.get(f.id) ?? { id: f.id, country: f.country, status: 'present' };
+  const freeze = (list: Delegate[]): FrozenSeat[] => list.map((d) => ({ id: d.id, country: d.country, status: seatStatus(d) }));
+  // The vote on screen: the persisted state for the selected draft resolution.
+  const vote: VoteStateV1 | null = selectedDoc ? voteStates[selectedDoc.id] ?? null : null;
+  const votes: DelegateVote[] = vote?.votes ?? [];
+  const phase: VotingPhase = vote?.status ?? 'voting';
+  const currentVoterIndex = vote?.currentVoterIndex ?? 0;
+  const passedIds = vote?.passedIds ?? [];
+  const orderedRights = vote?.rightsOrder ?? [];
 
-  const presentDelegates = activeBallot ? activeBallot.order.map(liveSeat) : livePresent;
+  const presentDelegates = vote ? vote.order.map(liveSeat) : livePresent;
 
-  const forCount = votes.filter((v) => v.choice === 'for' || v.choice === 'for-rights').length;
-  const againstCount = votes.filter((v) => v.choice === 'against' || v.choice === 'against-rights').length;
-  const abstainCount = votes.filter((v) => v.choice === 'abstain').length;
+  /** Tally and verdict for a given vote list (the one on screen, or a corrected one). */
+  const tallyOf = (list: DelegateVote[]) => ({
+    forCount: list.filter((v) => v.choice === 'for' || v.choice === 'for-rights').length,
+    againstCount: list.filter((v) => v.choice === 'against' || v.choice === 'against-rights').length,
+    abstainCount: list.filter((v) => v.choice === 'abstain').length,
+  });
+  const { forCount, againstCount, abstainCount } = tallyOf(votes);
   const withRightsAll = votes
     .filter((v) => v.choice === 'for-rights' || v.choice === 'against-rights')
     .sort((a, b) => compareCountryNames(a.country, b.country, language));
@@ -971,10 +1090,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   // Unanimous mode looks at every present delegate (P and PV). Both of these are
   // frozen with the ballot: they are the unanimity/quorum numerator and the
   // quorum/veto denominator, and a vote in progress must not be judged against a
-  // bar that moved under it. See the block comment on `ballot`.
-  const presentAndPvDelegates = activeBallot ? activeBallot.order.map(liveSeat) : livePresentAndPv;
-  const votableDelegates = activeBallot ? activeBallot.votable.map(liveSeat) : liveVotable;
-  const tally = { forCount, againstCount, abstainCount };
+  // bar that moved under it.
+  const presentAndPvDelegates = vote ? vote.order.map(liveSeat) : livePresentAndPv;
+  const votableDelegates = vote ? vote.votable.map(liveSeat) : liveVotable;
 
   /** The veto seats in force under a given rule set. `custom` → the chair-picked
    *  list; `p5` → p5Delegations, falling back to the shipped P5 default. */
@@ -988,8 +1106,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   // One pure evaluation shared by the screen and the inline rules console, so
   // flipping a rule instantly moves the denominator, the required-to-pass number
   // and the verdict for the vote already in progress. `evaluate` is also called
-  // with the *next* settings when a rule changes on the result screen.
-  const evaluate = (s: CommitteeSettings) => {
+  // with the *next* settings when a rule changes, and with a corrected vote list.
+  const evaluate = (s: CommitteeSettings, list: DelegateVote[] = votes) => {
     const vetoList = vetoListFor(s);
     // Matched by resolved country identity, NOT raw string equality. A roster
     // imported as "Russian Federation" / "United States of America" / "USA" / "UK"
@@ -998,18 +1116,18 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     // country (crisis cabinets, corporations) still match by exact name.
     const vetoBlocked = (s.vetoMode === 'p5' || s.vetoMode === 'custom')
       && vetoList.length > 0
-      && votes.some((v) => (v.choice === 'against' || v.choice === 'against-rights')
+      && list.some((v) => (v.choice === 'against' || v.choice === 'against-rights')
         && isVetoDelegation(vetoList, v.country));
     // Unanimous: every present delegate must have voted 'for' or 'for-rights'
     const unanFail = s.vetoMode === 'unanimous' && presentAndPvDelegates.some((d) => {
-      const vote = votes.find((v) => v.delegateId === d.id);
-      return !vote || (vote.choice !== 'for' && vote.choice !== 'for-rights');
+      const cast = list.find((v) => v.delegateId === d.id);
+      return !cast || (cast.choice !== 'for' && cast.choice !== 'for-rights');
     });
     return {
       vetoBlocked,
       unanFail,
       outcome: computeVoteOutcome({
-        tally,
+        tally: tallyOf(list),
         rules: s,
         presentCount: presentAndPvDelegates.length,
         totalCount: votableDelegates.length,
@@ -1021,16 +1139,32 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   const { vetoBlocked: p5Veto, unanFail: unanimousFail, outcome } = evaluate(settings);
   const totalDecisive = outcome.denominator;
-  const thresholdMet = outcome.thresholdMet;
   const passed = outcome.passed;
+  /** Ballot choices in force (Settings, and the roll call's Abstentions bookmark). */
+  const allowRights = settings.allowRightsVotes !== false;
+  const allowPass = settings.allowPass !== false;
+  /** The verdict fields a finished vote stores: vetoed is a failure a veto holder caused. */
+  const verdictOf = (rules: CommitteeSettings, list: DelegateVote[]) => {
+    const ev = evaluate(rules, list);
+    return { result: ev.outcome.passed ? 'passed' as const : 'failed' as const, vetoed: !ev.outcome.passed && ev.vetoBlocked };
+  };
 
-  const persistResult = (docId: string, result: 'passed' | 'failed', force = false) => {
-    if (resultPersistedRef.current && !force) return;
-    resultPersistedRef.current = true;
+  const persistResult = (docId: string, result: 'passed' | 'failed' | 'introduced') => {
+    if (isViewOnly) return;
+    // A verdict given after Back supersedes the `introduced` still waiting on Back's save.
+    if (result !== 'introduced') delete backStatusSeqRef.current[docId];
     // Recorded so every refetch re-applies it: a fetch already in flight still
     // carries the pre-vote status and would otherwise revert the verdict on screen.
     docResultPatchRef.current[docId] = result;
-    updateDocumentStatusInDB(docId, result, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    setResultSaveError((prev) => (prev?.docId === docId ? null : prev));
+    // Checked (V2): a refused status write used to leave the paper looking un-voted after a
+    // reload, and the list then offered "start a vote" over the stored result. The patch
+    // stays applied on screen; the banner offers Retry with the same verdict.
+    void updateDocumentStatusInDB(docId, result, committee.code, suffix).then((ok) => {
+      if (ok) return;
+      if (docResultPatchRef.current[docId] !== result) return;   // a newer verdict superseded it
+      setResultSaveError({ docId, result });
+    });
     // Update local committee state so the DR list reflects the result immediately
     setCommittee((prev) => {
       if (!prev) return prev;
@@ -1043,156 +1177,523 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     });
   };
 
+  // ── Vote writes ────────────────────────────────────────────────────────────
+  // Optimistic first (the ref and the state), then a serialised, checked write. Only the
+  // driving device ever calls this; a Commenter's controls are not rendered.
+  /** Back's `introduced` status write, once the vote state it belongs to has landed. */
+  const flushBackStatus = (docId: string) => {
+    const want = backStatusSeqRef.current[docId];
+    if (want == null || (savedSeqRef.current[docId] ?? 0) < want) return;
+    delete backStatusSeqRef.current[docId];
+    persistResult(docId, 'introduced');
+  };
+
+  const saveLatest = (docId: string) => {
+    saveChainRef.current = saveChainRef.current.then(async () => {
+      const latest = voteStatesRef.current[docId];
+      if (!latest) return;
+      // Every queued save sends the LATEST state, so once it has landed the saves queued
+      // behind it have nothing new to send.
+      if ((savedSeqRef.current[docId] ?? 0) >= latest.seq) { flushBackStatus(docId); return; }
+      const r = await saveVoteState(docId, latest, committee.code, suffix);
+      if (r === 'ok') {
+        savedSeqRef.current[docId] = Math.max(savedSeqRef.current[docId] ?? 0, latest.seq);
+        flushBackStatus(docId);
+        setVoteSaveError((prev) => (prev?.docId === docId ? null : prev));
+        return;
+      }
+      if (r === 'stale') {
+        // The stored seq is at or above ours: another write landed first (a lost response
+        // that did land, an earlier Moderator device). Re-read and look before deciding.
+        const loaded = await loadVoteStates(committee.id);
+        const stored = loaded?.[docId] ?? null;
+        const local = voteStatesRef.current[docId];
+        if (stored && local && stored.startedAt === local.startedAt && !isViewOnlyRef.current) {
+          // Same ballot: this device's taps are the newer intent. Re-apply the local state
+          // under a seq above the stored one instead of dropping the ballot.
+          const seq = Math.max(stored.seq, local.seq, pendingSeqRef.current[docId] ?? 0) + 1;
+          const next: VoteStateV1 = { ...local, seq, updatedAt: serverNowIso() };
+          pendingSeqRef.current[docId] = seq;
+          voteStatesRef.current = { ...voteStatesRef.current, [docId]: next };
+          setVoteStates(voteStatesRef.current);
+          const again = await saveVoteState(docId, next, committee.code, suffix);
+          if (again === 'ok') {
+            savedSeqRef.current[docId] = Math.max(savedSeqRef.current[docId] ?? 0, seq);
+            // Same ballot re-applied: it carries the Back, so the waiting status write goes out.
+            flushBackStatus(docId);
+            setVoteSaveError((prev) => (prev?.docId === docId ? null : prev));
+            return;
+          }
+          setVoteSaveError({ docId, kind: again === 'stale' ? 'stale' : again === 'denied' ? 'denied' : 'error' });
+          if (again !== 'stale') return;
+        } else {
+          setVoteSaveError({ docId, kind: 'stale' });
+        }
+        // A different ballot (or a second refusal): the DB wins. A Back waiting on this save
+        // is dropped with it: the document keeps the status the stored state implies.
+        delete pendingSeqRef.current[docId];
+        delete backStatusSeqRef.current[docId];
+        if (loaded) {
+          voteStatesRef.current = { ...voteStatesRef.current, ...loaded };
+          setVoteStates(voteStatesRef.current);
+        }
+        return;
+      }
+      // Nothing is thrown away: the local state stays on screen and Retry re-sends it.
+      setVoteSaveError({ docId, kind: r === 'denied' ? 'denied' : 'error' });
+    });
+  };
+
+  const commitVote = (docId: string, build: (prev: VoteStateV1 | null) => Omit<VoteStateV1, 'seq' | 'updatedAt' | 'driver' | 'v'>) => {
+    if (isViewOnly) return;
+    const prev = voteStatesRef.current[docId] ?? null;
+    const seq = Math.max(prev?.seq ?? 0, pendingSeqRef.current[docId] ?? 0) + 1;
+    const next: VoteStateV1 = { ...build(prev), v: 1, seq, updatedAt: serverNowIso(), driver: urlChairName || null };
+    pendingSeqRef.current[docId] = seq;
+    voteStatesRef.current = { ...voteStatesRef.current, [docId]: next };
+    setVoteStates(voteStatesRef.current);
+    saveLatest(docId);
+  };
+
+  /** Patch the vote on screen. */
+  const updateVote = (patch: (prev: VoteStateV1) => Partial<VoteStateV1>) => {
+    if (!selectedDoc) return;
+    const docId = selectedDoc.id;
+    if (!voteStatesRef.current[docId]) return;
+    commitVote(docId, (prev) => {
+      if (!prev) throw new Error('no vote to update');
+      const { seq: _s, updatedAt: _u, driver: _d, v: _v, ...rest } = { ...prev, ...patch(prev) };
+      void _s; void _u; void _d; void _v;
+      return rest;
+    });
+  };
+
+  const retryVoteSave = () => {
+    const err = voteSaveError;
+    if (!err) return;
+    setVoteSaveError(null);
+    const current = voteStatesRef.current[err.docId];
+    if (!current || err.kind === 'stale') return;
+    // Re-send under a fresh seq so the write is accepted even if an earlier one landed.
+    commitVote(err.docId, () => {
+      const { seq: _s, updatedAt: _u, driver: _d, v: _v, ...rest } = current;
+      void _s; void _u; void _d; void _v;
+      return rest;
+    });
+  };
+
   // ── Live rule changes from the inline console ──────────────────────────────
-  // Same write path as SettingsPanel: the Zustand store (instant, this device)
-  // AND the committees.settings jsonb, so every chair device that opens this
-  // session computes the identical verdict. This page already treats the DB copy
-  // as the source of truth on load (hydrateSettings in the loader above).
-  const applyRule = <K extends keyof CommitteeSettings>(key: K, value: CommitteeSettings[K]) => {
-    updateSetting(committee.code, key, value);
-    const next: CommitteeSettings = { ...settings, [key]: value };
-    // Never let the credential or the gavel ride along in the payload.
-    // saveCommitteeSettings read-merges into the existing jsonb, so omitting a
-    // key PRESERVES the DB's value. chairJoinSuffix is the chair password —
-    // writing a stale/empty copy locks every chair out. headChair is the gavel —
-    // writing a copy captured at page load reverts it to an earlier holder
-    // (AGENTS.md rule 12/13). A localStorage entry persisted before this guard
-    // existed can still carry either one, so strip on write as well as on load.
-    const { chairJoinSuffix: _cjs, ...payload } =
-      next as CommitteeSettings & { headChair?: string };
-    void _cjs;
-    delete (payload as { headChair?: string }).headChair;
-    saveCommitteeSettings(committee.id, payload, committee.code, committee.dbChairJoinSuffix ?? undefined);
+  // Store (instant, this device) + a key-level patch of committees.settings (D-1), so
+  // every chair device computes the identical verdict and no other setting is touched.
+  const applyRules = (patch: Partial<CommitteeSettings>) => {
+    if (isViewOnly) return;   // V-7: UI gate, consistent with SettingsPanel's `upd`
+    const keys = Object.keys(patch) as (keyof CommitteeSettings)[];
+    if (keys.length === 0) return;
+    for (const key of keys) updateSetting(committee.code, key, patch[key] as CommitteeSettings[typeof key]);
+    const next: CommitteeSettings = { ...settings, ...patch };
+    // ONLY the changed keys, in ONE patch, so two keys that belong together (a veto
+    // mode and its list) land together and the verdict below sees both.
+    // chairJoinSuffix, headChair, headChairDevice and agendaTopicIndex can never ride
+    // along (rules 12 and 13).
+    saveCommitteeSettings(committee.id, patch, committee.code, suffix);
     // Result already on screen: the verdict can flip, so the DR's stored status
     // has to follow it rather than keeping the value from the first evaluation.
     if (phase === 'result' && selectedDoc) {
-      const nextPassed = evaluate(next).outcome.passed;
-      if (nextPassed !== passed) persistResult(selectedDoc.id, nextPassed ? 'passed' : 'failed', true);
+      const v = verdictOf(next, votes);
+      if (v.result !== (passed ? 'passed' : 'failed') || v.vetoed !== !!vote?.vetoed) {
+        persistResult(selectedDoc.id, v.result);
+        updateVote(() => v);
+      }
     }
   };
 
-  const rulesProps = {
-    rules: settings,
-    onChange: applyRule,
-    vetoMode: settings.vetoMode,
-    onVetoModeChange: (m: CommitteeSettings['vetoMode']) => applyRule('vetoMode', m),
-    tally,
-    outcome,
-    votesCast: votes.length,
-    eligible: presentDelegates.length,
-    presentCount: presentAndPvDelegates.length,
-    totalCount: votableDelegates.length,
-    resultShown: phase === 'result',
-    vetoBlocked: p5Veto,
-    unanimousFail,
-    // So the console can warn about veto seats that match NO delegation in the room
-    // — a silent no-match is exactly how a missing veto used to hide.
-    vetoEntries: vetoListFor(settings),
-    delegationNames: votableDelegates.map((d) => d.country),
+  /** Veto seats a chair can pick: every non-observer delegation on the roster. */
+  const vetoRoster = committee.delegates.filter((d) => !isObserverSeat(d));
+
+  /** Switching the veto mode. Choosing Custom seeds the list only when this committee
+   *  has never stored one: from P5, the P5 seats that sit here (roster spelling);
+   *  otherwise empty. A list the chairs already chose is kept as it is. */
+  const changeVetoMode = (mode: CommitteeSettings['vetoMode']) => {
+    if (mode === settings.vetoMode) return;
+    const stored = (committee.dbSettings ?? {}) as Record<string, unknown>;
+    const hasStoredList = Array.isArray(stored.vetoCountries);
+    if (mode === 'custom' && !hasStoredList) {
+      const seeded = settings.vetoMode === 'p5'
+        ? vetoRoster.filter((d) => isVetoDelegation(vetoListFor(settings), d.country)).map((d) => d.country)
+        : [];
+      applyRules({ vetoMode: 'custom', vetoCountries: seeded });
+      return;
+    }
+    applyRules({ vetoMode: mode });
   };
 
   const startNewVote = (docId: string) => {
+    if (isViewOnly) return;
+    // A suspended or ended room takes no new ballot; say why instead of freezing a vote.
+    if (committee?.endedAt || committee?.suspendedAt) { setPhaseNotice('closed'); return; }
     setSelectedDocId(docId);
     // Freeze the room as it stands right now. "Vote again" comes through here too,
     // so a re-vote is judged against the room as it is at that moment.
-    setBallot({ docId, order: livePresent, votable: liveVotable });
-    setVotes([]);
-    setPhase('voting');
-    setCurrentVoterIndex(0);
-    setRightsIndex(0);
-    setOrderedRights([]);
-    setPassedIds([]);
-    resultPersistedRef.current = false;
+    commitVote(docId, () => ({
+      status: 'voting',
+      order: freeze(livePresent),
+      votable: freeze(liveVotable),
+      votes: [],
+      currentVoterIndex: 0,
+      passedIds: [],
+      rightsOrder: [],
+      rightsIndex: 0,
+      rightsTimerLimit: voteStatesRef.current[docId]?.rightsTimerLimit ?? 60,
+      result: null,
+      vetoed: false,
+      startedAt: serverNowIso(),   // database clock (T-1): compared across chair devices
+      // Frozen with the ballot: changing the setting later never changes a vote in progress.
+      method: settings.votingMethod === 'device' ? 'device' : 'rollcall',
+    }));
+  };
+
+  /** Re-open an unfinished vote after a reload, exactly where it stopped. */
+  const resumeVote = (docId: string) => {
+    setSelectedDocId(docId);
+    setRollCallOpen(false);
+  };
+
+  // ── Casting, passing and moving back ───────────────────────────────────────
+  // THE LINE (17 Sep 2026, owner: "Do not have a pass round, they simply vote next"). The
+  // delegations are asked in `order`; a delegation that passes is appended to `passedIds` and
+  // is asked once more after the last delegation in `order`. `currentVoterIndex` points into
+  // that line: index < order.length is the main ballot, index >= order.length is
+  // passedIds[index - order.length]. On the second ask a delegation must vote For or Against
+  // (with rights when rights are allowed): no second Pass and no Abstain, the usual MUN rule
+  // (a delegation that passes has said it will take a position once it has heard the room).
+  // Invariants:
+  //   • in the main ballot a delegation has either a vote or a Pass, never both. A vote cast
+  //     there after Back drops its Pass (and so its second ask); a Pass after Back drops its vote.
+  //   • a delegation that passed and was asked again holds a vote AND stays in passedIds; its
+  //     main-ballot seat reads Pass, its second-ask seat reads the vote.
+  // Every step is one `updateVote`, so `seq` grows and `vote_state` stays authoritative.
+  // Ballots stored before this change kept `passedIds` in ballot order and advanced the same
+  // pointer through a derived pass round, so they read correctly under the line rule.
+  type LineStep = Pick<VoteStateV1, 'votes' | 'passedIds' | 'currentVoterIndex'>;
+
+  /** Apply one step of the ballot. When the step walks past the end of the line, the vote
+   *  finishes at once (owner: "When everyone finishes voting, automatically move to rights
+   *  speakers"): the rights speakers when anyone voted with rights, otherwise the result. */
+  const advance = (make: (prev: VoteStateV1) => LineStep) => {
+    if (isViewOnly || !selectedDoc) return;
+    const docId = selectedDoc.id;
+    const prev = voteStatesRef.current[docId];
+    if (!prev) return;
+    const step = make(prev);
+    if (prev.method === 'device' || step.currentVoterIndex < prev.order.length + step.passedIds.length) {
+      updateVote(() => step);
+      return;
+    }
+    const rights = allowRights
+      ? step.votes
+        .filter((v) => v.choice === 'for-rights' || v.choice === 'against-rights')
+        .sort((a, b) => compareCountryNames(a.country, b.country, language))
+        .slice(0, 10)
+      : [];
+    if (rights.length > 0) {
+      updateVote(() => ({ ...step, status: 'rights-speakers', rightsOrder: rights, rightsIndex: 0 }));
+      return;
+    }
+    const v = verdictOf(settings, step.votes);
+    persistResult(docId, v.result);
+    updateVote(() => ({ ...step, status: 'result', ...v }));
   };
 
   const castVoteAndAdvance = (delegateId: string, country: string, choice: VoteChoice) => {
-    setVotes((prev) => {
-      const existing = prev.find((v) => v.delegateId === delegateId);
-      if (existing) return prev.map((v) => v.delegateId === delegateId ? { ...v, choice } : v);
-      return [...prev, { delegateId, country, choice }];
+    advance((prev) => {
+      const mainRound = prev.currentVoterIndex < prev.order.length;
+      const existing = prev.votes.find((v) => v.delegateId === delegateId);
+      const nextVotes = existing
+        ? prev.votes.map((v) => (v.delegateId === delegateId ? { ...v, choice } : v))
+        : [...prev.votes, { delegateId, country, choice }];
+      return {
+        votes: nextVotes,
+        passedIds: mainRound ? prev.passedIds.filter((id) => id !== delegateId) : prev.passedIds,
+        currentVoterIndex: prev.currentVoterIndex + 1,
+      };
     });
-    setCurrentVoterIndex((i) => i + 1);
   };
 
+  /** Pass (main ballot only): asked again at the end of the line, once. */
   const handlePass = (delegateId: string) => {
-    setPassedIds(prev => [...prev, delegateId]);
-    setCurrentVoterIndex(i => i + 1);
+    advance((prev) => {
+      if (prev.currentVoterIndex >= prev.order.length) return { votes: prev.votes, passedIds: prev.passedIds, currentVoterIndex: prev.currentVoterIndex };
+      return {
+        passedIds: prev.passedIds.includes(delegateId) ? prev.passedIds : [...prev.passedIds, delegateId],
+        votes: prev.votes.filter((v) => v.delegateId !== delegateId),
+        currentVoterIndex: prev.currentVoterIndex + 1,
+      };
+    });
   };
 
+  /** After Back: leave this delegation's recorded vote (or Pass) as it is and move on. */
+  const keepAndAdvance = () => {
+    advance((prev) => ({ votes: prev.votes, passedIds: prev.passedIds, currentVoterIndex: prev.currentVoterIndex + 1 }));
+  };
+
+  /**
+   * Back: one step towards the start of the vote, as many times as needed.
+   *   rights speakers (after the first) → the previous rights speaker
+   *   result or the first rights speaker → the last seat in the line, its choice shown and
+   *     kept or changed (a device ballot returns to its all-voted screen); verdict cleared and
+   *     the paper's status put back to introduced until the vote is finished again
+   *   ballot → the previous seat in the line, whose recorded choice is shown and can be kept
+   */
+  const stepBack = () => {
+    if (isViewOnly || !vote || !selectedDoc) return;
+    // A device ballot has no pointer to step back through: choices come from the devices.
+    if (vote.method === 'device' && vote.status === 'voting') return;
+    const docId = selectedDoc.id;
+    const fromResult = vote.status === 'result' && (() => {
+      const docStatus = committee.documents.find((d) => d.id === docId)?.status;
+      return docStatus === 'passed' || docStatus === 'failed' || !!vote.result;
+    })();
+    updateVote((prev) => {
+      if (prev.status === 'rights-speakers' && prev.rightsIndex > 0) return { rightsIndex: prev.rightsIndex - 1 };
+      const lineLen = prev.order.length + prev.passedIds.length;
+      if (prev.status !== 'voting') {
+        const reset = { status: 'voting' as const, result: null, vetoed: false, rightsOrder: [], rightsIndex: 0 };
+        return prev.method === 'device' ? reset : { ...reset, currentVoterIndex: Math.max(0, lineLen - 1) };
+      }
+      const idx = Math.min(prev.currentVoterIndex, lineLen);
+      if (idx > 0) return { currentVoterIndex: idx - 1 };
+      return {};
+    });
+    // Put the paper back to `introduced` only once this Back's vote state has landed
+    // (flushBackStatus). commitVote stamped its seq synchronously; the save runs later.
+    if (fromResult && pendingSeqRef.current[docId] != null) backStatusSeqRef.current[docId] = pendingSeqRef.current[docId];
+  };
+
+  /**
+   * Back to a delegation already asked, by clicking its flag in the carousel (owner, 17 Sep
+   * 2026: "make sure you are able to click on previous voters and move back in the queue").
+   * Exactly Back's semantics, only further: ONE `updateVote`, so the seq grows and every chair
+   * device follows; nothing is removed, so the seat arrives with its recorded choice shown and
+   * Keep and continue on offer. Moderator only, ballot only, never a device ballot, and never
+   * forwards (that would skip a delegation that has not been asked).
+   */
+  const goToVoter = (index: number) => {
+    if (isViewOnly || !vote || !selectedDoc) return;
+    if (vote.method === 'device' && vote.status === 'voting') return;
+    if (vote.status !== 'voting') return;
+    updateVote((prev) => {
+      if (prev.status !== 'voting') return {};
+      const lineLen = prev.order.length + prev.passedIds.length;
+      const to = Math.max(0, Math.min(index, lineLen - 1));
+      if (to >= prev.currentVoterIndex) return {};
+      return { currentVoterIndex: to };
+    });
+  };
+
+  const finishWithResult = () => {
+    if (isViewOnly || !selectedDoc) return;
+    const v = verdictOf(settings, votes);
+    persistResult(selectedDoc.id, v.result);
+    updateVote(() => ({ status: 'result', ...v }));
+  };
+
+  /** The all-voted screen (a device ballot after Back, or a ballot stored before votes
+   *  finished on their own): rights speakers if anyone has them, else the result. */
   const handleFinishVoting = () => {
-    if (withRights.length > 0) {
-      setOrderedRights([...withRights]);
-      setPhase('rights-speakers');
-      setRightsIndex(0);
+    if (allowRights && withRights.length > 0) {
+      updateVote(() => ({ status: 'rights-speakers', rightsOrder: [...withRights], rightsIndex: 0 }));
     } else {
-      setPhase('result');
-      if (selectedDoc) persistResult(selectedDoc.id, passed ? 'passed' : 'failed');
+      finishWithResult();
     }
+  };
+
+  /** Move a rights speaker to `slot` among the movable speakers: the ones still to come, plus
+   *  the one on the floor while they have not started (owner, 17 Sep 2026: "change the order
+   *  even of the current speaker if they are not speaking yet"). One `updateVote`, so the seq
+   *  grows and every chair device follows. Re-checked against the state it patches. */
+  const moveRightsSpeaker = (delegateId: string, slot: number) => {
+    if (isViewOnly) return;
+    const includeCurrent = !rightsStarted && !rightsRunning;
+    updateVote((prev) => {
+      if (prev.status !== 'rights-speakers') return {};
+      const cut = prev.rightsIndex + (includeCurrent ? 0 : 1);
+      const head = prev.rightsOrder.slice(0, cut);
+      const movable = prev.rightsOrder.slice(cut);
+      const item = movable.find((v) => v.delegateId === delegateId);
+      if (!item) return {};
+      const rest = movable.filter((v) => v.delegateId !== delegateId);
+      const at = Math.max(0, Math.min(slot, rest.length));
+      rest.splice(at, 0, item);
+      if (rest.every((v, i) => v.delegateId === movable[i].delegateId)) return {};
+      return { rightsOrder: [...head, ...rest] };
+    });
+  };
+
+  /** The one rights speaking time, seconds. Every rights speaker runs on it. */
+  const setRightsTimerLimit = (seconds: number) => {
+    if (isViewOnly) return;
+    updateVote(() => ({ rightsTimerLimit: seconds }));
+  };
+
+  /** A device ballot was revealed (DeviceVotingPanel): the choices enter vote_state in ONE
+   *  write, straight to the rights speakers or the result. No pass round in device mode. The
+   *  verdict is `evaluate` over the revealed list, exactly as for a roll call. */
+  const applyDeviceReveal = (docId: string, revealed: DelegateVote[]) => {
+    if (isViewOnly || !selectedDoc || selectedDoc.id !== docId) return;
+    const cur = voteStatesRef.current[docId];
+    if (!cur || cur.method !== 'device' || cur.status !== 'voting' || cur.currentVoterIndex >= cur.order.length) return;
+    const inOrder = new Set(cur.order.map((s) => s.id));
+    // Rights switched off: a rights choice cast before the switch counts as the plain vote.
+    const list = revealed
+      .filter((v) => inOrder.has(v.delegateId))
+      .map((v) => (allowRights ? v : v.choice === 'for-rights' ? { ...v, choice: 'for' as const } : v.choice === 'against-rights' ? { ...v, choice: 'against' as const } : v));
+    const rights = (allowRights ? list : [])
+      .filter((v) => v.choice === 'for-rights' || v.choice === 'against-rights')
+      .sort((a, b) => compareCountryNames(a.country, b.country, language))
+      .slice(0, 10);
+    const base = { votes: list, passedIds: [] as string[], currentVoterIndex: cur.order.length };
+    if (rights.length > 0) {
+      updateVote(() => ({ ...base, status: 'rights-speakers', rightsOrder: rights, rightsIndex: 0 }));
+      return;
+    }
+    const v = verdictOf(settings, list);
+    persistResult(docId, v.result);
+    updateVote(() => ({ ...base, status: 'result', ...v }));
   };
 
   const handleNextRightsSpeaker = () => {
     if (rightsIndex + 1 >= orderedRights.length) {
-      setPhase('result');
-      if (selectedDoc) persistResult(selectedDoc.id, passed ? 'passed' : 'failed');
+      finishWithResult();
     } else {
-      setRightsIndex((i) => i + 1);
+      updateVote((prev) => ({ rightsIndex: prev.rightsIndex + 1 }));
     }
   };
 
-  const handleBackToSession = async () => {
-    await setPhaseInDB(committee.id, 'speakers-list', committee.code, committee.dbChairJoinSuffix ?? undefined);
-    // A chair's identity is ONLY ?chairName= — there is no session, cookie or DB row for it.
-    // Dropping it here would make the session believe this device is the acting chair
-    // (isViewOnly needs a non-empty name) and rename them to the literal 'Chair' in chat.
-    // Read from window.location: this page has no Suspense boundary, so useSearchParams()
-    // would fail the prerender, and this only ever runs in a click handler.
+  // Carries ?chairName= on: a chair's identity is ONLY that param. Read from
+  // window.location: this page has no Suspense boundary, so useSearchParams() would
+  // fail the prerender, and this only ever runs in a click handler.
+  const chairPageHref = () => {
     const chairName = new URLSearchParams(window.location.search).get('chairName') ?? '';
-    router.push(`/chair/${committee.code}${chairName ? `?chairName=${encodeURIComponent(chairName)}` : ''}`);
+    return `/chair/${committee.code}${chairName ? `?chairName=${encodeURIComponent(chairName)}` : ''}`;
   };
+
+  // ── V-4: back to exactly the phase the room was in ────────────────────────
+  // `set_committee_voting_phase(false)` restores the remembered phase (a caucus whose
+  // caucus data is gone falls back to the GSL) and is a no-op when the room is not in
+  // voting mode, so it never forces the GSL over a caucus or a suspension. A Commenter
+  // only navigates. A refused write keeps the chair here and says so.
+  const handleBackToSession = async () => {
+    if (isViewOnly || committee.endedAt) { router.push(chairPageHref()); return; }
+    setBackBusy(true);
+    const r = await setVotingPhase(committee.id, false, committee.code, suffix);
+    setBackBusy(false);
+    if (!r.ok) { setPhaseNotice('leave_failed'); return; }
+    router.push(chairPageHref());
+  };
+
+  // ── V-1: End debate is the real End, checked ──────────────────────────────
+  // Same write as the chair page (`endDebate`: ended_at, expires_at, phase). The row is
+  // read back afterwards because a refused update resolves with no error: only a stored
+  // `ended_at` counts as ended. On success the chair lands on the chair page's End View.
   const handleEndDebate = async () => {
-    await setPhaseInDB(committee.id, 'adjourned', committee.code, committee.dbChairJoinSuffix ?? undefined);
-    router.push('/sessions');
+    if (isViewOnly) return;
+    setEndDebateState('working');
+    await endDebateInDB(committee.id, committee.code, suffix);
+    const { data } = await supabase.from('committees').select('ended_at').eq('id', committee.id).maybeSingle();
+    if (!data?.ended_at) { setEndDebateState('failed'); return; }
+    setEndDebateState('idle');
+    setShowEndDebateConfirm(false);
+    router.push(chairPageHref());
   };
 
   // VotingHeader lives at module scope so it never remounts; the rules popover it
   // hosts therefore keeps its open state while votes are being cast.
+  const drPlural = docName(committee, 'draft-resolution', 'plural', t('documents_draft_resolutions_tab'));
+  const drSingular = docName(committee, 'draft-resolution', 'singular', t('documents_draft_resolution_type'));
+  const chatUnread = committee.endedAt ? 0 : chatUnreadTotal(committee.messages, urlChairName || 'Chair', true, committee.chairNames ?? [], chatReadCounts);
   const headerProps = {
-    committeeName: committee.name,
-    onBack: handleBackToSession,
-    onEndDebate: () => setShowEndDebateConfirm(true),
+    onBack: () => { void handleBackToSession(); },
+    backBusy,
+    onEndDebate: () => { setEndDebateState('idle'); setShowEndDebateConfirm(true); },
     onOpenSettings: () => setShowSettings(true),
-    rules: <VotingRulesPopover {...rulesProps} />,
+    onOpenScoreboard: () => setShowScoreboard(true),
+    sessionCode: committee.code,
+    chat: committee.endedAt ? null : { unread: chatUnread, open: showChat, onToggle: () => setShowChat((v) => !v) },
+    isViewOnly,
   };
 
-  // ── Roll call modal (blocks until dismissed) ─────────────────────────────
-  const cycleRollCallStatus = (id: string) => {
-    // Remembered so the merge on refetch keeps this chair's value for this seat and
-    // lets every untouched seat follow the DB.
+  // The header's dialogs, mounted on every screen. Each portals and grows out of its icon.
+  const headerDialogs = (
+    <>
+      {showChat && !committee.endedAt && (
+        <ChatDialog onClose={() => setShowChat(false)}>
+          {(requestClose) => getCommitteeFlags(committee).disableChat ? (
+            <ChatDisabledNotice onClose={requestClose} />
+          ) : (
+            <ChatPanel
+              committee={committee}
+              senderName={urlChairName || 'Chair'}
+              isChair={true}
+              readOnly={!!committee.endedAt}
+              readCounts={chatReadCounts}
+              onReadCountsChange={setChatReadCounts}
+            />
+          )}
+        </ChatDialog>
+      )}
+      {showScoreboard && (
+        <ScoreboardPanel
+          committee={committee}
+          onClose={() => setShowScoreboard(false)}
+          feedbackVersion={feedbackVersion}
+          isViewOnly={isViewOnly}
+          chairName={urlChairName}
+        />
+      )}
+    </>
+  );
+
+  /** Show / hide the running tally, under the ballot (owner: "moved to the bottom, below
+   *  voting"). Per device, as before. */
+  const tallyToggle = (
+    <button
+      type="button"
+      onClick={() => setHideVotes(!hideVotes)}
+      aria-pressed={hideVotes}
+      className="inline-flex items-center gap-2 h-10 ps-3.5 pe-4 rounded-full text-[13.5px] font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,color,transform] duration-150 active:scale-[0.96] motion-reduce:transition-none"
+      style={{ backgroundColor: hideVotes ? '#1B3828' : 'rgba(27,56,40,0.06)', color: hideVotes ? '#EED98A' : '#4A3F33' }}
+    >
+      {hideVotes ? <EyeOff size={17} strokeWidth={2.25} aria-hidden /> : <Eye size={17} strokeWidth={2.25} aria-hidden />}
+      {hideVotes ? t('voting_show_tally') : t('voting_hide_tally')}
+    </button>
+  );
+
+  // ── The roll call before a ballot (VotingRollCall): statuses + rule bookmarks ──
+  /** Set one seat's roll-call status directly (the roll call's slider). */
+  const setRollCallStatus = (id: string, next: DelegateStatus) => {
+    if (isViewOnly) return;
     touchedStatusRef.current.add(id);
-    setRollCallStatuses((prev) => {
-      const cur = prev[id] ?? 'absent';
-      const next: DelegateStatus = cur === 'absent' ? 'present' : cur === 'present' ? 'present-voting' : 'absent';
-      setDelegateStatusInDB(id, next, committee.code, committee.dbChairJoinSuffix ?? undefined);
-      return { ...prev, [id]: next };
-    });
+    setRollCallStatuses((prev) => ({ ...prev, [id]: next }));
+    setDelegateStatusInDB(id, next, committee.code, suffix);
   };
 
   /** Hand out or take back an observer placard. Optimistic first, write
    *  fire-and-forget (AGENTS.md rule 5); the ref is the receipt the reconcile
    *  effect above checks the DB against. */
   const toggleObserverSeat = (d: Delegate) => {
+    if (isViewOnly) return;
     const next = !isObserverSeat(d);
     observerWriteRef.current[d.id] = { value: next, at: nowMs() };
     setObserverOverrides((prev) => ({ ...prev, [d.id]: next }));
     setObserverWriteFailed(false);
     // Arms the TTL backstop even when no refetch ever arrives.
     setObserverReconcileTick((n) => n + 1);
-    setDelegateObserverInDB(d.id, next, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    setDelegateObserverInDB(d.id, next, committee.code, suffix);
     // An observer holds no voting placard, so present-voting drops to present.
     if (next && seatStatus(d) === 'present-voting') {
       touchedStatusRef.current.add(d.id);
       setRollCallStatuses((prev) => ({ ...prev, [d.id]: 'present' }));
-      setDelegateStatusInDB(d.id, 'present', committee.code, committee.dbChairJoinSuffix ?? undefined);
+      setDelegateStatusInDB(d.id, 'present', committee.code, suffix);
     }
   };
 
@@ -1200,631 +1701,788 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     .map((id) => committee.delegates.find((d) => d.id === id))
     .filter((d): d is Delegate => !!d);
 
-  // The roll call modal and the failure banner are shared by the document-selection
-  // screen and the ballot screens, so a chair can seat a late arrival or see a
-  // refused write without abandoning a vote in progress.
-  const rollCallModal = !rollCallDone ? (
-    <RollCallModal
+  /** Clear All / All Present / All P+V over the whole room, as on the session's roll call.
+   *  An observer holds no voting placard, so All P+V makes observers Present. One RPC per
+   *  status (`set_delegate_statuses`, the chair page's bulk path), per-row only when the RPC
+   *  is missing (PGRST202); a refused bulk write gives the rows back to the DB values. */
+  const setAllRollCallStatuses = (status: DelegateStatus) => {
+    if (isViewOnly) return;
+    const groups: [DelegateStatus, Delegate[]][] = status === 'present-voting'
+      ? [['present-voting', committee.delegates.filter((d) => !isObserverSeat(d))], ['present', committee.delegates.filter((d) => isObserverSeat(d))]]
+      : [[status, committee.delegates]];
+    for (const [st, seats] of groups) {
+      if (seats.length === 0) continue;
+      seats.forEach((d) => touchedStatusRef.current.add(d.id));
+      setRollCallStatuses((prev) => {
+        const next = { ...prev };
+        seats.forEach((d) => { next[d.id] = st; });
+        return next;
+      });
+      const ids = seats.map((d) => d.id);
+      void setDelegateStatusesBulk(committee.id, st, ids, committee.code, suffix).then((r) => {
+        if (r === 'unavailable') { ids.forEach((id) => setDelegateStatusInDB(id, st, committee.code, suffix)); return; }
+        if (r !== null) return;
+        seats.forEach((d) => touchedStatusRef.current.delete(d.id));
+        setRollCallStatuses((prev) => {
+          const next = { ...prev };
+          seats.forEach((d) => { next[d.id] = d.status; });
+          return next;
+        });
+      });
+    }
+  };
+
+  // The roll call and the failure banner are shared by the document-selection screen and
+  // the ballot screens, so a chair can seat a late arrival or see a refused write without
+  // abandoning a vote in progress. Commenters never get it: it writes delegate statuses.
+  // It opens for a chosen document (`pendingDocId`: confirming starts that ballot) or on its
+  // own (`rollCallOpen`: confirming just closes it).
+  const pendingDoc = pendingDocId ? allDRs.find((d) => d.id === pendingDocId) ?? null : null;
+  const showRollCall = !isViewOnly && (rollCallOpen || !!pendingDoc);
+  const closeRollCall = () => { setRollCallOpen(false); setPendingDocId(null); };
+  const rollCallModal = showRollCall ? (
+    <DeviceVoteGate
+      code={committee.code}
+      chairSuffix={suffix}
+      method={settings.votingMethod === 'device' ? 'device' : 'rollcall'}
+      onMethodChange={(next) => applyRules({ votingMethod: next })}
+      seats={livePresent}
+      starting={!!pendingDoc}
+      readOnly={isViewOnly}
+    >{(gateNode, gateBlocked) => (
+    <VotingRollCall
       delegates={committee.delegates}
       rollCallStatuses={rollCallStatuses}
       isObserverSeat={isObserverSeat}
       onToggleObserver={toggleObserverSeat}
-      onCycleStatus={cycleRollCallStatus}
-      onConfirm={() => { setRollCallDone(true); setNewSeatIds([]); }}
-      side={
-        <VotingRulesPanel
-          {...rulesProps}
-          className="hidden md:flex w-[336px] shrink-0"
-          style={{ maxHeight: '85%', overflow: 'hidden' }}
-        />
-      }
+      onSetStatus={setRollCallStatus}
+      onBulkStatus={setAllRollCallStatuses}
+      onClose={closeRollCall}
+      doc={pendingDoc ? { code: pendingDoc.docCode, title: pendingDoc.title } : null}
+      onConfirm={() => {
+        const docId = pendingDoc?.id ?? null;
+        closeRollCall();
+        setNewSeatIds([]);
+        if (docId) startNewVote(docId);
+      }}
+      settings={settings}
+      onRulesChange={applyRules}
+      onVetoModeChange={changeVetoMode}
+      vetoEntries={vetoListFor(settings)}
+      readOnly={isViewOnly}
+      footerExtra={gateNode}
+      confirmBlocked={gateBlocked}
     />
+    )}</DeviceVoteGate>
   ) : null;
+
+  /**
+   * While the roll call is open the page's top bar IS the roll call's header (owner, 17 Sep
+   * 2026: "there are two Backs in the top left, just have one, and no need for 'Draft
+   * Resolutions' and 'Roll call for X'"). Its Back closes the roll call, the document-list
+   * crumb and the previous ballot's progress are dropped, and the paper the roll call is for
+   * is named by the code chip + title the bar already draws. It is merged AFTER the per-screen
+   * props (`headerFor`), so it wins on both screens. The inline-end cluster is untouched.
+   */
+  const rollCallHeader: Partial<VotingHeaderProps> | null = showRollCall
+    ? {
+        onBack: closeRollCall,
+        backBusy: false,
+        backLabel: t('voting_rc_back'),
+        docsLabel: undefined,
+        onDocs: undefined,
+        progress: null,
+        doc: pendingDoc ? { code: pendingDoc.docCode, title: pendingDoc.title } : null,
+      }
+    : null;
+  /** Every VotingHeader on this page: the shared props, this screen's, then the roll call's. */
+  const headerFor = (screen: Partial<VotingHeaderProps>): VotingHeaderProps =>
+    ({ ...headerProps, ...screen, ...(rollCallHeader ?? {}) });
 
   const observerFailBanner = observerWriteFailed
     ? <ObserverWriteFailedBanner onDismiss={() => setObserverWriteFailed(false)} />
     : null;
 
-  const rosterNotice = newSeats.length > 0 ? (
+  const rosterNotice = newSeats.length > 0 && !isViewOnly ? (
     <RosterNotice
       names={newSeats.map((d) => getCountryDisplayName(d.country, language))}
-      notInVote={!!activeBallot}
-      onOpenRollCall={() => { setRollCallDone(false); setNewSeatIds([]); }}
+      notInVote={!!vote && isVoteOpen(vote)}
+      onOpenRollCall={() => { setRollCallOpen(true); setNewSeatIds([]); }}
       onDismiss={() => setNewSeatIds([])}
     />
   ) : null;
 
-  // ── Doc selection screen ──────────────────────────────────────────────────
-  if (!selectedDoc) {
-    return (
-      <div className="min-h-screen bg-[#F6F1E9] flex flex-col">
-        <VotingHeader {...headerProps} />
-        {rollCallModal}
-        {observerFailBanner}
-        {rosterNotice}
-        {showSettings && <SettingsPanel committee={committee} onClose={() => setShowSettings(false)} />}
-        <div className="flex-1 flex items-center justify-center px-4">
-          <div className="w-full max-w-sm space-y-3">
-            <p className="text-xs font-mono text-[#9A8A78] text-center mb-5 tracking-widest">
-              {t('voting_select_doc', { doc: docName(committee, 'draft-resolution', 'singular', t('documents_draft_resolution_type')).toUpperCase() })}
-            </p>
-            {allDRs.length === 0 ? (
-              <p className="text-sm text-[#9A8A78] text-center py-8">
-                {t('voting_no_introduced_docs', { doc: docName(committee, 'draft-resolution', 'plural', t('documents_type_dr')) })}
-              </p>
-            ) : (
-              allDRs.map((doc) => {
-                const isVoted = doc.status === 'passed' || doc.status === 'failed';
-                return (
-                  <button
-                    key={doc.id}
-                    onClick={() => !isVoted && startNewVote(doc.id)}
-                    disabled={isVoted}
-                    className={`w-full text-start px-4 py-4 rounded-xl border transition-colors ${
-                      isVoted
-                        ? 'border-[#DDD4C0] bg-[#F6F1E9] opacity-60 cursor-not-allowed'
-                        : 'border-[#DDD4C0] bg-[#EDE7D8] text-[#6A5A4A] hover:border-[#1B3828]/60 hover:bg-[#1B3828]/10'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2 mb-0.5">
-                      <span className="text-xs font-mono font-bold text-[#1B3828]">{doc.docCode}</span>
-                      {doc.status === 'passed' && (
-                        <span className="text-[10px] font-bold text-green-400 bg-green-950/40 border border-green-800/40 px-2 py-0.5 rounded-full">✓ PASSED</span>
-                      )}
-                      {doc.status === 'failed' && (
-                        <span className="text-[10px] font-bold text-red-400 bg-red-950/40 border border-red-800/40 px-2 py-0.5 rounded-full">✗ FAILED</span>
-                      )}
-                    </div>
-                    <span className="text-base font-bold text-[#1C1410] block">{doc.title}</span>
-                    {doc.sponsors.length > 0 && (
-                      <span className="text-xs text-[#9A8A78] block mt-1">{sponsorLabel(committee, t('voting_sponsors'))}: {doc.sponsors.join(', ')}</span>
-                    )}
-                  </button>
-                );
-              })
-            )}
-            {/* Roll call was a one-way latch with no way back, so a delegation that
-                arrived after it was confirmed could never be seated from here. */}
-            <div className="pt-2 text-center">
-              <button
-                onClick={() => setRollCallDone(false)}
-                className="text-xs font-semibold underline transition-colors focus:outline-none"
-                style={{ color: '#6A5A4A' }}
-              >
-                {t('voting_roll_call_heading')}
-              </button>
-            </div>
+  // Banners every screen shares: the voting-mode state of the room, a refused ballot
+  // write, and another chair's settings change.
+  const statusBanners = (
+    <>
+      {settingsSync.notice}
+      {phaseNotice && !isViewOnly && (
+        <VotingBanner
+          tone={phaseNotice === 'closed' ? 'amber' : 'red'}
+          text={t(
+            phaseNotice === 'closed' ? 'voting_phase_closed'
+              : phaseNotice === 'leave_failed' ? 'voting_phase_leave_failed'
+              : 'voting_phase_enter_failed',
+          )}
+          onDismiss={() => setPhaseNotice(null)}
+        />
+      )}
+      {resultSaveError && !isViewOnly && (
+        <VotingBanner
+          tone="red"
+          text={t('voting_save_failed')}
+          actionLabel={t('voting_save_retry')}
+          onAction={() => { const e = resultSaveError; setResultSaveError(null); persistResult(e.docId, e.result); }}
+          onDismiss={() => setResultSaveError(null)}
+        />
+      )}
+      {voteSaveError && !isViewOnly && (
+        <VotingBanner
+          tone={voteSaveError.kind === 'stale' ? 'amber' : 'red'}
+          text={t(voteSaveError.kind === 'stale' ? 'voting_save_stale' : 'voting_save_failed')}
+          actionLabel={voteSaveError.kind === 'stale' ? undefined : t('voting_save_retry')}
+          onAction={retryVoteSave}
+          onDismiss={() => setVoteSaveError(null)}
+        />
+      )}
+      {isViewOnly && (
+        <VotingBanner tone="neutral" text={t('voting_view_only_note', { name: gavelRole.head ?? '' })} />
+      )}
+    </>
+  );
+
+  // ── V-1: End Debate confirmation ─────────────────────────────────────────
+  // Rendered on EVERY screen (it used to exist only on the ballot screen, so the header's
+  // End Debate button did nothing on the document list). Stays open while the write runs
+  // and when it fails, so a refused end is never mistaken for an ended room.
+  const endDebateModal = showEndDebateConfirm && !isViewOnly ? (
+    <Portal><div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ background: 'rgba(20,24,18,0.55)', backdropFilter: 'blur(6px)' }}
+      onClick={() => { if (endDebateState !== 'working') setShowEndDebateConfirm(false); }}
+    >
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="gv-end-debate-title"
+        className="rounded-[28px] w-full max-w-md mx-4 flex flex-col overflow-hidden"
+        style={{ backgroundColor: '#FAF8F3', boxShadow: '0 0 0 1px rgba(27,56,40,0.08), 0 24px 64px rgba(20,24,18,0.35)' }}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => { if (e.key === 'Escape' && endDebateState !== 'working') setShowEndDebateConfirm(false); }}
+      >
+        <div className="px-7 pt-7 pb-2">
+          <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: '#A32424', color: '#FFFFFF', boxShadow: '0 0 0 6px rgba(163,36,36,0.14), 0 8px 20px rgba(139,32,32,0.30)' }} aria-hidden>
+            <Flag size={24} strokeWidth={2.5} fill="currentColor" />
           </div>
+          <h2 id="gv-end-debate-title" className="text-[24px] font-bold leading-tight" style={{ color: '#8B1A1A' }}>{t('voting_end_debate_title')}</h2>
+          <p className="text-[15px] text-[#6A5A4A] leading-relaxed mt-2 [text-wrap:pretty]">
+            {t('voting_end_debate_body')}
+          </p>
+          {endDebateState === 'failed' && (
+            <p role="alert" className="text-sm font-semibold leading-snug mt-3" style={{ color: '#8B2020' }}>
+              {t('voting_end_debate_failed')}
+            </p>
+          )}
+        </div>
+        <div className="px-7 pt-5 pb-7 flex gap-3">
+          <button
+            autoFocus
+            onClick={() => setShowEndDebateConfirm(false)}
+            disabled={endDebateState === 'working'}
+            className="flex-1 h-12 rounded-2xl font-semibold text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] disabled:opacity-50"
+            style={{ backgroundColor: '#EDE7D8', color: '#1C1410' }}
+          >
+            {t('voting_cancel')}
+          </button>
+          <button
+            onClick={() => { void handleEndDebate(); }}
+            disabled={endDebateState === 'working'}
+            className="flex-1 h-12 rounded-2xl font-semibold text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] disabled:opacity-60"
+            style={{ backgroundColor: '#8B2020', color: 'white', boxShadow: '0 2px 4px rgba(90,20,20,0.2), 0 8px 20px rgba(90,20,20,0.22)' }}
+          >
+            {endDebateState === 'working' ? t('voting_end_debate_working') : endDebateState === 'failed' ? t('voting_save_retry') : t('voting_confirm_end')}
+          </button>
         </div>
       </div>
+    </div></Portal>
+  ) : null;
+
+  // ── Doc selection screen ──────────────────────────────────────────────────
+  if (!selectedDoc || !vote) {
+    // The page's decision per card. Moderator: start a vote (through the roll call), resume
+    // an unfinished one exactly where it stopped, or reopen a finished one with its stored
+    // ballots (Back from the result corrects a placard). Commenter: only a vote that exists.
+    const cardState = (doc: CommitteeDocument): PickCardState => {
+      const stored = voteStates[doc.id] ?? null;
+      // V2: a stored result counts as voted even when the documents.status write was lost,
+      // so a reload can never offer "start a vote" over a recorded result.
+      const isVoted = doc.status === 'passed' || doc.status === 'failed' || stored?.status === 'result';
+      const canOpen = isViewOnly ? !!stored : true;
+      if (stored && isVoteOpen(stored)) return { kind: 'live', vote: stored, canOpen };
+      if (isVoted) {
+        const result = stored?.result ?? (doc.status === 'failed' ? 'failed' : 'passed');
+        return { kind: 'voted', result: result === 'failed' && stored?.vetoed ? 'vetoed' : result, vote: stored, canOpen: !!stored };
+      }
+      return { kind: 'ready', canOpen };
+    };
+    const openCard = (doc: CommitteeDocument) => {
+      const st = cardState(doc);
+      if (!st.canOpen) return;
+      const stored = voteStates[doc.id] ?? null;
+      if (isViewOnly) { setFollowLive(false); setSelectedDocId(doc.id); return; }
+      if (st.kind === 'live') { resumeVote(doc.id); return; }
+      if (st.kind === 'voted' && stored) {
+        resumeVote(doc.id);
+        // The stored verdict is the truth; re-record a status write that was lost.
+        if (stored.result && doc.status !== stored.result) persistResult(doc.id, stored.result);
+        return;
+      }
+      // Not voted yet (or a result recorded before votes were stored): the roll call first.
+      setPendingDocId(doc.id);
+    };
+    return (
+      <SeatArtProvider delegates={committee.delegates}>
+      <div className="h-[100dvh] bg-[#EDE7D8] flex flex-col overflow-hidden">
+        <VotingHeader {...headerFor({ docsLabel: drPlural })} />
+        {rollCallModal}
+        {observerFailBanner}
+        {endDebateModal}
+        {showSettings && <SettingsPanel committee={committee} onClose={() => setShowSettings(false)} isViewOnly={isViewOnly} myChairName={urlChairName} />}
+        {headerDialogs}
+        <ResolutionPicker
+          docs={[...allDRs].sort((a, b) => a.docCode.localeCompare(b.docCode, undefined, { numeric: true }))}
+          stateOf={cardState}
+          onOpen={openCard}
+          isViewOnly={isViewOnly}
+          hideTally={hideVotes}
+          docSingular={drSingular}
+          docPlural={drPlural}
+          sponsorWord={sponsorLabel(committee, t('voting_sponsors'))}
+          onOpenRollCall={isViewOnly ? undefined : () => setRollCallOpen(true)}
+          onFollowLive={isViewOnly && !followLive && anyOpenVote ? () => { setFollowLive(true); setSelectedDocId(null); } : undefined}
+          onBackToSession={() => { void handleBackToSession(); }}
+          code={committee.code}
+          chairSuffix={suffix}
+        >
+          {rosterNotice}
+          {statusBanners}
+        </ResolutionPicker>
+      </div>
+      </SeatArtProvider>
     );
   }
 
-  // Pass-round: derived, no extra state needed
-  const mainRoundComplete = currentVoterIndex >= presentDelegates.length;
-  const passVoterIndex = passedIds.filter(id => votes.some(v => v.delegateId === id)).length;
-  const inPassRound = mainRoundComplete && passVoterIndex < passedIds.length;
+  // The voting line (see "THE LINE" above): the ballot order, then every delegation that
+  // passed, asked once more. Resolved to live rows by id (a new crest still flows through).
+  const mainCount = presentDelegates.length;
+  const passedSeat = (id: string): Delegate => liveSeatById.get(id) ?? { id, country: vote.order.find((s) => s.id === id)?.country ?? '', status: 'present' as DelegateStatus };
+  const lineSeats: (Delegate & { key: string })[] = [
+    ...presentDelegates.map((d) => ({ ...d, key: d.id })),
+    ...passedIds.map((id) => ({ ...passedSeat(id), key: `again:${id}` })),
+  ];
+  const lineLength = lineSeats.length;
+  const currentDelegate = currentVoterIndex < lineLength ? lineSeats[currentVoterIndex] : null;
+  /** The delegation on screen passed earlier and is being asked again: it must vote. */
+  const isSecondAsk = !!currentDelegate && currentVoterIndex >= mainCount;
+  const passedWaiting = Math.max(0, passedIds.length - Math.max(0, currentVoterIndex - mainCount));
+  const markOf = (id: string, index: number): CarouselMark => {
+    if (index < mainCount && passedIds.includes(id)) return 'pass';
+    return votes.find((v) => v.delegateId === id)?.choice ?? null;
+  };
+  // After Back, the seat on screen may already have a choice on record.
+  const recordedMark: CarouselMark = currentDelegate ? markOf(currentDelegate.id, currentVoterIndex) : null;
+  const choiceLabel = (m: Exclude<CarouselMark, null>) => t(
+    m === 'for' ? 'voting_choice_for'
+      : m === 'for-rights' ? 'voting_choice_for_rights'
+      : m === 'abstain' ? 'voting_choice_abstain'
+      : m === 'against-rights' ? 'voting_choice_against_rights'
+      : m === 'against' ? 'voting_choice_against'
+      : 'voting_choice_pass',
+  );
+  // A device ballot not yet revealed: the delegations vote on their own devices (DeviceVotingPanel).
+  const deviceBallotOpen = vote.method === 'device' && phase === 'voting' && currentVoterIndex < mainCount;
+  const canStepBack = !isViewOnly && !(vote.method === 'device' && phase === 'voting') && (phase !== 'voting' || currentVoterIndex > 0);
 
-  const currentDelegate = (() => {
-    if (!mainRoundComplete) return presentDelegates[currentVoterIndex];
-    if (inPassRound) {
-      const nextId = passedIds[passVoterIndex];
-      return committee.delegates.find(d => d.id === nextId) ?? null;
-    }
-    return null;
-  })();
+  const stage = phase === 'result' ? t('voting_stage_result')
+    : phase === 'rights-speakers' ? t('voting_stage_rights')
+    : isSecondAsk ? t('voting_stage_again')
+    : !currentDelegate ? t('voting_stage_tallied')
+    : t('voting_stage_voting');
 
-  const upcomingDelegates = (() => {
-    if (!mainRoundComplete) return presentDelegates.slice(currentVoterIndex + 1, currentVoterIndex + 6);
-    if (inPassRound) {
-      return passedIds
-        .slice(passVoterIndex + 1, passVoterIndex + 6)
-        .map(id => committee.delegates.find(d => d.id === id)!)
-        .filter(Boolean);
-    }
-    return [];
-  })();
+  const summaryLine = settings.substantiveThreshold === 'consensus'
+    ? t('voting_summary_counted_consensus', { counted: totalDecisive })
+    : t('voting_summary_counted', { counted: totalDecisive, needed: outcome.needed });
+
+  /** The quiet Back control, shared by every stage of the vote. */
+  const backButton = (label: string) => (
+    <button
+      type="button"
+      onClick={stepBack}
+      disabled={!canStepBack}
+      title={t('voting_step_back_title')}
+      className="inline-flex items-center gap-2 h-11 ps-4 pe-5 rounded-full text-[14px] font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,transform,opacity] duration-150 active:scale-[0.96] motion-reduce:transition-none disabled:opacity-35 disabled:cursor-not-allowed enabled:hover:bg-[rgba(27,56,40,0.13)]"
+      style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: '#1B3828' }}
+    >
+      <Undo2 size={18} strokeWidth={2.5} aria-hidden style={{ transform: language === 'ar' ? 'scaleX(-1)' : undefined }} />
+      {label}
+    </button>
+  );
+
+  const bigCount = (value: number, label: string, color: string) => (
+    <div className="text-center min-w-[88px]">
+      <div className="text-[36px] font-bold leading-none tabular-nums" style={{ color }}>{value}</div>
+      <div className="text-[13px] font-medium mt-2" style={{ color: '#6A5A4A' }}>{label}</div>
+    </div>
+  );
+
+  const clock = (secs: number) => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
 
   return (
     <FitToScreen>
     <SeatArtProvider delegates={committee.delegates}>
-    <div className="h-full w-full bg-[#F6F1E9] flex flex-col overflow-hidden">
-      <VotingHeader {...headerProps}>
-        <span className="text-xs font-mono font-bold text-[#1B3828] bg-[#DDD4C0] px-2 py-0.5 rounded shrink-0">
-          {selectedDoc.docCode}
-        </span>
-        <span className="text-sm font-bold text-[#1C1410] truncate hidden sm:block">{selectedDoc.title}</span>
-        <span className="text-xs text-[#9A8A78] shrink-0">
-          {votes.length}/{presentDelegates.length} voted
-        </span>
-        <button
-          onClick={() => setSelectedDocId(null)}
-          className="text-xs text-[#9A8A78] hover:text-[#6A5A4A] transition-colors shrink-0"
-        >
-          {t('voting_back_docs', { doc: docName(committee, 'draft-resolution', 'plural', t('documents_draft_resolutions_tab')) })}
-        </button>
-      </VotingHeader>
+    <div className="gv-ballot-screen h-full w-full bg-[#F6F1E9] flex flex-col overflow-hidden">
+      <style>{`
+        @keyframes gvNameIn { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
+        .gv-ballot-screen .gv-name-in { animation: gvNameIn 360ms cubic-bezier(0.2,0,0,1) backwards }
+        .gv-ballot-screen .gv-ballot { background-color: var(--gv-b-bg); transition: background-color 150ms, transform 150ms cubic-bezier(0.2,0,0,1), box-shadow 200ms }
+        .gv-ballot-screen .gv-ballot:not(:disabled):hover { background-color: var(--gv-b-hover); transform: translateY(-2px) }
+        .gv-ballot-screen .gv-ballot:not(:disabled):active { transform: scale(0.96) }
+        @media (prefers-reduced-motion: reduce) {
+          .gv-ballot-screen .gv-name-in { animation: none }
+          .gv-ballot-screen .gv-ballot { transition: none }
+          .gv-ballot-screen .gv-ballot:not(:disabled):hover, .gv-ballot-screen .gv-ballot:not(:disabled):active { transform: none }
+        }
+      `}</style>
+      <VotingHeader
+        {...headerFor({
+          docsLabel: drPlural,
+          onDocs: () => { setSelectedDocId(null); if (isViewOnly) setFollowLive(false); },
+          doc: { code: selectedDoc.docCode, title: selectedDoc.title },
+          progress: { stage, cast: deviceBallotOpen ? (deviceCast?.ballot === `${selectedDoc.id}:${vote.startedAt}` ? deviceCast.cast : 0) : votes.length, total: mainCount },
+        })}
+      />
       {rollCallModal}
       {observerFailBanner}
       {rosterNotice}
+      {statusBanners}
 
-      {/* ── Active voting: one delegate at a time ── */}
-      {phase === 'voting' && currentDelegate && (
-        <div className="flex-1 flex flex-col items-center py-6 px-4 overflow-hidden">
-          {inPassRound && (
-            <div className="w-full max-w-3xl mb-2 flex items-center justify-center gap-2 py-1 px-3 rounded-xl"
-              style={{ backgroundColor: 'rgba(182,135,31,0.15)', border: '1px solid rgba(182,135,31,0.35)' }}>
-              <span className="text-[10px] font-black text-amber-400 font-mono tracking-widest">
-                {t('voting_pass_round')}
+      {/* ── Device voting: counts only until the reveal ── */}
+      {deviceBallotOpen && (
+        <DeviceVotingPanel
+          key={`${selectedDoc.id}:${vote.startedAt}`}
+          code={committee.code}
+          chairSuffix={suffix}
+          documentId={selectedDoc.id}
+          ballotId={vote.startedAt}
+          seats={presentDelegates}
+          isViewOnly={isViewOnly}
+          headName={gavelRole.head}
+          onCount={(cast) => { const ballot = `${selectedDoc.id}:${vote.startedAt}`; setDeviceCast((prev) => (prev?.ballot === ballot && prev.cast === cast ? prev : { ballot, cast })); }}
+          onRevealed={(list) => applyDeviceReveal(selectedDoc.id, list)}
+        />
+      )}
+
+      {/* ── Active voting: one delegation at a time ── */}
+      {phase === 'voting' && currentDelegate && !deviceBallotOpen && (
+        <div className="flex-1 min-h-0 flex flex-col items-center px-8 pt-4 pb-8">
+          <div className="h-9 shrink-0 flex items-center gap-2">
+            {isSecondAsk ? (
+              <span className="inline-flex items-center gap-2 h-9 ps-3 pe-4 rounded-full text-[13.5px] font-semibold" style={{ backgroundColor: 'rgba(182,135,31,0.16)', color: '#6A4A0A' }}>
+                <SkipForward size={15} strokeWidth={2.5} aria-hidden />
+                {t('voting_again_title')}
+                <span className="font-medium tabular-nums">· {t('voting_pass_round_sub', { current: currentVoterIndex - mainCount + 1, total: passedIds.length })}</span>
               </span>
-              <span className="text-[10px] text-[#9A8A78] font-mono">
-                {t('voting_pass_round_sub')
-                  .replace('{current}', String(passVoterIndex + 1))
-                  .replace('{total}', String(passedIds.length))}
-              </span>
-            </div>
-          )}
-          {/* Current voter */}
-          <div className="flex-1 flex flex-col items-center justify-center min-h-0">
-            <div className="select-none mb-3 flex items-center justify-center">
-              {(() => {
-                const art = sessionSeatArt(currentDelegate);
-                const size = '220px';
-                return art.kind !== 'none' ? (
-                  <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 0 0 3.75px rgba(28,20,16,0.22)', flexShrink: 0 }}>
-                    <SeatFlag
-                      seat={currentDelegate}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                    />
-                  </div>
-                ) : (
-                  <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 0 0 3.75px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative', backgroundColor: 'rgba(221,212,192,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Emoji size="5rem">🌐</Emoji>
-                  </div>
-                );
-              })()}
-            </div>
+            ) : (
+              <>
+                <span className="text-[14px] font-medium tabular-nums" style={{ color: '#6A5A4A' }}>
+                  {currentVoterIndex + 1} / {mainCount}
+                </span>
+                {passedWaiting > 0 && (
+                  <span className="inline-flex items-center gap-1.5 h-7 ps-2.5 pe-3 rounded-full text-[12.5px] font-semibold" style={{ backgroundColor: 'rgba(182,135,31,0.14)', color: '#6A4A0A' }}>
+                    <SkipForward size={13} strokeWidth={2.5} aria-hidden />
+                    {t('voting_passed_waiting', { n: passedWaiting })}
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* The line of delegations, voting now in the centre */}
+          <div className="flex-1 min-h-0 w-full flex flex-col items-center justify-center">
+            <VoterCarousel
+              seats={lineSeats}
+              current={Math.min(currentVoterIndex, Math.max(0, lineLength - 1))}
+              markOf={markOf}
+              hideTally={hideVotes}
+              onPick={canStepBack ? goToVoter : undefined}
+            />
             <h1
-              style={{ fontSize: '40px' }}
-              className="font-black text-[#1C1410] text-center leading-tight mb-1"
+              key={`${currentDelegate.key}`}
+              className="gv-name-in text-[36px] font-bold text-[#1C1410] text-center leading-[1.1] tracking-[-0.015em] mt-3 max-w-4xl [text-wrap:balance]"
+              aria-live="polite"
             >
               {getCountryDisplayName(currentDelegate.country, language)}
             </h1>
-            <p className="text-[#9A8A78] text-sm">
-              {currentVoterIndex + 1} / {presentDelegates.length}
+            <div className="h-8 mt-2 flex items-center">
+              {recordedMark ? (
+                <span className="inline-flex items-center gap-2 h-8 px-3.5 rounded-full text-[13.5px] font-medium" style={{ backgroundColor: 'rgba(182,135,31,0.16)', color: '#6A4A0A' }}>
+                  {hideVotes && recordedMark !== 'pass' ? t('voting_recorded_hidden') : t('voting_recorded_choice', { choice: choiceLabel(recordedMark) })}
+                </span>
+              ) : isSecondAsk ? (
+                <span className="text-[14px] font-medium" style={{ color: '#6A5A4A' }}>{t('voting_again_rule')}</span>
+              ) : null}
+            </div>
+          </div>
+
+          {isViewOnly ? (
+            <p className="shrink-0 w-full max-w-3xl my-6 text-center text-[15px] font-medium text-[#6A5A4A]">
+              {t('voting_follower_waiting', { name: gavelRole.head ?? '' })}
             </p>
-          </div>
-
-          {/* Vote buttons — wrap into a grid on small screens (up to 6 options
-              won't fit a single non-wrapping row on a phone). */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex gap-3 w-full max-w-3xl mb-4">
-            <button
-              onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'for')}
-              className="flex-1 bg-[#2A7A3C] hover:bg-[#3D8A52] border border-[#2A7A3C] text-white font-black text-base py-6 rounded-2xl transition-colors gv-lift"
-            >
-              {t('voting_in_favour')}
-            </button>
-            <button
-              onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'for-rights')}
-              className="flex-1 bg-[#1B5C2E] hover:bg-[#2A7A3C] border border-[#3D7A52] text-[#EED98A] font-black text-sm py-6 rounded-2xl transition-colors leading-snug gv-lift"
-            >
-              {t('voting_in_favour')}<br />{t('voting_with_rights_label')}
-            </button>
-            {settings.allowAbstentions && (
-              (rollCallStatuses[currentDelegate.id] ?? currentDelegate.status) === 'present' ? (
-                <button
-                  onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'abstain')}
-                  className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] text-[#6A5A4A] font-black text-base py-6 rounded-2xl transition-colors gv-lift"
-                >
-                  {t('voting_abstain')}
-                </button>
-              ) : (
-                <button disabled className="flex-1 bg-[#EDE7D8] border border-[#DDD4C0] text-[#9A8A78] font-black text-base py-6 rounded-2xl opacity-40 cursor-not-allowed gv-lift">
-                  {t('voting_abstain_pv')}
-                </button>
-              )
-            )}
-            {!inPassRound && (
-              <button
-                onClick={() => handlePass(currentDelegate.id)}
-                className="flex-1 bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] text-[#6A5A4A] font-black text-sm py-6 rounded-2xl transition-colors gv-lift"
-              >
-                {t('voting_pass')}
-              </button>
-            )}
-            <button
-              onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'against-rights')}
-              className="flex-1 bg-[#7A2020] hover:bg-[#8B3030] border border-[#7A2020] text-[#EED98A] font-black text-sm py-6 rounded-2xl transition-colors leading-snug gv-lift"
-            >
-              {t('voting_against')}<br />{t('voting_with_rights_label')}
-            </button>
-            <button
-              onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'against')}
-              className="flex-1 bg-[#8B2020] hover:bg-[#A03030] border border-[#8B2020] text-white font-black text-base py-6 rounded-2xl transition-colors gv-lift"
-            >
-              {t('voting_against')}
-            </button>
-          </div>
-
-          {/* Scale */}
-          <div className="mb-4 w-full max-w-3xl relative">
-            <div className={hideVotes ? 'blur-sm select-none pointer-events-none' : ''}>
-              <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
-            </div>
-            <button
-              onClick={() => setHideVotes((v) => !v)}
-              title={hideVotes ? 'Show vote count' : 'Hide vote count'}
-              className="absolute right-0 top-0 h-7 w-9 flex items-center justify-center rounded-r-full text-[#9A8A78] hover:text-[#1C1410] transition-colors focus:outline-none"
-              style={{ backgroundColor: 'rgba(221,212,192,0.85)', borderLeft: '1px solid #DDD4C0' }}>
-              {hideVotes ? (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/>
-                  <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
-                  <line x1="1" y1="1" x2="23" y2="23"/>
-                </svg>
-              ) : (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                  <circle cx="12" cy="12" r="3"/>
-                </svg>
-              )}
-            </button>
-          </div>
-
-          {/* Upcoming voters — fixed height, invisible when empty so layout never shifts */}
-          <div className={`mt-4 w-full max-w-2xl h-[110px] shrink-0 ${upcomingDelegates.length === 0 ? 'invisible' : ''}`}>
-            <p className="text-[10px] text-[#9A8A78] font-mono text-center mb-2 tracking-widest">{t('voting_up_next')}</p>
-            <div className="flex items-center justify-center gap-4 h-[80px]">
-              {upcomingDelegates.map((d, i) => {
-                const qArt = sessionSeatArt(d);
-                const qHeight = i === 0 ? 52 : Math.max(20, 38 - i * 5);
-                const qWidth = Math.round(qHeight * 1.5);
-                const qRadius = i === 0 ? 8 : 5;
-                const qShadow = `0 0 0 ${i === 0 ? 2.5 : 1.5}px rgba(28,20,16,0.22)`;
-                return (
-                  <div key={d.id} className="flex flex-col items-center gap-1" style={{ opacity: Math.max(0.2, 1 - i * 0.18) }}>
-                    {qArt.kind !== 'none' ? (
-                      <div style={{ width: qWidth, height: qHeight, borderRadius: qRadius, overflow: 'hidden', boxShadow: qShadow, flexShrink: 0 }}>
-                        <SeatFlag seat={d} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                      </div>
-                    ) : (
-                      <div style={{ width: qWidth, height: qHeight, borderRadius: qRadius, overflow: 'hidden', boxShadow: qShadow, flexShrink: 0, position: 'relative', backgroundColor: 'rgba(221,212,192,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Emoji size={`${Math.round(qHeight * 0.65)}px`}>🌐</Emoji>
-                      </div>
-                    )}
-                    <span className="text-[9px] text-[#9A8A78] text-center max-w-[52px] truncate">{getCountryDisplayName(d.country, language)}</span>
+          ) : (
+            <div className="shrink-0 w-full max-w-[1080px] flex flex-col gap-3 mt-3">
+              <div className="flex gap-3">
+                <BallotButton
+                  tone="for" wide icon={<Check size={22} strokeWidth={3} />} label={t('voting_in_favour')}
+                  recorded={!hideVotes && recordedMark === 'for'}
+                  onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'for')}
+                />
+                {allowRights && (
+                  <BallotButton
+                    tone="for" icon={<Check size={20} strokeWidth={3} />} label={t('voting_in_favour')} sub={t('voting_with_rights_label')}
+                    recorded={!hideVotes && recordedMark === 'for-rights'}
+                    onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'for-rights')}
+                  />
+                )}
+                {settings.allowAbstentions && !isSecondAsk && (
+                  (vote?.order.find((f) => f.id === currentDelegate.id)?.status ?? seatStatus(currentDelegate)) === 'present' ? (
+                    <BallotButton
+                      tone="neutral" icon={<Minus size={20} strokeWidth={3} />} label={t('voting_abstain')}
+                      recorded={!hideVotes && recordedMark === 'abstain'}
+                      onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'abstain')}
+                    />
+                  ) : (
+                    <BallotButton tone="neutral" icon={<Minus size={20} strokeWidth={3} />} label={t('voting_abstain_pv')} disabled onClick={() => {}} />
+                  )
+                )}
+                {allowPass && !isSecondAsk && (
+                  <BallotButton
+                    tone="neutral" icon={<SkipForward size={20} strokeWidth={2.75} />} label={t('voting_pass')}
+                    recorded={recordedMark === 'pass'}
+                    onClick={() => handlePass(currentDelegate.id)}
+                  />
+                )}
+                {allowRights && (
+                  <BallotButton
+                    tone="against" icon={<X size={20} strokeWidth={3} />} label={t('voting_against')} sub={t('voting_with_rights_label')}
+                    recorded={!hideVotes && recordedMark === 'against-rights'}
+                    onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'against-rights')}
+                  />
+                )}
+                <BallotButton
+                  tone="against" wide icon={<X size={22} strokeWidth={3} />} label={t('voting_against')}
+                  recorded={!hideVotes && recordedMark === 'against'}
+                  onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'against')}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                {backButton(t('voting_step_back'))}
+                {!hideVotes && (
+                  <div className="flex-1 max-w-xl">
+                    <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
                   </div>
-                );
-              })}
+                )}
+                {recordedMark && !(isSecondAsk && recordedMark === 'pass') ? (
+                  <button
+                    type="button"
+                    onClick={keepAndAdvance}
+                    className="inline-flex items-center gap-2 h-11 ps-4 pe-5 rounded-full text-[14px] font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] motion-reduce:transition-none"
+                    style={{ backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 4px rgba(27,56,40,0.2), 0 8px 18px rgba(27,56,40,0.2)' }}
+                  >
+                    <CornerDownRight size={18} strokeWidth={2.5} aria-hidden style={{ transform: language === 'ar' ? 'scaleX(-1)' : undefined }} />
+                    {t('voting_keep_vote')}
+                  </button>
+                ) : (
+                  <span className="w-[120px] shrink-0" aria-hidden />
+                )}
+              </div>
+              <div className="flex justify-center">{tallyToggle}</div>
             </div>
-          </div>
+          )}
+          {isViewOnly && (
+            <div className="shrink-0 w-full max-w-xl flex flex-col items-center gap-3">
+              {!hideVotes && <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />}
+              {tallyToggle}
+            </div>
+          )}
         </div>
       )}
 
-      {/* ── All voted — proceed screen ── */}
-      {phase === 'voting' && !currentDelegate && (
-        <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6">
-          <h2 className="text-4xl font-black text-[#1C1410]">
-            {t('voting_all_voted').replace('{n}', String(presentDelegates.length))}
+      {/* ── All voted: only a device ballot after Back, or a ballot stored before a vote
+          finished on its own (owner, 17 Sep 2026: move straight on when everyone has voted) ── */}
+      {phase === 'voting' && !currentDelegate && !deviceBallotOpen && (
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-8 gap-7">
+          <h2 className="text-[28px] font-bold text-[#1C1410] text-center leading-tight tracking-[-0.012em] [text-wrap:balance]">
+            {votes.length >= mainCount
+              ? t('voting_all_voted', { n: mainCount })
+              // An early device reveal (then Back) lands here with delegations that never voted.
+              : t('voting_some_voted', { cast: votes.length, n: mainCount })}
           </h2>
-          <div className="flex gap-10 text-center">
-            <div>
-              <div className="text-4xl font-black text-green-400">{forCount}</div>
-              <div className="text-[#6A5A4A] text-sm mt-1">{t('voting_for_label')}</div>
-            </div>
-            <div>
-              <div className="text-4xl font-black text-red-400">{againstCount}</div>
-              <div className="text-[#6A5A4A] text-sm mt-1">{t('voting_against_label')}</div>
-            </div>
-            {abstainCount > 0 && (
-              <div>
-                <div className="text-4xl font-black text-[#6A5A4A]">{abstainCount}</div>
-                <div className="text-[#9A8A78] text-sm mt-1">{t('voting_abstain_label')}</div>
+          {hideVotes ? (
+            <p className="text-[15px] font-medium text-[#6A5A4A]">{t('voting_tally_hidden')}</p>
+          ) : (
+            <div className="w-full max-w-2xl flex flex-col items-center gap-6">
+              <div className="flex gap-10">
+                {bigCount(forCount, t('voting_for_label'), '#2F6B45')}
+                {bigCount(againstCount, t('voting_against_label'), '#8B2020')}
+                {abstainCount > 0 && bigCount(abstainCount, t('voting_abstain_label'), '#6A5A4A')}
+                {allowRights && withRights.length > 0 && bigCount(withRights.length, t('voting_with_rights_label'), '#8A6414')}
               </div>
-            )}
-            {withRights.length > 0 && (
-              <div>
-                <div className="text-4xl font-black text-amber-400">{withRights.length}</div>
-                <div className="text-[#6A5A4A] text-sm mt-1">{t('voting_with_rights_label')}</div>
-              </div>
-            )}
-          </div>
-          <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
-          <p className="text-xs text-[#6A5A4A] tabular-nums -mt-2">
-            {settings.substantiveThreshold === 'consensus'
-              ? `${totalDecisive} counted · no votes against allowed`
-              : `${totalDecisive} counted · ${outcome.needed} needed to pass`}
-            {outcome.quorumNeeded > 0 && ` · quorum ${presentAndPvDelegates.length}/${outcome.quorumNeeded}`}
-          </p>
-          <button
-            onClick={handleFinishVoting}
-            className="bg-[#1B3828] hover:bg-[#2A5A3C] text-white px-12 py-4 rounded-2xl font-black text-lg transition-colors mt-2 gv-lift"
-          >
-            {withRights.length > 0
-              ? t('voting_proceed_rights').replace('{n}', String(withRights.length))
-              : t('voting_see_result')}
-          </button>
+              <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+              <p className="text-[13.5px] font-medium text-[#6A5A4A] tabular-nums -mt-2">
+                {summaryLine}
+                {outcome.quorumNeeded > 0 && ` · ${t('voting_summary_quorum', { present: presentAndPvDelegates.length, needed: outcome.quorumNeeded })}`}
+              </p>
+            </div>
+          )}
+          {isViewOnly ? (
+            <p className="text-[15px] font-medium text-[#6A5A4A]">{t('voting_follower_waiting', { name: gavelRole.head ?? '' })}</p>
+          ) : (
+            <div className="flex items-center gap-3">
+              {backButton(t('voting_step_back'))}
+              <button
+                type="button"
+                onClick={handleFinishVoting}
+                className="h-12 px-8 rounded-full font-semibold text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 transition-transform duration-150 active:scale-[0.96] motion-reduce:transition-none"
+                style={{ backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 4px rgba(27,56,40,0.22), 0 12px 32px rgba(27,56,40,0.26)' }}
+              >
+                {/* A hidden tally reveals nothing here either, not even whether anyone voted with rights. */}
+                {hideVotes
+                  ? t('voting_continue')
+                  : allowRights && withRights.length > 0
+                    ? t('voting_proceed_rights', { n: withRights.length })
+                    : t('voting_see_result')}
+              </button>
+            </div>
+          )}
+          {tallyToggle}
         </div>
       )}
 
       {/* ── Rights speakers ── */}
-      {phase === 'rights-speakers' && orderedRights.length > 0 && (
-        <div className="flex-1 flex flex-col items-center justify-between py-8 px-8 overflow-hidden">
-          <div className="flex-1 flex flex-col items-center justify-center min-h-0">
-            <p className="text-xs text-amber-400 font-mono tracking-widest mb-6">
-              {t('voting_rights_header').replace('{current}', String(rightsIndex + 1)).replace('{total}', String(orderedRights.length))}
-            </p>
-            <div className="select-none mb-3 flex items-center justify-center">
-              {(() => {
-                const rightsSeat = committee.delegates.find((d) => d.id === orderedRights[rightsIndex].delegateId)
-                  ?? { country: orderedRights[rightsIndex].country };
-                const art = sessionSeatArt(rightsSeat);
-                const size = '196px';
-                return art.kind !== 'none' ? (
-                  <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 0 0 3.75px rgba(28,20,16,0.22)', flexShrink: 0 }}>
-                    <SeatFlag
-                      seat={rightsSeat}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+      {phase === 'rights-speakers' && orderedRights.length > rightsIndex && (() => {
+        const speaker = orderedRights[rightsIndex];
+        const rightsSeat = committee.delegates.find((d) => d.id === speaker.delegateId) ?? { country: speaker.country };
+        const presets = [30, 45, 60, 90, 120];
+        const lastRights = rightsIndex + 1 >= orderedRights.length;
+        return (
+          <div className="flex-1 min-h-0 flex gap-8 px-10 py-6">
+            <div className="flex-1 min-w-0 flex flex-col items-center justify-center">
+              <p className="text-[15px] font-medium mb-6 tabular-nums" style={{ color: '#6A5A4A' }}>
+                {t('voting_rights_header', { current: rightsIndex + 1, total: orderedRights.length })}
+              </p>
+              <span key={speaker.delegateId} className="gv-name-in rounded-full" style={{ boxShadow: '0 0 0 9px #F6F1E9, 0 0 0 15px #D9B44A, 0 24px 56px rgba(27,56,40,0.28)' }}>
+                <SeatCircleFlag seat={rightsSeat} size={220} decorative />
+              </span>
+              <h1 key={`n-${speaker.delegateId}`} className="gv-name-in text-[46px] font-bold text-[#1C1410] text-center mt-8 leading-[1.05] tracking-[-0.018em] [text-wrap:balance]">
+                {getCountryDisplayName(speaker.country, language)}
+              </h1>
+              <p className="text-[17px] font-medium mt-2" style={{ color: '#6A5A4A' }}>
+                {hideVotes
+                  ? t('voting_with_rights_label')
+                  : speaker.choice === 'for-rights' ? t('voting_rights_for') : t('voting_rights_against')}
+              </p>
+              {/* The rights clock runs on the driving device only (nothing per-second is ever
+                  written), so a Commenter does not get a clock that would sit still. */}
+              {!isViewOnly && (
+                <>
+                  <div
+                    className="text-[88px] font-bold mt-4 tabular-nums leading-none tracking-[-0.025em]"
+                    style={{ color: rightsSpeakerTime <= 10 ? '#8B2020' : rightsSpeakerTime <= 20 ? '#8A6414' : '#1C1410' }}
+                  >
+                    {clock(rightsSpeakerTime)}
+                  </div>
+                  {/* The controls in the GSL's manner (owner, 17 Sep 2026: "next speaker and
+                      back next to the Start button"): Back, Restart, Start / Pause, Next. */}
+                  <div className="flex gap-2 mt-5 items-center flex-wrap justify-center">
+                    {backButton(t('voting_step_back'))}
+                    <button
+                      type="button"
+                      onClick={() => { setRightsRunning(false); setRightsSpeakerTime(rightsTimerLimit); }}
+                      aria-label={t('voting_rights_restart')}
+                      title={t('voting_rights_restart')}
+                      className="h-12 w-12 rounded-full flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] hover:bg-[rgba(27,56,40,0.13)]"
+                      style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: '#1B3828' }}
+                    >
+                      <RotateCcw size={19} strokeWidth={2.4} aria-hidden />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { if (!rightsRunning) setRightsStarted(true); setRightsRunning((r) => !r); }}
+                      className="h-12 px-8 rounded-full font-semibold text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96]"
+                      style={{ backgroundColor: rightsRunning ? '#8A6414' : '#2F6B45', color: '#FFFFFF' }}
+                    >
+                      {rightsRunning ? t('voting_pause') : t('voting_start')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setRightsRunning(false); handleNextRightsSpeaker(); }}
+                      className="inline-flex items-center gap-2 h-12 ps-5 pe-6 rounded-full font-semibold text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] motion-reduce:transition-none"
+                      style={{ backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 4px rgba(27,56,40,0.2), 0 8px 18px rgba(27,56,40,0.2)' }}
+                    >
+                      {lastRights ? t('voting_see_result') : t('voting_next_rights')}
+                      <SkipForward size={17} strokeWidth={2.5} aria-hidden style={{ transform: language === 'ar' ? 'scaleX(-1)' : undefined }} />
+                    </button>
+                  </div>
+                  {/* ONE speaking time for the whole rights round, the GSL's presets plus a
+                      typed field. No per-speaker override any more. */}
+                  <div className="mt-5 flex items-center gap-2 flex-wrap justify-center">
+                    <span className="text-[13px] font-semibold" style={{ color: '#6A5A4A' }}>{t('voting_rights_default_time')}</span>
+                    {presets.map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setRightsTimerLimit(p)}
+                        aria-pressed={rightsTimerLimit === p}
+                        className="h-9 min-w-10 px-3 rounded-full font-medium text-[13px] tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,transform] duration-150 active:scale-[0.96]"
+                        style={{ backgroundColor: rightsTimerLimit === p ? '#1B3828' : 'rgba(27,56,40,0.07)', color: rightsTimerLimit === p ? '#EED98A' : '#4A3F33' }}
+                      >
+                        {p}s
+                      </button>
+                    ))}
+                    <RightsTimeField
+                      seconds={rightsTimerLimit}
+                      custom={!presets.includes(rightsTimerLimit)}
+                      label={t('voting_rights_default_time')}
+                      onCommit={(secs) => { if (secs != null) setRightsTimerLimit(secs); }}
                     />
                   </div>
-                ) : (
-                  <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 0 0 3.75px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative', backgroundColor: 'rgba(221,212,192,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Emoji size="5rem">🌐</Emoji>
-                  </div>
-                );
-              })()}
+                </>
+              )}
             </div>
-            <h1
-              style={{ fontSize: '32px' }}
-              className="font-black text-[#1C1410] text-center mb-2"
-            >
-              {getCountryDisplayName(orderedRights[rightsIndex].country, language)}
-            </h1>
-            <p className="text-amber-400 font-semibold">
-              {orderedRights[rightsIndex].choice === 'for-rights' ? t('voting_rights_for') : t('voting_rights_against')}
-            </p>
-            {/* Rights speaker countdown timer */}
-            <div className={`text-6xl font-black font-mono mt-4 tabular-nums ${rightsSpeakerTime <= 10 ? 'text-red-500' : rightsSpeakerTime <= 20 ? 'text-yellow-500' : 'text-[#1C1410]'}`}>
-              {Math.floor(rightsSpeakerTime / 60)}:{String(rightsSpeakerTime % 60).padStart(2, '0')}
-            </div>
-            <div className="flex gap-2 mt-3 flex-wrap justify-center">
-              <button
-                onClick={() => setRightsRunning((r) => !r)}
-                className={`gv-lift px-6 py-2.5 rounded-xl font-bold text-sm transition-colors ${rightsRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}
-              >
-                {rightsRunning ? t('voting_pause') : t('voting_start')}
-              </button>
-              {[30, 45, 60, 90, 120].map((s) => (
-                <button key={s} onClick={() => setRightsTimerLimit(s)}
-                  className={`gv-lift px-3 py-2.5 rounded-xl font-bold text-xs transition-colors ${rightsTimerLimit === s ? 'bg-[#1B3828] text-white' : 'bg-[#DDD4C0] text-[#6A5A4A] hover:bg-[#C8BAA8]'}`}>
-                  {s}s
-                </button>
-              ))}
+
+            <div className="w-[400px] shrink-0 flex flex-col justify-center min-h-0">
+              <RightsQueue
+                speakers={orderedRights}
+                currentIndex={rightsIndex}
+                hideTally={hideVotes}
+                currentMovable={!rightsStarted && !rightsRunning}
+                seconds={rightsTimerLimit}
+                onMove={isViewOnly ? undefined : moveRightsSpeaker}
+              />
             </div>
           </div>
-
-          <div className="w-full max-w-md space-y-1 mb-4 mt-6 overflow-y-auto" style={{ maxHeight: '220px' }}>
-            {orderedRights.slice(rightsIndex).map((v, relIdx) => {
-              const absIdx = rightsIndex + relIdx;
-              const isCurrent = relIdx === 0;
-              return (
-                <div
-                  key={v.delegateId}
-                  draggable={!isCurrent}
-                  onDragStart={() => { dragIndexRef.current = absIdx; }}
-                  onDragOver={(e) => { if (!isCurrent) e.preventDefault(); }}
-                  onDrop={() => {
-                    const from = dragIndexRef.current;
-                    if (from === null || from === absIdx || from <= rightsIndex || absIdx <= rightsIndex) return;
-                    setOrderedRights((prev) => {
-                      const arr = [...prev];
-                      const [item] = arr.splice(from, 1);
-                      arr.splice(absIdx, 0, item);
-                      return arr;
-                    });
-                    dragIndexRef.current = null;
-                  }}
-                  className={`flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition-all ${
-                    isCurrent
-                      ? 'bg-[#1B3828] border border-[#3D7A52] text-[#EED98A]'
-                      : 'bg-[#FAF8F3] border border-[#DDD4C0] text-[#1C1410] opacity-80 cursor-grab'
-                  }`}
-                >
-                  {!isCurrent && <span className="text-[#9A8A78] text-xs">⠿</span>}
-                  <span className="text-xs w-5 font-mono text-end opacity-60">{absIdx + 1}</span>
-                  <span><SeatMark country={v.country} /> {getCountryDisplayName(v.country, language)}</span>
-                  <span className={`ms-auto text-xs font-semibold ${
-                    isCurrent ? 'text-[#EED98A]' :
-                    v.choice === 'for-rights' ? 'text-[#2A7A3C]' : 'text-[#8B2020]'
-                  }`}>
-                    {isCurrent ? t('voting_speaking') : v.choice === 'for-rights' ? t('voting_for_rights_list') : t('voting_against_rights_list')}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          <button
-            onClick={() => { setRightsRunning(false); handleNextRightsSpeaker(); }}
-            className="w-full max-w-md bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-4 rounded-2xl font-black text-lg transition-colors gv-lift"
-          >
-            {rightsIndex + 1 < orderedRights.length ? t('voting_next_rights') : t('voting_see_result')}
-          </button>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Final result ── */}
-      {phase === 'result' && (
-        <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6">
-          <p className="text-xs font-mono text-[#9A8A78] tracking-widest uppercase">
-            {t('voting_final_result').replace('{code}', selectedDoc.docCode)}
-          </p>
-
-          {/* Main result bubble */}
-          <div
-            className="rounded-3xl px-16 py-12 text-center w-full max-w-xl"
-            style={{
-              backgroundColor: passed ? '#1B3828' : '#8B2020',
-              boxShadow: passed
-                ? '0 24px 64px rgba(27,56,40,0.30)'
-                : '0 24px 64px rgba(139,32,32,0.30)',
-            }}
-          >
-            <div className="text-6xl font-black mb-3" style={{ color: passed ? '#EED98A' : '#FFD0D0' }}>
-              {passed ? t('voting_passed') : t('voting_failed')}
-            </div>
-            <p className="text-xl font-bold mb-6" style={{ color: passed ? 'rgba(238,217,138,0.75)' : 'rgba(255,208,208,0.75)' }}>
-              {selectedDoc.title}
+      {phase === 'result' && (() => {
+        // Three outcomes, three looks (owner, 17 Sep 2026): passed forest, failed red, vetoed
+        // aubergine. Vetoed is a failure a veto holder caused, from the live evaluation.
+        const kind: 'passed' | 'failed' | 'vetoed' = passed ? 'passed' : p5Veto ? 'vetoed' : 'failed';
+        const look = {
+          passed: { bg: '#1B3828', chipBg: '#EED98A', chipFg: '#1B3828', title: '#EED98A', soft: 'rgba(238,217,138,0.78)', shadow: '0 2px 4px rgba(27,56,40,0.2), 0 24px 64px rgba(27,56,40,0.30)' },
+          failed: { bg: '#8B2020', chipBg: '#FFE1D6', chipFg: '#8B2020', title: '#FFFFFF', soft: 'rgba(255,222,210,0.82)', shadow: '0 2px 4px rgba(90,20,20,0.2), 0 24px 64px rgba(139,32,32,0.30)' },
+          vetoed: { bg: '#3E2447', chipBg: '#E9D6F0', chipFg: '#3E2447', title: '#FFFFFF', soft: 'rgba(233,214,240,0.84)', shadow: '0 2px 4px rgba(40,20,48,0.22), 0 24px 64px rgba(62,36,71,0.34)' },
+        }[kind];
+        const soft = look.soft;
+        return (
+          <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-8 gap-6">
+            <p className="text-[14px] font-medium tabular-nums" style={{ color: '#6A5A4A' }}>
+              {t('voting_final_result', { code: selectedDoc.docCode })}
             </p>
-            <div className="flex justify-center gap-10">
-              <div className="text-center">
-                <div className="text-4xl font-black" style={{ color: '#6EE7A0' }}>{forCount}</div>
-                <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>{t('voting_for_label')}</div>
+
+            <div
+              className="gv-name-in relative isolate overflow-hidden rounded-[24px] px-10 pt-8 pb-9 text-center w-full max-w-2xl"
+              style={{ backgroundColor: look.bg, boxShadow: look.shadow }}
+            >
+              <ResultBackdrop kind={kind} tint={look.bg} />
+              <div className="relative">
+              <div className="flex items-center justify-center gap-3">
+                <span className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: look.chipBg, color: look.chipFg }} aria-hidden>
+                  {kind === 'passed' ? <Check size={22} strokeWidth={2.75} /> : kind === 'vetoed' ? <ShieldAlert size={21} strokeWidth={2.5} /> : <X size={22} strokeWidth={2.75} />}
+                </span>
+                <span className="text-[40px] font-bold leading-none tracking-[-0.02em]" style={{ color: look.title, textShadow: '0 2px 12px rgba(0,0,0,0.35)' }}>
+                  {kind === 'passed' ? t('voting_pick_status_passed') : kind === 'vetoed' ? t('voting_pick_status_vetoed') : t('voting_pick_status_failed')}
+                </span>
               </div>
-              <div className="text-center">
-                <div className="text-4xl font-black" style={{ color: '#FCA5A5' }}>{againstCount}</div>
-                <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>{t('voting_against_label')}</div>
+              <p className="text-[16px] font-medium mt-3 mb-6 leading-snug [text-wrap:balance]" style={{ color: soft }}>
+                {selectedDoc.title}
+              </p>
+              {/* Equal columns (owner, 17 Sep 2026: "in the voting result, the number of votes is
+                  not centred"). Each cell used to be exactly as wide as its own label, so the big
+                  numbers marched at uneven intervals (72, 85, 94 px apart) and none of them lined
+                  up with anything. `min-w` puts them on one rhythm, the way the all-voted screen's
+                  bigCount already does. */}
+              <div className="flex justify-center gap-6 flex-wrap">
+                {[
+                  { n: forCount, label: t('voting_for_label'), color: '#9BE3B4', show: true },
+                  { n: againstCount, label: t('voting_against_label'), color: '#FFB4A8', show: true },
+                  { n: abstainCount, label: t('voting_abstain_label'), color: 'rgba(255,255,255,0.7)', show: abstainCount > 0 },
+                  { n: withRights.length, label: t('voting_with_rights_label'), color: '#F3D98A', show: allowRights && withRights.length > 0 },
+                ].filter((c) => c.show).map((c) => (
+                  <div key={c.label} className="text-center min-w-[96px]">
+                    <div className="text-[34px] font-bold leading-none tabular-nums" style={{ color: c.color }}>{c.n}</div>
+                    <div className="text-[13px] font-medium mt-2 leading-snug" style={{ color: soft }}>{c.label}</div>
+                  </div>
+                ))}
               </div>
-              {abstainCount > 0 && (
-                <div className="text-center">
-                  <div className="text-4xl font-black" style={{ color: 'rgba(255,255,255,0.5)' }}>{abstainCount}</div>
-                  <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>{t('voting_abstain_label')}</div>
-                </div>
-              )}
-              {withRights.length > 0 && (
-                <div className="text-center">
-                  <div className="text-4xl font-black" style={{ color: '#FCD34D' }}>{withRights.length}</div>
-                  <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>{t('voting_with_rights_label')}</div>
-                </div>
-              )}
+              <div className="mt-6 space-y-1.5 text-[13.5px] font-medium tabular-nums" style={{ color: '#FFFFFF' }}>
+                {p5Veto && (
+                  <p className="flex items-center gap-1.5 justify-center"><ShieldAlert size={16} strokeWidth={2.5} aria-hidden /> {settings.vetoMode === 'custom' ? t('voting_veto_exercised') : t('voting_p5_veto')}</p>
+                )}
+                {unanimousFail && <p>{t('voting_unanimous_fail')}</p>}
+                {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'supermajority-2-3' && (
+                  <p style={{ color: soft }}>{t('voting_supermajority', { for: forCount, total: totalDecisive, pct: totalDecisive > 0 ? Math.round(forCount / totalDecisive * 100) : 0 })}</p>
+                )}
+                {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'consensus' && (
+                  <p style={{ color: soft }}>{t('voting_consensus', { against: againstCount })}</p>
+                )}
+                {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'simple' && (
+                  <p style={{ color: soft }}>{t('voting_result_simple', { for: forCount, total: totalDecisive, needed: outcome.needed })}</p>
+                )}
+                {!outcome.quorumMet && (
+                  <p>{t('voting_result_quorum_not_met', { present: presentAndPvDelegates.length, needed: outcome.quorumNeeded })}</p>
+                )}
+                {outcome.countsAbstentions && abstainCount > 0 && (
+                  <p className="text-[13px]" style={{ color: soft }}>{t('voting_result_abst_counted')}</p>
+                )}
+              </div>
+              </div>
             </div>
-            {p5Veto && (
-              <p className="text-sm mt-4 font-semibold flex items-center gap-1 justify-center" style={{ color: '#FCA5A5' }}>
-                <Emoji size="1em">🛡️</Emoji> {t('voting_p5_veto')}
-              </p>
-            )}
-            {unanimousFail && (
-              <p className="text-sm mt-4 font-semibold" style={{ color: '#FCA5A5' }}>
-                {t('voting_unanimous_fail')}
-              </p>
-            )}
-            {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'supermajority-2-3' && (
-              <p className="text-sm mt-3 font-semibold" style={{ color: thresholdMet ? '#6EE7A0' : '#FCA5A5' }}>
-                {t('voting_supermajority').replace('{for}', String(forCount)).replace('{total}', String(totalDecisive)).replace('{pct}', String(totalDecisive > 0 ? Math.round(forCount / totalDecisive * 100) : 0))}
-              </p>
-            )}
-            {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'consensus' && (
-              <p className="text-sm mt-3 font-semibold" style={{ color: thresholdMet ? '#6EE7A0' : '#FCA5A5' }}>
-                {t('voting_consensus').replace('{against}', String(againstCount))}
-              </p>
-            )}
-            {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'simple' && (
-              <p className="text-sm mt-3 font-semibold tabular-nums" style={{ color: thresholdMet ? '#6EE7A0' : '#FCA5A5' }}>
-                Simple majority · {forCount}/{totalDecisive} in favour, {outcome.needed} needed
-              </p>
-            )}
-            {!outcome.quorumMet && (
-              <p className="text-sm mt-3 font-semibold tabular-nums" style={{ color: '#FCA5A5' }}>
-                Quorum not met · {presentAndPvDelegates.length} present, {outcome.quorumNeeded} required
-              </p>
-            )}
-            {outcome.countsAbstentions && abstainCount > 0 && (
-              <p className="text-xs mt-2" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>
-                Abstentions counted toward the total
-              </p>
-            )}
-          </div>
 
-          <div className="flex items-center justify-center gap-6">
-            <PieChart forVotes={forCount} against={againstCount} abstain={abstainCount} />
-            <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
-          </div>
+            <div className="w-full max-w-2xl">
+              <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+            </div>
 
-          {/* Action buttons */}
-          <div className="flex gap-3">
-            <button
-              onClick={() => startNewVote(selectedDoc.id)}
-              className="py-3 px-6 rounded-xl font-bold transition-colors gv-lift"
-              style={{ backgroundColor: '#DDD4C0', color: '#1B3828', border: '1.5px solid #C8BAA8' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#C8BAA8'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#DDD4C0'; }}
-            >
-              {t('voting_vote_again')}
-            </button>
-            <button
-              onClick={() => setSelectedDocId(null)}
-              className="py-3 px-6 rounded-xl font-black transition-colors"
-              style={{ backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 4px 16px rgba(27,56,40,0.25)' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-            >
-              {t('voting_next_doc', { doc: docName(committee, 'draft-resolution', 'singular', t('documents_draft_resolution')) })}
-            </button>
-            <button
-              onClick={() => setShowEndDebateConfirm(true)}
-              className="py-3 px-6 rounded-xl font-bold transition-colors gv-lift"
-              style={{ backgroundColor: '#8B2020', color: 'white', border: '1.5px solid #A03030' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#A03030'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
-            >
-              {t('voting_end_debate')}
-            </button>
-          </div>
-        </div>
-      )}
-      {showSettings && <SettingsPanel committee={committee} onClose={() => setShowSettings(false)} />}
-
-      {/* ── End Debate confirmation modal ── */}
-      {showEndDebateConfirm && (
-        <Portal><div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: 'rgba(5,4,3,0.80)', backdropFilter: 'blur(6px)' }}
-          onClick={() => setShowEndDebateConfirm(false)}
-        >
-          <div
-            className="rounded-2xl w-full max-w-sm mx-4 shadow-2xl flex flex-col overflow-hidden"
-            style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Top bar */}
-            <div className="px-6 pt-6 pb-4" style={{ borderBottom: '1px solid #EDE7D8' }}>
-              <div className="flex items-center gap-3 mb-1">
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-xl"
-                  style={{ backgroundColor: '#8B2020' }}
+            {!isViewOnly && (
+              <div className="flex gap-3 flex-wrap justify-center items-center">
+                {backButton(t('voting_step_back_to_ballot'))}
+                <button
+                  type="button"
+                  onClick={() => setPendingDocId(selectedDoc.id)}
+                  className="h-11 px-5 rounded-full font-semibold text-[14px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,transform] duration-150 active:scale-[0.96] hover:bg-white"
+                  style={{ backgroundColor: '#FAF8F3', color: '#1B3828', boxShadow: '0 0 0 1px rgba(27,56,40,0.14), 0 2px 6px rgba(27,56,40,0.08)' }}
                 >
-                  🔨
-                </div>
-                <h2 className="text-lg font-black text-[#1C1410]">{t('voting_end_debate_title')}</h2>
+                  {t('voting_vote_again')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDocId(null)}
+                  className="h-11 px-6 rounded-full font-semibold text-[14px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 transition-transform duration-150 active:scale-[0.96]"
+                  style={{ backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 4px rgba(27,56,40,0.22), 0 10px 26px rgba(27,56,40,0.24)' }}
+                >
+                  {t('voting_next_doc', { doc: docName(committee, 'draft-resolution', 'singular', t('documents_draft_resolution')) })}
+                </button>
               </div>
-              <p className="text-sm text-[#6A5A4A] leading-relaxed mt-2">
-                {t('voting_end_debate_body')}
-              </p>
-            </div>
-            {/* Buttons */}
-            <div className="px-6 py-4 flex gap-3">
-              <button
-                onClick={() => setShowEndDebateConfirm(false)}
-                className="flex-1 py-3 rounded-xl font-bold text-sm transition-colors gv-lift"
-                style={{ backgroundColor: '#EDE7D8', color: '#1C1410', border: '1.5px solid #DDD4C0' }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#DDD4C0'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; }}
-              >
-                {t('voting_cancel')}
-              </button>
-              <button
-                onClick={() => { setShowEndDebateConfirm(false); handleEndDebate(); }}
-                className="flex-1 py-3 rounded-xl font-black text-sm transition-colors gv-lift"
-                style={{ backgroundColor: '#8B2020', color: 'white' }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#A03030'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
-              >
-                {t('voting_confirm_end')}
-              </button>
-            </div>
+            )}
           </div>
-        </div></Portal>
-      )}
+        );
+      })()}
+      {showSettings && <SettingsPanel committee={committee} onClose={() => setShowSettings(false)} isViewOnly={isViewOnly} myChairName={urlChairName} />}
+      {headerDialogs}
+
+      {endDebateModal}
     </div>
     </SeatArtProvider>
     </FitToScreen>

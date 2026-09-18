@@ -29,6 +29,10 @@ const INK_70 = '#4A4238';
 const MUTED = '#6B5F52';
 const TRACK = '#E7E1D1';
 const ATTENTION = '#B6871F';
+/** Pledged spots are gold, never a green from the funnel ramp: they are people
+ *  who are coming but have not applied, so they must not read as a stage of the
+ *  application funnel. */
+const PLEDGED = '#C79A2E';
 
 /** A stage is flagged below this share of the stage above it — the same 70%
  *  bar the set-up priorities use, so "fine" means one thing on this page. */
@@ -46,6 +50,11 @@ export interface ApplicantsDialProps {
   /** Ordered widest → narrowest funnel stage. */
   stages: DialStage[];
   expected: number;
+  /** Delegation spots pledged that nobody has registered against yet — real
+   *  people, no application row (see src/lib/pledgedSpots.ts). They join the
+   *  centre number and get their own gold band and key row; they are NEVER
+   *  folded into a funnel stage, because they have not applied. */
+  pledged?: number;
   size?: number;
   onNavigate?: (href: string) => void;
 }
@@ -63,10 +72,15 @@ function arcPath(cx: number, cy: number, r: number, from: number, to: number) {
 }
 
 export default function ApplicantsDial({
-  stages, expected, size = 236, onNavigate,
+  stages, expected, pledged = 0, size = 236, onNavigate,
 }: ApplicantsDialProps) {
   const target = Math.max(expected, 0);
-  const current = stages[0]?.value ?? 0;
+  const registered = stages[0]?.value ?? 0;
+  const pledgedHeads = Math.max(0, Math.round(pledged));
+  /* The headline is everybody expected: rows on the list plus pledged spots
+     still to be filled. The funnel bands below stay row-only, so the ring can
+     never claim a pledged spot has been accepted or paid. */
+  const current = registered + pledgedHeads;
 
   /* Nested → disjoint. Walk from the narrowest stage outward, each band being
      what that stage has that the next one in does not. Clamped at zero: a
@@ -81,7 +95,9 @@ export default function ApplicantsDial({
         value: s.value,
         href: s.href,
         band: Math.max(0, s.value - (inner ? inner.value : 0)),
-        color: FUNNEL_RAMP[Math.min(i, FUNNEL_RAMP.length - 1)],
+        // Widened on purpose: the pledged band appended below is gold, not a
+        // member of the funnel ramp's literal union.
+        color: FUNNEL_RAMP[Math.min(i, FUNNEL_RAMP.length - 1)] as string,
       };
     })
     .reverse(); // draw furthest-through-the-funnel first
@@ -112,6 +128,24 @@ export default function ApplicantsDial({
       cursor = to;
       return { ...b, from, to: Math.max(from, to - GAP) };
     });
+  /* Pledged spots ride on the OUTSIDE of the funnel, after "applied but not
+     accepted": they are the furthest thing from a decided application. */
+  if (pledgedHeads > 0) {
+    const sweep = (pledgedHeads / denom) * 360;
+    const from = cursor;
+    const to = cursor + sweep;
+    cursor = to;
+    arcs.push({
+      key: 'pledged',
+      label: 'Pledged spots',
+      value: pledgedHeads,
+      href: undefined,
+      band: pledgedHeads,
+      color: PLEDGED,
+      from,
+      to: Math.max(from, to - GAP),
+    });
+  }
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 22, flexWrap: 'wrap' }}>
@@ -121,7 +155,9 @@ export default function ApplicantsDial({
           width={size}
           height={size}
           role="img"
-          aria-label={`${current} of ${target} expected applicants. ${stages
+          aria-label={`${current} of ${target} expected applicants${
+            pledgedHeads > 0 ? `, of which ${registered} registered and ${pledgedHeads} pledged delegation spots` : ''
+          }. ${stages
             .map((s) => `${s.label} ${s.value}${flagged.has(s.key) ? ', needs attention' : ''}`)
             .join('. ')}.`}
         >
@@ -178,6 +214,18 @@ export default function ApplicantsDial({
           >
             Applicants
           </span>
+          {/* Never let the bigger number stand alone: it is a sum, and the
+              organiser has to be able to see what is on the list today. */}
+          {pledgedHeads > 0 && (
+            <span
+              style={{
+                marginTop: 2, fontFamily: OUTFIT, fontSize: Math.max(8, size * 0.042),
+                fontWeight: 700, color: MUTED, fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {registered.toLocaleString()} registered · {pledgedHeads.toLocaleString()} pledged
+            </span>
+          )}
         </div>
       </div>
 
@@ -244,6 +292,30 @@ export default function ApplicantsDial({
             </li>
           );
         })}
+        {/* Not a funnel stage, and placed after them so it never reads as one:
+            spots a delegation has pledged and nobody has taken up yet. No deep
+            link, because there is no application row to open. */}
+        {pledgedHeads > 0 && (
+          <li>
+            <span
+              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '3px 4px', minHeight: 26 }}
+              title="Delegation spots pledged by a head delegate or faculty advisor that nobody has registered against yet. Each one is a person coming."
+            >
+              <span style={{ width: 9, height: 9, borderRadius: 3, background: PLEDGED, flexShrink: 0 }} />
+              <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: INK_70 }}>
+                Pledged spots
+              </span>
+              <span
+                style={{
+                  marginInlineStart: 'auto', fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900,
+                  color: INK, fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {pledgedHeads.toLocaleString()}
+              </span>
+            </span>
+          </li>
+        )}
       </ul>
     </div>
   );

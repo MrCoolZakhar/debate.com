@@ -19,6 +19,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { NEU, OUTFIT, EASE, NEU_GRADIENTS, NeuIconDisc } from '@/components/neu';
 import ConferencesTab, { type AdminConferenceRow } from './ConferencesTab';
+import { outstandingPledgedSpotsByConference, type PledgeRow } from '@/lib/pledgedSpots';
 
 // ── Sibling tabs. Each is self-contained: no required props, fetches its own
 // data, owns its own loading/empty/denied states. Built concurrently by other
@@ -54,6 +55,11 @@ export default function AdminClient() {
   const [rows, setRows] = useState<AdminConferenceRow[] | null>(null);
   const [logos, setLogos] = useState<Record<string, string | null>>({});
   const [avatars, setAvatars] = useState<Record<string, string | null>>({});
+  /** Conference id → delegation spots pledged that nobody has registered
+   *  against yet. Not in admin_conference_overview()'s return type (changing a
+   *  function's signature means dropping and recreating it), so it is a
+   *  follow-up read, netted off client side. */
+  const [pledged, setPledged] = useState<Record<string, number>>({});
   const [denied, setDenied] = useState(false);
   const [tab, setTab] = useState<TabKey>('data');
 
@@ -75,6 +81,28 @@ export default function AdminClient() {
     //     non-staff caller gets zero rows from RLS, and never reaches this code
     //     at all because the RPC above already failed.
     // Either read failing is harmless: rows fall back to monogram / initials.
+
+    // Pledged delegation spots, platform wide. An application row is one
+    // person; a pledge of 20 spots is twenty, so the "apps" column on the
+    // conferences tab would otherwise read a 200-person delegation conference
+    // as a handful of rows. Scoped to rows that can possibly matter — the ones
+    // that pledged, and the ones that belong to a delegation and therefore
+    // fill a pledge — so this is a few hundred rows, not the whole table.
+    // Readable here for the same reason as `profiles` above:
+    // is_conference_organizer() short-circuits on is_platform_admin(). A failed
+    // read just leaves the pledged figures off the rows.
+    void (async () => {
+      const { data: pledgeRows } = await supabase
+        .from('applications')
+        .select('id, conference_id, status, society_id, pledge_type, spots_pledged, advisors_pledged')
+        .or('society_id.not.is.null,pledge_type.eq.delegation');
+      if (!pledgeRows) return;
+      const map = outstandingPledgedSpotsByConference(
+        pledgeRows as (PledgeRow & { conference_id: string | null })[],
+      );
+      setPledged(Object.fromEntries(map));
+    })();
+
     const { data: confRows } = await supabase.from('conferences').select('id, logo_url, organizer_id');
     if (!confRows) return;
 
@@ -212,7 +240,7 @@ export default function AdminClient() {
             until a staff member actually opens it. */}
         <div role="tabpanel" id={`admin-panel-${tab}`} aria-labelledby={`admin-tab-${tab}`}>
           {tab === 'data' && <DataTab />}
-          {tab === 'conferences' && <ConferencesTab rows={rows} logos={logos} avatars={avatars} />}
+          {tab === 'conferences' && <ConferencesTab rows={rows} logos={logos} avatars={avatars} pledged={pledged} />}
           {tab === 'users' && <UsersTab />}
           {tab === 'activity' && <ActivityTab />}
           {tab === 'live' && <LiveCommitteesTab />}

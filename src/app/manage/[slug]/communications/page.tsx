@@ -98,6 +98,9 @@ interface EmailTemplate {
   delivery: 'immediate' | 'manual';
   updated_at: string;
   audience: SavedAudience | null;
+  recurring_enabled: boolean;
+  recurring_interval_days: number | null;
+  recurring_max_sends: number | null;
 }
 
 interface AppRow {
@@ -586,6 +589,7 @@ const EVENT_STAGE: Record<EventKey, Stage> = {
   not_attending: 'Delegations',
   attendance_restored: 'Delegations',
   documents_published: 'Session',
+  position_paper_due: 'Session',
   session_chair_invite: 'Session',
   session_join_invite: 'Session',
   awards_open: 'Session',
@@ -1798,7 +1802,7 @@ function CommunicationsPageInner() {
     const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('email_templates')
-      .select('id, conference_id, event_key, name, subject, body, body_blocks, enabled, delivery, updated_at, audience')
+      .select('id, conference_id, event_key, name, subject, body, body_blocks, enabled, delivery, updated_at, audience, recurring_enabled, recurring_interval_days, recurring_max_sends')
       .eq('conference_id', conferenceId);
     if (!fresh()) return;
     setTemplates((data ?? []) as EmailTemplate[]);
@@ -2822,6 +2826,26 @@ function CommunicationsPageInner() {
     });
   }
 
+  // Same optimistic-flip-and-rollback shape as handleToggleEnabled, for the
+  // three recurring-reminder controls (draft_reminder / payment_available
+  // only — the database CHECK refuses recurring_enabled on any other event).
+  function handleUpdateRecurring(
+    template: EmailTemplate,
+    patch: Partial<Pick<EmailTemplate, 'recurring_enabled' | 'recurring_interval_days' | 'recurring_max_sends'>>
+  ) {
+    if (!session) return;
+    const prev = template;
+    setTemplates(ts => ts.map(t => (t.id === template.id ? { ...t, ...patch } : t)));
+    const supabase = getAuthedClient(session.access_token);
+    (async () => {
+      const { error } = await supabase.from('email_templates').update(patch).eq('id', template.id);
+      if (error) throw error;
+    })().catch((e: unknown) => {
+      setTemplates(ts => ts.map(t => (t.id === template.id ? prev : t)));
+      showFlash('err', e instanceof Error ? e.message : 'Could not update the reminder settings.');
+    });
+  }
+
   async function handleDuplicateTemplate(t: EmailTemplate) {
     if (!conference || !session || duplicatingIds.has(t.id)) return;
     // Creation flow: the new row needs its real DB id (Edit/autosave target it),
@@ -2838,7 +2862,7 @@ function CommunicationsPageInner() {
       delivery: 'manual',
       enabled: false,
       updated_at: new Date().toISOString(),
-    }).select('id, conference_id, event_key, name, subject, body, body_blocks, enabled, delivery, updated_at, audience').single();
+    }).select('id, conference_id, event_key, name, subject, body, body_blocks, enabled, delivery, updated_at, audience, recurring_enabled, recurring_interval_days, recurring_max_sends').single();
     setDuplicatingIds(prev => { const nextSet = new Set(prev); nextSet.delete(t.id); return nextSet; });
     if (error || !data) { showFlash('err', error?.message ?? 'Could not duplicate the template.'); return; }
     setTemplates(prev => [...prev, data as EmailTemplate]);
@@ -3987,8 +4011,18 @@ function CommunicationsPageInner() {
                               style={{ color: SOFT, transform: expanded ? 'rotate(180deg)' : 'rotate(0)', transitionProperty: 'transform', transitionDuration: '200ms', transitionTimingFunction: EASE }}
                             />
                             <span className="min-w-0">
-                              <span className="block font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                                {ev.label}
+                              <span className="flex items-center gap-1.5 min-w-0">
+                                <span className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                                  {ev.label}
+                                </span>
+                                {ev.recurring && (
+                                  <span
+                                    className="rounded-full px-2 py-0.5 flex-shrink-0"
+                                    style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.05em', fontFamily: OUTFIT, backgroundColor: 'rgba(182,135,31,0.16)', color: GOLD_INK }}
+                                  >
+                                    REMINDER
+                                  </span>
+                                )}
                               </span>
                               <span className="block text-xs mt-0.5 truncate" style={{ fontFamily: OUTFIT }}>
                                 <span style={{ color: state.color, fontWeight: 700 }}>{state.text}</span>
@@ -4012,9 +4046,76 @@ function CommunicationsPageInner() {
                           </div>
                         </div>
                         {expanded && (
+                          <>
                           <p className="text-sm mt-2" style={{ color: '#1C1410', fontFamily: OUTFIT, lineHeight: 1.55, textWrap: 'pretty', maxWidth: 720, paddingLeft: 24 }}>
                             {ev.description}
                           </p>
+                          {ev.recurring && template?.enabled && (
+                            <div className="rounded-xl p-3 mt-3" style={{ ...WELL, marginLeft: 24, maxWidth: 480 }}>
+                              <p className="text-xs font-bold mb-2.5" style={{ color: '#1C1410', fontFamily: OUTFIT, letterSpacing: '0.03em' }}>
+                                Reminders
+                              </p>
+                              <div className="flex items-center justify-between gap-3 mb-3">
+                                <span className="text-xs font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                                  Repeat this reminder
+                                </span>
+                                <PillToggle
+                                  value={template.recurring_enabled}
+                                  onChange={() => handleUpdateRecurring(template, { recurring_enabled: !template.recurring_enabled })}
+                                />
+                              </div>
+                              <div className="flex flex-wrap gap-4 mb-3">
+                                <div>
+                                  <label className="block text-xs font-semibold mb-1" style={{ color: template.recurring_enabled ? '#1C1410' : SOFT, fontFamily: OUTFIT }}>
+                                    Days between reminders
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min={3}
+                                    max={60}
+                                    disabled={!template.recurring_enabled}
+                                    value={template.recurring_interval_days ?? 3}
+                                    onChange={(e) => {
+                                      const raw = e.target.value === '' ? null : Number(e.target.value);
+                                      setTemplates(ts => ts.map(t => (t.id === template.id ? { ...t, recurring_interval_days: raw } : t)));
+                                    }}
+                                    onBlur={(e) => {
+                                      const clamped = Math.min(60, Math.max(3, Math.round(Number(e.target.value)) || 3));
+                                      handleUpdateRecurring(template, { recurring_interval_days: clamped });
+                                    }}
+                                    className="rounded-xl px-3 py-1.5 text-sm focus:outline-none"
+                                    style={{ border: CARD_BORDER, backgroundColor: template.recurring_enabled ? '#FFFFFF' : '#F0EBDD', color: '#1C1410', fontFamily: OUTFIT, width: 84 }}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold mb-1" style={{ color: template.recurring_enabled ? '#1C1410' : SOFT, fontFamily: OUTFIT }}>
+                                    Stop after this many
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={10}
+                                    disabled={!template.recurring_enabled}
+                                    value={template.recurring_max_sends ?? 3}
+                                    onChange={(e) => {
+                                      const raw = e.target.value === '' ? null : Number(e.target.value);
+                                      setTemplates(ts => ts.map(t => (t.id === template.id ? { ...t, recurring_max_sends: raw } : t)));
+                                    }}
+                                    onBlur={(e) => {
+                                      const clamped = Math.min(10, Math.max(1, Math.round(Number(e.target.value)) || 3));
+                                      handleUpdateRecurring(template, { recurring_max_sends: clamped });
+                                    }}
+                                    className="rounded-xl px-3 py-1.5 text-sm focus:outline-none"
+                                    style={{ border: CARD_BORDER, backgroundColor: template.recurring_enabled ? '#FFFFFF' : '#F0EBDD', color: '#1C1410', fontFamily: OUTFIT, width: 84 }}
+                                  />
+                                </div>
+                              </div>
+                              <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT }}>
+                                Reminders stop on their own when there is nothing left to do, and when the conference starts.
+                              </p>
+                            </div>
+                          )}
+                          </>
                         )}
                       </div>
                     );

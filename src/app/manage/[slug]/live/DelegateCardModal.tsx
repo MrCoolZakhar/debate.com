@@ -27,7 +27,7 @@
 import { useMemo } from 'react';
 import { UserRound, Users2 } from 'lucide-react';
 import { NEU, NeuInset, OUTFIT } from '@/components/neu';
-import { FlagImg } from '@/components/FlagImg';
+import { CircleFlag } from '@/components/CircleFlag';
 import Avatar from '@/components/Avatar';
 import {
   formatSpeakingTime,
@@ -154,7 +154,7 @@ export function DelegateCardModal({
           style={{ width: 52, height: 52, backgroundColor: NEU.base, boxShadow: NEU.inSm }}
           aria-hidden
         >
-          <FlagImg code={flagCodeFor(country)} size={34} />
+          <CircleFlag code={flagCodeFor(country) || null} label={country} size={52} decorative />
         </span>
         <div className="min-w-0">
           <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.12em', color: SOFT }}>

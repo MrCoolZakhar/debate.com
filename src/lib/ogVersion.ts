@@ -160,3 +160,14 @@ export function homeOgImageUrl(origin = 'https://gavelling.com', now: Date = new
 export function listConferenceOgImageUrl(origin = 'https://gavelling.com', now: Date = new Date()): string {
   return `${origin}/api/og/list/${utcToday(now)}.jpg`;
 }
+
+/**
+ * The /conferences/explore card's URL.
+ *
+ * Dated like the homepage card, and for the same reason: it prints live
+ * catalogue counts, and a daily URL is the cadence at which a scraper can be
+ * made to see new ones.
+ */
+export function exploreOgImageUrl(origin = 'https://gavelling.com', now: Date = new Date()): string {
+  return `${origin}/api/og/explore/${utcToday(now)}.jpg`;
+}

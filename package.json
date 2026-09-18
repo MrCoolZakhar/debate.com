@@ -9,6 +9,7 @@
     "lint": "eslint",
     "check:og": "node scripts/check-og.mjs",
     "check:og:build": "next build && node scripts/check-og.mjs --start",
+    "check:indexability": "node scripts/check-indexability.mjs",
     "check:brand": "node scripts/check-brand-marks.mjs",
     "prebuild": "node scripts/check-brand-marks.mjs"
   },
@@ -23,6 +24,7 @@
     "next": "16.2.1",
     "nodemailer": "^8.0.7",
     "papaparse": "^5.5.4",
+    "pdfjs-dist": "6.3.289",
     "radix-ui": "^1.4.3",
     "react": "19.2.4",
     "react-dom": "19.2.4",

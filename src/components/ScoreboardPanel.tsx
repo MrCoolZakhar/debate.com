@@ -11,12 +11,24 @@
 // side's `loadConferenceScoreboard`. Chairs and secretariat now look at the same
 // object, and it can only ever be improved in one place.
 //
-// THREE THINGS ARE SESSION-ONLY and have no organiser equivalent, so they stay
+// FOUR THINGS ARE SESSION-ONLY and have no organiser equivalent, so they stay
 // here rather than moving into the shared table:
-//   • the forest header bar with Export CSV and ✕;
-//   • the MANUAL award / deduct control — only a chair awards points, so it is
-//     passed into the shared drill-in through its `detailExtra` slot;
-//   • the Matrix tab, the chair's wide numeric grid.
+//   • the forest header bar with Export CSV and ✕, and the strip of session
+//     figures under it;
+//   • the MANUAL plus / minus (`scoreboard/ManualAdjust`) — only the Moderator
+//     awards points, so it rides in the chair's own drill-in
+//     (`scoreboard/DelegateProfile`, handed to the shared table through its
+//     `renderDetail` slot), with the chair's score cell (`renderScore`) and no
+//     notes column (`hideNotesColumn`): chair notes are not counted;
+//   • the Matrix tab, the chair's wide numeric grid;
+//   • the History tab (`scoreboard/HistoryTab`), the session read back segment
+//     by segment with the chairs' notes in place.
+//
+// EVERY ONE OF THOSE IS A DEFAULTED-OFF PROP OR A SEPARATE COMPONENT, never a
+// change to what the organiser board renders: `onSortChange`, `sortDir`,
+// `circleFlags`, `flagSize` and `renderDetail` are all absent on the conferences
+// side, which therefore still draws plain headers, 20px rectangular flags, its
+// SORT BY pills and `DelegateDetail`, unchanged.
 //
 // THREE NUMBERS THAT USED TO DISAGREE, and now do not:
 //   1. the ranking list showed the BLENDED headline while the drill-in header
@@ -32,53 +44,79 @@
 //   3. the CSV exported only the objective total. It now carries both.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useMemo, useState } from 'react';
-import Portal from '@/components/Portal';
-import { SeatFlag } from '@/components/SeatFlag';
-import { NEU, NeuPill, OUTFIT } from '@/components/neu';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import GrowDialog from '@/components/GrowDialog';
+import { SeatCircleFlag } from '@/components/CircleFlag';
+import { NEU, OUTFIT } from '@/components/neu';
 import { SOFT, RED, CARD_BORDER_COLOR } from '@/components/scoreboardTokens';
 import {
-  ScoreboardTable, Stat, SORTS, sortScoreboardRows,
-  type SortKey, type ScoreboardLabels,
+  ScoreboardTable, sortScoreboardRows, naturalSortDir,
+  type SortKey, type SortDir, type ScoreboardLabels,
 } from '@/components/ScoreboardTable';
+import { IconStat, STAT_ICONS, TINT } from '@/components/scoreboard/SessionScoreboardParts';
+import DelegateProfile from '@/components/scoreboard/DelegateProfile';
+import ManualAdjust from '@/components/scoreboard/ManualAdjust';
+import HistoryTab from '@/components/scoreboard/HistoryTab';
 import { Committee } from '@/lib/types';
 import { getCountryDisplayName } from '@/lib/countries';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
-import { buildSessionScoreboardRows } from '@/lib/sessionScoreboard';
+import { buildSessionScoreboardRows, sessionPointSlices } from '@/lib/sessionScoreboard';
+import { buildSessionHistory, type HistorySpeech } from '@/lib/sessionHistory';
 import {
   formatSpeakingTime, type ScoreboardDelegateRow,
 } from '@/lib/conferenceScoreboard';
 import type { LedgerRow } from '@/lib/scoring';
 import { logEvent, getFeedbackForCommittee, type FeedbackEntry } from '@/lib/committeeService';
+import { updateFeedbackContent } from '@/lib/feedbackEdit';
+import { NoteEditingProvider } from '@/components/scoreboard/EditableNote';
 import { resolveChairAwardsHref } from '@/lib/sessionAwardsLink';
-import { Trophy } from 'lucide-react';
+import { Trophy, ListOrdered, Grid3x3, History } from 'lucide-react';
 
 function csvEscape(v: string | number): string {
   const s = String(v);
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 0, isViewOnly = false }: {
+export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 0, isViewOnly = false, chairName = '' }: {
   committee: Committee; onClose: () => void; feedbackVersion?: number;
   /** A Commenter reads the board; only the Moderator awards and deducts points. */
   isViewOnly?: boolean;
+  /** This device's chair name (`?chairName=`). Only comments written under it are editable. */
+  chairName?: string;
 }) {
   const { language } = useLanguage();
   const t = useT();
-  const [tab, setTab] = useState<'ranking' | 'matrix'>('ranking');
+  const [tab, setTab] = useState<'ranking' | 'matrix' | 'history'>('ranking');
   const [sortKey, setSortKey] = useState<SortKey>('score');
+  // The sort control is gone: the columns themselves are the control now, and a
+  // column can be read either way round. `naturalSortDir` keeps the arrow the
+  // header draws and the order `sortScoreboardRows` produces in agreement.
+  const [sortDir, setSortDir] = useState<SortDir>(naturalSortDir('score'));
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [awardAmt, setAwardAmt] = useState('');
-  const [awardNote, setAwardNote] = useState('');
-  const [deduct, setDeduct] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackEntry[]>([]);
+  // The board opens with a grow animation. The feedback read usually lands inside it, and
+  // applying it then rebuilds and re-rasterises the whole table mid-motion (the "occasional
+  // lag"). A result that arrives before the dialog has finished opening is held and applied
+  // on `onOpened` instead.
+  const openedRef = useRef(false);
+  const heldFeedback = useRef<FeedbackEntry[] | null>(null);
 
   // Re-reads on every realtime `feedback` event, so notes and ratings written by another
   // chair appear while the scoreboard is open. This was mount-only, which meant the board
   // silently went stale the moment a second chair wrote anything.
   useEffect(() => {
-    getFeedbackForCommittee(committee.id).then(setFeedback);
+    let cancelled = false;
+    getFeedbackForCommittee(committee.id).then((rows) => {
+      if (cancelled) return;
+      if (openedRef.current) setFeedback(rows);
+      else heldFeedback.current = rows;
+    });
+    return () => { cancelled = true; };
   }, [committee.id, feedbackVersion]);
+  const handleOpened = () => {
+    openedRef.current = true;
+    if (heldFeedback.current) { setFeedback(heldFeedback.current); heldFeedback.current = null; }
+  };
 
   // Awards are decided on the conference page, never here — this is only a signpost, and
   // it exists ONLY for conference-linked sessions. An anonymous standalone session renders
@@ -96,15 +134,6 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
   const openAwards = () => {
     if (awardsHref) { window.open(awardsHref, '_blank', 'noopener,noreferrer'); return; }
     resolveChairAwardsHref(committee.code).then((href) => window.open(href, '_blank', 'noopener,noreferrer'));
-  };
-
-  // A half-typed award belongs to the delegation it was typed under. Collapsing
-  // one row and opening another must not carry the amount and reason across —
-  // reset in the event handler, not in an effect on `expanded`, which would be a
-  // cascading render (and is what the lint rule is there to catch).
-  const handleExpand = (key: string | null) => {
-    setExpanded(key);
-    setAwardAmt(''); setAwardNote(''); setDeduct(false);
   };
 
   // The shared table deliberately does NOT call `useT()` — its other callers are
@@ -161,43 +190,89 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
     ctxUnmoderated: t('fb_tag_unmod'),
     ctxTour: t('fb_tag_tour'),
     commentWritten: t('sb_comment_written'),
+    sortAscending: t('sb_sort_asc'),
+    sortDescending: t('sb_sort_desc'),
   }), [t]);
-
-  // `SORTS` is exported with English labels because the organiser scoreboard
-  // renders it verbatim. Same reasoning as `labels`: translate at this caller.
-  const sortLabel: Record<SortKey, string> = {
-    score: t('sb_col_score'),
-    speeches: t('sb_col_speeches'),
-    time: t('sb_stat_speaking_time'),
-    comments: t('sb_sort_comments'),
-    name: t('sb_col_delegation'),
-  };
 
   const allRows = useMemo(
     () => buildSessionScoreboardRows(committee, feedback, language),
     [committee, feedback, language],
   );
   const rows = useMemo(
-    () => sortScoreboardRows(allRows, sortKey, language),
-    [allRows, sortKey, language],
+    () => sortScoreboardRows(allRows, sortKey, language, sortDir),
+    [allRows, sortKey, language, sortDir],
   );
 
   const totals = useMemo(() => ({
     delegations: allRows.length,
     speeches: allRows.reduce((s, r) => s + r.gslSpeeches + r.caucusSpeeches, 0),
     seconds: allRows.reduce((s, r) => s + r.speakingSeconds, 0),
-    comments: allRows.reduce((s, r) => s + r.comments.filter((c) => c.content.trim()).length, 0),
   }), [allRows]);
 
-  const submitManual = (country: string) => {
-    const amt = parseInt(awardAmt);
-    if (!awardAmt || isNaN(amt) || amt <= 0 || !awardNote.trim()) return;
+  // Place by score, ties sharing a place, for the profile's top line.
+  const rankOf = useMemo(() => {
+    const byScore = [...allRows].sort((a, b) => b.headline - a.headline);
+    const out = new Map<string, number>();
+    byScore.forEach((r, i) => {
+      const prev = byScore[i - 1];
+      out.set(r.key, prev && prev.headline === r.headline ? out.get(prev.key)! : i + 1);
+    });
+    return out;
+  }, [allRows]);
+  const maxHeadline = useMemo(() => Math.max(0, ...allRows.map((r) => r.headline)), [allRows]);
+
+  // The session history, built once: the profile's timeline reads each speech,
+  // with its chair notes already placed, from here, so the History tab and the
+  // profile can never place a note differently.
+  const history = useMemo(() => buildSessionHistory(committee, feedback), [committee, feedback]);
+  const speechesByCountry = useMemo(() => {
+    const out = new Map<string, HistorySpeech[]>();
+    for (const seg of history) for (const sp of seg.speeches) {
+      const list = out.get(sp.country);
+      if (list) list.push(sp); else out.set(sp.country, [sp]);
+    }
+    return out;
+  }, [history]);
+
+  // ── Correcting a comment already written ─────────────────────────────────
+  // The History tab and the profile both read their notes out of `feedback`, so
+  // one optimistic patch of that array changes the text on both at once. Then the
+  // row-counted write (`updateFeedbackContent`, which is itself conditional on
+  // `chair_name`) says whether it landed; if it did not, the old text goes back
+  // and `EditableNote` keeps the editor open with what the chair typed.
+  //
+  // A chair may only correct their OWN row (AGENTS.md: a feedback row is owned by
+  // its author). The check is here, in the statement, and in the UI — three places
+  // on purpose, because the chair suffix is the only write credential and every
+  // chair device has it (rule 15).
+  const saveNote = async (id: string, content: string): Promise<boolean> => {
+    const row = feedback.find((f) => f.id === id);
+    if (!row || !chairName || row.chairName !== chairName) return false;
+    const before = row.content;
+    if (before === content) return true;
+    setFeedback((prev) => prev.map((f) => (f.id === id ? { ...f, content } : f)));
+    const ok = await updateFeedbackContent(
+      id, chairName, content, committee.code, committee.dbChairJoinSuffix ?? undefined,
+    );
+    if (!ok) setFeedback((prev) => prev.map((f) => (f.id === id ? { ...f, content: before } : f)));
+    return ok;
+  };
+  const noteEditing = useMemo(
+    () => (chairName ? { chairName, save: saveNote } : null),
+    // `saveNote` closes over the current `feedback`, so it is rebuilt with it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [chairName, feedback, committee.code, committee.dbChairJoinSuffix],
+  );
+
+  // Same write as the old Award / Deduct form: one manual ledger row, absolute
+  // value, the reason (now optional) as its note.
+  const applyManual = (country: string, delta: number, reason: string) => {
+    if (!delta) return;
     logEvent(committee.id, {
       country,
-      type: deduct ? 'manual-deduct' : 'manual-award',
-      value: amt, note: awardNote.trim(),
+      type: delta < 0 ? 'manual-deduct' : 'manual-award',
+      value: Math.abs(delta), ...(reason ? { note: reason } : {}),
     }, committee.code, committee.dbChairJoinSuffix ?? undefined);
-    setAwardAmt(''); setAwardNote('');
   };
 
   const exportCsv = () => {
@@ -263,39 +338,6 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
     URL.revokeObjectURL(url);
   };
 
-  // ── The Moderator-only slot inside the shared drill-in ────────────────────
-  // Passed as `detailExtra` only when this device is NOT view-only. Same UI gate as
-  // every other view-only affordance in the session — AGENTS.md RULE 15 still holds:
-  // RLS checks only the chair suffix, so this hides the control, it does not enforce
-  // anything. Before the rename this read as an oversight; now that the role is
-  // literally called Commenter, a Commenter holding award/deduct powers contradicts
-  // the name on the badge.
-  const manualAdjustment = (row: ScoreboardDelegateRow) => (
-    <div
-      className="mt-4 p-3 rounded-xl"
-      style={{ borderTop: `1px solid ${CARD_BORDER_COLOR}`, backgroundColor: NEU.base }}
-    >
-      <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.12em', color: NEU.forest, marginBlockEnd: 8 }}>
-        {t('sb_manual_adjustment')}
-      </p>
-      <div className="flex items-center gap-2 mb-2">
-        <button onClick={() => setDeduct(false)} className="text-xs font-bold px-2.5 py-1 rounded-lg"
-          style={{ fontFamily: OUTFIT, backgroundColor: !deduct ? NEU.forest : 'transparent', color: !deduct ? NEU.gold : SOFT, border: `1px solid ${CARD_BORDER_COLOR}` }}>{t('sb_award')}</button>
-        <button onClick={() => setDeduct(true)} className="text-xs font-bold px-2.5 py-1 rounded-lg"
-          style={{ fontFamily: OUTFIT, backgroundColor: deduct ? RED : 'transparent', color: deduct ? '#FFFFFF' : SOFT, border: `1px solid ${CARD_BORDER_COLOR}` }}>{t('sb_deduct')}</button>
-        <input type="number" min={1} value={awardAmt} onChange={(e) => setAwardAmt(e.target.value)} placeholder={t('sb_pts')}
-          className="w-16 text-sm text-center rounded-lg px-1.5 py-1 outline-none"
-          style={{ fontFamily: OUTFIT, backgroundColor: NEU.surface, border: `1px solid ${CARD_BORDER_COLOR}`, color: NEU.ink }} />
-      </div>
-      <input value={awardNote} onChange={(e) => setAwardNote(e.target.value)} placeholder={t('sb_reason_required')}
-        className="w-full text-sm rounded-lg px-2.5 py-1.5 mb-2 outline-none"
-        style={{ fontFamily: OUTFIT, backgroundColor: NEU.surface, border: `1px solid ${CARD_BORDER_COLOR}`, color: NEU.ink }} />
-      <button onClick={() => submitManual(row.country)} disabled={!awardAmt || !awardNote.trim()}
-        className="text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-40 gv-lift"
-        style={{ fontFamily: OUTFIT, backgroundColor: NEU.forest, color: NEU.gold }}>{t('sb_apply')}</button>
-    </div>
-  );
-
   const TH: React.CSSProperties = {
     fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.08em',
     color: SOFT, borderBottom: `2px solid ${CARD_BORDER_COLOR}`, padding: '6px 8px',
@@ -306,17 +348,44 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
   };
 
   return (
-    <Portal>
-      <style>{`@keyframes sbFade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}`}</style>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(28,20,16,0.45)' }} onClick={onClose}>
-        {/* Height is capped as a % of the overlay, NEVER in vh: this modal is portalled into
-            #fit-root, which is scale()d, so vh resolves against the real viewport while the
-            overlay's own box is only FitToScreen's BASE_H. On tall screens 88vh overflowed
-            that box and the header/footer were pushed off-screen (and unreachable, because a
-            centred flex item overflows in both directions). % matches Motions/Documents. */}
-        <div className="w-full max-w-3xl max-h-[92%] rounded-2xl overflow-hidden flex flex-col"
-          style={{ backgroundColor: NEU.surface, border: `1px solid ${CARD_BORDER_COLOR}`, boxShadow: NEU.out, fontFamily: OUTFIT }}
-          onClick={(e) => e.stopPropagation()}>
+    // Grows out of the trophy in the top bar, like Motions and Documents.
+    <GrowDialog
+      originSelector='[data-tutorial="tab-scoreboard"]'
+      onClose={onClose}
+      onOpened={handleOpened}
+      ariaLabel={t('sb_title')}
+      /* Height is capped as a % of the overlay, NEVER in vh: this modal is portalled into
+         #fit-root, which is scale()d, so vh resolves against the real viewport while the
+         overlay's own box is only FitToScreen's BASE_H. % matches Motions/Documents. */
+      panelClassName="w-full max-w-3xl max-h-[92%] rounded-2xl overflow-hidden flex flex-col"
+      panelStyle={{ backgroundColor: NEU.surface, border: `1px solid ${CARD_BORDER_COLOR}`, boxShadow: NEU.out, fontFamily: OUTFIT }}
+      backdropStyle={{ background: 'rgba(28,20,16,0.45)' }}
+    >
+      {(requestClose) => (
+        // No DOM node of its own, so the panel's flex column is untouched. It
+        // carries this chair's name and the checked save down to every comment
+        // the History tab and the profiles render.
+        <NoteEditingProvider value={noteEditing}>
+          {/* `gv-sort-th` styles the shared table's pressable column headers, and
+              `gv-sb-seg` the History tab's segment headers. Both live here because
+              this panel is the only place either renders: the organiser board
+              passes no `onSortChange`, so its headers are plain spans and these
+              rules never match anything on the conferences side. */}
+          <style>{`
+            @keyframes sbFade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+            .gv-sort-th:hover{color:${NEU.forest}}
+            .gv-sort-th:active{transform:scale(0.96)}
+            .gv-sb-seg{transition:background 160ms cubic-bezier(0.22,1,0.36,1),transform 160ms cubic-bezier(0.22,1,0.36,1)}
+            .gv-sb-seg:hover{background:rgba(27,56,40,0.05)}
+            .gv-sb-seg:active{transform:scale(0.995)}
+            /* A chair's own comment, clickable in place. Quiet until pointed at:
+               the note must still read as a note, not as a form field. */
+            .gv-note-edit{transition:background 140ms cubic-bezier(0.22,1,0.36,1)}
+            .gv-note-edit:hover{background:rgba(238,217,138,0.20)}
+            .gv-note-pen{opacity:0;transition:opacity 140ms ease-out}
+            .gv-note-edit:hover .gv-note-pen,.gv-note-edit:focus-visible .gv-note-pen{opacity:0.8}
+            @media (hover:none){.gv-note-pen{opacity:0.55}}
+          `}</style>
           {/* Header */}
           <div className="px-5 py-3 flex items-center gap-3 shrink-0 sticky top-0 z-10" style={{ backgroundColor: NEU.forest }}>
             <div className="w-1 h-4 rounded-full" style={{ backgroundColor: NEU.gold }} />
@@ -331,17 +400,36 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
                 </button>
               )}
               <button onClick={exportCsv} className="text-xs font-bold px-3 py-1.5 rounded-lg gv-lift" style={{ backgroundColor: NEU.gold, color: NEU.forest }}>{t('sb_export_csv')}</button>
-              <button onClick={onClose} className="text-[#EDE7D8] hover:text-white text-lg leading-none" aria-label={t('sb_close')}>✕</button>
+              <button onClick={requestClose} className="inline-flex items-center justify-center w-9 h-9 rounded-full text-[#EDE7D8] hover:text-white hover:bg-[rgba(238,217,138,0.12)] text-lg leading-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]" aria-label={t('sb_close')}>✕</button>
             </div>
+          </div>
+
+          {/* ── THE FOUR FIGURES, MOVED UP AND GIVEN GLYPHS ──────────────────
+              They used to sit inside the Ranking tab, below the sort pills,
+              which put the session's headline numbers a tab-switch away and a
+              scroll down. They are true of the whole session, not of one tab,
+              so they belong above the tabs — and as one line of chips rather
+              than four full-width tiles, which is what "moved higher" buys in
+              vertical space on a 13-inch dais laptop. */}
+          <div className="flex gap-2 flex-wrap px-4 pt-3 shrink-0">
+            <IconStat compact icon={STAT_ICONS.delegations} label={t('sb_stat_delegations')} value={String(totals.delegations)} />
+            <IconStat compact icon={STAT_ICONS.speeches} label={t('sb_stat_speeches')} value={String(totals.speeches)} />
+            <IconStat compact icon={STAT_ICONS.time} label={t('sb_stat_speaking_time')} value={formatSpeakingTime(totals.seconds)} tint={TINT.sage} />
           </div>
 
           {/* Tabs */}
           <div className="flex gap-1 px-4 pt-3 shrink-0">
-            {(['ranking', 'matrix'] as const).map((id) => (
+            {([
+              ['ranking', t('sb_tab_ranking'), ListOrdered],
+              ['matrix', t('sb_tab_matrix'), Grid3x3],
+              ['history', t('sb_tab_history'), History],
+            ] as const).map(([id, label, Icon]) => (
               <button key={id} onClick={() => { setTab(id); setExpanded(null); }}
-                className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
-                style={{ backgroundColor: tab === id ? NEU.forest : 'transparent', color: tab === id ? NEU.gold : SOFT, border: tab === id ? 'none' : `1px solid ${CARD_BORDER_COLOR}` }}>
-                {id === 'ranking' ? t('sb_tab_ranking') : t('sb_tab_matrix')}
+                aria-pressed={tab === id}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors inline-flex items-center gap-1.5"
+                style={{ fontFamily: OUTFIT, backgroundColor: tab === id ? NEU.forest : 'transparent', color: tab === id ? NEU.gold : SOFT, border: tab === id ? 'none' : `1px solid ${CARD_BORDER_COLOR}`, minHeight: 32 }}>
+                <Icon size={13} strokeWidth={2.4} aria-hidden />
+                {label}
               </button>
             ))}
           </div>
@@ -349,34 +437,67 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
           <div className="flex-1 min-h-0 overflow-y-auto p-4">
             {tab === 'ranking' && (
               <div style={{ animation: 'sbFade 160ms ease-out' }}>
-                <div className="flex gap-2.5 flex-wrap mb-4">
-                  <Stat label={t('sb_stat_delegations')} value={String(totals.delegations)} />
-                  <Stat label={t('sb_stat_speeches')} value={String(totals.speeches)} />
-                  <Stat label={t('sb_stat_speaking_time')} value={formatSpeakingTime(totals.seconds)} />
-                  <Stat label={t('sb_stat_chair_notes')} value={String(totals.comments)} />
-                </div>
-
-                <div className="flex items-center gap-2 mb-3 flex-wrap">
-                  <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.12em', color: SOFT }}>{t('sb_sort_by')}</span>
-                  {SORTS.map((s) => (
-                    <NeuPill key={s.key} active={sortKey === s.key} onClick={() => setSortKey(s.key)}>
-                      {sortLabel[s.key]}
-                    </NeuPill>
-                  ))}
-                </div>
-
+                {/* NO SORT CONTROL. The columns are the control: pressing one
+                    sorts by it, pressing it again reverses it. The organiser
+                    board still passes no `onSortChange`, so its SORT BY pills
+                    and its plain headers are exactly as they were. */}
                 <ScoreboardTable
                   rows={rows}
                   sortKey={sortKey}
+                  sortDir={sortDir}
+                  onSortChange={(key, dir) => { setSortKey(key); setSortDir(dir); }}
                   showCommitteeColumn={false}
                   expanded={expanded}
-                  onExpand={handleExpand}
+                  onExpand={setExpanded}
                   locale={language}
-                  detailSummary
-                  detailExtra={isViewOnly ? undefined : manualAdjustment}
+                  circleFlags
+                  flagSize={34}
+                  hideNotesColumn
+                  wrapHeaders
+                  columnWidths={{ speeches: 92, time: 84, score: 96 }}
+                  renderScore={(row) => {
+                    const pct = maxHeadline > 0 ? Math.max(0, Math.min(100, (row.headline / maxHeadline) * 100)) : 0;
+                    return (
+                      <span
+                        className="inline-flex flex-col items-end"
+                        style={{ gap: 4, fontFamily: OUTFIT }}
+                        title={row.quality != null
+                          ? t('sb_title_score_blended').replace('{objective}', String(row.objective)).replace('{quality}', String(row.quality))
+                          : t('sb_title_score').replace('{objective}', String(row.objective))}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 3, lineHeight: 1 }}>
+                          <span style={{ fontWeight: 800, fontSize: 16, color: NEU.forest, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em' }}>
+                            {row.headline}
+                          </span>
+                          <span style={{ fontWeight: 700, fontSize: 10, color: SOFT }}>{t('sb_pts')}</span>
+                        </span>
+                        <span aria-hidden style={{ width: 52, height: 3, borderRadius: 999, backgroundColor: 'rgba(27,56,40,0.10)', overflow: 'hidden' }}>
+                          <span style={{ display: 'block', height: '100%', width: `${pct}%`, borderRadius: 999, backgroundColor: rankOf.get(row.key) === 1 ? '#C9A43A' : NEU.forest }} />
+                        </span>
+                      </span>
+                    );
+                  }}
+                  renderDetail={(row) => (
+                    <DelegateProfile
+                      row={row}
+                      rank={rankOf.get(row.key) ?? 0}
+                      rankTotal={allRows.length}
+                      slices={sessionPointSlices(committee, row.ledger, language, t('sb_breakdown_manual'))}
+                      speeches={speechesByCountry.get(row.country) ?? []}
+                      extra={isViewOnly ? undefined : (
+                        <ManualAdjust key={row.key} onApply={(delta, reason) => applyManual(row.country, delta, reason)} />
+                      )}
+                    />
+                  )}
                   labels={labels}
                   emptyText={t('sb_empty_no_delegations')}
                 />
+              </div>
+            )}
+
+            {tab === 'history' && (
+              <div style={{ animation: 'sbFade 160ms ease-out' }}>
+                <HistoryTab committee={committee} feedback={feedback} />
               </div>
             )}
 
@@ -419,8 +540,10 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
                         {/* Cap the name column so a long delegation name truncates instead of
                             widening the table (which would force the whole row to scroll). */}
                         <td style={{ ...TD, textAlign: 'start', maxWidth: 220 }}>
-                          <span className="flex items-center gap-1.5 min-w-0">
-                            <span className="shrink-0 flex"><SeatFlag country={r.country} size={20} className="shrink-0" /></span>
+                          <span className="flex items-center gap-2 min-w-0">
+                            {/* Round and bigger here too, so the Matrix and the
+                                Ranking tab identify a delegation the same way. */}
+                            <span className="shrink-0 flex"><SeatCircleFlag country={r.country} size={26} decorative /></span>
                             <span className="truncate" style={{ color: NEU.ink }} title={getCountryDisplayName(r.country, language)}>{getCountryDisplayName(r.country, language)}</span>
                           </span>
                         </td>
@@ -468,8 +591,8 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
               </div>
             )}
           </div>
-        </div>
-      </div>
-    </Portal>
+        </NoteEditingProvider>
+      )}
+    </GrowDialog>
   );
 }

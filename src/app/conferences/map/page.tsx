@@ -12,5 +12,12 @@ export const metadata: Metadata = pageMetadata({
 });
 
 export default function ConferencesMapPage() {
-  return <MapClient />;
+  // The map draws its title on a canvas-like client surface, so the page's
+  // heading is given here for crawlers and screen readers.
+  return (
+    <>
+      <h1 className="sr-only">Model UN conference world map</h1>
+      <MapClient />
+    </>
+  );
 }

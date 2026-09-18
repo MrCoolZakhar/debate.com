@@ -8,8 +8,9 @@ import { companyLegalLines, TRADING_NAME } from '@/lib/companyDetails';
  * components (e.g. /privacy) and client components. Hover states are static
  * Tailwind classes rather than inline JS so no 'use client' boundary is needed.
  *
- * Only links to routes that exist: /terms, /privacy (and its #your-rights
- * anchor). Do NOT add a /cookies link here until that page actually exists.
+ * Only links to routes that exist: the two public hubs (/conferences/explore,
+ * /blog), /terms, /privacy (and its #your-rights anchor). Do NOT add a
+ * /cookies link here until that page actually exists.
  */
 
 type Tone = 'ivory' | 'forest';
@@ -54,6 +55,16 @@ export default function FooterLegal({
         className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1"
         style={{ fontSize: '11.5px' }}
       >
+        {/* Hub links: every public footer is a crawl path to the two hubs
+            that list everything else (CLAUDE.md §4, indexability). */}
+        <Link href="/conferences/explore" className={t.link}>
+          Explore Conferences
+        </Link>
+        <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
+        <Link href="/blog" className={t.link}>
+          MUN Guides
+        </Link>
+        <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
         <Link href="/terms" className={t.link}>
           Terms of Service
         </Link>

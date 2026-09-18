@@ -1,193 +1,125 @@
 'use client';
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useLayoutEffect } from 'react';
 import { Committee, DelegateStatus } from '@/lib/types';
-import { getFlagUrl, getCountryDisplayName, UN_COUNTRIES, matchesCountryQuery, startsWithCountryQuery, compareCountryNames } from '@/lib/countries';
-import { SeatFlag, useSeatArt } from '@/components/SeatFlag';
+import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
+import { SeatCircleFlag, SIDEBAR_MONOGRAM } from '@/components/CircleFlag';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import {
-  setPhase as setPhaseInDB,
+  beginSessionAfterRollCall,
   setDelegateObserver as setDelegateObserverInDB,
+  resolveJoinRequestsOnAdmit,
 } from '@/lib/committeeService';
 import { liveCaucus } from '@/components/FeedbackLogPanel';
-import { Megaphone, Smartphone } from 'lucide-react';
-import { getSeatAvailability, releaseDelegateSeat, seatKey, type SeatAvailability } from '@/lib/seatClaims';
+import { GripVertical, Megaphone, Mic } from 'lucide-react';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 
 // ── FlagCircle ────────────────────────────────────────────────────────────────
 export function FlagCircle({ country, size = 'md' }: { country: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'hero' }) {
-  // A seat's own crest wins over the national flag; both keep this circle's
-  // exact frame and 85% inset. Falls back to the flag outside a SeatArtProvider.
-  const art = useSeatArt(country);
-  const dim: Record<string, string> = {
-    xs:   'w-7 h-7',
-    sm:   'w-9 h-9',
-    md:   'w-12 h-12',
-    lg:   'w-14 h-14',
-    xl:   'w-20 h-20',
-    hero: 'w-60 h-60',
-  };
-  const box = dim[size];
-  return (
-    <div className={`relative ${box} rounded-full overflow-hidden shrink-0 flex items-center justify-center`} style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
-      {art.kind !== 'none'
-        ? <SeatFlag country={country} className="w-[85%] h-[85%] object-contain" style={{ width: '85%', height: '85%', border: '1.5px solid rgba(28,20,16,0.10)', borderRadius: 'inherit' }} />
-        : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>}
-    </div>
-  );
+  // Seat crest, then the round flag, then a monogram: <SeatCircleFlag> fills
+  // the whole circle (square artwork, see src/components/CircleFlag.tsx).
+  const px: Record<string, number> = { xs: 28, sm: 36, md: 48, lg: 56, xl: 80, hero: 240 };
+  return <SeatCircleFlag country={country} size={px[size]} decorative />;
+}
+
+// ── Queue row size (17 Sep 2026) ─────────────────────────────────────────────
+// The sidebar's queue rows (not the roll call, not the Roll Call tab) are drawn 10% larger
+// than the 15 Sep sizes ("make their entire field 10% bigger"): flag, name, row height,
+// badges, grip and padding together. The console is scaled by FitToScreen (820px tall layout
+// → window height), so a big monitor already draws them physically larger (x1.32 at 1080p,
+// x1.76 at 1440p). Only where that scale SHRINKS the design (window under ~780px tall:
+// 1280x720, 1366x768, 1024x768) do rows get a further 5%, which still keeps ten rows in view.
+export const QUEUE_ROW_SCALE = 1.1;
+export const QUEUE_ROW_SCALE_SHORT_SCREEN = 1.155;
+function queueRowScaleNow(): number {
+  if (typeof window === 'undefined') return QUEUE_ROW_SCALE;
+  const fit = window.innerHeight / 820; // FitToScreen BASE_H
+  return fit > 0 && fit < 0.95 ? QUEUE_ROW_SCALE_SHORT_SCREEN : QUEUE_ROW_SCALE;
+}
+function useQueueRowScale(): number {
+  // Read synchronously on the first client render (the panel only mounts after the committee
+  // has loaded in the browser), so a short screen never draws 1.1 and then jumps to 1.155.
+  const [k, setK] = useState(queueRowScaleNow);
+  useEffect(() => {
+    const update = () => {
+      const next = queueRowScaleNow();
+      setK((prev) => (prev === next ? prev : next));
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+  return k;
 }
 
 // ── 3-state slider ────────────────────────────────────────────────────────────
-function StatusSlider({ status, onCycle, isObserver = false }: { status: DelegateStatus; onCycle: () => void; isObserver?: boolean }) {
+function StatusSlider({ status, onCycle, isObserver = false, large = false }: { status: DelegateStatus; onCycle: () => void; isObserver?: boolean; large?: boolean }) {
+  const t = useT();
   // Observers can only be Absent or Present, no present-voting (PV) segment.
-  if (isObserver) {
-    const thumbStart = status === 'absent' ? '2px' : '32px';
-    const thumbColor = status === 'absent' ? 'bg-[#8B2020]' : 'bg-[#3D7A52]';
-    return (
-      <button
-        onClick={(e) => { e.stopPropagation(); onCycle(); }}
-        className="relative w-[60px] h-[30px] rounded-full cursor-pointer shrink-0 select-none transition-all" style={{ backgroundColor: 'rgba(255,255,255,0.10)', border: '1.5px solid rgba(255,255,255,0.22)' }}
-        title="Tap to cycle: Absent → Present"
-      >
-        <div className="absolute inset-0 grid grid-cols-2 items-center pointer-events-none">
-          <span className={`text-[10px] font-bold text-center ${status === 'absent' ? 'text-white' : 'text-white/40'}`}>A</span>
-          <span className={`text-[10px] font-bold text-center ${status !== 'absent' ? 'text-white' : 'text-white/40'}`}>P</span>
-        </div>
-        <div className={`absolute top-[2px] w-[26px] h-[22px] rounded-full transition-all duration-200 shadow-sm ${thumbColor}`} style={{ insetInlineStart: thumbStart }} />
-      </button>
-    );
-  }
-  const thumbStart = status === 'absent' ? '2px' : status === 'present' ? '32px' : '62px';
-  const thumbColor = status === 'absent' ? 'bg-[#8B2020]' : status === 'present' ? 'bg-[#3D7A52]' : 'bg-[#B6871F]';
+  // `large`: the full-screen roll call (pre-session and the resume roll call), sized for a
+  // projector and a finger: 44px tall, 44px per segment. The mid-session Roll Call tab in
+  // the sidebar keeps the compact 30px slider.
+  const seg = large ? 44 : 30;       // width of one segment
+  const h = large ? 44 : 30;         // track height (incl. the 1.5px border)
+  const thumbW = large ? 40 : 26;
+  const thumbH = large ? 36 : 22;
+  const labelCls = large ? 'text-[13.5px] font-extrabold' : 'text-[10px] font-bold';
+  const segments: { key: string; on: boolean }[] = isObserver
+    ? [{ key: 'A', on: status === 'absent' }, { key: 'P', on: status !== 'absent' }]
+    : [{ key: 'A', on: status === 'absent' }, { key: 'P', on: status === 'present' }, { key: 'PV', on: status === 'present-voting' }];
+  const index = status === 'absent' ? 0 : isObserver || status === 'present' ? 1 : 2;
+  const thumbColor = status === 'absent' ? 'bg-[#8B2020]' : status === 'present' || isObserver ? 'bg-[#3D7A52]' : 'bg-[#B6871F]';
+  // The thumb is centred on its SEGMENT, and the segments are the padding box (16 Sep 2026).
+  // `seg` is a border-box width, but an absolutely positioned child is offset from the
+  // padding box, and so is the `inset-0` label grid: measuring the thumb against `seg` put it
+  // up to 2.5px off the letter it is meant to sit under, which reads as a crooked control on
+  // a projector. Both now divide the same inner width.
+  const innerW = seg * segments.length - 3;   // 1.5px border on each side
+  const innerH = h - 3;
+  const cellW = innerW / segments.length;
   return (
     <button
+      type="button"
       onClick={(e) => { e.stopPropagation(); onCycle(); }}
-      className="relative w-[90px] h-[30px] rounded-full cursor-pointer shrink-0 select-none transition-all" style={{ backgroundColor: 'rgba(255,255,255,0.10)', border: '1.5px solid rgba(255,255,255,0.22)' }}
-      title="Tap to cycle: Absent → Present → PV"
+      className="relative rounded-full cursor-pointer shrink-0 select-none transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/80"
+      style={{ width: seg * segments.length, height: h, backgroundColor: 'rgba(255,255,255,0.10)', border: '1.5px solid rgba(255,255,255,0.22)' }}
+      title={isObserver ? t('rollcall_slider_hint_observer') : t('rollcall_slider_hint')}
     >
-      <div className="absolute inset-0 grid grid-cols-3 items-center pointer-events-none">
-        <span className={`text-[10px] font-bold text-center ${status === 'absent' ? 'text-white' : 'text-white/40'}`}>A</span>
-        <span className={`text-[10px] font-bold text-center ${status === 'present' ? 'text-white' : 'text-white/40'}`}>P</span>
-        <span className={`text-[10px] font-bold text-center ${status === 'present-voting' ? 'text-white' : 'text-white/40'}`}>PV</span>
+      <div className="absolute inset-0 grid items-center pointer-events-none" style={{ gridTemplateColumns: `repeat(${segments.length}, 1fr)` }}>
+        {segments.map((s) => (
+          <span key={s.key} className={`${labelCls} text-center relative z-[1] ${s.on ? 'text-white' : 'text-white/40'}`}>{s.key}</span>
+        ))}
       </div>
-      <div className={`absolute top-[2px] w-[26px] h-[22px] rounded-full transition-all duration-200 shadow-sm ${thumbColor}`} style={{ insetInlineStart: thumbStart }} />
+      <div
+        className={`absolute rounded-full transition-all duration-200 shadow-sm ${thumbColor}`}
+        style={{ top: (innerH - thumbH) / 2, width: thumbW, height: thumbH, insetInlineStart: index * cellW + (cellW - thumbW) / 2 }}
+      />
     </button>
   );
 }
 
-// ── A-Z / QUEUE view toggle slider ────────────────────────────────────────────
-function ViewToggle({ view, onChange }: { view: 'az' | 'queue'; onChange: (v: 'az' | 'queue') => void }) {
-  const t = useT();
-  const isQueue = view === 'queue';
-  return (
-    <button
-      data-tutorial="sidebar-view-toggle"
-      data-current-view={view}
-      onClick={() => onChange(isQueue ? 'az' : 'queue')}
-      className="relative w-[104px] h-[28px] rounded-full cursor-pointer select-none shrink-0"
-      style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }}
-      title="Toggle A-Z / Queue view"
-    >
-      <div className="absolute top-[1px] w-[51px] h-[26px] rounded-full transition-all duration-200"
-        style={{ insetInlineStart: isQueue ? '51px' : '1px', backgroundColor: 'rgba(255,255,255,0.22)' }} />
-      <div className="absolute inset-0 flex items-center pointer-events-none z-10">
-        <span className={`w-[52px] text-[10px] font-bold text-center leading-none ${!isQueue ? 'text-white' : 'text-white/40'}`}>{t('rollcall_az')}</span>
-        <span className={`w-[52px] text-[10px] font-bold text-center leading-none ${isQueue ? 'text-white' : 'text-white/40'}`}>{t('rollcall_queue')}</span>
-      </div>
-    </button>
+// ── Recognising an absent delegate ───────────────────────────────────────────
+// The status a recognised delegate gets: the one their waiting-room request asked for,
+// never Present-and-Voting for an observer, Present otherwise. Shared by this panel's row
+// click and the chair page's typed add bars, so both paths answer a request identically.
+export function recognisedStatus(
+  pendingMotions: Committee['pendingMotions'] | undefined,
+  country: string,
+  isObserver: boolean,
+): DelegateStatus {
+  if (isObserver) return 'present';
+  const joinReq = (pendingMotions ?? []).find(
+    (m) => (m.type as string) === 'join-request' && m.proposedBy === country,
   );
+  if (!joinReq) return 'present';
+  try { if (JSON.parse(joinReq.topic)?.desiredStatus === 'present-voting') return 'present-voting'; } catch { /* keep present */ }
+  return 'present';
 }
 
-// ── Add country input ─────────────────────────────────────────────────────────
-function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Committee; onAdd: (country: string) => void; onQueryChange?: (q: string) => void }) {
-  const t = useT();
-  const { language } = useLanguage();
-  const [query, setQuery] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-  const existingNames = new Set(committee.delegates.map((d) => d.country.toLowerCase()));
-
-  const updateQuery = (q: string) => { setQuery(q); onQueryChange?.(q); };
-
-  const rq = query.trim().toLowerCase();
-  const knownMatches = rq
-    ? UN_COUNTRIES.filter((c) => startsWithCountryQuery(c.name, rq, language))
-        .concat(UN_COUNTRIES.filter((c) =>
-          !startsWithCountryQuery(c.name, rq, language) &&
-          matchesCountryQuery(c.name, rq, language)))
-    : [];
-
-  const topKnown = knownMatches.find((c) => !existingNames.has(c.name.toLowerCase())) ?? null;
-  const trimmed = query.trim();
-  const isCustom = trimmed.length > 0 && !existingNames.has(trimmed.toLowerCase());
-  const showCustomOption = isCustom && (!topKnown || topKnown.name.toLowerCase() !== trimmed.toLowerCase());
-
-  const commit = (name: string) => {
-    const normalised = name.trim();
-    if (!normalised || existingNames.has(normalised.toLowerCase())) return;
-    onAdd(normalised);
-    updateQuery('');
-    inputRef.current?.focus();
-  };
-
-  return (
-    <div className="relative">
-      <div className="flex items-center rounded-xl overflow-hidden transition-all" style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }}>
-        <input
-          ref={inputRef}
-          type="text"
-          value={query}
-          onChange={(e) => updateQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              if (topKnown) commit(topKnown.name);
-              else if (trimmed) commit(trimmed);
-            }
-            if (e.key === 'Escape') updateQuery('');
-          }}
-          placeholder={t('rollcall_filter_placeholder')}
-          className="flex-1 bg-transparent px-3 py-2.5 text-sm focus:outline-none placeholder-white/30" style={{ color: '#EDE7D8' }}
-        />
-        {query && (topKnown || trimmed) && (
-          <span className="text-[10px] text-[#9A8A78] px-2 truncate max-w-[80px]">
-            ↵ {topKnown ? getCountryDisplayName(topKnown.name, language) : trimmed}
-          </span>
-        )}
-      </div>
-
-      {query && (knownMatches.length > 0 || showCustomOption) && (
-        <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden z-30 shadow-xl max-h-52 overflow-y-auto">
-          {knownMatches
-            .filter((c) => !existingNames.has(c.name.toLowerCase()))
-            .slice(0, showCustomOption ? 5 : 8)
-            .map((c, i) => (
-              <button
-                key={c.code}
-                onMouseDown={(e) => { e.preventDefault(); commit(c.name); }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-start transition-colors ${
-                  i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'
-                }`}
-              >
-                <img src={getFlagUrl(c.code)} alt={c.code} className="w-5 h-5 object-contain shrink-0" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                <span className="text-sm flex-1">{getCountryDisplayName(c.name, language)}</span>
-                {i === 0 && <span className="text-[10px] text-[#9A8A78] shrink-0">Enter ↵</span>}
-              </button>
-            ))}
-          {showCustomOption && (
-            <button
-              onMouseDown={(e) => { e.preventDefault(); commit(trimmed); }}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-start transition-colors text-[#1C1410] hover:bg-[#DDD4C0] border-t border-[#DDD4C0]"
-            >
-              <span className="text-base">🌐</span>
-              <span className="text-sm flex-1">{trimmed}</span>
-              <span className="text-[10px] text-[#1B3828] shrink-0 font-semibold">Add custom</span>
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+// ── Add a seat ────────────────────────────────────────────────────────────────
+// Adding a seat is NOT this panel's job any more (16 Sep 2026): the "+ Add a seat" button and
+// its picker were replaced by a small type box beside the quorum tabs (SeatAddField, mounted
+// by the chair page in CommitteeIdentityBadge), in the sidebar and the pre-session roll call.
 
 // ── Full speakers list popup ──────────────────────────────────────────────────
 function FullListPopup({
@@ -289,21 +221,31 @@ function RollCallPanelInner({
   onRemoveFromList,
   onCycleStatus,
   onStatusChange,
+  onBulkStatusChange,
   onPhaseChange,
-  onDelegateAdd,
   onReorderList,
   isRollCallPhase = false,
   showStatusSliders = false,
   showBulkActions = false,
-  showViewToggle = true,
   isReadOnly = false,
   isViewOnly = false,
+  onCommenterAttempt,
   isTdT = false,
   isRoomOrderTdT = false,
   hideIdentity = false,
-  listView: listViewProp,
-  onListViewChange,
+  speechRunning = false,
+  readyDelegateId = null,
+  onJoinRequestResolved,
+  canAddToList,
+  onRemoveCurrentSpeaker,
 }: {
+  /**
+   * Take the speaker holding the floor off it (a click on their row; there is no X on the
+   * row any more, 15 Sep 2026: the floor's speaker strip keeps its own X).
+   * The chair page logs the speech, pauses and clears the floor. Must be a STABLE callback:
+   * it is part of the memo comparator. Omitted = the speaker's row does nothing.
+   */
+  onRemoveCurrentSpeaker?: (delegateId: string) => void;
   committee: Committee;
   onAddToList?: (delegateId: string) => void;
   onListIds?: Set<string>;
@@ -317,15 +259,25 @@ function RollCallPanelInner({
    */
   onCycleStatus?: (delegateId: string) => void;
   onStatusChange?: (delegateId: string, status: DelegateStatus) => void;
+  /**
+   * Bulk roll call (All present / All P+V / Clear) as ONE parent write. When given, the
+   * bulk buttons call this once instead of onStatusChange per delegate (PERF-2: 190 writes
+   * and 190 realtime events for a General Assembly).
+   */
+  onBulkStatusChange?: (status: DelegateStatus, delegateIds: string[]) => void;
   onPhaseChange?: (phase: string) => void;
-  onDelegateAdd?: (country: string) => void;
   onReorderList?: (newList: { delegateId: string; country: string }[]) => void;
   isRollCallPhase?: boolean;
   showStatusSliders?: boolean;
   showBulkActions?: boolean;
-  showViewToggle?: boolean;
   isReadOnly?: boolean;
   isViewOnly?: boolean;
+  /**
+   * A Commenter tried a Moderator-only action here (a row click, the status slider, the bulk
+   * roll-call buttons, Begin Session): the chair page raises the "only the Moderator" notice.
+   * Must be STABLE (it is in the memo comparator). UI only (rule 15): nothing is written.
+   */
+  onCommenterAttempt?: () => void;
   isTdT?: boolean;
   isRoomOrderTdT?: boolean;
   /**
@@ -337,78 +289,59 @@ function RollCallPanelInner({
    * above it and keeps the heading (the default).
    */
   hideIdentity?: boolean;
-  listView?: 'az' | 'queue';
-  onListViewChange?: (v: 'az' | 'queue') => void;
+  /**
+   * The chair's speaker clock is running (`timerRunning`). A state flip on press, never a
+   * per-second value. Together with the speaker at the top of the queue it is the signal
+   * that a speech started, which scrolls the list back to the top.
+   */
+  speechRunning?: boolean;
+  /**
+   * The delegation the floor draws as "Ready to speak": the first GSL delegate while nobody
+   * is seated (the chair page's `onDeck`). Presentation only: they stay an ordinary
+   * `speakers_list` row, so they keep #1, stay draggable and removable, and get a quiet
+   * "Ready" caption instead of the gold speaking treatment. Ignored when a speaker holds
+   * the floor or outside the queue view.
+   */
+  readyDelegateId?: string | null;
+  /**
+   * An absent delegate was recognised from this panel (clicked onto a list). The parent
+   * drops that country's pending join-request motions from local state; the DB delete is
+   * done here, after the status write lands (see handleRowClick).
+   */
+  onJoinRequestResolved?: (country: string) => void;
+  /**
+   * Asked BEFORE an absent delegate is recognised: can the list take them right now? The
+   * caucus queue answers with caucusQueueCapacity and raises the queue-full notification
+   * (top right) itself when it cannot. Without it a click marked the delegate Present and then the add was
+   * silently refused. Omitted = the list always has room (the GSL).
+   */
+  canAddToList?: (delegateId: string) => boolean;
 }) {
   const { language } = useLanguage();
   const t = useT();
-  const [search, setSearch] = useState('');
-  const [listViewInternal, setListViewInternal] = useState<'az' | 'queue'>('az');
-  const listView = listViewProp !== undefined ? listViewProp : listViewInternal;
-  const setListView = (v: 'az' | 'queue') => { setListViewInternal(v); onListViewChange?.(v); };
+  const queueRowScale = useQueueRowScale();
   const [showFullList, setShowFullList] = useState(false);
   const [localStatuses, setLocalStatuses] = useState<Record<string, DelegateStatus>>({});
   const [localObservers, setLocalObservers] = useState<Record<string, boolean>>({});
   const listRef = useRef<HTMLDivElement>(null);
-  const dragIndexRef = useRef<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  // ── Queue reorder (pointer drag on the grip, or arrow keys on it) ──────────
+  // `drag` renders the lifted row and the drop line; it changes only when the drag starts,
+  // ends, or the drop SLOT changes. Per-move work (the row following the pointer) writes the
+  // DOM directly through dragRef, never React state, and never committee state (RULES 3/4).
+  const [drag, setDrag] = useState<{ id: string; slot: number } | null>(null);
+  const dragRef = useRef<{
+    id: string; pointerId: number; startY: number; startScroll: number; lastY: number;
+    active: boolean; slot: number; el: HTMLElement | null; raf: number;
+    /** Screen px per layout px (FitToScreen's scale). */ scale: number;
+    /** Pointer travel before the row lifts: 4 on the grip, 6 on the row (a click stays a click). */ slop: number;
+  } | null>(null);
+  // A drag must never end in a row click (add / remove / recognise): true for 400 ms after one.
+  const justDraggedRef = useRef(false);
   // Every optimistic status override, with the value we set and when we set it.
   // Mutated synchronously on click so rapid taps cycle off the latest value
   // rather than the one baked into the last render.
   const pendingStatusRef = useRef<Record<string, { value: DelegateStatus; at: number }>>({});
   const [reconcileTick, setReconcileTick] = useState(0);
-
-  // ── Seat claims (one person per seat) ─────────────────────────────────────
-  // Which seats a device has joined on, so a chair can free one when a phone dies or
-  // the wrong person took it. Booleans only: the RPC never says WHO holds a seat.
-  // Fetched only where the control can show: never for a view-only Commenter, never
-  // on an ended session.
-  const canFreeSeats = !isReadOnly && !isViewOnly && !committee.endedAt;
-  const [seatAvail, setSeatAvail] = useState<SeatAvailability>({});
-  const [freeArmed, setFreeArmed] = useState<string | null>(null);
-  const [freeBusy, setFreeBusy] = useState<string | null>(null);
-  const [freeError, setFreeError] = useState(false);
-
-  // Which seats exist, as one stable string. `committee.delegates` is a new array on every
-  // roll-call tap and every realtime echo; keying the fetch on it refetched and reset the
-  // poll on each tap. A seat being added or removed is what actually needs a re-read.
-  const seatRosterKey = committee.delegates.map((d) => seatKey(d.country)).sort().join('|');
-
-  useEffect(() => {
-    if (!canFreeSeats) { setSeatAvail({}); return; }
-    let cancelled = false;
-    const load = () => {
-      getSeatAvailability(committee.code).then((a) => { if (!cancelled && a) setSeatAvail(a); });
-    };
-    load();
-    // The claims table is private, so no realtime event announces a new claim. A change
-    // to the set of seats re-reads at once, and a gentle poll covers new claims.
-    const id = setInterval(load, 20_000);
-    return () => { cancelled = true; clearInterval(id); };
-  }, [canFreeSeats, committee.code, seatRosterKey]);
-
-  // Two taps to free: the first arms, the second releases. Disarms on its own.
-  useEffect(() => {
-    if (!freeArmed) return;
-    const id = setTimeout(() => setFreeArmed(null), 4000);
-    return () => clearTimeout(id);
-  }, [freeArmed]);
-
-  const freeSeat = async (country: string) => {
-    const k = seatKey(country);
-    if (freeBusy) return;
-    if (freeArmed !== k) { setFreeArmed(k); setFreeError(false); return; }
-    setFreeArmed(null);
-    setFreeBusy(k);
-    const ok = await releaseDelegateSeat(committee.code, country, committee.dbChairJoinSuffix ?? undefined);
-    setFreeBusy(null);
-    if (!ok) { setFreeError(true); return; }
-    setFreeError(false);
-    setSeatAvail((prev) => {
-      const s = prev[k];
-      return s ? { ...prev, [k]: { ...s, claimed: false, full: false, mine: false } } : prev;
-    });
-  };
 
   useEffect(() => {
     pendingStatusRef.current = {};
@@ -518,11 +451,13 @@ function RollCallPanelInner({
   // Bulk set: localStatuses is flushed ATOMICALLY (one setState, one render) and
   // the parent owns the writes — one per delegate, not two.
   const setAllStatuses = (status: DelegateStatus) => {
+    if (isViewOnly) { onCommenterAttempt?.(); return; }
     const newStatuses: Record<string, DelegateStatus> = {};
     const at = Date.now();
     committee.delegates.forEach((d) => { newStatuses[d.id] = status; pendingStatusRef.current[d.id] = { value: status, at }; });
     setLocalStatuses(newStatuses);
-    committee.delegates.forEach((d) => onStatusChange?.(d.id, status));
+    if (onBulkStatusChange) onBulkStatusChange(status, committee.delegates.map((d) => d.id));
+    else committee.delegates.forEach((d) => onStatusChange?.(d.id, status));
   };
 
   const handleAllPresent = () => setAllStatuses('present');
@@ -530,28 +465,31 @@ function RollCallPanelInner({
   const handleClear = () => setAllStatuses('absent');
 
   const handleBeginSession = () => {
+    if (isViewOnly) { onCommenterAttempt?.(); return; }
+    // The chair page restores a caucus that a suspension paused (or opens the GSL); the DB
+    // write decides from the stored row and clears any caucus data when there is none (C-1).
     onPhaseChange?.('speakers-list');
-    setPhaseInDB(committee.id, 'speakers-list', committee.code, committee.dbChairJoinSuffix ?? undefined);
+    void beginSessionAfterRollCall(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
   };
 
-  const handleAddDelegate = (country: string) => {
-    onDelegateAdd?.(country);
-  };
-
-  // A-Z view: pure alphabetical, no status separation
+  // ONE ordering, no toggle. The A-Z / QUEUE switch was removed: chairs left the A-Z
+  // roll-call sort on for whole sessions and the queue was unreadable.
+  // - Roll call (isRollCallPhase: pre-session and the resume roll call) and the
+  //   mid-session Roll Call tab (showStatusSliders): plain A-Z.
+  // - Everywhere else: the speaker holding the floor (#1), then the list in order, then
+  //   every PRESENT delegate not on the list, A-Z, then every ABSENT one, A-Z (16 Sep 2026,
+  //   owner: absent delegations sink to the bottom so the room in front of the chair reads
+  //   first). Status is the optimistic one (localStatuses), so a recognised or marked-absent
+  //   row moves at once.
   const alphabetical = [...committee.delegates].sort((a, b) => compareCountryNames(a.country, b.country, language));
-  // allAlpha shared base for queueOrdered (alphabetical among non-queue delegates)
-  const allAlpha = alphabetical;
 
-  // Queue view: GSL delegates first (in order), then present/PV alphabetically, then absent
   const inQueue = (committee.speakersList ?? [])
     .map((s) => committee.delegates.find((d) => d.id === s.delegateId))
     .filter(Boolean) as typeof committee.delegates;
   const inQueueIds = new Set(inQueue.map((d) => d.id));
-  const notInQueue = allAlpha.filter((d) => !inQueueIds.has(d.id));
-  const notInQueuePresent = notInQueue.filter((d) => d.status !== 'absent');
-  const notInQueueAbsent = notInQueue.filter((d) => d.status === 'absent');
-  const queueOrdered = [...inQueue, ...notInQueuePresent, ...notInQueueAbsent];
+  const notQueued = alphabetical.filter((d) => !inQueueIds.has(d.id));
+  const isAbsentNow = (d: (typeof committee.delegates)[number]) => (localStatuses[d.id] ?? d.status) === 'absent';
+  const queueOrdered = [...inQueue, ...notQueued.filter((d) => !isAbsentNow(d)), ...notQueued.filter(isAbsentNow)];
 
   const currentSpeakerDelegate = committee.currentSpeaker?.delegateId
     ? committee.delegates.find((d) => d.id === committee.currentSpeaker!.delegateId) ?? null
@@ -564,16 +502,244 @@ function RollCallPanelInner({
     ? [speakerAtTop, ...queueOrdered.filter((d) => d.id !== speakerAtTop.id)]
     : queueOrdered;
 
-  const baseList = listView === 'queue' ? finalQueueOrdered : alphabetical;
-  // When searching: show all, but grey out non-matches so the filter is visible
-  const filtered = baseList;
+  // The mid-session Roll Call tab (showStatusSliders) is taking roll too, so it reads A-Z
+  // exactly like pre-session. Any speech start closes that tab on the chair page, which
+  // switches this back to the queue and the effect below scrolls to the top.
+  const isQueueView = !isRollCallPhase && !showStatusSliders;
+  // The whole room, always: nothing filters or dims this list any more (the filter field is
+  // gone, 16 Sep 2026).
+  const filtered = isQueueView ? finalQueueOrdered : alphabetical;
 
-  // Auto-scroll to first match when search changes
+  // A speech started → back to the top of the list, where the speaker now sits as #1.
+  // The signal is the speaker at the top (GSL Next / call first speaker, moderated caucus
+  // and Tour de Table advance) plus the clock being started (Start, including a resume
+  // after a pause). Both change on a press only, never per second, and this effect only
+  // scrolls a DOM node: no committee state, no updateLocal, no localUpdateTime (RULES 3/4).
+  // Right of Reply is not a queue speech and touches neither value.
+  const speechSignal = isQueueView ? `${speakerAtTop?.id ?? ''}|${speechRunning ? 1 : 0}` : null;
+  const prevSpeechSignalRef = useRef(speechSignal);
   useEffect(() => {
-    if (!search || !listRef.current) return;
-    const firstMatch = listRef.current.querySelector('[data-matches="true"]') as HTMLElement | null;
-    firstMatch?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [search]);
+    const prev = prevSpeechSignalRef.current;
+    prevSpeechSignalRef.current = speechSignal;
+    if (speechSignal === null || prev === speechSignal) return;
+    // Coming back from the A-Z Roll Call tab: the order just changed wholesale, so start
+    // at the top (the speaker, if any, is #1 there).
+    if (prev === null) { listRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    const [id, running] = speechSignal.split('|');
+    const [prevId, prevRunning] = (prev ?? '|0').split('|');
+    const newSpeaker = id !== '' && id !== prevId;
+    const clockStarted = running === '1' && prevRunning !== '1' && id !== '';
+    if (newSpeaker || clockStarted) listRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [speechSignal]);
+
+  // ── Scroll edge fade ────────────────────────────────────────────────────────
+  // The scrollbar is hidden; a soft fade at an edge that has more rows beyond it says the
+  // list scrolls. CSS variables written straight to the node on scroll: no React render.
+  const updateFade = useCallback(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const top = Math.max(0, Math.min(28, el.scrollTop));
+    const bottom = Math.max(0, Math.min(28, el.scrollHeight - el.clientHeight - el.scrollTop));
+    el.style.setProperty('--fade-top', `${top}px`);
+    el.style.setProperty('--fade-bottom', `${bottom}px`);
+  }, []);
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    updateFade();
+    el.addEventListener('scroll', updateFade, { passive: true });
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateFade) : null;
+    ro?.observe(el);
+    return () => { el.removeEventListener('scroll', updateFade); ro?.disconnect(); };
+  }, [updateFade]);
+  // Rows added or removed change the scroll height without resizing the box.
+  useEffect(() => { updateFade(); });
+
+  // ── Queue reorder ───────────────────────────────────────────────────────────
+  // Only the queued delegations behind the floor: the speaker at #1 is never draggable and
+  // never a drop target (slot 0 is directly beneath them). Only in the queue view, with a
+  // reorder handler, for a chair who can write.
+  const canReorder = !!onReorderList && isQueueView && !isViewOnly && !isReadOnly && !committee.endedAt;
+  const delegateIds = new Set(committee.delegates.map((d) => d.id));
+  const reorderIds = canReorder
+    ? (committee.speakersList ?? []).map((s) => s.delegateId).filter((id) => id !== speakerAtTop?.id && delegateIds.has(id))
+    : [];
+  const reorderable = new Set(reorderIds);
+
+  // The full list with `id` placed in front of `beforeId` (or after the last reorderable row
+  // when null). Null when the order would not change.
+  const reorderedList = (id: string, beforeId: string | null) => {
+    const list = committee.speakersList ?? [];
+    const moved = list.find((s) => s.delegateId === id);
+    if (!moved) return null;
+    const rest = list.filter((s) => s.delegateId !== id);
+    let at: number;
+    if (beforeId) {
+      at = rest.findIndex((s) => s.delegateId === beforeId);
+      if (at < 0) return null;
+    } else {
+      const others = reorderIds.filter((x) => x !== id);
+      const last = others.length ? rest.findIndex((s) => s.delegateId === others[others.length - 1]) : -1;
+      at = last >= 0 ? last + 1 : rest.length;
+    }
+    const next = [...rest.slice(0, at), moved, ...rest.slice(at)];
+    return next.every((s, i) => s.delegateId === list[i]?.delegateId) ? null : next;
+  };
+
+  // ── Pointer drag ─────────────────────────────────────────────────────────────
+  // A queued row can be picked up from ANYWHERE on it with a mouse or pen (it lifts after
+  // ROW_SLOP px, so a plain click still adds / removes), and from the grip with any pointer,
+  // touch included (the grip is touch-action: none; the row is not, so a finger still
+  // scrolls the list). Moves and the release are read from WINDOW listeners, so the drag
+  // never depends on pointer capture or on the pointer staying over the row it started on.
+  // That dependency is why the queue "was not draggable" (15 Sep 2026): only the faint
+  // 28px grip could start a drag, and nothing on the row itself did.
+  // The console is drawn inside FitToScreen's scale(), so every screen distance is divided
+  // by the list's scale before it is compared with layout offsets.
+  const latestRef = useRef({ reorderIds, reorderedList, onReorderList });
+  useEffect(() => { latestRef.current = { reorderIds, reorderedList, onReorderList }; });
+
+  const paintDrag = useCallback(() => {
+    const st = dragRef.current;
+    const list = listRef.current;
+    if (!st || !st.active || !list) return;
+    if (st.el) st.el.style.transform = `translateY(${(st.lastY - st.startY) / st.scale + (list.scrollTop - st.startScroll)}px)`;
+    const y = (st.lastY - list.getBoundingClientRect().top) / st.scale + list.scrollTop;
+    let slot = 0;
+    for (const id of latestRef.current.reorderIds) {
+      if (id === st.id) continue;
+      const row = list.querySelector<HTMLElement>(`[data-reorder-id="${CSS.escape(id)}"]`);
+      if (row && y > row.offsetTop + row.offsetHeight / 2) slot++;
+    }
+    if (slot !== st.slot) { st.slot = slot; setDrag({ id: st.id, slot }); }
+  }, []);
+
+  // The pointer id of a pointerdown that may become a drag. While set, window listeners
+  // are attached (layout effect: attached in the same flush as the pointerdown, so even a
+  // very fast click's pointerup is seen). Cleared by endDrag.
+  const [armedPointer, setArmedPointer] = useState<number | null>(null);
+
+  const endDrag = useCallback((commit: boolean) => {
+    const st = dragRef.current;
+    dragRef.current = null;
+    setArmedPointer(null);
+    if (!st) return;
+    cancelAnimationFrame(st.raf);
+    if (st.el) st.el.style.transform = '';
+    if (!st.active) return;
+    justDraggedRef.current = true;
+    setTimeout(() => { justDraggedRef.current = false; }, 400);
+    setDrag(null);
+    const { reorderIds: ids, reorderedList: build, onReorderList: commitList } = latestRef.current;
+    if (!commit || !commitList) return;
+    const others = ids.filter((x) => x !== st.id);
+    const next = build(st.id, others[st.slot] ?? null);
+    // Optimistic + chained write, owned by the parent (reorderSpeakersList).
+    if (next) commitList(next);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (armedPointer === null) return;
+    const onMove = (e: PointerEvent) => {
+      const st = dragRef.current;
+      const list = listRef.current;
+      if (!st || st.pointerId !== e.pointerId || !list) return;
+      st.lastY = e.clientY;
+      if (!st.active) {
+        if (Math.abs(e.clientY - st.startY) / st.scale < st.slop) return;
+        st.active = true;
+        window.getSelection()?.removeAllRanges();
+        st.el = list.querySelector<HTMLElement>(`[data-reorder-id="${CSS.escape(st.id)}"]`);
+        st.slot = latestRef.current.reorderIds.indexOf(st.id);
+        setDrag({ id: st.id, slot: st.slot });
+        // Edge auto-scroll while held near the top or bottom of the list.
+        const tick = () => {
+          const cur = dragRef.current;
+          const l = listRef.current;
+          if (!cur || !l) return;
+          const r = l.getBoundingClientRect();
+          const edge = 44 * cur.scale;
+          const dy = cur.lastY < r.top + edge ? -Math.ceil((r.top + edge - cur.lastY) / 4)
+            : cur.lastY > r.bottom - edge ? Math.ceil((cur.lastY - (r.bottom - edge)) / 4) : 0;
+          if (dy !== 0) { l.scrollTop += dy; paintDrag(); }
+          cur.raf = requestAnimationFrame(tick);
+        };
+        st.raf = requestAnimationFrame(tick);
+      }
+      if (e.cancelable) e.preventDefault();
+      paintDrag();
+    };
+    const onUp = (e: PointerEvent) => { if (dragRef.current?.pointerId === e.pointerId) endDrag(true); };
+    const onCancel = (e: PointerEvent) => { if (dragRef.current?.pointerId === e.pointerId) endDrag(false); };
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+    };
+  }, [armedPointer, paintDrag, endDrag]);
+
+  // While a row is lifted the whole page shows the grabbing cursor and selects no text; the
+  // cleanup also covers an unmount mid-drag.
+  const dragging = drag !== null;
+  useEffect(() => {
+    if (!dragging) return;
+    const body = document.body;
+    const prevCursor = body.style.cursor;
+    const prevSelect = body.style.userSelect;
+    body.style.cursor = 'grabbing';
+    body.style.userSelect = 'none';
+    return () => { body.style.cursor = prevCursor; body.style.userSelect = prevSelect; };
+  }, [dragging]);
+  // Unmount mid-drag: stop the auto-scroll loop (the layout effect removes the listeners).
+  useEffect(() => () => { const st = dragRef.current; if (st) cancelAnimationFrame(st.raf); }, []);
+
+  const startPointerDrag = (e: React.PointerEvent<HTMLElement>, id: string, fromGrip: boolean) => {
+    if (e.button !== 0 || !listRef.current || dragRef.current) return;
+    if (!fromGrip) {
+      // The row: mouse and pen only (a finger scrolls), and never from a button inside it.
+      if (e.pointerType === 'touch') return;
+      const hit = (e.target as HTMLElement).closest('button, input, a, [role="switch"]');
+      if (hit && hit !== e.currentTarget) return;
+    } else {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    const list = listRef.current;
+    const scale = (list.getBoundingClientRect().height / (list.offsetHeight || 1)) || 1;
+    dragRef.current = {
+      id, pointerId: e.pointerId, startY: e.clientY, lastY: e.clientY,
+      startScroll: list.scrollTop, active: false, slot: -1, el: null, raf: 0,
+      scale, slop: fromGrip ? 4 : 6,
+    };
+    setArmedPointer(e.pointerId);
+  };
+
+  // Keyboard: ArrowUp / ArrowDown on the grip moves the delegation one place.
+  const gripKeyDown = (e: React.KeyboardEvent<HTMLElement>, id: string) => {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!onReorderList) return;
+    const i = reorderIds.indexOf(id);
+    if (i < 0) return;
+    const others = reorderIds.filter((x) => x !== id);
+    const slot = e.key === 'ArrowUp' ? i - 1 : i + 1;
+    if (slot < 0 || slot > others.length) return;
+    const next = reorderedList(id, others[slot] ?? null);
+    if (next) onReorderList(next);
+  };
+
+  // The footer holds only Begin Session now (the seat field moved beside the quorum tabs).
+  // Without it the footer is not drawn at all rather than left as an empty strip.
+  const showBeginSession = committee.phase === 'pre-session' || committee.phase === 'roll-call';
+
+  // Bulk roll-call buttons: projector and finger sized in the full-screen roll call.
+  const bulkBtnCls = `font-bold uppercase tracking-wide transition-colors gv-lift-dark focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70 ${
+    isRollCallPhase ? 'text-[13.5px] px-3 py-3.5 min-h-[48px] rounded-xl' : 'text-[11px] px-2 py-2 rounded-lg'
+  }`;
 
   return (
     <div className="flex flex-col h-full overflow-hidden"
@@ -585,203 +751,365 @@ function RollCallPanelInner({
         }
       }}
     >
-      {/* hideIdentity: the surface above already states the committee (the chair
-          sidebar's CommitteeIdentityBadge). Repeating it here printed the name
-          twice, one line apart. The heading goes; the bottom border STAYS, and
-          it becomes the single seam under the whole masthead — badge and stats
-          row now sit inside one block instead of two bordered cards. */}
-      <div
-        className={`px-4 ${hideIdentity ? 'pt-1.5' : 'pt-4'} pb-3 shrink-0 relative z-10`}
-        style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}
-      >
+      {/* hideIdentity: the surface above already states the committee AND owns the quorum
+          rings (CommitteeIdentityBadge, in the chair sidebar and the pre-session card), so
+          this block keeps only the roll-call bulk actions. No divider: the masthead's own
+          tone ends where the list begins. */}
+      {(!hideIdentity || showBulkActions) && (
+      <div className={`${isRollCallPhase ? 'px-5' : 'px-4'} ${hideIdentity ? 'pt-2.5' : 'pt-4'} pb-2.5 shrink-0 relative z-10`}>
         {!hideIdentity && (
           <>
             <p className="text-lg font-black leading-tight truncate mb-0.5" style={{ color: '#EED98A' }}>{getCommitteeDisplayName(committee.name, language)}</p>
             {committee.topic && (
-              <p className="text-xs leading-snug line-clamp-2 mb-2" style={{ color: 'rgba(238,217,138,0.55)' }}>
-                <span className="font-semibold" style={{ color: 'rgba(238,217,138,0.7)' }}>{t('rollcall_topic')} </span>{committee.topic}
+              <p className="text-xs leading-snug line-clamp-2 mb-2" style={{ color: 'rgba(238,217,138,0.85)' }}>
+                <span className="font-semibold">{t('rollcall_topic')} </span>{committee.topic}
               </p>
             )}
+            <div className="flex gap-1.5">
+              <MajorityPie arcFill={1} color="#2A5A3C" label={`${present}`} />
+              <MajorityPie arcFill={2 / 3} color="#B6871F" label={`${Math.ceil(present * 2 / 3)}`} />
+              <MajorityPie arcFill={0.5} color="#8A7A6A" label={`${Math.floor(present / 2) + 1}`} />
+            </div>
           </>
         )}
-        <div className="flex items-center justify-between">
-          <div className="flex gap-1.5">
-            <MajorityPie arcFill={1} color="#2A5A3C" label={`${present}`} />
-            <MajorityPie arcFill={2 / 3} color="#B6871F" label={`${Math.ceil(present * 2 / 3)}`} />
-            <MajorityPie arcFill={0.5} color="#8A7A6A" label={`${Math.floor(present / 2) + 1}`} />
-          </div>
-          {showViewToggle && <ViewToggle view={listView} onChange={setListView} />}
-        </div>
         {showBulkActions && (
-          <div className="flex gap-1.5 mt-2">
-            <button onClick={handleClear} className="text-[10px] font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg transition-colors gv-lift-dark" style={{ backgroundColor: 'rgba(139,32,32,0.25)', color: '#F4A0A0', border: '1px solid rgba(139,32,32,0.4)' }}>{t('rollcall_clear_all')}</button>
-            <button onClick={handleAllPresent} className="text-[10px] font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg transition-colors gv-lift-dark" style={{ backgroundColor: 'rgba(61,122,82,0.3)', color: '#EDE7D8', border: '1px solid rgba(61,122,82,0.4)' }}>{t('rollcall_all_present')}</button>
-            <button onClick={handleAllPresentVoting} className="text-[10px] font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg transition-colors gv-lift-dark" style={{ backgroundColor: 'rgba(182,135,31,0.25)', color: '#EED98A', border: '1px solid rgba(182,135,31,0.35)' }}>{t('rollcall_all_pv')}</button>
+          <div className={`grid grid-cols-3 ${isRollCallPhase ? 'gap-2.5' : 'gap-2'} ${hideIdentity ? '' : 'mt-2'}`}>
+            <button onClick={handleClear} className={bulkBtnCls} style={{ backgroundColor: 'rgba(139,32,32,0.30)', color: '#F6B4B4' }}>{t('rollcall_clear_all')}</button>
+            <button onClick={handleAllPresent} className={bulkBtnCls} style={{ backgroundColor: 'rgba(61,122,82,0.40)', color: '#EDE7D8' }}>{t('rollcall_all_present')}</button>
+            <button onClick={handleAllPresentVoting} className={bulkBtnCls} style={{ backgroundColor: 'rgba(182,135,31,0.30)', color: '#EED98A' }}>{t('rollcall_all_pv')}</button>
           </div>
         )}
       </div>
+      )}
 
-      <div ref={listRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
-        {filtered.map((d, idx) => {
+      {/* Scrollbar hidden in every engine (scrollbar-width, ::-webkit-scrollbar); wheel, touch
+          and keyboard still scroll. Generous bottom padding so the last row never sits flush
+          against the add bar, and an edge fade (updateFade) where more rows are hidden. */}
+      <div
+        ref={listRef}
+        tabIndex={0}
+        aria-label={t('rollcall_list_label')}
+        className={`relative flex-1 min-h-0 overflow-y-auto overscroll-contain pt-1.5 ${isRollCallPhase ? 'px-3 space-y-1.5' : 'px-2 space-y-1'} [scrollbar-width:none] [&::-webkit-scrollbar]:hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#EED98A]/50`}
+        style={{
+          paddingBottom: 48,
+          msOverflowStyle: 'none',
+          WebkitMaskImage: 'linear-gradient(to bottom, transparent 0, #000 var(--fade-top, 0px), #000 calc(100% - var(--fade-bottom, 0px)), transparent 100%)',
+          maskImage: 'linear-gradient(to bottom, transparent 0, #000 var(--fade-top, 0px), #000 calc(100% - var(--fade-bottom, 0px)), transparent 100%)',
+        } as React.CSSProperties}
+      >
+        {filtered.map((d) => {
           const effectiveStatus = localStatuses[d.id] ?? d.status;
           const isOnList = onListIds?.has(d.id) ?? false;
           const isAbsent = effectiveStatus === 'absent';
           const isObserver = (localObservers[d.id] ?? d.isObserver) === true;
           const queuePos = queuePositionMap.get(d.id) ?? null;
-          const matchesSearch = !search || matchesCountryQuery(d.country, search, language);
-          const isDraggable = listView === 'queue' && !isRollCallPhase && queuePositionMap.has(d.id);
+          const isReorderable = reorderable.has(d.id);
+          const isLifted = drag?.id === d.id;
+          // Drop line: before this row, or after it when it is the last reorderable row. Never
+          // shown for the slot the row came from (dropping there changes nothing).
+          let dropLine: 'before' | 'after' | null = null;
+          if (drag && isReorderable && !isLifted) {
+            const others = reorderIds.filter((x) => x !== drag.id);
+            const mine = others.indexOf(d.id);
+            const origin = reorderIds.indexOf(drag.id);
+            if (drag.slot !== origin) {
+              if (drag.slot === mine) dropLine = 'before';
+              else if (mine === others.length - 1 && drag.slot === others.length) dropLine = 'after';
+            }
+          }
           const isCurrentSpeaker = committee.currentSpeaker?.delegateId === d.id;
           const isCurrentSpeakerInPanel = queuePos === 1 && (
             committee.currentSpeaker?.delegateId === d.id ||
             caucus?.currentSpeaker === d.country
           );
-          const isUpNext = listView === 'queue' && isCurrentSpeakerInPanel;
-          const seatK = seatKey(d.country);
-          const seatClaimed = canFreeSeats && seatAvail[seatK]?.claimed === true;
-          const seatArmed = freeArmed === seatK;
+          const isUpNext = isQueueView && isCurrentSpeakerInPanel;
+          // First on the GSL with nobody seated, drawn "Ready to speak" on the floor. Not the
+          // speaking treatment: no gold rim, no microphone, just a quiet caption at #1.
+          const isReadyRow = isQueueView && !speakerAtTop && !!readyDelegateId && readyDelegateId === d.id && queuePos === 1;
+          // Removable from the floor from this row (chair page, onRemoveCurrentSpeaker).
+          const holdsFloor = !isRollCallPhase && !showStatusSliders && !isReadOnly && !isViewOnly && !committee.endedAt
+            && (isCurrentSpeaker || (!!caucus?.currentSpeaker && caucus.currentSpeaker === d.country));
+          // Recognising an absent delegate: clicking them onto a list marks them Present
+          // in the same action. Not in roll call and not in the mid-session Roll Call tab
+          // (showStatusSliders): the slider owns status there, so an absent row is a status
+          // row only and never lands on a list. Not when read-only or ended.
+          const canRecognise = !!onAddToList && !isRollCallPhase && !showStatusSliders && !isReadOnly && !committee.endedAt;
 
           const handleRowClick = () => {
-            if (isViewOnly) return;
-            if (onAddToList && !isAbsent) {
+            if (isViewOnly) {
+              // A row press that would act for the Moderator (add / remove / recognise, or a
+              // status slider, which is inert and lets the press through to the row).
+              if (!isReadOnly && !committee.endedAt && (onAddToList || isRollCallPhase || showStatusSliders)) onCommenterAttempt?.();
+              return;
+            }
+            if (drag || justDraggedRef.current) return;
+            if (!onAddToList) return;
+            // The speaker holding the floor: a click takes them OFF it (the parent logs the
+            // speech, pauses and clears the floor), even when nobody else is queued.
+            if (holdsFloor && onRemoveCurrentSpeaker) { onRemoveCurrentSpeaker(d.id); return; }
+            if (!isAbsent) {
               if (!isOnList) onAddToList(d.id);
               else if (onRemoveFromList) onRemoveFromList(d.id);
+              return;
             }
+            if (!canRecognise) return;
+            // Room first, status second: if the list cannot take them (a caucus with no
+            // time left), leave the status alone. canAddToList shows the reason.
+            if (!isOnList && canAddToList && !canAddToList(d.id)) return;
+            // A waiting-room request from this delegation is answered by this click, the
+            // same way Approve answers it: the status they asked for (never PV for an
+            // observer), then the motion goes. Best effort on reading the desired status,
+            // since this panel can hold a slightly older pendingMotions snapshot.
+            const desired = recognisedStatus(committee.pendingMotions, d.country, isObserver);
+            // 1) Status, optimistic: localStatuses here, updateLocal + setDelegateStatusInDB
+            //    in the parent's onStatusChange. Must precede the add, because the parent's
+            //    absent handling strips absent delegates from both lists.
+            applyStatus(d.id, desired);
+            // 2) The list add, optimistic then fire-and-forget, owned by the parent.
+            if (!isOnList) onAddToList(d.id);
+            // 3) Any pending join-request for this country: dropped locally now, deleted in
+            //    the DB only AFTER a status write lands, so the delegate's phone never sees
+            //    the request vanish while it still reads absent (it would show "denied").
+            onJoinRequestResolved?.(d.country);
+            resolveJoinRequestsOnAdmit(committee.id, d.id, d.country, desired, committee.code, committee.dbChairJoinSuffix ?? undefined);
           };
 
+          // The row is the button: keyboard users get the same add / remove / recognise
+          // action as a click. Only when the click would do something for this chair.
+          const rowActionable = !!onAddToList && !isViewOnly && (!isAbsent || canRecognise);
+          // The speaker holding the floor, in the queue view (#1) or the A-Z views.
+          const isSpeakingRow = isUpNext || isCurrentSpeaker;
+          // The status slider (roll call, Roll Call tab) takes ~120px of the row, so that mode
+          // runs a size down to keep names readable at the sidebar's minimum width.
+          const sliderMode = isRollCallPhase || showStatusSliders;
+          // The full-screen roll call (pre-session and the resume roll call) is the one people
+          // read off a projector: bigger flags, names, slider and observer toggle. The
+          // mid-session Roll Call tab (sidebar) stays compact.
+          const bigRoll = !!isRollCallPhase;
+          // Present vs Present-and-Voting is colour-coded ONLY while taking roll (sliderMode).
+          // Outside it both read the same neutral tint.
+          // ABSENT IS THE CLEAR STATE (16 Sep 2026): no tint, no dimmed flag, no dimmed name.
+          // The backdrop is what marks a delegation as answered (P or PV), so an unanswered
+          // row stays at full brightness and is still readable from the back of the room. The
+          // old treatment darkened exactly the rows a chair is still hunting for.
+          const rowBg = isLifted ? '#24503A'
+            : isSpeakingRow ? 'rgba(238,217,138,0.14)'
+            : isAbsent ? 'transparent'
+            : !sliderMode ? 'rgba(237,231,216,0.07)'
+            : effectiveStatus === 'present' ? 'rgba(61,122,82,0.26)'
+            : 'rgba(182,135,31,0.20)';
+          const rowBgHover = isLifted ? '#24503A'
+            : isSpeakingRow ? 'rgba(238,217,138,0.20)'
+            : isAbsent ? 'rgba(237,231,216,0.06)'
+            : !sliderMode ? 'rgba(237,231,216,0.12)'
+            : effectiveStatus === 'present' ? 'rgba(61,122,82,0.40)'
+            : 'rgba(182,135,31,0.32)';
+          // Queue rows (not roll call, not the Roll Call tab) scale by `q`: 1.1, or 1.155 on a
+          // short screen (useQueueRowScale). Roll call sizes are unchanged.
+          const q = sliderMode ? 1 : queueRowScale;
+          const qr = (n: number) => Math.round(n * q * 10) / 10;
+          // Round flags, 5% up from 48 / 34 / 40 (15 Sep 2026), queue x q (17 Sep 2026).
+          const flagPx = isUpNext ? qr(50) : bigRoll ? 54 : sliderMode ? 34 : qr(42);
+
           return (
-            <div key={d.id}>
-              {dragOverIndex === idx && dragOverIndex !== dragIndexRef.current && (
-                <div className="h-0.5 bg-[#1B3828] rounded-full mx-2 -mb-0.5" />
+            <div
+              key={d.id}
+              data-reorder-id={isReorderable ? d.id : undefined}
+              className="relative"
+              style={isLifted ? { zIndex: 20, willChange: 'transform' } : undefined}
+            >
+              {dropLine && (
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-x-1.5 flex items-center"
+                  style={dropLine === 'before' ? { top: -3.5, height: 3 } : { bottom: -3.5, height: 3 }}
+                >
+                  <span className="shrink-0 w-2 h-2 rounded-full" style={{ backgroundColor: '#EED98A', marginInlineStart: -1 }} />
+                  <span className="flex-1 h-[2.5px] rounded-full" style={{ backgroundColor: '#EED98A' }} />
+                </div>
               )}
               <div
-                data-matches={matchesSearch ? 'true' : 'false'}
                 onClick={handleRowClick}
-                draggable={isDraggable}
-                onDragStart={() => { if (isDraggable) dragIndexRef.current = idx; }}
-                onDragOver={(e) => { e.preventDefault(); if (listView === 'queue' && !isRollCallPhase) setDragOverIndex(idx); }}
-                onDrop={() => {
-                  const from = dragIndexRef.current;
-                  const to = idx;
-                  if (from === null || from === to || !onReorderList) { setDragOverIndex(null); return; }
-                  const gslItems = (committee.speakersList ?? []);
-                  const fromDelegateId = filtered[from]?.id;
-                  const toDelegateId = d.id;
-                  const fromIdx = gslItems.findIndex(s => s.delegateId === fromDelegateId);
-                  const toIdx = gslItems.findIndex(s => s.delegateId === toDelegateId);
-                  if (fromIdx < 0 || toIdx < 0) { setDragOverIndex(null); return; }
-                  const newList = [...gslItems];
-                  const [moved] = newList.splice(fromIdx, 1);
-                  newList.splice(toIdx, 0, moved);
-                  onReorderList(newList);
-                  dragIndexRef.current = null;
-                  setDragOverIndex(null);
-                }}
-                onDragEnd={() => { dragIndexRef.current = null; setDragOverIndex(null); }}
-                className={`group/seat flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all ${
-                  !matchesSearch
-                    ? 'opacity-20'
-                    : isCurrentSpeaker
-                    ? 'border-2'
-                    : isAbsent
-                    ? 'opacity-35'
-                    : effectiveStatus === 'present'
-                    ? 'border'
-                    : 'border'
-                } ${
-                  (!isRollCallPhase && !showStatusSliders && onAddToList && !isAbsent) || isRollCallPhase || showStatusSliders
+                onPointerDown={isReorderable ? (e) => startPointerDrag(e, d.id, false) : undefined}
+                role={rowActionable ? 'button' : undefined}
+                tabIndex={rowActionable ? 0 : undefined}
+                aria-current={isSpeakingRow ? 'true' : undefined}
+                onKeyDown={rowActionable ? (e) => {
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleRowClick(); }
+                } : undefined}
+                className={`group/seat flex items-center ${bigRoll ? 'gap-3.5 px-3 rounded-2xl' : sliderMode ? 'gap-2 px-2.5 rounded-xl' : 'rounded-xl'} focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/80 transition-[background-color,box-shadow] duration-150 motion-reduce:transition-none bg-[var(--row-bg)] hover:bg-[var(--row-bg-hover)] ${
+                  (!isRollCallPhase && !showStatusSliders && onAddToList && (!isAbsent || (canRecognise && !isViewOnly))) || isRollCallPhase || showStatusSliders
                     ? 'cursor-pointer'
                     : isAbsent && !isRollCallPhase && !showStatusSliders
                     ? 'cursor-not-allowed'
                     : ''
-                } ${isDraggable ? 'cursor-grab' : ''}`}
+                }`}
                 style={{
-                  backgroundColor: !matchesSearch ? 'transparent'
-                    : isCurrentSpeaker ? 'rgba(238,217,138,0.12)'
-                    : isAbsent ? 'transparent'
-                    : effectiveStatus === 'present' ? 'rgba(61,122,82,0.22)'
-                    : 'rgba(182,135,31,0.18)',
-                  borderColor: !matchesSearch ? 'transparent'
-                    : isCurrentSpeaker ? 'rgba(238,217,138,0.5)'
-                    : isAbsent ? 'transparent'
-                    : effectiveStatus === 'present' ? 'rgba(61,122,82,0.4)'
-                    : 'rgba(182,135,31,0.4)',
-                }}
-                onMouseEnter={(e) => { if (!isAbsent) (e.currentTarget as HTMLElement).style.backgroundColor = effectiveStatus === 'present' ? 'rgba(61,122,82,0.38)' : effectiveStatus === 'present-voting' ? 'rgba(182,135,31,0.32)' : 'rgba(238,217,138,0.08)'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = !matchesSearch ? 'transparent' : isCurrentSpeaker ? 'rgba(238,217,138,0.12)' : isAbsent ? 'transparent' : effectiveStatus === 'present' ? 'rgba(61,122,82,0.22)' : 'rgba(182,135,31,0.18)'; }}
+                  ['--row-bg' as string]: rowBg,
+                  ['--row-bg-hover' as string]: rowBgHover,
+                  minHeight: isUpNext ? qr(64) : bigRoll ? 70 : sliderMode ? 48 : qr(54),
+                  paddingBlock: bigRoll ? 8 : qr(6),
+                  ...(sliderMode ? null : { gap: qr(12), paddingInline: qr(10) }),
+                  // A lit edge, not a border: the speaker's row reads at a distance.
+                  boxShadow: isLifted
+                    ? '0 10px 28px rgba(0,0,0,0.38), 0 2px 6px rgba(0,0,0,0.25), inset 0 0 0 1.5px rgba(238,217,138,0.55)'
+                    : isSpeakingRow ? 'inset 0 0 0 1.5px rgba(238,217,138,0.6)'
+                    : isReadyRow ? 'inset 0 0 0 1px rgba(238,217,138,0.26)' : undefined,
+                } as React.CSSProperties}
               >
                 <div className="relative shrink-0">
                   {isRoomOrderTdT && queuePos !== null ? (
-                    <div className={`${isUpNext ? 'w-12 h-12' : 'w-9 h-9'} rounded-full bg-[#DDD4C0] border border-[#C8BAA8] flex items-center justify-center`}>
-                      <span className={`font-black text-[#B6871F] ${isUpNext ? 'text-xl' : 'text-sm'}`}>{queuePos}</span>
+                    <div className="rounded-full bg-[#DDD4C0] flex items-center justify-center" style={{ width: flagPx, height: flagPx }}>
+                      <span className="font-black text-[#8B5A20] tabular-nums" style={{ fontSize: isUpNext ? qr(20) : qr(16) }}>{queuePos}</span>
                     </div>
                   ) : (
-                    <FlagCircle country={d.country} size={isUpNext ? 'md' : 'sm'} />
+                    <SeatCircleFlag
+                      country={d.country}
+                      size={flagPx}
+                      decorative
+                      // A custom seat with no crest shows its initials here, not the glyph.
+                      fallback="initials"
+                      monogramColors={SIDEBAR_MONOGRAM}
+                      ring={isSpeakingRow ? false : 'rgba(255,255,255,0.18)'}
+                      style={{
+                        // A soft lift so the disc sits above the forest ground, not in it.
+                        boxShadow: isSpeakingRow
+                          ? '0 0 0 2.5px #EED98A, 0 2px 6px rgba(0,0,0,0.32)'
+                          : '0 1px 2px rgba(0,0,0,0.30), 0 2px 7px rgba(0,0,0,0.22)',
+                        // Absent is NOT dimmed or greyed (16 Sep 2026): a chair reading the
+                        // room needs the flag it has not answered yet to be the clearest thing
+                        // on the list, not the faintest.
+                      }}
+                    />
                   )}
-                  {/* Queue position bubble, omitted when isRoomOrderTdT since position is already the primary display */}
+                  {/* Observer indicator OUTSIDE roll call (16 Sep 2026, owner): a small gold
+                      megaphone on the flag's bottom inline-end edge, on observer rows only, never
+                      a control (observer status is set while taking roll, beside the slider).
+                      A non-observer row shows nothing. */}
+                  {!sliderMode && isObserver && (
+                    <div
+                      role="img"
+                      aria-label={t('rollcall_observer')}
+                      title={t('rollcall_observer')}
+                      className="absolute -bottom-1 -end-1.5 rounded-full flex items-center justify-center"
+                      style={{ width: qr(19), height: qr(19), backgroundColor: '#EED98A', color: '#1B3828', boxShadow: '0 0 0 1.5px #1B3828, 0 1px 3px rgba(0,0,0,0.3)' }}
+                    >
+                      <Megaphone size={qr(10.5)} strokeWidth={2.6} aria-hidden />
+                    </div>
+                  )}
+                  {/* Queue position, or a microphone for the speaker holding the floor. Omitted
+                      for a Room Order Tour de Table, where the number already IS the disc. */}
                   {queuePos !== null && !isRoomOrderTdT && (
-                    <div className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-0.5 rounded-full flex items-center justify-center font-black leading-none text-[10px]"
-                      style={{ backgroundColor: '#EDE7D8', color: '#1B3828', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }}>
-                      {isCurrentSpeakerInPanel ? '★' : queuePos <= 99 ? queuePos : '99+'}
+                    <div
+                      className="absolute -top-1 -end-1.5 px-1 rounded-full flex items-center justify-center font-black leading-none tabular-nums"
+                      style={{ minWidth: qr(21), height: qr(21), fontSize: qr(11.5), backgroundColor: isCurrentSpeakerInPanel ? '#EED98A' : '#EDE7D8', color: '#1B3828', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }}
+                      aria-label={isCurrentSpeakerInPanel ? t('rollcall_speaking') : t('rollcall_queue_position', { n: queuePos })}
+                      role="img"
+                    >
+                      {isCurrentSpeakerInPanel ? <Mic size={qr(11)} strokeWidth={3} aria-hidden /> : queuePos <= 99 ? queuePos : '99+'}
                     </div>
                   )}
                 </div>
-                <span className={`flex-1 truncate ${isUpNext ? 'text-lg font-bold' : 'text-base'} ${!isAbsent ? 'font-medium' : 'opacity-50'}`} style={{ color: '#EDE7D8' }}>
-                  {getCountryDisplayName(d.country, language)}
-                </span>
-                {isObserver && (
-                  <span className="text-[9px] shrink-0 font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md" style={{ backgroundColor: 'rgba(238,217,138,0.15)', color: 'rgba(238,217,138,0.85)', border: '1px solid rgba(238,217,138,0.3)' }}>{t('rollcall_observer')}</span>
-                )}
-                {/* Observer placard toggle. It used to be gated on
-                    `isRollCallPhase || showStatusSliders`, which meant that
-                    mid-session it existed only inside the ROLL CALL sidebar tab
-                    (`showSliders`, off by default) — so "you can't change delegates
-                    to observers" was true of every screen a chair actually stands
-                    on. The gate is now write-access alone. To keep the sidebar
-                    quiet it is revealed on hover/focus, except where it was always
-                    visible before (roll call, sliders) and on an existing observer,
-                    whose placard must stay one click away from coming off. */}
-                {!(isReadOnly || isViewOnly) && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); toggleObserver(d.id, isObserver); }}
-                    title={isObserver ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
-                    aria-label={isObserver ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
-                    aria-pressed={isObserver}
-                    className={`shrink-0 p-1 rounded-md transition-all active:scale-90 focus:outline-none ${
-                      (isRollCallPhase || showStatusSliders || isObserver)
-                        ? ''
-                        : 'opacity-0 group-hover/seat:opacity-100 focus-visible:opacity-100'
-                    }`}
-                    style={{ color: isObserver ? 'rgba(238,217,138,0.9)' : 'rgba(237,231,216,0.4)' }}
-                  >
-                    <Megaphone size={15} />
-                  </button>
-                )}
-                {/* Someone has joined on this seat. Tap twice to free it (a dead phone,
-                    the wrong person). Chair only: canFreeSeats hides it for a view-only
-                    Commenter and once the session has ended. */}
-                {seatClaimed && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); freeSeat(d.country); }}
-                    disabled={freeBusy === seatK}
-                    title={seatArmed ? t('rollcall_seat_free_confirm') : t('rollcall_seat_claimed_title')}
-                    aria-label={seatArmed ? t('rollcall_seat_free_confirm') : t('rollcall_seat_free')}
-                    className="shrink-0 flex items-center gap-1 px-1.5 py-1 rounded-md transition-all active:scale-90 focus:outline-none disabled:opacity-40"
+                <div className="flex-1 min-w-0 flex flex-col">
+                  <span
+                    className="truncate"
                     style={{
-                      color: seatArmed ? '#F4A0A0' : 'rgba(237,231,216,0.45)',
-                      backgroundColor: seatArmed ? 'rgba(139,32,32,0.25)' : 'transparent',
-                      border: seatArmed ? '1px solid rgba(139,32,32,0.4)' : '1px solid transparent',
+                      fontSize: isUpNext ? qr(19.5) : bigRoll ? 21 : sliderMode ? 15.5 : qr(17),
+                      fontWeight: isUpNext ? 800 : 600,
+                      lineHeight: 1.2,
+                      // Full brightness whatever the status: the backdrop says answered, the
+                      // word says absent. Nothing on this list is ever faded out.
+                      color: '#F4EFE3',
                     }}
                   >
-                    <Smartphone size={14} />
-                    {seatArmed && <span className="text-[10px] font-bold uppercase tracking-wide whitespace-nowrap">{t('rollcall_seat_free')}</span>}
+                    {getCountryDisplayName(d.country, language)}
+                  </span>
+                  {isSpeakingRow && !sliderMode && (
+                    <span className="truncate uppercase" style={{ fontSize: qr(11), fontWeight: 800, letterSpacing: '0.08em', lineHeight: 1.3, color: '#EED98A' }}>
+                      {t('rollcall_speaking')}
+                    </span>
+                  )}
+                  {isReadyRow && !sliderMode && (
+                    <span className="truncate uppercase" style={{ fontSize: qr(10.5), fontWeight: 700, letterSpacing: '0.08em', lineHeight: 1.3, color: 'rgba(238,217,138,0.72)' }}>
+                      {t('gsl_on_deck')}
+                    </span>
+                  )}
+                </div>
+                {/* In roll call the observer state is the gold megaphone beside the slider, with
+                    the word "observer" under it. Outside roll call it is the small badge on the
+                    flag (observer rows only).
+                    Absent says so in words. Present and Present-and-Voting are deliberately NOT
+                    told apart here (no PV tag, no tint): the slider carries that distinction
+                    while taking roll. */}
+                {!sliderMode && isAbsent && (
+                  <span className="shrink-0 font-bold uppercase tracking-wider" style={{ fontSize: qr(11), color: 'rgba(237,231,216,0.72)' }}>{t('rollcall_absent')}</span>
+                )}
+                {/* Reorder grip: drag with a mouse, finger or pen, or ArrowUp / ArrowDown. Faint
+                    until the row is hovered; always visible on touch screens (no hover). */}
+                {isReorderable && (
+                  <button
+                    type="button"
+                    aria-label={t('rollcall_reorder_handle', { country: getCountryDisplayName(d.country, language) })}
+                    title={t('rollcall_reorder_hint')}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => gripKeyDown(e, d.id)}
+                    onPointerDown={(e) => startPointerDrag(e, d.id, true)}
+                    className={`shrink-0 -me-1 flex items-center justify-center rounded-md transition-opacity duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70 focus-visible:opacity-100 group-hover/seat:opacity-100 [@media(hover:none)]:opacity-80 ${
+                      isLifted ? 'opacity-100 cursor-grabbing' : 'opacity-45 cursor-grab'
+                    }`}
+                    style={{ width: qr(28), height: qr(36), color: '#EDE7D8', touchAction: 'none' }}
+                  >
+                    <GripVertical size={qr(17)} aria-hidden />
                   </button>
                 )}
-                {isAbsent && !(isRollCallPhase || showStatusSliders) && (
-                  <span className="text-[10px] shrink-0 font-mono ms-auto uppercase tracking-wide" style={{ color: 'rgba(237,231,216,0.35)' }}>{t('rollcall_absent')}</span>
-                )}
-                {(isRollCallPhase || showStatusSliders) && (
-                  <div onClick={(e) => e.stopPropagation()} className={`shrink-0 ${(isReadOnly || isViewOnly) ? 'pointer-events-none opacity-50' : ''}`}>
-                    <StatusSlider status={effectiveStatus} onCycle={() => cycleStatus(d.id, effectiveStatus)} isObserver={isObserver} />
+                {sliderMode && (
+                  <div onClick={(e) => e.stopPropagation()} className={`shrink-0 flex items-center ${bigRoll ? 'gap-2.5' : 'gap-1'} ${(isReadOnly || isViewOnly) ? 'pointer-events-none opacity-50' : ''}`}>
+                    {/* Observer toggle: the megaphone right next to the slider, on every row while
+                        taking roll. Gold = observer, faint = not, and an observer says so in the
+                        word underneath (16 Sep 2026: the only place the word "observer" appears,
+                        and only while roll call is on the screen). Making an observer drops PV to
+                        P (toggleObserver). Read-only / Commenter: inert, like the slider. */}
+                    {/* Fixed width on EVERY row, observer or not, so the word appearing under one
+                        megaphone never shifts the slider column out of line with its neighbours. */}
+                    <span className="shrink-0 flex flex-col items-center" style={{ width: bigRoll ? 66 : 50 }}>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); toggleObserver(d.id, isObserver); }}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      disabled={isReadOnly || isViewOnly}
+                      title={isObserver ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
+                      aria-label={`${isObserver ? t('rollcall_observer_remove') : t('rollcall_observer_make')}: ${getCountryDisplayName(d.country, language)}`}
+                      aria-pressed={isObserver}
+                      className="rounded-full flex items-center justify-center shrink-0 transition-[background-color,color,transform,box-shadow] duration-150 active:scale-[0.92] motion-reduce:transition-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/80 hover:brightness-125"
+                      style={{
+                        width: bigRoll ? 44 : 26,
+                        height: bigRoll ? 44 : 26,
+                        backgroundColor: isObserver ? '#EED98A' : 'rgba(237,231,216,0.06)',
+                        color: isObserver ? '#1B3828' : 'rgba(237,231,216,0.42)',
+                        boxShadow: isObserver ? '0 1px 3px rgba(0,0,0,0.3)' : 'inset 0 0 0 1.5px rgba(237,231,216,0.14)',
+                      }}
+                    >
+                      <Megaphone size={bigRoll ? 19 : 13} strokeWidth={2.4} aria-hidden />
+                    </button>
+                    {isObserver && (
+                      <span
+                        aria-hidden
+                        // No truncation: the whole word must read ("OBSER..." does not). It is
+                        // centred under the megaphone and sized so the longest locale (fr
+                        // OBSERVATEUR) fits the fixed column.
+                        className="whitespace-nowrap uppercase"
+                        style={{ fontSize: bigRoll ? 10 : 7.5, fontWeight: 800, letterSpacing: bigRoll ? '0.03em' : 0, lineHeight: 1.1, color: '#EED98A', marginTop: 2 }}
+                      >
+                        {t('rollcall_observer')}
+                      </span>
+                    )}
+                    </span>
+                    {/* Fixed 3-segment width, so an observer's shorter A/P slider never shifts
+                        the megaphone column out of line with the rows around it. */}
+                    <div className="flex justify-start" style={{ width: bigRoll ? 132 : 90 }}>
+                      <StatusSlider status={effectiveStatus} onCycle={() => cycleStatus(d.id, effectiveStatus)} isObserver={isObserver} large={bigRoll} />
+                    </div>
                   </div>
                 )}
               </div>
@@ -790,16 +1118,13 @@ function RollCallPanelInner({
         })}
       </div>
 
-      <div className="px-3 py-3 space-y-2 shrink-0 overflow-visible relative z-10" style={{ borderTop: '1px solid rgba(61,122,82,0.3)' }}>
-        {freeError && (
-          <p className="text-[11px] font-semibold px-1" role="alert" style={{ color: '#F4A0A0' }}>{t('rollcall_seat_free_failed')}</p>
-        )}
-        <AddCountryInput committee={committee} onAdd={handleAddDelegate} onQueryChange={setSearch} />
-        {(committee.phase === 'pre-session' || committee.phase === 'roll-call') && (
+      {showBeginSession && (
+      <div className={`${isRollCallPhase ? 'px-4 py-3.5 flex' : 'px-3 py-3'} shrink-0 overflow-visible relative z-10`} style={{ backgroundColor: 'rgba(0,0,0,0.14)' }}>
+        {(
           <button
             onClick={handleBeginSession}
             disabled={present < 1}
-            className="w-full disabled:opacity-40 disabled:cursor-not-allowed py-3 rounded-xl text-sm font-black uppercase tracking-widest gv-lift-dark" style={{ backgroundColor: '#EDE7D8', color: '#1B3828' }} onMouseEnter={(e) => { if ((e.currentTarget as HTMLButtonElement).disabled) return; (e.currentTarget as HTMLElement).style.backgroundColor = '#DDD4C0'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; }}
+            className={`disabled:opacity-40 disabled:cursor-not-allowed ${isRollCallPhase ? 'flex-1 px-5 py-3.5 text-[15px] leading-tight' : 'w-full py-3 text-sm'} rounded-xl font-black uppercase tracking-widest gv-lift-dark`} style={{ backgroundColor: '#EDE7D8', color: '#1B3828' }} onMouseEnter={(e) => { if ((e.currentTarget as HTMLButtonElement).disabled) return; (e.currentTarget as HTMLElement).style.backgroundColor = '#DDD4C0'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; }}
           >
             {/* With delegates in the room but none marked present, the blocker is the
                 roll call, not the roster — "Add at least 1 delegate" was simply wrong. */}
@@ -807,6 +1132,7 @@ function RollCallPanelInner({
           </button>
         )}
       </div>
+      )}
 
       {showFullList && (
         <FullListPopup
@@ -827,17 +1153,24 @@ const RollCallPanel = React.memo(RollCallPanelInner, (prev, next) => {
     prev.committee.phase === next.committee.phase &&
     prev.committee.currentSpeaker === next.committee.currentSpeaker &&
     prev.committee.caucusQueue === next.committee.caucusQueue &&
+    // The caucus speaker at #1 and the join requests an absent-row click resolves.
+    prev.committee.caucus?.currentSpeaker === next.committee.caucus?.currentSpeaker &&
+    prev.committee.pendingMotions === next.committee.pendingMotions &&
+    prev.committee.endedAt === next.committee.endedAt &&
     prev.isRollCallPhase === next.isRollCallPhase &&
     prev.showStatusSliders === next.showStatusSliders &&
     prev.showBulkActions === next.showBulkActions &&
-    prev.showViewToggle === next.showViewToggle &&
+    prev.speechRunning === next.speechRunning &&
+    prev.readyDelegateId === next.readyDelegateId &&
+    prev.canAddToList === next.canAddToList &&
     prev.isReadOnly === next.isReadOnly &&
     prev.isViewOnly === next.isViewOnly &&
+    prev.onCommenterAttempt === next.onCommenterAttempt &&
     prev.isTdT === next.isTdT &&
     prev.isRoomOrderTdT === next.isRoomOrderTdT &&
     prev.onListIds === next.onListIds &&
-    prev.listView === next.listView &&
-    prev.onReorderList === next.onReorderList
+    prev.onReorderList === next.onReorderList &&
+    prev.onRemoveCurrentSpeaker === next.onRemoveCurrentSpeaker
   );
 });
 

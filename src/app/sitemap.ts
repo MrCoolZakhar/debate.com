@@ -1,81 +1,126 @@
 import { MetadataRoute } from 'next';
 import { supabase } from '@/lib/supabase';
+import { articles } from './blog/posts';
+import { SITE_URL } from '@/lib/seo';
 
-// Re-generate hourly so newly listed public conferences enter the sitemap
-// without waiting for a redeploy.
-export const revalidate = 3600;
+// ── The sitemap: every indexable URL, exactly as it canonicalises ────────────
+//
+// Rules (enforced by `npm run check:indexability`):
+//  - list only URLs that answer 200 with no redirect, a self-canonical and no
+//    noindex. Never a redirecting path (/conferences → /), never a query string.
+//  - lastmod must be TRUE. It used to be `new Date()` for every static page,
+//    i.e. "changed right now" on every generation, which teaches Google to
+//    ignore our lastmod entirely. Static pages carry the date their content
+//    last changed (bump it when you edit the page); hub pages carry the newest
+//    conference update, because that is what changes on them.
+//
+// Dynamic, not ISR. With `revalidate = 3600` production served the same copy
+// for 5+ days (x-vercel-cache HIT, age 433593 s, lastmod frozen at the 11 Sep
+// deploy), so conferences published since were missing. The query is one small
+// select and Google fetches the sitemap a few times a day.
+export const dynamic = 'force-dynamic';
 
-// Public conference pages are first-class SEO surfaces: each is_public
-// conference gets its own /conferences/[slug] entry so Google discovers new
-// listings without waiting for internal-link crawls. Failure here must never
-// break the sitemap, so the fetch degrades to the static list.
-async function conferenceEntries(): Promise<MetadataRoute.Sitemap> {
+const url = (path: string) => (path === '/' ? SITE_URL : `${SITE_URL}${path}`);
+
+// Content dates of the static pages. Bump when the page's text changes.
+const STATIC_PAGES: { path: string; lastModified: string; changeFrequency: 'daily' | 'weekly' | 'monthly' | 'yearly'; priority: number }[] = [
+  { path: '/sessions',          lastModified: '2026-08-13', changeFrequency: 'monthly', priority: 0.9 },
+  { path: '/create',            lastModified: '2026-09-17', changeFrequency: 'monthly', priority: 0.8 },
+  { path: '/join',              lastModified: '2026-09-16', changeFrequency: 'monthly', priority: 0.7 },
+  { path: '/conferences/roles', lastModified: '2026-09-08', changeFrequency: 'weekly',  priority: 0.7 },
+  { path: '/about',             lastModified: '2026-09-15', changeFrequency: 'monthly', priority: 0.6 },
+  { path: '/contact',           lastModified: '2026-08-13', changeFrequency: 'yearly',  priority: 0.5 },
+  { path: '/privacy',           lastModified: '2026-08-28', changeFrequency: 'yearly',  priority: 0.3 },
+  { path: '/terms',             lastModified: '2026-08-28', changeFrequency: 'yearly',  priority: 0.3 },
+];
+
+// Blog post content dates. Posts come from the manifest (src/app/blog/posts.ts),
+// so a new post can never be left out of the sitemap; add its date here.
+const BLOG_DEFAULT_DATE = '2026-06-07';
+const BLOG_DATES: Record<string, string> = {
+  'how-to-run-mun-committee': '2026-06-01',
+  'best-mun-software-2026': '2026-07-21',
+  'muncommand-alternative': '2026-07-21',
+  'mymun-alternative': '2026-08-13',
+  'muncoordinated-alternative': '2026-07-21',
+  'general-speakers-list-guide': '2026-06-01',
+  'mun-motions-explained': '2026-06-01',
+  'how-to-chair-first-mun': '2026-06-01',
+};
+const BLOG_PRIORITY: Record<string, number> = {
+  'best-mun-software-2026': 0.9,
+  'muncommand-alternative': 0.9,
+  'mymun-alternative': 0.9,
+  'muncoordinated-alternative': 0.9,
+  'free-mun-tools': 0.9,
+};
+
+interface ConfRow {
+  slug: string | null;
+  updated_at: string | null;
+  awards_published_at?: string | null;
+}
+
+// Failure here must never break the sitemap: degrade to the static list.
+async function publicConferences(): Promise<ConfRow[]> {
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('conferences')
-      .select('slug, updated_at')
-      .eq('is_public', true);
-    return (data ?? [])
-      .filter((c): c is { slug: string; updated_at: string | null } => !!c.slug)
-      .map((c) => ({
-        url: `https://gavelling.com/conferences/${c.slug}`,
-        // Real lastmod: crawlers prioritise entries whose date actually moved.
-        ...(c.updated_at ? { lastModified: new Date(c.updated_at) } : {}),
-        changeFrequency: 'weekly' as const,
-        priority: 0.8,
-      }));
+      .select('slug, updated_at, awards_published_at')
+      .eq('is_public', true)
+      .order('updated_at', { ascending: false });
+    if (!error) return ((data as ConfRow[]) ?? []).filter((c) => !!c.slug);
+    const fallback = await supabase.from('conferences').select('slug, updated_at').eq('is_public', true);
+    return ((fallback.data as ConfRow[]) ?? []).filter((c) => !!c.slug);
   } catch {
     return [];
   }
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const conferences = await conferenceEntries();
+  const conferences = await publicConferences();
+  const newestConference = conferences
+    .map((c) => (c.updated_at ? new Date(c.updated_at).getTime() : 0))
+    .reduce((a, b) => Math.max(a, b), 0);
+  // Hubs list conferences, so they change when a conference does.
+  const hubDate = newestConference ? new Date(newestConference) : new Date('2026-09-17');
+
   return [
-    { url: 'https://gavelling.com',             lastModified: new Date(), changeFrequency: 'daily',   priority: 1   },
-    { url: 'https://gavelling.com/conferences/explore', lastModified: new Date(), changeFrequency: 'daily', priority: 0.9 },
-    { url: 'https://gavelling.com/conferences/map',     lastModified: new Date(), changeFrequency: 'weekly', priority: 0.7 },
-    { url: 'https://gavelling.com/conferences/roles',   lastModified: new Date(), changeFrequency: 'monthly', priority: 0.7 },
-    { url: 'https://gavelling.com/sessions',     lastModified: new Date(), changeFrequency: 'weekly',  priority: 0.9 },
-    { url: 'https://gavelling.com/about',        lastModified: new Date(), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/contact',      lastModified: new Date(), changeFrequency: 'monthly', priority: 0.6 },
-    { url: 'https://gavelling.com/privacy',      lastModified: new Date(), changeFrequency: 'yearly',  priority: 0.3 },
-    { url: 'https://gavelling.com/terms',        lastModified: new Date(), changeFrequency: 'yearly',  priority: 0.3 },
-    { url: 'https://gavelling.com/blog',         lastModified: new Date(), changeFrequency: 'weekly',  priority: 0.9 },
-    ...conferences,
-    { url: 'https://gavelling.com/blog/how-to-run-mun-committee',    lastModified: new Date('2026-06-01'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/best-mun-software-2026',      lastModified: new Date('2026-07-21'), changeFrequency: 'monthly', priority: 0.9 },
-    { url: 'https://gavelling.com/blog/muncommand-alternative',      lastModified: new Date('2026-07-21'), changeFrequency: 'monthly', priority: 0.9 },
-    { url: 'https://gavelling.com/blog/mymun-alternative',           lastModified: new Date('2026-08-13'), changeFrequency: 'monthly', priority: 0.9 },
-    { url: 'https://gavelling.com/blog/muncoordinated-alternative',  lastModified: new Date('2026-07-21'), changeFrequency: 'monthly', priority: 0.9 },
-    { url: 'https://gavelling.com/blog/general-speakers-list-guide',  lastModified: new Date('2026-06-01'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/mun-motions-explained',        lastModified: new Date('2026-06-01'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/how-to-chair-first-mun',       lastModified: new Date('2026-06-01'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/how-to-run-moderated-caucus',  lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/unmoderated-caucus-guide',     lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/mun-voting-procedures',        lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/mun-delegate-tips',            lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/mun-position-paper-guide',     lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/mun-resolution-writing',       lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/mun-rules-of-procedure',       lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/mun-security-council-guide',   lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/mun-crisis-committee-guide',   lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/free-mun-tools',               lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.9 },
-    { url: 'https://gavelling.com/blog/mun-conference-preparation',   lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/mun-public-speaking-tips',     lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/mun-opening-speech',           lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/mun-working-paper-guide',      lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/mun-amendment-guide',          lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/mun-right-of-reply',           lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.7 },
-    { url: 'https://gavelling.com/blog/tour-de-table-mun',            lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/mun-director-guide',           lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/mun-chair-script',             lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/mun-bloc-building',            lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/mun-awards-guide',             lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/mun-conference-planning',      lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/mun-technology-guide',         lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/mun-online-committees',        lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/mun-faculty-advisor-guide',    lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/mun-points-of-order',          lastModified: new Date('2026-06-07'), changeFrequency: 'monthly', priority: 0.8 },
+    { url: url('/'), lastModified: hubDate, changeFrequency: 'daily', priority: 1 },
+    { url: url('/conferences/explore'), lastModified: hubDate, changeFrequency: 'daily', priority: 0.9 },
+    { url: url('/conferences/map'), lastModified: hubDate, changeFrequency: 'weekly', priority: 0.6 },
+    { url: url('/blog'), lastModified: new Date('2026-08-13'), changeFrequency: 'weekly', priority: 0.9 },
+    ...STATIC_PAGES.map((p) => ({
+      url: url(p.path),
+      lastModified: new Date(p.lastModified),
+      changeFrequency: p.changeFrequency,
+      priority: p.priority,
+    })),
+    ...conferences.flatMap((c) => {
+      const entries: MetadataRoute.Sitemap = [
+        {
+          url: url(`/conferences/${c.slug}`),
+          ...(c.updated_at ? { lastModified: new Date(c.updated_at) } : {}),
+          changeFrequency: 'weekly',
+          priority: 0.8,
+        },
+      ];
+      // The public honour roll exists once awards are published.
+      if (c.awards_published_at) {
+        entries.push({
+          url: url(`/conferences/${c.slug}/awards`),
+          lastModified: new Date(c.awards_published_at),
+          changeFrequency: 'yearly',
+          priority: 0.5,
+        });
+      }
+      return entries;
+    }),
+    ...articles.map((a) => ({
+      url: url(`/blog/${a.slug}`),
+      lastModified: new Date(BLOG_DATES[a.slug] ?? BLOG_DEFAULT_DATE),
+      changeFrequency: 'monthly' as const,
+      priority: BLOG_PRIORITY[a.slug] ?? 0.8,
+    })),
   ];
 }

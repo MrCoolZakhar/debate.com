@@ -194,7 +194,7 @@ function DraftLandingInner() {
         <p className="text-sm mb-6" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, lineHeight: 1.55 }}>
           The draft this link points to has been submitted, deleted, or never existed. If you are still hoping to apply, you can start again from the conference page.
         </p>
-        <Link href="/conferences" className="inline-flex items-center gap-2 rounded-full py-2.5 px-5 font-bold text-sm focus:outline-none" style={primaryPillStyle}>
+        <Link href="/conferences/explore" className="inline-flex items-center gap-2 rounded-full py-2.5 px-5 font-bold text-sm focus:outline-none" style={primaryPillStyle}>
           BROWSE CONFERENCES
         </Link>
       </CardShell>
@@ -212,7 +212,7 @@ function DraftLandingInner() {
         <p className="text-sm mb-6" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, lineHeight: 1.55 }}>
           Your saved answers are gone and you will not be reminded about them again. You can always start a fresh application from the conference page.
         </p>
-        <Link href="/conferences" className="inline-flex items-center gap-2 rounded-full py-2.5 px-5 font-bold text-sm focus:outline-none" style={primaryPillStyle}>
+        <Link href="/conferences/explore" className="inline-flex items-center gap-2 rounded-full py-2.5 px-5 font-bold text-sm focus:outline-none" style={primaryPillStyle}>
           BROWSE CONFERENCES
         </Link>
       </CardShell>

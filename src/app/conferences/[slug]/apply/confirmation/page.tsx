@@ -12,6 +12,8 @@ import { supabase as anonClient } from '@/lib/supabase';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
 import { themeCssVars, type ConferenceTheme } from '@/lib/theme';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
+import SubmissionToast from '@/components/SubmissionToast';
 
 const OUTFIT = "'Outfit', sans-serif";
 
@@ -118,6 +120,39 @@ function ConfirmationInner({ conference }: { conference: ConfRow }) {
     return () => { cancelled = true; };
   }, [conference.id, conference.fee_amount, conference.fee_currency, role]);
 
+  // The one-time, per-role, after-submitting message an organizer may have
+  // written — shown as a toast, never blocking the pass above. Readable by
+  // link (USING (true)), same anon client as the conferences read; degrades
+  // silently to no toast on any error, a missing row, or a blank message,
+  // which is every conference today.
+  const [submission, setSubmission] = useState<{ message: string; linkLabel: string | null; linkUrl: string | null } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await anonClient
+          .from('application_role_configs')
+          .select('submission_message, submission_link_label, submission_link_url')
+          .eq('conference_id', conference.id)
+          .eq('role', role)
+          .maybeSingle();
+        if (cancelled) return;
+        if (error || !data) return;
+        const row = data as { submission_message: string | null; submission_link_label: string | null; submission_link_url: string | null };
+        if (!row.submission_message || !row.submission_message.trim()) return;
+        setSubmission({
+          message: row.submission_message,
+          linkLabel: row.submission_link_label,
+          linkUrl: row.submission_link_url,
+        });
+      } catch {
+        if (!cancelled) setSubmission(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [conference.id, role]);
+
   const paidAmount = Number(app?.amount_paid ?? 0);
   const paid = app?.payment_status === 'paid';
   const outstanding = Math.max(0, (roleFee?.amount ?? 0) - paidAmount);
@@ -148,6 +183,15 @@ function ConfirmationInner({ conference }: { conference: ConfRow }) {
       />
       <SiteNav />
       <style>{`@keyframes gvRise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }`}</style>
+
+      {submission && (
+        <SubmissionToast
+          conferenceName={conferenceAcronymLabel(conference) || conference.full_name}
+          message={submission.message}
+          linkLabel={submission.linkLabel}
+          linkUrl={submission.linkUrl}
+        />
+      )}
 
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 py-16">
         <RegistrationConfirmation
@@ -245,11 +289,11 @@ function ConfirmationInner({ conference }: { conference: ConfRow }) {
               <Link
                 href="/conferences/explore"
                 className="mt-6 text-xs font-medium focus:outline-none transition-colors"
-                style={{ color: 'var(--gv-muted)', textDecoration: 'none', fontFamily: OUTFIT }}
+                style={{ color: 'var(--gv-muted)', textDecoration: 'underline', textUnderlineOffset: 3, fontFamily: OUTFIT }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-on-bg)'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-muted)'; }}
               >
-                explore more conferences
+                Explore More Conferences
               </Link>
             </div>
           </div>

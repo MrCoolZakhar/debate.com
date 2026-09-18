@@ -15,6 +15,13 @@
 //   • One person per seat (a double-delegation slot holds two). The holder is the auth
 //     uid when signed in, otherwise this device's random token below. The server keeps
 //     only a SHA-256 of the token, never the token itself.
+//   • One DEVICE per account per committee: a signed-in claim also records the device's
+//     token hash, so the same account on a phone and a laptop cannot both drive the seat
+//     (see claimDelegateSeat's `takeover`).
+//   • A chair can remove whoever holds a seat (Settings → People, kick_delegate_seat). For
+//     10 minutes after that, claim_delegate_seat answers `kicked` to that holder and to
+//     that device, and getSeatAvailability reports the seat as `removed` so the join page
+//     stops offering it to them. Anyone else may take the seat at once.
 //
 // `delegate_seat_claims` has RLS on and NO policies: every read and write goes through
 // the SECURITY DEFINER RPCs wrapped here, and none of them returns a name, an email or
@@ -22,7 +29,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase as anonSupabase } from '@/lib/supabase';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
-import { sessionClient } from '@/lib/sessionClient';
 
 const TOKEN_PREFIX = 'gavelling-seat-token:';
 // Used only when localStorage is unavailable (private mode, blocked site data). The
@@ -118,6 +124,14 @@ export interface SeatState {
   full: boolean;
   /** This account, or this device, is one of the holders. */
   mine: boolean;
+  /**
+   * A chair removed THIS holder (or this device) from this seat less than 10 minutes ago,
+   * so `claim_delegate_seat` will answer `kicked`. Only ever true for the caller: the RPC
+   * returns nothing about anyone else's removal.
+   */
+  removed: boolean;
+  /** Whole minutes until this seat opens to this holder again (0 when not removed). */
+  removedMinutes: number;
 }
 /** Keyed by seatKey(country). */
 export type SeatAvailability = Record<string, SeatState>;
@@ -146,6 +160,8 @@ export async function getSeatAvailability(
           claimed: s.claimed === true,
           full: s.full === true,
           mine: s.mine === true,
+          removed: (raw as { removed?: unknown }).removed === true,
+          removedMinutes: Math.max(0, Number((raw as { removed_minutes?: unknown }).removed_minutes) || 0),
         };
       }
     }
@@ -156,9 +172,14 @@ export async function getSeatAvailability(
 }
 
 // ── Claim / release ───────────────────────────────────────────────────────────
+/** A seat RPC that has not answered in this long is treated as unanswered, not as a verdict. */
+const SEAT_RPC_TIMEOUT_MS = 12_000;
+
 export type SeatClaimReason =
   | 'claimed' | 'mine' | 'ended'                                           // ok
   | 'taken' | 'reserved' | 'signin' | 'no_seat' | 'no_token' | 'not_found' // refused
+  | 'other_device'                                                         // refused: this account is in on another device
+  | 'kicked'                                                               // refused: a chair removed this holder from this seat < 10 min ago (Settings → People)
   | 'error';                                                               // could not ask
 export interface SeatClaimResult { ok: boolean; reason: SeatClaimReason }
 
@@ -166,34 +187,64 @@ export interface SeatClaimResult { ok: boolean; reason: SeatClaimReason }
  * Take (or re-take) a seat for this account or device. Always sends the device token,
  * even when signed in, so a device claim can be adopted by the account that signs in on
  * it and a signed-in claim survives signing out on the same device.
+ *
+ * One account controls a seat from ONE device (migration
+ * `seat_claims_one_device_per_account`). The token is what tells an account's phone from
+ * its laptop. `takeover: true` moves this account's claim onto this device (a fresh open,
+ * or the explicit "Use this device instead" tap); `takeover: false` is a re-verify and
+ * answers 'other_device' when another device holds it, changing nothing, so an older
+ * device stops instead of stealing the seat back every 30 s.
  */
-export async function claimDelegateSeat(code: string, country: string, accessToken?: string | null): Promise<SeatClaimResult> {
-  try {
-    const client = await clientFor(accessToken);
-    const { data, error } = await client.rpc('claim_delegate_seat', {
-      p_code: code.toUpperCase(),
-      p_country: country,
-      p_token: getSeatToken(code),
-    });
-    if (error || !data) return { ok: false, reason: 'error' };
-    const d = data as { ok?: boolean; reason?: string };
-    return { ok: d.ok === true, reason: (d.reason ?? 'error') as SeatClaimReason };
-  } catch {
-    return { ok: false, reason: 'error' };
-  }
+export async function claimDelegateSeat(
+  code: string,
+  country: string,
+  accessToken?: string | null,
+  opts: { takeover: boolean } = { takeover: false },
+): Promise<SeatClaimResult> {
+  const ask = async (): Promise<SeatClaimResult> => {
+    try {
+      const client = await clientFor(accessToken);
+      const { data, error } = await client.rpc('claim_delegate_seat', {
+        p_code: code.toUpperCase(),
+        p_country: country,
+        p_token: getSeatToken(code),
+        p_takeover: opts.takeover,
+      });
+      if (error || !data) return { ok: false, reason: 'error' };
+      const d = data as { ok?: boolean; reason?: string };
+      return { ok: d.ok === true, reason: (d.reason ?? 'error') as SeatClaimReason };
+    } catch {
+      return { ok: false, reason: 'error' };
+    }
+  };
+  // A hung fetch used to block the seat re-verify FOREVER: /delegate holds one check at a
+  // time, so one request that never settles (a phone that lost its network mid-flight)
+  // meant the 30 s tick, the tab-visible check and the chair's kick were all dropped for
+  // the life of the page. `error` is the answer nothing acts on, so timing out is always
+  // safe: the next tick simply asks again.
+  return Promise.race([ask(), new Promise<SeatClaimResult>((resolve) => {
+    setTimeout(() => resolve({ ok: false, reason: 'error' }), SEAT_RPC_TIMEOUT_MS);
+  })]);
 }
 
 /**
- * Chair only: free every place on a seat so the next person can take it (a dead phone,
- * the wrong person). Gated on is_session_chair, i.e. the x-chair-suffix header, the same
- * credential as every other chair write. True ONLY when the server confirmed it.
+ * Give up this account's or this device's own claim on a seat (the idle logout on
+ * /delegate). Never touches anyone else's claim: the server resolves the holder exactly
+ * like claim_delegate_seat. Best effort: an idle seat also expires on its own after
+ * SEAT_CLAIM_EXPIRY_MINUTES without a re-verify, so a failed call does not strand it.
  */
-export async function releaseDelegateSeat(code: string, country: string, chairSuffix?: string): Promise<boolean> {
-  if (!chairSuffix) return false;
+export async function leaveDelegateSeat(
+  code: string,
+  country: string,
+  accessToken?: string | null,
+): Promise<boolean> {
+  const token = peekSeatToken(code);
   try {
-    const { data, error } = await sessionClient(code, chairSuffix).rpc('release_delegate_seat', {
+    const client = await clientFor(accessToken);
+    const { data, error } = await client.rpc('leave_delegate_seat', {
       p_code: code.toUpperCase(),
       p_country: country,
+      p_token: token,
     });
     if (error) return false;
     return (data as { ok?: boolean } | null)?.ok === true;
@@ -201,3 +252,11 @@ export async function releaseDelegateSeat(code: string, country: string, chairSu
     return false;
   }
 }
+
+/**
+ * Server side (claim_delegate_seat, delegate_seat_availability): a claim whose
+ * last_seen_at is older than this no longer holds the seat, so another person can take
+ * it. Five minutes longer than the client's idle logout (src/lib/delegateIdle.ts), which
+ * stops re-verifying once the delegate goes idle. Documentation only: the SQL is the truth.
+ */
+export const SEAT_CLAIM_EXPIRY_MINUTES = 65;

@@ -41,12 +41,15 @@ Last swept: 11 Sep 2026.
       `chair_invite_reminder_1` in Communications and watch it be ignored. Real
       inconsistency, deliberately not fixed silently.
 
-## Blocked on information
+## Before the next production push
 
-- [ ] **ONUcly's original email failure was never explained.** The code now
-      reports the true cause instead of blaming the audience filter, but the
-      original fault is still unknown. Blocked on: the exact on-screen error
-      text from them.
+- [ ] **Update the tutorial and all four languages for the new session UI.** Peter
+      asked (15 Sep 2026) for this to happen before the sidebar / top bar / motions
+      / voting redesign goes to production, but not yet, because more changes are
+      coming. Covers: the onboarding tutorial and GuidedWalkthrough steps (new top
+      bar, collapsible sidebar, editable topic, code presentation, speaker
+      controls), and es/fr/ar translations of every string added since 8bafeaa
+      (agents add English first; check `.claude/TRANSLATIONS.md` for gaps).
 
 ## Needs a human's eyes
 

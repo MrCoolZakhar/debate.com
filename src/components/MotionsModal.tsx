@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Portal from '@/components/Portal';
+import GrowDialog from '@/components/GrowDialog';
 import { portalFrame } from '@/components/chat/chatTokens';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
@@ -11,11 +12,14 @@ import { SeatFlag } from '@/components/SeatFlag';
 const SQUARE_FLAGS = new Set(['CH', 'NP']);
 import { Emoji } from '@/components/Emoji';
 import { useSettingsStore, DEFAULT_MOTION_NAMES, MotionNames } from '@/lib/settingsStore';
+import { logFloorSpeech, creditRoomOrderTour, type FloorClock } from '@/lib/floorSpeech';
 import {
-  addPendingMotion as addPendingMotionInDB,
+  useTempMotionIds, isTempMotionId, raiseMotionOptimistic, removeMotionEverywhere,
+  fellOtherFloorMotions, showMotionNotice,
+} from '@/lib/motionFlight';
+import {
   removePendingMotion as removePendingMotionInDB,
-  setPhase as setPhaseInDB,
-  updateCaucus as updateCaucusInDB,
+  setPhaseAndCaucus as setPhaseAndCaucusInDB,
   addToCaucusList as addToCaucusListInDB,
   batchAddToCaucusList as batchAddToCaucusListInDB,
   clearCaucusList as clearCaucusListInDB,
@@ -23,7 +27,10 @@ import {
   endDebate as endDebateInDB,
   clearCurrentSpeakerIfUnchanged,
   logEvent,
+  caucusQueueCapacity,
 } from '@/lib/committeeService';
+import { serverNow, serverNowIso } from '@/lib/serverClock';
+import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 
 type ModalView = 'list' | 'raise' | 'vote';
 type TypeMeta = Record<PendingMotionType, { icon: string; label: string; sub: string }>;
@@ -101,6 +108,18 @@ const motionIdentity = (m: PendingMotion) =>
 const isFloorMotion = (m: PendingMotion) =>
   (m.type as string) !== 'join-request' && (m.type as string) !== 'gsl-request' && m.type !== 'custom';
 
+/** Every motion the chair votes on (floor motions AND Custom), never join / GSL requests. */
+const isVotableMotion = (m: PendingMotion) =>
+  (m.type as string) !== 'join-request' && (m.type as string) !== 'gsl-request';
+
+/** The most motions that may wait on the floor at once. Enforced when raising (client only:
+ *  there is no database limit). Editing a motion already on the floor is always allowed. */
+export const MAX_FLOOR_MOTIONS = 15;
+/** Motions shown as normal ranked cards in the voting view: the one being voted on plus the
+ *  queue column beside it. With more than this, the queue column scrolls in place (the modal
+ *  keeps its size). Five fits a 1280x800 laptop without scrolling. */
+const RANKED_VISIBLE = 5;
+
 
 function requiredVotes(type: PendingMotionType, present: number): { needed: number; fraction: string } {
   if (type === 'consultation' || type === 'tour') return { needed: Math.ceil((present * 2) / 3), fraction: '2/3 majority' };
@@ -109,12 +128,11 @@ function requiredVotes(type: PendingMotionType, present: number): { needed: numb
 
 function DisruptivenessBadge({ type }: { type: PendingMotionType }) {
   const t = useT();
-  const { language } = useLanguage();
   const labels: Record<PendingMotionType, string> = {
     'end-debate': t('motions_badge_ends'), 'suspend-debate': t('motions_badge_suspends'),
     consultation: t('motions_badge_most'), tour: t('motions_badge_very'),
     unmoderated: t('motions_badge_disruptive'), moderated: t('motions_badge_least'),
-    custom: informationalLabel(language),
+    custom: '',
   };
   const colors: Record<PendingMotionType, string> = {
     'end-debate': 'bg-[#8B2020]/20 text-[#8B2020] border-[#8B2020]/40',
@@ -125,26 +143,20 @@ function DisruptivenessBadge({ type }: { type: PendingMotionType }) {
     moderated: 'bg-[#1B3828]/30 text-[#EED98A] border-[#1B3828]/40',
     custom: 'bg-[#9A8A78]/12 text-[#6A5A4A] border-[#C5B9A8]',
   };
+  // A Custom motion carries no badge: it has no place in the disruptiveness ranking.
+  if (!labels[type]) return null;
   return <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${colors[type]}`}>{labels[type]}</span>;
 }
-
-const informationalLabel = (language: string) =>
-  language === 'ar' ? 'للعلم فقط' : language === 'fr' ? 'Informatif' : language === 'es' ? 'Informativo' : 'Informational';
-
-const noOpCopy = (language: string) => language === 'ar'
-  ? { head: 'قبول هذا الاقتراح لا يغير الجلسة', body: 'الاقتراح المخصص هو سجل فقط. عند قبوله يختفي من قائمة الاقتراحات ولا يتغير شيء آخر: تبقى المرحلة وقائمة المتحدثين والمتحدث الحالي كما هي، ويستمر النقاش من حيث توقف.' }
-  : language === 'fr' ? { head: "Accepter ne change rien à la séance", body: "Une motion personnalisée n'est qu'une trace écrite. À l'acceptation elle quitte le plancher et rien d'autre ne bouge : la phase, la liste des orateurs et l'orateur en cours restent identiques, le débat reprend exactement où il en était." }
-  : language === 'es' ? { head: 'Aceptarla no cambia la sesión', body: 'Una moción personalizada es solo un registro. Al aceptarla desaparece del pleno y nada más cambia: la fase, la lista de oradores y el orador actual siguen igual, y el debate continúa donde estaba.' }
-  : { head: 'Accepting this will not change the session', body: 'A Custom motion is a record only. Accepting it clears it from the floor and nothing else moves: the phase, the speakers list, the caucus queue and the current speaker all stay exactly as they are, and debate carries on where it left off.' };
 
 /** Informational "i" affordance. Opens on HOVER and on FOCUS (never on click),
  *  per the house UI rules, and is portaled at fixed viewport coordinates with
  *  edge flipping so a scrollable modal body can never clip it. */
-function InfoHint({ head, body }: { head: string; body: string }) {
+function InfoHint({ label, text }: { label: string; text: string }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number; flipped: boolean } | null>(null);
+  const tipId = React.useId();
 
   const WIDTH = 288;
   // Portal mounts into the transformed `#fit-root`, so the fixed layer is positioned in that
@@ -184,17 +196,18 @@ function InfoHint({ head, body }: { head: string; body: string }) {
   return (
     <>
       <button
-        ref={btnRef} type="button" tabIndex={0} aria-label={head}
+        ref={btnRef} type="button" tabIndex={0} aria-label={label} aria-describedby={open ? tipId : undefined}
         onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}
         onClick={(e) => e.preventDefault()}
-        className="shrink-0 w-[15px] h-[15px] rounded-full inline-flex items-center justify-center text-[10px] font-black leading-none transition-colors focus:outline-none gv-lift"
-        style={{ border: '1px solid #C5B9A8', color: '#6A5A4A', backgroundColor: '#FAF8F3' }}
+        className="shrink-0 w-[18px] h-[18px] rounded-full inline-flex items-center justify-center text-[11px] font-black leading-none transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A] gv-lift"
+        style={{ border: '1px solid #C5B9A8', color: '#6A5A4A', backgroundColor: '#FAF8F3', fontFamily: 'Georgia, serif' }}
       >
         i
       </button>
       {open && pos && (
         <Portal>
           <div
+            id={tipId} role="tooltip"
             onMouseEnter={show} onMouseLeave={hide}
             className="fixed z-[70] rounded-2xl px-4 py-3"
             style={{
@@ -204,27 +217,11 @@ function InfoHint({ head, body }: { head: string; body: string }) {
               boxShadow: '0 10px 30px rgba(28,20,16,0.18), 0 2px 6px rgba(28,20,16,0.08)',
             }}
           >
-            <p className="text-xs font-black mb-1" style={{ color: '#1B3828' }}>{head}</p>
-            <p className="text-xs leading-relaxed" style={{ color: '#6A5A4A' }}>{body}</p>
+            <p className="text-xs leading-relaxed font-semibold" style={{ color: '#1B3828' }}>{text}</p>
           </div>
         </Portal>
       )}
     </>
-  );
-}
-
-/** The strip that makes it unmistakable a Custom motion is informational. */
-function CustomNoOpNotice({ compact = false }: { compact?: boolean }) {
-  const { language } = useLanguage();
-  const copy = noOpCopy(language);
-  return (
-    <div
-      className={`flex items-center gap-2 rounded-xl ${compact ? 'px-2.5 py-1' : 'px-3 py-1.5'}`}
-      style={{ backgroundColor: '#EDE7D8', border: '1px dashed #C5B9A8' }}
-    >
-      <span className={compact ? 'text-[10px]' : 'text-xs'} style={{ color: '#6A5A4A', fontWeight: 600 }}>{copy.head}</span>
-      <span className="ms-auto flex items-center"><InfoHint head={copy.head} body={copy.body} /></span>
-    </div>
   );
 }
 
@@ -351,7 +348,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries, optional
                   }`}>
                   {isChair
                     ? <span className="text-base leading-none">🪑</span>
-                    : <SeatFlag country={country} size={20} className="object-contain inline-block" fallback={<Emoji size="1.125rem">🌐</Emoji>} />}
+                    : <SeatFlag country={country} size={20} className="object-contain inline-block" fallback={<UnknownSeatIcon size={20} />} />}
                   <span className="text-sm flex-1">{dName(country)}</span>
                   {isBlocked
                     ? <span className="text-xs text-[#B8844A] shrink-0 font-semibold">{t('motions_motion_on_floor')}</span>
@@ -370,7 +367,7 @@ const optionalProposerPlaceholder = (language: string) =>
   language === 'ar' ? 'اختياري — اتركه فارغًا' : language === 'fr' ? 'Facultatif — laisser vide' : language === 'es' ? 'Opcional — dejar en blanco' : 'Optional — leave blank';
 
 // ── Raise Motion Form ─────────────────────────────────────────────────────────
-function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion, belowQuorum = false, isViewOnly = false }: {
+function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion, belowQuorum = false, isViewOnly = false, floorFull = false }: {
   committee: Committee;
   typeMeta: TypeMeta;
   onBack: () => void;
@@ -378,11 +375,14 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
   editingMotion?: PendingMotion | null;
   belowQuorum?: boolean;
   isViewOnly?: boolean;
+  /** MAX_FLOOR_MOTIONS are already waiting. Raising is refused; editing one is not. */
+  floorFull?: boolean;
 }) {
   const t = useT();
   const { language } = useLanguage();
   const { getSettings } = useSettingsStore();
   const s = getSettings(committee.code);
+  const raiseBlocked = floorFull && !editingMotion;
   // Custom always sits last: it is the least disruptive motion there is.
   const DEFAULT_ORDER: PendingMotionType[] = ['moderated', 'unmoderated', 'tour', 'consultation', 'custom'];
   const enabledTypes = DEFAULT_ORDER.filter((motionType) => {
@@ -415,7 +415,10 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
   const speakingTime = parseInt(speakingTimeStr, 10) || 0;
   const totalTime = totalMins * 60 + totalSecs;
 
-  const speakerCount = (totalTime > 0 && speakingTime > 0) ? Math.floor(totalTime / speakingTime) : null;
+  // Any time left over is one more (shorter) speaker, not unused time: the chair can queue a
+  // delegate whenever committed time is below the remaining total, and that last speaker's
+  // clock is capped to what is left. Same rule as caucusQueueCapacity on the chair page.
+  const speakerCount = (totalTime > 0 && speakingTime > 0) ? caucusQueueCapacity(totalTime, speakingTime, 0, 0) : null;
   const unusedSecs = (totalTime > 0 && speakingTime > 0) ? totalTime % speakingTime : 0;
 
   const numClass = 'bg-transparent text-[#1C1410] text-xl font-bold text-center focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
@@ -446,11 +449,11 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
     const isSuspendOrEnd = type === 'suspend-debate' || type === 'end-debate';
     if (!isSuspendOrEnd) {
       if ((type === 'moderated' || type === 'unmoderated') && totalTime === 0) {
-        setError('Total caucus time cannot be zero.');
+        setError(t('motions_error_no_total_time'));
         return;
       }
       if (type === 'moderated' && speakingTime === 0) {
-        setError('Speaking time per delegate cannot be zero.');
+        setError(t('motions_error_no_speaking_time'));
         return;
       }
     }
@@ -513,7 +516,6 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
             {/* Custom motion: optional free-text name, then optional proposer. */}
             {type === 'custom' && (
               <>
-                <CustomNoOpNotice />
                 <div>
                   <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">
                     {customNameLabel(language)} <span className="text-[#9A8A78] text-sm font-normal">({t('motions_optional')})</span>
@@ -553,48 +555,46 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                   <p className="text-[#1C1410] font-semibold text-xs">
                     {t('motions_all_speak', { n: presentCountries.length })}
                   </p>
-                  <div>
-                    <label className="block text-sm font-semibold text-[#6A5A4A] mb-1">{t('motions_speaking_time_label')}</label>
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-1.5">
-                        <input type="number" min={10} value={speakingTimeStr}
-                          onChange={(e) => setSpeakingTimeStr(e.target.value)}
-                          className={`w-14 ${numClass}`} />
-                        <span className="text-[#6A5A4A] text-sm">{t('motions_sec')}</span>
+                  {/* Speaking time on the left, the order as a vertical stack on the right (owner,
+                      17 Sep 2026: the three order buttons in one row were clipped). */}
+                  <div className="flex gap-3 items-start">
+                    <div className="flex-1 min-w-0">
+                      <label className="block text-sm font-semibold text-[#6A5A4A] mb-1">{t('motions_speaking_time_label')}</label>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-1.5">
+                          <input type="number" min={10} value={speakingTimeStr}
+                            onChange={(e) => setSpeakingTimeStr(e.target.value)}
+                            className={`w-14 ${numClass}`} />
+                          <span className="text-[#6A5A4A] text-sm">{t('motions_sec')}</span>
+                        </div>
+                        <span className="text-xs text-[#9A8A78]">
+                          {t('motions_total_approx', { n: speakingTime > 0 ? Math.ceil((presentCountries.length * speakingTime) / 60) : 0 })}
+                        </span>
                       </div>
-                      <span className="text-xs text-[#9A8A78]">
-                        {t('motions_total_approx', { n: speakingTime > 0 ? Math.ceil((presentCountries.length * speakingTime) / 60) : 0 })}
-                      </span>
-                    </div>
-                    <div className="flex gap-2 mt-1.5">
-                      {[30, 45, 60, 90, 120].map((t) => (
-                        <button key={t} onClick={() => setSpeakingTimeStr(String(t))}
-                          className={`gv-lift text-xs px-2.5 py-1 rounded-lg transition-colors focus:outline-none ${speakingTime === t ? 'bg-[#1B3828] text-white font-bold' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
-                          {t}s
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-[#6A5A4A] mb-1">{t('motions_speaking_order')}</label>
-                    <div className="flex gap-3">
-                      <button onClick={() => setTourOrder('asc')}
-                        className={`gv-lift flex-1 py-2 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'asc' ? 'bg-[#1B3828] text-white' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
-                        {t('motions_az')}
-                      </button>
-                      <button onClick={() => setTourOrder('desc')}
-                        className={`gv-lift flex-1 py-2 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'desc' ? 'bg-[#1B3828] text-white' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
-                        {t('motions_za')}
-                      </button>
-                      <button onClick={() => setTourOrder('custom')}
-                        className={`gv-lift flex-1 py-2 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'custom' ? 'bg-[#1B3828] text-white' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
-                        {t('motions_room_order')}
-                      </button>
-                    </div>
-                    <div style={{ height: '24px', display: 'flex', alignItems: 'center' }}>
+                      <div className="flex gap-2 mt-1.5 flex-wrap">
+                        {[30, 45, 60, 90, 120].map((t) => (
+                          <button key={t} onClick={() => setSpeakingTimeStr(String(t))}
+                            className={`gv-lift text-xs px-2.5 py-1 rounded-lg transition-colors focus:outline-none ${speakingTime === t ? 'bg-[#1B3828] text-white font-bold' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
+                            {t}s
+                          </button>
+                        ))}
+                      </div>
+                      {/* The Room Order hint sits under the presets: this column is shorter than
+                          the order stack beside it, so the hint never grows the form. */}
                       {tourOrder === 'custom' && (
-                        <p className="text-xs text-[#9A8A78] leading-relaxed">{t('motions_room_order_hint')}</p>
+                        <p className="mt-1.5 text-xs text-[#9A8A78] leading-relaxed">{t('motions_room_order_hint')}</p>
                       )}
+                    </div>
+                    <div className="shrink-0 w-36" role="radiogroup" aria-label={t('motions_speaking_order')}>
+                      <label className="block text-sm font-semibold text-[#6A5A4A] mb-1">{t('motions_speaking_order')}</label>
+                      <div className="flex flex-col gap-1.5">
+                        {([['asc', t('motions_az')], ['desc', t('motions_za')], ['custom', t('motions_room_order')]] as const).map(([key, label]) => (
+                          <button key={key} onClick={() => setTourOrder(key)} role="radio" aria-checked={tourOrder === key}
+                            className={`gv-lift w-full px-2 py-1.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === key ? 'bg-[#1B3828] text-white' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -691,7 +691,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                         <span className="font-black text-xl leading-tight" style={{ color: '#1B3828' }}>{speakerCount}</span>
                         <span className="text-sm font-semibold" style={{ color: '#6A5A4A' }}>{speakerCount === 1 ? t('motions_delegate_speak').replace('{s}', t('motions_delegate_singular')) : t('motions_delegate_speak').replace('{s}', t('motions_delegate_plural'))}</span>
                         {unusedSecs > 0 && (
-                          <span className="text-xs font-semibold ms-1" style={{ color: '#B8844A' }}>{t('motions_unused_secs').replace('{n}', String(unusedSecs))}</span>
+                          <span className="text-xs font-semibold ms-1" style={{ color: '#B8844A' }}>{t('motions_last_speaker_secs').replace('{n}', String(unusedSecs))}</span>
                         )}
                       </div>
                     )}
@@ -704,15 +704,22 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
       </div>
 
       {type && (
-        <div className="px-7 pb-7 pt-3 border-t border-white/10 shrink-0">
+        // The form scrolls behind this footer, so the footer needs its own ground and a visible
+        // hairline: `border-white/10` on ivory drew nothing, and the fields ran into the button.
+        <div className="px-7 pb-7 pt-3 shrink-0 bg-[#FAF8F3]" style={{ boxShadow: '0 -1px 0 #DDD4C0, 0 -10px 16px -12px rgba(27,56,40,0.30)' }}>
           {belowQuorum && (
             <div className="mb-4 p-3 bg-[#8B2020]/20 border border-[#8B2020]/40 rounded-xl text-xs text-[#8B2020]">
               ⚠️ {t('motions_quorum_warning')}
             </div>
           )}
+          {raiseBlocked && (
+            <p role="status" className="mb-3 p-3 rounded-xl text-sm font-semibold" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.25)' }}>
+              {t('motions_floor_full', { n: MAX_FLOOR_MOTIONS })}
+            </p>
+          )}
           {error && <p className="text-[#8B2020] text-sm font-medium mb-3">{error}</p>}
           {!isViewOnly && (
-            <button onClick={submit} disabled={!canSubmit() || belowQuorum}
+            <button onClick={submit} disabled={!canSubmit() || belowQuorum || raiseBlocked}
               className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-5 rounded-2xl text-base font-black transition-colors focus:outline-none gv-lift" style={{ letterSpacing: '0.05em' }}>
               {editingMotion ? t('motions_edit_btn') : t('motions_raise_btn')}
             </button>
@@ -724,7 +731,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
 }
 
 // ── Voting View ───────────────────────────────────────────────────────────────
-function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBack, onEdit, pendingIds, isViewOnly = false, rank }: {
+function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBack, onEdit, pendingIds, isViewOnly = false, onCommenterAttempt, rank }: {
   committee: Committee;
   typeMeta: TypeMeta;
   onAccepted: (motion: PendingMotion) => void;
@@ -732,8 +739,11 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   onRemove: (motionId: string) => void;
   onBack: () => void;
   onEdit: (motionId: string) => void;
-  pendingIds: Set<string>;
+  pendingIds: ReadonlySet<string>;
   isViewOnly?: boolean;
+  /** A Commenter: Accept / Reject / Edit and Raise are drawn disabled and a press raises the
+   *  "only the Moderator" notice (the chair page's). Nothing is written (rule 15). */
+  onCommenterAttempt?: () => void;
   /** B7 — recompute disruptiveness from the CURRENT motionOrder instead of trusting the
    *  value baked into the row at insert time. See rankMotion in MotionsModal. */
   rank: (m: PendingMotion) => number;
@@ -753,6 +763,37 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
 
   const [order, setOrder] = useState<PendingMotion[]>(initialSorted);
   const dragIndexRef = useRef<number | null>(null);
+  // Fades on the overflow column say "there is more" without a visible scrollbar. Updated
+  // only when a value actually flips, so scrolling does not re-render the modal per frame.
+  const overflowRef = useRef<HTMLDivElement | null>(null);
+  const [overflowFade, setOverflowFade] = useState<{ top: boolean; bottom: boolean }>({ top: false, bottom: false });
+  const extrasCount = Math.max(0, order.length - RANKED_VISIBLE);
+  /** MEASURED, never counted (16 Sep 2026). This used to be `extrasCount > 0`, so with five or
+   *  fewer motions the queue column got no `overflow-y-auto` at all: on a short window, or with
+   *  tall cards (a long Custom name, a topic, a Tour de Table's two badges), the cards ran past
+   *  the column and over the Raise a Motion button below it. The button is outside the scroller,
+   *  so nothing can overlap it now, whatever the motion count. */
+  const [scrolls, setScrolls] = useState(false);
+  const measureOverflow = useCallback(() => {
+    const el = overflowRef.current;
+    if (!el) return;
+    const over = el.scrollHeight > el.clientHeight + 2;
+    setScrolls((prev) => (prev === over ? prev : over));
+    const top = over && el.scrollTop > 2;
+    const bottom = over && el.scrollTop + el.clientHeight < el.scrollHeight - 2;
+    setOverflowFade((prev) => (prev.top === top && prev.bottom === bottom ? prev : { top, bottom }));
+  }, []);
+  useEffect(() => { measureOverflow(); }, [extrasCount, measureOverflow]);
+  // The column's height moves with the window, and a card's height with its own content, so the
+  // fades and the scroll affordance are re-measured for both.
+  useEffect(() => {
+    const el = overflowRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => measureOverflow());
+    ro.observe(el);
+    for (const child of Array.from(el.children)) ro.observe(child);
+    return () => ro.disconnect();
+  }, [measureOverflow, extrasCount]);
 
   // Keep order in sync when motions are removed externally
   const motionIdKey = (committee.pendingMotions ?? []).map((m) => m.id).join(',');
@@ -774,19 +815,35 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [motionIdKey]);
 
-  const present = committee.delegates.filter((d) => d.status !== 'absent' && !d.isObserver).length;
+  // OBSERVERS COUNT ON A MOTION (16 Sep 2026). A motion is procedure, not the final
+  // substantive vote: an observer sitting in the room is part of the body deciding how the
+  // room runs, so the threshold is measured against everyone present. Only the ballot on
+  // /voting/[code] excludes them. The chair page's quorum rings and `belowQuorum` count the
+  // same way.
+  const present = committee.delegates.filter((d) => d.status !== 'absent').length;
 
   if (order.length === 0) {
     return (
       <div className="px-7 pb-7 text-center py-8">
         <p className="text-[#6A5A4A]">{t('motions_no_vote')}</p>
+        {isViewOnly && onCommenterAttempt && (
+          // A Commenter with an empty floor still sees where raising lives; a press explains the gavel.
+          <button type="button" aria-disabled onClick={onCommenterAttempt} title={t('commenter_only_hint')}
+            className="mt-4 mx-auto block w-full max-w-sm bg-[#2A5A3C] text-white py-3 rounded-2xl font-black text-sm opacity-40 cursor-not-allowed focus:outline-none"
+            style={{ letterSpacing: '0.05em' }}>
+            {t('motions_raise_motion_btn')}
+          </button>
+        )}
         <button onClick={onAllDone} className="mt-4 text-sm text-[#B6871F] hover:text-[#EED98A]">{t('motions_back')}</button>
       </div>
     );
   }
 
   const primary = order[0];
-  const rest = order.slice(1, 5);
+  // Every motion below the primary lives in the right column. Nothing is ever hidden: past
+  // RANKED_VISIBLE the column scrolls in place instead of opening a side column.
+  const rest = order.slice(1);
+  const floorFull = order.length >= MAX_FLOOR_MOTIONS;
 
   const renderCard = (m: PendingMotion, large: boolean, idx: number) => {
     const meta = typeMeta[m.type];
@@ -806,9 +863,10 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
     const isCustom = m.type === 'custom';
     // A Custom motion titles itself with its own free-text name.
     const cardLabel = motionDisplayLabel(m, typeMeta, language);
-    // Its ID must be real before Accept can delete the row (never call the DB
-    // with a temp ID — the row would survive and realtime would resurrect it).
-    const acceptBlocked = isCustom && pendingIds.has(m.id);
+    // M-2: while the INSERT is still in flight the id is `temp-...`. EVERY action is held
+    // back until the real UUID lands: a delete issued with a temp id deletes nothing, so an
+    // accept, reject, edit or suspend "No" in that window left the real row to come back.
+    const acceptBlocked = pendingIds.has(m.id) || isTempMotionId(m.id);
 
     return (
       <div
@@ -845,9 +903,10 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
             <span className="min-w-0 break-words">{cardLabel}</span>
             {!isPrimary && !isViewOnly && (
               <button
-                onClick={(e) => { e.stopPropagation(); onEdit(m.id); }}
-                title="Edit motion"
-                className="opacity-40 hover:opacity-80 transition-opacity focus:outline-none shrink-0"
+                onClick={(e) => { e.stopPropagation(); if (!acceptBlocked) onEdit(m.id); }}
+                disabled={acceptBlocked}
+                title={acceptBlocked ? t('motions_saving') : t('motions_edit_label')}
+                className={`opacity-40 hover:opacity-80 transition-opacity focus:outline-none shrink-0 ${acceptBlocked ? 'cursor-not-allowed' : ''}`}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" stroke="#4A4A4A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
@@ -861,17 +920,9 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
             : <SeatFlag country={m.proposedBy} style={{ width: large ? 56 : 32, height: large ? 40 : 24, borderRadius: '8px', border: f && SQUARE_FLAGS.has(f.code) ? 'none' : '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className="inline-block" fallback={null} />}
         </div>
 
-        {/* Custom motions: badge line + the informational no-op strip */}
-        {isCustom && (
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2 flex-wrap">
-              <DisruptivenessBadge type="custom" />
-              {!m.proposedBy && (
-                <span className={`${large ? 'text-sm' : 'text-xs'} font-semibold`} style={{ color: '#9A8A78' }}>{noProposerLabel(language)}</span>
-              )}
-            </div>
-            <CustomNoOpNotice compact={!large} />
-          </div>
+        {/* Custom motion with no proposer: say so, since there is no flag */}
+        {isCustom && !m.proposedBy && (
+          <span className={`${large ? 'text-sm' : 'text-xs'} font-semibold`} style={{ color: '#9A8A78' }}>{noProposerLabel(language)}</span>
         )}
 
         {/* Topic inline — a Custom motion's `topic` IS its title, already rendered above */}
@@ -899,7 +950,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
                 {m.type === 'moderated' && m.speakingTime > 0 && m.totalTime > 0 && (
                   <p className="text-sm" style={{ color: '#1C1410' }}>
                     <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_total_speakers_display')} </span>
-                    <span className="font-black">{Math.floor(m.totalTime / m.speakingTime)} {Math.floor(m.totalTime / m.speakingTime) === 1 ? t('motions_speaker_singular') : t('motions_speaker_plural')}{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
+                    <span className="font-black">{caucusQueueCapacity(m.totalTime, m.speakingTime, 0, 0)} {caucusQueueCapacity(m.totalTime, m.speakingTime, 0, 0) === 1 ? t('motions_speaker_singular') : t('motions_speaker_plural')}{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
                   </p>
                 )}
               </>
@@ -920,7 +971,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
                 {m.type === 'moderated' && m.speakingTime > 0 && m.totalTime > 0 && (
                   <p className="text-xs" style={{ color: '#1C1410' }}>
                     <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_total_speakers_display')} </span>
-                    <span className="font-black">{Math.floor(m.totalTime / m.speakingTime)} {Math.floor(m.totalTime / m.speakingTime) === 1 ? t('motions_speaker_singular') : t('motions_speaker_plural')}{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
+                    <span className="font-black">{caucusQueueCapacity(m.totalTime, m.speakingTime, 0, 0)} {caucusQueueCapacity(m.totalTime, m.speakingTime, 0, 0) === 1 ? t('motions_speaker_singular') : t('motions_speaker_plural')}{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
                   </p>
                 )}
               </>
@@ -933,7 +984,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
               {fmtTime(0, m.speakingTime)} {t('motions_per_delegate')}
             </span>
             <span className={`${large ? 'text-sm' : 'text-xs'} text-[#9A8A78]`}>
-              {m.tourOrder === 'desc' ? 'Z→A' : m.tourOrder === 'custom' ? 'Custom' : 'A→Z'}
+              {m.tourOrder === 'desc' ? 'Z→A' : m.tourOrder === 'custom' ? t('motions_tour_order_custom') : 'A→Z'}
             </span>
           </div>
         )}
@@ -951,19 +1002,33 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           <div className="flex gap-2 mt-auto">
             <button onClick={() => { if (!acceptBlocked) onAccepted(m); }}
               disabled={acceptBlocked}
-              title={acceptBlocked ? 'Saving…' : undefined}
+              title={acceptBlocked ? t('motions_saving') : undefined}
               className={`gv-lift flex-1 bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${acceptBlocked ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
               {isCustom ? clearFromFloorLabel(language) : t('motions_accept_btn')}
             </button>
-            <button onClick={() => onRemove(m.id)}
-              disabled={pendingIds.has(m.id)}
-              className={`gv-lift flex-1 bg-[#DDD4C0] hover:bg-red-950/40 hover:text-[#8B2020] text-[#6A5A4A] border border-[#DDD4C0] hover:border-[#8B2020]/40 py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${pendingIds.has(m.id) ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
+            <button onClick={() => { if (!acceptBlocked) onRemove(m.id); }}
+              disabled={acceptBlocked}
+              className={`gv-lift flex-1 bg-[#DDD4C0] hover:bg-red-950/40 hover:text-[#8B2020] text-[#6A5A4A] border border-[#DDD4C0] hover:border-[#8B2020]/40 py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${acceptBlocked ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
               {t('motions_reject_btn')}
             </button>
-            <button onClick={(e) => { e.stopPropagation(); onEdit(m.id); }}
-              title="Edit motion"
-              className="bg-[#B6871F]/20 hover:bg-[#B6871F]/40 border border-[#B6871F]/50 hover:border-[#B6871F] text-[#B6871F] py-2.5 px-4 rounded-xl font-bold text-sm transition-colors shrink-0 focus:outline-none gv-lift" style={{ fontFamily: "'DM Mono', monospace" }}>
+            <button onClick={(e) => { e.stopPropagation(); if (!acceptBlocked) onEdit(m.id); }}
+              disabled={acceptBlocked}
+              title={acceptBlocked ? t('motions_saving') : t('motions_edit_label')}
+              className="disabled:opacity-40 disabled:cursor-not-allowed bg-[#B6871F]/20 hover:bg-[#B6871F]/40 border border-[#B6871F]/50 hover:border-[#B6871F] text-[#B6871F] py-2.5 px-4 rounded-xl font-bold text-sm transition-colors shrink-0 focus:outline-none gv-lift" style={{ fontFamily: "'DM Mono', monospace" }}>
               {t('motions_edit_label')}
+            </button>
+          </div>
+        )}
+        {isPrimary && isViewOnly && onCommenterAttempt && (
+          // A Commenter sees the dais's decision buttons, disabled; a press explains the gavel.
+          <div className="flex gap-2 mt-auto">
+            <button type="button" aria-disabled onClick={onCommenterAttempt} title={t('commenter_only_hint')}
+              className="flex-1 bg-[#2A5A3C] text-white py-2.5 rounded-xl font-bold text-sm opacity-40 cursor-not-allowed focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
+              {isCustom ? clearFromFloorLabel(language) : t('motions_accept_btn')}
+            </button>
+            <button type="button" aria-disabled onClick={onCommenterAttempt} title={t('commenter_only_hint')}
+              className="flex-1 bg-[#DDD4C0] text-[#6A5A4A] border border-[#DDD4C0] py-2.5 rounded-xl font-bold text-sm opacity-40 cursor-not-allowed focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
+              {t('motions_reject_btn')}
             </button>
           </div>
         )}
@@ -973,11 +1038,12 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
 
   return (
     <div className="px-7 pb-7 space-y-3 flex flex-col h-full overflow-hidden">
-      <div className="flex items-center shrink-0">
+      <div className="flex items-center gap-2.5 shrink-0">
         <h2 className="text-3xl font-black" style={{ color: '#1B3828' }}>{t('motions_vote_heading')}</h2>
-      </div>
-      <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs shrink-0 font-semibold" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
-        <span>{t('motions_drag_hint')}</span>
+        <InfoHint label={t('motions_drag_hint_label')} text={t('motions_drag_hint')} />
+        <span className="ms-auto text-xs font-bold tabular-nums" style={{ color: floorFull ? '#8B2020' : '#9A8A78' }}>
+          {order.length}/{MAX_FLOOR_MOTIONS}
+        </span>
       </div>
       <div className="flex flex-1 min-h-0">
         {/* Left column, primary motion being voted on */}
@@ -998,37 +1064,75 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           </svg>
           <div className="flex-1 w-px" style={{ backgroundColor: '#C8BAA8' }} />
         </div>
-        {/* Right column, queued motions + Raise a Motion button */}
-        {/* pt-3 pe-4: give room for the badge that translates outside each card's top-right corner */}
-        <div className="w-72 flex flex-col pt-3 pe-4">
-          {rest.map((m, i) => (
-            <React.Fragment key={m.id}>
-              {renderCard(m, false, i + 1)}
-              {i < rest.length - 1 && (
-                <div className="flex items-center gap-2 px-2 pointer-events-none select-none" style={{ opacity: 0.35, height: '14px' }}>
-                  <div className="flex-1 h-px" style={{ backgroundColor: '#C8BAA8' }} />
-                  <svg width="16" height="10" viewBox="0 0 16 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="2"  cy="2" r="1.5" fill="#1C1410"/>
-                    <circle cx="8"  cy="2" r="1.5" fill="#1C1410"/>
-                    <circle cx="14" cy="2" r="1.5" fill="#1C1410"/>
-                    <circle cx="2"  cy="8" r="1.5" fill="#1C1410"/>
-                    <circle cx="8"  cy="8" r="1.5" fill="#1C1410"/>
-                    <circle cx="14" cy="8" r="1.5" fill="#1C1410"/>
-                  </svg>
-                  <div className="flex-1 h-px" style={{ backgroundColor: '#C8BAA8' }} />
-                </div>
-              )}
-              {i === rest.length - 1 && <div style={{ height: '6px' }} />}
-            </React.Fragment>
-          ))}
-          {!isViewOnly && (
-            <button
-              onClick={onBack}
-              className="w-full bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-3 rounded-2xl font-black text-sm transition-colors shrink-0 focus:outline-none gv-lift"
-              style={{ letterSpacing: '0.05em' }}
+        {/* Right column, queued motions + Raise a Motion button. Past RANKED_VISIBLE motions
+            the queued cards scroll inside this same column (hidden scrollbar, edge fades), so
+            the modal never grows a side column or widens. Order, ranks and actions unchanged. */}
+        <div className="w-72 shrink-0 flex flex-col min-h-0">
+          <div className="relative flex-1 min-h-0 flex flex-col">
+            <div
+              ref={overflowRef}
+              onScroll={measureOverflow}
+              tabIndex={scrolls ? 0 : undefined}
+              aria-label={scrolls ? (extrasCount > 0 ? t('motions_more_on_floor', { count: extrasCount }) : t('motions_vote_heading')) : undefined}
+              className="flex-1 min-h-0 pt-3 pe-4 overflow-y-auto overscroll-contain pb-2 focus:outline-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
-              {t('motions_raise_motion_btn')}
-            </button>
+              {rest.map((m, i) => (
+                <React.Fragment key={m.id}>
+                  {renderCard(m, false, i + 1)}
+                  {i < rest.length - 1 && (
+                    <div className="flex items-center gap-2 px-2 pointer-events-none select-none" style={{ opacity: 0.35, height: '14px' }}>
+                      <div className="flex-1 h-px" style={{ backgroundColor: '#C8BAA8' }} />
+                      <svg width="16" height="10" viewBox="0 0 16 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="2"  cy="2" r="1.5" fill="#1C1410"/>
+                        <circle cx="8"  cy="2" r="1.5" fill="#1C1410"/>
+                        <circle cx="14" cy="2" r="1.5" fill="#1C1410"/>
+                        <circle cx="2"  cy="8" r="1.5" fill="#1C1410"/>
+                        <circle cx="8"  cy="8" r="1.5" fill="#1C1410"/>
+                        <circle cx="14" cy="8" r="1.5" fill="#1C1410"/>
+                      </svg>
+                      <div className="flex-1 h-px" style={{ backgroundColor: '#C8BAA8' }} />
+                    </div>
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+            {scrolls && (
+              <>
+                <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-6 transition-opacity duration-150"
+                  style={{ opacity: overflowFade.top ? 1 : 0, background: 'linear-gradient(#FAF8F3, rgba(250,248,243,0))' }} />
+                <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-10 flex items-end justify-center pb-1 transition-opacity duration-150"
+                  style={{ opacity: overflowFade.bottom ? 1 : 0, background: 'linear-gradient(rgba(250,248,243,0), #FAF8F3 70%)' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="#6A5A4A" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </div>
+              </>
+            )}
+          </div>
+          {rest.length > 0 && <div className="shrink-0" style={{ height: '6px' }} />}
+          {!isViewOnly && (
+            <div className="shrink-0 pe-4">
+              <button
+                onClick={onBack}
+                disabled={floorFull}
+                className="w-full bg-[#2A5A3C] hover:bg-[#3D7A52] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] disabled:cursor-not-allowed text-white py-3 rounded-2xl font-black text-sm transition-colors shrink-0 focus:outline-none gv-lift"
+                style={{ letterSpacing: '0.05em' }}
+              >
+                {t('motions_raise_motion_btn')}
+              </button>
+              {floorFull && (
+                <p role="status" className="mt-2 text-xs font-semibold text-center" style={{ color: '#8B2020' }}>
+                  {t('motions_floor_full', { n: MAX_FLOOR_MOTIONS })}
+                </p>
+              )}
+            </div>
+          )}
+          {isViewOnly && onCommenterAttempt && (
+            <div className="shrink-0 pe-4">
+              <button type="button" aria-disabled onClick={onCommenterAttempt} title={t('commenter_only_hint')}
+                className="w-full bg-[#2A5A3C] text-white py-3 rounded-2xl font-black text-sm opacity-40 cursor-not-allowed focus:outline-none"
+                style={{ letterSpacing: '0.05em' }}>
+                {t('motions_raise_motion_btn')}
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -1037,12 +1141,18 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
 }
 
 // ── Main Modal ────────────────────────────────────────────────────────────────
-export default function MotionsModal({ committee, onClose, onCommitteeUpdate, belowQuorum = false, isViewOnly = false }: {
+export default function MotionsModal({ committee, onClose, onCommitteeUpdate, belowQuorum = false, isViewOnly = false, onCommenterAttempt, floorClock }: {
   committee: Committee;
   onClose: () => void;
   onCommitteeUpdate?: (updater: (c: Committee) => Committee) => void;
   belowQuorum?: boolean;
   isViewOnly?: boolean;
+  /** A Commenter tried a Moderator-only action (raise, accept, reject): the chair page's notice. */
+  onCommenterAttempt?: () => void;
+  /** The chair page's live speaker clock (anchor + extra time), so a speech interrupted by
+   *  a caucus, Suspend or End is logged from the real anchor (G-1). Without it the helper
+   *  falls back to the committee row's own anchor and no extra time. */
+  floorClock?: () => FloorClock;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -1105,49 +1215,47 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     (type === 'custom' ? 0 : (motionRankBase[type] ?? 1_000_000) + totalTime);
   const typeMeta = buildTypeMeta(motionNames);
   const pending = [...(committee.pendingMotions ?? [])].filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').sort((a, b) => rankMotion(b) - rankMotion(a));
+  const floorFull = pending.length >= MAX_FLOOR_MOTIONS;
   const [view, setView] = useState<ModalView>(pending.length === 0 && !isViewOnly ? 'raise' : 'vote');
   const [specialVoteMotion, setSpecialVoteMotion] = useState<PendingMotion | null>(null);
-  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  // M-2: temp ids live in a module-level store keyed by committee, not modal state, so
+  // closing the modal mid-insert no longer forgets which motions are still saving.
+  const pendingIds = useTempMotionIds(committee.id);
   const [editingMotionId, setEditingMotionId] = useState<string | null>(null);
   const update = (updater: (c: Committee) => Committee) => onCommitteeUpdate?.(updater);
+  // The dialog's animated close while it is mounted; the fullscreen Suspend / End screen
+  // replaces the dialog, so there it falls back to closing at once.
+  const animatedCloseRef = useRef<(() => void) | null>(null);
+  const close = () => (animatedCloseRef.current ?? onClose)();
 
   const handleRaised = (motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => {
     const existing = committee.pendingMotions ?? [];
+    // Backstop for the disabled Raise button: the floor holds MAX_FLOOR_MOTIONS at most.
+    if (existing.filter(isVotableMotion).length >= MAX_FLOOR_MOTIONS) return;
     if (motion.type === 'custom') {
       // Custom motions don't take a delegation's floor slot, so several may be
       // queued at once. Only a byte-identical one (same proposer AND same name)
       // is rejected — that also keeps every queued Custom motion distinguishable.
       if (existing.some((m) => m.type === 'custom' && m.proposedBy === motion.proposedBy && (m.topic ?? '') === motion.topic)) return;
     } else if (existing.some((m) => isFloorMotion(m) && m.proposedBy === motion.proposedBy)) {
+      // One floor motion per delegation. This used to return silently, so the chair's
+      // click simply did nothing. Say why.
+      showMotionNotice(committee.id, { kind: 'blocked', country: motion.proposedBy === CHAIR_KEY ? chairDisplayName(language) : motion.proposedBy });
       return;
     }
 
-    const tempId = `temp-${Date.now()}`;
-    const disruptiveness = localCalcDisruptiveness(motion.type, motion.totalTime);
-
-    setPendingIds((prev) => new Set([...prev, tempId]));
-    update((c) => ({ ...c, pendingMotions: [...(c.pendingMotions ?? []), { ...motion, id: tempId, disruptiveness }] }));
-
-    addPendingMotionInDB(committee.id, motion, committee.code, committee.dbChairJoinSuffix ?? undefined, motionOrder).then((realId) => {
-      if (!realId) return;
-      update((c) => ({
-        ...c,
-        pendingMotions: (c.pendingMotions ?? []).map((m) =>
-          m.id === tempId ? { ...m, id: realId } : m
-        ),
-      }));
-      setPendingIds((prev) => { const next = new Set(prev); next.delete(tempId); return next; });
+    raiseMotionOptimistic({
+      committee, motion, update, motionOrder,
+      disruptiveness: localCalcDisruptiveness(motion.type, motion.totalTime),
     });
 
     setView('vote');
   };
 
   const handleRemove = (motionId: string) => {
-    update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motionId) }));
-    // Only call DB if this is a real UUID (not a temp optimistic ID)
-    if (!motionId.startsWith('temp-')) {
-      removePendingMotionInDB(motionId, committee.code, committee.dbChairJoinSuffix ?? undefined);
-    }
+    // Every remove affordance is disabled while the id is temporary (M-2); if one still
+    // slips through, the store deletes the real row as soon as the insert returns.
+    removeMotionEverywhere(committee, motionId, update);
   };
 
   const handleEdited = (motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => {
@@ -1156,23 +1264,12 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
 
     // Remove old motion from local state immediately (same as handleRemove but inline
     // so committee.pendingMotions is clean before the re-add, avoiding the duplicate check)
-    update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== oldId) }));
-    if (!oldId.startsWith('temp-')) removePendingMotionInDB(oldId, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    removeMotionEverywhere(committee, oldId, update);
 
     // Add replacement, same logic as handleRaised but NO duplicate check
-    const tempId = `temp-${Date.now()}`;
-    const disruptiveness = localCalcDisruptiveness(motion.type, motion.totalTime);
-
-    setPendingIds((prev) => new Set([...prev, tempId]));
-    update((c) => ({ ...c, pendingMotions: [...(c.pendingMotions ?? []), { ...motion, id: tempId, disruptiveness }] }));
-
-    addPendingMotionInDB(committee.id, motion, committee.code, committee.dbChairJoinSuffix ?? undefined, motionOrder).then((realId) => {
-      if (!realId) return;
-      update((c) => ({
-        ...c,
-        pendingMotions: (c.pendingMotions ?? []).map((m) => m.id === tempId ? { ...m, id: realId } : m),
-      }));
-      setPendingIds((prev) => { const next = new Set(prev); next.delete(tempId); return next; });
+    raiseMotionOptimistic({
+      committee, motion, update, motionOrder,
+      disruptiveness: localCalcDisruptiveness(motion.type, motion.totalTime),
     });
 
     setEditingMotionId(null);
@@ -1180,8 +1277,11 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   };
 
   const handleMotionAccepted = async (motion: PendingMotion) => {
-    // Clear ALL other pending motions, only the accepted one proceeds
-    // GSL (speakersList) is NEVER modified here
+    // When a caucus, Suspend or End passes, every OTHER pending floor motion FALLS: it is
+    // deleted and a one-line notice offers Undo for ~8 s (fellOtherFloorMotions, M-1).
+    // Custom motions never make anything fall. GSL (speakersList) is NEVER modified here.
+    // Never act on a temp id (M-2): the buttons are disabled, this is the backstop.
+    if (isTempMotionId(motion.id)) return;
 
     // ── CUSTOM MOTION: DELIBERATE NO-OP ───────────────────────────────────────
     // This branch is FIRST and returns unconditionally so a Custom motion can
@@ -1195,9 +1295,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id) }));
       // Never call the DB with a temp ID (the Accept button is disabled until
       // the real UUID lands, this is the belt-and-braces guard).
-      if (!motion.id.startsWith('temp-')) {
-        removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
-      }
+      removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
       // Close only when the floor is now empty; otherwise stay so the chair can
       // work through the remaining motions.
       const othersLeft = (committee.pendingMotions ?? []).some((m) => m.id !== motion.id && isFloorMotion(m));
@@ -1224,8 +1322,16 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     // started_at, so no separate stopSpeakerTimer write is needed — one conditional write,
     // nothing to race with. See the docstring in committeeService.ts.
     const floorSpeaker = committee.currentSpeaker;
+    // G-1: the interrupted speaker's speech is logged BEFORE the floor is cleared, from the
+    // anchor (idempotent per turn, Room Order placeholders skipped). The other floor motions
+    // fall at the same moment.
     const clearFloorForCaucus = () => {
+      fellOtherFloorMotions({ committee, passedId: motion.id, update, motionOrder, rank: rankMotion });
+      // A Room Order Tour de Table this caucus replaces has ended: one speech per delegation
+      // on its roster snapshot (idempotent per tour + country; no-op for any other caucus).
+      void creditRoomOrderTour(committee);
       if (!floorSpeaker) return;
+      void logFloorSpeech(committee, floorClock?.());
       clearCurrentSpeakerIfUnchanged(
         committee.id, floorSpeaker.delegateId, floorSpeaker.country,
         committee.code, committee.dbChairJoinSuffix ?? undefined,
@@ -1253,8 +1359,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       clearFloorForCaucus();
       removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
       clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
-      updateCaucusInDB(committee.id, caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);
-      setPhaseInDB(committee.id, 'unmoderated-caucus', committee.code, committee.dbChairJoinSuffix ?? undefined);
+      setPhaseAndCaucusInDB(committee.id, 'unmoderated-caucus', caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);   // one update (R-7)
       return;
     }
     if (motion.type === 'consultation') {
@@ -1272,8 +1377,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       clearFloorForCaucus();
       removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
       clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
-      updateCaucusInDB(committee.id, caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);
-      setPhaseInDB(committee.id, 'unmoderated-caucus', committee.code, committee.dbChairJoinSuffix ?? undefined);
+      setPhaseAndCaucusInDB(committee.id, 'unmoderated-caucus', caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);   // one update (R-7)
       return;
 
     } else if (motion.type === 'moderated') {
@@ -1290,8 +1394,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       clearFloorForCaucus();
       removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
       clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
-      updateCaucusInDB(committee.id, caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);
-      setPhaseInDB(committee.id, 'moderated-caucus', committee.code, committee.dbChairJoinSuffix ?? undefined);
+      setPhaseAndCaucusInDB(committee.id, 'moderated-caucus', caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);   // one update (R-7)
       return;
 
     } else if (motion.type === 'tour') {
@@ -1313,6 +1416,10 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
           speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
           currentSpeaker: null, proposerPosition: null, spokenCountries: [],
           totalStartedAt: null,   // paused until the chair starts the first speaker
+          // Placeholders credit nobody per turn, so the room is snapshotted here and every
+          // delegation on it gets ONE speech when the tour ends (creditRoomOrderTour).
+          roomOrderCountries: alphabetical.map((d) => d.country),
+          tourStartedAt: serverNowIso(),
         };
         // Numbered placeholder queue, "Speaker 1", "Speaker 2", etc.
         const caucusQueue = alphabetical.map((_, i) => ({
@@ -1323,8 +1430,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         onClose();
         clearFloorForCaucus();
         removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
-        updateCaucusInDB(committee.id, caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);
-        setPhaseInDB(committee.id, 'moderated-caucus', committee.code, committee.dbChairJoinSuffix ?? undefined);
+        setPhaseAndCaucusInDB(committee.id, 'moderated-caucus', caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);   // one update (R-7)
         clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined).then(() =>
           batchAddToCaucusListInDB(committee.id, caucusQueue, committee.code, committee.dbChairJoinSuffix ?? undefined)
         );
@@ -1357,8 +1463,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       onClose();
       clearFloorForCaucus();
       removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
-      updateCaucusInDB(committee.id, caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);
-      setPhaseInDB(committee.id, 'moderated-caucus', committee.code, committee.dbChairJoinSuffix ?? undefined);
+      setPhaseAndCaucusInDB(committee.id, 'moderated-caucus', caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);   // one update (R-7)
       // Await clear before insert to prevent race condition (DELETE winning after INSERT)
       clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined).then(() =>
         batchAddToCaucusListInDB(
@@ -1375,6 +1480,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   // ── Special vote: "Does this motion pass?" ──────────────────────────────────
   if (specialVoteMotion) {
     const isSuspend = specialVoteMotion.type === 'suspend-debate';
+    const specialBlocked = isTempMotionId(specialVoteMotion.id) || pendingIds.has(specialVoteMotion.id);
     return (
       <Portal><div className="fixed inset-0 z-[60] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
         <p className="text-xs font-mono tracking-widest text-[#9A8A78] mb-6">
@@ -1383,38 +1489,66 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         <h1 className="text-4xl font-black mb-14 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('motions_does_pass')}</h1>
         <div className="flex gap-8">
           <button
+            disabled={specialBlocked}
             onClick={async () => {
               const motionId = specialVoteMotion!.id;
-              if (!motionId.startsWith('temp-')) {
-                await removePendingMotionInDB(motionId, committee.code, committee.dbChairJoinSuffix ?? undefined);
-              }
+              if (isTempMotionId(motionId)) return;
+              await removePendingMotionInDB(motionId, committee.code, committee.dbChairJoinSuffix ?? undefined);
               update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motionId) }));
+              // M-1: the other floor motions fall. G-1: whoever held the floor has their speech
+              // logged, then leaves it, so a resumed session cannot log the same turn again.
+              fellOtherFloorMotions({ committee, passedId: motionId, passedType: specialVoteMotion!.type, update, motionOrder, rank: rankMotion });
+              // End Debate ends a Room Order Tour de Table for good (Suspend only pauses it).
+              if (!isSuspend) void creditRoomOrderTour(committee);
+              const floor = committee.currentSpeaker;
+              if (floor) {
+                void logFloorSpeech(committee, floorClock?.());
+                update((c) => ({ ...c, currentSpeaker: null }));
+                clearCurrentSpeakerIfUnchanged(committee.id, floor.delegateId, floor.country, committee.code, committee.dbChairJoinSuffix ?? undefined);
+              }
+              // R-5: optimistic first (RULE 5), but remembered. Both writes are retried inside
+              // runWrite and a real failure raises the chair page's "Not saved" toast; when they
+              // resolve false the lifecycle fields are put back, so this laptop does not sit on
+              // a suspended / ended screen while the room carries on. The chair page drops its
+              // overlay when suspendedAt / endedAt return to null. Timestamps are on the
+              // database clock (T-1).
+              const before = {
+                phase: committee.phase, suspendedAt: committee.suspendedAt ?? null,
+                endedAt: committee.endedAt ?? null, expiresAt: committee.expiresAt ?? null,
+              };
+              const rollback = (ok: boolean) => { if (!ok) onCommitteeUpdate?.((c) => ({ ...c, ...before })); };
               if (isSuspend) {
-                onCommitteeUpdate?.((c) => ({ ...c, suspendedAt: new Date().toISOString(), phase: 'adjourned' as const }));
-                suspendDebateInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
+                // S4: a caucus kept through the break keeps its queue, never its floor holder.
+                onCommitteeUpdate?.((c) => ({
+                  ...c, suspendedAt: serverNowIso(), phase: 'adjourned' as const,
+                  caucus: c.caucus?.currentSpeaker ? { ...c.caucus, currentSpeaker: null } : c.caucus,
+                }));
+                void suspendDebateInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined).then(rollback);
               } else {
-                const now = new Date();
-                const expires = new Date(now.getTime() + 1 * 60 * 60 * 1000);
-                onCommitteeUpdate?.((c) => ({ ...c, endedAt: now.toISOString(), expiresAt: expires.toISOString(), phase: 'adjourned' as const }));
-                endDebateInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
+                const nowMs = serverNow();
+                // Mirrors endDebate()'s own +1h. If one is ever changed, change all three.
+                const expires = new Date(nowMs + 1 * 60 * 60 * 1000);
+                onCommitteeUpdate?.((c) => ({ ...c, endedAt: new Date(nowMs).toISOString(), expiresAt: expires.toISOString(), phase: 'adjourned' as const }));
+                void endDebateInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined).then(rollback);
               }
               setSpecialVoteMotion(null);
               onClose();
             }}
-            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none gv-lift" style={{ backgroundColor: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
+            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none gv-lift disabled:opacity-40 disabled:cursor-not-allowed" style={{ backgroundColor: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
             {t('motions_yes')}
           </button>
           <button
+            disabled={specialBlocked}
             onClick={() => {
               const motionId = specialVoteMotion.id;
-              removePendingMotionInDB(motionId, committee.code, committee.dbChairJoinSuffix ?? undefined);
-              update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motionId) }));
+              if (isTempMotionId(motionId)) return;
+              removeMotionEverywhere(committee, motionId, update);
               setSpecialVoteMotion(null);
               onClose();
             }}
-            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none gv-lift" style={{ backgroundColor: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
+            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none gv-lift disabled:opacity-40 disabled:cursor-not-allowed" style={{ backgroundColor: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#7A1C1C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}>
             {t('motions_no')}
@@ -1425,12 +1559,19 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   }
 
   return (
-    <Portal><div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-[#FAF8F3] border border-[#DDD4C0] rounded-3xl w-full shadow-2xl overflow-hidden flex flex-col max-w-5xl" style={{ height: '88%' }}>
+    // Grows out of the Motions tab. Rendered from the committee already in memory: nothing
+    // here waits on the network, so a slow connection cannot delay or stutter the opening.
+    <GrowDialog
+      originSelector='[data-tutorial="tab-motions"]'
+      onClose={onClose}
+      closeRef={animatedCloseRef}
+      ariaLabel={t('tab_motions')}
+      panelClassName={`bg-[#FAF8F3] border border-[#DDD4C0] rounded-3xl w-full shadow-2xl overflow-hidden flex flex-col max-w-5xl`}
+      panelStyle={{ height: '88%' }}
+    >
+      {(requestClose) => (<>
         <div className="flex items-center justify-end px-7 pt-6 pb-0 shrink-0">
-          <button onClick={onClose} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl leading-none">✕</button>
+          <button onClick={requestClose} aria-label={t('sb_close')} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl leading-none focus:outline-none">✕</button>
         </div>
         <div className="flex-1 min-h-0 pt-2 flex flex-col">
           {view === 'raise' && (
@@ -1442,6 +1583,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               editingMotion={editingMotionId ? ((committee.pendingMotions ?? []).find((m) => m.id === editingMotionId) ?? null) : null}
               belowQuorum={belowQuorum}
               isViewOnly={isViewOnly}
+              floorFull={floorFull}
             />
           )}
           {view === 'vote' && (
@@ -1449,12 +1591,13 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               committee={committee}
               typeMeta={typeMeta}
               onAccepted={handleMotionAccepted}
-              onAllDone={() => { setView('list'); onClose(); }}
+              onAllDone={close}
               onRemove={handleRemove}
               onBack={() => setView('raise')}
               onEdit={(motionId) => { setEditingMotionId(motionId); setView('raise'); }}
               pendingIds={pendingIds}
               isViewOnly={isViewOnly}
+              onCommenterAttempt={onCommenterAttempt}
               rank={rankMotion}
             />
           )}
@@ -1492,15 +1635,14 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                               <div className="flex items-center gap-1.5 mt-1">
                                 {m.proposedBy === CHAIR_KEY
                                   ? <span className="text-base leading-none">🪑</span>
-                                  : <SeatFlag country={m.proposedBy} size={20} className="object-contain inline-block" fallback={<Emoji size="1rem">🌐</Emoji>} />}
+                                  : <SeatFlag country={m.proposedBy} size={20} className="object-contain inline-block" fallback={<UnknownSeatIcon size={20} />} />}
                                 <span className="text-sm font-semibold text-[#1C1410]">{m.proposedBy === CHAIR_KEY ? chairDisplayName(language) : getCountryDisplayName(m.proposedBy, language)}</span>
                               </div>
                             )}
                             {rowIsCustom && !m.proposedBy && (
                               <p className="text-sm font-semibold mt-1" style={{ color: '#9A8A78' }}>{noProposerLabel(language)}</p>
                             )}
-                            {rowIsCustom && <div className="mt-2"><CustomNoOpNotice compact /></div>}
-                            {m.topic && !rowIsCustom && <p className="text-sm text-[#6A5A4A] mt-1 font-medium">"{m.topic}"</p>}
+                            {m.topic && !rowIsCustom && <p className="text-sm text-[#6A5A4A] mt-1 font-medium">&ldquo;{m.topic}&rdquo;</p>}
                             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                               {m.type !== 'tour' && m.totalTime > 0 && (
                                 <span className="text-xs font-bold text-[#1B3828] bg-[#FAF8F3] border border-[#DDD4C0] px-2 py-0.5 rounded-md">
@@ -1524,7 +1666,10 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                               )}
                             </div>
                           </div>
-                          <button onClick={() => handleRemove(m.id)} className="text-[#9A8A78] hover:text-[#8B2020] text-sm transition-colors mt-0.5">✕</button>
+                          <button onClick={() => { if (!isTempMotionId(m.id)) handleRemove(m.id); }}
+                            disabled={isTempMotionId(m.id)}
+                            title={isTempMotionId(m.id) ? t('motions_saving') : undefined}
+                            className="text-[#9A8A78] hover:text-[#8B2020] disabled:opacity-40 disabled:cursor-not-allowed text-sm transition-colors mt-0.5">✕</button>
                         </div>
                       </div>
                     );
@@ -1532,8 +1677,8 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                 </div>
               )}
               <div className="flex gap-3 pt-2">
-                <button onClick={() => setView('raise')}
-                  className="flex-1 bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-all gv-lift">
+                <button onClick={() => setView('raise')} disabled={floorFull}
+                  className="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-all gv-lift">
                   {t('motions_raise_list_btn')}
                 </button>
                 {pending.length > 0 && (
@@ -1546,7 +1691,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
             </div>
           )}
         </div>
-      </div>
-    </div></Portal>
+      </>)}
+    </GrowDialog>
   );
 }

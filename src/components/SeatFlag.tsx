@@ -76,7 +76,7 @@ interface SeatFlagProps {
   className?: string;
   style?: CSSProperties;
   /** Drawn when the seat resolves to neither a crest nor a known flag.
-   *  Defaults to FlagImg's globe. */
+   *  Defaults to FlagImg's unknown-user badge. */
   fallback?: ReactNode;
 }
 

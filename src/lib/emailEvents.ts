@@ -26,14 +26,18 @@ export interface EventDef {
    *  send, clicking INVITE is the consent, so the Notifications registry
    *  hides their toggle and shows a fixed "always sends" note instead. */
   functional?: boolean;
+  /** May repeat on a cadence the organizer sets. The database allows this on
+   *  exactly two keys and refuses it on any other, so do not add a third here
+   *  without the matching migration. */
+  recurring?: boolean;
 }
 
 export const EVENT_REGISTRY = [
   { key: 'application_received', label: 'Application Received', description: 'Sent to a delegate when their application is submitted.', defaultDelivery: 'immediate' },
-  { key: 'draft_reminder', label: 'Unfinished application reminder', description: "Sent to someone who started an application and never submitted it, nudging them back to their saved answers. Queued by the send_draft_reminder RPC (organizer-only, one reminder per draft per 72 hours), not by queueEventEmail. It follows the same superset rule as Question received: with no template row our default still sends, and only a row you have explicitly turned off skips it.", defaultDelivery: 'immediate' },
+  { key: 'draft_reminder', label: 'Unfinished application reminder', description: "Sent to someone who started an application and never submitted it, nudging them back to their saved answers. Repeats on the cadence you set below, and stops on its own as soon as they submit, when the conference's first day arrives, or when the cap is reached. Organizers can also send one by hand. It follows the same superset rule as Question received: with no template row our default still sends, and only a row you have explicitly turned off skips it.", defaultDelivery: 'immediate', recurring: true },
   { key: 'application_accepted', label: 'Application Accepted', description: 'Sent when an application is accepted.', defaultDelivery: 'immediate' },
   { key: 'application_rejected', label: 'Application Rejected', description: 'Sent when an application is rejected.', defaultDelivery: 'immediate' },
-  { key: 'payment_available', label: 'Payment Available', description: "Sent when payment opens up for a delegate. Companion to Application Accepted: on acceptance, this is suppressed for anyone who was actually emailed Application Accepted for the same action. It only sends alone when that email resolved to nothing (off or unconfigured) for them.", defaultDelivery: 'immediate' },
+  { key: 'payment_available', label: 'Payment Available', description: "Sent when payment opens up for a delegate. Companion to Application Accepted: on acceptance, this is suppressed for anyone who was actually emailed Application Accepted for the same action. It only sends alone when that email resolved to nothing (off or unconfigured) for them.", defaultDelivery: 'immediate', recurring: true },
   { key: 'payment_received', label: 'Payment Received', description: "Sent when a delegate is marked paid.", defaultDelivery: 'immediate' },
   { key: 'fee_waived', label: 'Fee Waived', description: "Sent when a delegate's fee is waived.", defaultDelivery: 'immediate' },
   { key: 'aid_approved', label: 'Financial Aid Approved', description: "Sent when a delegate's financial aid request is approved.", defaultDelivery: 'immediate' },
@@ -49,6 +53,7 @@ export const EVENT_REGISTRY = [
   { key: 'not_attending', label: 'Marked Not Attending', description: 'Sent when a delegate is marked not attending.', defaultDelivery: 'manual' },
   { key: 'attendance_restored', label: 'Attendance Restored', description: "Sent when a delegate's attendance is restored.", defaultDelivery: 'immediate' },
   { key: 'documents_published', label: 'Study guide released', description: "Sent automatically to a committee's delegates when its study guide release time passes.", defaultDelivery: 'immediate' },
+  { key: 'position_paper_due', label: 'Position paper due', description: 'Sent to delegates who have not submitted a position paper yet, pointing them at the deadline. Send it by hand when you want it; it does not repeat on its own.', defaultDelivery: 'manual' },
   { key: 'chair_assigned', label: 'Chair Assigned', description: 'Sent when someone is assigned as a committee chair.', defaultDelivery: 'immediate' },
   { key: 'committee_chair_invite', label: 'Chair invite', description: 'Sent when an organizer invites someone to chair a committee. Always sends, clicking INVITE is the consent, using your draft if enabled, otherwise our default.', defaultDelivery: 'immediate', functional: true },
   { key: 'organizer_invite', label: 'Organizer invite', description: 'Sent when someone is invited to join the organizing team. Always sends, clicking INVITE is the consent, using your draft if enabled, otherwise our default.', defaultDelivery: 'immediate', functional: true },
@@ -131,6 +136,7 @@ export const NOTIFICATION_CATEGORY: Record<EventKey, NotificationCategory> = {
   not_attending: 'applications',
   attendance_restored: 'applications',
   documents_published: 'documents',
+  position_paper_due: 'documents',
   chair_assigned: 'applications',
   committee_chair_invite: 'applications',
   organizer_invite: 'applications',
@@ -560,7 +566,7 @@ export async function turnOnDefaultEmail(
   conferenceId: string,
   eventKey: string
 ): Promise<{ ok: boolean; error?: string }> {
-  const event = EVENT_REGISTRY.find(e => e.key === eventKey);
+  const event = (EVENT_REGISTRY as readonly EventDef[]).find(e => e.key === eventKey);
 
   const { data: existing } = await supabase
     .from('email_templates')
@@ -583,6 +589,10 @@ export async function turnOnDefaultEmail(
     body_blocks: [],
     enabled: true,
     delivery: event?.defaultDelivery ?? 'immediate',
+    // A recurring event starts on, at the default cadence, because the row
+    // being absent already meant "recurring at 3 sends every 3 days".
+    // Inserting it off would quietly reduce what people already receive.
+    ...(event?.recurring ? { recurring_enabled: true, recurring_interval_days: 3, recurring_max_sends: 3 } : {}),
   });
   return { ok: !error, error: error?.message };
 }

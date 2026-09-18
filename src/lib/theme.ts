@@ -42,6 +42,7 @@ export interface ResolvedTheme {
   surface: string;
   border: string;
   main: string;
+  mainDark: string;
   mainMid: string;
   mainLight: string;
   accent: string;
@@ -58,6 +59,7 @@ export const GAVELLING_THEME: Readonly<ResolvedTheme> = Object.freeze({
   surface: '#FAF8F3',
   border: '#DDD4C0',
   main: '#1B3828',
+  mainDark: '#16301F',
   mainMid: '#2A5A3C',
   mainLight: '#3D7A52',
   accent: '#B6871F',
@@ -169,6 +171,8 @@ export function resolveTheme(theme: ConferenceTheme | null | undefined): Resolve
   // Two lighter steps of the main colour, for hover states and secondary fills.
   const mainMid = mix(main, '#FFFFFF', 0.18);
   const mainLight = mix(main, '#FFFFFF', 0.34);
+  // A darker step of the main colour, for the monogram fallback gradient.
+  const mainDark = mix(main, '#000000', 0.18);
   // Light stop of the accent gradient/disc pairing, derived the same way.
   const accentLight = mix(accent, '#FFFFFF', 0.55);
 
@@ -177,6 +181,7 @@ export function resolveTheme(theme: ConferenceTheme | null | undefined): Resolve
     surface: GAVELLING_THEME.surface,
     border: GAVELLING_THEME.border,
     main,
+    mainDark,
     mainMid,
     mainLight,
     accent,
@@ -206,6 +211,7 @@ export function themeCssVars(theme: ConferenceTheme | null | undefined): React.C
     '--gv-surface': t.surface,
     '--gv-border': t.border,
     '--gv-main': t.main,
+    '--gv-main-dark': t.mainDark,
     '--gv-main-mid': t.mainMid,
     '--gv-main-light': t.mainLight,
     '--gv-accent': t.accent,

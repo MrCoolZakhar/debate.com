@@ -8,6 +8,7 @@ import Portal from '@/components/Portal';
 import { useAuth } from '@/components/AuthProvider';
 import { notifyDraftsChanged } from '@/hooks/useDraftCount';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
+import { supabase as anonSupabase } from '@/lib/supabase';
 import { useCredits } from '@/hooks/useCredits';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
@@ -21,11 +22,15 @@ import { queueParticipantEventEmail } from '@/lib/emailEvents';
 import { reportBlocked } from '@/lib/reportCrash';
 import { themeCssVars, type ConferenceTheme } from '@/lib/theme';
 import {
-  type ApplyDraftAnswers,
+  type ApplyDraftAnswers, type ApplyDraftRow,
   loadApplyDraft, saveApplyDraft, discardApplyDraft,
   saveApplyDraftOnTeardown, resyncDraftRevision,
   draftHasContent, newDraftClientId, fingerprintDraft,
 } from '@/lib/applyDraft';
+import {
+  type GuestApplyAnswers,
+  saveGuestDraft, loadGuestDraft, clearGuestDraft,
+} from '@/lib/guestApplyDraft';
 import { NEU, NeuInset, NeuCard, OUTFIT, EASE, Emoji3D } from '@/components/neu';
 import { WizardShell, TwoTabPick } from '@/components/wizard';
 import { CVEntryModal, type CVEntry, type ExperienceEntry } from '@/components/CVEntryModal';
@@ -903,10 +908,17 @@ function ConferenceApplyInner() {
   const [societyDropdownOpen, setSocietyDropdownOpen] = useState(false);
   const [societyError, setSocietyError] = useState('');
   // Delegations that ALREADY have a head-delegate / faculty-advisor application
-  // for this conference — grayed out and non-selectable in the picker (a second
-  // delegation application for the same society isn't allowed; joiners are
-  // invited by that society's head delegate instead). Populated from the
-  // conference_taken_society_ids RPC.
+  // for this conference. HEAD-DELEGATE AND FACULTY-ADVISOR ROLES ONLY: for those
+  // two roles a taken delegation is greyed out and not selectable, because a
+  // second delegation application for the same society would duplicate it.
+  //
+  // NEVER GATE A DELEGATE ON THIS SET. A delegate joining a delegation that
+  // already has a head delegate is the normal case, so for a delegate a taken
+  // delegation is precisely the one they need to pick. Applying this set to
+  // delegates blocked 37 delegations across 5 conferences before it was caught.
+  // Both use sites guard on isInvoicingRole. Keep it that way.
+  //
+  // Populated from the conference_taken_society_ids RPC.
   const [takenSocietyIds, setTakenSocietyIds] = useState<Set<string>>(new Set());
   // Delegation-invite consume (?delegationInvite=<token>): the resolved society
   // is pre-selected AND bypasses the "already applied" grayout, since the
@@ -1080,13 +1092,21 @@ function ConferenceApplyInner() {
   const ageAtStart = hasAgeGate && myDob && conference ? ageAt(myDob, conference.start_date) : null;
   const underAge = minAgeLimit != null && ageAtStart !== null && ageAtStart < minAgeLimit;
   const overAge = maxAgeLimit != null && ageAtStart !== null && ageAtStart > maxAgeLimit;
+  // A signed-out visitor has no profile date of birth for the checks above
+  // to run against. On an age-gated conference, asking once up front (never
+  // stored — see the guest date-of-birth screen below) saves them filling a
+  // long form only to be refused at Submit. `ask` -> `passed` lets them into
+  // the wizard; `ask` -> `blocked` shows the guest variant of the age
+  // screen, with its own way back to `ask` to correct a mistyped date.
+  const [guestDobInput, setGuestDobInput] = useState('');
+  const [guestDobStage, setGuestDobStage] = useState<'ask' | 'passed' | 'blocked'>('ask');
   // The basics wall fires whenever EITHER field is missing, age gate or not.
   // It sits in front of the age screens, so the age gate keeps working on top
   // of it: with no date of birth `ageAtStart` is null and underAge/overAge are
   // both false, so the applicant fills the wall in first and the age screen
   // then judges them on a date of birth that actually exists. Preview never
   // shows it and never writes.
-  const needsBasics = !previewing && (!myNationality || !myDob);
+  const needsBasics = !!user && !previewing && (!myNationality || !myDob);
   /** One sentence stating the requirement, whichever bounds are set. */
   const ageRequirementText =
     minAgeLimit != null && maxAgeLimit != null
@@ -1208,24 +1228,25 @@ function ConferenceApplyInner() {
     setQuestionPage(0);
   }, [role]);
 
+  // The sign-in href for a guest who needs to authenticate before Submit —
+  // built once here and reused by the "Sign in and submit" button on
+  // Overview (Option A no longer redirects on load, see the effect below).
+  const buildSignInHref = useCallback((): string => {
+    // Round-trip the WHOLE query string, not just ?role. Rebuilding it as
+    // `?role=${role}` dropped ?delegationInvite=<token> (an invited delegate
+    // who had to sign in lost their invite and landed in the generic flow)
+    // and ?edit=1 (an edit link bounced back as a fresh application).
+    const query = searchParams.toString();
+    const returnTo = `/conferences/${slug}/apply?${query || `role=${role}`}`;
+    // `apply=1` is context, not routing: without it the sign-in page gives no
+    // reason for asking, and an applicant who followed a role link reads the
+    // bare form as the link having been wrong.
+    return `/auth/signin?next=${encodeURIComponent(returnTo)}&apply=1`;
+  }, [searchParams, slug, role]);
+
   // ── Auth gate + fetch
   useEffect(() => {
     if (authLoading) return;
-    if (!user) {
-      // Round-trip the WHOLE query string, not just ?role. Rebuilding it as
-      // `?role=${role}` dropped ?delegationInvite=<token> (an invited delegate
-      // who had to sign in lost their invite and landed in the generic flow)
-      // and ?edit=1 (an edit link bounced back as a fresh application).
-      const query = searchParams.toString();
-      const returnTo = `/conferences/${slug}/apply?${query || `role=${role}`}`;
-      // `apply=1` is context, not routing: without it the sign-in page gives no
-      // reason for asking, and an applicant who followed a role link reads the
-      // bare form as the link having been wrong.
-      router.replace(
-        `/auth/signin?next=${encodeURIComponent(returnTo)}&apply=1`,
-      );
-      return;
-    }
     fetchAll();
   // `session?.access_token`, not `session`: AuthProvider swaps the session
   // OBJECT on every auth event (token refresh, tab focus), and depending on it
@@ -1316,6 +1337,11 @@ function ConferenceApplyInner() {
   const draftEnabled =
     !isEditMode && !authLoading && !loading && !draftConflict &&
     !!session && !!conference && !!user && !existingApp && !previewing;
+
+  // The guest equivalent, for a signed-out visitor. Separate mechanism from
+  // the server draft above (see guestApplyDraft.ts) — the two must never both
+  // be writing for the same person, so this deliberately keeps its own !user.
+  const guestDraftEnabled = !isEditMode && !authLoading && !loading && !user && !!conference && !previewing;
 
   // Live mirrors for the saver, which is called from event listeners and from
   // async continuations and must never read a stale closure. Declared BEFORE
@@ -1443,6 +1469,70 @@ function ConferenceApplyInner() {
 
     let cancelled = false;
     (async () => {
+      // ADOPTION STEP. A guest draft from before signing in, if there is one,
+      // is reconciled with the server BEFORE the ordinary load a few lines
+      // below — which this can skip entirely in the common case. See
+      // guestApplyDraft.ts's file header for the full reasoning.
+      const guestRow = loadGuestDraft(slug, role);
+      if (guestRow) {
+        const client = getAuthedClient(session.access_token);
+        const guestAsFull: ApplyDraftAnswers = {
+          ...guestRow.answers,
+          delegationInviteToken: draftInviteTokenRef.current ?? delegationInviteToken ?? null,
+        };
+        // Presenting revision 0 both creates the row when none exists yet
+        // (the common case — a brand-new account cannot have a server
+        // draft) AND, for free, tells us whether one already did: an
+        // existing row with a real revision refuses this as a conflict.
+        const attempt = await saveApplyDraft(client, {
+          conferenceId: conference.id,
+          role,
+          answers: guestAsFull,
+          step: guestRow.step,
+          revision: 0,
+          clientId: draftClientIdRef.current,
+        });
+        if (cancelled) { draftLoadStartedRef.current = false; return; }
+
+        if (attempt.ok) {
+          // No server draft existed. Silent adopt: the guest draft IS the
+          // server draft now, and the guest key is gone because it has
+          // genuinely moved, not because it was discarded.
+          clearGuestDraft(slug, role);
+          applyGuestAnswers(guestRow.answers, guestRow.step);
+          const clampedStep = Math.min(Math.max(1, Math.trunc(guestRow.step) || 1), totalSteps);
+          draftRevisionRef.current = attempt.revision;
+          draftExistsRef.current = true;
+          setHasDraft(true);
+          draftFingerprintRef.current = fingerprintDraft(guestAsFull, clampedStep);
+          refreshCredits();
+          setDraftReady(true);
+          return;
+        }
+
+        if (attempt.conflict) {
+          // COLLISION: a server draft already exists. The conflict response
+          // only carries a revision, not the content, so it has to be loaded
+          // — the one case this effect still calls loadApplyDraft with a
+          // guest draft present — and the applicant chooses, rather than
+          // either copy being picked for them or silently overwritten.
+          const serverRow = await loadApplyDraft(client, conference.id, user.id, role);
+          if (cancelled) { draftLoadStartedRef.current = false; return; }
+          if (serverRow) {
+            setGuestCollision({ guestAnswers: guestRow.answers, guestStep: guestRow.step, serverRow });
+            return; // draftReady stays false until the applicant picks
+          }
+          // The server draft vanished between the conflict and this read —
+          // fall through to the ordinary load below, which will find nothing.
+        }
+        // Any other refusal — including 'already_applied', when an
+        // `applications` row already exists for this (conference, user,
+        // role) — leaves the guest key in place and falls through to the
+        // ordinary load below, on purpose: a later prompt needs that key to
+        // still exist so it can offer these answers as an edit to the
+        // application that already exists.
+      }
+
       const row = await loadApplyDraft(getAuthedClient(session.access_token), conference.id, user.id, role);
       if (cancelled) { draftLoadStartedRef.current = false; return; }
       if (row) {
@@ -1555,6 +1645,195 @@ function ConferenceApplyInner() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftEnabled, draftReady]);
 
+  // ══ GUEST DRAFT (signed-out visitors only) ═══════════════════════════════
+  // See src/lib/guestApplyDraft.ts's file header for why this exists and what
+  // it deliberately does not store. Independent of the server draft above —
+  // a plain localStorage write is synchronous, so there is no revision or
+  // conflict story to carry, and it is NEVER restored automatically: it is
+  // offered, and the visitor chooses (also explained in that file's header).
+
+  const guestDraftAnswers: GuestApplyAnswers = {
+    isIndependent,
+    societyInput,
+    selectedSocietyId,
+    invitedSocietyId,
+    inviteSocietyName,
+    willPledgeSpots,
+    spotsPledged,
+    willPledgeAdvisors,
+    advisorsPledged,
+    preferences,
+    experienceEntries,
+    experienceLevel,
+    customAnswers,
+    questionPage,
+    voucherCode,
+  };
+  const guestDraftFingerprint = JSON.stringify({ answers: guestDraftAnswers, step });
+
+  const guestDraftStateRef = useRef<{ answers: GuestApplyAnswers; step: number } | null>(null);
+  const guestDraftEnabledRef = useRef(false);
+  useEffect(() => {
+    guestDraftStateRef.current = { answers: guestDraftAnswers, step };
+    // Belt-and-braces, same reasoning as the server draft above: never write
+    // in preview under any circumstance.
+    guestDraftEnabledRef.current = guestDraftEnabled && !previewing;
+  });
+
+  // ── Debounced save, same cadence as the server draft.
+  useEffect(() => {
+    if (!guestDraftEnabled) return;
+    const t = setTimeout(() => { saveGuestDraft(slug, role, guestDraftAnswers, step); }, DRAFT_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guestDraftFingerprint, guestDraftEnabled, slug, role]);
+
+  // ── Flush on teardown. A plain localStorage write is synchronous and
+  // survives pagehide on its own — no keepalive fetch trick needed here.
+  useEffect(() => {
+    if (!guestDraftEnabled) return;
+    const onPageHide = () => {
+      if (!guestDraftEnabledRef.current) return;
+      const snap = guestDraftStateRef.current;
+      if (!snap) return;
+      saveGuestDraft(slug, role, snap.answers, snap.step);
+    };
+    window.addEventListener('pagehide', onPageHide);
+    return () => window.removeEventListener('pagehide', onPageHide);
+  }, [guestDraftEnabled, slug, role]);
+
+  /** Applies a saved set of guest (or adopted) answers exactly the way the
+   *  server draft's own resume does, including the same step clamp. Shared by
+   *  the restore-offer card below and by sign-in adoption further down. */
+  const applyGuestAnswers = useCallback((a: GuestApplyAnswers, savedStep: number) => {
+    setIsIndependent(a.isIndependent);
+    setSocietyInput(a.societyInput);
+    setSelectedSocietyId(a.selectedSocietyId);
+    if (a.invitedSocietyId) setInvitedSocietyId(a.invitedSocietyId);
+    if (a.inviteSocietyName) setInviteSocietyName(a.inviteSocietyName);
+    setWillPledgeSpots(a.willPledgeSpots);
+    setSpotsPledged(a.spotsPledged);
+    setWillPledgeAdvisors(a.willPledgeAdvisors);
+    setAdvisorsPledged(a.advisorsPledged);
+    setPreferences(a.preferences);
+    setExperienceEntries(a.experienceEntries ?? []);
+    setExperienceLevel(a.experienceLevel);
+    setCustomAnswers(a.customAnswers);
+    setQuestionPage(a.questionPage);
+    // The voucher CODE only — see guestApplyDraft.ts's header.
+    setVoucherCode(a.voucherCode);
+    setStep(Math.min(Math.max(1, Math.trunc(savedStep) || 1), totalSteps));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalSteps]);
+
+  /** "Keep my existing application" on the post-sign-in offer screen
+   *  (case one, below) was pressed: the guest draft for this (slug, role)
+   *  is already cleared, and this is what makes the plain "already
+   *  applied" wall take over instead of the offer re-appearing. */
+  const [guestOfferDismissed, setGuestOfferDismissed] = useState(false);
+
+  /** A guest draft was found on arrival. Offered, never applied automatically
+   *  — see the file header on WHY. Checked once per mount. */
+  const [guestDraftOffer, setGuestDraftOffer] = useState<{ answers: GuestApplyAnswers; step: number } | null>(null);
+  const guestDraftOfferCheckedRef = useRef(false);
+  useEffect(() => {
+    if (!guestDraftEnabled) return;
+    if (guestDraftOfferCheckedRef.current) return;
+    guestDraftOfferCheckedRef.current = true;
+    const row = loadGuestDraft(slug, role);
+    if (row) setGuestDraftOffer({ answers: row.answers, step: row.step });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guestDraftEnabled, slug, role]);
+
+  function handleContinueGuestDraft() {
+    if (!guestDraftOffer) return;
+    applyGuestAnswers(guestDraftOffer.answers, guestDraftOffer.step);
+    setGuestDraftOffer(null);
+  }
+
+  function handleStartFreshGuestDraft() {
+    clearGuestDraft(slug, role);
+    setGuestDraftOffer(null);
+  }
+
+  /** The rare case: an account already has a server draft AND this browser
+   *  also has a guest draft from before signing in. Set by the resume
+   *  effect's adoption step; resolved by one of the two handlers below.
+   *  Neither copy is picked automatically — see Part 8's reasoning. */
+  const [guestCollision, setGuestCollision] = useState<{
+    guestAnswers: GuestApplyAnswers; guestStep: number; serverRow: ApplyDraftRow;
+  } | null>(null);
+
+  /** Finishes applying whichever copy the applicant chose: the draft
+   *  bookkeeping the resume effect would otherwise have set up. */
+  function finishGuestCollision(fingerprint: string, revision: number, discardToken: string | null) {
+    draftRevisionRef.current = revision;
+    draftTokenRef.current = discardToken;
+    draftExistsRef.current = true;
+    setHasDraft(true);
+    draftFingerprintRef.current = fingerprint;
+    refreshCredits();
+    setDraftReady(true);
+  }
+
+  function handleUseServerOverGuest() {
+    if (!guestCollision) return;
+    const { serverRow } = guestCollision;
+    applyGuestAnswers(serverRow.answers, serverRow.step);
+    if (serverRow.answers.delegationInviteToken) draftInviteTokenRef.current = serverRow.answers.delegationInviteToken;
+    const clampedStep = Math.min(Math.max(1, Math.trunc(serverRow.step) || 1), totalSteps);
+    finishGuestCollision(fingerprintDraft(serverRow.answers, clampedStep), serverRow.revision, serverRow.discardToken);
+    clearGuestDraft(slug, role);
+    setGuestCollision(null);
+  }
+
+  function handleUseGuestOverServer() {
+    if (!guestCollision || !conference || !session) return;
+    const { guestAnswers, guestStep, serverRow } = guestCollision;
+    applyGuestAnswers(guestAnswers, guestStep);
+    const fullAnswers: ApplyDraftAnswers = {
+      ...guestAnswers,
+      delegationInviteToken: draftInviteTokenRef.current ?? delegationInviteToken ?? null,
+    };
+    const clampedStep = Math.min(Math.max(1, Math.trunc(guestStep) || 1), totalSteps);
+    const client = getAuthedClient(session.access_token);
+    void (async () => {
+      // The applicant explicitly chose this copy, so overwriting the
+      // server draft is deliberate — presenting ITS revision (from the
+      // collision) so the write actually lands rather than conflicting again.
+      const res = await saveApplyDraft(client, {
+        conferenceId: conference.id,
+        role,
+        answers: fullAnswers,
+        step: guestStep,
+        revision: serverRow.revision,
+        clientId: draftClientIdRef.current,
+      });
+      if (res.ok) {
+        finishGuestCollision(fingerprintDraft(fullAnswers, clampedStep), res.revision, serverRow.discardToken);
+      } else {
+        // Someone else wrote the server draft between the collision and this
+        // explicit choice — vanishingly unlikely. Fall back to its current
+        // copy rather than leaving the applicant stuck on neither.
+        applyGuestAnswers(serverRow.answers, serverRow.step);
+        finishGuestCollision(fingerprintDraft(serverRow.answers, clampedStep), serverRow.revision, serverRow.discardToken);
+      }
+      clearGuestDraft(slug, role);
+      setGuestCollision(null);
+    })();
+  }
+
+  /** "Sign in and submit" on Overview, for a signed-out visitor. Saves
+   *  synchronously before navigating so nothing can be lost to the race, then
+   *  pushes (never replaces) so Back returns to the filled-in form. */
+  const [goingToSignIn, setGoingToSignIn] = useState(false);
+  function goSignIn() {
+    if (goingToSignIn) return;
+    setGoingToSignIn(true);
+    saveGuestDraft(slug, role, guestDraftAnswers, step);
+    router.push(buildSignInHref());
+  }
+
   /** Drop the draft row once the application it drafted actually exists (or
    *  has been withdrawn). Turns autosave off first so an in-flight debounce
    *  can never resurrect what we just deleted. */
@@ -1641,9 +1920,9 @@ function ConferenceApplyInner() {
     // either, so nothing re-ran it once auth landed: the page simply never
     // loaded. Bailing before touching `loading` means the worst case is a
     // no-op, and the effect now re-fires when the token arrives.
-    if (!session) return;
+    const authed = !!session;
     setLoading(true);
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = authed ? getAuthedClient(session!.access_token) : anonSupabase;
 
     const { data: confData } = await supabase
       .from('conferences')
@@ -1661,7 +1940,7 @@ function ConferenceApplyInner() {
 
     // Organizer preview eligibility. Read-only, and deliberately not gated on
     // isPreview — knowing this costs nothing and keeps the check in one place.
-    if (isPreview) {
+    if (isPreview && authed) {
       const { data: isOrganizer } = await supabase.rpc('is_conference_organizer', { conf_id: confData.id });
       setCanPreview(!!isOrganizer);
     }
@@ -1683,38 +1962,42 @@ function ConferenceApplyInner() {
         .select('id, name, name_normalized')
         .eq('conference_id', confData.id)
         .order('name', { ascending: true }),
-      supabase
+      // The five reads below are user-scoped and must not be sent at all for
+      // a signed-out visitor: a guest resolves to the same null-data shape
+      // the real query would return for "nothing found", never an actual
+      // request against a table that needs an identity it doesn't have.
+      authed ? supabase
         .from('applications')
         .select('id, status, is_independent, society_id, experience_level, custom_answers, pledge_type, spots_pledged, advisors_pledged')
         .eq('conference_id', confData.id)
         .eq('user_id', user!.id)
         .eq('role', role)
-        .maybeSingle(),
+        .maybeSingle() : Promise.resolve({ data: null }),
       // One-active-application-per-conference check: any OTHER role this
       // user already holds an active application under, at this same
       // conference. Rejected/withdrawn are excluded on purpose (#1 — they
       // don't count, so a rejected applicant can still apply fresh under a
       // different role). Not .maybeSingle(): nothing here guarantees a
       // single row today, and this must never throw.
-      supabase
+      authed ? supabase
         .from('applications')
         .select('id, role, status')
         .eq('conference_id', confData.id)
         .eq('user_id', user!.id)
         .neq('role', role)
         .in('status', ['submitted', 'accepted', 'assigned', 'checked-in'])
-        .limit(1),
-      supabase
+        .limit(1) : Promise.resolve({ data: null }),
+      authed ? supabase
         .from('profiles')
         .select('nationality, date_of_birth, is_ambassador, unlimited_conferences_remaining, mun_experience_level')
         .eq('id', user!.id)
-        .maybeSingle(),
+        .maybeSingle() : Promise.resolve({ data: null }),
       // Personal Gavelling Unlimited subscription: owner_user_id = the
       // applicant, conference_id NULL (never conference-scoped), active/
       // trialing and not expired. Drives has_active_subscription below,
       // recorded as fee_waiver_source for reporting — the conference fee
       // itself carries no Gavelling surcharge regardless.
-      supabase
+      authed ? supabase
         .from('subscriptions')
         .select('plan, status, current_period_end')
         .eq('owner_user_id', user!.id)
@@ -1722,14 +2005,14 @@ function ConferenceApplyInner() {
         .in('status', ['active', 'trialing'])
         .or(`current_period_end.is.null,current_period_end.gt.${new Date().toISOString()}`)
         .limit(1)
-        .maybeSingle(),
+        .maybeSingle() : Promise.resolve({ data: null }),
       // MUN CV entry count — the applicant's rank is derived from this (same
       // source the CV page uses: entries.length → experienceProgress). head+
       // count avoids pulling any rows.
-      supabase
+      authed ? supabase
         .from('mun_cv_entries')
         .select('id', { count: 'exact', head: true })
-        .eq('user_id', user!.id),
+        .eq('user_id', user!.id) : Promise.resolve({ data: null, count: null, error: null }),
     ]);
 
     const committeesData = (committeesRes.data as CommitteeOption[]) ?? [];
@@ -2268,7 +2551,7 @@ function ConferenceApplyInner() {
       // this applicant was explicitly invited to that one). Resolve the id the
       // application would attach to: an explicit selection, or the one
       // delegation the typed name is unmistakably the same as.
-      if (!isObserver && !isIndependent) {
+      if (!isObserver && !isIndependent && isInvoicingRole) {
         const resolvedId = selectedSocietyId ?? adopted?.id ?? null;
         if (resolvedId && resolvedId !== invitedSocietyId && takenSocietyIds.has(resolvedId)) {
           setSocietyError('This delegation has already applied. Ask its head delegate or faculty advisor to invite you.');
@@ -2952,6 +3235,29 @@ function ConferenceApplyInner() {
               −{formatFee(breakdown.voucherDiscount, breakdown.currency)}
             </span>
           </div>
+        ) : !user ? (
+          // Signed-out visitor: the code is worth keeping (it rides into the
+          // guest draft with everything else), but validate_voucher is not
+          // anon-executable, so there is nothing here to check it against —
+          // and nothing to resolve a discount from — until they sign in.
+          <div style={{ marginBottom: 10 }}>
+            <input
+              type="text"
+              value={voucherCode}
+              onChange={(e) => { setVoucherCode(e.target.value.toUpperCase()); setVoucherError(''); }}
+              placeholder="Voucher code"
+              aria-label="Voucher code"
+              className="w-full rounded-xl px-3.5 py-2 text-sm focus:outline-none"
+              style={{
+                border: '1.5px solid var(--gv-border)',
+                backgroundColor: 'var(--gv-surface)', color: NEU.ink, fontFamily: OUTFIT,
+                letterSpacing: '0.08em', textTransform: 'uppercase',
+              }}
+            />
+            <p className="text-xs mt-1.5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+              Your code will be applied when you sign in.
+            </p>
+          </div>
         ) : (
           <div className="flex items-stretch gap-2" style={{ marginBottom: voucherError ? 4 : 10 }}>
             <input
@@ -3024,8 +3330,13 @@ function ConferenceApplyInner() {
     // The existing delegation Continue will attach this application to, shown
     // under the field so the adoption is never silent. Not when it has
     // already applied (Continue refuses that with its own message).
+    // Suppressed only for the roles Continue still refuses, which is
+    // head-delegate and faculty-advisor. For a DELEGATE an already-applied
+    // delegation is the normal thing to be matched to, and hiding the line
+    // would make that attachment silent, which is the one thing this line
+    // exists to prevent.
     const adoptionShown = !invitedSocietyId && adoptableSociety
-      && !(takenSocietyIds.has(adoptableSociety.id) && adoptableSociety.id !== invitedSocietyId)
+      && !(isInvoicingRole && takenSocietyIds.has(adoptableSociety.id) && adoptableSociety.id !== invitedSocietyId)
       ? adoptableSociety
       : null;
     const pickSociety = (s: Society) => {
@@ -3165,7 +3476,7 @@ function ConferenceApplyInner() {
                       {societySuggestions.map(s => {
                         // A delegation that already has a head/advisor application
                         // for this conference — grayed out and non-selectable.
-                        const taken = takenSocietyIds.has(s.id) && s.id !== invitedSocietyId;
+                        const taken = isInvoicingRole && takenSocietyIds.has(s.id) && s.id !== invitedSocietyId;
                         return (
                           <button
                             key={s.id}
@@ -4447,7 +4758,8 @@ function ConferenceApplyInner() {
     // Edit mode resubmits the existing application via resubmit_application —
     // it never runs the credit-consuming create path in handleSubmit, so the
     // gate/cost card only applies to fresh submissions.
-    const gated = !isEditMode && !previewing && !canApply;
+    const guestGate = !user && !previewing;
+    const gated = !isEditMode && !previewing && !guestGate && !canApply;
 
     return (
       <WizardShell
@@ -4550,7 +4862,35 @@ function ConferenceApplyInner() {
         {/* ── Cost card — sponsored conferences never gate or charge a credit,
             so the balance/plan/buy-more UI is replaced entirely by a single
             celebratory banner. ── */}
-        {creditsSponsored ? (
+        {guestGate ? (
+          <div
+            className="relative rounded-2xl p-5 mb-4"
+            style={{ backgroundColor: 'color-mix(in srgb, var(--gv-main) 5%, transparent)', border: '1.5px solid color-mix(in srgb, var(--gv-main) 14%, transparent)' }}
+          >
+            <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.15em', color: NEU.muted, marginBottom: 6 }}>
+              ALMOST THERE
+            </p>
+            <p className="font-bold text-base mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: OUTFIT }}>
+              Create an account to submit
+            </p>
+            <p className="text-sm" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6 }}>
+              Your answers are saved on this device, so nothing is lost. Sign in or create an account and we will carry everything you have filled in straight through to your application.
+            </p>
+            {/* The one cost fact a signed-out visitor can actually know,
+                decided the same way costLabel above decides it — never a
+                balance, plan, pool or Unlimited state, all of which need an
+                account and would just be a guess here. */}
+            {creditsSponsored ? (
+              <p className="text-xs mt-3" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                Credits for this conference have been sponsored by Gavelling, so applying is free.
+              </p>
+            ) : isExemptRole ? null : (
+              <p className="text-xs mt-3" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                Submitting this application uses 1 Gavelling credit.
+              </p>
+            )}
+          </div>
+        ) : creditsSponsored ? (
           <div
             className="relative rounded-2xl p-5 mb-4 flex items-center gap-3"
             style={{ background: 'linear-gradient(135deg, color-mix(in srgb, var(--gv-accent) 28%, transparent), color-mix(in srgb, var(--gv-main) 6%, transparent))', border: '1.5px solid color-mix(in srgb, var(--gv-accent) 55%, transparent)' }}
@@ -4643,7 +4983,7 @@ function ConferenceApplyInner() {
             actually spends credits (never for sponsored / exempt / already-
             Unlimited / edit resubmits), so it stays additive to the summary
             above and never interferes with Submit. ── */}
-        {!creditsSponsored && !isExemptRole && !hasUnlimited && !isEditMode && (() => {
+        {!creditsSponsored && !isExemptRole && !hasUnlimited && !isEditMode && !guestGate && (() => {
           const creditPrice = creditPricing(geoCountry);
           const creditTotal = Math.round(creditPrice.each * creditQty * 100) / 100;
           return (
@@ -4759,10 +5099,10 @@ function ConferenceApplyInner() {
         )}
 
         <WizardFooter
-          onNext={handleSubmit}
-          nextLabel={previewing ? 'Return to settings' : submitting ? 'Submitting…' : (isEditMode ? 'Resubmit application' : 'Submit application')}
+          onNext={guestGate ? goSignIn : handleSubmit}
+          nextLabel={guestGate ? 'Sign in and submit' : previewing ? 'Return to settings' : submitting ? 'Submitting…' : (isEditMode ? 'Resubmit application' : 'Submit application')}
           primary
-          disabled={submitting || gated}
+          disabled={guestGate ? false : (submitting || gated)}
         />
 
         {/* ── Withdraw application — secondary, destructive; only while the
@@ -4860,6 +5200,13 @@ function ConferenceApplyInner() {
   const canEdit = isEditMode && !!existingApp && !!roleConfig
     && (existingApp.status === 'rejected' || existingApp.status === 'submitted');
 
+  // A guest draft for THIS (slug, role) still in browser storage, checked
+  // fresh on every render rather than cached in state — it can change out
+  // from under this component (Part 34's adoption step clears it, or the
+  // visitor presses "Keep my existing application" below) and there is
+  // nothing to gain by pretending it is stable. Never read in preview.
+  const guestDraftRow = !previewing ? loadGuestDraft(slug, role) : null;
+
   // One-active-application-per-conference: an active application under a
   // different role blocks a fresh apply here, same wall treatment as
   // "already applied". Checked BEFORE the same-role wall (and skipped
@@ -4877,6 +5224,7 @@ function ConferenceApplyInner() {
             </h2>
             <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
               You already have an active {otherRoleApp.role.replace(/-/g, ' ')} application to this conference. Withdraw it or contact the organizing team if you need to change roles.
+              {guestDraftRow && ' The answers you just filled in are still saved in this browser, so if you withdraw it you can come back and finish.'}
             </p>
             <Link
               href={`/conferences/${slug}`}
@@ -4885,6 +5233,53 @@ function ConferenceApplyInner() {
             >
               VIEW CONFERENCE →
             </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Offered ONLY when there is a guest draft to apply and the application is
+  // one canEdit would actually accept (submitted or rejected) — accepted /
+  // assigned / checked-in have no legal edit to route them into, so those
+  // fall through to the plain wall below with just an extra line.
+  if (
+    existingApp && !canEdit && !previewing && guestDraftRow && !guestOfferDismissed
+    && (existingApp.status === 'submitted' || existingApp.status === 'rejected')
+  ) {
+    const updateHref = (() => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('edit', '1');
+      return `/conferences/${slug}/apply?${params.toString()}`;
+    })();
+    return (
+      <div className="min-h-screen flex flex-col" style={{ ...themeCssVars(activeTheme), backgroundColor: 'var(--gv-bg)' }}>
+        <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
+        <SiteNav />
+        <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
+          <div className="rounded-2xl p-10 text-center max-w-md w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
+            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+              You already applied to this conference
+            </h2>
+            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
+              You applied as {role.replace(/-/g, ' ')} already. We saved the answers you just filled in on this device. You can use them to update your existing application, or keep the application you already have.
+            </p>
+            <button
+              onClick={() => router.push(updateHref)}
+              className="w-full rounded-xl py-3 font-bold text-sm focus:outline-none transition-colors"
+              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', border: 'none', cursor: 'pointer' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
+            >
+              Update my application
+            </button>
+            <button
+              onClick={() => { clearGuestDraft(slug, role); setGuestOfferDismissed(true); }}
+              className="w-full mt-3 text-sm font-semibold focus:outline-none"
+              style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", background: 'none', border: 'none', cursor: 'pointer' }}
+            >
+              Keep my existing application
+            </button>
           </div>
         </div>
       </div>
@@ -4903,6 +5298,7 @@ function ConferenceApplyInner() {
             </h2>
             <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
               Your application as {role.replace(/-/g, ' ')} is {existingApp.status}.
+              {guestDraftRow && ' The answers you just filled in are still saved in this browser.'}
             </p>
             <Link
               href={`/conferences/${slug}`}
@@ -4980,6 +5376,121 @@ function ConferenceApplyInner() {
               >
                 Edit profile
               </Link>
+              <Link
+                href={`/conferences/${slug}`}
+                className="text-sm font-semibold"
+                style={{ color: 'var(--gv-muted)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
+              >
+                ← Back to {conferenceAcronymLabel(conference)}
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Guest date-of-birth gate (age-gated conferences only) ────────────────
+  // A signed-out visitor has no profile date of birth for underAge/overAge
+  // above to run against. Asking once, up front, on the conferences that
+  // actually gate on age saves a long form only to be refused at Submit;
+  // never asked at all when there is no gate. The date lives only in the
+  // two pieces of state it is declared with (see there) and is never
+  // written anywhere.
+  if (!user && !previewing && hasAgeGate && guestDobStage !== 'passed') {
+    if (guestDobStage === 'blocked') {
+      const guestAgeAtStart = guestDobInput ? ageAt(guestDobInput, conference.start_date) : null;
+      return (
+        <div className="min-h-screen flex flex-col" style={{ ...themeCssVars(activeTheme), backgroundColor: 'var(--gv-bg)' }}>
+          <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
+          <SiteNav />
+          <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
+            <div className="rounded-2xl p-10 text-center max-w-md w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
+              <span
+                className="inline-flex items-center rounded-full px-3 py-1 mb-4 text-[11px] font-bold"
+                style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.25)', color: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+              >
+                AGE REQUIREMENT
+              </span>
+              <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+                This conference requires delegates to be {ageRequirementText}
+              </h2>
+              <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
+                Based on your date of birth, you will be {guestAgeAtStart} when {conferenceAcronymLabel(conference)} starts, so you can&apos;t apply this time. If you typed it wrong, go back and try again.
+              </p>
+              <div className="flex items-center justify-center gap-4">
+                <button
+                  onClick={() => setGuestDobStage('ask')}
+                  className="text-sm font-semibold focus:outline-none"
+                  style={{ color: 'var(--gv-main)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: "'Outfit', sans-serif" }}
+                >
+                  Go back
+                </button>
+                <Link
+                  href={`/conferences/${slug}`}
+                  className="text-sm font-semibold"
+                  style={{ color: 'var(--gv-muted)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
+                >
+                  ← Back to {conferenceAcronymLabel(conference)}
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen flex flex-col" style={{ ...themeCssVars(activeTheme), backgroundColor: 'var(--gv-bg)' }}>
+        <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
+        <SiteNav />
+        <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
+          <div className="rounded-2xl p-10 max-w-md w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
+            <span
+              className="inline-flex items-center rounded-full px-3 py-1 mb-4 text-[11px] font-bold"
+              style={{ backgroundColor: 'color-mix(in srgb, var(--gv-accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-accent) 35%, transparent)', color: 'var(--gv-accent)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+            >
+              BEFORE YOU START
+            </span>
+            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+              What is your date of birth?
+            </h2>
+            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
+              {conferenceAcronymLabel(conference)} sets an age requirement, so we ask before you fill anything in. We only use it to check you can apply.
+            </p>
+
+            <label className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+              Date of birth
+            </label>
+            <DatePicker
+              value={guestDobInput}
+              max={new Date().toISOString().slice(0, 10)}
+              initialView="2005-06-15"
+              placeholder="Select your date of birth"
+              onChange={(iso) => setGuestDobInput(iso)}
+            />
+            <button
+              onClick={() => {
+                const age = guestDobInput ? ageAt(guestDobInput, conference.start_date) : null;
+                const under = minAgeLimit != null && age !== null && age < minAgeLimit;
+                const over = maxAgeLimit != null && age !== null && age > maxAgeLimit;
+                setGuestDobStage(under || over ? 'blocked' : 'passed');
+              }}
+              disabled={!guestDobInput}
+              className="w-full mt-4 rounded-xl py-3 font-bold text-sm focus:outline-none transition-colors"
+              style={{
+                backgroundColor: !guestDobInput ? 'var(--gv-border)' : 'var(--gv-main)',
+                color: !guestDobInput ? 'var(--gv-muted)' : 'var(--gv-on-main)',
+                fontFamily: "'Outfit', sans-serif",
+                letterSpacing: '0.08em',
+                cursor: !guestDobInput ? 'default' : 'pointer',
+              }}
+              onMouseEnter={(e) => { if (guestDobInput) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
+              onMouseLeave={(e) => { if (guestDobInput) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
+            >
+              Continue
+            </button>
+            <div className="text-center mt-4">
               <Link
                 href={`/conferences/${slug}`}
                 className="text-sm font-semibold"
@@ -5231,6 +5742,95 @@ function ConferenceApplyInner() {
               >
                 Reload
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* A guest draft was found in this browser on arrival. Offered, never
+            applied automatically — see guestApplyDraft.ts's file header: a
+            key with no owner cannot tell two applicants on a shared machine
+            apart, so silently filling the form is a real outcome to avoid. */}
+        {guestDraftOffer && !user && !guestCollision && (
+          <div className="w-full mx-auto mb-4" style={{ maxWidth: 720 }}>
+            <div
+              className="rounded-xl px-4 py-3"
+              style={{ backgroundColor: 'color-mix(in srgb, var(--gv-accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-accent) 34%, transparent)' }}
+              role="status"
+            >
+              <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: '#6E5310', margin: 0, lineHeight: 1.45 }}>
+                You have an unfinished application here
+              </p>
+              <p style={{ fontFamily: OUTFIT, fontWeight: 500, fontSize: 12.5, color: '#6E5310', lineHeight: 1.5, margin: '4px 0 0 0' }}>
+                We saved your answers in this browser. If this is not your computer, start fresh instead.
+              </p>
+              <div className="flex flex-wrap items-center gap-3 mt-3">
+                <button
+                  type="button"
+                  onClick={handleContinueGuestDraft}
+                  style={{
+                    fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5,
+                    color: NEU.gold, background: NEU.forest, border: 'none',
+                    borderRadius: 999, padding: '6px 14px', cursor: 'pointer',
+                  }}
+                >
+                  Continue where I left off
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStartFreshGuestDraft}
+                  style={{
+                    fontFamily: OUTFIT, fontWeight: 600, fontSize: 12.5, color: '#6E5310',
+                    background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                    textDecoration: 'underline', textUnderlineOffset: 3,
+                  }}
+                >
+                  Start fresh
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* The rare collision: an account already has a server draft AND this
+            browser has a guest draft from before signing in. Neither is
+            overwritten silently — see the resume effect's adoption step. */}
+        {guestCollision && (
+          <div className="w-full mx-auto mb-4" style={{ maxWidth: 720 }}>
+            <div
+              className="rounded-xl px-4 py-3"
+              style={{ backgroundColor: 'color-mix(in srgb, var(--gv-accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-accent) 34%, transparent)' }}
+              role="status"
+            >
+              <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: '#6E5310', margin: 0, lineHeight: 1.45 }}>
+                Two versions of this application
+              </p>
+              <p style={{ fontFamily: OUTFIT, fontWeight: 500, fontSize: 12.5, color: '#6E5310', lineHeight: 1.5, margin: '4px 0 0 0' }}>
+                You have a draft saved to your account, and answers you filled in on this browser before signing in. Which would you like to keep?
+              </p>
+              <div className="flex flex-wrap items-center gap-3 mt-3">
+                <button
+                  type="button"
+                  onClick={handleUseGuestOverServer}
+                  style={{
+                    fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5,
+                    color: NEU.gold, background: NEU.forest, border: 'none',
+                    borderRadius: 999, padding: '6px 14px', cursor: 'pointer',
+                  }}
+                >
+                  Use what I just filled in
+                </button>
+                <button
+                  type="button"
+                  onClick={handleUseServerOverGuest}
+                  style={{
+                    fontFamily: OUTFIT, fontWeight: 600, fontSize: 12.5, color: '#6E5310',
+                    background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                    textDecoration: 'underline', textUnderlineOffset: 3,
+                  }}
+                >
+                  Use my saved draft
+                </button>
+              </div>
             </div>
           </div>
         )}

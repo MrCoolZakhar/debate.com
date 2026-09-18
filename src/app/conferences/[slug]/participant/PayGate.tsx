@@ -6,7 +6,7 @@
 // Never wraps the payment panel or Q&R, those are always visible.
 
 import Link from 'next/link';
-import { Lock, Clock, XCircle, RotateCcw } from 'lucide-react';
+import { Lock, Clock, XCircle, RotateCcw, LogOut } from 'lucide-react';
 import { SectionCard, OUTFIT, type GateState } from './shared';
 
 export function LockedCard() {
@@ -93,6 +93,45 @@ export function RejectedCard({
             This decision is final for this role.
           </p>
         )}
+      </div>
+    </SectionCard>
+  );
+}
+
+/** Final state after the applicant withdraws their own pending application
+ *  (withdraw_application). Rendered by ParticipantView in place of the
+ *  payment panel and role content, exactly as RejectedCard is: a withdrawn
+ *  application has no fee to settle and no committee to prepare for.
+ *
+ *  No "apply again" here: `applications` is unique on (conference, user, role)
+ *  and resubmit_application only reopens 'submitted' / 'rejected' rows, so the
+ *  apply page answers a withdrawn row with "You've already applied". Offering
+ *  the route back would be a dead end until the database allows it. */
+export function WithdrawnCard({ conferenceSlug }: { conferenceSlug: string; role?: string }) {
+  return (
+    <SectionCard>
+      <div className="flex flex-col items-center text-center py-10">
+        <div
+          className="flex items-center justify-center mb-5"
+          style={{ width: '64px', height: '64px', borderRadius: '9999px', backgroundColor: 'rgba(154,138,120,0.14)', border: '1px solid rgba(154,138,120,0.3)' }}
+        >
+          <LogOut size={24} strokeWidth={1.8} style={{ color: '#6B5F52' }} />
+        </div>
+        <p className="text-[15px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+          You withdrew this application.
+        </p>
+        <p className="text-[13px] max-w-[340px] mb-6" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.7 }}>
+          The organizing team no longer has it under review. Any Gavelling credit you spent is refunded. To take part after all, contact the organizing team.
+        </p>
+        <Link
+          href={`/conferences/${conferenceSlug}`}
+          className="inline-flex items-center gap-2 rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none transition-colors"
+          style={{ backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: OUTFIT, letterSpacing: '0.06em' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+        >
+          VIEW CONFERENCE
+        </Link>
       </div>
     </SectionCard>
   );

@@ -114,7 +114,7 @@ export default function DelegationInvitePage() {
           <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.55 }}>
             {error}
           </p>
-          <Link href="/conferences" className="inline-flex items-center gap-2 rounded-full py-2.5 px-5 font-bold text-sm focus:outline-none" style={primaryPillStyle}>
+          <Link href="/conferences/explore" className="inline-flex items-center gap-2 rounded-full py-2.5 px-5 font-bold text-sm focus:outline-none" style={primaryPillStyle}>
             BROWSE CONFERENCES
           </Link>
         </div>

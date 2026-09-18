@@ -348,12 +348,15 @@ export default function PayPage() {
     return descMap;
   }
 
-  // RLS scopes payment_batches/payments to the caller's own rows, so this is
-  // implicitly "my payment history for this conference" — every method
-  // (stripe/manual/organizer), newest first. Feeds both the Payments tab and
-  // the awaiting-review set that hides an invoice's pay affordance while its
-  // manual proof is under review.
-  async function fetchPaymentBatches(conferenceId: string, accessToken: string): Promise<PaymentBatchRow[]> {
+  // Filters on payer_user_id EXPLICITLY rather than relying on RLS to do it.
+  // is_conference_organizer() includes a platform-admin bypass and also
+  // returns true for an organizer of THIS conference, so a caller who is
+  // both an organizer and an applicant would otherwise see the entire
+  // conference's payment history rendered as their own on this page. Every
+  // method (stripe/manual/organizer), newest first. Feeds both the Payments
+  // tab and the awaiting-review set that hides an invoice's pay affordance
+  // while its manual proof is under review.
+  async function fetchPaymentBatches(conferenceId: string, userId: string, accessToken: string): Promise<PaymentBatchRow[]> {
     const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('payment_batches')
@@ -362,6 +365,7 @@ export default function PayPage() {
         payments (id, invoice_id, amount_cents, currency, invoice:invoices (kind, label))
       `)
       .eq('conference_id', conferenceId)
+      .eq('payer_user_id', userId)
       .order('created_at', { ascending: false });
     return (data ?? []) as unknown as PaymentBatchRow[];
   }
@@ -430,7 +434,7 @@ export default function PayPage() {
         const [aid, invs, batches] = await Promise.all([
           fetchAidRequest(primary.id, session.access_token),
           fetchInvoices(apps, primary, leader, conf.id, session.access_token),
-          fetchPaymentBatches(conf.id, session.access_token),
+          fetchPaymentBatches(conf.id, user.id, session.access_token),
         ]);
         if (cancelled) return;
         setAidRequest(aid);
@@ -455,10 +459,10 @@ export default function PayPage() {
   // can affect the other's derived view (awaiting-review chips, new invoice
   // rows), so callers never have to remember to refresh both separately.
   async function refetchInvoices() {
-    if (!application || !conference || !session) return;
+    if (!application || !conference || !session || !user) return;
     const [invs, batches] = await Promise.all([
       fetchInvoices(allApps, application, leaderApp, conference.id, session.access_token),
-      fetchPaymentBatches(conference.id, session.access_token),
+      fetchPaymentBatches(conference.id, user.id, session.access_token),
     ]);
     setInvoices(invs);
     setPaymentBatches(batches);
@@ -1733,7 +1737,9 @@ function PayInvoiceAndActions({
   const roleFeeAwaitingReview = !!roleFeeInvoice && pendingProofInvoiceIds.has(roleFeeInvoice.id);
   const roleFeeSelectable = !!roleFeeInvoice && !isInvoiceSettled(roleFeeInvoice) && dueCents > 0 && !roleFeeAwaitingReview;
   const isCovered = roleFeeInvoice?.status === 'waived';
-  const gateState = getGateState(roleConfig?.payment_timing ?? 'anytime', application.status, application.payment_status);
+  // `fee` is already today's phase-resolved role fee — hand it over so a
+  // free role can never come back 'locked' (see getGateState).
+  const gateState = getGateState(roleConfig?.payment_timing ?? 'anytime', application.status, application.payment_status, fee);
   const payableNow = gateState !== 'under_review';
   const paymentsEnabled = conference.payment_method === 'stripe' && conference.connect_onboarding_status === 'complete';
   const externalPaymentUrl = conference.payment_method === 'manual' ? conference.external_payment_url : null;

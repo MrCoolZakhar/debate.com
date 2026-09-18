@@ -76,6 +76,15 @@ export interface CommitteeSettings {
   p5Delegations: string[];
   vetoCountries: string[];
   quorumThreshold: 'none' | '1-4' | '1-3' | '1-2';
+  // 'rollcall' (default): the chair reads the delegations out one by one. 'device': every
+  // delegation votes on its own device and the chair sees only counts until the reveal
+  // (src/lib/deviceVoting.ts). Frozen into each ballot as vote_state.method when it opens.
+  votingMethod: 'rollcall' | 'device';
+  // Ballot choices on /voting/[code] and on device ballots (17 Sep 2026). Default true.
+  // false hides "In favour / Against with rights" (so no rights speakers follow the vote).
+  allowRightsVotes: boolean;
+  // false hides Pass. A delegation that passes is asked again once, at the end of the ballot.
+  allowPass: boolean;
   // Tab 2 — Motions
   motionModeratedCaucus: boolean;
   motionUnmoderatedCaucus: boolean;
@@ -136,6 +145,9 @@ export const DEFAULT_SETTINGS: CommitteeSettings = {
   p5Delegations: ['China', 'France', 'Russia', 'United Kingdom', 'United States'],
   vetoCountries: ['China', 'France', 'Russia', 'United Kingdom', 'United States'],
   quorumThreshold: 'none',
+  votingMethod: 'rollcall',
+  allowRightsVotes: true,
+  allowPass: true,
   motionModeratedCaucus: true,
   motionUnmoderatedCaucus: true,
   motionCoW: true,
@@ -188,6 +200,55 @@ export function impliedSettings(
   return implied;
 }
 
+// ── What never travels between the DB blob and the store ─────────────────────
+/**
+ * Keys that live in `committees.settings` but must never be hydrated into the per-device
+ * store (and therefore can never be posted back from it):
+ *   • `chairJoinSuffix`: the write credential. Written only by `set_committee_chair_suffix`;
+ *     the chair/voting pages mirror it into the store themselves once access is proven.
+ *   • `separateChairCode`: write-only legacy marker.
+ *   • `headChair` / `headChairDevice`: the gavel. A copy captured earlier reverts it (rule 12).
+ *   • `agendaTopicIndex`: written only by the agenda picker.
+ *   • `votingReturnPhase`: written only by `set_committee_voting_phase`.
+ */
+export const NON_HYDRATED_SETTING_KEYS = [
+  'chairJoinSuffix',
+  'separateChairCode',
+  'headChair',
+  'headChairDevice',
+  'agendaTopicIndex',
+  'votingReturnPhase',
+] as const;
+
+/** The DB settings blob minus every key in NON_HYDRATED_SETTING_KEYS. */
+export function stripNonHydratedSettings(blob: Record<string, unknown> | null | undefined): Partial<CommitteeSettings> {
+  const out: Record<string, unknown> = { ...(blob ?? {}) };
+  for (const k of NON_HYDRATED_SETTING_KEYS) delete out[k];
+  return out as Partial<CommitteeSettings>;
+}
+
+/** Stable serialisation (sorted keys at every depth) so an effect can key on the CONTENT of
+ *  `committee.dbSettings` rather than its identity, which changes on every refetch. */
+export function stableSettingsKey(value: unknown): string {
+  const norm = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(norm);
+    if (v && typeof v === 'object') {
+      const o = v as Record<string, unknown>;
+      return Object.keys(o).sort().reduce<Record<string, unknown>>((acc, k) => { acc[k] = norm(o[k]); return acc; }, {});
+    }
+    return v;
+  };
+  try { return JSON.stringify(norm(value ?? null)); } catch { return ''; }
+}
+
+/** Keys (top level) whose stored value differs between two blobs. */
+export function changedSettingKeys(prev: Record<string, unknown> | null | undefined, next: Record<string, unknown> | null | undefined): string[] {
+  const a = prev ?? {};
+  const b = next ?? {};
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  return [...keys].filter((k) => stableSettingsKey(a[k]) !== stableSettingsKey(b[k]));
+}
+
 interface SettingsStore {
   settings: Record<string, CommitteeSettings>;
   getSettings: (code: string) => CommitteeSettings;
@@ -216,6 +277,7 @@ export const useSettingsStore = create<SettingsStore>()(
             : { ...s.settings, [code]: { ...DEFAULT_SETTINGS, ...partial } },
         })),
       // DB is the source of truth on load: merge stored DB values over the current entry.
+      // Callers pass `stripNonHydratedSettings(dbSettings)`, never the raw blob.
       hydrateSettings: (code, partial) =>
         set((s) => ({
           settings: {

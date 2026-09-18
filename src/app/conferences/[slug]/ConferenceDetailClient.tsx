@@ -25,6 +25,7 @@ import { uploadConferenceAsset } from '@/lib/conferenceAssets';
 import { formatFeeCompact } from '@/lib/utils';
 import { activeFeePhase, activePhaseFee, type FeePhase } from '@/lib/finance';
 import { fetchDelegateFees, type ResolvedFee } from '@/lib/publicFees';
+import { hasNothingToPay } from '@/lib/freeRegistration';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { normalizeBlocks } from '@/lib/customQuestions';
 import { appendEditionYear } from '@/lib/presetNames';
@@ -2170,6 +2171,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   onSelectRole={selectRole}
                   participantDataLoading={authLoading || participantDataLoading}
                   justClaimedCount={justClaimedCount}
+                  // Patch in place rather than refetching the conference: the
+                  // RPC has already committed, and this is the only row that
+                  // changed.
+                  onApplicationWithdrawn={(applicationId) => {
+                    setMyApplications(prev => prev.map(a => (
+                      a.id === applicationId ? { ...a, status: 'withdrawn' } : a
+                    )));
+                  }}
                 />
                 </div>
                 </>
@@ -2375,6 +2384,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           'checked-in': { label: 'CHECKED IN',   bg: 'color-mix(in srgb, var(--gv-main-light) 35%, transparent)',   color: '#A8D5B8',              hint: '' },
                           waitlisted:   { label: 'WAITLISTED',   bg: 'rgba(237,231,216,0.12)', color: 'color-mix(in srgb, var(--gv-on-main) 80%, transparent)', hint: 'You are on the waitlist. We will notify you if a spot opens.' },
                           rejected:     { label: 'NOT ACCEPTED', bg: 'rgba(139,32,32,0.35)',   color: '#E8A9A9',              hint: 'Your application was not accepted this time.' },
+                          withdrawn:    { label: 'WITHDRAWN',    bg: 'rgba(237,231,216,0.12)', color: 'color-mix(in srgb, var(--gv-on-main) 80%, transparent)', hint: 'You withdrew this application. Contact the organizing team if you want to take part after all.' },
                         };
                         const meta = STATUS_META[myApp.status] ?? { label: myApp.status.toUpperCase(), bg: 'rgba(237,231,216,0.12)', color: 'color-mix(in srgb, var(--gv-on-main) 80%, transparent)', hint: '' };
                         const allocCountry = myAllocation ? getCountryByName(myAllocation.country_name) : null;
@@ -2383,8 +2393,24 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         // payable pre-acceptance, so the entry point shows as
                         // soon as the application is submitted, regardless of
                         // the role fee's own payment_timing.
-                        const payable = myApp.status === 'submitted' || myApp.status === 'accepted'
-                          || myApp.status === 'assigned' || myApp.status === 'checked-in';
+                        //
+                        // ...but not when there is nothing to pay. A free role
+                        // whose application the database has already stamped
+                        // 'paid'/'waived' owes nothing at all, and sending them
+                        // to a payment page was the whole "free conference
+                        // still gates behind payment" complaint. Both halves
+                        // are needed: a free role that is still 'unpaid' means
+                        // a surcharge, a delegation pledge or a leftover
+                        // invoice IS owed, so the route must stay open (see
+                        // src/lib/freeRegistration.ts).
+                        const myAppRoleConfig = roleConfigs.find(rc => rc.role === myApp.role) ?? null;
+                        const nothingToPay = hasNothingToPay(myAppRoleConfig, myApp.payment_status);
+                        const payable = !nothingToPay && (myApp.status === 'submitted' || myApp.status === 'accepted'
+                          || myApp.status === 'assigned' || myApp.status === 'checked-in');
+                        // Financial aid is a real second thing this button
+                        // leads to, so it only earns a place in the label when
+                        // the conference actually runs an aid programme.
+                        const payLabel = conference.financial_aid_enabled ? 'PAY AND REQUEST AID' : 'PAY';
                         return (
                           <>
                             <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-on-main)', margin: '0 0 8px 0' }}>
@@ -2415,7 +2441,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-accent)'; }}
                               >
                                 <CreditCard size={15} strokeWidth={2.2} />
-                                PAY AND REQUEST AID
+                                {payLabel}
                               </Link>
                             )}
                             {myAllocation && (
@@ -3627,13 +3653,21 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
                 </svg>
               </a>
-              <span aria-label="LinkedIn (coming soon)" style={{ color: '#C8BFB0', cursor: 'default' }}>
+              <a
+                href="https://www.linkedin.com/company/gavelling/"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="LinkedIn"
+                style={{ color: 'var(--gv-muted)', transition: 'color 0.15s' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--gv-main)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--gv-muted)'; }}
+              >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/>
                   <rect x="2" y="9" width="4" height="12"/>
                   <circle cx="4" cy="4" r="2"/>
                 </svg>
-              </span>
+              </a>
             </div>
             <p className="text-xs font-semibold text-[var(--gv-main)] md:text-right">
               © {new Date().getFullYear()} Gavelling. Built for the MUN community.

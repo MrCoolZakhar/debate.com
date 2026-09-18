@@ -11,6 +11,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { reportBlocked } from '@/lib/reportCrash';
 import { useAuth } from '@/components/AuthProvider';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
+import { CircleFlag } from '@/components/CircleFlag';
 import { effectiveSlotArt, parseGroups, type SlotGroup } from '@/lib/slotGroups';
 import { ageAt } from '@/lib/age';
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
@@ -758,6 +759,21 @@ function CountryFlag({
   const [failed, setFailed] = useState(false);
   const clean = (code ?? '').trim();
   const label = alt ?? title ?? '';
+  // A round call site (radius >= half a square box) gets the shared round flag,
+  // square artwork that fills the circle. Character seats keep the person glyph.
+  if (w === h && radius >= w / 2) {
+    return (
+      <CircleFlag
+        code={isIsoCode(clean) ? clean : null}
+        logoUrl={logoUrl}
+        size={w}
+        label={label}
+        title={title}
+        fallback={<UserRound size={Math.round(w * 0.6)} strokeWidth={2} style={{ color: NEU.forest }} />}
+        style={{ boxShadow: shadow, opacity: dim, ...style }}
+      />
+    );
+  }
   if (logoUrl) {
     const box = Math.min(w, h);
     return (

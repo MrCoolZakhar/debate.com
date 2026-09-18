@@ -11,18 +11,22 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 
+// Every portrait is a pre-framed 480x480 webp: head (chin to top of hair) about
+// 45% of the height, eyes on the line 40% from the top, face centred. Frame a
+// new photo the same way before adding it; the card applies no per-photo
+// position or zoom, so a loosely cropped image will visibly stand out.
 const AMBASSADORS = [
   // Latin America
-  { name: 'Santiago Rosas Peña',      country: 'Venezuela',      initials: 'SR', photo: '/ambassador-photos/santiago_ambassador.webp', photoPosition: 'center 35%' },
+  { name: 'Santiago Rosas Peña',      country: 'Venezuela',      initials: 'SR', photo: '/ambassador-photos/santiago_ambassador.webp' },
   // Europe
-  { name: 'Kyle Wilkinson',          country: 'United Kingdom', initials: 'KW', photo: '/ambassador-photos/kyle_ambassador.webp', photoPosition: 'center 50%' },
+  { name: 'Kyle Wilkinson',          country: 'United Kingdom', initials: 'KW', photo: '/ambassador-photos/kyle_ambassador.webp' },
   { name: 'Celine Nasser',           country: 'United Kingdom', initials: 'CN', photo: '/ambassador-photos/celine_ambassador.webp' },
-  { name: 'Daniel O\'Neil Ferrero',  country: 'Scotland',       initials: 'DF', photo: '/ambassador-photos/Daniel_ambassador.webp', photoPosition: 'center 20%', photoScale: 1.2 },
+  { name: 'Daniel O’Neil Ferrero',   country: 'Scotland',       initials: 'DF', photo: '/ambassador-photos/Daniel_ambassador.webp' },
   { name: 'Noelia Alvarez Iglesias', country: 'Spain',          initials: 'NA', photo: '/ambassador-photos/noelia_ambassador.webp' },
-  { name: 'Félix Losada Ottino',     country: 'Spain',          initials: 'FL', photo: '/ambassador-photos/felix_ambassador.webp', photoPosition: 'center 25%' },
-  { name: 'Luca Formichella',        country: 'Italy',          initials: 'LF', photo: '/ambassador-photos/luca_ambassador.webp', photoPosition: 'center 20%' },
+  { name: 'Félix Losada Ottino',     country: 'Spain',          initials: 'FL', photo: '/ambassador-photos/felix_ambassador.webp' },
+  { name: 'Luca Formichella',        country: 'Italy',          initials: 'LF', photo: '/ambassador-photos/luca_ambassador.webp' },
   { name: 'Amna Sikandar',           country: 'France',         initials: 'AS', photo: '/ambassador-photos/Amna_ambassador.webp' },
-  { name: 'Vlad Gheorghe',           country: 'Romania',        initials: 'VG', photo: '/ambassador-photos/Vlad_ambassador.webp', photoPosition: 'center 25%', photoScale: 1.6 },
+  { name: 'Vlad Gheorghe',           country: 'Romania',        initials: 'VG', photo: '/ambassador-photos/Vlad_ambassador.webp' },
   // North America
   { name: 'Spencer Lindsay',         country: 'Canada',         initials: 'SL', photo: '/ambassador-photos/spencer_ambassador.webp' },
   { name: 'Armande Loretz',          country: 'France',         initials: 'AL', photo: '/ambassador-photos/armande_ambassador.webp' },
@@ -32,52 +36,54 @@ const AMBASSADORS = [
   { name: 'Paolo Marinuzzi',         country: 'Venezuela',      initials: 'PM', photo: '/ambassador-photos/paolo_ambassador.webp' },
   { name: 'Anna Cocconi',            country: 'Venezuela',      initials: 'AC', photo: '/ambassador-photos/anna_ambassador.webp' },
   // Asia (west to east)
-  { name: 'Farah Lahiani',           country: 'UAE',            initials: 'FH', photo: '/ambassador-photos/farah_ambassador.webp', photoPosition: 'center 62%' },
-  { name: 'Abdul Rehman',            country: 'Pakistan',       initials: 'AR', photo: '/ambassador-photos/abdulrehman_ambassador.webp', photoPosition: 'center 30%' },
+  { name: 'Farah Lahiani',           country: 'UAE',            initials: 'FH', photo: '/ambassador-photos/farah_ambassador.webp' },
+  { name: 'Abdul Rehman',            country: 'Pakistan',       initials: 'AR', photo: '/ambassador-photos/abdulrehman_ambassador.webp' },
   { name: 'Saayoojya Variyath',      country: 'India',          initials: 'SV', photo: '/ambassador-photos/saayoojya_ambassador.webp' },
   { name: 'Sri Harsha Vardhan Pachava', country: 'India',       initials: 'SH', photo: '/ambassador-photos/sriharsha_ambassador.webp' },
   { name: 'Tyler Serano',            country: 'Philippines',    initials: 'TS', photo: '/ambassador-photos/tyler_ambassador.webp' },
   { name: 'Andrew Mailoa',           country: 'Indonesia',      initials: 'AM', photo: '/ambassador-photos/andrew_ambassador.webp' },
   { name: 'Charlito Gunawan',        country: 'Indonesia',      initials: 'CG', photo: '/ambassador-photos/charlito_ambassador.webp' },
   { name: 'Victor Mikusek',          country: 'Hong Kong',      initials: 'VM', photo: '/ambassador-photos/victor_ambassador.webp' },
-  { name: 'Alman Ahmad',             country: 'UAE',            initials: 'AA', photo: '/ambassador-photos/alman_ambassador.webp', photoPosition: 'center 25%' },
-  { name: 'Farhan Arbab',            country: 'Bangladesh',     initials: 'FA', photo: '/ambassador-photos/farhan_ambassador.webp', photoPosition: 'center 33%' },
-  { name: 'Anushka Arora',           country: 'India',          initials: 'AA', photo: '/ambassador-photos/anushka_ambassador.webp', photoPosition: 'center 38%' },
-  { name: 'Ridhi Sareen',            country: 'India',          initials: 'RS', photo: '/ambassador-photos/ridhi_ambassador.webp', photoPosition: 'center 22%' },
-  { name: 'Myesha Soni',             country: 'Thailand',       initials: 'MS', photo: '/ambassador-photos/myesha_ambassador.webp', photoPosition: 'center 40%' },
-  { name: 'Reem Ghazal',             country: 'France',         initials: 'RG', photo: '/ambassador-photos/reem_ambassador.webp', photoPosition: 'center 30%' },
+  { name: 'Alman Ahmad',             country: 'UAE',            initials: 'AA', photo: '/ambassador-photos/alman_ambassador.webp' },
+  { name: 'Farhan Arbab',            country: 'Bangladesh',     initials: 'FA', photo: '/ambassador-photos/farhan_ambassador.webp' },
+  { name: 'Anushka Arora',           country: 'India',          initials: 'AA', photo: '/ambassador-photos/anushka_ambassador.webp' },
+  { name: 'Ridhi Sareen',            country: 'India',          initials: 'RS', photo: '/ambassador-photos/ridhi_ambassador.webp' },
+  { name: 'Myesha Soni',             country: 'Thailand',       initials: 'MS', photo: '/ambassador-photos/myesha_ambassador.webp' },
+  { name: 'Reem Ghazal',             country: 'France',         initials: 'RG', photo: '/ambassador-photos/reem_ambassador.webp' },
   // Africa
-  { name: 'Lealem Tayework',         country: 'Ethiopia',       initials: 'LT', photo: '/ambassador-photos/lealem_ambassador.webp', photoPosition: 'center 22%' },
+  { name: 'Lealem Tayework',         country: 'Ethiopia',       initials: 'LT', photo: '/ambassador-photos/lealem_ambassador.webp' },
   // Latin America
-  { name: 'Diego Aldana',            country: 'Honduras',       initials: 'DA', photo: '/ambassador-photos/diego_ambassador.webp', photoPosition: 'center 22%' },
+  { name: 'Diego Aldana',            country: 'Honduras',       initials: 'DA', photo: '/ambassador-photos/diego_ambassador.webp' },
   { name: 'Isabella Romero',         country: 'Honduras',       initials: 'IR', photo: '/ambassador-photos/isabella_ambassador.webp' },
   // Asia
-  { name: 'El Fatiarrazzy Sena',     country: 'Indonesia',      initials: 'ES', photo: '/ambassador-photos/el_ambassador.webp', photoPosition: '44% 62%' },
-  { name: 'Hasan Ali Hilaly',        country: 'Pakistan',       initials: 'HH', photo: '/ambassador-photos/hasan_ambassador.webp', photoPosition: 'center 40%' },
+  { name: 'El Fatiarrazzy Sena',     country: 'Indonesia',      initials: 'ES', photo: '/ambassador-photos/el_ambassador.webp' },
+  { name: 'Hasan Ali Hilaly',        country: 'Pakistan',       initials: 'HH', photo: '/ambassador-photos/hasan_ambassador.webp' },
   // Europe
-  { name: 'Eva Dubost',              country: 'France',         initials: 'ED', photo: '/ambassador-photos/eva_ambassador.webp', photoPosition: 'center 42%' },
-  { name: 'Sophia Baah',             country: 'United Kingdom', initials: 'SB', photo: '/ambassador-photos/sophia_ambassador.webp', photoPosition: 'center 45%' },
-  { name: 'Yağmur Akman',            country: 'Türkiye',         initials: 'YA', photo: '/ambassador-photos/yagmur_ambassador.webp', photoPosition: '46% 42%' },
-  { name: 'Petru-Serban Radulescu',  country: 'Romania',        initials: 'PR', photo: '/ambassador-photos/petru_ambassador.webp', photoPosition: 'center 13%' },
+  { name: 'Eva Dubost',              country: 'France',         initials: 'ED', photo: '/ambassador-photos/eva_ambassador.webp' },
+  { name: 'Sophia Baah',             country: 'United Kingdom', initials: 'SB', photo: '/ambassador-photos/sophia_ambassador.webp' },
+  { name: 'Yağmur Akman',            country: 'Türkiye',         initials: 'YA', photo: '/ambassador-photos/yagmur_ambassador.webp' },
+  { name: 'Petru-Serban Radulescu',  country: 'Romania',        initials: 'PR', photo: '/ambassador-photos/petru_ambassador.webp' },
   // North America
-  { name: 'Adam Epstein',            country: 'Canada',         initials: 'AE', photo: '/ambassador-photos/adam_ambassador.webp', photoPosition: 'center 40%' },
+  { name: 'Adam Epstein',            country: 'Canada',         initials: 'AE', photo: '/ambassador-photos/adam_ambassador.webp' },
 
   // ── Joined since the last update ──────────────────────────────────────────
   // `photo: null` is deliberate and not a placeholder to fill in blindly: it
   // means we have the person but not a picture of them, and the card renders
-  // their initials instead. Two of the eight below are in that state. Adding
+  // their initials instead. One of the nine below is in that state. Adding
   // a photo is just swapping the null for a path.
   // Europe
-  { name: 'Marsia Qurku',            country: 'Albania',        initials: 'MQ', photo: '/ambassador-photos/marsia_ambassador.webp', photoPosition: '51% 55%', photoScale: 1.5 },
-  { name: 'Ahmet Mert Çıragöz',      country: 'Türkiye',        initials: 'AÇ', photo: '/ambassador-photos/ahmet_ambassador.webp', photoPosition: '52% 30%', photoScale: 1.4 },
-  { name: 'Jan Beblavy',             country: 'Slovakia',       initials: 'JB', photo: '/ambassador-photos/jan_ambassador.webp', photoPosition: '45% 42%', photoScale: 1.15 },
+  { name: 'Marsia Qurku',            country: 'Albania',        initials: 'MQ', photo: '/ambassador-photos/marsia_ambassador.webp' },
+  { name: 'Ahmet Mert Çıragöz',      country: 'Türkiye',        initials: 'AÇ', photo: '/ambassador-photos/ahmet_ambassador.webp' },
+  { name: 'Jan Beblavy',             country: 'Slovakia',       initials: 'JB', photo: '/ambassador-photos/jan_ambassador.webp' },
   // Asia
-  { name: 'Sarth Agrawal',           country: 'Jordan',         initials: 'SA', photo: '/ambassador-photos/sarth_ambassador.webp', photoPosition: '45% 20%', photoScale: 1.8 },
-  { name: 'Nadia Seranity',          country: 'Sri Lanka',      initials: 'NS', photo: '/ambassador-photos/nadia_ambassador.webp', photoPosition: '48% 38%', photoScale: 1.3 },
+  { name: 'Sarth Agrawal',           country: 'Jordan',         initials: 'SA', photo: '/ambassador-photos/sarth_ambassador.webp' },
+  { name: 'Nadia Seranity',          country: 'Sri Lanka',      initials: 'NS', photo: '/ambassador-photos/nadia_ambassador.webp' },
   { name: 'Qais Soub',               country: 'Jordan',         initials: 'QS', photo: null },
-  { name: 'Arun Kaloo',              country: 'Malaysia',       initials: 'AK', photo: null },
+  { name: 'Arun Kaloo',              country: 'Malaysia',       initials: 'AK', photo: '/ambassador-photos/arun_ambassador.webp' },
   // North America
-  { name: 'Nolan Taarea',            country: 'United States',  initials: 'NT', photo: '/ambassador-photos/nolan_ambassador.webp', photoPosition: '52% 22%', photoScale: 1.35 },
+  { name: 'Nolan Taarea',            country: 'United States',  initials: 'NT', photo: '/ambassador-photos/nolan_ambassador.webp' },
+  // South America
+  { name: 'Alejandro Ospina Gil',    country: 'Colombia',       initials: 'AO', photo: '/ambassador-photos/alejandro_ambassador.webp' },
 ];
 
 const inputStyle: React.CSSProperties = {
@@ -144,11 +150,11 @@ export default function AboutClient() {
       <section className="relative z-10 w-full flex items-end"
         style={{ height: 340, background: 'linear-gradient(135deg, #1B3828 0%, #2A5A3C 50%, #1B3828 100%)', borderBottom: '1px solid rgba(27, 56, 40, 0.3)' }}>
 <div className="relative z-10 w-full text-center px-12 pb-10">
-          <p className="font-black text-white tracking-tight leading-none" style={{ fontSize: 'clamp(36px, 5vw, 72px)' }}>
+          <h1 className="font-black text-white tracking-tight leading-none" style={{ fontSize: 'clamp(36px, 5vw, 72px)' }}>
             {t('about_banner_tagline')}{' '}
             <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: '#EED98A' }}>{t('about_banner_love')}</span>
             {' '}{t('about_banner_mun')}
-          </p>
+          </h1>
         </div>
       </section>
 
@@ -193,7 +199,7 @@ export default function AboutClient() {
                   <div key={amb.name} className="flex flex-col items-center gap-3" style={{ width: 120 }}>
                     <div style={{ width: 120, height: 120, borderRadius: '50%', overflow: 'hidden', border: '2px solid rgba(28,20,16,0.15)', backgroundColor: 'rgba(221,212,192,0.5)', flexShrink: 0 }}>
                       {amb.photo ? (
-                        <img src={amb.photo} alt={amb.name} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: amb.photoPosition ?? 'center top', display: 'block', transform: `scale(${(amb as {photoScale?: number}).photoScale ?? 1})`, transformOrigin: amb.photoPosition ?? 'center top' }} />
+                        <img src={amb.photo} alt={amb.name} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                       ) : (
                         <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(221,212,192,0.8)', color: '#B6871F', fontWeight: 700, fontSize: 16 }}>{amb.initials}</div>
                       )}

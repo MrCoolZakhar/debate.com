@@ -1,47 +1,37 @@
 import { MetadataRoute } from 'next';
 
+// ── robots.txt: block ONLY what must never be fetched ────────────────────────
+//
+// A Disallow does NOT keep a URL out of Google. It stops Google READING the
+// page, so it never sees the page's noindex, and a URL it finds linked anywhere
+// gets indexed bare ("Indexed, though blocked by robots.txt": /auth/signin was
+// exactly that). So private pages are CRAWLABLE and say noindex themselves,
+// through the X-Robots-Tag headers in next.config.ts (one list, which also
+// covers client pages and query-string variants such as /join?code=...).
+//
+// What stays disallowed is what has a side effect when a crawler renders it:
+//   - the live-session runtimes: loading /delegate/CODE claims a seat through
+//     claim_delegate_seat (a rendering bot would take a real delegate's seat
+//     for 65 minutes); the chair, advisor and voting pages start the same kind
+//     of per-device claims. They are also noindex by header.
+//   - /unsubscribe and /drafts/...?stop=1 act on GET for a real person.
+//   - /api/ is not pages (except the OG cards, which image crawlers may fetch).
+// Never add a private PAGE here: add it to NOINDEX_ROUTES in next.config.ts.
+// `npm run check:indexability` fails if a known private page is disallowed.
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
       {
         userAgent: '*',
-        allow: '/',
+        allow: ['/', '/api/og/'],
         disallow: [
-          // Live-session app surfaces (per-committee, code-gated)
           '/chair/',
           '/delegate/',
           '/voting/',
           '/advisor/',
-          // Sub-paths only — the trailing slash deliberately leaves the bare
-          // /join and /create indexable, which is where the SEO value is.
-          '/join/',
-          '/create/',
-          // But NEVER the parameterised form. /join?code=ABC123 is a real URL
-          // this page reads, so an indexed query string would publish a live
-          // session code into search results. Both pages canonicalise to their
-          // bare path, so nothing of value is lost.
-          '/join?',
-          '/create?',
-          // Token-bearing, and acts on GET. Must never be crawled: a bot
-          // following it would unsubscribe a real person.
           '/unsubscribe',
-          // Conferences private surfaces (auth-gated dashboards & flows)
-          '/manage/',
-          '/admin',
-          '/account/',
-          '/my-conferences',
-          '/invites/',
-          '/auth/',
-          '/delegation/',
+          '/drafts/*stop=',
           '/api/',
-          '/conferences/new',
-          '/conferences/*/apply',
-          '/conferences/*/pay',
-          '/conferences/*/participant',
-          '/conferences/*/role',
-          '/conferences/*/papers',
-          // Dev-only
-          '/grain-dev/',
         ],
       },
     ],

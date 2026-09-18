@@ -130,3 +130,48 @@ export function buildSessionScoreboardRows(
     };
   });
 }
+
+/** One slice of a delegation's objective points, for the profile's stacked bar. */
+export interface PointSlice {
+  sourceId: string;
+  label: string;
+  pts: number;
+}
+
+/**
+ * A delegation's objective points folded BY SOURCE, largest first — the numbers
+ * behind the chair's one stacked bar.
+ *
+ * The same fold as `computeSourceTotals` (scoring.ts), done on the row's ledger
+ * the builder above already produced rather than by re-reading the log: the time
+ * bonus inside a speech row is banked against `speakingTimePer10s`, so "speeches"
+ * and "speaking time" are two slices, and the slices still sum to `row.objective`.
+ * Every manual award and deduction is ONE slice (`manual`) under `manualLabel`,
+ * because a ledger row's own label for those is the chair's free-text reason.
+ * Zero slices are dropped. Pure; no scoring maths of its own.
+ */
+export function sessionPointSlices(
+  committee: Committee,
+  ledger: ScoreboardDelegateRow['ledger'],
+  language: string,
+  manualLabel: string,
+): PointSlice[] {
+  const cfg = getScoringConfig(committee);
+  const totals = new Map<string, number>();
+  const labelFor = new Map<string, string>();
+  for (const r of ledger) {
+    const timePts = r.timePts ?? 0;
+    totals.set(r.sourceId, (totals.get(r.sourceId) ?? 0) + (r.pts - timePts));
+    if (!labelFor.has(r.sourceId)) labelFor.set(r.sourceId, r.label);
+    if (timePts) totals.set('speakingTimePer10s', (totals.get('speakingTimePer10s') ?? 0) + timePts);
+  }
+  const label = (id: string): string => {
+    if (id === 'manual') return manualLabel;
+    const src = cfg.sources.find((s) => s.id === id);
+    return src ? sourceName(src, language) : (labelFor.get(id) ?? id);
+  };
+  return [...totals.entries()]
+    .filter(([, pts]) => pts !== 0)
+    .map(([sourceId, pts]) => ({ sourceId, label: label(sourceId), pts }))
+    .sort((a, b) => b.pts - a.pts);
+}

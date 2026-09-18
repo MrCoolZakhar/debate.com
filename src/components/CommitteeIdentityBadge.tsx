@@ -1,56 +1,113 @@
 'use client';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CommitteeIdentityBadge — the masthead at the top of the chair session
-// sidebar, and the ONE place the committee's identity is stated in that column.
+// CommitteeIdentityBadge: the masthead at the top of the chair's forest sidebar,
+// and the ONE place the committee's identity is stated in that column. The sidebar
+// now runs the full height of the viewport (the chair top bar starts at its right
+// edge), so this block is the first thing at the top-left of the chair screen.
 //
-// WHY IT LOOKS LIKE THIS
+// Anatomy, top to bottom, no hairlines anywhere:
+//   • The emblem, the hero of the column (EMBLEM px). Resolution is the caller's:
+//     conference committee logo, then the conference logo, then the preset match
+//     for the name, then the UN emblem (DEFAULT_EMBLEM). A logo that fails to load
+//     drops to the UN emblem, and that failing drops to gold initials, so there is
+//     never a broken image or an empty slot.
+//   • Beside it: the acronym big with the full name small beneath (AGENTS.md UI
+//     RULE, resolved by the caller via committeeDisplayName), and the topic. The
+//     topic is smaller than the name, and always starts with a fixed "Topic:" label
+//     (`topicLabel`, 16 Sep 2026) that is never part of the edit. For the Moderator
+//     (`onTopicSave`) a click on the text, or the small pencil button beside it (17 Sep
+//     2026), writes IN PLACE: the label keeps its spot and the topic becomes a bare
+//     one-line field in the same type, growing to 3 lines, with only a gold hairline under
+//     it. No panel, no plate, no change of shape. Enter or blur saves, Escape cancels, 150
+//     characters max; only the text after the label edits. On a conference committee with 2+ topics a separate small "switch topic"
+//     control (`onSwitchAgenda`) opens the agenda picker, so the text edits and the
+//     picker stays one click away.
+//   • QuorumRings: three half-circle bookmark tabs (Present, 2/3, 1/2+1) flush on the list
+//     below, plus the quorum pill when a quorum rule is set. Observers are counted in both
+//     numbers. Passed in as `present`/`total`; omit `present` to hide them. `seatField`
+//     (the inline SeatAddField) sits to the right of the tabs on the same row. The topic is
+//     clamped to 3 lines with the full text in a tooltip.
 //
-// • Continuous, not stacked. It has no card of its own: no background fill, no
-//   border box, no radius. It is the same forest as the sidebar, lit from the
-//   top by a wash that dissolves to nothing before the bottom edge, so the
-//   badge reads as the panel catching light rather than a separate slab sitting
-//   on it. Its only seam is a gold hairline that fades out at BOTH ends — a
-//   badge underline, never a border between two cards. The panel below
-//   (RollCallPanel with `hideIdentity`) starts straight after it with no
-//   divider of its own, so the two read as one masthead.
-//
-// • The mark floats. `LogoDisc bare` with the circular clip explicitly turned
-//   off (borderRadius 0 / overflow visible), so nothing is a disc and nothing
-//   is cropped — including a wide wordmark, which just letterboxes inside the
-//   slot instead of losing its ends to a circle.
-//
-// • Contrast. Committee artwork is arbitrary: the UN emblem is bright cyan
-//   (#009EDC) and reads instantly on forest, but the ICJ seal is dark navy
-//   (#2A4B7C) and a conference upload can be anything. Floating them raw would
-//   let the dark ones sink into #1B3828. Two tight white `drop-shadow`s give
-//   the artwork a faint light rim, and because drop-shadow follows the ALPHA
-//   channel it hugs the real silhouette of a transparent PNG/SVG rather than
-//   boxing it. A third, darker, offset shadow grounds the mark so it reads as
-//   floating above the panel. Light marks are unaffected; dark marks gain an
-//   edge. That is the whole treatment — no disc, no plate, no chip.
-//
-// • Missing artwork. `fallbackTone="plain"`: gold initials on their own. The
-//   default LogoDisc monogram is a FOREST gradient disc, which on a forest
-//   sidebar is invisible.
-//
-// • Naming follows the AGENTS.md UI RULE: a long name shows its acronym big
-//   with the full name small beneath; a short name is shown ONCE with no
-//   redundant second line. The caller resolves both via
-//   `deriveCommitteeAcronym` + `committeeDisplayName`.
+// Contrast on #1B3828: body ivory #EDE7D8 is 11:1; the full name at 78% ivory and
+// the topic at 84% gold both clear 4.5:1. Committee artwork is arbitrary (the UN
+// mark is bright cyan, the ICJ seal dark navy), so the emblem sits on a soft ivory
+// glow and wears a light alpha-following rim, which lifts dark marks and leaves
+// light ones alone.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { LogoDisc } from '@/components/LogoDisc';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { ArrowLeftRight, PanelLeftClose, Pencil } from 'lucide-react';
 import { NEU, OUTFIT } from '@/components/neu';
+import QuorumRings from '@/components/QuorumRings';
 
-/** Slot the mark is contained inside. Slightly wider than tall so a wordmark
- *  logo gets a little more room without a square emblem drifting off-axis. */
-const MARK_H = 38;
-const MARK_W = 46;
+export const DEFAULT_EMBLEM = '/logos/un.svg';
 
-/** Light rim (follows the artwork's alpha) + a grounding shadow. */
+const EMBLEM = 84;
+
+/** The topic's own line height in px (11.5px at 1.28), so the inline field can grow by lines. */
+const TOPIC_LINE = 15;
+
+/** Light rim (follows the artwork's alpha) plus a grounding shadow. */
 const FLOAT_FILTER =
-  'drop-shadow(0 0 1px rgba(255,255,255,0.75)) drop-shadow(0 0 2.5px rgba(255,255,255,0.4)) drop-shadow(0 3px 5px rgba(0,0,0,0.38))';
+  'drop-shadow(0 0 0.75px rgba(255,255,255,0.55)) drop-shadow(0 3px 7px rgba(0,0,0,0.32))';
+
+/** The committee emblem with its fallback chain. Also drawn, smaller, at the top of the
+ *  collapsed sidebar column (SidebarFlagRail). */
+export function CommitteeEmblem({ src, monogram, alt, size = EMBLEM, onLight = false }: {
+  src: string | null; monogram: string; alt: string; size?: number;
+  /** Drawn on the ivory page (the collapsed column), not on forest: an ink shadow, no glow. */
+  onLight?: boolean;
+}) {
+  // Failures remembered per URL, so a later logo (the conference row arriving) gets a try.
+  const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
+  const chain = [src, DEFAULT_EMBLEM].filter((s): s is string => !!s && !failed.has(s));
+  const shown = chain[0] ?? null;
+  return (
+    <span
+      className="relative shrink-0 flex items-center justify-center"
+      style={{ width: size, height: size }}
+    >
+      {!onLight && <span
+        aria-hidden
+        className="pointer-events-none absolute rounded-full"
+        style={{
+          inset: -Math.round(size / 8.4),
+          background: 'radial-gradient(circle at 50% 45%, rgba(237,231,216,0.16) 0%, rgba(237,231,216,0.06) 45%, rgba(237,231,216,0) 70%)',
+        }}
+      />}
+      {shown ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={shown}
+          src={shown}
+          alt={alt}
+          width={size}
+          height={size}
+          decoding="async"
+          draggable={false}
+          onError={() => setFailed((prev) => { const n = new Set(prev); n.add(shown); return n; })}
+          className="relative block"
+          style={{ width: '100%', height: '100%', objectFit: 'contain', filter: onLight ? 'drop-shadow(0 1px 1.5px rgba(27,56,40,0.35)) drop-shadow(0 3px 8px rgba(27,56,40,0.18))' : FLOAT_FILTER }}
+        />
+      ) : (
+        <span
+          role="img"
+          aria-label={alt}
+          className="relative"
+          style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: Math.round(size * 0.31), letterSpacing: '0.02em', color: onLight ? NEU.forest : NEU.gold }}
+        >
+          {monogram}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** Gold initials for an emblem that cannot load: up to three letters of the label. */
+export function emblemMonogram(primary: string): string {
+  return primary.replace(/[^\p{L}\p{N}]/gu, '').slice(0, 3).toUpperCase() || '?';
+}
 
 export default function CommitteeIdentityBadge({
   logoSrc,
@@ -58,143 +115,262 @@ export default function CommitteeIdentityBadge({
   secondary,
   topic,
   topicLabel,
-  onTopicClick,
-  topicActionTitle,
+  onTopicSave,
+  topicMaxLength = 150,
+  onSwitchAgenda,
+  switchAgendaLabel,
+  labels,
+  onCollapse,
+  collapseLabel,
+  present,
+  total = 0,
+  quorumNeeded = null,
+  seatField,
 }: {
-  /** When set, the topic line becomes a button (the Moderator switching the agenda on a
-   *  conference committee with 2+ topics). Omitted, it renders exactly as before. */
-  onTopicClick?: () => void;
-  /** Tooltip for the topic button. */
-  topicActionTitle?: string;
-  /** Resolved emblem URL, or null for the monogram fallback. */
+  /** When set, clicking the topic turns it into an inline editor (the Moderator, session
+   *  not ended). Resolves false when the write was refused; the caller has already rolled
+   *  its optimistic topic back, and the badge says so. */
+  onTopicSave?: (next: string) => Promise<boolean>;
+  topicMaxLength?: number;
+  /** When set, a small "switch topic" control opens the agenda picker (a conference
+   *  committee with 2+ topics). Separate from the text, which edits. */
+  onSwitchAgenda?: () => void;
+  switchAgendaLabel?: string;
+  /** Translated copy for the editor. */
+  labels?: { edit: string; add: string; field: string; failed: string };
+  /** When set, a collapse button folds the sidebar away (the chair sidebar only). */
+  onCollapse?: () => void;
+  collapseLabel?: string;
+  /** Resolved emblem URL, or null for the UN emblem default. */
   logoSrc: string | null;
-  /** Big label — the acronym for a long name, otherwise the name itself. */
+  /** Big label: the acronym for a long name, otherwise the name itself. */
   primary: string;
   /** Full name, shown small beneath. Null when `primary` already IS the name. */
   secondary?: string | null;
   topic?: string | null;
-  /** Translated "Topic:" label. */
+  /** Translated "Topic:" label, shown before the topic and never editable. */
   topicLabel?: string;
+  /** Delegations present, observers included. Omit to hide the quorum rings. */
+  present?: number;
+  /** Delegations on the roster, observers included. */
+  total?: number;
+  /** Delegations the quorum rule needs, or null when there is no rule. */
+  quorumNeeded?: number | null;
+  /** The inline seat field, drawn to the inline end of the quorum tabs. Omit for a
+   *  Commenter or an ended session. */
+  seatField?: ReactNode;
 }) {
-  const monogram = primary.replace(/[^A-Za-z0-9]/g, '').slice(0, 3) || '?';
-  return (
-    <div className="shrink-0 relative" style={{ padding: '11px 13px 10px' }}>
-      {/* Top-lit wash. Fades to fully transparent at the bottom, so the badge has
-          NO edge of its own — it bleeds into the stats row beneath it and the
-          two share the one seam that already closes RollCallPanel's header. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            'linear-gradient(180deg, rgba(61,122,82,0.34) 0%, rgba(61,122,82,0.15) 48%, rgba(61,122,82,0) 100%)',
-        }}
-      />
-      {/* Extruded top edge: the same "lit from above" cue the neumorphic system
-          uses on ivory, translated to forest. 1px, and it is not a divider —
-          it sits on the sidebar's outer edge, under the toolbar. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute"
-        style={{ left: 0, right: 0, top: 0, height: 1, background: 'rgba(255,255,255,0.07)' }}
-      />
+  const monogram = emblemMonogram(primary);
+  const longPrimary = primary.length > 12;
 
-      <div className="relative flex items-center gap-2.5">
-        <LogoDisc
-          src={logoSrc}
-          alt={primary}
-          size={MARK_H}
-          fallbackText={monogram}
-          bare
-          fallbackTone="plain"
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [failed, setFailed] = useState(false);
+  const fieldRef = useRef<HTMLTextAreaElement>(null);
+  // Escape and Enter both end the edit, and the blur that follows must not save again.
+  const doneRef = useRef(false);
+
+  // The field is the topic's own line, not a box over it: it starts one line tall and grows
+  // with what is typed, to the same 3 lines the text itself is clamped to. Written straight
+  // to the node (no state, nothing per keystroke re-rendering the masthead).
+  const fitField = () => {
+    const el = fieldRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, TOPIC_LINE * 3)}px`;
+  };
+
+  useEffect(() => {
+    if (!editing) return;
+    const el = fieldRef.current;
+    if (!el) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+    fitField();
+  }, [editing]);
+
+  // The editor's permission can go away mid-edit (gavel handed over, session ended): the
+  // editor simply stops rendering, and `startEdit` re-seeds the draft next time.
+  const isEditing = editing && !!onTopicSave;
+
+  const startEdit = () => {
+    if (!onTopicSave) return;
+    doneRef.current = false;
+    setFailed(false);
+    setDraft(topic ?? '');
+    setEditing(true);
+  };
+  const finish = (save: boolean) => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    setEditing(false);
+    const next = draft.replace(/\s+/g, ' ').trim().slice(0, topicMaxLength);
+    if (!save || !onTopicSave || !next || next === (topic ?? '').trim()) return;
+    void onTopicSave(next).then((ok) => setFailed(!ok));
+  };
+
+  const topicStyle: React.CSSProperties = {
+    fontFamily: OUTFIT,
+    fontSize: 11.5,
+    fontWeight: 500,
+    lineHeight: 1.28,
+    color: 'rgba(238,217,138,0.86)',
+    margin: 0,
+    textWrap: 'pretty',
+  };
+
+  // The fixed "Topic:" prefix. Outside the editable control, so a click on it edits nothing
+  // and the textarea never contains it.
+  const labelNode = topicLabel ? (
+    <span style={{ fontWeight: 800, color: NEU.gold, letterSpacing: '0.01em' }}>{topicLabel} </span>
+  ) : null;
+
+  let topicNode: React.ReactNode = null;
+  if (isEditing) {
+    // WRITING IN PLACE, not in a panel (owner, 17 Sep 2026: "no big bubble, just inline
+    // write"). The fixed label keeps its spot at the start of the line and the field takes
+    // the rest of it, in the topic's own type and colour with nothing behind it but a gold
+    // hairline, so the line does not move or change shape when the edit begins. It was a
+    // 3-row textarea on a dark plate before.
+    topicNode = (
+      <div className="mt-0.5 flex items-start gap-1">
+        {topicLabel && (
+          <span className="shrink-0" style={{ ...topicStyle, fontWeight: 800, color: NEU.gold }}>{topicLabel}</span>
+        )}
+        <textarea
+          ref={fieldRef}
+          value={draft}
+          rows={1}
+          maxLength={topicMaxLength}
+          aria-label={labels?.field}
+          onChange={(e) => { setDraft(e.target.value.replace(/\n/g, ' ')); fitField(); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+            else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
+          }}
+          onBlur={() => finish(true)}
+          className="flex-1 min-w-0 resize-none overflow-hidden bg-transparent p-0 focus:outline-none"
           style={{
-            // Override the circular clip: floating means never cropped.
-            width: MARK_W,
-            height: MARK_H,
-            borderRadius: 0,
-            overflow: 'visible',
-            filter: logoSrc ? FLOAT_FILTER : undefined,
+            ...topicStyle,
+            color: '#F4EFE3',
+            height: TOPIC_LINE,
+            border: 'none',
+            borderBottom: '1px solid rgba(238,217,138,0.7)',
           }}
         />
-        <div className="min-w-0 flex-1">
-          <p
-            className="truncate"
-            // Only when the acronym stands alone: a `title` becomes the element's
-            // accessible name, so setting it while the full name is ALSO rendered
-            // beneath made a screen reader announce that name twice.
+      </div>
+    );
+  } else if (onTopicSave) {
+    // The label, then the topic as an INLINE control, so the two flow as one sentence
+    // under the 3-line clamp. A span with role=button rather than a <button>: a button is
+    // laid out as an inline-block and would break the text onto its own line.
+    topicNode = (
+      <p className="line-clamp-3 mt-0.5" style={topicStyle}>
+        {labelNode}
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={startEdit}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEdit(); } }}
+          aria-label={`${topicLabel ?? ''} ${topic ?? ''}. ${labels?.edit ?? ''}`.trim()}
+          title={topic ? `${topic}\n${labels?.edit ?? ''}`.trim() : labels?.edit}
+          className="group/topic rounded cursor-text transition-colors hover:bg-[rgba(238,217,138,0.12)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70"
+          style={{ color: topic ? topicStyle.color : 'rgba(238,217,138,0.6)', boxDecorationBreak: 'clone', WebkitBoxDecorationBreak: 'clone', padding: '0 2px' }}
+        >
+          {topic || labels?.add}
+        </span>
+        {/* The pencil is its own button and is always there (owner, 17 Sep 2026): the topic
+            text still edits on a click, but a chair should not have to discover that. It is
+            inline-flex, so it sits at the end of the topic's last line rather than on a line
+            of its own. */}
+        <button
+          type="button"
+          onClick={startEdit}
+          aria-label={labels?.edit}
+          title={labels?.edit}
+          className="inline-flex items-center justify-center rounded ms-1 align-[-3px] opacity-60 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70 transition-opacity"
+          style={{ width: 16, height: 16, color: 'rgba(238,217,138,0.9)' }}
+        >
+          <Pencil size={10} aria-hidden />
+        </button>
+      </p>
+    );
+  } else if (topic) {
+    topicNode = (
+      <p className="line-clamp-3 mt-0.5" title={topic} style={topicStyle}>
+        {labelNode}
+        {topic}
+      </p>
+    );
+  }
+
+  return (
+    // With the quorum tabs the bottom padding is 0: the tabs sit flush on the list below.
+    <div className="shrink-0 relative" style={{ padding: typeof present === 'number' ? '14px 16px 0' : '14px 16px 12px', backgroundColor: 'rgba(255,255,255,0.035)' }}>
+      {onCollapse && (
+        <button
+          type="button"
+          onClick={onCollapse}
+          aria-label={collapseLabel}
+          title={collapseLabel}
+          className="absolute top-2 end-2 w-7 h-7 rounded-lg flex items-center justify-center transition-[background-color,color,scale] duration-150 active:scale-[0.96] hover:bg-[rgba(237,231,216,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70"
+          style={{ color: 'rgba(237,231,216,0.6)' }}
+        >
+          <PanelLeftClose size={16} aria-hidden className="rtl:-scale-x-100" />
+        </button>
+      )}
+      <div className="flex items-start gap-3.5">
+        <CommitteeEmblem src={logoSrc} monogram={monogram} alt={secondary ?? primary} />
+        <div className="min-w-0 flex-1 flex flex-col gap-1" style={{ minHeight: EMBLEM, justifyContent: 'center', paddingInlineEnd: onCollapse ? 18 : 0 }}>
+          <h2
+            className={longPrimary ? 'line-clamp-2' : 'truncate'}
+            // A `title` only when the label stands alone: with the full name ALSO
+            // rendered beneath, it would make a screen reader announce it twice.
             title={secondary ? undefined : primary}
             style={{
               fontFamily: OUTFIT,
               fontWeight: 900,
-              fontSize: 17,
-              lineHeight: 1.12,
-              letterSpacing: '-0.005em',
+              fontSize: longPrimary ? 20 : 27,
+              lineHeight: 1.05,
+              letterSpacing: longPrimary ? '-0.005em' : '0.005em',
               color: NEU.gold,
               margin: 0,
+              textWrap: 'balance',
             }}
           >
             {primary}
-          </p>
+          </h2>
           {secondary && (
             <p
-              className="truncate"
+              className="line-clamp-2"
               title={secondary}
-              style={{
-                fontFamily: OUTFIT,
-                fontSize: 10.5,
-                fontWeight: 500,
-                lineHeight: 1.25,
-                color: 'rgba(237,231,216,0.52)',
-                margin: '1px 0 0',
-              }}
+              style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 500, lineHeight: 1.25, color: 'rgba(237,231,216,0.78)', margin: 0, textWrap: 'balance' }}
             >
               {secondary}
             </p>
           )}
-          {topic && !onTopicClick && (
-            <p
-              className="line-clamp-2"
-              title={topic}
-              style={{
-                fontFamily: OUTFIT,
-                fontSize: 10.5,
-                lineHeight: 1.3,
-                color: 'rgba(238,217,138,0.55)',
-                margin: '2px 0 0',
-              }}
-            >
-              {topicLabel && (
-                <span style={{ fontWeight: 700, color: 'rgba(238,217,138,0.72)' }}>{topicLabel} </span>
-              )}
-              {topic}
-            </p>
+          {topicNode}
+          {failed && !isEditing && labels?.failed && (
+            <p role="alert" className="m-0" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: '#F2C77E' }}>{labels.failed}</p>
           )}
-          {topic && onTopicClick && (
-            // Same typography as the plain line; only a hover wash and a focus ring say it
-            // can be clicked (the Moderator switching the agenda).
+          {onSwitchAgenda && !isEditing && (
             <button
               type="button"
-              onClick={onTopicClick}
-              title={topicActionTitle ? `${topicActionTitle}: ${topic}` : topic}
-              className="line-clamp-2 w-full text-start rounded-md cursor-pointer transition-colors hover:bg-[rgba(238,217,138,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/60"
-              style={{
-                fontFamily: OUTFIT,
-                fontSize: 10.5,
-                lineHeight: 1.3,
-                color: 'rgba(238,217,138,0.55)',
-                margin: '2px 0 0',
-                padding: '1px 3px',
-                marginInlineStart: -3,
-              }}
+              onClick={onSwitchAgenda}
+              className="self-start inline-flex items-center gap-1 rounded-md px-1 py-0.5 -ms-1 transition-colors hover:bg-[rgba(238,217,138,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70"
+              style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(238,217,138,0.72)' }}
             >
-              {topicLabel && (
-                <span style={{ fontWeight: 700, color: 'rgba(238,217,138,0.72)' }}>{topicLabel} </span>
-              )}
-              <span className="underline decoration-dotted decoration-[rgba(238,217,138,0.45)] underline-offset-2">{topic}</span>
+              <ArrowLeftRight size={11} aria-hidden />
+              {switchAgendaLabel}
             </button>
           )}
         </div>
       </div>
+      {typeof present === 'number' && (
+        <div className="mt-2">
+          <QuorumRings present={present} total={total} quorumNeeded={quorumNeeded} trailing={seatField} />
+        </div>
+      )}
     </div>
   );
 }

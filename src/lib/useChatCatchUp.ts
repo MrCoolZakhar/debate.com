@@ -20,6 +20,8 @@ type CommitteeSetter = Dispatch<SetStateAction<Committee | null>>;
  */
 export async function catchUpMessages(committeeId: string, setCommittee: CommitteeSetter): Promise<void> {
   const fetched = await getMessagesList(committeeId);
+  // P-4: a failed read is null, never "no messages". Keep what we have.
+  if (!fetched) return;
   setCommittee((prev) => {
     if (!prev) return prev;
     const merged = mergeMessagesById(prev.messages, fetched);

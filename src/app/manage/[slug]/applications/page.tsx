@@ -19,11 +19,12 @@ import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { notifyErr, notifyOk, clearErr, clearOk } from '@/lib/appNotify';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { FlagImg } from '@/components/FlagImg';
+import { CircleFlag } from '@/components/CircleFlag';
 import { DatePicker } from '@/components/DatePicker';
 import { LogoDisc } from '@/components/LogoDisc';
 import Portal from '@/components/Portal';
 import ProfileLink from '@/components/ProfileLink';
-import { getCountryByName, getFlagUrl, UN_COUNTRIES } from '@/lib/countries';
+import { getCountryByName, UN_COUNTRIES } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
 import { checkInApplication, undoCheckIn } from '@/lib/checkIn';
 import { isPaymentsLive } from '@/lib/payments';
@@ -1118,6 +1119,15 @@ interface DraftRow {
   email: string | null;
   avatar_url: string | null;
   nationality: string | null;
+  /** The delegation the draft names, when it names one. `society_id` is set
+   *  only when the applicant picked a delegation that really exists on this
+   *  conference; `society_name` falls back to the name they typed, which is
+   *  why the row marks an unmatched name as typed rather than confirmed.
+   *  Added to `application_draft_status` in
+   *  `application_draft_status_add_delegation` — the rest of `answers` is
+   *  still unreachable to an organiser at the database. */
+  society_id: string | null;
+  society_name: string | null;
 }
 
 /** Ink for the drafts surface. `NEU.muted` measures 3.15:1 on `NEU.surface` and
@@ -2207,7 +2217,7 @@ export default function ApplicationsPage() {
     const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('application_draft_status')
-      .select('id, user_id, role, updated_at, reminders_sent, last_reminder_at, reminder_opt_out, display_name, email, avatar_url, nationality')
+      .select('id, user_id, role, updated_at, reminders_sent, last_reminder_at, reminder_opt_out, display_name, email, avatar_url, nationality, society_id, society_name')
       .eq('conference_id', conference.id)
       .order('updated_at', { ascending: false });
 
@@ -3917,10 +3927,16 @@ export default function ApplicationsPage() {
   // case a chair application owes money exactly like any other role.
   // When Stripe checkout is live for this conference, manual mark-paid is not
   // offered at all (bulk or single) — checkout + webhook own that state.
-  const chairHasFee = roleHasFee(roleConfigs.find(rc => rc.role === 'chair'));
+  // Chairs were only ever the most common feeless role, never the only one: a
+  // conference can charge nothing for observers, or nothing at all. Asking the
+  // role config directly is the same question, asked of every role — so a free
+  // conference stops being offered mark-paid, "Remind to pay" and an Unpaid
+  // tile for money it does not charge. Still "ever charges", not "charges
+  // today", so the controls do not blink out between fee phases.
+  const roleChargesFee = (role: string) => roleHasFee(roleConfigs.find(rc => rc.role === role));
   const payEligible = (a: Application) =>
     !paymentsLive
-    && (a.role !== 'chair' || chairHasFee)
+    && roleChargesFee(a.role)
     && (a.status === 'accepted' || a.status === 'assigned' || a.status === 'submitted' || a.status === 'checked-in')
     && a.payment_status !== 'paid' && a.payment_status !== 'waived';
   // Accept is blocked while a gating app_fee invoice is unpaid, matched by
@@ -3946,7 +3962,7 @@ export default function ApplicationsPage() {
   // live — a reminder is MORE useful there, not less: it is the nudge to go
   // and pay through checkout.
   const bulkRemindable = bulkEligibleApps.filter(a =>
-    (a.role !== 'chair' || chairHasFee)
+    roleChargesFee(a.role)
     && (a.status === 'accepted' || a.status === 'assigned' || a.status === 'submitted' || a.status === 'checked-in')
     && a.payment_status !== 'paid' && a.payment_status !== 'waived'
   );
@@ -3999,8 +4015,9 @@ export default function ApplicationsPage() {
     ).length,
     checkedIn: statScope.filter(a => a.status === 'checked-in').length,
     paid: statScope.filter(a => a.payment_status === 'paid').length,
-    // Unpaid excludes chairs unless this conference configured a chair fee.
-    unpaid: statScope.filter(a => (a.role !== 'chair' || chairHasFee) && (a.payment_status == null || a.payment_status === 'unpaid')).length,
+    // Unpaid only counts roles this conference actually charges for — a free
+    // role can never be in arrears.
+    unpaid: statScope.filter(a => roleChargesFee(a.role) && (a.payment_status == null || a.payment_status === 'unpaid')).length,
   };
 
   // Clickable stat-tile filters (#10). Status tiles clear payment and vice
@@ -4250,12 +4267,11 @@ export default function ApplicationsPage() {
             // allocation was removed can be re-allocated from the row.
             const canAllocate = isDelegate
               && (app.status === 'accepted' || app.status === 'assigned' || app.status === 'checked-in');
-            // Chairs are feeless by default — no payment affordance — unless
-            // this conference configured a chair fee, in which case they get
-            // the exact same treatment as any other role (#5).
+            // No payment affordance for a role this conference charges nothing
+            // for. Chairs are the usual such role, not a special case (#5).
             const isChair = app.role === 'chair';
             const isInvitedChair = isChair && app.fee_waiver_source === 'chair_invite';
-            const showPayControl = (!isChair || chairHasFee) && (app.status === 'accepted' || app.status === 'assigned' || app.status === 'submitted' || app.status === 'checked-in');
+            const showPayControl = roleChargesFee(app.role) && (app.status === 'accepted' || app.status === 'assigned' || app.status === 'submitted' || app.status === 'checked-in');
 
             const factStyle: React.CSSProperties = {
               fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.muted,
@@ -4311,13 +4327,12 @@ export default function ApplicationsPage() {
                       <div style={{ position: 'relative', flexShrink: 0 }}>
                         <MemberAvatar name={name} url={app.profiles?.avatar_url ?? null} size={62} />
                         {natCode && (
-                          /* eslint-disable-next-line @next/next/no-img-element */
-                          <img
-                            src={getFlagUrl(natCode)}
-                            alt={nationality ?? ''}
+                          <CircleFlag
+                            code={natCode}
+                            size={24}
+                            label={nationality ?? ''}
                             title={nationality ?? ''}
-                            draggable={false}
-                            style={{ position: 'absolute', right: -3, bottom: -3, width: 24, height: 24, borderRadius: 9999, objectFit: 'cover', boxShadow: '0 1px 3px rgba(27,56,40,0.25)', border: `2px solid ${NEU.surface}` }}
+                            style={{ position: 'absolute', right: -3, bottom: -3, boxShadow: '0 1px 3px rgba(27,56,40,0.25)', border: `2px solid ${NEU.surface}` }}
                           />
                         )}
                       </div>
@@ -4861,6 +4876,35 @@ export default function ApplicationsPage() {
                                 </span>
                               </>
                             )}
+                            {/* The delegation, when the draft names one. An
+                                organiser running delegation conferences reads
+                                this list by school, and a half-finished
+                                application with no school attached to it is
+                                the one they cannot chase. A picked delegation
+                                (society_id) is stated plainly; a name they
+                                only typed says so, because nothing has matched
+                                it to a delegation yet. */}
+                            {d.society_name && (
+                              <>
+                                <span aria-hidden>·</span>
+                                <span
+                                  className="inline-flex items-center gap-1 truncate"
+                                  style={{ fontWeight: d.society_id ? 700 : 500 }}
+                                  title={d.society_id
+                                    ? `Delegation: ${d.society_name}`
+                                    : `Delegation typed as "${d.society_name}". Not matched to a delegation at this conference yet.`}
+                                >
+                                  <Building2
+                                    size={12}
+                                    strokeWidth={2.4}
+                                    style={{ flexShrink: 0, color: d.society_id ? NEU.deepGold : NEU.muted }}
+                                    aria-hidden
+                                  />
+                                  <span className="truncate">{d.society_name}</span>
+                                  {!d.society_id && <span style={{ opacity: 0.7 }}>(typed)</span>}
+                                </span>
+                              </>
+                            )}
                             {email && (
                               <>
                                 <span aria-hidden>·</span>
@@ -5228,9 +5272,10 @@ export default function ApplicationsPage() {
         const liftOn = (e: React.MouseEvent<HTMLElement>) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; };
         const liftOff = (e: React.MouseEvent<HTMLElement>) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; };
 
-        // Chairs are feeless by default — no payment control — unless this
-        // conference configured a chair fee, matching any other role (#5).
-        const showPaymentControls = (app.role !== 'chair' || chairHasFee)
+        // A role this conference charges nothing for gets no payment control:
+        // there is no state to mark. Chairs are simply the most common such
+        // role, not a special case (#5).
+        const showPaymentControls = roleChargesFee(app.role)
           && (app.status === 'accepted' || app.status === 'assigned' || app.status === 'submitted' || app.status === 'checked-in');
         // Unified payment control (F: merge mark-paid vs waive). One menu, both
         // underlying states still reachable. An invited chair whose role has
@@ -5257,7 +5302,10 @@ export default function ApplicationsPage() {
         // Withdraw (F: PART 2 item 1): accepted/assigned only, and only when
         // payment_status is 'unpaid' or 'waived'. Paid applicants must have
         // their payment handled first (refunds come with finances).
-        const canWithdraw = app.payment_status !== 'paid';
+        // A free role is stamped 'paid' on arrival by the database, and there
+        // is no payment to handle first, so the guard does not apply to it —
+        // without this exception a free conference could never remove anyone.
+        const canWithdraw = app.payment_status !== 'paid' || !roleChargesFee(app.role);
 
         // Rare + destructive actions live behind the overflow "…" so they stop
         // competing with the decision. Same handlers, same guards: REMOVE keeps

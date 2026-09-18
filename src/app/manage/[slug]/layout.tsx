@@ -11,7 +11,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { LogoDisc } from '@/components/LogoDisc';
 import Loader from '@/components/Loader';
-import ProfileDropdown from '@/components/ProfileDropdown';
+import ProfileAvatarMenu from '@/components/ProfileAvatar';
 import type { EmailTheme } from '@/lib/emailHtml';
 import type { ConferenceTheme } from '@/lib/theme';
 import { financialsAreReadOnly } from '@/lib/organizerPermissions';
@@ -165,7 +165,25 @@ const CONFERENCE_COLUMNS = [
 
 // ── Nav definition ─────────────────────────────────────────────────────────
 
-const NAV_SECTIONS = (slug: string, communicationsBadge = 0) => [
+/** Unhandled work, per rail entry. Every number is a real count of things
+ *  waiting on the organiser — applications nobody has decided on, accepted
+ *  delegates with no committee yet, participant queries with an unread reply,
+ *  financial aid requests still pending. Never a decoration: a zero renders
+ *  nothing at all.
+ *
+ *  Shown as the existing badge treatment, which is a single gold DOT on the
+ *  collapsed rail (the count lives in its aria-label) and the number itself
+ *  only once the label beside it is legible. */
+export interface NavBadges {
+  applications: number;
+  assignment: number;
+  communications: number;
+  financialAid: number;
+}
+
+const NO_BADGES: NavBadges = { applications: 0, assignment: 0, communications: 0, financialAid: 0 };
+
+const NAV_SECTIONS = (slug: string, badges: NavBadges = NO_BADGES) => [
   {
     header: null,
     items: [
@@ -177,8 +195,8 @@ const NAV_SECTIONS = (slug: string, communicationsBadge = 0) => [
     header: 'MANAGE',
     items: [
       { icon: Building2, label: 'Committees',   href: `/manage/${slug}/committees`,   external: false, badge: 0 },
-      { icon: Users,     label: 'Applications', href: `/manage/${slug}/applications`, external: false, badge: 0 },
-      { icon: MapPin,    label: 'Assignment',   href: `/manage/${slug}/assignment`,   external: false, badge: 0 },
+      { icon: Users,     label: 'Applications', href: `/manage/${slug}/applications`, external: false, badge: badges.applications },
+      { icon: MapPin,    label: 'Assignment',   href: `/manage/${slug}/assignment`,   external: false, badge: badges.assignment },
       { icon: FileText,  label: 'Documents',    href: `/manage/${slug}/documents`,    external: false, badge: 0 },
       // Scoreboard is deliberately NOT a nav item. Delegate performance is a
       // property of a committee, not of the dashboard, so it opens from a
@@ -191,14 +209,14 @@ const NAV_SECTIONS = (slug: string, communicationsBadge = 0) => [
   {
     header: 'COMMUNICATE',
     items: [
-      { icon: Mail, label: 'Communications', href: `/manage/${slug}/communications`, external: false, badge: communicationsBadge },
+      { icon: Mail, label: 'Communications', href: `/manage/${slug}/communications`, external: false, badge: badges.communications },
     ],
   },
   {
     header: 'FINANCIAL',
     items: [
       { icon: CreditCard,     label: 'Financials',    href: `/manage/${slug}/financials`,    external: false, badge: 0 },
-      { icon: HeartHandshake, label: 'Financial Aid', href: `/manage/${slug}/financial-aid`, external: false, badge: 0 },
+      { icon: HeartHandshake, label: 'Financial Aid', href: `/manage/${slug}/financial-aid`, external: false, badge: badges.financialAid },
     ],
   },
   // POST CONFERENCE / Awards used to sit here. Awards are now a tab inside
@@ -253,17 +271,17 @@ function SideRail({
   slug,
   conference,
   pathname,
-  communicationsBadge = 0,
+  badges = NO_BADGES,
   sealTitle,
 }: {
   slug: string;
   conference: Conference | null;
   pathname: string;
-  communicationsBadge?: number;
+  badges?: NavBadges;
   sealTitle: string;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const sections = NAV_SECTIONS(slug, communicationsBadge);
+  const sections = NAV_SECTIONS(slug, badges);
   const statusStyle = STATUS_STYLES[conference?.status ?? 'private'] ?? STATUS_STYLES.private;
   const year = conference ? new Date(conference.start_date + 'T00:00:00').getFullYear() : null;
 
@@ -496,17 +514,17 @@ function SidebarContent({
   conference,
   pathname,
   onNavClick,
-  communicationsBadge = 0,
+  badges = NO_BADGES,
   sealTitle,
 }: {
   slug: string;
   conference: Conference | null;
   pathname: string;
   onNavClick?: () => void;
-  communicationsBadge?: number;
+  badges?: NavBadges;
   sealTitle: string;
 }) {
-  const sections = NAV_SECTIONS(slug, communicationsBadge);
+  const sections = NAV_SECTIONS(slug, badges);
 
   const statusStyle = STATUS_STYLES[conference?.status ?? 'private'] ?? STATUS_STYLES.private;
   const year = conference ? new Date(conference.start_date + 'T00:00:00').getFullYear() : null;
@@ -649,7 +667,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
 
-  const { user, session, profile, signOut, loading: authLoading } = useAuth();
+  const { user, session, signOut, loading: authLoading } = useAuth();
   /** The two stable primitives the inbox badge keys on. AuthProvider replaces
    *  the session OBJECT on every auth event (token refresh, tab focus), so
    *  depending on it would refetch the badge on each of those; the token is a
@@ -673,6 +691,11 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   // scroll while it is open (this is the phone case, so iOS matters).
   useScrollLock(mobileMenuOpen);
   const [inboxBadge, setInboxBadge] = useState(0);
+  /** The other three rail badges: applications nobody has decided on, accepted
+   *  delegates with no committee yet, pending financial aid requests. Their own
+   *  state, refreshed on navigation, so a stale count never outlives the page
+   *  the organiser just cleared. */
+  const [workBadges, setWorkBadges] = useState({ applications: 0, assignment: 0, financialAid: 0 });
 
   // Nav badge — same unread definition as the communications inbox
   // (unreadCountOf there): a thread counts as unread when it has a
@@ -705,6 +728,48 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   }, [conferenceId, accessToken]);
 
   useEffect(() => { loadInboxBadge(); }, [loadInboxBadge]);
+
+  // ── The other unhandled-work counts ───────────────────────────────────────
+  // Three head-only counts, so nothing but a number crosses the wire and no
+  // applicant detail is loaded to render a dot.
+  //
+  //  • Applications: `status = 'submitted'` is exactly "waiting on a decision".
+  //  • Assignment: `status = 'accepted'` and nothing further. Allocating an
+  //    application moves it to 'assigned' (and check-in to 'checked-in'), so
+  //    'accepted' alone IS the unallocated set — the same definition the
+  //    dashboard's Unallocated tile draws, kept deliberately in step with it.
+  //    Only the roles that take a committee seat, and never someone marked
+  //    not attending.
+  //  • Financial aid: requests still 'pending' review.
+  //
+  // `pathname` is a dependency on purpose: the counts are what the organiser
+  // just went and cleared, so they refresh as they move between sections.
+  const loadWorkBadges = useCallback(async () => {
+    if (!conferenceId || !accessToken) return;
+    const supabase = getAuthedClient(accessToken);
+    const [pendingApps, unallocated, pendingAid] = await Promise.all([
+      supabase.from('applications').select('id', { count: 'exact', head: true })
+        .eq('conference_id', conferenceId).eq('status', 'submitted'),
+      supabase.from('applications').select('id', { count: 'exact', head: true })
+        .eq('conference_id', conferenceId).eq('status', 'accepted')
+        .in('role', ['delegate', 'head-delegate']).eq('attending', true),
+      supabase.from('financial_aid_requests').select('id', { count: 'exact', head: true })
+        .eq('conference_id', conferenceId).eq('status', 'pending'),
+    ]);
+    // A failed read leaves that badge at zero rather than inventing a number.
+    setWorkBadges({
+      applications: pendingApps.count ?? 0,
+      assignment: unallocated.count ?? 0,
+      financialAid: pendingAid.count ?? 0,
+    });
+  }, [conferenceId, accessToken]);
+
+  useEffect(() => { loadWorkBadges(); }, [loadWorkBadges, pathname]);
+
+  const navBadges = useMemo(
+    () => ({ ...workBadges, communications: inboxBadge }),
+    [workBadges, inboxBadge],
+  );
 
   // The communications page marks threads read locally (optimistic state,
   // its own component tree) — this sidebar badge lives in the layout above
@@ -861,12 +926,6 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     loadConference();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id, slug, session?.access_token]);
-
-  const avatarInitial = profile?.display_name
-    ? profile.display_name[0].toUpperCase()
-    : user?.email
-    ? user.email[0].toUpperCase()
-    : '?';
 
   // Memoised so consumers (useManage()) only see a new context value when
   // the conference data or the (now-stable, useCallback'd) refresh functions
@@ -1077,27 +1136,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
           </Link>
 
           {/* Shared account menu (same hover-open dropdown as SiteNav) */}
-          <ProfileDropdown
-            panelStyle={{ zIndex: 60 }}
-            trigger={(open, toggle) => (
-              <button
-                onClick={toggle}
-                aria-label="Account menu"
-                className="flex items-center justify-center w-7 h-7 rounded-full text-xs font-black focus:outline-none transition-opacity hover:opacity-80 flex-shrink-0"
-                style={{
-                  backgroundColor: '#EED98A', color: '#1B3828',
-                  fontFamily: "'Outfit', sans-serif",
-                  border: 'none', cursor: 'pointer', padding: 0,
-                }}
-              >
-                {profile?.avatar_url ? (
-                  <img src={profile.avatar_url} alt="Avatar" className="w-7 h-7 rounded-full object-cover" />
-                ) : (
-                  avatarInitial
-                )}
-              </button>
-            )}
-          />
+          <ProfileAvatarMenu size={44} tone="dark" panelStyle={{ zIndex: 60 }} />
 
           {/* Mobile hamburger */}
           <button
@@ -1111,7 +1150,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
       </header>
 
       {/* Desktop floating rail, icons only, expands on hover */}
-      <SideRail slug={slug} conference={conference} pathname={pathname} communicationsBadge={inboxBadge} sealTitle={sealTitle} />
+      <SideRail slug={slug} conference={conference} pathname={pathname} badges={navBadges} sealTitle={sealTitle} />
 
       {/* Mobile drawer overlay */}
       {mobileMenuOpen && (
@@ -1131,7 +1170,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
                 conference={conference}
                 pathname={pathname}
                 onNavClick={() => setMobileMenuOpen(false)}
-                communicationsBadge={inboxBadge}
+                badges={navBadges}
                 sealTitle={sealTitle}
               />
             </div>
