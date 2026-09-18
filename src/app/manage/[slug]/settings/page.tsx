@@ -68,6 +68,9 @@ interface RoleConfig {
   auto_accept: boolean;
   payment_timing: 'after_application' | 'after_acceptance' | 'anytime';
   custom_questions: unknown[];
+  submission_message: string | null;
+  submission_link_label: string | null;
+  submission_link_url: string | null;
   fee_phases: FeePhase[] | null;
   allow_resubmission: boolean;
   preference_mode: string;
@@ -291,6 +294,10 @@ const STEPS = [
   {
     n: 3, label: 'Form', sub: 'The questions this role answers when applying',
     hint: 'The questions this role fills in when they apply: short answers, long answers, choices, uploads. Each role has its own form, because an advisor and a delegate have almost nothing in common to say. Reordering and rewording is safe at any time; answers already submitted are kept exactly as they were given.',
+  },
+  {
+    n: 4, label: 'After submitting', sub: 'An optional message shown once, right after this role applies',
+    hint: 'This appears as a small card in the corner of the confirmation screen for about twenty seconds, right after someone submits this role. It is the last thing they read before they leave, so it is the right place for what to do next, rather than for anything they will need later, because it is not saved anywhere they can go back to. If there is something they must keep, an email is the right tool for that.',
   },
 ] as const;
 
@@ -1238,6 +1245,7 @@ export default function SettingsPage() {
     auto_accept: 1, payment_timing: 1, allow_resubmission: 1,
     fee_amount: 2, fee_currency: 2, fee_phases: 2,
     custom_questions: 3,
+    submission_message: 4, submission_link_label: 4, submission_link_url: 4,
   };
 
   function stepForUpdates(updates: Record<string, unknown>): number | null {
@@ -2200,9 +2208,71 @@ export default function SettingsPage() {
     && !(activeRoleConfig?.fee_phases ?? []).some(p => !p.start_date || !p.end_date);
   const stepComplete = useMemo(
     // Form is always complete: custom questions are optional by design.
-    () => ({ 1: step1Complete, 2: step2Complete, 3: true } as Record<number, boolean>),
+    // After submitting (4) is always complete too: the message is optional.
+    () => ({ 1: step1Complete, 2: step2Complete, 3: true, 4: true } as Record<number, boolean>),
     [step1Complete, step2Complete],
   );
+
+  // ── After-submitting message (step 4) ───────────────────────────────────
+  // Local, debounced input state — the same reason QuestionBuilder is
+  // remounted with key={selectedRole} rather than reading roleConfigs
+  // directly on every keystroke: an optimistic save elsewhere in this role's
+  // row must not reset what is mid-typing here.
+  const [submissionMessageInput, setSubmissionMessageInput] = useState('');
+  const [submissionLinkLabelInput, setSubmissionLinkLabelInput] = useState('');
+  const [submissionLinkUrlInput, setSubmissionLinkUrlInput] = useState('');
+  const [submissionLinkError, setSubmissionLinkError] = useState('');
+  const submissionSyncedRoleRef = useRef<string | null>(null);
+  const submissionMessageRef = useRef('');
+  const submissionLinkLabelRef = useRef('');
+  const submissionLinkUrlRef = useRef('');
+  const submissionDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Resync from the saved row only when the active role actually changes —
+  // never on every unrelated re-render, which would otherwise fight typing.
+  useEffect(() => {
+    if (submissionSyncedRoleRef.current === selectedRole) return;
+    submissionSyncedRoleRef.current = selectedRole;
+    const message = activeRoleConfig?.submission_message ?? '';
+    const label = activeRoleConfig?.submission_link_label ?? '';
+    const url = activeRoleConfig?.submission_link_url ?? '';
+    setSubmissionMessageInput(message);
+    setSubmissionLinkLabelInput(label);
+    setSubmissionLinkUrlInput(url);
+    submissionMessageRef.current = message;
+    submissionLinkLabelRef.current = label;
+    submissionLinkUrlRef.current = url;
+    setSubmissionLinkError('');
+  }, [selectedRole, activeRoleConfig]);
+
+  /** Debounced save for all three fields together, so typing in one never
+   *  fires a write per keystroke and a save always carries the current
+   *  value of the other two. Clamps the same way the database CHECK
+   *  constraints do, so none of them can ever fire at an organizer:
+   *  trims; blank becomes null; a blank link field nulls BOTH link fields
+   *  (the shape rule is both-or-neither); a blank message nulls both link
+   *  fields too, because a button needs words around it. */
+  function scheduleSubmissionSave() {
+    if (submissionDebounceRef.current) clearTimeout(submissionDebounceRef.current);
+    submissionDebounceRef.current = setTimeout(() => {
+      submissionDebounceRef.current = null;
+      const message = submissionMessageRef.current.trim();
+      let label = submissionLinkLabelRef.current.trim();
+      let url = submissionLinkUrlRef.current.trim();
+      if (!label || !url) { label = ''; url = ''; }
+      if (!message) { label = ''; url = ''; }
+      if (url && !url.startsWith('https://')) {
+        setSubmissionLinkError('The link must start with https://');
+        return;
+      }
+      setSubmissionLinkError('');
+      saveRoleConfig(activeRole, {
+        submission_message: message || null,
+        submission_link_label: label || null,
+        submission_link_url: url || null,
+      });
+    }, 800);
+  }
 
   const stepPanelRef = useRef<HTMLDivElement | null>(null);
   const lastOpenedRef = useRef<string | null>(null);
@@ -3586,6 +3656,92 @@ export default function SettingsPage() {
                           </p>
                         )}
                         <QuestionBuilder key={selectedRole} value={currentBlocks} onChange={handleBlocksChange} hasApplications={selectedRoleHasApplications} />
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={cardStyle}>
+                    <StepHeader
+                      n={STEPS[3].n} label={STEPS[3].label} sub={STEPS[3].sub} hint={STEPS[3].hint}
+                      complete={stepComplete[4]} open={openStep === 4}
+                      onClick={() => setOpenStep(openStep === 4 ? 0 : 4)}
+                      status={stepSaveState[4]}
+                    />
+                    {openStep === 4 && (
+                      <div className="mt-5">
+                        <div className="mb-4">
+                          <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                            Message
+                          </label>
+                          <textarea
+                            rows={4}
+                            maxLength={280}
+                            value={submissionMessageInput}
+                            placeholder="Join our WhatsApp group so you do not miss any announcements."
+                            onChange={(e) => {
+                              submissionMessageRef.current = e.target.value;
+                              setSubmissionMessageInput(e.target.value);
+                              scheduleSubmissionSave();
+                            }}
+                            onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                            onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                            style={{ ...inputStyle, resize: 'vertical', lineHeight: '1.6' }}
+                          />
+                          <p
+                            className="text-xs mt-1"
+                            style={{ textAlign: 'right', fontFamily: "'Outfit', sans-serif", fontSize: 11.5, fontWeight: 600, color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}
+                          >
+                            {submissionMessageInput.length} / 280
+                          </p>
+                        </div>
+
+                        <div className="flex gap-3 mb-2 flex-wrap">
+                          <div className="flex-1" style={{ minWidth: 200 }}>
+                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                              Button text (optional)
+                            </label>
+                            <input
+                              type="text"
+                              maxLength={40}
+                              value={submissionLinkLabelInput}
+                              placeholder="Join the group"
+                              onChange={(e) => {
+                                submissionLinkLabelRef.current = e.target.value;
+                                setSubmissionLinkLabelInput(e.target.value);
+                                scheduleSubmissionSave();
+                              }}
+                              onFocus={fgInput}
+                              onBlur={bgInput}
+                              style={inputStyle}
+                            />
+                          </div>
+                          <div className="flex-1" style={{ minWidth: 200 }}>
+                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                              Button link (optional)
+                            </label>
+                            <input
+                              type="text"
+                              value={submissionLinkUrlInput}
+                              placeholder="https://chat.whatsapp.com/..."
+                              onChange={(e) => {
+                                submissionLinkUrlRef.current = e.target.value;
+                                setSubmissionLinkUrlInput(e.target.value);
+                                scheduleSubmissionSave();
+                              }}
+                              onFocus={fgInput}
+                              onBlur={bgInput}
+                              style={inputStyle}
+                            />
+                          </div>
+                        </div>
+                        <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                          Add both to show a button, or leave both empty for a message with no button. The link must start with https://
+                        </p>
+                        {submissionLinkError && (
+                          <p role="alert" className="text-xs mt-1.5" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+                            {submissionLinkError}
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
