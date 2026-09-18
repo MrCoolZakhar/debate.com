@@ -543,7 +543,7 @@ export async function queueEventEmail(
       subject: resolveTokens(subjectSource, ctx),
       body: resolveTokens(flatBody, ctx),
       body_html: renderEmailHtml({
-        blocks, conference: renderConf, ctx, variant: 'transactional',
+        blocks, conference: renderConf, ctx, variant: 'transactional', event: eventKey, isDefault: !useDraft,
         // Per-recipient, so a `facts` row asking for 'country' or 'committee'
         // draws THIS delegate's flag and THIS committee's emblem.
         media: {
@@ -731,7 +731,7 @@ export async function queueChairInviteEmail(
     recipient_email: invitedEmail,
     subject: resolveTokens(subjectSource, ctx),
     body: resolveTokens(flatBody, ctx),
-    body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, chairInviteToken: token, variant: 'transactional' }),
+    body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, chairInviteToken: token, variant: 'transactional', event: 'committee_chair_invite', isDefault: !useTemplate }),
     status: 'pending',
   });
   if (error) return;
@@ -870,7 +870,7 @@ export async function queueOrganizerInviteEmail(
     recipient_email: invitedEmail,
     subject: resolveTokens(subjectSource, ctx),
     body: resolveTokens(flatBody, ctx),
-    body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, organizerInviteToken: token, variant: 'transactional' }),
+    body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, organizerInviteToken: token, variant: 'transactional', event: 'organizer_invite', isDefault: !useTemplate }),
     status: 'pending',
   });
   if (error) return;
@@ -998,7 +998,7 @@ export async function queueImportJoinInviteEmails(
       recipient_email: r.invitedEmail,
       subject: resolveTokens(subjectSource, ctx),
       body: resolveTokens(flattenBlocksToPlainText(blocks, renderConf, { importClaimToken: token }), ctx),
-      body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, importClaimToken: token, variant: 'transactional' }),
+      body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, importClaimToken: token, variant: 'transactional', event: 'import_join_invite', isDefault: !useTemplate }),
       status: 'pending' as const,
     }];
   });
@@ -1143,7 +1143,7 @@ export async function queueRequestReceivedEmail(
       recipient_email: email,
       subject: resolveTokens(subjectSource, ctx),
       body: resolveTokens(flatBody, ctx),
-      body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, variant: 'transactional' }),
+      body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, variant: 'transactional', event: eventKey, isDefault: !useDraft }),
       status: 'pending' as const,
     }));
 
