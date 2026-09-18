@@ -142,7 +142,9 @@ export const KIT_CSS = `
 .gv-auth-skip{background:none;border:none;padding:6px 8px;border-radius:8px;font-family:${OUTFIT};font-size:14px;font-weight:600;color:${INK};text-decoration:underline;text-underline-offset:3px;cursor:pointer;white-space:nowrap}
 .gv-auth-body{overflow-y:auto;padding:8px 32px 32px;overscroll-behavior:contain}
 .gv-auth-screen{display:flex;flex-direction:column;gap:12px}
-.gv-auth-mark{display:block;margin:4px auto 14px;width:40px;height:40px;object-fit:contain}
+.gv-auth-brand{display:flex;align-items:center;justify-content:center;gap:8px;margin:4px auto 14px}
+.gv-auth-mark{display:block;width:36px;height:36px;object-fit:contain}
+.gv-auth-word{font-family:${OUTFIT};font-size:22px;font-weight:700;letter-spacing:-0.02em;color:${FOREST}}
 .gv-auth-big{margin:0 0 20px;text-align:center;font-size:26px;font-weight:700;letter-spacing:-0.02em;line-height:1.2;color:${INK}}
 .gv-auth-sub{margin:-8px 0 8px;text-align:center;font-size:15px;line-height:1.5;color:${INK_SOFT};text-wrap:pretty}
 .gv-auth-lead{margin:4px 0 8px;font-size:15px;line-height:1.5;color:${INK_SOFT};text-wrap:pretty}
@@ -169,11 +171,11 @@ export const KIT_CSS = `
 .gv-green:active{transform:scale(0.985)}
 .gv-green:disabled{cursor:default;opacity:0.7}
 .gv-green-shine{position:absolute;inset:0;background:radial-gradient(circle at var(--spot-x,50%) var(--spot-y,50%),rgba(120,210,150,0.45) 0%,rgba(120,210,150,0) 60%);transition:opacity 200ms ease;pointer-events:none}
-.gv-or{display:flex;align-items:center;gap:16px;margin:22px 0}
+.gv-or{display:flex;align-items:center;gap:10px;margin:14px 0}
 .gv-or span{flex:1;height:1px;background:${HAIR}}
-.gv-or em{font-style:normal;font-size:12px;color:${INK}}
+.gv-or em{font-family:${OUTFIT};font-style:normal;font-weight:500;font-size:12px;line-height:1;color:#6A6A6A}
 .gv-socials{display:flex;justify-content:center;gap:16px}
-.gv-social{width:60px;height:60px;display:inline-flex;align-items:center;justify-content:center;border:1px solid ${INK};border-radius:12px;background:#FFFFFF;cursor:pointer;transition:background-color 140ms ease,transform 120ms ease}
+.gv-social{width:56px;height:56px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #E4E4E4;border-radius:12px;background:#FFFFFF;cursor:pointer;transition:background-color 140ms ease,transform 120ms ease}
 .gv-social:hover{background:#F7F7F7}
 .gv-social:active{transform:scale(0.96)}
 .gv-social:disabled{opacity:0.55;cursor:default}
