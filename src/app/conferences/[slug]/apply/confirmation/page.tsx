@@ -245,11 +245,11 @@ function ConfirmationInner({ conference }: { conference: ConfRow }) {
               <Link
                 href="/conferences/explore"
                 className="mt-6 text-xs font-medium focus:outline-none transition-colors"
-                style={{ color: 'var(--gv-muted)', textDecoration: 'none', fontFamily: OUTFIT }}
+                style={{ color: 'var(--gv-muted)', textDecoration: 'underline', textUnderlineOffset: 3, fontFamily: OUTFIT }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-on-bg)'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-muted)'; }}
               >
-                explore more conferences
+                Explore More Conferences
               </Link>
             </div>
           </div>
