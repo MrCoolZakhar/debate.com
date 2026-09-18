@@ -9,6 +9,23 @@ import { getScoringConfig, RATING_MIN } from '@/lib/scoring';
 import { factorName } from '@/lib/scoringNames';
 import { addFeedback, updateFeedback, getFeedbackForCommittee } from '@/lib/committeeService';
 import { serverNow } from '@/lib/serverClock';
+import { buildSessionHistory, liveSegment, RTR_CONTEXT, type SegmentKind } from '@/lib/sessionHistory';
+import { motionNames } from '@/lib/committeeFlags';
+import { ListOrdered, Gavel, Users, MicVocal, CircleDot, MessagesSquare, type LucideIcon } from 'lucide-react';
+
+const KIND_ICON: Record<SegmentKind, LucideIcon> = {
+  'speakers-list': ListOrdered,
+  'moderated-caucus': Gavel,
+  'unmoderated-caucus': Users,
+  'tour-de-table': MicVocal,
+  consultation: MessagesSquare,
+  other: CircleDot,
+};
+
+/** One section of the dock: a debate segment of the session, as the History tab reads it. */
+interface DockSection { id: string; kind: SegmentKind; topic: string; startedAt: string; items: FeedItem[] }
+
+const instant = (iso?: string) => (iso ? Date.parse(iso) : NaN);
 
 type ItemKind = 'past' | 'live' | 'next';
 interface FeedItem {
@@ -197,19 +214,71 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
     });
   }, [past, turn]);
 
-  const items: FeedItem[] = useMemo(() => {
-    const out: FeedItem[] = [];
-    for (const p of past) out.push({ key: `past|${p.country}|${p.timestamp}`, kind: 'past', country: p.country, context: p.context, topic: p.topic, spokenAt: p.timestamp, seconds: p.seconds, timestamp: p.timestamp });
-    // Held turns sit between the log and the floor, which is where they happened.
-    for (const r of recent) if (r.key !== liveKey) out.push(r);
-    // The live card's speech STARTED when this turn started, which is the only
-    // honest answer available before the speech is logged. `next` cards have not
-    // happened yet, so they carry no time at all and get one when they reconcile.
-    if (currentCountry && liveKey) out.push({ key: liveKey, kind: 'live', country: currentCountry, context: ctx, topic: liveTopicNow, spokenAt: new Date(turnStart).toISOString() });
-    for (const u of upcoming) out.push({ key: `next|${u.delegateId}`, kind: 'next', country: u.country, context: ctx, topic: liveTopicNow });
+  // ── The dock reads like the History (owner, 18 Sep 2026) ────────────────────
+  //
+  // Sections are the History tab's debate segments (`buildSessionHistory`, which already
+  // follows phase changes: a caucus that passed opens its own segment even before anyone
+  // speaks, and the debate the room is in now is always the newest). Newest section first,
+  // and inside a section newest first: the upcoming delegations on top, then the floor, then
+  // what was said. Every card keeps the key it always had (`past|...`, `live|...`, `next|...`),
+  // so notes, the held turn and the reconcile passes below are untouched by the regrouping.
+  // Rights of reply are cards too (`rtr|...`), written on under context 'right-of-reply'.
+  const segments = useMemo(() => buildSessionHistory(committee, []), [committee]);
+  const replies = useMemo(() => segments.flatMap((sg) => sg.events.filter((e) => e.type === 'right-of-reply')), [segments]);
+  const nextIds = JSON.stringify(upcoming.map((u) => u.delegateId));
+
+  const sections: DockSection[] = useMemo(() => {
+    const out: DockSection[] = segments.map((sg) => ({
+      id: sg.id, kind: sg.kind, topic: sg.topic, startedAt: sg.startedAt,
+      items: [
+        ...sg.speeches.map((p): FeedItem => ({
+          key: `past|${p.country}|${p.timestamp}`, kind: 'past', country: p.country, context: p.context,
+          topic: p.topic, spokenAt: p.timestamp, seconds: p.seconds, timestamp: p.timestamp,
+        })),
+        // A right of reply: seconds 0 (never null), so no pass below mistakes its note for
+        // one written on a speech still in progress.
+        ...sg.events.filter((e) => e.type === 'right-of-reply').map((e): FeedItem => ({
+          key: `rtr|${e.country}|${e.timestamp}`, kind: 'past', country: e.country, context: RTR_CONTEXT,
+          topic: sg.topic, spokenAt: e.timestamp, seconds: 0, timestamp: e.timestamp,
+        })),
+      ],
+    }));
+    // Nothing logged and nothing live yet: one section for the floor.
+    if (out.length === 0 && (currentCountry || upcoming.length)) {
+      const live = liveSegment(committee);
+      out.push({ id: 'live|floor', kind: live?.kind ?? 'speakers-list', topic: live?.topic ?? '', startedAt: '', items: [] });
+    }
+    // `segments` is already NEWEST FIRST. Held turns sit in the section they happened in (the
+    // newest that had started by then).
+    for (const r of recent) {
+      if (r.key === liveKey) continue;
+      const at = instant(r.spokenAt);
+      const home = out.find((sc) => !sc.startedAt || !Number.isFinite(at) || instant(sc.startedAt) <= at) ?? out[0];
+      home?.items.push(r);
+    }
+    const newest = out[0];
+    if (newest) {
+      // The live card's speech STARTED when this turn started, which is the only honest
+      // answer available before the speech is logged. `next` cards have not happened yet,
+      // so they carry no time at all and get one when they reconcile.
+      if (currentCountry && liveKey) newest.items.push({ key: liveKey, kind: 'live', country: currentCountry, context: ctx, topic: liveTopicNow, spokenAt: new Date(turnStart).toISOString() });
+      for (const u of upcoming) newest.items.push({ key: `next|${u.delegateId}`, kind: 'next', country: u.country, context: ctx, topic: liveTopicNow });
+    }
+    // Newest first, throughout. Upcoming (in reverse speaking order, so the next delegation
+    // sits right above the floor), then the floor, then the log by time.
+    const rank = (i: FeedItem) => (i.kind === 'next' ? 0 : i.kind === 'live' ? 1 : 2);
+    for (const sc of out) {
+      const order = new Map(sc.items.map((it, i) => [it.key, i]));
+      sc.items.sort((a, b) => rank(a) - rank(b)
+        || (a.kind === 'next' ? (order.get(b.key)! - order.get(a.key)!) : 0)
+        || (instant(b.spokenAt) || 0) - (instant(a.spokenAt) || 0));
+    }
     return out;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [past, recent, currentCountry, liveKey, turnStart, JSON.stringify(upcoming.map((u) => u.delegateId)), ctx, liveTopicNow]);
+  }, [segments, recent, currentCountry, liveKey, turnStart, nextIds, ctx, liveTopicNow]);
+
+  // The cards in the order they are drawn: pass 3 below and the focus recede read this.
+  const items: FeedItem[] = useMemo(() => sections.flatMap((sc) => sc.items), [sections]);
 
   // Load every chair's speech feedback, and re-load whenever a realtime `feedback`
   // event lands (`feedbackVersion`). This used to run exactly once per mount behind a
@@ -250,6 +319,18 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
         }
       };
 
+      // A RIGHT OF REPLY is identified by country + context + the instant it was granted
+      // (`spoken_at` = the log timestamp). Its rows carry seconds 0, so the passes below
+      // (which only look at seconds null or at speech contexts) never touch them.
+      for (const r of replies) {
+        const key = `rtr|${r.country}|${r.timestamp}`;
+        const at = instant(r.timestamp);
+        for (const f of fb) {
+          if (f.country !== r.country || f.speechContext !== RTR_CONTEXT) continue;
+          if (Math.abs(instant(f.spokenAt ?? undefined) - at) > 2000) continue;
+          claim(key, f, true);
+        }
+      }
       // A LOGGED speech is identified by country + context + seconds.
       for (const p of past) {
         const key = `past|${p.country}|${p.timestamp}`;
@@ -338,7 +419,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
     })();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [committee.id, past.length, feedbackVersion, chairName, currentCountry]);
+  }, [committee.id, past.length, replies.length, feedbackVersion, chairName, currentCountry]);
 
   // On speaker change: FLUSH FIRST, then start the new turn.
   //
@@ -494,6 +575,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
   // own label — otherwise a finished caucus speech would be re-tagged by whatever is on the
   // floor now (or, once the caucus ends, re-tag the GSL rows as a caucus).
   const tagFor = (item: FeedItem) => {
+    if (item.context === RTR_CONTEXT) return t('sb_hist_right_of_reply');
     if (item.context === 'speakers-list') return t('fb_tag_gsl');
     if (item.context === ctx && caucus?.motionLabel) return caucus.motionLabel;
     return item.context === 'unmoderated-caucus' ? t('fb_tag_unmod') : t('fb_tag_caucus');
@@ -580,6 +662,163 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
     </div>
   );
 
+
+  // ── A section header: which debate this is, and (for a caucus) what it is about ──────
+  // Mirrors the History tab's segment header, with the caucus name printed beside the kind
+  // (owner, 18 Sep 2026) and a hairline divider running out to the edge.
+  const kindLabel = (k: SegmentKind): string => {
+    switch (k) {
+      case 'speakers-list': return t('sb_hist_seg_gsl');
+      case 'moderated-caucus': return t('sb_hist_seg_moderated');
+      case 'unmoderated-caucus': return t('sb_hist_seg_unmoderated');
+      case 'tour-de-table': return t('sb_hist_seg_tour');
+      case 'consultation': return motionNames(committee, language).consultation;
+      default: return t('sb_hist_seg_other');
+    }
+  };
+  const sectionHeader = (sc: DockSection) => {
+    const Icon = KIND_ICON[sc.kind];
+    const name = sc.kind !== 'speakers-list' && sc.kind !== 'tour-de-table' ? sc.topic : '';
+    return (
+      <div className="flex items-center gap-2 pt-3 pb-0.5 min-w-0" style={{ color: '#1B3828' }}>
+        <Icon size={14} strokeWidth={2.4} aria-hidden className="shrink-0" />
+        <span className="min-w-0 truncate text-[11px] uppercase tracking-wider" title={name || undefined}>
+          <span className="font-black">{kindLabel(sc.kind)}</span>
+          {name && <span className="font-medium normal-case tracking-normal" style={{ color: '#6A5A4A' }}>{` · ${name}`}</span>}
+        </span>
+        <span aria-hidden className="flex-1 h-px min-w-6" style={{ backgroundColor: 'rgba(27,56,40,0.16)' }} />
+        {sc.startedAt && (
+          <span className="shrink-0 text-[10px] tabular-nums" style={{ color: '#9A8A78' }}>
+            {new Date(sc.startedAt).toLocaleTimeString(language === 'en' ? 'en-GB' : language, { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  const renderItem = (item: FeedItem, idx: number) => {
+    const rs = state[item.key] ?? { content: '', scores: {}, country: item.country };
+    const isLive = item.kind === 'live';
+    const isFocused = item.key === effectiveFocus;
+    const isHover = hoverKey === item.key && !isFocused;
+    const scored = hasRating(rs.scores);
+    const notes = notesFor(item.key, rs);
+    const theirs = notes.filter((n) => !n.isMine);
+    const dist = focusIdx >= 0 ? Math.min(Math.abs(idx - focusIdx), 3) : 0;
+
+    let scale = scaleByDist[dist], opacity = opacityByDist[dist];
+    let boxShadow = '0 3px 12px rgba(28,20,16,0.07)';
+    if (isFocused) {
+      scale = 1; opacity = 1;
+      boxShadow = '0 0 0 2px #B8844A, 0 14px 36px rgba(28,20,16,0.18)';
+    } else if (isHover) {
+      scale = 1.01; opacity = 1;
+      boxShadow = '0 10px 26px rgba(28,20,16,0.16)';
+    }
+
+    return (
+      <div
+        key={item.key}
+        ref={(el) => { rowRefs.current[item.key] = el; }}
+        className="w-full flex items-center gap-3 shrink-0"
+        style={{ opacity, transition: PILL_TRANSITION }}
+      >
+        {isFocused ? (
+          /* Active, wide, 2-row writing bubble */
+          <div
+            className="flex-1 min-w-0"
+            style={{
+              borderRadius: 22, backgroundColor: '#FFFFFF',
+              border: '1px solid rgba(221,212,192,0.85)', boxShadow,
+              transform: `scale(${scale})`, transformOrigin: 'center', transition: PILL_TRANSITION,
+              padding: '12px 16px',
+            }}
+          >
+            <div className="flex items-center gap-2.5">
+              {/* The topic rides as a tooltip rather than a second line:
+                  it is now SAVED with the note, so the scoreboard prints it
+                  in full, and the dock header has no width to spare. */}
+              <span title={item.topic || undefined} className="text-[11px] font-black uppercase tracking-wider shrink-0" style={{ color: '#1B3828' }}>{tagFor(item)}</span>
+              <SeatFlag country={item.country} size={26} className="shrink-0" />
+              <span className="flex-1 min-w-0 truncate text-base font-bold" style={{ color: '#1C1410' }}>{getCountryDisplayName(item.country, language)}</span>
+              {!isLive && <button onClick={(e) => { e.stopPropagation(); setFocusKey(null); }} className="shrink-0 text-sm" style={{ color: '#9A8A78' }}>✕</button>}
+            </div>
+            {/* GROWS WITH THE NOTE. It was a hard `rows={2}` with `resize-none`, so
+                anything past two lines scrolled inside a box with a hidden scrollbar:
+                the chair could not see what they had just written ("some things are
+                clipped", owner, 17 Sep 2026). It now measures itself on every change
+                and on mount, between two and six rows, and only scrolls past six.
+                Written straight to the node, no state, no re-render per keystroke
+                beyond the one `setNote` already causes. */}
+            <textarea
+              ref={(el) => { if (el) autoGrow(el); }}
+              rows={2}
+              value={rs.content}
+              onChange={(e) => { autoGrow(e.currentTarget); setNote(item, e.target.value); }}
+              onBlur={() => persist(item, rs.content, rs.scores)}
+              placeholder={t('fb_private_note')}
+              className="w-full mt-2 text-sm rounded-lg px-3 py-2 outline-none resize-none"
+              style={{ color: '#1C1410', backgroundColor: '#FAF8F3', border: '1px solid #EDE7D8', overflowY: 'auto' }}
+            />
+            {/* What the other chairs wrote on this same speech — read-only, in the
+                same box, so the dais reads as one record rather than N private ones.
+                Each chair edits only the row carrying their own name. */}
+            {theirs.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs leading-snug px-1">
+                {theirs.map((n, ni) => (
+                  <span key={ni} className="inline-flex items-baseline gap-1">
+                    {ni > 0 && <span style={{ color: '#B8AE9C' }}>/</span>}
+                    <span style={{ fontWeight: 700, color: '#1B3828' }}>{n.chairName}</span>
+                    <span style={{ color: '#6A5A4A' }}>{n.content}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Collapsed capsule, shows the note written for this delegate */
+          <div
+            onMouseEnter={() => setHoverKey(item.key)}
+            onMouseLeave={() => setHoverKey((k) => (k === item.key ? null : k))}
+            onClick={() => setFocusKey(item.key)}
+            className="flex-1 min-w-0 flex items-center gap-3"
+            style={{
+              height: 54, borderRadius: 9999, backgroundColor: '#EDE7D8',
+              border: '1px solid rgba(221,212,192,0.85)', boxShadow,
+              transform: `scale(${scale})`,
+              transformOrigin: 'center', transition: PILL_TRANSITION,
+              cursor: 'pointer', padding: '0 20px',
+            }}
+          >
+            <SeatFlag country={item.country} size={22} className="shrink-0" />
+            <span className="font-semibold shrink-0" style={{ color: '#1C1410' }}>{getCountryDisplayName(item.country, language)}</span>
+            {notes.length > 0 ? (
+              <span className="flex-1 min-w-0 truncate text-sm" style={{ color: '#6A5A4A' }}>
+                {/* Drop the author ONLY when the single note is your own — that is the
+                    common case and it should read exactly as it always did. A lone note
+                    written by SOMEONE ELSE must still carry their name, or you cannot tell
+                    your own note from a colleague's. */}
+                {notes.length === 1 && notes[0].isMine ? `— ${notes[0].content}` : notes.map((n, ni) => (
+                  <span key={ni}>
+                    {ni > 0 && <span style={{ color: '#B8AE9C' }}> / </span>}
+                    <span style={{ fontWeight: 700, color: '#1B3828' }}>{n.chairName}: </span>
+                    {n.content}
+                  </span>
+                ))}
+              </span>
+            ) : <span className="flex-1" />}
+            {scored && <span className="shrink-0 text-sm font-black" style={{ color: '#1B3828' }}>✓</span>}
+          </div>
+        )}
+
+        {/* 2×2 metric grid, interactive for focused, greyed read-only for nearest, absent otherwise */}
+        <div className="shrink-0" style={{ width: GRID_COL }}>
+          {factors.length > 0 && (isFocused || dist === 1) && metricStack(item, rs, isFocused)}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex-1 min-h-0 flex flex-col" style={{ fontFamily: "'Poppins','Outfit',sans-serif" }}>
       <style>{`.fb-dock-scroll::-webkit-scrollbar{display:none}`}</style>
@@ -593,131 +832,16 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
         // under the dock and clipped the ring at the edges ("some things are clipped", owner).
         <div className="fb-dock-scroll flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: 'none', overflowX: 'hidden' }}>
           <div className="flex flex-col justify-start gap-2 pt-2 pb-6 px-6">
-            {items.map((item, idx) => {
-              const rs = state[item.key] ?? { content: '', scores: {}, country: item.country };
-              const isLive = item.kind === 'live';
-              const isFocused = item.key === effectiveFocus;
-              const isHover = hoverKey === item.key && !isFocused;
-              const scored = hasRating(rs.scores);
-              const notes = notesFor(item.key, rs);
-              const theirs = notes.filter((n) => !n.isMine);
-              const dist = focusIdx >= 0 ? Math.min(Math.abs(idx - focusIdx), 3) : 0;
-
-              let scale = scaleByDist[dist], opacity = opacityByDist[dist];
-              let boxShadow = '0 3px 12px rgba(28,20,16,0.07)';
-              if (isFocused) {
-                scale = 1; opacity = 1;
-                boxShadow = '0 0 0 2px #B8844A, 0 14px 36px rgba(28,20,16,0.18)';
-              } else if (isHover) {
-                scale = 1.01; opacity = 1;
-                boxShadow = '0 10px 26px rgba(28,20,16,0.16)';
-              }
-
-              return (
-                <div
-                  key={item.key}
-                  ref={(el) => { rowRefs.current[item.key] = el; }}
-                  className="w-full flex items-center gap-3 shrink-0"
-                  style={{ opacity, transition: PILL_TRANSITION }}
-                >
-                  {isFocused ? (
-                    /* Active, wide, 2-row writing bubble */
-                    <div
-                      className="flex-1 min-w-0"
-                      style={{
-                        borderRadius: 22, backgroundColor: '#FFFFFF',
-                        border: '1px solid rgba(221,212,192,0.85)', boxShadow,
-                        transform: `scale(${scale})`, transformOrigin: 'center', transition: PILL_TRANSITION,
-                        padding: '12px 16px',
-                      }}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        {/* The topic rides as a tooltip rather than a second line:
-                            it is now SAVED with the note, so the scoreboard prints it
-                            in full, and the dock header has no width to spare. */}
-                        <span title={item.topic || undefined} className="text-[11px] font-black uppercase tracking-wider shrink-0" style={{ color: '#1B3828' }}>{tagFor(item)}</span>
-                        <SeatFlag country={item.country} size={26} className="shrink-0" />
-                        <span className="flex-1 min-w-0 truncate text-base font-bold" style={{ color: '#1C1410' }}>{getCountryDisplayName(item.country, language)}</span>
-                        {!isLive && <button onClick={(e) => { e.stopPropagation(); setFocusKey(null); }} className="shrink-0 text-sm" style={{ color: '#9A8A78' }}>✕</button>}
-                      </div>
-                      {/* GROWS WITH THE NOTE. It was a hard `rows={2}` with `resize-none`, so
-                          anything past two lines scrolled inside a box with a hidden scrollbar:
-                          the chair could not see what they had just written ("some things are
-                          clipped", owner, 17 Sep 2026). It now measures itself on every change
-                          and on mount, between two and six rows, and only scrolls past six.
-                          Written straight to the node, no state, no re-render per keystroke
-                          beyond the one `setNote` already causes. */}
-                      <textarea
-                        ref={(el) => { if (el) autoGrow(el); }}
-                        rows={2}
-                        value={rs.content}
-                        onChange={(e) => { autoGrow(e.currentTarget); setNote(item, e.target.value); }}
-                        onBlur={() => persist(item, rs.content, rs.scores)}
-                        placeholder={t('fb_private_note')}
-                        className="w-full mt-2 text-sm rounded-lg px-3 py-2 outline-none resize-none"
-                        style={{ color: '#1C1410', backgroundColor: '#FAF8F3', border: '1px solid #EDE7D8', overflowY: 'auto' }}
-                      />
-                      {/* What the other chairs wrote on this same speech — read-only, in the
-                          same box, so the dais reads as one record rather than N private ones.
-                          Each chair edits only the row carrying their own name. */}
-                      {theirs.length > 0 && (
-                        <div className="mt-1.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs leading-snug px-1">
-                          {theirs.map((n, ni) => (
-                            <span key={ni} className="inline-flex items-baseline gap-1">
-                              {ni > 0 && <span style={{ color: '#B8AE9C' }}>/</span>}
-                              <span style={{ fontWeight: 700, color: '#1B3828' }}>{n.chairName}</span>
-                              <span style={{ color: '#6A5A4A' }}>{n.content}</span>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    /* Collapsed capsule, shows the note written for this delegate */
-                    <div
-                      onMouseEnter={() => setHoverKey(item.key)}
-                      onMouseLeave={() => setHoverKey((k) => (k === item.key ? null : k))}
-                      onClick={() => setFocusKey(item.key)}
-                      className="flex-1 min-w-0 flex items-center gap-3"
-                      style={{
-                        height: 54, borderRadius: 9999, backgroundColor: '#EDE7D8',
-                        border: '1px solid rgba(221,212,192,0.85)', boxShadow,
-                        transform: `scale(${scale})`,
-                        transformOrigin: 'center', transition: PILL_TRANSITION,
-                        cursor: 'pointer', padding: '0 20px',
-                      }}
-                    >
-                      <SeatFlag country={item.country} size={22} className="shrink-0" />
-                      <span className="font-semibold shrink-0" style={{ color: '#1C1410' }}>{getCountryDisplayName(item.country, language)}</span>
-                      {notes.length > 0 ? (
-                        <span className="flex-1 min-w-0 truncate text-sm" style={{ color: '#6A5A4A' }}>
-                          {/* Drop the author ONLY when the single note is your own — that is the
-                              common case and it should read exactly as it always did. A lone note
-                              written by SOMEONE ELSE must still carry their name, or you cannot tell
-                              your own note from a colleague's. */}
-                          {notes.length === 1 && notes[0].isMine ? `— ${notes[0].content}` : notes.map((n, ni) => (
-                            <span key={ni}>
-                              {ni > 0 && <span style={{ color: '#B8AE9C' }}> / </span>}
-                              <span style={{ fontWeight: 700, color: '#1B3828' }}>{n.chairName}: </span>
-                              {n.content}
-                            </span>
-                          ))}
-                        </span>
-                      ) : <span className="flex-1" />}
-                      {scored && <span className="shrink-0 text-sm font-black" style={{ color: '#1B3828' }}>✓</span>}
-                    </div>
-                  )}
-
-                  {/* 2×2 metric grid, interactive for focused, greyed read-only for nearest, absent otherwise */}
-                  <div className="shrink-0" style={{ width: GRID_COL }}>
-                    {factors.length > 0 && (isFocused || dist === 1) && metricStack(item, rs, isFocused)}
-                  </div>
-                </div>
-              );
-            })}
+            {sections.map((sc) => (
+              <div key={sc.id} className="flex flex-col gap-2">
+                {sectionHeader(sc)}
+                {sc.items.map((item) => renderItem(item, items.indexOf(item)))}
+              </div>
+            ))}
           </div>
         </div>
       )}
     </div>
   );
 }
+

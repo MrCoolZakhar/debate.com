@@ -50,6 +50,10 @@ export const DEFAULT_SCORING: ScoringConfig = {
     { id: 'caucusSpeech',       name: 'Caucus speech',      value: 8,  enabled: true, builtin: true },
     { id: 'speakingTimePer10s', name: 'Speaking time /10s', value: 1,  enabled: true, builtin: true },
     { id: 'motionRaised',       name: 'Motion raised',      value: 10, enabled: true, builtin: true },
+    // A motion the chair ACCEPTED (a caucus, a Custom motion, Suspend or End Debate "Yes").
+    // Added 18 Sep 2026; committees that stored their sources before then pick it up at read
+    // time through `withBuiltinSources` below, with no backfill.
+    { id: 'motionPassed',       name: 'Motion passed',      value: 10, enabled: true, builtin: true },
     { id: 'rightOfReply',       name: 'Right of reply',     value: 5,  enabled: true, builtin: true },
     { id: 'wpSponsor',          name: 'Working paper',      value: 10, enabled: true, builtin: true },
     { id: 'drSponsor',          name: 'Draft resolution',   value: 20, enabled: true, builtin: true },
@@ -63,6 +67,46 @@ export const DEFAULT_SCORING: ScoringConfig = {
   ],
   factorRatingsEnabled: false, factorScaleMax: 10, scoreBlend: 0,
 };
+
+/**
+ * A stored `sources` list with every BUILT-IN source it is missing appended in its default
+ * place (after the built-in that precedes it in DEFAULT_SCORING). A committee's
+ * `settings.scoring.sources` REPLACES the default list, so a built-in added after a committee
+ * first saved its scoring (motionPassed, 18 Sep 2026) would otherwise never exist for it:
+ * never scored, never listed in Settings. Nothing stored is changed or reordered, a chair's
+ * removal of a custom source is untouched, and the first Settings save writes the full list.
+ * Returns the SAME array when nothing is missing, so callers keyed on identity stay stable.
+ */
+export function withBuiltinSources(sources: ScoreSource[]): ScoreSource[] {
+  const have = new Set(sources.map((x) => x.id));
+  const missing = DEFAULT_SCORING.sources.filter((x) => !have.has(x.id));
+  if (missing.length === 0) return sources;
+  const out = [...sources];
+  for (const m of missing) {
+    const at = DEFAULT_SCORING.sources.findIndex((x) => x.id === m.id);
+    const prev = at > 0 ? DEFAULT_SCORING.sources[at - 1].id : null;
+    const prevIdx = prev ? out.findIndex((x) => x.id === prev) : -1;
+    out.splice(prevIdx >= 0 ? prevIdx + 1 : out.length, 0, { ...m });
+  }
+  return out;
+}
+
+// One normalised copy per stored scoring object, so the store hands out the same object
+// every call (SettingsPanel and its tabs key effects and memos on it).
+const scoringCache = new WeakMap<ScoringConfig, ScoringConfig>();
+export function withBuiltinScoring(scoring: ScoringConfig | undefined | null): ScoringConfig {
+  if (!scoring || !Array.isArray(scoring.sources)) return DEFAULT_SCORING;
+  const hit = scoringCache.get(scoring);
+  if (hit) return hit;
+  const sources = withBuiltinSources(scoring.sources);
+  const out = sources === scoring.sources ? scoring : { ...scoring, sources };
+  scoringCache.set(scoring, out);
+  return out;
+}
+function normaliseScoring(settings: CommitteeSettings): CommitteeSettings {
+  const scoring = withBuiltinScoring(settings.scoring);
+  return scoring === settings.scoring ? settings : { ...settings, scoring };
+}
 
 export interface CommitteeSettings {
   // Tab 1 — Voting & Majorities
@@ -262,7 +306,7 @@ export const useSettingsStore = create<SettingsStore>()(
   persist(
     (set, get) => ({
       settings: {},
-      getSettings: (code) => ({ ...DEFAULT_SETTINGS, ...(get().settings[code] ?? {}) }),
+      getSettings: (code) => normaliseScoring({ ...DEFAULT_SETTINGS, ...(get().settings[code] ?? {}) }),
       updateSetting: (code, key, value) =>
         set((s) => ({
           settings: {
@@ -282,7 +326,7 @@ export const useSettingsStore = create<SettingsStore>()(
         set((s) => ({
           settings: {
             ...s.settings,
-            [code]: { ...DEFAULT_SETTINGS, ...(s.settings[code] ?? {}), ...partial },
+            [code]: normaliseScoring({ ...DEFAULT_SETTINGS, ...(s.settings[code] ?? {}), ...partial }),
           },
         })),
       migrateSettings: (oldCode, newCode) =>

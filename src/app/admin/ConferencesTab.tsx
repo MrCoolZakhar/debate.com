@@ -10,11 +10,15 @@
 //     flag, live/draft state). Both badges are filter controls.
 //   • Set-up progress is a donut RING with the fraction inside it; hovering it
 //     reveals exactly which steps are outstanding.
-//   • Clicking ANYWHERE on a row opens that conference's dashboard IN A NEW TAB.
-//     The row is a real <a href> so hover shows the target, middle-click and
-//     "copy link address" work, and the browser owns every modifier. The small
-//     number of in-row filter controls are real <button>s that preventDefault,
-//     so the two interactions never fight.
+//   • Clicking a row opens the conference pop-up (ConferenceDetailDialog): the
+//     key facts, the organisers, and the staff actions (edit, email the
+//     organisers, delete). The arrow at the end of the row is still a real link
+//     to the dashboard in a new tab. The in-row filter controls are real
+//     <button>s that stop propagation, so the interactions never fight.
+//   • Clicking the organiser opens that person's account pop-up (UserDrawer).
+//   • PAST conferences (last day before today, see conferenceDates.ts) live in
+//     their own section, reached from the Past tile. They are not counted in
+//     any other tile, and "All conferences" means current and upcoming only.
 //   • Chips are tiered: only exceptions (short on seats, stalled, empty dais)
 //     get a saturated fill. Plain facts stay quiet and extruded, and a fact
 //     nobody has told us yet gets no chip at all (see INTENT_ICON).
@@ -26,8 +30,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDownWideNarrow, ArrowUpRight, Building2, CalendarClock, Check, ChevronDown,
   CircleAlert, Clock, FileText, Gavel, Globe, LayoutTemplate, Mail, MapPin, Megaphone,
-  PencilLine, Rocket, Search, Target, UserPlus, Users, Wallet, X,
+  History, PencilLine, Rocket, Search, Target, UserPlus, Users, Wallet, X,
 } from 'lucide-react';
+import ConferenceDetailDialog from './ConferenceDetailDialog';
+import { UserDrawer } from './UsersTab';
+import { isPastConference } from './conferenceDates';
 import { NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuCard, NeuInset, NeuStatTile, NeuIconDisc, NeuRing } from '@/components/neu';
 import Portal from '@/components/Portal';
 import { LogoDisc } from '@/components/LogoDisc';
@@ -645,7 +652,7 @@ function countFilters(f: Filters) {
 // ── The tab ─────────────────────────────────────────────────────────────────
 
 export default function ConferencesTab({
-  rows, logos, avatars = {}, pledged = {},
+  rows: allRows, logos, avatars = {}, pledged = {}, organizerIds = {}, onChanged,
 }: {
   rows: AdminConferenceRow[];
   /** conference id → logo_url, loaded separately (the overview RPC has no logo). */
@@ -655,7 +662,23 @@ export default function ConferencesTab({
   /** conference id → delegation spots pledged and not yet filled, loaded
    *  separately for the same reason (see AdminClient). Missing means none. */
   pledged?: Record<string, number>;
+  /** conference id → organizer_id, for opening the organiser's account. */
+  organizerIds?: Record<string, string | null>;
+  /** Reload the overview after an edit or delete made in the pop-up. */
+  onChanged?: () => void;
 }) {
+  // Past conferences are their own section. Everything else on this tab, the
+  // tiles included, reads only the current and upcoming ones.
+  const { currentRows, pastRows } = useMemo(() => {
+    const cur: AdminConferenceRow[] = [];
+    const past: AdminConferenceRow[] = [];
+    for (const r of allRows) (isPastConference(r) ? past : cur).push(r);
+    return { currentRows: cur, pastRows: past };
+  }, [allRows]);
+  const [view, setView] = useState<'current' | 'past'>('current');
+  const rows = view === 'past' ? pastRows : currentRows;
+  const [openConf, setOpenConf] = useState<string | null>(null);
+  const [openPerson, setOpenPerson] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   // Peter #2: newest listed first, by created_at desc.
   const [sort, setSort] = useState<SortKey>('newest');
@@ -700,14 +723,16 @@ export default function ConferencesTab({
       .map(([c, n]) => ({ label: `${c} (${n})`, value: c }));
   }, [rows]);
 
+  // Always over CURRENT conferences, whichever section is on screen.
   const stats = useMemo(() => ({
-    total: rows.length,
-    live: rows.filter(r => r.is_public).length,
-    drafts: rows.filter(r => !r.is_public).length,
-    verified: rows.filter(r => r.is_verified).length,
-    stalled: rows.filter(isStalled).length,
-    shortSeats: rows.filter(isShortOnSeats).length,
-  }), [rows]);
+    total: currentRows.length,
+    live: currentRows.filter(r => r.is_public).length,
+    drafts: currentRows.filter(r => !r.is_public).length,
+    verified: currentRows.filter(r => r.is_verified).length,
+    stalled: currentRows.filter(isStalled).length,
+    shortSeats: currentRows.filter(isShortOnSeats).length,
+    past: pastRows.length,
+  }), [currentRows, pastRows]);
 
   const shown = useMemo(() => {
     let r = rows;
@@ -786,13 +811,19 @@ export default function ConferencesTab({
     })),
   ];
 
+  // Every current tile returns to the current section; Past switches to the
+  // past one and clears the filters, since a filter chosen for current
+  // conferences rarely means anything there.
+  const cur = view === 'current';
+  const inCurrent = (f: () => void) => () => { setView('current'); f(); };
   const statTiles = [
-    { label: 'All conferences', value: stats.total,      emoji: 'Card index',        icon: Building2,   gradient: NEU_GRADIENTS.forest, active: activeCount === 0, onClick: clearAll },
-    { label: 'Live',            value: stats.live,       emoji: 'Globe showing europe-africa', icon: Globe, gradient: NEU_GRADIENTS.green,  active: filters.state.size === 1 && filters.state.has('live'),  onClick: () => only('state', 'live') },
-    { label: 'Drafts',          value: stats.drafts,     emoji: 'Memo',              icon: PencilLine,  gradient: NEU_GRADIENTS.amber,  active: filters.state.size === 1 && filters.state.has('draft'), onClick: () => only('state', 'draft') },
-    { label: 'Verified',        value: stats.verified,   emoji: 'Check mark button', icon: Check,       gradient: NEU_GRADIENTS.sage,   active: filters.verified.size === 1 && filters.verified.has('yes'), onClick: () => only('verified', 'yes') },
-    { label: `Stalled ${STALE_DAYS}d+`, value: stats.stalled, emoji: 'Hourglass not done', icon: Clock, gradient: NEU_GRADIENTS.gold,   active: filters.flags.size === 1 && filters.flags.has('stalled'), onClick: () => only('flags', 'stalled') },
-    { label: 'Short on seats',  value: stats.shortSeats, emoji: 'Chair',             icon: CircleAlert, gradient: NEU_GRADIENTS.amber,  active: filters.flags.size === 1 && filters.flags.has('seats'),   onClick: () => only('flags', 'seats') },
+    { label: 'All conferences', value: stats.total,      emoji: 'Card index',        icon: Building2,   gradient: NEU_GRADIENTS.forest, active: cur && activeCount === 0, onClick: inCurrent(clearAll) },
+    { label: 'Live',            value: stats.live,       emoji: 'Globe showing europe-africa', icon: Globe, gradient: NEU_GRADIENTS.green,  active: cur && filters.state.size === 1 && filters.state.has('live'),  onClick: inCurrent(() => only('state', 'live')) },
+    { label: 'Drafts',          value: stats.drafts,     emoji: 'Memo',              icon: PencilLine,  gradient: NEU_GRADIENTS.amber,  active: cur && filters.state.size === 1 && filters.state.has('draft'), onClick: inCurrent(() => only('state', 'draft')) },
+    { label: 'Verified',        value: stats.verified,   emoji: 'Check mark button', icon: Check,       gradient: NEU_GRADIENTS.sage,   active: cur && filters.verified.size === 1 && filters.verified.has('yes'), onClick: inCurrent(() => only('verified', 'yes')) },
+    { label: `Stalled ${STALE_DAYS}d+`, value: stats.stalled, emoji: 'Hourglass not done', icon: Clock, gradient: NEU_GRADIENTS.gold,   active: cur && filters.flags.size === 1 && filters.flags.has('stalled'), onClick: inCurrent(() => only('flags', 'stalled')) },
+    { label: 'Short on seats',  value: stats.shortSeats, emoji: 'Chair',             icon: CircleAlert, gradient: NEU_GRADIENTS.amber,  active: cur && filters.flags.size === 1 && filters.flags.has('seats'),   onClick: inCurrent(() => only('flags', 'seats')) },
+    { label: 'Past conferences', value: stats.past,      emoji: 'Hourglass done',    icon: History,     gradient: NEU_GRADIENTS.sage,   active: !cur, onClick: () => { setView(v => (v === 'past' ? 'current' : 'past')); clearAll(); } },
   ];
 
   return (
@@ -913,12 +944,14 @@ export default function ConferencesTab({
         <SortMenu value={sort} onChange={setSort} />
 
         <span className="ml-auto" style={{ fontFamily: MONO, fontSize: 11, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
-          {shown.length === rows.length ? `${rows.length} conferences` : `${shown.length} of ${rows.length}`}
+          {shown.length === rows.length
+            ? `${rows.length} ${view === 'past' ? 'past ' : ''}conferences`
+            : `${shown.length} of ${rows.length}${view === 'past' ? ' past' : ''}`}
         </span>
       </div>
 
       {/* Stat tiles — each one is also a filter. */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-5">
         {statTiles.map(s => (
           <NeuStatTile
             key={s.label} emoji={s.emoji} icon={s.icon} gradient={s.gradient}
@@ -960,16 +993,36 @@ export default function ConferencesTab({
         </div>
       )}
 
+      {view === 'past' && (
+        <div className="flex items-center gap-2 mb-3">
+          <History size={15} strokeWidth={2.5} style={{ color: NEU.deepGold }} aria-hidden />
+          <h2 style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>Past conferences</h2>
+          <span style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.inkSoft }}>
+            Their last day is behind us. Not counted anywhere else on this tab.
+          </span>
+          <button
+            type="button"
+            onClick={() => { setView('current'); clearAll(); }}
+            className="ml-auto focus:outline-none"
+            style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, color: NEU.forest, background: 'none', border: 'none', cursor: 'pointer' }}
+          >
+            Back to current conferences
+          </button>
+        </div>
+      )}
+
       {/* Rows */}
       {shown.length === 0 ? (
         <NeuCard style={{ padding: '48px 24px' }}>
           <div className="flex flex-col items-center text-center">
             <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Building2} emoji="Card index" size={46} />
             <p className="mt-4" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 15, color: NEU.ink }}>
-              {rows.length === 0 ? 'No conferences yet' : 'Nothing matches'}
+              {rows.length === 0 ? (view === 'past' ? 'No past conferences' : 'No conferences yet') : 'Nothing matches'}
             </p>
-            <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>
-              {rows.length === 0 ? 'Every conference on the platform will show up here.' : 'Loosen a filter, or clear them all.'}
+            <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.inkSoft }}>
+              {rows.length === 0
+                ? (view === 'past' ? 'A conference moves here the day after it ends.' : 'Every conference on the platform will show up here.')
+                : 'Loosen a filter, or clear them all.'}
             </p>
           </div>
         </NeuCard>
@@ -987,10 +1040,22 @@ export default function ConferencesTab({
               onFilterCountry={v => only('country', v)}
               onFilterOrganizer={v => only('organizer', v)}
               onFilterIntent={v => only('intent', v)}
+              onOpen={() => setOpenConf(r.id)}
+              onOpenOrganizer={organizerIds[r.id] ? () => setOpenPerson(organizerIds[r.id] as string) : undefined}
             />
           ))}
         </div>
       )}
+
+      {openConf && (
+        <ConferenceDetailDialog
+          conferenceId={openConf}
+          onClose={() => setOpenConf(null)}
+          onChanged={() => onChanged?.()}
+          onOpenPerson={id => setOpenPerson(id)}
+        />
+      )}
+      {openPerson && <UserDrawer userId={openPerson} onClose={() => setOpenPerson(null)} />}
     </div>
   );
 }
@@ -999,6 +1064,7 @@ export default function ConferencesTab({
 
 function ConferenceRow({
   r, logo, avatar, pledged, filters, onFilterState, onFilterCountry, onFilterOrganizer, onFilterIntent,
+  onOpen, onOpenOrganizer,
 }: {
   r: AdminConferenceRow;
   logo: string | null;
@@ -1010,6 +1076,10 @@ function ConferenceRow({
   onFilterCountry: (v: string) => void;
   onFilterOrganizer: (v: string) => void;
   onFilterIntent: (v: string) => void;
+  onOpen: () => void;
+  /** Opens the organiser's account. Absent when the organiser id is unknown,
+   *  in which case the chip falls back to filtering by organiser. */
+  onOpenOrganizer?: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const intent = useMemo(() => getConferenceIntent(r.intent), [r.intent]);
@@ -1041,33 +1111,29 @@ function ConferenceRow({
       : `Not verified yet. Outstanding: ${pending.map(s => s.label).join(', ')}`;
 
   return (
-    // Peter #7, revised: the row is a REAL LINK, and a plain click opens the
-    // dashboard IN A NEW TAB. Staff scan this list and dip into one conference
-    // at a time; losing the filtered list on every click was the whole
-    // complaint. Because it is an <a href target="_blank">, the browser owns
-    // all of it: hover shows the target, middle-click and cmd/ctrl-click open a
-    // tab, "copy link address" works, and Enter activates it. Nothing here
-    // routes by hand any more.
-    //
-    // The nested filter controls (CornerBadge, FilterChip) each call
-    // preventDefault() as well as stopPropagation(), which is what stops a
-    // filter click from also navigating. The HoverPop panel is portaled to
-    // <body>, so its rows are not inside this anchor at all and can never
-    // navigate. Keep both properties if you touch those components.
-    <a
-      href={`/manage/${r.slug}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={`Open ${acronym || r.full_name} dashboard in a new tab`}
+    // The row opens the conference pop-up (a staff decision replacing "open the
+    // dashboard in a new tab"; the arrow at the end still does that). It is a
+    // role=button div rather than a <button> because it contains real buttons
+    // (the filter badges and chips), which each stop propagation. Keyboard:
+    // Enter / Space on the row itself, never on a control inside it.
+    <div
+      role="button"
+      tabIndex={0}
+      data-admin-conf={r.id}
+      aria-label={`Open ${acronym || r.full_name}`}
+      onClick={onOpen}
+      onKeyDown={e => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); }
+      }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className="block focus:outline-none"
+      className="block focus:outline-none focus-visible:ring-2"
       style={{
         backgroundColor: NEU.surface,
         borderRadius: 20,
         padding: '13px 16px',
         cursor: 'pointer',
-        textDecoration: 'none',
         color: NEU.ink,
         boxShadow: hovered ? NEU.outHover : NEU.out,
         transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
@@ -1163,9 +1229,9 @@ function ConferenceRow({
               // Peter #8: organiser picture beside the name, graceful initials.
               <FilterChip
                 icon={Users}
-                active={filters.organizer.size === 1 && filters.organizer.has(organizerKey)}
-                title={r.organizer_email ?? undefined}
-                onFilter={() => onFilterOrganizer(organizerKey)}
+                active={!onOpenOrganizer && filters.organizer.size === 1 && filters.organizer.has(organizerKey)}
+                title={onOpenOrganizer ? `Open ${r.organizer_name ?? r.organizer_email}'s account` : r.organizer_email ?? undefined}
+                onFilter={() => (onOpenOrganizer ? onOpenOrganizer() : onFilterOrganizer(organizerKey))}
               >
                 <span className="inline-flex items-center gap-1.5">
                   <OrganizerAvatar name={r.organizer_name} email={r.organizer_email} avatar={avatar} size={17} />
@@ -1375,21 +1441,34 @@ function ConferenceRow({
           </HoverPop>
         )}
 
-        {/* Affordance that the whole row is the link (#7). */}
-        <ArrowUpRight
-          size={17}
-          strokeWidth={2.6}
-          aria-hidden
-          className="flex-shrink-0"
-          style={{
-            color: hovered ? NEU.forest : NEU.muted,
-            opacity: hovered ? 1 : 0.45,
-            transform: hovered ? 'translate(2px,-2px)' : 'none',
-            transition: `transform 240ms ${EASE}, color 240ms ${EASE}, opacity 240ms ${EASE}`,
-          }}
-        />
+        {/* The dashboard, in a new tab. A real link, so middle-click and
+            "copy link address" work; it stops propagation so it never also
+            opens the pop-up. */}
+        <a
+          href={`/manage/${r.slug}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Open ${acronym || r.full_name} dashboard in a new tab`}
+          title="Open the dashboard in a new tab"
+          onClick={e => e.stopPropagation()}
+          onKeyDown={e => e.stopPropagation()}
+          className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none focus-visible:ring-2"
+          style={{ width: 30, height: 30, borderRadius: 999 }}
+        >
+          <ArrowUpRight
+            size={17}
+            strokeWidth={2.6}
+            aria-hidden
+            style={{
+              color: hovered ? NEU.forest : NEU.muted,
+              opacity: hovered ? 1 : 0.45,
+              transform: hovered ? 'translate(2px,-2px)' : 'none',
+              transition: `transform 240ms ${EASE}, color 240ms ${EASE}, opacity 240ms ${EASE}`,
+            }}
+          />
+        </a>
       </div>
-    </a>
+    </div>
   );
 }
 

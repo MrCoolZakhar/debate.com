@@ -31,6 +31,7 @@ import {
 import Avatar from '@/components/Avatar';
 import Portal from '@/components/Portal';
 import Loader from '@/components/Loader';
+import { UserDrawer } from './UsersTab';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 
@@ -195,6 +196,8 @@ export default function ActivityTab() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState<Set<string>>(new Set());
+  /** The actor opened from a feed row (the shared account pop-up). */
+  const [openPerson, setOpenPerson] = useState<string | null>(null);
 
   const load = useCallback(async (cursor: { at: string; id: string } | null) => {
     if (!session) { setError('Not signed in.'); setEvents([]); return; }
@@ -331,11 +334,29 @@ export default function ActivityTab() {
                     <Icon size={12} strokeWidth={2.4} style={{ color: def?.fg ?? MUTED }} />
                   </span>
 
-                  <Avatar url={ev.actor_avatar} name={ev.actor_name} />
-
-                  <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: INK, maxWidth: 190 }}>
-                    {ev.actor_name}
-                  </span>
+                  {ev.actor_id ? (
+                    // Inside a row that may itself be a link: stop both, so a
+                    // click on the person opens their account and nothing else.
+                    <button
+                      type="button"
+                      title="Open this account"
+                      onClick={e => { e.preventDefault(); e.stopPropagation(); setOpenPerson(ev.actor_id); }}
+                      className="inline-flex items-center gap-2.5 min-w-0 focus:outline-none focus-visible:ring-2"
+                      style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', borderRadius: 8 }}
+                    >
+                      <Avatar url={ev.actor_avatar} name={ev.actor_name} />
+                      <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: INK, maxWidth: 190, textDecoration: 'underline', textDecorationColor: 'transparent' }}>
+                        {ev.actor_name}
+                      </span>
+                    </button>
+                  ) : (
+                    <>
+                      <Avatar url={ev.actor_avatar} name={ev.actor_name} />
+                      <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: INK, maxWidth: 190 }}>
+                        {ev.actor_name}
+                      </span>
+                    </>
+                  )}
 
                   <span className="flex-shrink-0" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: MUTED }}>
                     {def?.label ?? ev.kind}
@@ -378,6 +399,7 @@ export default function ActivityTab() {
           </button>
         )
       )}
+      {openPerson && <UserDrawer userId={openPerson} onClose={() => setOpenPerson(null)} />}
     </div>
   );
 }

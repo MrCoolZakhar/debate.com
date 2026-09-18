@@ -23,6 +23,7 @@
 
 import type { Committee } from './types';
 import { factorName, sourceName } from './scoringNames';
+import { describeMotion } from './motionLog';
 import {
   buildActivityRow,
   foldFactors,
@@ -120,7 +121,13 @@ export function buildSessionScoreboardRows(
       draftResolutions: activity.dr,
       manual: activity.manual,
 
-      ledger: computeLedger(committee, d.country).map((r) => ({ ...r, label: sourceLabel(r.sourceId, r.label) })),
+      // A motion row's detail is re-described in the reader's language (the ledger itself
+      // writes English, for the organiser board).
+      ledger: computeLedger(committee, d.country).map((r) => ({
+        ...r,
+        label: sourceLabel(r.sourceId, r.label),
+        detail: r.motion ? (describeMotion(committee, r.motion, language) ?? r.detail) : r.detail,
+      })),
       comments,
       // Ratings already recorded ALWAYS display. `ScoringConfig.factorRatingsEnabled`
       // gates the chair's rating input in the feedback bar; it must never hide

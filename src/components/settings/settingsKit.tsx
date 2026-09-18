@@ -150,6 +150,16 @@ export function SettingsKitStyles() {
         .stg-docs { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
         .stg-vote-top { grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); }
       }
+      /* Points: the orbit. Stacked (blend first) until the page can hold the ring with a
+         column of rows on each side; then sources | ring | factors, the ring centred on the
+         rows. PointsTab bends the rows along the ring's curve (useOrbitArc). */
+      .stg-orbit { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 28px; align-items: start; }
+      .stg-orbit-core { order: -1; }
+      @container (min-width: 900px) {
+        .stg-orbit { grid-template-columns: minmax(0, 1fr) minmax(250px, 290px) minmax(0, 1fr); }
+        .stg-orbit-core { order: 0; align-self: center; }
+        .stg-orbit-end { align-self: center; }
+      }
       @container (min-width: 900px) { .stg-docs { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.95fr); } }
       @media (prefers-reduced-motion: reduce) {
         .stg-root *, .stg-root *::before, .stg-root *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; animation-delay: 0ms !important; }
@@ -167,12 +177,15 @@ type LucideIcon = React.ComponentType<{ size?: number; strokeWidth?: number; cla
  *  forest, with its explanation behind an InfoHint and an optional aside at the inline-end.
  *  The lead groups of a tab sit on a raised ivory plate, the rest on a faint forest tint, so
  *  the SURFACE says which settings matter; the hue says which tab they belong to. */
-export function Section({ icon: Icon, title, hint, lead = false, children, delay = 0, aside }: {
+export function Section({ icon: Icon, title, hint, lead = false, children, delay = 0, aside, bare = false, className, style }: {
   icon?: LucideIcon; title: string; hint?: string; lead?: boolean; children: React.ReactNode; delay?: number; aside?: React.ReactNode;
+  /** No plate: the heading, then the children straight on the page (the Points orbit, whose
+   *  rows carry their own surfaces and follow the blend ring's curve). */
+  bare?: boolean; className?: string; style?: React.CSSProperties;
 }) {
   const id = useId();
   return (
-    <section aria-labelledby={id} className="stg-rise" style={{ animationDelay: `${delay}ms`, marginBottom: 26 }}>
+    <section aria-labelledby={id} className={className ? `stg-rise ${className}` : 'stg-rise'} style={{ animationDelay: `${delay}ms`, marginBottom: 26, ...style }}>
       <div className="flex items-center gap-2.5" style={{ marginBottom: 10, paddingInline: 2, minHeight: 34 }}>
         {Icon && <Icon aria-hidden size={lead ? 19 : 18} strokeWidth={lead ? 2.4 : 2.1} style={{ color: `var(${ACCENT_VAR}, ${K.forestLight})`, flexShrink: 0 }} />}
         <h3 id={id} className="stg-title min-w-0" style={{ margin: 0, fontSize: T.section, fontWeight: W.section, lineHeight: LH.section, letterSpacing: '-0.01em', color: K.forest }}>
@@ -182,12 +195,14 @@ export function Section({ icon: Icon, title, hint, lead = false, children, delay
         <span aria-hidden className="flex-1" />
         {aside}
       </div>
-      <div style={{
-        borderRadius: 16, background: lead ? K.surface : K.tint,
-        boxShadow: lead ? K.card : 'none', padding: '2px 16px',
-      }}>
-        {children}
-      </div>
+      {bare ? children : (
+        <div style={{
+          borderRadius: 16, background: lead ? K.surface : K.tint,
+          boxShadow: lead ? K.card : 'none', padding: '2px 16px',
+        }}>
+          {children}
+        </div>
+      )}
     </section>
   );
 }

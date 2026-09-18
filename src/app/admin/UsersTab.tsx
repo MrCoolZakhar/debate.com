@@ -107,6 +107,8 @@ interface UserDetail {
     mun_experience_level: string | null; created_at: string; last_sign_in_at: string | null;
     is_demo: boolean; is_ambassador: boolean; is_admin: boolean;
     points_balance: number; credits_remaining: number;
+    /** The personal Unlimited subscription in force now (trial or paid), or null. */
+    unlimited?: { plan: string; status: string; current_period_end: string | null } | null;
   };
   applications: DetailApplication[];
   conferences: DetailConference[];
@@ -351,7 +353,10 @@ function MiniRow({ children }: { children: React.ReactNode }) {
   );
 }
 
-function UserDrawer({ userId, onClose }: { userId: string; onClose: () => void }) {
+/** The staff record for one account. Exported so every place the console lists
+ *  a person (conference organisers, newest accounts, the activity feed) opens
+ *  the same pop-up rather than a second copy of it. */
+export function UserDrawer({ userId, onClose }: { userId: string; onClose: () => void }) {
   const { session } = useAuth();
   const [detail, setDetail] = useState<UserDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -364,15 +369,24 @@ function UserDrawer({ userId, onClose }: { userId: string; onClose: () => void }
       const { data, error: e } = await supabase.rpc('admin_user_detail', { p_user_id: userId });
       if (cancelled) return;
       if (e) { setError(e.message); return; }
+      if (!data) { setError('No account found for this person.'); return; }
       setDetail(data as UserDetail);
     })();
     return () => { cancelled = true; };
   }, [session, userId]);
 
+  // Capture phase, and the key is consumed here: this drawer can open on top of
+  // another dialog (the conference pop-up), and Escape must close only the top
+  // layer. GrowDialog's own Escape handler skips an event already prevented.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
 
   // Modal: freeze the user list behind the detail drawer.
@@ -388,6 +402,9 @@ function UserDrawer({ userId, onClose }: { userId: string; onClose: () => void }
         onClick={onClose}
       >
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Account"
           className="w-full max-w-3xl overflow-y-auto"
           style={{
             maxHeight: '88vh', backgroundColor: NEU.surface, borderRadius: 24,
@@ -473,7 +490,12 @@ function UserDrawer({ userId, onClose }: { userId: string; onClose: () => void }
                 {[
                   { l: 'Joined', v: fmtDate(p.created_at) },
                   { l: 'Last seen', v: timeAgo(p.last_sign_in_at) },
-                  { l: 'Credits left', v: String(p.credits_remaining ?? 0) },
+                  {
+                    l: 'Credits left',
+                    v: p.unlimited
+                      ? `Unlimited${p.unlimited.status === 'trialing' ? ' (trial)' : ''}`
+                      : String(p.credits_remaining ?? 0),
+                  },
                   { l: 'Points', v: String(p.points_balance ?? 0) },
                 ].map(s => (
                   <NeuInset key={s.l} small style={{ padding: '9px 12px', borderRadius: 13 }}>

@@ -1,8 +1,9 @@
 // Single source of truth for committee scoring. Reads the DB-backed scoring config
 // (never localStorage) and produces an itemized ledger — one row per point-earning event.
 import type { Committee } from './types';
-import { DEFAULT_SCORING, DEFAULT_DOCUMENT_NAMES, type ScoringConfig } from './settingsStore';
+import { DEFAULT_SCORING, DEFAULT_DOCUMENT_NAMES, withBuiltinSources, type ScoringConfig } from './settingsStore';
 import { docName } from './docNames';
+import { describeMotion, type MotionFields } from './motionLog';
 
 // Parsed __log__ event (superset of the legacy speaking-log entry).
 export interface LedgerEvent {
@@ -17,6 +18,16 @@ export interface LedgerEvent {
   timestamp?: string;
   /** Per-floor-turn idempotency key (src/lib/floorSpeech.ts). Duplicates are dropped on parse. */
   turnKey?: string;
+  // Motion events (src/lib/motionLog.ts): motion-raised / -passed / -failed / -edited.
+  motionId?: string;
+  motionType?: MotionFields['motionType'];
+  totalTime?: number;
+  speakingTime?: number;
+  tourOrder?: MotionFields['tourOrder'];
+  /** motion-failed: 'rejected' | 'failed' | 'fell'. */
+  outcome?: string;
+  /** motion-edited: the id this motion had before the edit or Undo re-raised it. */
+  prevMotionId?: string;
 }
 
 export interface LedgerRow {
@@ -35,6 +46,8 @@ export interface LedgerRow {
   // by-source fold below needs to attribute the time bonus to the source that
   // actually pays it. 0 when that source is disabled.
   timePts?: number;
+  /** Motion rows: the motion itself, so a surface can describe it in its own language. */
+  motion?: MotionFields;
 }
 
 // committee.dbScoring merged over DEFAULT_SCORING — never reads localStorage.
@@ -44,7 +57,9 @@ export function getScoringConfig(committee: Pick<Committee, 'dbScoring'>): Scori
   return {
     ...DEFAULT_SCORING,
     ...db,
-    sources: Array.isArray(db.sources) && db.sources.length ? db.sources : DEFAULT_SCORING.sources,
+    // A stored list REPLACES the defaults, so a built-in added later (motionPassed) is
+    // appended at read time rather than never existing for that committee. No backfill.
+    sources: Array.isArray(db.sources) && db.sources.length ? withBuiltinSources(db.sources) : DEFAULT_SCORING.sources,
     factors: Array.isArray(db.factors) && db.factors.length ? db.factors : DEFAULT_SCORING.factors,
   };
 }
@@ -148,9 +163,14 @@ export function computeLedger(committee: Committee, country: string): LedgerRow[
       const timePts = per10 != null ? Math.floor(secs / 10) * per10 : 0;
       const detail = [e.topic, secs ? `${secs}s` : ''].filter(Boolean).join(' · ');
       rows.push({ type: 'speech', sourceId: sid, label: name(cfg, sid), country, pts: base + timePts, detail, timestamp: e.timestamp ?? '', context: e.context ?? 'speakers-list', seconds: secs, timePts });
-    } else if (type === 'motion-raised') {
-      const v = val(cfg, 'motionRaised'); if (v == null) continue;
-      rows.push({ type, sourceId: 'motionRaised', label: name(cfg, 'motionRaised'), country, pts: v, detail: '', timestamp: e.timestamp ?? '' });
+    } else if (type === 'motion-raised' || type === 'motion-passed') {
+      // motion-raised before 18 Sep 2026 was written on ACCEPT; it still scores motionRaised.
+      const sid = type === 'motion-raised' ? 'motionRaised' : 'motionPassed';
+      const v = val(cfg, sid); if (v == null) continue;
+      const motion: MotionFields = { motionId: e.motionId, motionType: e.motionType, topic: e.topic, totalTime: e.totalTime, speakingTime: e.speakingTime, tourOrder: e.tourOrder };
+      // The detail is in the committee's own motion names in English (the organiser board
+      // is English by design); session surfaces re-describe `motion` in their language.
+      rows.push({ type, sourceId: sid, label: name(cfg, sid), country, pts: v, detail: describeMotion(committee, motion, 'en') ?? '', timestamp: e.timestamp ?? '', motion });
     } else if (type === 'right-of-reply') {
       const v = val(cfg, 'rightOfReply'); if (v == null) continue;
       rows.push({ type, sourceId: 'rightOfReply', label: name(cfg, 'rightOfReply'), country, pts: v, detail: '', timestamp: e.timestamp ?? '' });

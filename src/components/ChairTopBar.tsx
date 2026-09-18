@@ -11,6 +11,14 @@
 // redesign. Inline-end: the session code (click to present it full screen), then
 // small TopBarIconButtons for Chat (with its unread count), Scoreboard and Settings.
 //
+// Two rows when space is short (18 Sep 2026, owner: "on smaller screens the Roll Call /
+// Motions / Documents tabs almost disappear"). `useTopBarTwoRows` measures the room left of
+// the icon cluster against what the three labels (and their counts) need at full width;
+// when it is short the caller drops the tabs into a second 44px row under the cluster,
+// each tab an equal third of the full width, and the header is 88px tall. The icon
+// cluster always stays in row one. The chair page passes the taller top to
+// NotificationStack (`topPx`), so cards never cover the second row.
+//
 // No separators and no borders: the active tab is a forest wash plus a gold
 // underline, counts are inline pills that never cover the label, and every icon
 // button has an accessible name, a tooltip, a 40px hit area and a visible
@@ -18,7 +26,7 @@
 // caller, so the tutorial spotlights still find their targets.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { ReactNode } from 'react';
+import { useLayoutEffect, useState, type ReactNode, type RefObject } from 'react';
 
 const OUTFIT = "'Outfit', sans-serif";
 
@@ -60,6 +68,7 @@ export function TopBarTab({
     <button
       type="button"
       data-tutorial={tutorial}
+      data-topbar-tab
       onClick={onClick}
       aria-pressed={active}
       aria-label={count > 0 && countLabel ? countLabel : undefined}
@@ -72,8 +81,8 @@ export function TopBarTab({
         backgroundColor: active ? 'rgba(27,56,40,0.08)' : undefined,
       }}
     >
-      <span className="truncate">{label}</span>
-      {count > 0 && <CountPill n={count} />}
+      <span data-topbar-label className="truncate">{label}</span>
+      {count > 0 && <span data-topbar-pill className="inline-flex shrink-0"><CountPill n={count} /></span>}
       <span
         aria-hidden
         className="absolute rounded-full motion-reduce:transition-none"
@@ -129,4 +138,53 @@ export function TopBarIconButton({
       )}
     </button>
   );
+}
+
+/** Height of one top-bar row in layout px (the header is one or two of these). */
+export const TOP_BAR_ROW_PX = 44;
+
+/**
+ * True when the three tabs cannot show their full labels beside the icon cluster, i.e. the
+ * caller should lay them out in a second row. Measures in layout px (FitToScreen's transform
+ * does not affect offsetWidth / scrollWidth): the header's inner width minus the cluster's
+ * width, against each tab's label width + count + padding. The answer does not depend on
+ * which layout is showing, so it cannot flip-flop. Re-measured by a ResizeObserver on the
+ * header and the cluster, and whenever `key` changes (language, counts, whether the tabs are
+ * rendered); never per second. State changes only when the answer changes.
+ */
+export function useTopBarTwoRows(
+  headerRef: RefObject<HTMLElement | null>,
+  navRef: RefObject<HTMLElement | null>,
+  clusterRef: RefObject<HTMLElement | null>,
+  key: string,
+): boolean {
+  const [twoRows, setTwoRows] = useState(false);
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    const nav = navRef.current;
+    const cluster = clusterRef.current;
+    const measure = () => {
+      let next = false;
+      if (header && nav && cluster) {
+        const cs = getComputedStyle(header);
+        const inner = header.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+        const available = inner - cluster.offsetWidth - 6;
+        let needed = 0;
+        nav.querySelectorAll<HTMLElement>('[data-topbar-tab]').forEach((tab) => {
+          const label = tab.querySelector<HTMLElement>('[data-topbar-label]');
+          const pill = tab.querySelector<HTMLElement>('[data-topbar-pill]');
+          needed += 32 + (label?.scrollWidth ?? 0) + (pill ? pill.offsetWidth + 8 : 0) + 4;
+        });
+        next = available < needed;
+      }
+      setTwoRows((prev) => (prev === next ? prev : next));
+    };
+    measure();
+    if (!header || !cluster) return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(header);
+    ro.observe(cluster);
+    return () => ro.disconnect();
+  }, [headerRef, navRef, clusterRef, key]);
+  return twoRows;
 }

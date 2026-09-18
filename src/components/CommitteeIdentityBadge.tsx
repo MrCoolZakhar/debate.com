@@ -280,19 +280,24 @@ export default function CommitteeIdentityBadge({
           {topic || labels?.add}
         </span>
         {/* The pencil is its own button and is always there (owner, 17 Sep 2026): the topic
-            text still edits on a click, but a chair should not have to discover that. It is
-            inline-flex, so it sits at the end of the topic's last line rather than on a line
-            of its own. */}
-        <button
+            text still edits on a click, but a chair should not have to discover that.
+            Directly after the last word, centred on the text line (18 Sep 2026, owner: "the
+            pencil is not aligned properly, put it directly next to the text"): the box is
+            exactly one topic line tall with `vertical-align: top`, so it never enlarges or
+            shifts the line box, and the icon is centred inside it. A word joiner (U+2060)
+            before it forbids a line break between the last word and the pencil, so it can
+            never wrap onto a line of its own (the joiner and the button share a nowrap span,
+            since Chrome still breaks between a joiner and an atomic inline). */}
+        <span style={{ whiteSpace: 'nowrap' }}>{'\u2060'}<button
           type="button"
           onClick={startEdit}
           aria-label={labels?.edit}
           title={labels?.edit}
-          className="inline-flex items-center justify-center rounded ms-1 align-[-3px] opacity-60 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70 transition-opacity"
-          style={{ width: 16, height: 16, color: 'rgba(238,217,138,0.9)' }}
+          className="inline-flex items-center justify-center rounded opacity-60 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70 transition-opacity"
+          style={{ width: 13, height: 11.5 * 1.28, marginInlineStart: 2, verticalAlign: 'top', color: 'rgba(238,217,138,0.9)' }}
         >
           <Pencil size={10} aria-hidden />
-        </button>
+        </button></span>
       </p>
     );
   } else if (topic) {

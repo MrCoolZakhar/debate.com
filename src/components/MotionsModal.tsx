@@ -26,9 +26,9 @@ import {
   suspendDebate as suspendDebateInDB,
   endDebate as endDebateInDB,
   clearCurrentSpeakerIfUnchanged,
-  logEvent,
   caucusQueueCapacity,
 } from '@/lib/committeeService';
+import { logMotionRaised, logMotionPassed, logMotionFailed, logMotionEdited } from '@/lib/motionLog';
 import { serverNow, serverNowIso } from '@/lib/serverClock';
 import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 
@@ -1247,6 +1247,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     raiseMotionOptimistic({
       committee, motion, update, motionOrder,
       disruptiveness: localCalcDisruptiveness(motion.type, motion.totalTime),
+      // One ledger line per motion RAISED (src/lib/motionLog.ts), scored by motionRaised,
+      // written only once the insert landed.
+      onSaved: (realId) => logMotionRaised(committee, realId, motion),
     });
 
     setView('vote');
@@ -1255,6 +1258,8 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   const handleRemove = (motionId: string) => {
     // Every remove affordance is disabled while the id is temporary (M-2); if one still
     // slips through, the store deletes the real row as soon as the insert returns.
+    const rejected = (committee.pendingMotions ?? []).find((m) => m.id === motionId);
+    if (rejected && !isTempMotionId(motionId) && isVotableMotion(rejected)) logMotionFailed(committee, rejected, 'rejected');
     removeMotionEverywhere(committee, motionId, update);
   };
 
@@ -1270,6 +1275,8 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     raiseMotionOptimistic({
       committee, motion, update, motionOrder,
       disruptiveness: localCalcDisruptiveness(motion.type, motion.totalTime),
+      // An edit is the same motion under a new id: linked, never a second raise.
+      onSaved: (realId) => { if (!isTempMotionId(oldId)) logMotionEdited(committee, oldId, realId, motion); },
     });
 
     setEditingMotionId(null);
@@ -1292,6 +1299,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     // caucus loading screen — the committee carries on exactly where it was.
     // Do not add anything else to this branch.
     if (motion.type === 'custom') {
+      // The ledger line (motion-passed) is the one addition since this branch was written: it
+      // changes no session state, it only records that the room accepted it.
+      logMotionPassed(committee, motion);
       update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id) }));
       // Never call the DB with a temp ID (the Accept button is disabled until
       // the real UUID lands, this is the belt-and-braces guard).
@@ -1330,18 +1340,18 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       // A Room Order Tour de Table this caucus replaces has ended: one speech per delegation
       // on its roster snapshot (idempotent per tour + country; no-op for any other caucus).
       void creditRoomOrderTour(committee);
-      if (!floorSpeaker) return;
-      void logFloorSpeech(committee, floorClock?.());
-      clearCurrentSpeakerIfUnchanged(
-        committee.id, floorSpeaker.delegateId, floorSpeaker.country,
-        committee.code, committee.dbChairJoinSuffix ?? undefined,
-      );
+      if (floorSpeaker) {
+        void logFloorSpeech(committee, floorClock?.());
+        clearCurrentSpeakerIfUnchanged(
+          committee.id, floorSpeaker.delegateId, floorSpeaker.country,
+          committee.code, committee.dbChairJoinSuffix ?? undefined,
+        );
+      }
+      // The pass is logged LAST (motionPassed scores the proposer). It also opens the caucus's
+      // own History segment, so it must be stamped after the interrupted GSL speech above,
+      // which belongs to the segment this caucus replaces. Both stamp the clock synchronously.
+      logMotionPassed(committee, motion);
     };
-
-    // The proposer earns a point for getting a motion approved onto the floor.
-    if (motion.proposedBy) {
-      logEvent(committee.id, { country: motion.proposedBy, type: 'motion-raised', sourceId: 'motionRaised' }, committee.code, committee.dbChairJoinSuffix ?? undefined);
-    }
 
     if (motion.type === 'unmoderated') {
       const caucus = {
@@ -1506,6 +1516,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                 update((c) => ({ ...c, currentSpeaker: null }));
                 clearCurrentSpeakerIfUnchanged(committee.id, floor.delegateId, floor.country, committee.code, committee.dbChairJoinSuffix ?? undefined);
               }
+              logMotionPassed(committee, specialVoteMotion!);
               // R-5: optimistic first (RULE 5), but remembered. Both writes are retried inside
               // runWrite and a real failure raises the chair page's "Not saved" toast; when they
               // resolve false the lifecycle fields are put back, so this laptop does not sit on
@@ -1544,6 +1555,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
             onClick={() => {
               const motionId = specialVoteMotion.id;
               if (isTempMotionId(motionId)) return;
+              logMotionFailed(committee, specialVoteMotion, 'failed');
               removeMotionEverywhere(committee, motionId, update);
               setSpecialVoteMotion(null);
               onClose();

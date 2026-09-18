@@ -49,6 +49,7 @@ import {
   NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuCard, NeuInset, NeuStatTile, NeuIconDisc, NeuRing,
 } from '@/components/neu';
 import GrowthChart, { type GrowthPoint } from './GrowthChart';
+import { UserDrawer } from './UsersTab';
 
 const MONO = 'ui-monospace, monospace';
 const RED = '#8B2020';
@@ -396,6 +397,8 @@ export default function DataTab() {
   const [lists, setLists] = useState<Lists | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  /** A person opened from the newest-accounts list (the shared account pop-up). */
+  const [openPerson, setOpenPerson] = useState<string | null>(null);
 
   /** Refresh button only. Re-reads the aggregate, never the people. */
   const refresh = useCallback(async () => {
@@ -756,7 +759,14 @@ export default function DataTab() {
               {lists.recent_signups.slice(0, 8).map(s => {
                 const code = s.nationality ? getCountryByName(s.nationality)?.code : undefined;
                 return (
-                  <div key={s.id} className="flex items-center gap-2.5" style={{ padding: '4px 2px' }}>
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setOpenPerson(s.id)}
+                    title="Open this account"
+                    className="flex items-center gap-2.5 w-full text-left focus:outline-none focus-visible:ring-2"
+                    style={{ padding: '4px 2px', border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 8 }}
+                  >
                     <Avatar url={s.avatar_url} name={s.name ?? '?'} size={22} />
                     <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.ink, maxWidth: 150 }}>
                       {s.name || 'No name yet'}
@@ -771,7 +781,7 @@ export default function DataTab() {
                       </span>
                     )}
                     <span style={{ fontFamily: MONO, fontSize: 10, color: NEU.muted, flexShrink: 0, ...NUM }}>{ago(s.created_at)}</span>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -1173,6 +1183,7 @@ export default function DataTab() {
         <KeyRound size={12} />
         <span>Both are gated on is_platform_admin() in the database, not in this component.</span>
       </p>
+      {openPerson && <UserDrawer userId={openPerson} onClose={() => setOpenPerson(null)} />}
     </div>
   );
 }

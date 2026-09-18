@@ -13,7 +13,7 @@
 //          bundles and Paste a list.
 //   Right  the delegations only: a large count (DelegationCount, plain type, no
 //          pill), ONE column of countries that scrolls inside, and Start session
-//          (StartSessionButton) pinned at the foot.
+//          (StartSessionButton, centred on a forest gradient) pinned at the foot.
 //
 // Design rule (CLAUDE.md §8): no count or status pills. Counts are typography,
 // observer status is the megaphone icon.
@@ -23,7 +23,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Gavel, Loader2, Lock, Megaphone, Plus, X } from 'lucide-react';
+import { Loader2, Lock, Megaphone, Plus, X } from 'lucide-react';
 import { DEFAULT_EMBLEM, emblemMonogram } from '@/components/CommitteeIdentityBadge';
 import { C, OUTFIT, SHADOW } from '../join/joinUi';
 
@@ -47,13 +47,15 @@ export function CreateStyles() {
       @keyframes create-count-in { from { opacity: 0; transform: translateY(6px); filter: blur(3px); } to { opacity: 1; transform: none; filter: blur(0); } }
       .create-count-in { animation: create-count-in 220ms cubic-bezier(0.2,0,0,1) both; }
       .create-start { transition-property: transform, box-shadow, background-color; transition-duration: 180ms; transition-timing-function: cubic-bezier(0.2,0,0,1); }
-      .create-start-disc { transition-property: transform; transition-duration: 220ms; transition-timing-function: cubic-bezier(0.2,0,0,1); }
       @media (hover: hover) {
         .create-start.is-ready:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 rgba(238,217,138,0.28), inset 0 0 0 1px rgba(238,217,138,0.22), 0 4px 8px rgba(27,56,40,0.18), 0 18px 36px rgba(27,56,40,0.30) !important; }
-        .create-start.is-ready:hover .create-start-disc { transform: rotate(-12deg); }
       }
       .create-start.is-ready:active { transform: scale(0.96); }
-      @media (prefers-reduced-motion: reduce) { .create-emblem-in, .create-count-in { animation: none; } .create-start, .create-start-disc { transition: none; } .create-start.is-ready:hover .create-start-disc { transform: none; } }
+      /* One screen needs about 790px of height (18 Sep 2026: the paste field runs to the foot
+         of the panel and needs at least 80px). On a shorter lg window the page scrolls instead
+         of cutting the paste field off below the fold. */
+      @media (min-width: 1024px) and (max-height: 789px) { .create-root { height: auto !important; min-height: 100dvh !important; overflow: visible !important; } }
+      @media (prefers-reduced-motion: reduce) { .create-emblem-in, .create-count-in { animation: none; } .create-start { transition: none; } }
     `}</style>
   );
 }
@@ -120,7 +122,8 @@ export function SmallLabel({ children, htmlFor, id }: { children: ReactNode; htm
 
 // ── The live committee identity ─────────────────────────────────────────────
 // (17 Sep 2026, owner: "I don't like the massive green block. Rather have the
-// committee logo in a white circle".) A compact row: the emblem in a white disc,
+// committee logo in a white circle".) Slightly larger since 18 Sep 2026 (owner: "make the
+// emblem and top section slightly bigger": disc up to 112px, name 30px). A compact row: the emblem in a white disc,
 // resolved by the caller (matchPresetEmblem), then the UN emblem, then forest
 // initials, never a broken image; beside it the acronym with the full name
 // beneath, the topic and the chairs, exactly as the chair masthead will state them.
@@ -141,12 +144,12 @@ export function LiveCommitteeIdentity({ src, primary, secondary, placeholder, to
   const monogram = emblemMonogram(primary || placeholder);
 
   return (
-    <div aria-hidden className="flex flex-shrink-0 items-center gap-4">
+    <div aria-hidden className="flex flex-shrink-0 items-center gap-5">
       {/* The white disc. The artwork is re-keyed, so a new match fades in instead of snapping. */}
       <span
         className="relative flex flex-shrink-0 items-center justify-center rounded-full bg-white"
         style={{
-          width: 'clamp(72px, 9.5vh, 96px)', aspectRatio: '1', containerType: 'size',
+          width: 'clamp(84px, 11.5vh, 112px)', aspectRatio: '1', containerType: 'size',
           boxShadow: '0 1px 2px rgba(27,56,40,0.10), 0 8px 22px rgba(27,56,40,0.14), inset 0 0 0 1px rgba(0,0,0,0.06)',
         }}
       >
@@ -173,23 +176,23 @@ export function LiveCommitteeIdentity({ src, primary, secondary, placeholder, to
           title={primary || placeholder}
           style={{
             fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '-0.015em', lineHeight: 1.12,
-            fontSize: (primary || placeholder).length > 22 ? 20 : 26,
+            fontSize: (primary || placeholder).length > 22 ? 23 : 30,
             color: hasName ? C.forest : C.muted,
           }}
         >
           {primary || placeholder}
         </p>
         {secondary && (
-          <p className="mt-0.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 500, lineHeight: 1.35, color: C.inkSoft }}>
+          <p className="mt-0.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 500, lineHeight: 1.35, color: C.inkSoft }}>
             {secondary}
           </p>
         )}
-        <p className="mt-1 line-clamp-2" style={{ fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.4, color: topic ? C.ink : C.muted, textWrap: 'pretty' }}>
+        <p className="mt-1 line-clamp-2" style={{ fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.4, color: topic ? C.ink : C.muted, textWrap: 'pretty' }}>
           <span style={{ fontWeight: 800, color: C.goldDeep }}>{topicLabel}</span>{' '}
           <span style={{ fontWeight: 500 }}>{topic || topicEmpty}</span>
         </p>
         {chairsLine && (
-          <p className="mt-0.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: C.inkSoft }}>
+          <p className="mt-0.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: C.inkSoft }}>
             {chairsLine}
           </p>
         )}
@@ -231,9 +234,12 @@ export function DelegationCount({ count, word, observersLine, liveLabel }: {
 }
 
 // ── Start session ────────────────────────────────────────────────────────────
-// The one primary action. Forest with gold, a gold gavel disc at the inline end,
-// a sub line that says what will happen (or what is missing), a soft lift on
-// hover, scale on press. When the form is incomplete it stays focusable
+// The one primary action (18 Sep 2026, owner: "centred, a gradient, no hammer in a
+// circle, and not the delegation count, it is listed above"). The label is centred on
+// a deep forest gradient with a faint gold rim; the sub line only says what is
+// MISSING (or that delegations can come later), never the count. No icon while ready;
+// a spinner leads the label while the room is created, a lock while incomplete.
+// Soft lift on hover, scale on press. When the form is incomplete it stays focusable
 // (aria-disabled) so a press can take the chair to the missing field.
 export function StartSessionButton({ label, sub, state, onClick }: {
   label: string;
@@ -251,10 +257,11 @@ export function StartSessionButton({ label, sub, state, onClick }: {
       aria-disabled={!ready || undefined}
       aria-busy={creating || undefined}
       disabled={creating}
-      className={`create-start group relative flex w-full items-center gap-3 overflow-hidden text-start focus:outline-none focus-visible:shadow-[0_0_0_3px_#EDE7D8,0_0_0_5px_#1B3828] ${ready ? 'is-ready active:scale-[0.96]' : ''}`}
+      className={`create-start group relative flex w-full flex-col items-center justify-center overflow-hidden px-6 text-center focus:outline-none focus-visible:shadow-[0_0_0_3px_#EDE7D8,0_0_0_5px_#1B3828] ${ready ? 'is-ready active:scale-[0.96]' : ''}`}
       style={{
-        minHeight: 64, borderRadius: 20, paddingInlineStart: 20, paddingInlineEnd: 8,
+        minHeight: 64, borderRadius: 20,
         backgroundColor: blocked ? 'rgba(27,56,40,0.06)' : C.forest,
+        backgroundImage: blocked ? undefined : 'linear-gradient(135deg, #2E6446 0%, #1F4230 42%, #1B3828 62%, #122A1D 100%)',
         boxShadow: blocked
           ? 'inset 0 0 0 1.5px rgba(27,56,40,0.14)'
           : 'inset 0 1px 0 rgba(238,217,138,0.22), inset 0 0 0 1px rgba(238,217,138,0.14), 0 2px 4px rgba(27,56,40,0.16), 0 12px 28px rgba(27,56,40,0.26)',
@@ -262,27 +269,19 @@ export function StartSessionButton({ label, sub, state, onClick }: {
       }}
     >
       {!blocked && <span aria-hidden className="pointer-events-none absolute inset-0" style={{ backgroundImage: GRAIN, backgroundSize: '300px 300px', mixBlendMode: 'overlay', opacity: 0.08 }} />}
-      <span className="relative flex min-w-0 flex-1 flex-col py-2.5">
-        <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 800, letterSpacing: '0.01em', lineHeight: 1.2, color: blocked ? C.forest : C.gold }}>
-          {label}
-        </span>
-        {sub && (
-          <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, lineHeight: 1.3, marginTop: 2, color: blocked ? C.inkSoft : 'rgba(237,231,216,0.72)' }}>
-            {sub}
+      <span className="relative flex max-w-full items-center justify-center gap-2 py-2.5">
+        {creating && <Loader2 size={18} strokeWidth={2.6} className="shrink-0 animate-spin" style={{ color: C.gold }} aria-hidden />}
+        {blocked && <Lock size={15} strokeWidth={2.4} className="shrink-0" style={{ color: C.muted }} aria-hidden />}
+        <span className="flex min-w-0 flex-col items-center">
+          <span className="max-w-full truncate" style={{ fontFamily: OUTFIT, fontSize: 18, fontWeight: 800, letterSpacing: '0.01em', lineHeight: 1.2, color: blocked ? C.forest : C.gold }}>
+            {label}
           </span>
-        )}
-      </span>
-      <span
-        aria-hidden
-        className="create-start-disc relative flex flex-shrink-0 items-center justify-center rounded-full"
-        style={{
-          width: 48, height: 48,
-          backgroundColor: blocked ? 'rgba(27,56,40,0.08)' : C.gold,
-          color: blocked ? C.muted : C.forest,
-          boxShadow: blocked ? 'none' : 'inset 0 1px 0 rgba(255,255,255,0.55), 0 2px 6px rgba(0,0,0,0.22)',
-        }}
-      >
-        {creating ? <Loader2 size={21} strokeWidth={2.6} className="animate-spin" /> : blocked ? <Lock size={18} strokeWidth={2.4} /> : <Gavel size={21} strokeWidth={2.3} className="rtl:-scale-x-100" />}
+          {sub && (
+            <span className="max-w-full truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, lineHeight: 1.3, marginTop: 2, color: blocked ? C.inkSoft : 'rgba(237,231,216,0.72)' }}>
+              {sub}
+            </span>
+          )}
+        </span>
       </span>
     </button>
   );

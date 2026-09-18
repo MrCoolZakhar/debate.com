@@ -7,7 +7,10 @@
  * whole delegate screen is replaced by the ballot: the paper's code and title, every choice
  * (In favour, In favour with rights, Abstain when allowed and the delegation is Present rather
  * than Present and voting, Against with rights, Against), a confirmation step, and afterwards
- * "Your vote" with Change vote until the chair reveals. No pass round. When the ballot closes
+ * "Your vote" with Change vote until the chair reveals. No pass round. When this delegation
+ * holds a veto (P5 or the chair's custom list, read from the committee row through
+ * `vetoRulesFromRow`, the same rules the chair's verdict uses) and picks Against, the
+ * confirmation becomes the veto double check: "This is a veto. Record it?" (18 Sep 2026). When the ballot closes
  * (result, rights speakers, back to debate) the normal delegate board returns.
  *
  * Reads `my_device_ballot` when the phase or the documents slice changes (every vote_state
@@ -17,7 +20,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Minus, X, Eye, Smartphone } from 'lucide-react';
+import { Check, Minus, X, Eye, Smartphone, ShieldAlert } from 'lucide-react';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCountryDisplayName } from '@/lib/countries';
 import { getMyDeviceBallot, castDeviceVote, type MyDeviceBallot } from '@/lib/deviceVoting';
@@ -25,6 +28,7 @@ import { markDelegateActivity } from '@/lib/delegateIdle';
 import type { Committee } from '@/lib/types';
 import type { VoteChoice } from '@/lib/voteState';
 import { DG, DelegateStyles } from '@/components/delegate/DelegateUI';
+import { holdsVeto, isVetoChoice, vetoRulesFromRow } from '@/components/voting/vetoHolders';
 
 const OUTFIT = "'Outfit', system-ui, sans-serif";
 
@@ -130,6 +134,9 @@ export default function DeviceBallotScreen({ code, country, committee, accessTok
     ...(allowRights ? [{ choice: 'against-rights' as VoteChoice, tone: 'against' as const, label: t('voting_against'), sub: t('voting_with_rights_label') }] : []),
     { choice: 'against', tone: 'against', label: t('voting_against') },
   ];
+  // The veto double check (owner, 18 Sep 2026): the same question the chair's roll call asks.
+  const vetoPick = !!pick && isVetoChoice(pick)
+    && holdsVeto(vetoRulesFromRow(committee.name, committee.dbSettings as Record<string, unknown> | undefined), country);
   const skin = (tone: 'for' | 'against' | 'neutral') => tone === 'for'
     ? { bg: '#2F6B45', fg: '#FFFFFF', sub: 'rgba(238,217,138,0.95)', icon: <Check size={22} strokeWidth={3} aria-hidden /> }
     : tone === 'against'
@@ -259,20 +266,33 @@ export default function DeviceBallotScreen({ code, country, committee, accessTok
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => { if (e.key === 'Escape' && !saving) setPick(null); }}
           >
-            <h2 id="dvote-confirm-title" style={{ margin: 0, fontSize: 15, fontWeight: 700, color: DG.body }}>{t('dvote_confirm_title')}</h2>
-            <p style={{ margin: '6px 0 0', fontSize: 26, fontWeight: 900, color: pick.startsWith('for') ? '#2F6B45' : pick.startsWith('against') ? DG.danger : DG.ink }}>
-              {t(CHOICE_KEY[pick])}
-            </p>
+            {vetoPick ? (
+              <>
+                <span className="inline-flex items-center justify-center" aria-hidden style={{ width: 48, height: 48, borderRadius: 999, background: '#3E2447', color: '#F3D98A' }}>
+                  <ShieldAlert size={24} strokeWidth={2.4} />
+                </span>
+                <h2 id="dvote-confirm-title" style={{ margin: '12px 0 0', fontSize: 24, fontWeight: 900, lineHeight: 1.15, color: '#3E2447' }}>{t('voting_veto_confirm_title')}</h2>
+                <p style={{ margin: '6px 0 0', fontSize: 15, lineHeight: 1.4, color: DG.body }}>{t('dvote_veto_body')}</p>
+              </>
+            ) : (
+              <>
+                <h2 id="dvote-confirm-title" style={{ margin: 0, fontSize: 15, fontWeight: 700, color: DG.body }}>{t('dvote_confirm_title')}</h2>
+                <p style={{ margin: '6px 0 0', fontSize: 26, fontWeight: 900, color: pick.startsWith('for') ? '#2F6B45' : pick.startsWith('against') ? DG.danger : DG.ink }}>
+                  {t(CHOICE_KEY[pick])}
+                </p>
+              </>
+            )}
             <div className="flex" style={{ gap: 10, marginTop: 20 }}>
-              <button type="button" disabled={saving} onClick={() => setPick(null)}
+              <button type="button" autoFocus={vetoPick} disabled={saving} onClick={() => setPick(null)}
                 className="flex-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] active:scale-[0.97] transition-transform disabled:opacity-50"
                 style={{ height: 52, borderRadius: 14, border: 'none', background: DG.ivory, color: DG.ink, fontSize: 16, fontWeight: 700 }}>
                 {t('dvote_back')}
               </button>
-              <button type="button" autoFocus disabled={saving} onClick={() => { void cast(pick); }}
+              {/* A veto is not pre-focused: the safe key (Back) is the default there. */}
+              <button type="button" autoFocus={!vetoPick} disabled={saving} onClick={() => { void cast(pick); }}
                 className="flex-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] active:scale-[0.97] transition-transform disabled:opacity-60"
-                style={{ height: 52, borderRadius: 14, border: 'none', background: DG.forest, color: DG.gold, fontSize: 16, fontWeight: 800 }}>
-                {saving ? t('dvote_saving') : t('dvote_confirm_btn')}
+                style={{ height: 52, borderRadius: 14, border: 'none', background: vetoPick ? DG.danger : DG.forest, color: vetoPick ? '#FFFFFF' : DG.gold, fontSize: 16, fontWeight: 800 }}>
+                {saving ? t('dvote_saving') : vetoPick ? t('voting_veto_confirm_yes') : t('dvote_confirm_btn')}
               </button>
             </div>
           </div>

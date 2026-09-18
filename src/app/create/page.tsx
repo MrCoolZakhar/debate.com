@@ -690,7 +690,8 @@ function CreatePageInner() {
     : missingName && missingTopic ? t('create_cta_needs')
     : missingName ? t('create_cta_needs_name')
     : missingTopic ? t('create_cta_needs_topic')
-    : delegateCount > 0 ? (observerCount > 0 ? `${countLabel}, ${observerLabel}` : countLabel)
+    // Never the count on the button (owner, 18 Sep 2026): the roster above already states it.
+    : delegateCount > 0 ? null
     : t('create_cta_sub_later');
   // Incomplete: the press takes the chair to the first missing field instead of doing nothing.
   const onStart = () => {
@@ -720,7 +721,7 @@ function CreatePageInner() {
   const sortedDelegates = [...delegates].sort((a, b) => compareCountryNames(a, b, language));
 
   return (
-    <div className="relative min-h-screen w-full lg:flex lg:h-dvh lg:min-h-0 lg:flex-col lg:overflow-hidden" style={{ backgroundColor: C.page, WebkitFontSmoothing: 'antialiased', fontFamily: OUTFIT }}>
+    <div className="create-root relative min-h-screen w-full lg:flex lg:h-dvh lg:min-h-0 lg:flex-col lg:overflow-hidden" style={{ backgroundColor: C.page, WebkitFontSmoothing: 'antialiased', fontFamily: OUTFIT }}>
       <PageBackdrop />
       <CreateStyles />
 
@@ -743,12 +744,13 @@ function CreatePageInner() {
         <ProfileAvatarMenu size={44} />
       </nav>
 
-      <main className="relative z-10 mx-auto grid w-full max-w-[1440px] grid-cols-[minmax(0,1fr)] gap-4 px-4 pb-4 sm:px-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,11fr)_minmax(0,10fr)] lg:gap-5 lg:pb-5">
+      <main className="relative z-10 mx-auto grid w-full max-w-[1440px] grid-cols-[minmax(0,1fr)] gap-4 px-4 pb-4 sm:px-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,11fr)_minmax(0,10fr)] lg:grid-rows-[minmax(0,1fr)] lg:gap-5 lg:pb-5">
         {/* ── Left: 1. Committee, then 2. Delegations (the controls) ─────────── */}
         {/* No conference sign-in prompt here (17 Sep 2026, owner: "not needed").
             A chair setting up a room is not looking for the organiser side. */}
         <Panel
           step={1}
+          className="lg:min-h-0"
           labelledBy="create-step-committee"
           title={t('create_step_committee')}
         >
@@ -796,7 +798,7 @@ function CreatePageInner() {
           </div>
 
           {/* ── 2. Delegations: add bar, quick bundles, paste. The list is on the right. */}
-          <section aria-labelledby="create-step-delegations" className="mt-4 flex flex-shrink-0 flex-col" style={{ paddingTop: 16, boxShadow: 'inset 0 1px 0 rgba(27,56,40,0.08)' }}>
+          <section aria-labelledby="create-step-delegations" className="mt-4 flex flex-shrink-0 flex-col lg:min-h-0 lg:flex-1" style={{ paddingTop: 16, boxShadow: 'inset 0 1px 0 rgba(27,56,40,0.08)' }}>
             <StepHeading step={2} labelledBy="create-step-delegations" title={t('create_step_delegations')} />
 
             {/* Add a country: the one add path (+ button, Enter, first typeahead row). */}
@@ -845,12 +847,14 @@ function CreatePageInner() {
               )}
             </div>
 
-            {/* Quick bundles. One row that scrolls sideways on a phone, wraps from sm.
+            {/* Quick bundles. One row that scrolls sideways on a phone, wraps from sm, and is
+                one sideways row again from lg (18 Sep 2026), so the paste field below gets
+                the height.
                 The Paste a list toggle used to sit at the end of this row; the paste
                 area is now always on screen (below), so there is nothing to open. */}
             <div className="mt-3 flex-shrink-0">
               <p id="create-presets-label" className="sr-only">{t('create_quick_bundles')}</p>
-              <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 [&::-webkit-scrollbar]:hidden">
+              <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 lg:flex-nowrap lg:overflow-x-auto [&::-webkit-scrollbar]:hidden">
                 <div role="group" aria-labelledby="create-presets-label" className="contents">
                   {Object.entries(BUNDLES).map(([key, bundle]) => (
                     <button key={key} type="button" onClick={() => addBundle(key)} title={t('create_quick_bundles')}
@@ -877,30 +881,32 @@ function CreatePageInner() {
 
             {/* Paste a list: always here, never behind a button (17 Sep 2026, owner:
                 "make the paste a list removed, but add the entire tab already").
-                Same matching as before: Auto-match opens the review modal. */}
-            <div className="mt-3 flex-shrink-0">
-              <div className="mb-1.5 flex items-center gap-1.5" style={{ color: C.inkSoft }}>
+                Same matching as before: Auto-match opens the review modal. Big, and from lg
+                it takes every pixel down to the foot of the panel (18 Sep 2026, owner: "make
+                the paste a list section big, extending to the bottom of the screen"). */}
+            <div className="mt-3 flex flex-shrink-0 flex-col lg:min-h-0 lg:flex-1">
+              {/* Label and Auto-match share one row, so the whole height below is the field.
+                  The hint stays the field's tooltip and its description for screen readers. */}
+              <div className="mb-1.5 flex flex-shrink-0 items-center gap-1.5" style={{ color: C.inkSoft }}>
                 <ClipboardList size={14} strokeWidth={2.1} />
-                <label htmlFor="create-paste" className="uppercase" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em' }}>
+                <label htmlFor="create-paste" className="me-auto uppercase" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em' }}>
                   {t('create_paste_toggle')}
                 </label>
+                <button type="button" onClick={handlePaste} disabled={!pasteText.trim()}
+                  className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-extrabold transition-[background-color,color,transform,opacity] duration-150 enabled:hover:bg-[#1B3828] enabled:hover:text-[#EED98A] enabled:active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
+                  style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: C.forest, boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.14)' }}>
+                  <Wand2 size={14} strokeWidth={2.2} />
+                  {stripArrow(t('create_auto_match'))}
+                </button>
               </div>
               <textarea id="create-paste" value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
                 placeholder={t('create_paste_placeholder')}
                 title={t('create_paste_hint')}
-                rows={3}
-                className="block w-full resize-none rounded-[14px] bg-white/80 px-3.5 py-2.5 lg:h-[58px] lg:py-2 text-base leading-relaxed text-[#1C1410] placeholder-[#8A7C6B] shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] transition-[box-shadow] duration-150 focus:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] focus:outline-none sm:text-[14px]" />
-              <div className="mt-2 flex flex-wrap items-center gap-3">
-                <button type="button" onClick={handlePaste} disabled={!pasteText.trim()}
-                  className="flex h-9 items-center gap-2 rounded-xl px-3.5 text-[13px] font-extrabold transition-[background-color,color,transform,opacity] duration-150 enabled:hover:bg-[#1B3828] enabled:hover:text-[#EED98A] enabled:active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none"
-                  style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: C.forest, boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.14)' }}>
-                  <Wand2 size={15} strokeWidth={2.2} />
-                  {stripArrow(t('create_auto_match'))}
-                </button>
-                {pasteError
-                  ? <p role="alert" className="text-[13px] font-semibold" style={{ color: '#8A6414' }}>{pasteError}</p>
-                  : <p className="min-w-0 flex-1 text-[12.5px] leading-snug" style={{ color: C.inkSoft, textWrap: 'pretty' }}>{t('create_paste_hint')}</p>}
-              </div>
+                aria-describedby="create-paste-hint"
+                rows={8}
+                className="block w-full resize-none rounded-[14px] bg-white/80 px-3.5 py-3 lg:h-auto lg:min-h-[80px] lg:flex-1 text-base leading-relaxed text-[#1C1410] placeholder-[#8A7C6B] shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] transition-[box-shadow] duration-150 focus:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] focus:outline-none sm:text-[14px]" />
+              <p id="create-paste-hint" className="sr-only">{t('create_paste_hint')}</p>
+              {pasteError && <p role="alert" className="mt-1.5 flex-shrink-0 text-[13px] font-semibold" style={{ color: '#8A6414' }}>{pasteError}</p>}
             </div>
           </section>
         </Panel>

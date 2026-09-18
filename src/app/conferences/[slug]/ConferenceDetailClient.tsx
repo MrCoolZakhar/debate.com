@@ -8,7 +8,7 @@ import SiteNav from '@/components/SiteNav';
 import FooterLegal from '@/components/FooterLegal';
 import Portal from '@/components/Portal';
 import { DifficultyTile, levelAccent } from '@/components/DifficultyTile';
-import { TruncatedTopic } from '@/components/TruncatedTopic';
+import { CardTopic, CommitteeDais, CommitteeInfoDialog, PersonAvatar, committeeHasMore } from '@/app/conferences/[slug]/CommitteeInfoDialog';
 import DecorativeBleed from '@/components/DecorativeBleed';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -138,6 +138,8 @@ interface SecretariatMember {
   name: string;
   avatar_url: string | null;
   title: string | null;
+  /** profiles.id, links to the public MUN CV. Absent on rosters written before 18 Sep 2026. */
+  user_id?: string | null;
 }
 
 interface PartnerConference {
@@ -780,20 +782,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   // Per committee, country_code -> seats_taken (1 or 2) — a double country
   // can be half-filled, so this needs the count, not just membership.
   const [committeeOccupied, setCommitteeOccupied] = useState<Record<string, Record<string, number>>>({});
-  // Per committee, HOW MANY chair invites are still unanswered — never who.
-  // `display_chairs` only ever carries chairs who accepted, so a committee that
-  // has invited its whole dais and is waiting on a reply used to render with no
-  // dais at all, reading as though nobody had been asked.
-  //
-  // A COUNT is the whole payload on purpose. An invitee may decline, and has
-  // not agreed to be listed publicly against this conference, so this page
-  // renders an unnamed "Chair to be confirmed" placeholder from it and never a
-  // name. anon cannot read `conference_chair_invites` (its only SELECT policies
-  // are invitee-reads-own and organizers-manage) and that is left exactly as it
-  // is: `get_committee_pending_chair_counts` is a SECURITY DEFINER count that
-  // returns no name, no email and no user id, gated on the same
-  // `conferences.is_public` test as the committee row itself.
-  const [committeePendingChairs, setCommitteePendingChairs] = useState<Record<string, number>>({});
+  // The public page names a chair only once they have accepted
+  // (`display_chairs`); an unanswered invite shows nothing at all.
+  // The committee whose "Show more" pop-up is open.
+  const [committeeInfoId, setCommitteeInfoId] = useState<string | null>(null);
   const [expandedRoster, setExpandedRoster] = useState<string | null>(null);
   // The committee roster modal is a modal — freeze the conference page behind it.
   useScrollLock(!!expandedRoster);
@@ -1104,14 +1096,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     // Public committee extras: full rosters, live occupancy
     const ccIds = ((committeesRes.data as Committee[]) ?? []).map(c => c.id);
     if (ccIds.length > 0) {
-      const [slotsRes, occRes, pendingChairsRes] = await Promise.all([
+      const [slotsRes, occRes] = await Promise.all([
         supabase
           .from('committee_country_slots')
           .select('conference_committee_id, country_code, country_name, delegation_size, logo_url, group_id')
           .in('conference_committee_id', ccIds)
           .order('country_name', { ascending: true }),
         supabase.rpc('get_committee_occupancy', { p_committee_ids: ccIds }),
-        supabase.rpc('get_committee_pending_chair_counts', { p_committee_ids: ccIds }),
       ]);
       const slotsMap: Record<string, CommitteeSlot[]> = {};
       for (const row of ((slotsRes.data ?? []) as (CommitteeSlot & { conference_committee_id: string })[])) {
@@ -1121,15 +1112,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
       for (const row of ((occRes.data ?? []) as { conference_committee_id: string; country_code: string; seats_taken: number }[])) {
         (occMap[row.conference_committee_id] ??= {})[row.country_code] = row.seats_taken;
       }
-      const pendingChairMap: Record<string, number> = {};
-      for (const row of ((pendingChairsRes.data ?? []) as { conference_committee_id: string; pending_chairs: number }[])) {
-        pendingChairMap[row.conference_committee_id] = row.pending_chairs;
-      }
       setCommitteeSlots(slotsMap);
       setCommitteeOccupied(occMap);
-      // A failed read leaves this empty, which is the card's behaviour before
-      // today: no placeholder rather than a wrong one.
-      setCommitteePendingChairs(pendingChairMap);
     }
 
     if (user && session) {
@@ -2068,42 +2052,41 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     THE SECRETARIAT
                   </p>
                   <div className="flex flex-wrap justify-center gap-x-7 gap-y-6">
-                    {(conference.display_secretariat ?? []).map((m, i) => (
-                      <div key={`${m.name}-${i}`} className="flex flex-col items-center text-center" style={{ width: '108px' }}>
-                        {m.avatar_url ? (
-                          <img
-                            src={m.avatar_url}
-                            alt={m.name}
-                            style={{
-                              width: '72px', height: '72px', borderRadius: '9999px', objectFit: 'cover',
-                              boxShadow: '0 6px 16px color-mix(in srgb, var(--gv-main) 22%, transparent)',
-                              backgroundColor: 'var(--gv-bg)',
-                              outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: '-1px',
-                            }}
-                          />
-                        ) : (
-                          <span
-                            className="flex items-center justify-center"
-                            style={{
-                              width: '72px', height: '72px', borderRadius: '9999px',
-                              backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)',
-                              fontSize: '22px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
-                              boxShadow: '0 6px 16px color-mix(in srgb, var(--gv-main) 22%, transparent)',
-                            }}
-                          >
-                            {m.name.charAt(0).toUpperCase()}
+                    {(conference.display_secretariat ?? []).map((m, i) => {
+                      const inner = (
+                        <>
+                          <PersonAvatar name={m.name} url={m.avatar_url} px={72} />
+                          <span className="text-[13.5px] font-semibold mt-2.5 leading-tight" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+                            {m.name}
                           </span>
-                        )}
-                        <span className="text-[13.5px] font-semibold mt-2.5 leading-tight" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
-                          {m.name}
-                        </span>
-                        {m.title && (
-                          <span className="mt-1" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.1em', color: 'var(--gv-accent)', textTransform: 'uppercase' }}>
-                            {m.title}
-                          </span>
-                        )}
-                      </div>
-                    ))}
+                          {m.title && (
+                            <span className="mt-1" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.1em', color: 'var(--gv-accent)', textTransform: 'uppercase' }}>
+                              {m.title}
+                            </span>
+                          )}
+                        </>
+                      );
+                      // Linked to the public MUN CV when the roster carries the
+                      // account; plain for an entry without one.
+                      if (!m.user_id) {
+                        return (
+                          <div key={`${m.name}-${i}`} className="flex flex-col items-center text-center" style={{ width: '108px' }}>
+                            {inner}
+                          </div>
+                        );
+                      }
+                      return (
+                        <ProfileLink
+                          key={`${m.name}-${i}`}
+                          userId={m.user_id}
+                          name={m.name}
+                          className="flex flex-col items-center text-center rounded-lg transition-transform hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--gv-main)]"
+                          style={{ width: '108px' }}
+                        >
+                          {inner}
+                        </ProfileLink>
+                      );
+                    })}
                   </div>
                 </SectionCard>
               )}
@@ -2914,19 +2897,6 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                             const isCrisis = c.committee_type === 'crisis';
                             const monogram = (c.abbreviation || c.name).replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase();
                             const chairs = c.display_chairs ?? [];
-                            const chairIds = c.chair_user_ids ?? [];
-                            // Link a chair to their public MUN CV only when we can safely
-                            // correlate display_chairs[i] ↔ chair_user_ids[i] (equal lengths ⇒
-                            // same order from the sync trigger); mismatched ⇒ don't link, to
-                            // avoid ever pointing at the wrong person's CV.
-                            const chairsLinkable = chairIds.length === chairs.length;
-                            // Outstanding chair invites, as a COUNT. Deliberately
-                            // never a name: someone who has been asked and has
-                            // not answered may decline, and has not agreed to be
-                            // listed publicly against this conference. The count
-                            // is enough to stop an already-spoken-for dais
-                            // reading as empty, which is all this needs to do.
-                            const pendingChairCount = committeePendingChairs[c.id] ?? 0;
                             const { countryCapacity, countriesTaken, seatCapacity, seatsTaken, pct, hasDoubles } = committeeStats(c);
 
                             return (
@@ -3035,118 +3005,35 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                             {ROMAN[ti] ?? String(ti + 1)}.
                                           </span>
                                           <span className="text-[12.5px] font-medium" style={{ color: '#2E2820', fontFamily: "'Outfit', sans-serif", lineHeight: 1.55 }}>
-                                            {/* First 75 characters, cut at a word, with an in-place Show more. */}
-                                            <TruncatedTopic text={topic} max={75} />
+                                            {/* First 120 characters, cut at a word. One Show more per committee, below. */}
+                                            <CardTopic text={topic} />
                                           </span>
                                         </div>
                                       ))}
+                                      {committeeHasMore(c.topics) && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setCommitteeInfoId(c.id)}
+                                          aria-haspopup="dialog"
+                                          className="mt-1.5 ml-[28px] rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[color:var(--gv-main)]"
+                                          style={{
+                                            fontFamily: "'Outfit', sans-serif", fontSize: '11.5px', fontWeight: 700,
+                                            color: 'var(--gv-main)', background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                                            textDecoration: 'underline', textDecorationColor: 'color-mix(in srgb, var(--gv-main) 35%, transparent)', textUnderlineOffset: 3,
+                                          }}
+                                        >
+                                          Show more
+                                        </button>
+                                      )}
                                     </div>
                                   )}
 
-                                  {/* Dais, pinned to the card bottom — shown when
-                                      chairs are assigned, or when the committee
-                                      has an unanswered invite out (unnamed
-                                      placeholder, see below) */}
+                                  {/* Dais, pinned to the card bottom. Only chairs
+                                      who accepted; nothing for an open invite. */}
                                   <div className="w-full mt-auto">
                                   {chairs.length > 0 && (
                                   <div className="w-full mt-4 pt-4" style={{ borderTop: '1px solid color-mix(in srgb, var(--gv-border) 55%, transparent)' }}>
-                                    <div className="flex items-start justify-center gap-6">
-                                      {chairs.map((ch, ci) => {
-                                        const uid = chairsLinkable ? chairIds[ci] : null;
-                                        const inner = (
-                                          <>
-                                            {ch.avatar_url ? (
-                                              /* eslint-disable-next-line @next/next/no-img-element */
-                                              <img
-                                                src={ch.avatar_url}
-                                                alt={ch.name}
-                                                style={{
-                                                  width: '52px', height: '52px', borderRadius: '9999px', objectFit: 'cover',
-                                                  boxShadow: '0 4px 12px color-mix(in srgb, var(--gv-main) 22%, transparent)',
-                                                  backgroundColor: 'var(--gv-bg)',
-                                                  outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: '-1px',
-                                                }}
-                                              />
-                                            ) : (
-                                              <span
-                                                className="flex items-center justify-center"
-                                                style={{
-                                                  width: '52px', height: '52px', borderRadius: '9999px',
-                                                  backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)',
-                                                  fontSize: '17px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
-                                                }}
-                                              >
-                                                {ch.name.charAt(0)}
-                                              </span>
-                                            )}
-                                            <span className="text-[11.5px] font-semibold mt-2 leading-tight" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
-                                              {ch.name}
-                                            </span>
-                                          </>
-                                        );
-                                        return uid ? (
-                                          <ProfileLink
-                                            key={ch.name}
-                                            userId={uid}
-                                            name={ch.name}
-                                            className="flex flex-col items-center text-center transition-transform hover:-translate-y-0.5"
-                                            style={{ width: '96px' }}
-                                          >
-                                            {inner}
-                                          </ProfileLink>
-                                        ) : (
-                                          <div key={ch.name} className="flex flex-col items-center text-center" style={{ width: '96px' }}>
-                                            {inner}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                    {/* A dais that is part seated, part invited.
-                                        The seated chairs are named above; this
-                                        line accounts for the rest without
-                                        naming anyone who has not accepted. */}
-                                    {pendingChairCount > 0 && (
-                                      <p
-                                        className="text-center text-[10.5px] font-semibold mt-2.5"
-                                        style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}
-                                      >
-                                        {pendingChairCount === 1
-                                          ? '1 more chair to be confirmed'
-                                          : `${pendingChairCount} more chairs to be confirmed`}
-                                      </p>
-                                    )}
-                                  </div>
-                                  )}
-
-                                  {/* No chair has accepted, but one or more have
-                                      been invited. An unnamed placeholder, on
-                                      purpose: an invitee may decline, and has
-                                      not agreed to appear publicly against this
-                                      conference, so this page shows THAT the
-                                      dais is being filled and never WHO. The
-                                      organiser surfaces (committees, assignment,
-                                      the live wall) are where the names live. */}
-                                  {chairs.length === 0 && pendingChairCount > 0 && (
-                                  <div className="w-full mt-4 pt-4" style={{ borderTop: '1px solid color-mix(in srgb, var(--gv-border) 55%, transparent)' }}>
-                                    <div className="flex flex-col items-center text-center">
-                                      <span
-                                        className="flex items-center justify-center"
-                                        style={{
-                                          width: '52px', height: '52px', borderRadius: '9999px',
-                                          border: '1.5px dashed color-mix(in srgb, var(--gv-accent) 70%, transparent)',
-                                          backgroundColor: 'color-mix(in srgb, var(--gv-accent) 10%, transparent)',
-                                          color: '#8A6614',
-                                        }}
-                                      >
-                                        <UserRound size={22} strokeWidth={1.75} />
-                                      </span>
-                                      <span
-                                        className="text-[11.5px] font-semibold mt-2 leading-tight"
-                                        style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif" }}
-                                      >
-                                        {pendingChairCount === 1 ? 'Chair to be confirmed' : 'Chairs to be confirmed'}
-                                      </span>
-                                    </div>
+                                    <CommitteeDais chairs={chairs} chairIds={c.chair_user_ids} />
                                   </div>
                                   )}
 
@@ -3239,6 +3126,18 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         </div>
                       </div>
                     )}
+
+                    {/* Show more: the committee's full information */}
+                    {(() => {
+                      const c = committeeInfoId ? committees.find(x => x.id === committeeInfoId) : null;
+                      if (!c) return null;
+                      const isCrisis = c.committee_type === 'crisis';
+                      const { countryCapacity } = committeeStats(c);
+                      const seatsLine = !isCrisis && c.delegation_size >= 2
+                        ? `${countryCapacity} countries · 2 delegates each`
+                        : `${countryCapacity} ${isCrisis ? 'roles' : 'seats'}`;
+                      return <CommitteeInfoDialog committee={c} seatsLine={seatsLine} onClose={() => setCommitteeInfoId(null)} />;
+                    })()}
 
                     {/* Roster modal, list format */}
                     {rosterCommittee && (() => {

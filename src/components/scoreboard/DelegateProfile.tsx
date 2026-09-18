@@ -62,6 +62,7 @@ const SLICE_COLOUR: Record<string, string> = {
   caucusSpeech: '#4F7F5E',
   speakingTimePer10s: '#C9A43A',
   motionRaised: '#B8844A',
+  motionPassed: '#8E6A2E',
   rightOfReply: '#A35D4A',
   wpSponsor: '#5D86A8',
   drSponsor: '#34587A',
@@ -154,7 +155,7 @@ export default function DelegateProfile({ row, rank, rankTotal, slices, speeches
       const base = r.type === 'manual-award' ? t('sb_hist_award') : t('sb_hist_deduct');
       return r.detail ? `${r.detail} · ${base}` : base.charAt(0).toLocaleUpperCase(language) + base.slice(1);
     }
-    if (r.type === 'wp' || r.type === 'dr' || r.type === 'drPassed') return r.detail ? `${r.label} · ${r.detail}` : r.label;
+    if (r.type === 'wp' || r.type === 'dr' || r.type === 'drPassed' || r.type === 'motion-raised' || r.type === 'motion-passed') return r.detail ? `${r.label} · ${r.detail}` : r.label;
     return r.label;
   };
 
