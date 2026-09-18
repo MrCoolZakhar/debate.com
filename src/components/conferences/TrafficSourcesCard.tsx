@@ -14,8 +14,10 @@
 // Counting started when this shipped: there is no backfill, and applications
 // filed before a conference's first counted visit are left out of conversion.
 
-import { useEffect, useMemo, useState } from 'react';
-import { Info } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Info, X, ArrowRight } from 'lucide-react';
+import Portal from '@/components/Portal';
+import { useScrollLock } from '@/hooks/useScrollLock';
 import { NeuCard, NEU, OUTFIT } from '@/components/neu';
 import { BENTO_BORDER } from '@/components/conferences/bento';
 import { useAuth } from '@/components/AuthProvider';
@@ -88,7 +90,7 @@ function Figure({ value, label, hint }: { value: string; label: string; hint?: s
 }
 
 /** Pure view, so it can be rendered from any summary (also by a harness). */
-export function TrafficSourcesView({ summary }: { summary: TrafficSummary | null }) {
+export function TrafficSourcesView({ summary, inDialog = false }: { summary: TrafficSummary | null; inDialog?: boolean }) {
   const [range, setRange] = useState<Range>(30);
 
   const model = useMemo(() => {
@@ -133,8 +135,8 @@ export function TrafficSourcesView({ summary }: { summary: TrafficSummary | null
   const empty = !!summary && !summary.first_day;
 
   return (
-    <NeuCard className="flex flex-col flex-shrink-0" style={{ padding: '14px 18px 16px', border: BENTO_BORDER }}>
-      <div className="flex items-start justify-between gap-3 flex-wrap">
+    <NeuCard className="flex flex-col flex-shrink-0" style={{ padding: inDialog ? '18px 22px 20px' : '14px 18px 16px', border: BENTO_BORDER }}>
+      <div className="flex items-start justify-between gap-3 flex-wrap" style={inDialog ? { paddingInlineEnd: 36 } : undefined}>
         <div className="min-w-0">
           <h2 className="flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>
             Where applicants come from
@@ -239,6 +241,129 @@ export function TrafficSourcesView({ summary }: { summary: TrafficSummary | null
   );
 }
 
+// ── Compact card (sits beside "Applicants against target") ──────────────────
+// Headline conversion, visits and submitted over the last 30 days, and one
+// stacked bar of visits by source. The full table opens in a pop-up.
+
+function last30(summary: TrafficSummary) {
+  const today = dayNum(summary.today);
+  const first = summary.first_day ? dayNum(summary.first_day) : today;
+  const from = Math.max(today - 29, first);
+  const inWin = (d: string) => { const n = dayNum(d); return n >= from && n <= today; };
+  const by = new Map<Row, number>();
+  let visits = 0;
+  for (const v of summary.views) if (inWin(v.day)) { visits += v.views; by.set(v.source, (by.get(v.source) ?? 0) + v.views); }
+  let submitted = 0;
+  for (const a of summary.applications) if (summary.first_day && inWin(a.day)) submitted += a.n;
+  const segs = [...by.entries()].filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
+  return { visits, submitted, segs };
+}
+
+function TrafficDialog({ summary, onClose }: { summary: TrafficSummary; onClose: () => void }) {
+  useScrollLock(true);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const back = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => { window.removeEventListener('keydown', onKey); back?.focus?.(); };
+  }, [onClose]);
+  return (
+    <Portal>
+      <div
+        className="fixed inset-0 flex items-center justify-center"
+        style={{ zIndex: 80, background: 'rgba(28,20,16,0.38)', padding: 16 }}
+        onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}
+      >
+        <div role="dialog" aria-modal="true" aria-label="Where applicants come from" className="relative w-full" style={{ maxWidth: 680, maxHeight: '90%', overflowY: 'auto', borderRadius: 22 }}>
+          <button
+            ref={closeRef}
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute inline-flex items-center justify-center focus:outline-none focus-visible:ring-2"
+            style={{ top: 12, insetInlineEnd: 12, width: 30, height: 30, borderRadius: 999, border: 'none', background: 'color-mix(in srgb, var(--gv-main) 8%, transparent)', color: NEU.ink, cursor: 'pointer', zIndex: 1 }}
+          >
+            <X size={15} />
+          </button>
+          <TrafficSourcesView summary={summary} inDialog />
+        </div>
+      </div>
+    </Portal>
+  );
+}
+
+export function TrafficCompactView({ summary }: { summary: TrafficSummary | null }) {
+  const [open, setOpen] = useState(false);
+  const m = useMemo(() => (summary ? last30(summary) : null), [summary]);
+  const empty = !!summary && !summary.first_day;
+  const label = { fontFamily: OUTFIT, fontSize: 11, color: NEU.inkSoft } as const;
+  return (
+    <NeuCard className="flex flex-col" style={{ padding: '15px 16px', border: BENTO_BORDER, height: '100%' }}>
+      <h2 className="flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink, lineHeight: 1.2 }}>
+        Where applicants come from
+      </h2>
+      {!summary && <p style={{ ...label, marginTop: 8 }}>Loading…</p>}
+      {empty && (
+        <div style={{ marginTop: 10 }}>
+          <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink }}>Views are counted from today.</p>
+          <p style={{ ...label, marginTop: 3 }}>Share your conference page. Visits and applications will show here by source.</p>
+        </div>
+      )}
+      {m && !empty && summary && (
+        <>
+          <p style={{ ...label, marginTop: 1 }}>Last 30 days</p>
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontFamily: OUTFIT, fontSize: 34, fontWeight: 800, color: NEU.ink, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+              {fmtPct(m.submitted, m.visits)}
+            </div>
+            <div style={label}>Conversion</div>
+          </div>
+          <div className="flex" style={{ gap: 18, marginTop: 10 }}>
+            <div>
+              <div style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 800, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>{fmtInt(m.visits)}</div>
+              <div style={label}>Visits</div>
+            </div>
+            <div>
+              <div style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 800, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>{fmtInt(m.submitted)}</div>
+              <div style={label}>Submitted</div>
+            </div>
+          </div>
+          <div
+            role="img"
+            aria-label={`Visits by source: ${m.segs.map(([k, n]) => `${TRAFFIC_SOURCE_LABEL[k]} ${n}`).join(', ') || 'none yet'}`}
+            className="flex overflow-hidden"
+            style={{ height: 8, borderRadius: 999, marginTop: 12, gap: 2, background: 'color-mix(in srgb, var(--gv-main) 7%, transparent)' }}
+          >
+            {m.segs.map(([k, n]) => (
+              <span key={k} title={`${TRAFFIC_SOURCE_LABEL[k]}: ${n}`} style={{ flex: n, background: SOURCE_COLOR[k] }} />
+            ))}
+          </div>
+          <div className="flex flex-wrap" style={{ gap: '3px 10px', marginTop: 7 }}>
+            {m.segs.slice(0, 3).map(([k]) => (
+              <span key={k} className="inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.ink }}>
+                <span aria-hidden style={{ width: 7, height: 7, borderRadius: 999, background: SOURCE_COLOR[k] }} />
+                {TRAFFIC_SOURCE_LABEL[k]}
+              </span>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="inline-flex items-center gap-1.5 self-start focus:outline-none focus-visible:ring-2 rounded transition-opacity hover:opacity-70"
+            style={{ marginTop: 'auto', paddingTop: 10, fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, color: NEU.forest, background: 'none', border: 'none', cursor: 'pointer' }}
+          >
+            See every source
+            <ArrowRight size={13} />
+          </button>
+          {open && <TrafficDialog summary={summary} onClose={() => setOpen(false)} />}
+        </>
+      )}
+    </NeuCard>
+  );
+}
+
 /** Fetching wrapper mounted on /manage/[slug]. Renders nothing on a refusal. */
 export default function TrafficSourcesCard({ conferenceId }: { conferenceId: string }) {
   const { session } = useAuth();
@@ -261,5 +386,5 @@ export default function TrafficSourcesCard({ conferenceId }: { conferenceId: str
   }, [token, conferenceId]);
 
   if (denied) return null;
-  return <TrafficSourcesView summary={summary} />;
+  return <TrafficCompactView summary={summary} />;
 }

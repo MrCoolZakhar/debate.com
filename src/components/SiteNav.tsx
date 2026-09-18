@@ -5,7 +5,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
-import { Globe, FileClock } from 'lucide-react';
+import { Globe, FileClock, Languages } from 'lucide-react';
+import LanguageRequestDialog from '@/components/LanguageRequestDialog';
+import { isSessionsPath } from '@/lib/sessionRoutes';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
 import AuthLink from '@/components/auth/AuthLink';
 import { useCredits } from '@/hooks/useCredits';
@@ -40,8 +42,12 @@ interface SiteNavProps {
   hideLanguage?: boolean;
 }
 
-export default function SiteNav({ logoOverride, overlay = false, hideLanguage = false, brand }: SiteNavProps = {}) {
+export default function SiteNav({ logoOverride, overlay = false, hideLanguage: hideLanguageProp = false, brand }: SiteNavProps = {}) {
   const pathname = usePathname();
+  // Languages are a sessions feature: every conferences-side page is English
+  // only and shows no switcher (owner, 18 Sep 2026).
+  const hideLanguage = hideLanguageProp || !isSessionsPath(pathname);
+  const [requestLangOpen, setRequestLangOpen] = useState(false);
   const router = useRouter();
   const [hovered, setHovered] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -284,6 +290,18 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
                     {language === lang && <span className="ml-1" style={{ color: '#B6871F' }}>✓</span>}
                   </button>
                 ))}
+                <div style={{ height: 1, backgroundColor: '#DDD4C0' }} />
+                <button
+                  type="button"
+                  onClick={() => { setShowLangMenu(false); setRequestLangOpen(true); }}
+                  className="w-full flex items-center gap-2 text-start px-4 py-2.5 text-sm transition-colors focus:outline-none"
+                  style={{ color: '#1B3828', fontWeight: 700, fontFamily: "'Outfit', sans-serif", backgroundColor: 'transparent', border: 'none', cursor: 'pointer' }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                >
+                  <Languages size={14} strokeWidth={2.2} aria-hidden />
+                  {t('lang_request_open')}
+                </button>
               </div>
             )}
           </div>
@@ -446,6 +464,15 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
                   </button>
                 ))}
               </div>
+              <button
+                type="button"
+                onClick={() => { setMenuOpen(false); setRequestLangOpen(true); }}
+                className="mx-2 mt-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold focus:outline-none"
+                style={{ width: 'calc(100% - 16px)', color: '#1B3828', fontFamily: "'Outfit', sans-serif", backgroundColor: 'transparent', border: '1px dashed rgba(27,56,40,0.3)', cursor: 'pointer' }}
+              >
+                <Languages size={15} strokeWidth={2.2} aria-hidden />
+                {t('lang_request_open')}
+              </button>
             </>
           )}
 
@@ -588,6 +615,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
           )}
         </div>
       </div>
+      {!hideLanguage && <LanguageRequestDialog open={requestLangOpen} onClose={() => setRequestLangOpen(false)} />}
     </>
   );
 }

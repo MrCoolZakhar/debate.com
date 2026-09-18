@@ -8,9 +8,10 @@ import { createCommittee as createCommitteeInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { UN_COUNTRIES, getCountryByName, getCountryDisplayName, countryMatchRank, findCountryFlexible, compareCountryNames } from '@/lib/countries';
 import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS, ICC_ROLES, ICJ_ROLES, CRISIS_MEMBERS, FIFA_MEMBERS, HOUSE_OF_COMMONS_ROLES, US_SENATE_MEMBERS, PRESS_ROLES, EUROPEAN_PARLIAMENT_MEMBERS } from '@/lib/presets';
-import { Check, ChevronLeft, ClipboardList, CornerDownLeft, Globe, Megaphone, PenLine, Plus, Search, UserRound, Wand2, X } from 'lucide-react';
+import { Check, ChevronLeft, ClipboardList, CornerDownLeft, Globe, Languages, Megaphone, PenLine, Plus, Search, UserRound, Wand2, X } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import Loader from '@/components/Loader';
+import LanguageRequestDialog from '@/components/LanguageRequestDialog';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCommitteeDisplayName, committeeDisplayName, deriveCommitteeAcronym, matchPresetEmblem } from '@/lib/presetNames';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
@@ -479,6 +480,7 @@ function CreatePageInner() {
   const t = useT();
   const { language, setLanguage } = useLanguage();
   const [showLangMenu, setShowLangMenu] = useState(false);
+  const [requestLangOpen, setRequestLangOpen] = useState(false);
   const router = useRouter();
   const { updateSetting } = useSettingsStore();
   // Chairs: committed chips plus the text still in the field. `chairNames` keeps the
@@ -659,9 +661,21 @@ function CreatePageInner() {
                 {language === code && <Check size={14} strokeWidth={2.6} className="ms-auto" style={{ color: C.goldDeep }} />}
               </button>
             ))}
+            <div className="my-1 h-px" style={{ backgroundColor: 'rgba(27,56,40,0.1)' }} />
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => { setShowLangMenu(false); setRequestLangOpen(true); }}
+              className="w-full flex items-center gap-2.5 h-10 px-3 rounded-xl text-start transition-colors hover:bg-[#1B3828]/[0.05] focus:outline-none"
+              style={{ fontFamily: OUTFIT, color: C.forest, fontWeight: 700, fontSize: '13px' }}
+            >
+              <Languages size={14} strokeWidth={2.2} style={{ width: 20 }} aria-hidden />
+              <span>{t('lang_request_open')}</span>
+            </button>
           </div>
         </>
       )}
+      <LanguageRequestDialog open={requestLangOpen} onClose={() => setRequestLangOpen(false)} />
     </div>
   );
 

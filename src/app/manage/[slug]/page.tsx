@@ -328,65 +328,50 @@ interface AppRow {
   advisors_pledged: number | null;
 }
 
-// ── Unallocated-delegates alert tile ───────────────────────────────────────
-// Amber alarm while accepted delegates await committee allocation; calm
-// green once everyone is placed. Links straight to the assignment board.
+// ── Unallocated-delegates alert ────────────────────────────────────────────
+// Shown ONLY while accepted delegates are waiting for a committee and country:
+// a warning with the number large and a direct way to the assignment board.
+// Nothing at all once everyone is placed (owner, 18 Sep 2026: no check mark).
 
 function UnallocatedTile({ count, href }: { count: number; href: string }) {
-  const [hovered, setHovered] = useState(false);
-  const ok = count === 0;
+  if (count <= 0) return null;
   return (
-    <Link
-      href={href}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      className="flex flex-col"
+    <div
+      role="status"
+      className="flex items-center"
       style={{
-        textDecoration: 'none',
         minWidth: 0,
-        justifyContent: 'space-between',
-        padding: '13px 15px',
-        borderRadius: 22,
-        backgroundColor: NEU.surface,
-        backgroundImage: ok
-          ? 'linear-gradient(rgba(61,122,82,0.10), rgba(61,122,82,0.10))'
-          : 'linear-gradient(rgba(184,132,74,0.12), rgba(184,132,74,0.12))',
-        border: ok ? '1.5px solid rgba(61,122,82,0.35)' : '1.5px solid rgba(184,132,74,0.4)',
-        boxShadow: hovered ? NEU.outHover : NEU.out,
-        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
-        transition: `box-shadow 260ms ${EASE}, transform 260ms ${EASE}`,
-        cursor: 'pointer',
+        gap: 12,
+        padding: '11px 12px 11px 14px',
+        borderRadius: 18,
+        background: 'linear-gradient(135deg, rgba(184,132,74,0.24) 0%, rgba(184,132,74,0.12) 100%)',
+        boxShadow: 'inset 0 0 0 1.5px rgba(160,104,44,0.55)',
       }}
     >
-      <div className="flex items-start justify-between gap-2">
-        <Emoji3D
-          name={ok ? 'Check mark button' : 'Red exclamation mark'}
-          size={32}
-          fallback={ok ? CheckCircle2 : AlertCircle}
-          fallbackColor={ok ? NEU.green : NEU.amber}
-        />
-        <ArrowRight size={13} style={{ color: ok ? NEU.green : NEU.amber, opacity: hovered ? 1 : 0.6, transform: hovered ? 'translateX(2px)' : 'none', transition: `transform 200ms ${EASE}` }} />
+      <AlertCircle size={22} strokeWidth={2.4} style={{ color: '#8A5A2E', flexShrink: 0 }} aria-hidden />
+      <p style={{ fontFamily: OUTFIT, fontSize: 34, fontWeight: 900, color: '#7A4A1C', fontVariantNumeric: 'tabular-nums', lineHeight: 1, flexShrink: 0 }}>
+        {count}
+      </p>
+      <div className="min-w-0" style={{ flex: 1 }}>
+        <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: '#6B3F14', lineHeight: 1.2 }}>
+          {count === 1 ? 'Delegate without a seat' : 'Delegates without a seat'}
+        </p>
+        <p style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: '#7A4A1C', marginTop: 2, lineHeight: 1.3 }}>
+          Accepted, still waiting for a committee and country.
+        </p>
       </div>
-      {ok ? (
-        <div>
-          <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.green, lineHeight: 1.2 }}>
-            All delegates allocated
-          </p>
-          <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.muted, marginTop: 3 }}>
-            Nothing waiting for assignment
-          </p>
-        </div>
-      ) : (
-        <div>
-          <p style={{ fontFamily: OUTFIT, fontSize: 27, fontWeight: 900, color: NEU.amber, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-            {count}
-          </p>
-          <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: '#8A5A2E', marginTop: 4 }}>
-            Unallocated delegates
-          </p>
-        </div>
-      )}
-    </Link>
+      <Link
+        href={href}
+        className="inline-flex items-center gap-1.5 flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7A4A1C] transition-transform active:scale-[0.97]"
+        style={{
+          fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, color: '#FFFFFF',
+          background: '#8A5A2E', borderRadius: 999, padding: '8px 13px', textDecoration: 'none',
+        }}
+      >
+        Assign now
+        <ArrowRight size={13} />
+      </Link>
+    </div>
   );
 }
 
@@ -583,14 +568,23 @@ function ActivityLine({ ev, now }: { ev: ActivityEvent; now: number }) {
  * card, so a busy conference never lengthens the page — the dashboard stays
  * one screen no matter how much has just happened.
  */
-export function RecentActivity({ events, now }: { events: ActivityEvent[]; now: number }) {
+export function RecentActivity({ events, now, fill = false }: {
+  events: ActivityEvent[];
+  now: number;
+  /** Paint every row, as many as the column's height shows (the rest scroll
+   *  inside the card), instead of leaving a gap under eight. The dashboard
+   *  always passes it: the gap showed whenever the priorities card was short,
+   *  most of all once every priority was done. */
+  fill?: boolean;
+}) {
   const [showAll, setShowAll] = useState(false);
   const [hovered, setHovered] = useState(false);
   // Nothing to expand into: an empty feed opens an empty modal, which is a
   // dead end rather than a disclosure. The card stays inert until there is
   // something to show.
   const openable = events.length > 0;
-  const hidden = Math.max(0, events.length - ACTIVITY_INLINE_LIMIT);
+  const inlineLimit = fill ? events.length : ACTIVITY_INLINE_LIMIT;
+  const hidden = Math.max(0, events.length - inlineLimit);
 
   return (
     <>
@@ -665,9 +659,20 @@ export function RecentActivity({ events, now }: { events: ActivityEvent[]; now: 
             Activity will appear here as delegates apply, pay, get allocated, and check in.
           </p>
         ) : (
-          <div className="flex flex-col gap-2" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-            {events.slice(0, ACTIVITY_INLINE_LIMIT).map(ev => <ActivityLine key={ev.key} ev={ev} now={now} />)}
-          </div>
+          fill ? (
+            /* Absolutely placed rows add no height of their own, so the card
+               takes exactly the space the column has left and fills it with
+               as many rows as fit (the rest scroll), never a gap. */
+            <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+              <div className="flex flex-col gap-2" style={{ position: 'absolute', inset: 0, overflowY: 'auto' }}>
+                {events.map(ev => <ActivityLine key={ev.key} ev={ev} now={now} />)}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+              {events.slice(0, inlineLimit).map(ev => <ActivityLine key={ev.key} ev={ev} now={now} />)}
+            </div>
+          )
         )}
       </div>
 
@@ -790,13 +795,13 @@ function ActivityModal({ events, now, onClose }: { events: ActivityEvent[]; now:
 // says so in words rather than printing "0 / 0 / 0" as if something were wrong.
 
 function RevenueReadout({
-  fee, currency, paidCount, totalCount, expected, href,
+  fee, currency, paidCount, owingCount, href,
 }: {
   fee: number;
   currency: string;
   paidCount: number;
-  totalCount: number;
-  expected: number;
+  /** Accepted (or further along) and not yet paid. */
+  owingCount: number;
   href: string;
 }) {
   if (fee <= 0) {
@@ -814,8 +819,7 @@ function RevenueReadout({
 
   const cells: { label: string; value: number; hint: string; accent: string }[] = [
     { label: 'Collected', value: paidCount * fee, accent: NEU.deepGold, hint: `${paidCount} paid x ${formatFee(fee, currency)}` },
-    { label: 'If everyone pays', value: totalCount * fee, accent: NEU.ink, hint: `${totalCount} applicant${totalCount === 1 ? '' : 's'} x ${formatFee(fee, currency)}` },
-    { label: 'At target', value: expected * fee, accent: NEU.ink, hint: expected > 0 ? `${expected} expected x ${formatFee(fee, currency)}` : 'Set an expected delegate count' },
+    { label: 'Outstanding', value: owingCount * fee, accent: NEU.ink, hint: `${owingCount} accepted and not yet paid x ${formatFee(fee, currency)}` },
   ];
 
   return (
@@ -848,7 +852,7 @@ function RevenueReadout({
                 fontVariantNumeric: 'tabular-nums', marginTop: 2, lineHeight: 1.1,
               }}
             >
-              {c.value > 0 || c.label === 'Collected' ? formatFee(c.value, currency) : '—'}
+              {formatFee(c.value, currency)}
             </span>
           </div>
         ))}
@@ -1407,6 +1411,11 @@ export default function DashboardPage() {
     a => a.status === 'accepted' || a.status === 'assigned' || a.status === 'checked-in'
   ).length;
   const paidApps = dash.apps.filter(a => a.payment_status === 'paid').length;
+  // Owed: accepted (or further along) and not yet paid. The money card's
+  // "Outstanding" figure.
+  const owingApps = dash.apps.filter(
+    a => (a.status === 'accepted' || a.status === 'assigned' || a.status === 'checked-in') && a.payment_status !== 'paid'
+  ).length;
   const delegateApps = dash.apps.filter(a => a.role === 'delegate' || a.role === 'head-delegate').length;
   const societies = new Set(dash.apps.map(a => a.society_id).filter(Boolean)).size;
   // People a delegation has pledged to bring who have no application row yet.
@@ -1869,7 +1878,7 @@ export default function DashboardPage() {
         </NeuCard>
 
         {/* Momentum feed, fills whatever height the right column dictates. */}
-        <RecentActivity events={activity} now={now} />
+        <RecentActivity events={activity} now={now} fill />
 
         </div>
 
@@ -1881,7 +1890,10 @@ export default function DashboardPage() {
             used to need their own tile row (allocation alert, money) so the
             card is full edge to edge instead of a big ring beside a
             paragraph. */}
-        <NeuCard className="flex-shrink-0" style={{ padding: '15px 18px', border: BENTO_BORDER }}>
+        {/* Applicants against target, with the compact traction card on its
+            right (stacked below lg). */}
+        <div className="flex flex-col lg:flex-row items-stretch flex-shrink-0" style={{ gap: 14 }}>
+        <NeuCard className="flex-shrink-0 lg:flex-1 min-w-0" style={{ padding: '15px 18px', border: BENTO_BORDER }}>
           <div className="flex items-stretch flex-wrap" style={{ gap: 20 }}>
             {/* 224, not the 236 default: the dial's height IS this card's
                 height, and 224 is what the vertical budget affords once the
@@ -1907,8 +1919,7 @@ export default function DashboardPage() {
                 fee={fee}
                 currency={conference.fee_currency}
                 paidCount={paidApps}
-                totalCount={totalApps}
-                expected={expectedDelegates}
+                owingCount={owingApps}
                 href={`/manage/${slug}/financials/settings`}
               />
               <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -1930,6 +1941,10 @@ export default function DashboardPage() {
             </div>
           </div>
         </NeuCard>
+        <div className="flex-shrink-0 lg:w-[272px]">
+          <TrafficSourcesCard conferenceId={conference.id} />
+        </div>
+        </div>
 
         {/* The participants chart, sole occupant of this slot. It used to
             share the card with a revenue chart behind a two-pill switch; the
@@ -1941,10 +1956,6 @@ export default function DashboardPage() {
         <NeuCard className="flex flex-col flex-shrink-0" style={{ padding: '12px 16px 12px', border: BENTO_BORDER }}>
           <ParticipantsChart points={participantSeries} />
         </NeuCard>
-
-        {/* Where applicants come from: anonymous page visits by source and
-            conversion. Self-contained, see TrafficSourcesCard.tsx. */}
-        <TrafficSourcesCard conferenceId={conference.id} />
 
         </div>
       </div>

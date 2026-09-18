@@ -40,6 +40,7 @@ import { verifyConferenceAccess, type ConferenceAccess } from '@/lib/conferenceA
 import { getSessionJoinRules, getSeatAvailability, peekSeatToken, seatKey, type SeatAvailability } from '@/lib/seatClaims';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
+import SessionLanguageMenu from '@/components/SessionLanguageMenu';
 import { getCountryDisplayName } from '@/lib/countries';
 import { supabase, supabase as anonSupabase } from '@/lib/supabase';
 import { PRESET_LOGOS, deriveCommitteeAcronym, committeeDisplayName, matchPresetEmblem } from '@/lib/presetNames';
@@ -563,12 +564,13 @@ function JoinPageInner() {
       <PageBackdrop />
 
       {/* ── Nav ─────────────────────────────────────────────────────────────── */}
-      <nav className="relative z-10 mx-auto flex h-16 w-full max-w-[1120px] items-center justify-between gap-3 px-4 sm:px-6">
+      <nav className="relative z-20 mx-auto flex h-16 w-full max-w-[1120px] items-center justify-between gap-3 px-4 sm:px-6">
         <Link href="/sessions" className="flex flex-shrink-0 items-center focus:outline-none">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/GavellingLogo.png" alt="Gavelling" className="h-auto w-[118px] object-contain sm:w-[140px]" />
         </Link>
         <div className="flex min-w-0 items-center gap-2">
+          <SessionLanguageMenu />
           <Link
             href="/create"
             aria-label={t('join_nav_create')}
