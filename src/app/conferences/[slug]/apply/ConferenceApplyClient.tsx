@@ -1092,6 +1092,14 @@ function ConferenceApplyInner() {
   const ageAtStart = hasAgeGate && myDob && conference ? ageAt(myDob, conference.start_date) : null;
   const underAge = minAgeLimit != null && ageAtStart !== null && ageAtStart < minAgeLimit;
   const overAge = maxAgeLimit != null && ageAtStart !== null && ageAtStart > maxAgeLimit;
+  // A signed-out visitor has no profile date of birth for the checks above
+  // to run against. On an age-gated conference, asking once up front (never
+  // stored — see the guest date-of-birth screen below) saves them filling a
+  // long form only to be refused at Submit. `ask` -> `passed` lets them into
+  // the wizard; `ask` -> `blocked` shows the guest variant of the age
+  // screen, with its own way back to `ask` to correct a mistyped date.
+  const [guestDobInput, setGuestDobInput] = useState('');
+  const [guestDobStage, setGuestDobStage] = useState<'ask' | 'passed' | 'blocked'>('ask');
   // The basics wall fires whenever EITHER field is missing, age gate or not.
   // It sits in front of the age screens, so the age gate keeps working on top
   // of it: with no date of birth `ageAtStart` is null and underAge/overAge are
@@ -1717,6 +1725,12 @@ function ConferenceApplyInner() {
     setStep(Math.min(Math.max(1, Math.trunc(savedStep) || 1), totalSteps));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalSteps]);
+
+  /** "Keep my existing application" on the post-sign-in offer screen
+   *  (case one, below) was pressed: the guest draft for this (slug, role)
+   *  is already cleared, and this is what makes the plain "already
+   *  applied" wall take over instead of the offer re-appearing. */
+  const [guestOfferDismissed, setGuestOfferDismissed] = useState(false);
 
   /** A guest draft was found on arrival. Offered, never applied automatically
    *  — see the file header on WHY. Checked once per mount. */
@@ -5186,6 +5200,13 @@ function ConferenceApplyInner() {
   const canEdit = isEditMode && !!existingApp && !!roleConfig
     && (existingApp.status === 'rejected' || existingApp.status === 'submitted');
 
+  // A guest draft for THIS (slug, role) still in browser storage, checked
+  // fresh on every render rather than cached in state — it can change out
+  // from under this component (Part 34's adoption step clears it, or the
+  // visitor presses "Keep my existing application" below) and there is
+  // nothing to gain by pretending it is stable. Never read in preview.
+  const guestDraftRow = !previewing ? loadGuestDraft(slug, role) : null;
+
   // One-active-application-per-conference: an active application under a
   // different role blocks a fresh apply here, same wall treatment as
   // "already applied". Checked BEFORE the same-role wall (and skipped
@@ -5203,6 +5224,7 @@ function ConferenceApplyInner() {
             </h2>
             <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
               You already have an active {otherRoleApp.role.replace(/-/g, ' ')} application to this conference. Withdraw it or contact the organizing team if you need to change roles.
+              {guestDraftRow && ' The answers you just filled in are still saved in this browser, so if you withdraw it you can come back and finish.'}
             </p>
             <Link
               href={`/conferences/${slug}`}
@@ -5211,6 +5233,53 @@ function ConferenceApplyInner() {
             >
               VIEW CONFERENCE →
             </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Offered ONLY when there is a guest draft to apply and the application is
+  // one canEdit would actually accept (submitted or rejected) — accepted /
+  // assigned / checked-in have no legal edit to route them into, so those
+  // fall through to the plain wall below with just an extra line.
+  if (
+    existingApp && !canEdit && !previewing && guestDraftRow && !guestOfferDismissed
+    && (existingApp.status === 'submitted' || existingApp.status === 'rejected')
+  ) {
+    const updateHref = (() => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('edit', '1');
+      return `/conferences/${slug}/apply?${params.toString()}`;
+    })();
+    return (
+      <div className="min-h-screen flex flex-col" style={{ ...themeCssVars(activeTheme), backgroundColor: 'var(--gv-bg)' }}>
+        <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
+        <SiteNav />
+        <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
+          <div className="rounded-2xl p-10 text-center max-w-md w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
+            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+              You already applied to this conference
+            </h2>
+            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
+              You applied as {role.replace(/-/g, ' ')} already. We saved the answers you just filled in on this device. You can use them to update your existing application, or keep the application you already have.
+            </p>
+            <button
+              onClick={() => router.push(updateHref)}
+              className="w-full rounded-xl py-3 font-bold text-sm focus:outline-none transition-colors"
+              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', border: 'none', cursor: 'pointer' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
+            >
+              Update my application
+            </button>
+            <button
+              onClick={() => { clearGuestDraft(slug, role); setGuestOfferDismissed(true); }}
+              className="w-full mt-3 text-sm font-semibold focus:outline-none"
+              style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", background: 'none', border: 'none', cursor: 'pointer' }}
+            >
+              Keep my existing application
+            </button>
           </div>
         </div>
       </div>
@@ -5229,6 +5298,7 @@ function ConferenceApplyInner() {
             </h2>
             <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
               Your application as {role.replace(/-/g, ' ')} is {existingApp.status}.
+              {guestDraftRow && ' The answers you just filled in are still saved in this browser.'}
             </p>
             <Link
               href={`/conferences/${slug}`}
@@ -5306,6 +5376,121 @@ function ConferenceApplyInner() {
               >
                 Edit profile
               </Link>
+              <Link
+                href={`/conferences/${slug}`}
+                className="text-sm font-semibold"
+                style={{ color: 'var(--gv-muted)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
+              >
+                ← Back to {conferenceAcronymLabel(conference)}
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Guest date-of-birth gate (age-gated conferences only) ────────────────
+  // A signed-out visitor has no profile date of birth for underAge/overAge
+  // above to run against. Asking once, up front, on the conferences that
+  // actually gate on age saves a long form only to be refused at Submit;
+  // never asked at all when there is no gate. The date lives only in the
+  // two pieces of state it is declared with (see there) and is never
+  // written anywhere.
+  if (!user && !previewing && hasAgeGate && guestDobStage !== 'passed') {
+    if (guestDobStage === 'blocked') {
+      const guestAgeAtStart = guestDobInput ? ageAt(guestDobInput, conference.start_date) : null;
+      return (
+        <div className="min-h-screen flex flex-col" style={{ ...themeCssVars(activeTheme), backgroundColor: 'var(--gv-bg)' }}>
+          <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
+          <SiteNav />
+          <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
+            <div className="rounded-2xl p-10 text-center max-w-md w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
+              <span
+                className="inline-flex items-center rounded-full px-3 py-1 mb-4 text-[11px] font-bold"
+                style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.25)', color: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+              >
+                AGE REQUIREMENT
+              </span>
+              <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+                This conference requires delegates to be {ageRequirementText}
+              </h2>
+              <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
+                Based on your date of birth, you will be {guestAgeAtStart} when {conferenceAcronymLabel(conference)} starts, so you can&apos;t apply this time. If you typed it wrong, go back and try again.
+              </p>
+              <div className="flex items-center justify-center gap-4">
+                <button
+                  onClick={() => setGuestDobStage('ask')}
+                  className="text-sm font-semibold focus:outline-none"
+                  style={{ color: 'var(--gv-main)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: "'Outfit', sans-serif" }}
+                >
+                  Go back
+                </button>
+                <Link
+                  href={`/conferences/${slug}`}
+                  className="text-sm font-semibold"
+                  style={{ color: 'var(--gv-muted)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
+                >
+                  ← Back to {conferenceAcronymLabel(conference)}
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen flex flex-col" style={{ ...themeCssVars(activeTheme), backgroundColor: 'var(--gv-bg)' }}>
+        <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
+        <SiteNav />
+        <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
+          <div className="rounded-2xl p-10 max-w-md w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
+            <span
+              className="inline-flex items-center rounded-full px-3 py-1 mb-4 text-[11px] font-bold"
+              style={{ backgroundColor: 'color-mix(in srgb, var(--gv-accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-accent) 35%, transparent)', color: 'var(--gv-accent)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+            >
+              BEFORE YOU START
+            </span>
+            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+              What is your date of birth?
+            </h2>
+            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
+              {conferenceAcronymLabel(conference)} sets an age requirement, so we ask before you fill anything in. We only use it to check you can apply.
+            </p>
+
+            <label className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+              Date of birth
+            </label>
+            <DatePicker
+              value={guestDobInput}
+              max={new Date().toISOString().slice(0, 10)}
+              initialView="2005-06-15"
+              placeholder="Select your date of birth"
+              onChange={(iso) => setGuestDobInput(iso)}
+            />
+            <button
+              onClick={() => {
+                const age = guestDobInput ? ageAt(guestDobInput, conference.start_date) : null;
+                const under = minAgeLimit != null && age !== null && age < minAgeLimit;
+                const over = maxAgeLimit != null && age !== null && age > maxAgeLimit;
+                setGuestDobStage(under || over ? 'blocked' : 'passed');
+              }}
+              disabled={!guestDobInput}
+              className="w-full mt-4 rounded-xl py-3 font-bold text-sm focus:outline-none transition-colors"
+              style={{
+                backgroundColor: !guestDobInput ? 'var(--gv-border)' : 'var(--gv-main)',
+                color: !guestDobInput ? 'var(--gv-muted)' : 'var(--gv-on-main)',
+                fontFamily: "'Outfit', sans-serif",
+                letterSpacing: '0.08em',
+                cursor: !guestDobInput ? 'default' : 'pointer',
+              }}
+              onMouseEnter={(e) => { if (guestDobInput) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
+              onMouseLeave={(e) => { if (guestDobInput) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
+            >
+              Continue
+            </button>
+            <div className="text-center mt-4">
               <Link
                 href={`/conferences/${slug}`}
                 className="text-sm font-semibold"
