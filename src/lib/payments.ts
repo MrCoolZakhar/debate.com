@@ -110,13 +110,17 @@ export function unlimitedPricing(countryCode: string | null): { monthly: number;
     : { monthly: 2.5, yearly: 25, currency: 'USD' };
 }
 
-/** Gavelling credit (one-off, non-expiring) pricing for display purposes only
- *  — create-credit-checkout recomputes and enforces the real price. Mirrors
- *  unlimitedPricing's region split (UNLIMITED_REGION_A). */
-export function creditPricing(countryCode: string | null): { each: number; currency: string } {
-  const code = countryCode?.toUpperCase();
-  const isRegionA = !code || UNLIMITED_REGION_A.has(code);
-  return isRegionA ? { each: 3, currency: 'USD' } : { each: 1, currency: 'USD' };
+/** A Gavelling credit is USD 1 everywhere. No regional split: this is
+ *  display only, and create-credit-checkout v4 is the real price,
+ *  a flat 100 cents with no region lookup of its own, so the two cannot
+ *  disagree the way a client-side region list and a server-side one once
+ *  did. The countryCode parameter is kept, unused, so every call site
+ *  keeps compiling and so a future regional split has one obvious place
+ *  to come back to. The old region branch was removed rather than
+ *  renumbered: two copies of one price is exactly what produced a page
+ *  quoting one number while Stripe charged another. */
+export function creditPricing(_countryCode: string | null): { each: number; currency: string } {
+  return { each: 1, currency: 'USD' };
 }
 
 /** Gavelling Pro (1 credit/month + archive & upcoming tools) pricing for
