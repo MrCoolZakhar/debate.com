@@ -9,8 +9,11 @@
 //
 //   Left   1. Committee: the emblem in a WHITE DISC with the live acronym / name,
 //          topic and chairs beside it (LiveCommitteeIdentity), then the name,
-//          topic and chairs fields. 2. Delegations: the add bar, the quick
-//          bundles and Paste a list.
+//          topic and chairs fields (name | topic side by side, chairs beneath).
+//          2. Delegations: the heading beside the add bar, the quick bundles in one
+//          sideways row, then Paste a list filling the rest of the column (18 Sep 2026,
+//          owner: the box "must be genuinely big": 265px at 1280x800, 353 at 1440x900,
+//          525 at 1920x1080), with Auto-match inside the field's lower corner.
 //   Right  the delegations only: a large count (DelegationCount, plain type, no
 //          pill), ONE column of countries that scrolls inside, and Start session
 //          (StartSessionButton, centred on a forest gradient) pinned at the foot.
@@ -31,7 +34,7 @@ export { C, OUTFIT, SHADOW };
 
 /** One input look for every field on the page. 16px on phones so iOS never zooms. */
 export const INPUT_CLS =
-  'w-full h-[48px] lg:h-[46px] rounded-[14px] bg-white/80 px-4 text-base sm:text-[15px] text-[#1C1410] placeholder-[#8A7C6B] ' +
+  'w-full h-[48px] lg:h-[42px] rounded-[14px] bg-white/80 px-4 text-base sm:text-[15px] text-[#1C1410] placeholder-[#8A7C6B] ' +
   'shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] focus:outline-none ' +
   'focus:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] transition-[box-shadow] duration-150';
 
@@ -51,10 +54,10 @@ export function CreateStyles() {
         .create-start.is-ready:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 rgba(238,217,138,0.28), inset 0 0 0 1px rgba(238,217,138,0.22), 0 4px 8px rgba(27,56,40,0.18), 0 18px 36px rgba(27,56,40,0.30) !important; }
       }
       .create-start.is-ready:active { transform: scale(0.96); }
-      /* One screen needs about 790px of height (18 Sep 2026: the paste field runs to the foot
-         of the panel and needs at least 80px). On a shorter lg window the page scrolls instead
+      /* One screen needs about 660px of height (18 Sep 2026: the paste field runs to the foot
+         of the panel and needs at least 120px). On a shorter lg window the page scrolls instead
          of cutting the paste field off below the fold. */
-      @media (min-width: 1024px) and (max-height: 789px) { .create-root { height: auto !important; min-height: 100dvh !important; overflow: visible !important; } }
+      @media (min-width: 1024px) and (max-height: 659px) { .create-root { height: auto !important; min-height: 100dvh !important; overflow: visible !important; } }
       @media (prefers-reduced-motion: reduce) { .create-emblem-in, .create-count-in { animation: none; } .create-start { transition: none; } }
     `}</style>
   );
@@ -82,14 +85,15 @@ export function Panel({ step, title, labelledBy, aside, children, className = ''
 }
 
 /** The numbered step heading: a forest disc with the gold numeral, then the title. */
-export function StepHeading({ step, title, labelledBy, aside }: {
+export function StepHeading({ step, title, labelledBy, aside, className = '' }: {
   step: number;
   title: string;
   labelledBy: string;
   aside?: ReactNode;
+  className?: string;
 }) {
   return (
-    <header className="mb-3 flex min-h-[32px] flex-shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+    <header className={`mb-3 ${className} flex min-h-[32px] flex-shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5`}>
       <span
         aria-hidden
         className="flex flex-shrink-0 items-center justify-center tabular-nums"
@@ -320,7 +324,7 @@ export function ChairTokenField({ id, chairs, draft, onDraft, onCommit, onRemove
   };
   return (
     <div
-      className="flex h-[48px] items-center gap-1.5 rounded-[14px] bg-white/80 ps-1.5 pe-1.5 shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] transition-[box-shadow] duration-150 focus-within:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] lg:h-[46px]"
+      className="flex h-[48px] items-center gap-1.5 rounded-[14px] bg-white/80 ps-1.5 pe-1.5 shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] transition-[box-shadow] duration-150 focus-within:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] lg:h-[42px]"
     >
       <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {chairs.map((name, i) => (

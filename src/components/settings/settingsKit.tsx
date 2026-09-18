@@ -150,15 +150,18 @@ export function SettingsKitStyles() {
         .stg-docs { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
         .stg-vote-top { grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); }
       }
-      /* Points: the orbit. Stacked (blend first) until the page can hold the ring with a
-         column of rows on each side; then sources | ring | factors, the ring centred on the
-         rows. PointsTab bends the rows along the ring's curve (useOrbitArc). */
-      .stg-orbit { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 28px; align-items: start; }
-      .stg-orbit-core { order: -1; }
+      /* Points: the orbit. Stacked (ring, dial, sources, factors) until the page can hold
+         the ring with a column of rows on each side; then sources | ring | factors, all
+         centred on one line, the ring growing into whatever the two columns leave (260 to
+         440px), and the dial with its worked example under the three. PointsTab places the
+         rows on a circle around the ring (useOrbitArc). */
+      .stg-orbit { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 0; row-gap: 18px; align-items: start; }
+      .stg-orbit-core { order: -2; width: min(100%, 300px); justify-self: center; }
+      .stg-orbit-foot { order: -1; display: flex; flex-wrap: wrap; align-items: center; gap: 14px 32px; }
       @container (min-width: 900px) {
-        .stg-orbit { grid-template-columns: minmax(0, 1fr) minmax(250px, 290px) minmax(0, 1fr); }
-        .stg-orbit-core { order: 0; align-self: center; }
-        .stg-orbit-end { align-self: center; }
+        .stg-orbit { grid-template-columns: minmax(290px, 1fr) clamp(260px, calc(100cqw - 660px), 440px) minmax(290px, 1fr); align-items: center; row-gap: 26px; }
+        .stg-orbit-core { order: 0; width: 100%; }
+        .stg-orbit-foot { order: 0; grid-column: 1 / -1; justify-self: center; width: min(100%, 760px); }
       }
       @container (min-width: 900px) { .stg-docs { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.95fr); } }
       @media (prefers-reduced-motion: reduce) {

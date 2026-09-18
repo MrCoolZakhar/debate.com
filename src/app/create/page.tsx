@@ -725,7 +725,7 @@ function CreatePageInner() {
       <PageBackdrop />
       <CreateStyles />
 
-      <nav className="relative z-20 mx-auto flex h-14 w-full max-w-[1440px] flex-shrink-0 items-center gap-2 px-4 sm:gap-3 sm:px-6">
+      <nav className="relative z-20 mx-auto flex h-14 lg:h-12 w-full max-w-[1440px] flex-shrink-0 items-center gap-2 px-4 sm:gap-3 sm:px-6">
         <Link href="/sessions" className="flex flex-shrink-0 items-center focus:outline-none">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/GavellingLogo.png" alt="Gavelling" className="h-auto w-[112px] object-contain sm:w-[132px]" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
@@ -765,18 +765,20 @@ function CreatePageInner() {
             chairsLine={chairsLine}
           />
 
-          <div className="mt-3.5 flex flex-shrink-0 flex-col gap-2">
-            <div>
+          {/* Name and topic side by side from sm, chairs across the row beneath (18 Sep 2026,
+              to give the paste field its height). */}
+          <div className="mt-3 grid flex-shrink-0 grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="min-w-0">
               <SmallLabel htmlFor="create-committee-name">{t('create_committee_name')}</SmallLabel>
               <CommitteeNameInput id="create-committee-name" value={committeeName} onChange={setCommitteeName} onPresetSelect={handleCommitteePreset} />
             </div>
-            <div>
+            <div className="min-w-0">
               <SmallLabel htmlFor="create-topic">{t('create_topic')}</SmallLabel>
               <input id="create-topic" type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
                 placeholder={language === 'ar' ? 'مثال: الحق في التعليم' : language === 'fr' ? "ex. Le droit à l'éducation" : language === 'es' ? 'ej. El derecho a la educación' : 'e.g. The right to education'}
                 className={INPUT_CLS} />
             </div>
-            <div>
+            <div className="min-w-0 sm:col-span-2">
               <SmallLabel htmlFor="create-chair-name">
                 {t('create_chairs')} <span style={{ fontWeight: 600, color: C.inkSoft, letterSpacing: '0.06em' }}>{t('create_optional')}</span>
               </SmallLabel>
@@ -798,13 +800,15 @@ function CreatePageInner() {
           </div>
 
           {/* ── 2. Delegations: add bar, quick bundles, paste. The list is on the right. */}
-          <section aria-labelledby="create-step-delegations" className="mt-4 flex flex-shrink-0 flex-col lg:min-h-0 lg:flex-1" style={{ paddingTop: 16, boxShadow: 'inset 0 1px 0 rgba(27,56,40,0.08)' }}>
-            <StepHeading step={2} labelledBy="create-step-delegations" title={t('create_step_delegations')} />
+          <section aria-labelledby="create-step-delegations" className="mt-3 flex flex-shrink-0 flex-col lg:min-h-0 lg:flex-1" style={{ paddingTop: 12, boxShadow: 'inset 0 1px 0 rgba(27,56,40,0.08)' }}>
+            {/* From lg the step heading and the add bar share one row (18 Sep 2026). */}
+            <div className="flex flex-shrink-0 flex-col lg:flex-row lg:items-center lg:gap-4">
+            <StepHeading step={2} labelledBy="create-step-delegations" title={t('create_step_delegations')} className="lg:mb-0 lg:flex-shrink-0" />
 
             {/* Add a country: the one add path (+ button, Enter, first typeahead row). */}
-            <div ref={addWrapRef} className="relative z-30 flex-shrink-0">
+            <div ref={addWrapRef} className="relative z-30 flex-shrink-0 lg:min-w-0 lg:flex-1">
               <label htmlFor="create-add-country" className="sr-only">{t('create_add_country')}</label>
-              <div className="flex h-[48px] items-center gap-2 rounded-[14px] bg-white/80 ps-3.5 pe-1.5 shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] transition-[box-shadow] duration-150 focus-within:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] lg:h-[46px]">
+              <div className="flex h-[48px] items-center gap-2 rounded-[14px] bg-white/80 ps-3.5 pe-1.5 shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] transition-[box-shadow] duration-150 focus-within:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] lg:h-[42px]">
                 <Search size={17} strokeWidth={2.2} className="shrink-0" style={{ color: C.inkSoft }} />
                 <input id="create-add-country" type="text" value={search} onChange={(e) => onSearchChange(e.target.value)}
                   autoComplete="off"
@@ -847,12 +851,14 @@ function CreatePageInner() {
               )}
             </div>
 
+            </div>
+
             {/* Quick bundles. One row that scrolls sideways on a phone, wraps from sm, and is
                 one sideways row again from lg (18 Sep 2026), so the paste field below gets
                 the height.
                 The Paste a list toggle used to sit at the end of this row; the paste
                 area is now always on screen (below), so there is nothing to open. */}
-            <div className="mt-3 flex-shrink-0">
+            <div className="mt-2.5 flex-shrink-0">
               <p id="create-presets-label" className="sr-only">{t('create_quick_bundles')}</p>
               <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 lg:flex-nowrap lg:overflow-x-auto [&::-webkit-scrollbar]:hidden">
                 <div role="group" aria-labelledby="create-presets-label" className="contents">
@@ -884,27 +890,31 @@ function CreatePageInner() {
                 Same matching as before: Auto-match opens the review modal. Big, and from lg
                 it takes every pixel down to the foot of the panel (18 Sep 2026, owner: "make
                 the paste a list section big, extending to the bottom of the screen"). */}
-            <div className="mt-3 flex flex-shrink-0 flex-col lg:min-h-0 lg:flex-1">
-              {/* Label and Auto-match share one row, so the whole height below is the field.
-                  The hint stays the field's tooltip and its description for screen readers. */}
+            <div className="mt-2.5 flex flex-shrink-0 flex-col lg:min-h-0 lg:flex-1">
+              {/* A one-line label, then the field takes every pixel below it. Auto-match sits
+                  INSIDE the field's lower corner (18 Sep 2026, owner: the box "must be genuinely
+                  big"), so it costs no height. The hint stays the field's tooltip and its
+                  description for screen readers. */}
               <div className="mb-1.5 flex flex-shrink-0 items-center gap-1.5" style={{ color: C.inkSoft }}>
                 <ClipboardList size={14} strokeWidth={2.1} />
-                <label htmlFor="create-paste" className="me-auto uppercase" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em' }}>
+                <label htmlFor="create-paste" className="uppercase" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', lineHeight: 1.3 }}>
                   {t('create_paste_toggle')}
                 </label>
+              </div>
+              <div className="relative flex flex-col lg:min-h-0 lg:flex-1">
+                <textarea id="create-paste" value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
+                  placeholder={t('create_paste_placeholder')}
+                  title={t('create_paste_hint')}
+                  aria-describedby="create-paste-hint"
+                  rows={8}
+                  className="block w-full resize-none rounded-[14px] bg-white/80 px-3.5 pt-3 pb-14 lg:h-auto lg:min-h-[120px] lg:flex-1 text-base leading-relaxed text-[#1C1410] placeholder-[#8A7C6B] shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] transition-[box-shadow] duration-150 focus:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] focus:outline-none sm:text-[14px]" />
                 <button type="button" onClick={handlePaste} disabled={!pasteText.trim()}
-                  className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-extrabold transition-[background-color,color,transform,opacity] duration-150 enabled:hover:bg-[#1B3828] enabled:hover:text-[#EED98A] enabled:active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
-                  style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: C.forest, boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.14)' }}>
-                  <Wand2 size={14} strokeWidth={2.2} />
+                  className="absolute bottom-2.5 end-2.5 flex h-9 items-center gap-2 rounded-xl px-3.5 text-[13px] font-extrabold transition-[background-color,color,transform,opacity] duration-150 enabled:hover:bg-[#2A5A3C] enabled:active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus-visible:shadow-[0_0_0_2px_#EDE7D8,0_0_0_4px_#1B3828]"
+                  style={{ backgroundColor: C.forest, color: C.gold, boxShadow: '0 2px 8px rgba(27,56,40,0.18)' }}>
+                  <Wand2 size={15} strokeWidth={2.2} />
                   {stripArrow(t('create_auto_match'))}
                 </button>
               </div>
-              <textarea id="create-paste" value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
-                placeholder={t('create_paste_placeholder')}
-                title={t('create_paste_hint')}
-                aria-describedby="create-paste-hint"
-                rows={8}
-                className="block w-full resize-none rounded-[14px] bg-white/80 px-3.5 py-3 lg:h-auto lg:min-h-[80px] lg:flex-1 text-base leading-relaxed text-[#1C1410] placeholder-[#8A7C6B] shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] transition-[box-shadow] duration-150 focus:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] focus:outline-none sm:text-[14px]" />
               <p id="create-paste-hint" className="sr-only">{t('create_paste_hint')}</p>
               {pasteError && <p role="alert" className="mt-1.5 flex-shrink-0 text-[13px] font-semibold" style={{ color: '#8A6414' }}>{pasteError}</p>}
             </div>

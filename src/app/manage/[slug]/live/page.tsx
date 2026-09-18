@@ -13,7 +13,7 @@ import {
 } from '@/components/neu';
 import { getScoringConfig } from '@/lib/scoring';
 import type { ScoringConfig } from '@/lib/settingsStore';
-import { loadConferenceScoreboard, type ConferenceScoreboard } from '@/lib/conferenceScoreboard';
+import { loadConferenceScoreboard, sessionHeadlineScores, type ConferenceScoreboard } from '@/lib/conferenceScoreboard';
 import { getAwardsConfig } from '@/lib/awards';
 import {
   type LiveCommittee, type ChairPerson, type PendingChairPerson, type CaucusJson,
@@ -240,8 +240,10 @@ export default function LiveStatusPage() {
           // query — like the ledger read it replaces — is unbounded. If that
           // ever bites, the fix is a per-committee `max(created_at)` view, not
           // narrowing the clock back to `updated_at`.
+          // `recipient` is what marks a ledger row (`__log__`) for scoring.ts, which scores
+          // this committee exactly as the chair's board does (`sessionHeadlineScores`).
           anonSupabase.from('messages')
-            .select('committee_id, sender, content, created_at')
+            .select('committee_id, sender, recipient, content, created_at')
             .in('committee_id', sessionIds),
           // Chair feedback: ratings AND private notes. In practice almost every
           // row is a factor rating with no prose, so factor_scores is as much
@@ -466,6 +468,12 @@ export default function LiveStatusPage() {
             : [],
           speechLogs,
           eventLogs,
+          // The chair's own arithmetic (scoring.ts over this committee's config, blend
+          // included), so the live wall, the organiser scoreboard and the chair's board agree.
+          scores: sid && sRow
+            ? sessionHeadlineScores(sRow, bySession(delegates, sid), bySession(sysMessages, sid), bySession(documents, sid), bySession(feedback, sid))
+                .map((x) => ({ country: x.country, total: x.headline }))
+            : [],
           lastActivityAt,
           lastMessageAt,
           hasHistory,

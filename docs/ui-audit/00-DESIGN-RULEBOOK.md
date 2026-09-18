@@ -30,9 +30,9 @@ This is the yardstick for the UI audit. A page/component either clears this bar 
 
 1. **Clear focal hierarchy** — every viewport has one obvious protagonist. If everything is the same weight, nothing is.
 2. **Contrast as the tool** — you create emphasis by DEMOTING the secondary as much as by promoting the primary. Uniform thickness/colour = no hierarchy.
-3. **Depth & elevation** — layered shadows, glass, gradients give a screen dimensionality. Flat-on-flat reads cheap.
+3. **Depth & elevation** — layered shadows, glass, gradients give a screen dimensionality. Flat-on-flat reads cheap. Depth belongs to the protagonist, not to every fact: never one raised neumorphic tile per fact (see §7, Disliked).
 4. **Meaningful motion** — hover lifts, arrow nudges, shimmer, expand-on-hover. Never gratuitous; always feedback. Respect `prefers-reduced-motion`.
-5. **Density done right** — pack related info tightly and legibly (a 2×2 fact grid) instead of sprawling stacks; give the page air between groups.
+5. **Density done right** — pack related info tightly and legibly (compact typographic fact rows with an icon, a label and a value, not a grid of raised tiles) instead of sprawling stacks; give the page air between groups.
 6. **Show data, don't list it** — occupancy → a fill bar; price → a medallion; a schedule → a timeline; locations → a map/flags; rank → an insignia.
 7. **Consistency of the language** — same card radius, same border weight family, same eyebrow treatment, same button language across a surface. One-off styling reads as unfinished.
 8. **Real content over placeholders** — logos, banners, avatars, flags. A page that leans on monograms everywhere hasn't earned its polish.
@@ -129,6 +129,7 @@ Sourced from Peter's own messages on the sessions redesign (chair, delegate, vot
 - **Emails with no images, repeated facts, or raw slugs** as names ("kenyamodelunitednations"). Use the display name.
 - **Shipping one screen size.** Every change is checked from 1024x768 to 2560x1440; defaults (sidebar width, flag size) scale with the screen.
 - **Em dashes** in anything a user reads.
+- **Grids of identical beige neumorphic bubbles** (one raised tile per fact) are out. The owner moved away from that neumorphism; compose with hierarchy, colour, flags and graphs instead. Said of the delegate points screen and the admin conference pop-up (18 Sep 2026).
 
 ---
 

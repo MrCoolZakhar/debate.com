@@ -22,23 +22,35 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ArrowUpRight, CalendarClock, Check, Globe, Mail, MapPin, PencilLine, Send, Trash2,
-  Users, X, AlertTriangle, Building2, History,
+  ArrowUpRight, Building2, CalendarClock, Check, Gavel, Globe, History, LayoutTemplate, Link2,
+  Mail, MapPin, PencilLine, Rocket, Send, Ticket, Trash2, Users, Wallet, X, AlertTriangle,
+  FileText, BadgeCheck, CreditCard, Armchair, Target,
 } from 'lucide-react';
 import GrowDialog from '@/components/GrowDialog';
 import Loader from '@/components/Loader';
 import Avatar from '@/components/Avatar';
 import { LogoDisc } from '@/components/LogoDisc';
+import { CircleFlag } from '@/components/CircleFlag';
 import { DatePicker } from '@/components/DatePicker';
-import VerifiedCheck from '@/components/VerifiedCheck';
+import VerifiedCheck, { VERIFIED_BLUE } from '@/components/VerifiedCheck';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useScrollLock } from '@/hooks/useScrollLock';
-import { NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuInset } from '@/components/neu';
-import { Eyebrow, NUM, RED, fmtDate, int } from './staffBits';
+import { NEU, OUTFIT, EASE } from '@/components/neu';
+import { NUM, RED, fmtDate, int } from './staffBits';
 import { isPastConference } from './conferenceDates';
 
-interface Detail {
+// ── Palette (docs/ui-audit/00-DESIGN-RULEBOOK.md §3) ────────────────────────
+// Flat, bordered, coloured. No raised neumorphic tiles: the owner moved away
+// from one bubble per fact (rulebook §7, Disliked).
+const C = {
+  forest: '#1B3828', forestMid: '#2A5A3C', forestLight: '#3D7A52',
+  gold: '#EED98A', goldDeep: '#B6871F', amber: '#B8844A',
+  ivory: '#EDE7D8', cream: '#FAF8F3', parchment: '#DDD4C0', track: '#E6DECB',
+  ink: '#1C1410', inkSoft: '#5E5145', sky: '#4A7896', plum: '#8A6BA0',
+} as const;
+
+export interface ConferenceDetail {
   conference: {
     id: string; slug: string; full_name: string; acronym: string;
     start_date: string | null; end_date: string | null; dates_tbd: boolean;
@@ -51,16 +63,25 @@ interface Detail {
     payment_method: string | null; connect_onboarding_status: string | null;
     created_at: string; updated_at: string;
   };
+  /** The seven stages of conference_setup_status() that are ALSO its seven
+   *  verification keys (v_ver_keys). setup_total is 7 as well today; the list
+   *  is filtered to verification_keys so the ring means "distance from the
+   *  blue checkmark" even if a non-criterion step is ever added again. */
+  setup: {
+    items: { key: string; title: string; done: boolean; todo: string }[];
+    seat_capacity: number; required_seats: number; minutes_left: number;
+  };
   organisers: {
     user_id: string; display_name: string | null; email: string | null;
     avatar_url: string | null; role: string; is_owner: boolean;
   }[];
   counts: {
-    applications: number; accepted: number; paid: number; allocations: number;
-    committees: number; live_sessions: number; invoices: number;
+    applications: number; submitted: number; accepted: number; rejected: number; withdrawn: number;
+    paid: number; allocations: number; committees: number; live_sessions: number; invoices: number;
   };
   fees: { role: string; amount: number; currency: string }[];
 }
+type Detail = ConferenceDetail;
 
 type Pane = 'overview' | 'edit' | 'email' | 'delete';
 
@@ -101,26 +122,184 @@ function errText(e: { message?: string } | null | undefined, fallback: string): 
   return m ? m.replace(/^.*?ERROR:\s*/, '') : fallback;
 }
 
-// ── Small presentational pieces ─────────────────────────────────────────────
+const pct = (n: number, of: number) => (of > 0 ? Math.round((n / of) * 100) : 0);
 
-function Fact({ icon: Icon, label, value }: { icon: typeof Globe; label: string; value: React.ReactNode }) {
+const STAGE_ICON: Record<string, typeof Globe> = {
+  page: LayoutTemplate, committees: Building2, chairs: Gavel, email: Mail,
+  secretariat: Users, financials: Wallet, publish: Rocket,
+};
+/** The organiser's checklist titles are imperative ("Invite chairs"); the
+ *  staff view names the stage. */
+const STAGE_LABEL: Record<string, string> = {
+  page: 'Conference page', committees: 'Committees and seats', chairs: 'Chairs on the dais',
+  email: 'Applicant emails', secretariat: 'Secretariat', financials: 'Payment method', publish: 'Published',
+};
+
+// ── The verification ring ──────────────────────────────────────────────────
+
+function StageRing({ done, total, verified }: { done: number; total: number; verified: boolean }) {
+  const size = 124, stroke = 12, r = (size - stroke) / 2, circ = 2 * Math.PI * r;
+  const frac = total > 0 ? Math.min(1, done / total) : 0;
+  const colour = verified ? VERIFIED_BLUE : frac >= 0.7 ? C.forestLight : frac >= 0.4 ? C.goldDeep : C.amber;
   return (
-    <NeuInset small style={{ padding: '10px 12px', borderRadius: 14 }}>
-      <div className="flex items-center gap-1.5 mb-1">
-        <Icon size={12} strokeWidth={2.4} style={{ color: NEU.deepGold, flexShrink: 0 }} aria-hidden />
-        <span style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: NEU.inkSoft }}>{label}</span>
+    <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={C.track} strokeWidth={stroke} />
+        <circle
+          cx={size / 2} cy={size / 2} r={r} fill="none" stroke={colour} strokeWidth={stroke}
+          strokeLinecap="round" strokeDasharray={`${circ * frac} ${circ}`}
+          style={{ transition: `stroke-dasharray 600ms ${EASE}` }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span style={{ fontFamily: OUTFIT, fontSize: 30, fontWeight: 900, color: C.ink, lineHeight: 1, letterSpacing: '-0.03em', ...NUM }}>
+          {done}<span style={{ color: C.inkSoft, fontWeight: 700, fontSize: 20 }}>/{total}</span>
+        </span>
+        <span style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: C.inkSoft, marginTop: 3 }}>stages</span>
       </div>
-      <div className="break-words" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink, ...NUM }}>{value}</div>
-    </NeuInset>
+    </div>
   );
 }
 
-function Count({ value, label }: { value: number; label: string }) {
+// ── The delegate funnel ────────────────────────────────────────────────────
+
+function Funnel({ detail }: { detail: Detail }) {
+  const k = detail.counts;
+  const expected = Number(detail.conference.expected_delegates) || 0;
+  const seats = detail.setup.seat_capacity || 0;
+  const scale = Math.max(expected, seats, k.applications, 1);
+  const target = expected || seats;
+  const steps = [
+    { key: 'applied', label: 'Applied', value: k.applications, colour: C.sky, icon: FileText },
+    { key: 'accepted', label: 'Accepted', value: k.accepted, colour: C.forestLight, icon: BadgeCheck },
+    { key: 'paid', label: 'Paid', value: k.paid, colour: C.goldDeep, icon: CreditCard },
+    { key: 'placed', label: 'Placed in a seat', value: k.allocations, colour: C.plum, icon: Armchair },
+  ];
+  const markers: { at: number; label: string; colour: string }[] = [];
+  if (expected > 0) markers.push({ at: expected, label: `Expected ${int(expected)}`, colour: C.goldDeep });
+  if (seats > 0 && seats !== expected) markers.push({ at: seats, label: `Seats ${int(seats)}`, colour: C.forest });
+
   return (
-    <div className="flex flex-col items-center" style={{ minWidth: 64 }}>
-      <span style={{ fontFamily: OUTFIT, fontSize: 20, fontWeight: 900, color: NEU.ink, lineHeight: 1, ...NUM }}>{int(value)}</span>
-      <span style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.inkSoft, marginTop: 4 }}>{label}</span>
+    <section aria-labelledby="adm-funnel">
+      <div className="flex items-end gap-3 flex-wrap mb-1">
+        <h3 id="adm-funnel" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: C.forest }}>Delegates</h3>
+        <span className="ml-auto" style={{ fontFamily: OUTFIT, fontSize: 12, color: C.inkSoft }}>
+          {expected > 0 ? <>Expecting <strong style={{ color: C.ink }}>{int(expected)}</strong></> : 'No expected number set'}
+          {seats > 0 && <> · <strong style={{ color: C.ink }}>{int(seats)}</strong> seats</>}
+        </span>
+      </div>
+      <p style={{ fontFamily: OUTFIT, color: C.ink, lineHeight: 1 }}>
+        <span style={{ fontSize: 44, fontWeight: 900, letterSpacing: '-0.03em', ...NUM }}>{int(k.applications)}</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: C.inkSoft, marginLeft: 8 }}>
+          {k.applications === 1 ? 'application' : 'applications'}
+          {target > 0 && k.applications > 0 && <>, {pct(k.applications, target)}% of {expected ? 'the target' : 'the seats'}</>}
+        </span>
+      </p>
+      {k.applications === 0 && (
+        <p className="mt-1.5" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: C.inkSoft }}>
+          Nobody has applied yet.{target > 0 ? ` The bars fill toward ${int(target)}.` : ''}
+        </p>
+      )}
+
+      <div className="mt-4 flex flex-col" style={{ gap: 11 }}>
+        {steps.map((st, i) => {
+          const prev = i === 0 ? null : steps[i - 1].value;
+          const Icon = st.icon;
+          const w = (st.value / scale) * 100;
+          return (
+            <div key={st.key} className="grid items-center" style={{ gridTemplateColumns: '132px 1fr 88px', gap: 12 }}>
+              <span className="inline-flex items-center gap-2 min-w-0">
+                <span className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 24, height: 24, borderRadius: 999, background: st.colour }}>
+                  <Icon size={13} strokeWidth={2.4} style={{ color: '#FFFFFF' }} aria-hidden />
+                </span>
+                <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: C.ink }}>{st.label}</span>
+              </span>
+              <div className="relative" style={{ height: 14, borderRadius: 999, background: C.track }}>
+                <div style={{
+                  position: 'absolute', insetInlineStart: 0, top: 0, bottom: 0, width: `${Math.max(w, st.value > 0 ? 2 : 0)}%`,
+                  borderRadius: 999, background: `linear-gradient(90deg, ${st.colour}CC, ${st.colour})`,
+                  transition: `width 600ms ${EASE}`,
+                }} />
+                {markers.map(m => (
+                  <span key={m.label} aria-hidden style={{
+                    position: 'absolute', top: -4, bottom: -4, width: 2, borderRadius: 2,
+                    insetInlineStart: `calc(${(m.at / scale) * 100}% - 1px)`, background: m.colour, opacity: 0.8,
+                  }} />
+                ))}
+              </div>
+              <span className="text-end" style={{ fontFamily: OUTFIT, ...NUM }}>
+                <span style={{ fontSize: 17, fontWeight: 900, color: C.ink }}>{int(st.value)}</span>
+                <span
+                  title={prev === null ? `Share of the ${expected ? 'expected delegates' : 'seats'}` : `Share of ${steps[i - 1].label.toLowerCase()}`}
+                  style={{ fontSize: 11, fontWeight: 700, color: st.value > 0 ? st.colour : C.inkSoft, marginInlineStart: 6 }}
+                >
+                  {prev === null
+                    ? (target > 0 ? `${pct(st.value, target)}%` : '')
+                    : `${pct(st.value, prev)}%`}
+                </span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex items-center gap-4 flex-wrap mt-3" style={{ fontFamily: OUTFIT, fontSize: 11, color: C.inkSoft }}>
+        {markers.map(m => (
+          <span key={m.label} className="inline-flex items-center gap-1.5">
+            <span aria-hidden style={{ width: 2, height: 12, background: m.colour, borderRadius: 2 }} />
+            {m.label}
+          </span>
+        ))}
+      </div>
+      {(k.submitted > 0 || k.rejected > 0 || k.withdrawn > 0) && (
+        <p className="mt-2" style={{ fontFamily: OUTFIT, fontSize: 12, color: C.inkSoft }}>
+          <strong style={{ color: C.ink }}>{int(k.submitted)}</strong> waiting for a decision ·{' '}
+          <strong style={{ color: RED }}>{int(k.rejected)}</strong> rejected ·{' '}
+          <strong style={{ color: C.ink }}>{int(k.withdrawn)}</strong> withdrawn
+        </p>
+      )}
+    </section>
+  );
+}
+
+// ── Typographic fact rows ──────────────────────────────────────────────────
+
+function FactRow({ icon: Icon, tint, label, children }: { icon: typeof Globe; tint: string; label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3" style={{ padding: '9px 0', borderTop: `1px solid ${C.parchment}` }}>
+      <Icon size={16} strokeWidth={2.2} style={{ color: tint, flexShrink: 0, marginTop: 1 }} aria-hidden />
+      <div className="min-w-0 flex-1">
+        <p style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: C.inkSoft }}>{label}</p>
+        <div className="break-words" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: C.ink, ...NUM }}>{children}</div>
+      </div>
     </div>
+  );
+}
+
+// ── Buttons and fields (flat, bordered) ────────────────────────────────────
+
+/** Icon first, the word small beneath (rulebook §7, Liked). */
+function ToolButton({ icon: Icon, label, onClick, on, danger }: {
+  icon: typeof Globe; label: string; onClick: () => void; on: boolean; danger?: boolean;
+}) {
+  const accent = danger ? RED : C.forest;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={on}
+      className="inline-flex flex-col items-center justify-center focus:outline-none focus-visible:ring-2 transition-transform active:scale-[0.97]"
+      style={{
+        width: 76, height: 58, gap: 4, borderRadius: 14, cursor: 'pointer',
+        border: `1.5px solid ${on ? accent : C.parchment}`,
+        background: on ? accent : C.cream,
+        color: on ? (danger ? '#FFFFFF' : C.gold) : accent,
+        transition: `background 160ms ${EASE}, border-color 160ms ${EASE}, color 160ms ${EASE}`,
+      }}
+    >
+      <Icon size={20} strokeWidth={2.2} aria-hidden />
+      <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700 }}>{label}</span>
+    </button>
   );
 }
 
@@ -130,27 +309,19 @@ function ActionButton({
   icon: typeof Globe; label: string; onClick?: () => void; on?: boolean; danger?: boolean;
   disabled?: boolean; type?: 'button' | 'submit';
 }) {
-  const [hover, setHover] = useState(false);
-  const fill = danger
-    ? `linear-gradient(135deg, #9A3030, #7A1F1F)`
-    : `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`;
+  const accent = danger ? RED : C.forest;
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
-      aria-pressed={on}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
       className="inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2"
       style={{
-        padding: '8px 14px', borderRadius: 999, border: 'none',
+        padding: '8px 15px', borderRadius: 999, border: `1.5px solid ${on ? accent : C.parchment}`,
         cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
-        background: on ? fill : NEU.surface,
-        color: on ? (danger ? '#FFFFFF' : NEU.gold) : danger ? RED : NEU.ink,
-        boxShadow: hover && !disabled ? NEU.outSmHover : NEU.outSm,
+        background: on ? accent : C.cream,
+        color: on ? (danger ? '#FFFFFF' : C.gold) : accent,
         fontFamily: OUTFIT, fontSize: 12, fontWeight: 800,
-        transition: `box-shadow 180ms ${EASE}`,
       }}
     >
       <Icon size={14} strokeWidth={2.4} aria-hidden />
@@ -160,15 +331,15 @@ function ActionButton({
 }
 
 const fieldStyle: React.CSSProperties = {
-  width: '100%', border: 'none', borderRadius: 12, padding: '9px 12px',
-  backgroundColor: NEU.base, boxShadow: NEU.inSm, color: NEU.ink,
+  width: '100%', borderRadius: 12, padding: '9px 12px',
+  backgroundColor: '#FFFFFF', border: `1.5px solid ${C.parchment}`, color: C.ink,
   fontFamily: OUTFIT, fontSize: 13, outline: 'none',
 };
 
 function Field({ label, children, wide }: { label: string; children: React.ReactNode; wide?: boolean }) {
   return (
     <label className={wide ? 'sm:col-span-2 block' : 'block'}>
-      <span className="block mb-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: NEU.inkSoft }}>{label}</span>
+      <span className="block mb-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: C.inkSoft }}>{label}</span>
       {children}
     </label>
   );
@@ -442,16 +613,18 @@ function DeletePane({
 // ── The dialog ─────────────────────────────────────────────────────────────
 
 export default function ConferenceDetailDialog({
-  conferenceId, onClose, onChanged, onOpenPerson,
+  conferenceId, onClose, onChanged, onOpenPerson, initialDetail,
 }: {
   conferenceId: string;
   onClose: () => void;
   /** Called after an edit or a delete, so the list reloads from the server. */
   onChanged: () => void;
   onOpenPerson: (userId: string) => void;
+  /** Render this record instead of fetching one (previews only). */
+  initialDetail?: Detail;
 }) {
   const { session } = useAuth();
-  const [detail, setDetail] = useState<Detail | null>(null);
+  const [detail, setDetail] = useState<Detail | null>(initialDetail ?? null);
   const [error, setError] = useState<string | null>(null);
   const [pane, setPane] = useState<Pane>('overview');
   const [notice, setNotice] = useState<string | null>(null);
@@ -459,6 +632,7 @@ export default function ConferenceDetailDialog({
   useScrollLock(true);
 
   useEffect(() => {
+    if (initialDetail) return;
     let cancelled = false;
     (async () => {
       if (!session) { setError('Not signed in.'); return; }
@@ -470,33 +644,35 @@ export default function ConferenceDetailDialog({
       setDetail(data as Detail);
     })();
     return () => { cancelled = true; };
-  }, [session, conferenceId]);
+  }, [session, conferenceId, initialDetail]);
 
   const toggle = useCallback((p: Pane) => { setNotice(null); setPane(cur => (cur === p ? 'overview' : p)); }, []);
 
   const c = detail?.conference;
   const title = c ? (c.acronym?.trim() || c.full_name) : 'Conference';
   const past = c ? isPastConference(c) : false;
-  const allFree = !!detail && detail.fees.every(f => !Number(f.amount));
+  const stages = detail?.setup.items ?? [];
+  const stagesDone = stages.filter(s => s.done).length;
+  const paidFees = (detail?.fees ?? []).filter(f => Number(f.amount) > 0);
 
   return (
     <GrowDialog
       originSelector={`[data-admin-conf="${conferenceId}"]`}
       onClose={onClose}
       ariaLabel={title}
-      panelClassName="w-full max-w-3xl overflow-y-auto"
+      panelClassName="w-full max-w-4xl overflow-y-auto"
       panelStyle={{
-        maxHeight: '88vh', backgroundColor: NEU.surface, borderRadius: 24,
-        boxShadow: '0 24px 60px rgba(27,56,40,0.30)', padding: 24, fontFamily: OUTFIT,
+        maxHeight: '90vh', backgroundColor: C.cream, borderRadius: 26, fontFamily: OUTFIT,
+        border: `1.5px solid ${C.parchment}`, boxShadow: '0 28px 70px rgba(27,56,40,0.32)',
       }}
-      backdropStyle={{ background: 'rgba(16,28,20,0.45)' }}
+      backdropStyle={{ background: 'rgba(16,28,20,0.5)' }}
     >
       {requestClose => (
         <>
-          {!detail && !error && <div className="flex items-center justify-center py-16"><Loader /></div>}
+          {!detail && !error && <div className="flex items-center justify-center py-20"><Loader /></div>}
 
           {error && (
-            <div className="py-10 text-center">
+            <div className="py-12 px-6 text-center">
               <p style={{ fontSize: 13, color: RED }}>{error}</p>
               <div className="mt-4 inline-flex"><ActionButton icon={X} label="Close" onClick={requestClose} /></div>
             </div>
@@ -504,146 +680,214 @@ export default function ConferenceDetailDialog({
 
           {detail && c && (
             <>
-              {/* Header */}
-              <div className="flex items-start gap-3.5 mb-5">
-                <LogoDisc src={c.logo_url} alt={title} size={56} fallbackText={title.slice(0, 3)} />
-                <div className="flex-1 min-w-0">
-                  <h2 className="flex items-center gap-2 flex-wrap" style={{ fontSize: 21, fontWeight: 900, color: NEU.ink, letterSpacing: '-0.01em' }}>
+              {/* ── Hero: the flag is the protagonist ── */}
+              <header
+                className="relative flex items-center gap-5 flex-wrap"
+                style={{
+                  padding: '26px 28px 24px',
+                  background: `radial-gradient(120% 140% at 0% 0%, ${C.forestMid} 0%, ${C.forest} 60%)`,
+                  borderRadius: '24px 24px 0 0', color: C.ivory,
+                }}
+              >
+                <div className="relative flex-shrink-0" style={{ width: 104, height: 104 }}>
+                  <CircleFlag
+                    country={c.country}
+                    size={104}
+                    loading="eager"
+                    ring={C.gold}
+                    label={c.country || 'No country'}
+                    fallback={<Globe size={40} style={{ color: C.forest }} />}
+                    style={{ boxShadow: '0 10px 26px rgba(0,0,0,0.35)', borderRadius: 999 }}
+                  />
+                  <span className="absolute" style={{ right: -8, bottom: -6, borderRadius: 999, boxShadow: '0 4px 12px rgba(0,0,0,0.3)', border: `2.5px solid ${C.forest}` }}>
+                    <LogoDisc src={c.logo_url} alt={title} size={44} fallbackText={title.slice(0, 3)} />
+                  </span>
+                </div>
+
+                <div className="flex-1 min-w-0" style={{ minWidth: 220 }}>
+                  <h2 className="flex items-center gap-2.5 flex-wrap" style={{ fontSize: 30, fontWeight: 900, letterSpacing: '-0.02em', lineHeight: 1.05, color: '#FFFFFF' }}>
                     <span className="truncate">{title}</span>
-                    <VerifiedCheck verified={c.is_verified} showUnverified size={17}
+                    <VerifiedCheck verified={c.is_verified} showUnverified size={22}
                       title={c.is_verified ? `Verified${c.verified_at ? ` on ${fmtDate(c.verified_at)}` : ''}` : 'Not verified yet'} />
                   </h2>
                   {title !== c.full_name && (
-                    <p className="truncate" style={{ fontSize: 12.5, color: NEU.inkSoft, fontWeight: 600 }}>{c.full_name}</p>
+                    <p className="truncate mt-1" style={{ fontSize: 14, fontWeight: 600, color: C.gold }}>{c.full_name}</p>
                   )}
-                  <div className="flex items-center gap-2 flex-wrap mt-1.5" style={{ fontSize: 11.5, fontWeight: 700, color: NEU.inkSoft }}>
-                    <span className="inline-flex items-center gap-1" style={{ color: c.is_public ? NEU.green : NEU.inkSoft }}>
-                      {c.is_public ? <Globe size={12} aria-hidden /> : <PencilLine size={12} aria-hidden />}
-                      {c.is_public ? `Published${c.published_at ? ` ${fmtDate(c.published_at)}` : ''}` : 'Draft'}
+                  <div className="flex items-center gap-x-4 gap-y-1 flex-wrap mt-2.5" style={{ fontSize: 12.5, fontWeight: 600, color: 'rgba(237,231,216,0.85)' }}>
+                    <span className="inline-flex items-center gap-1.5"><CalendarClock size={14} aria-hidden style={{ color: C.gold }} />{datesLabel(c)}</span>
+                    <span className="inline-flex items-center gap-1.5"><MapPin size={14} aria-hidden style={{ color: C.gold }} />{[c.city, c.country].filter(Boolean).join(', ') || 'No location'}</span>
+                    <span className="inline-flex items-center gap-1.5" style={{ color: c.is_public ? '#A8E0B8' : 'rgba(237,231,216,0.85)' }}>
+                      {c.is_public ? <Globe size={14} aria-hidden /> : <PencilLine size={14} aria-hidden />}
+                      {c.is_public ? 'Published' : 'Draft'}
                     </span>
-                    {past && <span className="inline-flex items-center gap-1"><History size={12} aria-hidden /> Past</span>}
+                    {past && <span className="inline-flex items-center gap-1.5"><History size={14} aria-hidden />Past</span>}
                     {c.is_demo && <span>Demo</span>}
                   </div>
                 </div>
+
                 <button
                   type="button"
                   onClick={requestClose}
                   aria-label="Close"
-                  className="flex items-center justify-center focus:outline-none flex-shrink-0"
+                  className="absolute flex items-center justify-center focus:outline-none focus-visible:ring-2"
                   style={{
-                    width: 32, height: 32, border: 'none', borderRadius: 11, cursor: 'pointer',
-                    backgroundColor: NEU.surface, boxShadow: NEU.outSm, color: NEU.inkSoft,
+                    top: 16, right: 16, width: 34, height: 34, borderRadius: 999, cursor: 'pointer',
+                    border: '1.5px solid rgba(238,217,138,0.35)', background: 'rgba(0,0,0,0.18)', color: C.ivory,
                   }}
                 >
-                  <X size={15} />
+                  <X size={16} />
                 </button>
-              </div>
+              </header>
 
-              {/* Facts */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 mb-4">
-                <Fact icon={CalendarClock} label="Dates" value={datesLabel(c)} />
-                <Fact icon={MapPin} label="Location" value={[c.city, c.country].filter(Boolean).join(', ') || 'Not set'} />
-                <Fact icon={Building2} label="Created" value={fmtDate(c.created_at)} />
-                <Fact icon={Mail} label="Contact email" value={c.contact_email || 'Not set'} />
-                <Fact icon={Users} label="Expected delegates" value={int(c.expected_delegates)} />
-                <Fact
-                  icon={Globe}
-                  label="Fees"
-                  value={detail.fees.length === 0 || allFree
-                    ? 'Free'
-                    : detail.fees.filter(f => Number(f.amount) > 0).map(f => `${roleLabel(f.role)} ${feeLabel(f.amount, f.currency)}`).join(', ')}
-                />
-              </div>
-
-              <NeuInset style={{ padding: '14px 10px', borderRadius: 16, marginBottom: 18 }}>
-                <div className="flex items-start justify-around flex-wrap gap-y-3">
-                  <Count value={detail.counts.applications} label="Applications" />
-                  <Count value={detail.counts.accepted} label="Accepted" />
-                  <Count value={detail.counts.paid} label="Paid" />
-                  <Count value={detail.counts.allocations} label="Delegates placed" />
-                  <Count value={detail.counts.committees} label="Committees" />
-                </div>
-              </NeuInset>
-
-              {/* Organisers */}
-              <Eyebrow style={{ marginBottom: 8 }}>Organisers · {detail.organisers.length}</Eyebrow>
-              <div className="flex flex-col gap-1.5 mb-5">
-                {detail.organisers.map(o => (
-                  <button
-                    key={o.user_id}
-                    type="button"
-                    onClick={() => onOpenPerson(o.user_id)}
-                    className="flex items-center gap-2.5 text-left focus:outline-none focus-visible:ring-2 w-full"
-                    style={{
-                      padding: '8px 12px', borderRadius: 14, border: 'none', cursor: 'pointer',
-                      backgroundColor: NEU.surface, boxShadow: NEU.outSm,
-                    }}
-                    title="Open this account"
-                  >
-                    <Avatar url={o.avatar_url} name={o.display_name || o.email || '?'} size={28} />
-                    <span className="flex-1 min-w-0">
-                      <span className="block truncate" style={{ fontSize: 13, fontWeight: 800, color: NEU.ink }}>
-                        {o.display_name || 'No name'}
-                      </span>
-                      <span className="block truncate" style={{ fontSize: 11.5, color: NEU.inkSoft }}>{o.email}</span>
-                    </span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: o.is_owner ? NEU.deepGold : NEU.inkSoft }}>
-                      {roleLabel(o.role)}
-                    </span>
-                    <ArrowUpRight size={14} style={{ color: NEU.inkSoft, flexShrink: 0 }} aria-hidden />
-                  </button>
-                ))}
-              </div>
-
-              {/* Links and actions */}
-              <div className="flex items-center gap-2 flex-wrap mb-4">
-                <a
-                  href={`/conferences/${c.slug}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 focus:outline-none"
-                  style={{ padding: '8px 14px', borderRadius: 999, backgroundColor: NEU.surface, boxShadow: NEU.outSm, color: NEU.forest, fontSize: 12, fontWeight: 800, textDecoration: 'none' }}
-                >
-                  Public page <ArrowUpRight size={13} aria-hidden />
+              {/* ── Tools bar ── */}
+              <div className="flex items-center gap-2 flex-wrap" style={{ padding: '14px 28px', borderBottom: `1px solid ${C.parchment}`, background: C.ivory }}>
+                <a href={`/conferences/${c.slug}`} target="_blank" rel="noopener noreferrer"
+                   className="inline-flex items-center gap-1 focus:outline-none focus-visible:underline"
+                   style={{ fontSize: 12.5, fontWeight: 800, color: C.forest, textDecoration: 'none' }}>
+                  Public page <ArrowUpRight size={14} aria-hidden />
                 </a>
-                <a
-                  href={`/manage/${c.slug}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 focus:outline-none"
-                  style={{ padding: '8px 14px', borderRadius: 999, backgroundColor: NEU.surface, boxShadow: NEU.outSm, color: NEU.forest, fontSize: 12, fontWeight: 800, textDecoration: 'none' }}
-                >
-                  Manage <ArrowUpRight size={13} aria-hidden />
+                <span aria-hidden style={{ color: C.goldDeep, margin: '0 6px' }}>◆</span>
+                <a href={`/manage/${c.slug}`} target="_blank" rel="noopener noreferrer"
+                   className="inline-flex items-center gap-1 focus:outline-none focus-visible:underline"
+                   style={{ fontSize: 12.5, fontWeight: 800, color: C.forest, textDecoration: 'none' }}>
+                  Manage <ArrowUpRight size={14} aria-hidden />
                 </a>
                 <span className="flex-1" />
-                <ActionButton icon={PencilLine} label="Edit details" on={pane === 'edit'} onClick={() => toggle('edit')} />
-                <ActionButton icon={Mail} label="Email organisers" on={pane === 'email'} onClick={() => toggle('email')} />
-                <ActionButton icon={Trash2} label="Delete" danger on={pane === 'delete'} onClick={() => toggle('delete')} />
+                <ToolButton icon={PencilLine} label="Edit" on={pane === 'edit'} onClick={() => toggle('edit')} />
+                <ToolButton icon={Mail} label="Email" on={pane === 'email'} onClick={() => toggle('email')} />
+                <ToolButton icon={Trash2} label="Delete" danger on={pane === 'delete'} onClick={() => toggle('delete')} />
               </div>
 
-              {notice && (
-                <p role="status" className="mb-3" style={{ fontSize: 12.5, fontWeight: 700, color: NEU.green }}>{notice}</p>
-              )}
+              <div style={{ padding: '22px 28px 28px' }}>
+                {notice && (
+                  <p role="status" className="mb-3 inline-flex items-center gap-1.5" style={{ fontSize: 12.5, fontWeight: 700, color: C.forestLight }}>
+                    <Check size={14} aria-hidden /> {notice}
+                  </p>
+                )}
 
-              {pane !== 'overview' && (
-                <NeuInset style={{ padding: 16, borderRadius: 18 }}>
-                  {pane === 'edit' && (
-                    <EditPane
-                      detail={detail}
-                      onCancel={() => setPane('overview')}
-                      onSaved={next => { setDetail(next); setPane('overview'); setNotice('Saved.'); onChanged(); }}
-                    />
-                  )}
-                  {pane === 'email' && <EmailPane detail={detail} onDone={() => setPane('overview')} />}
-                  {pane === 'delete' && (
-                    <DeletePane
-                      detail={detail}
-                      onCancel={() => setPane('overview')}
-                      onDeleted={() => { onChanged(); requestClose(); }}
-                    />
-                  )}
-                </NeuInset>
-              )}
+                {pane !== 'overview' && (
+                  <div className="mb-6" style={{ padding: 18, borderRadius: 18, background: '#FFFFFF', border: `1.5px solid ${pane === 'delete' ? 'rgba(139,32,32,0.35)' : C.parchment}` }}>
+                    {pane === 'edit' && (
+                      <EditPane
+                        detail={detail}
+                        onCancel={() => setPane('overview')}
+                        onSaved={next => { setDetail(next); setPane('overview'); setNotice('Saved.'); onChanged(); }}
+                      />
+                    )}
+                    {pane === 'email' && <EmailPane detail={detail} onDone={() => setPane('overview')} />}
+                    {pane === 'delete' && (
+                      <DeletePane
+                        detail={detail}
+                        onCancel={() => setPane('overview')}
+                        onDeleted={() => { onChanged(); requestClose(); }}
+                      />
+                    )}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-[1.45fr_1fr]" style={{ gap: 32 }}>
+                  {/* ── Left: delegates, then organisers ── */}
+                  <div className="min-w-0">
+                    <Funnel detail={detail} />
+
+                    <section aria-labelledby="adm-orgs" className="mt-8">
+                      <h3 id="adm-orgs" className="mb-1" style={{ fontSize: 13, fontWeight: 800, color: C.forest }}>
+                        Organisers <span style={{ color: C.inkSoft, fontWeight: 700 }}>{detail.organisers.length}</span>
+                      </h3>
+                      <div className="flex flex-col">
+                        {detail.organisers.map(o => (
+                          <button
+                            key={o.user_id}
+                            type="button"
+                            onClick={() => onOpenPerson(o.user_id)}
+                            title="Open this account"
+                            className="group flex items-center gap-3 text-left w-full focus:outline-none focus-visible:ring-2"
+                            style={{ padding: '9px 6px', border: 'none', borderTop: `1px solid ${C.parchment}`, background: 'transparent', cursor: 'pointer' }}
+                          >
+                            <Avatar url={o.avatar_url} name={o.display_name || o.email || '?'} size={36} rounded />
+                            <span className="flex-1 min-w-0">
+                              <span className="block truncate" style={{ fontSize: 13.5, fontWeight: 800, color: C.ink }}>{o.display_name || 'No name'}</span>
+                              <span className="block truncate" style={{ fontSize: 12, color: C.inkSoft }}>{o.email}</span>
+                            </span>
+                            <span style={{ fontSize: 11.5, fontWeight: 800, color: o.is_owner ? C.goldDeep : C.inkSoft }}>{roleLabel(o.role)}</span>
+                            <ArrowUpRight size={15} aria-hidden className="transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" style={{ color: C.forest }} />
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  </div>
+
+                  {/* ── Right: the checkmark, then the facts ── */}
+                  <div className="min-w-0">
+                    <section aria-labelledby="adm-stages">
+                      <div className="flex items-center gap-4">
+                        <StageRing done={stagesDone} total={stages.length} verified={c.is_verified} />
+                        <div className="min-w-0">
+                          <h3 id="adm-stages" style={{ fontSize: 13, fontWeight: 800, color: C.forest }}>Checkmark</h3>
+                          <p className="mt-0.5" style={{ fontSize: 17, fontWeight: 900, color: c.is_verified ? VERIFIED_BLUE : C.ink, lineHeight: 1.2 }}>
+                            {c.is_verified
+                              ? 'Verified'
+                              : stagesDone === stages.length
+                                ? 'Lands on the next refresh'
+                                : `${stages.length - stagesDone} ${stages.length - stagesDone === 1 ? 'stage' : 'stages'} to go`}
+                          </p>
+                          <p className="mt-1" style={{ fontSize: 11.5, color: C.inkSoft }}>
+                            {c.is_verified
+                              ? (c.verified_at ? `Since ${fmtDate(c.verified_at)}` : 'Every stage done')
+                              : detail.setup.minutes_left > 0 ? `About ${detail.setup.minutes_left} minutes of work` : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <ul className="mt-4 flex flex-col" style={{ gap: 7 }}>
+                        {stages.map(s => {
+                          const Icon = STAGE_ICON[s.key] ?? Target;
+                          return (
+                            <li key={s.key} className="flex items-center gap-2.5" title={s.done ? undefined : s.todo}>
+                              <span className="inline-flex items-center justify-center flex-shrink-0" style={{
+                                width: 22, height: 22, borderRadius: 999,
+                                background: s.done ? C.forestLight : 'transparent',
+                                border: s.done ? 'none' : `2px solid ${C.amber}`,
+                              }}>
+                                {s.done
+                                  ? <Check size={13} strokeWidth={3} style={{ color: '#FFFFFF' }} aria-hidden />
+                                  : <Icon size={11} strokeWidth={2.6} style={{ color: C.amber }} aria-hidden />}
+                              </span>
+                              <span style={{ fontSize: 13, fontWeight: s.done ? 600 : 800, color: s.done ? C.inkSoft : C.ink }}>
+                                {STAGE_LABEL[s.key] ?? s.title}
+                              </span>
+                              <span className="sr-only">{s.done ? 'done' : 'missing'}</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </section>
+
+                    <section aria-label="Details" className="mt-7">
+                      <FactRow icon={Ticket} tint={C.goldDeep} label="Fees">
+                        {paidFees.length === 0
+                          ? 'Free for every role'
+                          : paidFees.map(f => (
+                            <span key={f.role} className="block">{roleLabel(f.role)} <span style={{ color: C.forestLight }}>{feeLabel(f.amount, f.currency)}</span></span>
+                          ))}
+                      </FactRow>
+                      <FactRow icon={Building2} tint={C.forestLight} label="Committees">
+                        {int(detail.counts.committees)}
+                        {detail.counts.live_sessions > 0 && <span style={{ color: C.inkSoft, fontWeight: 600 }}> · {int(detail.counts.live_sessions)} with a live room</span>}
+                      </FactRow>
+                      <FactRow icon={Mail} tint={C.sky} label="Contact">{c.contact_email || 'Not set'}</FactRow>
+                      {c.website_url && (
+                        <FactRow icon={Link2} tint={C.sky} label="Website">
+                          <a href={c.website_url} target="_blank" rel="noopener noreferrer" style={{ color: C.forest }}>{c.website_url.replace(/^https?:\/\//, '')}</a>
+                        </FactRow>
+                      )}
+                      <FactRow icon={CalendarClock} tint={C.plum} label="Created">
+                        {fmtDate(c.created_at)}
+                        {c.published_at && <span style={{ color: C.inkSoft, fontWeight: 600 }}> · published {fmtDate(c.published_at)}</span>}
+                      </FactRow>
+                    </section>
+                  </div>
+                </div>
+              </div>
             </>
           )}
         </>
