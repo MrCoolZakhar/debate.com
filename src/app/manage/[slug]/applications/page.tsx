@@ -1857,7 +1857,7 @@ export default function ApplicationsPage() {
   const searchParams = useSearchParams();
   const urlStatus = searchParams.get('status');
   const urlPayment = searchParams.get('payment');
-  const paymentsLive = isPaymentsLive(conference?.id, conference?.connect_onboarding_status, conference?.payment_method);
+  const paymentsLive = isPaymentsLive(conference?.id, conference?.connect_onboarding_status, conference?.payment_method, conference?.platform_collects);
   const [applications, setApplications] = useState<Application[]>([]);
   // Unpaid gating invoices (gates_acceptance=true, status not settled/waived/
   // void). Only app_fee rows ever carry the flag, since it comes from

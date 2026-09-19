@@ -145,9 +145,14 @@ export function isPaymentsLive(
   conferenceId?: string | null,
   connectOnboardingStatus?: string | null,
   paymentMethod?: string | null,
+  platformCollects?: boolean | null,
 ): boolean {
   if (ACTIVE_PROVIDER !== 'stripe') return false;
   if (conferenceId && MANUAL_MODE_CONFERENCE_IDS.has(conferenceId)) return false;
+  // conferences.platform_collects: card payments are charged on Gavelling's
+  // own Stripe account (create-checkout v19 sends no Stripe-Account header
+  // and skips the onboarding check), so Connect status does not matter.
+  if (platformCollects) return true;
   if (paymentMethod !== undefined && paymentMethod !== null && paymentMethod !== 'stripe') return false;
   if (connectOnboardingStatus !== undefined && connectOnboardingStatus !== null) {
     return connectOnboardingStatus === 'complete';
@@ -171,11 +176,14 @@ export interface PaymentReadinessConference {
   external_payment_note: string | null;
   connect_onboarding_status: string | null;
   payment_gate_exempt?: boolean | null;
+  /** Gavelling's own Stripe account collects (no Connect needed). Ready. */
+  platform_collects?: boolean | null;
 }
 
 /** Mirrors conference_payments_ready(uuid) exactly. Deliberately does not
  *  consider payment_gate_exempt, the SQL function doesn't either. */
 export function conferencePaymentsReady(conf: PaymentReadinessConference): boolean {
+  if (conf.platform_collects) return true;
   if (conf.payment_method === 'manual') {
     return !!(conf.external_payment_url?.trim() || conf.external_payment_note?.trim());
   }

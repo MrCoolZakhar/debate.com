@@ -184,7 +184,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
    *  The action handlers below keep using `session` — they need `session.user`
    *  and they run on a click, not off a dependency array. */
   const accessToken = session?.access_token;
-  const paymentsLive = isPaymentsLive(conference.id, conference.connect_onboarding_status, conference.payment_method);
+  const paymentsLive = isPaymentsLive(conference.id, conference.connect_onboarding_status, conference.payment_method, conference.platform_collects);
   const [societies, setSocieties] = useState<Society[]>([]);
   const [members, setMembers] = useState<PoolMember[]>([]);
   const [searchPool, setSearchPool] = useState<SearchApp[]>([]);

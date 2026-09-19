@@ -196,6 +196,12 @@ basics are missing or the account is new; the basics step is non-dismissable (Si
 `/auth/signin`, `/auth/signup` and `/auth/forgot` only redirect to `/?auth=...&next=...`; redirect guards
 still go through them. While the modal is open `CompleteBasicsGate` stands down and `useBasicsGateBlocking()`
 is true, so no two modals stack.
+Since 19 Sep 2026 it is the "Wall" split (owner picked mockup 1): from 860px wide a 400px image panel on
+the LEFT on every step and the form on the right (880 x at least 560, radius 24, left-aligned brand and
+heading, a one-line intro, a Terms line under the Google tile); below 860px the single 480px column, and
+the full-screen sheet on phones. The image is ONE file, `public/auth/side.webp` (`AUTH_SIDE_IMAGE` /
+`AUTH_SIDE_ALT` in `authModalKit.tsx`, `object-fit: cover`, top-anchored, supply 800 x 1120 or larger);
+today it is a render of the mockup's wall, to be replaced by the owner's artwork.
 
 ## 5c. Custom (parliamentary) committees
 

@@ -18,6 +18,16 @@ export const FOREST = '#1B3828';
 export const DANGER = '#C13515';
 export const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#222222] focus-visible:ring-offset-2 focus-visible:ring-offset-white';
 
+/** The designed picture on the LEFT of the pop-up (owner, 19 Sep 2026: the
+ *  "Wall" layout, Canva-style). One file: replace `public/auth/side.webp` with
+ *  the owner's artwork and nothing else changes. Portrait, drawn with
+ *  `object-fit: cover` into a 400 x 560 (and taller) panel, so supply it at
+ *  800 x 1120 or larger and keep the important part away from the bottom edge.
+ *  Hidden below 860px wide, where the pop-up is a single column. */
+export const AUTH_SIDE_IMAGE = '/auth/side.webp';
+export const AUTH_SIDE_ALT = 'Gavelling: apply to conferences, chair a committee, build your MUN CV, organise a conference for free.';
+export const AUTH_SPLIT_MIN_WIDTH = 860;
+
 /** Airbnb floating label: the label sits inside the field and moves up once
  *  the field is focused or filled (the `placeholder=" "` + :placeholder-shown
  *  trick, no JS). */
@@ -113,6 +123,16 @@ export function TermsLine() {
   );
 }
 
+/** The left half of the split pop-up: one image, nothing else. */
+export function AuthSideImage() {
+  return (
+    <div className="gv-auth-side">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={AUTH_SIDE_IMAGE} alt={AUTH_SIDE_ALT} decoding="async" />
+    </div>
+  );
+}
+
 /** A selectable card row (questionnaire answers). */
 export function OptionRow({
   selected, onClick, children, role = 'radio',
@@ -202,6 +222,29 @@ export const KIT_CSS = `
 .gv-pill{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px 0 8px;border:1px solid ${HAIR};border-radius:999px;background:#FFFFFF;font-family:${OUTFIT};font-size:13.5px;color:${INK};cursor:pointer}
 .gv-add{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:56px;border:1px dashed ${BORDER};border-radius:12px;background:#FFFFFF;font-family:${OUTFIT};font-size:15px;font-weight:600;color:${INK};cursor:pointer}
 .gv-add:hover{border-color:${INK};background:#FAFAFA}
+/* Split layout (the "Wall"): image LEFT, form RIGHT, 400 + 480 = 880 wide,
+   at least 560 tall, 24px radius. Taller steps grow the panel (the image
+   covers whatever height) up to the viewport; then the form column scrolls. */
+.gv-auth-side{display:none}
+@media (min-width:${AUTH_SPLIT_MIN_WIDTH}px){
+  .gv-auth-panel.gv-split{max-width:880px;min-height:min(560px,calc(100dvh - 48px));flex-direction:row;border-radius:24px;box-shadow:0 30px 80px -20px rgba(0,0,0,0.55)}
+  .gv-auth-panel.gv-split.gv-wide{max-width:968px}
+  .gv-split .gv-auth-side{display:block;position:relative;flex:0 0 400px;background:${FOREST}}
+  .gv-split .gv-auth-side img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top;display:block}
+  .gv-split .gv-auth-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;min-height:0}
+  .gv-split .gv-auth-head{padding:16px 16px 0}
+  .gv-split .gv-auth-body{flex:1 1 auto;display:flex;flex-direction:column;padding:4px 44px 32px}
+  .gv-split .gv-auth-body>*{margin-top:auto;margin-bottom:auto}
+  .gv-split .gv-auth-brand{justify-content:flex-start;margin:0 0 22px}
+  .gv-split .gv-auth-mark{width:28px;height:28px}
+  .gv-split .gv-auth-word{font-size:19px;letter-spacing:-0.01em}
+  .gv-split .gv-auth-big{text-align:left;font-size:30px;line-height:1.15;margin:0 0 8px}
+  .gv-split .gv-auth-intro{display:block}
+  .gv-split .gv-auth-terms{text-align:left}
+}
+.gv-auth-main{display:flex;flex-direction:column;min-height:0}
+.gv-auth-intro{display:none;margin:0 0 14px;font-size:15px;line-height:1.5;color:${INK_SOFT};text-wrap:pretty}
+.gv-auth-terms{margin:14px 0 0;font-size:12px;line-height:1.5;color:${INK_SOFT};text-align:center}
 @keyframes gvAuthFade{from{opacity:0}to{opacity:1}}
 @keyframes gvAuthRise{from{opacity:0;transform:translateY(100px)}to{opacity:1;transform:none}}
 @media (max-width:743px){

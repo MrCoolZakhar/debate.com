@@ -64,6 +64,8 @@ interface PayConference {
   contact_email: string | null;
   payment_method: string | null;
   connect_onboarding_status: string;
+  /** Gavelling's own Stripe account collects card payments (no Connect). */
+  platform_collects: boolean | null;
   external_payment_url: string | null;
   external_payment_note: string | null;
   financial_aid_enabled: boolean;
@@ -383,7 +385,7 @@ export default function PayPage() {
         .from('conferences')
         .select(`
           id, full_name, fee_currency, contact_email,
-          payment_method, connect_onboarding_status, external_payment_url, external_payment_note,
+          payment_method, connect_onboarding_status, platform_collects, external_payment_url, external_payment_note,
           financial_aid_enabled, aid_questions, aid_intro, theme
         `)
         .eq('slug', slug)
@@ -1742,7 +1744,10 @@ function PayInvoiceAndActions({
   // free role can never come back 'locked' (see getGateState).
   const gateState = getGateState(roleConfig?.payment_timing ?? 'anytime', application.status, application.payment_status, fee);
   const payableNow = gateState !== 'under_review';
-  const paymentsEnabled = conference.payment_method === 'stripe' && conference.connect_onboarding_status === 'complete';
+  // platform_collects mirrors conference_payments_ready(): card payments are
+  // charged on Gavelling's own Stripe account, so Connect status is moot.
+  const paymentsEnabled = !!conference.platform_collects
+    || (conference.payment_method === 'stripe' && conference.connect_onboarding_status === 'complete');
   const externalPaymentUrl = conference.payment_method === 'manual' ? conference.external_payment_url : null;
   const manualActive = conference.payment_method === 'manual';
   // Gated on leaderApp, not primary — a dual-role user's primary application

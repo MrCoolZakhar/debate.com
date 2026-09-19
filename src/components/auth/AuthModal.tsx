@@ -29,6 +29,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, LogOut, Mail, X } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -43,7 +44,7 @@ import { setBasicsGateStatus } from '@/lib/basicsGateState';
 import { closeAuth, openAuth, useAuthModal, type AuthRequest } from '@/lib/authModal';
 import { CODE_LENGTH, GoogleIcon, isValidEmail, useCooldown } from '@/app/auth/authUi';
 import {
-  BORDER, ErrorLine, FOCUS, FloatInput, FloatPassword, GreenButton, Hint, INK, INK_SOFT,
+  AuthSideImage, BORDER, ErrorLine, FOCUS, FloatInput, FloatPassword, GreenButton, Hint, INK, INK_SOFT,
   KIT_CSS, OUTFIT, TermsLine, TextButton,
 } from './authModalKit';
 import AuthQuestionnaire from './AuthQuestionnaire';
@@ -335,9 +336,13 @@ function AuthModal({ request }: { request: AuthRequest }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="gv-auth-title"
-        className={`gv-auth-panel${inQuestions ? ' gv-wide' : ''}`}
+        className={`gv-auth-panel gv-split${inQuestions ? ' gv-wide' : ''}`}
         onKeyDown={onKeyDown}
       >
+        {/* Owner, 19 Sep 2026: the "Wall" layout. The designed image on the
+            left on every step, the steps on the right; one column below 860px. */}
+        <AuthSideImage />
+        <div className="gv-auth-main">
         <div className="gv-auth-head">
           <div className="gv-auth-head-l">
             {showBack && (
@@ -367,6 +372,7 @@ function AuthModal({ request }: { request: AuthRequest }) {
                 <span className="gv-auth-word">Gavelling</span>
               </div>
               <h2 id="gv-auth-title" className="gv-auth-big">Log in or sign up</h2>
+              <p className="gv-auth-intro">One account for applying, chairing and organising. Free to start.</p>
               {request.apply && <p className="gv-notice" role="status">Log in or sign up to carry on with your application. We will bring you straight back to it.</p>}
               {request.notice && <p className="gv-notice" role="status">{request.notice}</p>}
               <FloatInput
@@ -391,6 +397,11 @@ function AuthModal({ request }: { request: AuthRequest }) {
                   <GoogleIcon />
                 </button>
               </div>
+              <p className="gv-auth-terms">
+                By continuing you agree to the{' '}
+                <Link href="/terms" target="_blank" rel="noopener" className={`gv-inline ${FOCUS}`}>Terms</Link> and{' '}
+                <Link href="/privacy" target="_blank" rel="noopener" className={`gv-inline ${FOCUS}`}>Privacy Policy</Link>.
+              </p>
             </form>
           )}
 
@@ -482,6 +493,7 @@ function AuthModal({ request }: { request: AuthRequest }) {
               onNestedOpen={setNestedOpen}
             />
           )}
+        </div>
         </div>
       </div>
     </div>
