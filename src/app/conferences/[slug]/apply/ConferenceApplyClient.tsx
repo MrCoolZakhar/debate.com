@@ -2325,7 +2325,10 @@ function ConferenceApplyInner() {
   // step will be shown (mode-gated). Skipped entirely for mode 'none'.
   useEffect(() => {
     if (!showPreferenceStep || prefDataLoaded || prefDataLoading) return;
-    if (!conference || !session) return;
+    // No session check: since 075527a1 a signed-out visitor walks the whole
+    // form, and skipping this load left every committee at 0 open, which the
+    // card reads as FULL. Both reads below are anon-safe.
+    if (!conference) return;
     loadPreferenceData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showPreferenceStep, prefDataLoaded, prefDataLoading, conference?.id, committees.length]);
@@ -2335,12 +2338,20 @@ function ConferenceApplyInner() {
    * country slots, plus which of those are already TAKEN. Availability comes
    * from get_taken_allocations (a privacy-safe RPC — the delegate can't read
    * conference_allocations directly under RLS).
+   *
+   * Signed out, it reads with the anon client: committee_country_slots is
+   * readable by anyone ("Anyone can read country slots by link") and
+   * get_taken_allocations is SECURITY DEFINER, anon-executable, and returns
+   * only (committee, country_code) pairs for a public conference. A failed
+   * taken read counts nothing as taken (the server decides at submit), and a
+   * failed slots read leaves the committees with no availability shown
+   * rather than FULL.
    */
   async function loadPreferenceData() {
-    if (!session || !conference) return;
+    if (!conference) return;
     if (committees.length === 0) return;
     setPrefDataLoading(true);
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = session ? getAuthedClient(session.access_token) : anonSupabase;
     const ids = committees.map(c => c.id);
     const [slotsRes, takenRes] = await Promise.all([
       supabase
@@ -3918,7 +3929,7 @@ function ConferenceApplyInner() {
                   rank={committeeRank(c.id)}
                   active={false}
                   disabled={info.full || (atMax && committeeRank(c.id) == null)}
-                  showAvailability
+                  showAvailability={info.total > 0}
                   onClick={() => toggleCommitteeOnly(c)}
                   reducedMotion={reducedMotion}
                 />
@@ -3980,7 +3991,7 @@ function ConferenceApplyInner() {
                     rank={null}
                     active={expanded || chosenHere > 0}
                     disabled={info.full && chosenHere === 0}
-                    showAvailability
+                    showAvailability={info.total > 0}
                     onClick={() => setExpandedCommitteeId(prev => (prev === c.id ? null : c.id))}
                     reducedMotion={reducedMotion}
                   />
