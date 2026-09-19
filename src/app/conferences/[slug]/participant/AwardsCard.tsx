@@ -551,7 +551,12 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
                   <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: '#9A8A78', margin: '0 0 8px 0' }}>
                     The numbers are evidence, not the verdict. Sorted by the session&apos;s blended score.
                   </p>
-                  <div className="rounded-xl" style={{ overflowX: 'auto', border: '1px solid rgba(221,212,192,0.8)', maxHeight: 360, overflowY: 'auto' }}>
+                  {/* The table is 640px wide at minimum, so on a phone it is
+                      already a horizontal pan. Capping its HEIGHT as well made
+                      it a two-axis nested scroller in which every vertical
+                      swipe was captured instead of moving the page. Below
+                      `sm` the height cap is dropped and the page scrolls it. */}
+                  <div className="rounded-xl max-h-none sm:max-h-[360px] overflow-y-visible sm:overflow-y-auto" style={{ overflowX: 'auto', border: '1px solid rgba(221,212,192,0.8)' }}>
                     <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 640, fontFamily: OUTFIT, fontSize: 12 }}>
                       <thead>
                         <tr style={{ position: 'sticky', top: 0, backgroundColor: '#F3EFE6', zIndex: 1 }}>

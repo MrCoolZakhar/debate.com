@@ -239,8 +239,8 @@ export default function CalendarPage() {
           </p>
           <Link
             href="/conferences/explore"
-            className="inline-flex items-center gap-2 rounded-xl py-2.5 px-6 font-bold text-[13px] focus:outline-none transition-colors"
-            style={{ backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: OUTFIT, letterSpacing: '0.04em' }}
+            className="inline-flex items-center gap-2 rounded-xl px-6 font-bold text-[13px] focus:outline-none transition-colors"
+            style={{ minHeight: 44, backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: OUTFIT, letterSpacing: '0.04em' }}
             onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#1B3828'; }}
           >

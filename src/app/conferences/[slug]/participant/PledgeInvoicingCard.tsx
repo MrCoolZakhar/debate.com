@@ -156,7 +156,7 @@ export default function PledgeInvoicingCard({
         <ModalOverlay onClose={() => { if (!aidSubmitting) setAidModalOpen(false); }}>
           <div
             className="rounded-2xl p-6 flex flex-col gap-4"
-            style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 440, maxWidth: 'calc(100vw - 32px)', maxHeight: '85vh', overflowY: 'auto' }}
+            style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 440, maxWidth: 'calc(100vw - 32px)', maxHeight: '85dvh', overflowY: 'auto' }}
           >
             <p className="font-black text-lg" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
               Request Financial Aid for Your Delegation
@@ -195,7 +195,7 @@ export default function PledgeInvoicingCard({
                   value={aidRequestedAmount}
                   onChange={(e) => setAidRequestedAmount(e.target.value)}
                   placeholder="0.00"
-                  className="flex-1 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
+                  className="flex-1 min-w-0 rounded-xl px-3.5 py-2.5 text-base sm:text-sm focus:outline-none"
                   style={{ border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT }}
                 />
               </div>

@@ -479,7 +479,10 @@ export default function PayPage() {
   return (
     <div className="min-h-screen flex flex-col" style={{ ...themeCssVars(conference?.theme ?? {}), backgroundColor: NEU.base }}>
       <SiteNav />
-      <div className="flex-1 w-full max-w-[900px] mx-auto px-6 py-10">
+      {/* The PAY button is the last thing in this column, so on a phone with a
+          home indicator it ends up against the gesture bar. The inset is 0 on
+          every other device, so desktop keeps its 40px. */}
+      <div className="flex-1 w-full max-w-[900px] mx-auto px-6 pt-10 pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
         <Link
           href={`/conferences/${slug}/role`}
           className="inline-flex items-center gap-1.5 mb-6 focus:outline-none"
@@ -643,12 +646,23 @@ function RemovePledgeAction({
     if (!b) return;
     const r = b.getBoundingClientRect();
     const left = Math.max(8, Math.min(r.right - POP_W, window.innerWidth - POP_W - 8));
-    setPos({ top: r.bottom + 6, left });
+    // FLIP ABOVE when there is no room below. `left` was clamped both ways but
+    // `top` never was, and the panel is `position: fixed` on a page whose
+    // scroll CLOSES it (onScroll below) — so a pledge row in the lower third
+    // of a phone screen opened its Cancel / Remove buttons off the bottom with
+    // no way to reach them. The height is measured once the panel exists (the
+    // rAF re-place below); the first pass uses a conservative estimate.
+    const h = popRef.current?.offsetHeight ?? 150;
+    const roomBelow = window.innerHeight - r.bottom - 8;
+    const top = h <= roomBelow ? r.bottom + 6 : Math.max(8, r.top - 6 - h);
+    setPos({ top, left });
   }, []);
 
   useEffect(() => {
     if (!open) return;
     place();
+    // Second pass with the panel's real height, now that it is in the DOM.
+    const raf = requestAnimationFrame(place);
     const onDoc = (e: MouseEvent) => {
       const t = e.target as Node;
       if (btnRef.current?.contains(t) || popRef.current?.contains(t)) return;
@@ -659,6 +673,7 @@ function RemovePledgeAction({
     window.addEventListener('resize', place);
     window.addEventListener('scroll', onScroll, true);
     return () => {
+      cancelAnimationFrame(raf);
       document.removeEventListener('mousedown', onDoc);
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', onScroll, true);
@@ -795,6 +810,9 @@ function GenericInvoiceCard({
     <NeuCard style={{ padding: 0, overflow: 'hidden' }}>
       <div className="w-full flex items-center gap-3" style={{ padding: '16px 18px' }}>
         {!settled && !awaitingReview && (
+          /* 44px tap target around the 16px box, the pattern the add-on list
+             already uses: the negative margins keep the row's geometry. */
+          <span className="flex items-center justify-center flex-shrink-0" style={{ width: 44, height: 44, margin: '-14px -14px -14px -14px' }}>
           <input
             type="checkbox"
             checked={selected}
@@ -803,6 +821,7 @@ function GenericInvoiceCard({
             style={{ width: 16, height: 16, accentColor: NEU.forest, cursor: 'pointer' }}
             aria-label={`Select ${label}`}
           />
+          </span>
         )}
         <button
           type="button"
@@ -983,7 +1002,7 @@ function AddonsModal({
     <ModalOverlay onClose={() => { if (!saving) onClose(); }}>
       <div
         className="rounded-2xl p-6 flex flex-col gap-4"
-        style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 460, maxWidth: 'calc(100vw - 32px)', maxHeight: '85vh', overflowY: 'auto' }}
+        style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 460, maxWidth: 'calc(100vw - 32px)', maxHeight: '85dvh', overflowY: 'auto' }}
       >
         <div className="flex items-center justify-between gap-3">
           <p className="font-black text-lg" style={{ color: 'var(--gv-on-surface)', fontFamily: OUTFIT }}>Buy Add-ons</p>
@@ -1195,7 +1214,7 @@ function AddSpotsPanel({
           }}
           onBlur={() => { if (count === '') setCount(1); }}
           aria-label="Number of spots to pledge"
-          className="rounded-xl text-sm text-center focus:outline-none"
+          className="rounded-xl text-base sm:text-sm text-center focus:outline-none"
           style={{ width: 64, height: 44, border: 'none', backgroundColor: NEU.base, boxShadow: NEU.inSm, color: NEU.ink, fontFamily: OUTFIT, fontWeight: 700 }}
         />
         <button
@@ -1284,7 +1303,11 @@ function AdvisorTicketsModal({
     <ModalOverlay onClose={() => { if (!adding) onClose(); }}>
       <div
         className="rounded-2xl p-6 flex flex-col gap-4"
-        style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 400, maxWidth: 'calc(100vw - 32px)' }}
+        /* ModalOverlay is a non-scrolling `fixed inset-0` centred box with the
+           page scroll locked, so a card taller than the phone is clipped at
+           BOTH ends and its buttons cannot be reached. Every dialog here
+           carries its own cap. */
+        style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 400, maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100dvh - 80px)', overflowY: 'auto' }}
       >
         <div className="flex items-center justify-between gap-3">
           <p className="font-black text-lg" style={{ color: 'var(--gv-on-surface)', fontFamily: OUTFIT }}>Buy Advisor Tickets</p>
@@ -1344,7 +1367,7 @@ function AdvisorTicketsModal({
               }}
               onBlur={() => { if (count === '') setCount(1); }}
               aria-label="Number of advisor tickets"
-              className="rounded-xl text-sm text-center focus:outline-none"
+              className="rounded-xl text-base sm:text-sm text-center focus:outline-none"
               style={{ width: 64, height: 44, border: 'none', backgroundColor: NEU.base, boxShadow: NEU.inSm, color: NEU.ink, fontFamily: OUTFIT, fontWeight: 700 }}
             />
             <button
@@ -1484,7 +1507,7 @@ function ProofUploadModal({
     <ModalOverlay onClose={() => { if (!submitting) onClose(); }}>
       <div
         className="rounded-2xl p-6 flex flex-col gap-4"
-        style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 420, maxWidth: 'calc(100vw - 32px)', maxHeight: '85vh', overflowY: 'auto' }}
+        style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 420, maxWidth: 'calc(100vw - 32px)', maxHeight: '85dvh', overflowY: 'auto' }}
       >
         <div className="flex items-center justify-between gap-3">
           <p className="font-black text-lg" style={{ color: 'var(--gv-on-surface)', fontFamily: OUTFIT }}>Upload Payment Proof</p>
@@ -1992,14 +2015,17 @@ function PayInvoiceAndActions({
           <NeuCard style={{ padding: 0, overflow: 'hidden' }}>
             <div className="w-full flex items-center gap-3" style={{ padding: '18px 20px' }}>
               {roleFeeSelectable && (
-                <input
-                  type="checkbox"
-                  checked={selectedIds.has(roleFeeInvoice!.id)}
-                  onChange={() => toggleSelected(roleFeeInvoice!.id)}
-                  className="flex-shrink-0"
-                  style={{ width: 16, height: 16, accentColor: NEU.forest, cursor: 'pointer' }}
-                  aria-label="Select registration fee"
-                />
+                /* 44px tap target around the 16px box, as in the add-on list. */
+                <span className="flex items-center justify-center flex-shrink-0" style={{ width: 44, height: 44, margin: '-14px' }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(roleFeeInvoice!.id)}
+                    onChange={() => toggleSelected(roleFeeInvoice!.id)}
+                    className="flex-shrink-0"
+                    style={{ width: 16, height: 16, accentColor: NEU.forest, cursor: 'pointer' }}
+                    aria-label="Select registration fee"
+                  />
+                </span>
               )}
               <button
                 type="button"
@@ -2103,7 +2129,7 @@ function PayInvoiceAndActions({
                              Same handling as /apply. */
                           onChange={e => setVoucherCode(e.target.value.toUpperCase())}
                           placeholder="e.g. EARLYBIRD10"
-                          className="flex-1 rounded-xl px-3.5 py-2.5 text-sm uppercase focus:outline-none"
+                          className="flex-1 min-w-0 rounded-xl px-3.5 py-2.5 text-base sm:text-sm uppercase focus:outline-none"
                           style={{ border: 'none', backgroundColor: NEU.base, boxShadow: NEU.inSm, color: NEU.ink, fontFamily: OUTFIT }}
                         />
                         <button
@@ -2375,7 +2401,7 @@ function PayInvoiceAndActions({
 
       {stubMessage && (
         <ModalOverlay onClose={() => setStubMessage(null)}>
-          <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 380, maxWidth: 'calc(100vw - 32px)' }}>
+          <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 380, maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100dvh - 80px)', overflowY: 'auto' }}>
             <div
               className="flex items-center justify-center flex-shrink-0"
               style={{ width: 44, height: 44, borderRadius: '9999px', backgroundColor: 'rgba(184,132,74,0.14)', border: '1px solid rgba(184,132,74,0.3)' }}
@@ -2391,8 +2417,8 @@ function PayInvoiceAndActions({
                 className="flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold focus:outline-none"
                 style={{ border: '1px solid var(--gv-border)', color: 'var(--gv-main)', backgroundColor: 'color-mix(in srgb, var(--gv-main) 4%, transparent)', fontFamily: OUTFIT, textDecoration: 'none' }}
               >
-                <Mail size={14} />
-                {conference.contact_email}
+                <Mail size={14} className="flex-shrink-0" />
+                <span className="min-w-0" style={{ overflowWrap: 'anywhere' }}>{conference.contact_email}</span>
               </a>
             )}
             <button

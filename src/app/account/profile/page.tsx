@@ -495,6 +495,22 @@ export default function ProfilePage() {
         boxShadow: '-6px -6px 16px rgba(255,255,255,0.8), 8px 8px 24px rgba(27,56,40,0.14)',
       }}
     >
+      {/* iOS Safari zooms the whole page when a focused field is under 16px,
+          and every field on this screen was 14px, so tapping Display Name
+          jerked the layout sideways and left it zoomed. 16px on a phone only;
+          the 14px desktop field is unchanged. `!important` because the size
+          comes from a utility class and, on the nationality field, an inline
+          style. (18 Sep 2026 phone audit.) */}
+      <style>{`
+@media (max-width:743px){
+  .gv-acct-input{font-size:16px!important}
+  .gv-tap44>button::after{content:'';position:absolute;top:-11px;bottom:-11px;left:-8px;right:-8px}
+  .gv-tap20::after{content:'';position:absolute;top:-12px;bottom:-12px;left:-12px;right:-12px}
+}
+@media (max-width:430px){
+  .gv-rank-row{flex-direction:column;align-items:flex-start;gap:12px}
+}`}</style>
+
       {/* Decorative bleed — a low-opacity globe drifting off the top-right of the
           page panel for depth. Negative z keeps it under the opaque cards; the
           small offset keeps it from ever forcing a horizontal scrollbar. */}
@@ -556,7 +572,15 @@ export default function ProfilePage() {
             style={{ bottom: '-34px', right: '-18px', color: 'rgba(238,217,138,0.10)' }}
           />
           <div className="relative flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-4">
+            {/* The rank word ran 41px past the banner at 375px and 56px at
+                360px, and `overflow-hidden` cut it in half ("Beginne"). Two
+                things were wrong: nothing could shrink (`min-w-0` is missing
+                by default on a flex child), and a 78px insignia plus a fixed
+                50px word simply does not fit 279px of banner. On a phone the
+                insignia now sits ABOVE the word, which gives the word the full
+                width, so even "Intermediate" fits at a size still worth
+                reading. The desktop row is unchanged. */}
+            <div className="gv-rank-row flex items-center gap-4 min-w-0">
               {/* MUN rank insignia — the same tiered glyph used across the app */}
               <span
                 className="inline-flex items-center justify-center flex-shrink-0"
@@ -569,9 +593,9 @@ export default function ProfilePage() {
               >
                 <LevelInsignia level={exp.level} size={48} />
               </span>
-              <div>
+              <div className="min-w-0">
                 <span
-                  className="inline-flex items-center gap-2"
+                  className="inline-flex items-center gap-2 max-w-full"
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
                 >
                   <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: '12.5px', letterSpacing: '0.18em', color: '#EED98A', margin: 0, textTransform: 'uppercase' }}>
@@ -579,9 +603,13 @@ export default function ProfilePage() {
                   </p>
                   <ExperienceInfo tone="gold" align="left" currentLevel={exp.level} />
                 </span>
+                {/* Fluid, so "Intermediate" fits the same box "Beginner" does.
+                    50px is still the desktop size (a 1000px page clears the
+                    10vw ceiling long before it). `break-words` is the belt to
+                    the clamp's braces. */}
                 <p
-                  className="font-black"
-                  style={{ fontFamily: OUTFIT, fontSize: '50px', lineHeight: 1.02, color: '#FAF8F3', letterSpacing: '-0.02em', margin: '4px 0 0 0' }}
+                  className="font-black break-words"
+                  style={{ fontFamily: OUTFIT, fontSize: 'clamp(28px, 10vw, 50px)', lineHeight: 1.02, color: '#FAF8F3', letterSpacing: '-0.02em', margin: '4px 0 0 0' }}
                 >
                   {exp.label}
                 </p>
@@ -712,7 +740,7 @@ export default function ProfilePage() {
                       onChange={(e) => setReviewText(e.target.value)}
                       rows={3}
                       placeholder="What should future delegates know about this conference?"
-                      className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"
+                      className="gv-acct-input w-full rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"
                       style={{ ...inputStyle, lineHeight: 1.7 }}
                       onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
                       onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
@@ -761,8 +789,13 @@ export default function ProfilePage() {
           <Eyebrow size="lg">Basic Information</Eyebrow>
         </div>
 
-        {/* Avatar — roughly double the previous size, upload affordance intact */}
-        <div className="relative flex items-center gap-5 mb-7" style={{ zIndex: 1 }}>
+        {/* Avatar — roughly double the previous size, upload affordance intact.
+            `flex-wrap`: at 375px the 144px avatar plus the 20px gap left 123px
+            for a button that needs about 150, so "Upload photo" broke over two
+            lines inside a pill sized for one. Wrapping puts the button and its
+            hint on their own full-width row instead, and changes nothing on a
+            desktop where both fit side by side. */}
+        <div className="relative flex flex-wrap items-center gap-5 mb-7" style={{ zIndex: 1 }}>
           <div className="relative flex-shrink-0">
             {displayAvatar ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -801,17 +834,17 @@ export default function ProfilePage() {
               </div>
             )}
           </div>
-          <div>
+          <div className="min-w-0">
             <button
               onClick={() => avatarInputRef.current?.click()}
               disabled={avatarUploading}
-              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-bold focus:outline-none"
-              style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, border: 'none', cursor: avatarUploading ? 'default' : 'pointer', boxShadow: NEU.outSm }}
+              className="inline-flex items-center gap-2 rounded-full px-4 text-[13px] font-bold focus:outline-none"
+              style={{ minHeight: 44, whiteSpace: 'nowrap', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, border: 'none', cursor: avatarUploading ? 'default' : 'pointer', boxShadow: NEU.outSm }}
             >
               <Camera size={14} strokeWidth={2.2} />
               {displayAvatar ? 'Change photo' : 'Upload photo'}
             </button>
-            <p className="text-[11px] mt-2" style={{ color: avatarError ? '#8B2020' : '#9A8A78', fontFamily: OUTFIT }}>
+            <p className="text-[12.5px] mt-2" style={{ color: avatarError ? '#8B2020' : '#9A8A78', fontFamily: OUTFIT }}>
               {avatarError || 'JPG or PNG, up to 5MB.'}
             </p>
             <input
@@ -838,7 +871,7 @@ export default function ProfilePage() {
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+              className="gv-acct-input w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
               style={inputStyle}
               onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
               onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
@@ -858,7 +891,7 @@ export default function ProfilePage() {
               type="email"
               value={profile?.email ?? user?.email ?? ''}
               readOnly
-              className="w-full rounded-xl px-4 py-3 text-sm"
+              className="gv-acct-input w-full rounded-xl px-4 py-3 text-sm"
               style={{
                 border: '1px solid #DDD4C0',
                 backgroundColor: 'rgba(0,0,0,0.03)',
@@ -909,7 +942,7 @@ export default function ProfilePage() {
                   onChange={(e) => { setNationality(e.target.value); setNatOpen(true); }}
                   onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; setNatOpen(true); }}
                   onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-                  className="w-full rounded-xl py-3 text-sm focus:outline-none"
+                  className="gv-acct-input w-full rounded-xl py-3 text-sm focus:outline-none"
                   style={{ ...inputStyle, paddingLeft: '44px', paddingRight: '16px' }}
                 />
               </div>
@@ -1014,27 +1047,43 @@ export default function ProfilePage() {
                 <div
                   role="radiogroup"
                   aria-label="Education level"
-                  className="relative grid grid-cols-2 gap-1 rounded-full p-1 select-none"
+                  className="gv-edu-seg relative grid gap-1 rounded-full p-1 select-none"
                   style={{
                     maxWidth: '340px',
                     backgroundColor: 'rgba(27,56,40,0.06)',
                     boxShadow: NEU.inSm,
                   }}
                 >
+                  {/* Two blocks side by side is a desktop shape. On a phone the
+                      pair squeezed to about 150px each and "High School" broke
+                      over two lines inside a pill sized for one (owner, 18 Sep
+                      2026). Under 430px they stack, and the thumb slides down
+                      instead of across. Position lives in CSS so one media
+                      query moves both the buttons and the thumb; the paint
+                      (gradient, ring, shadow) stays inline. */}
+                  <style>{`
+.gv-edu-seg{grid-template-columns:repeat(2,minmax(0,1fr))}
+.gv-edu-thumb{top:4px;bottom:4px;left:4px;width:calc(50% - 6px)}
+.gv-edu-thumb[data-idx="1"]{left:calc(50% + 2px)}
+@media (max-width:430px){
+  .gv-edu-seg{grid-template-columns:1fr;max-width:none}
+  .gv-edu-seg>button{min-height:48px}
+  .gv-edu-thumb{left:4px;right:4px;width:auto;top:4px;bottom:auto;height:calc(50% - 6px)}
+  .gv-edu-thumb[data-idx="1"]{left:4px;top:calc(50% + 2px)}
+}
+@media (prefers-reduced-motion:reduce){.gv-edu-thumb{transition:none}}
+                  `}</style>
                   {/* Sliding forest thumb — only rendered once a side is chosen. */}
                   {selectedIdx >= 0 && (
                     <span
                       aria-hidden
-                      className="absolute rounded-full"
+                      data-idx={selectedIdx}
+                      className="gv-edu-thumb absolute rounded-full"
                       style={{
-                        top: '4px',
-                        bottom: '4px',
-                        left: selectedIdx === 0 ? '4px' : 'calc(50% + 2px)',
-                        width: 'calc(50% - 6px)',
                         background: 'linear-gradient(150deg, #24492F, #1B3828)',
                         boxShadow: '0 4px 12px rgba(27,56,40,0.3), inset 0 1px 0 rgba(238,217,138,0.25)',
                         border: '1px solid rgba(238,217,138,0.35)',
-                        transition: 'left 260ms cubic-bezier(0.4,0,0.2,1)',
+                        transition: 'left 260ms cubic-bezier(0.4,0,0.2,1), top 260ms cubic-bezier(0.4,0,0.2,1)',
                       }}
                     />
                   )}
@@ -1076,8 +1125,9 @@ export default function ProfilePage() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="rounded-full py-2.5 px-6 font-bold text-[13px] focus:outline-none transition-colors"
+            className="rounded-full px-6 font-bold text-[13px] focus:outline-none transition-colors"
             style={{
+              minHeight: 44,
               backgroundColor: saving ? '#DDD4C0' : '#1B3828',
               color: saving ? '#9A8A78' : '#EED98A',
               fontFamily: OUTFIT,
@@ -1154,10 +1204,17 @@ export default function ProfilePage() {
                   {row.desc}
                 </p>
               </div>
-              <PillToggle
-                value={notifications[row.field]}
-                onChange={(v) => handleToggle(row.field, v)}
-              />
+              {/* The switch itself is 40x22, which is the right SIZE and the
+                  wrong TARGET on a phone. The wrapper grows the hit area to
+                  44px tall with a pseudo-element on the button (which is
+                  already `position: relative`), so nothing about the switch's
+                  look or any other screen that uses it changes. */}
+              <span className="gv-tap44 flex-shrink-0 inline-flex">
+                <PillToggle
+                  value={notifications[row.field]}
+                  onChange={(v) => handleToggle(row.field, v)}
+                />
+              </span>
             </div>
           ))}
         </div>
@@ -1261,7 +1318,7 @@ export default function ProfilePage() {
                   onChange={(e) => setDeleteConfirmText(e.target.value)}
                   disabled={deleting}
                   autoFocus
-                  className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+                  className="gv-acct-input w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
                   style={inputStyle}
                 />
               </div>

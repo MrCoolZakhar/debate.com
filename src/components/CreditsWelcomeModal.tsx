@@ -91,7 +91,7 @@ export default function CreditsWelcomeModal({
     <Portal>
       <div
         onClick={onClose}
-        className="fixed inset-0 z-[2147483000] flex items-center justify-center px-4"
+        className="fixed inset-0 z-[2147483000] flex items-center justify-center px-4 py-4"
         style={{
           backgroundColor: 'rgba(28,20,16,0.42)',
           backdropFilter: 'blur(3px)',
@@ -117,10 +117,17 @@ export default function CreditsWelcomeModal({
           />
         )}
 
+        {/* This card is about 646px tall, so on a 667px phone it cleared the
+            screen by ten pixels a side and on anything shorter (an SE at 568,
+            or any phone with the URL bar down) it ran off both ends with no
+            way to scroll to "Explore conferences". It is the first screen a
+            new account sees, so it gets the same treatment as
+            CompleteBasicsGate: a dvh cap and its own scroll.
+            (18 Sep 2026 phone audit.) */}
         <div
           onClick={(e) => e.stopPropagation()}
           className="relative w-full text-center"
-          style={{ maxWidth: 420, borderRadius: 26, backgroundColor: NEU.surface, boxShadow: NEU.out, padding: '0 30px 30px', animation: 'gvWelcomePop 260ms cubic-bezier(0.2,0.7,0.2,1)' }}
+          style={{ maxWidth: 420, maxHeight: 'calc(100dvh - 32px)', overflowY: 'auto', borderRadius: 26, backgroundColor: NEU.surface, boxShadow: NEU.out, padding: '0 30px 30px', animation: 'gvWelcomePop 260ms cubic-bezier(0.2,0.7,0.2,1)' }}
         >
           <button
             onClick={onClose}
@@ -144,7 +151,9 @@ export default function CreditsWelcomeModal({
             <span style={{ fontFamily: OUTFIT, fontSize: 26, fontWeight: 900, color: NEU.ink }}>Introducing </span>
             <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, fontSize: 26, color: NEU.amber }}>Credits</span>
           </h2>
-          <p style={{ fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.6, color: NEU.muted, margin: '0 0 20px' }}>
+          {/* inkSoft, not muted: muted is 2.7:1 on this surface and this is
+              body copy, not a decorative label (rulebook section 3). */}
+          <p style={{ fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.6, color: NEU.inkSoft, margin: '0 0 20px' }}>
             Credits are how applying works on Gavelling. They keep the site free of processing fees and automate every step for your organizers.
           </p>
 

@@ -279,7 +279,7 @@ export default function ImportInvitePage() {
           </p>
         )}
         {invite!.invited_email_masked && (
-          <p className="text-xs mt-3" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+          <p className="text-xs mt-3" style={{ color: NEU.muted, fontFamily: OUTFIT, overflowWrap: 'anywhere' }}>
             Invitation for {invite!.invited_email_masked}
           </p>
         )}

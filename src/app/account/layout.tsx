@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { User, ScrollText, CalendarDays, Coins, CalendarCheck, ArrowRight, FileClock, type LucideIcon } from 'lucide-react';
@@ -50,6 +50,21 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
     }
   }, [authLoading, user, router, pathname]);
 
+  // Bring the current tab into the rail. Without it, CONFERENCE CALENDAR and
+  // CREDITS & SUBSCRIPTION sat off the right edge of a 375px screen, cut
+  // mid-word, so the two pages that need the rail most never showed which one
+  // you were on. `inline: 'nearest'` leaves MY PROFILE where it is (already
+  // visible) instead of yanking the rail for no reason, and `block: 'nearest'`
+  // keeps it from scrolling the PAGE as well. Read-only: it touches the rail's
+  // scrollLeft and nothing else.
+  const tabRailRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const rail = tabRailRef.current;
+    if (!rail) return;
+    const active = rail.querySelector('[data-acct-tab="active"]');
+    active?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  }, [pathname, draftCount]);
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE7D8' }}>
@@ -88,10 +103,27 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
 
         <div className="max-w-[1000px] mx-auto px-6 py-10">
 
-          {/* Mobile tab bar */}
+          {/* Mobile tab bar.
+              It is a horizontal scroller, so on a phone it must LOOK like one
+              and behave like one (18 Sep 2026 phone audit):
+              - it bleeds to the screen edges (`-mx-6 px-6`), because a strip
+                that stops at the page gutter reads as a cut-off row rather
+                than a rail you can push;
+              - its scrollbar is hidden, because the native bar drew a grey
+                slab straight over the active tab's 2px underline and that is
+                what made "the scrolling at the top" look broken;
+              - `overscroll-x: contain` so pushing the rail never turns into a
+                page-level rubber band;
+              - rows are 44px tall (they were 34) and the type is 13px (it was
+                12), so the first thing under a thumb is actually tappable;
+              - and the ACTIVE tab is scrolled into view on mount, because on
+                /calendar and /unlimited the current tab sat off the right edge
+                cut mid-word, so the page never told you where you were. */}
+          <style>{`.gv-acct-tabs{scrollbar-width:none;-ms-overflow-style:none}.gv-acct-tabs::-webkit-scrollbar{display:none}`}</style>
           <div
-            className="md:hidden flex overflow-x-auto gap-0 mb-6"
-            style={{ borderBottom: '1px solid #DDD4C0' }}
+            ref={tabRailRef}
+            className="gv-acct-tabs md:hidden flex overflow-x-auto gap-0 mb-6 -mx-6 px-6"
+            style={{ borderBottom: '1px solid #DDD4C0', overscrollBehaviorX: 'contain' }}
           >
             {navLinks.map((link) => {
               const active = pathname === link.href;
@@ -100,8 +132,10 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="flex-shrink-0 inline-flex items-center gap-1.5 py-2 px-3 text-xs font-bold focus:outline-none"
+                  data-acct-tab={active ? 'active' : undefined}
+                  className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 text-[13px] font-bold focus:outline-none"
                   style={{
+                    minHeight: 44,
                     color: active ? accent : link.highlight ? '#B6871F' : '#9A8A78',
                     borderBottom: active ? `2px solid ${accent}` : '2px solid transparent',
                     textDecoration: 'none',
@@ -133,8 +167,10 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
               return (
                 <Link
                   href={CONFERENCES_HREF}
-                  className="flex-shrink-0 inline-flex items-center gap-1.5 py-2 px-3 text-xs font-bold focus:outline-none"
+                  data-acct-tab={confActive ? 'active' : undefined}
+                  className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 text-[13px] font-bold focus:outline-none"
                   style={{
+                    minHeight: 44,
                     color: '#B6871F',
                     borderBottom: confActive ? '2px solid #B6871F' : '2px solid transparent',
                     textDecoration: 'none',
@@ -151,10 +187,18 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
             })()}
           </div>
 
-          {/* Desktop: sidebar + content */}
-          <div className="hidden md:flex gap-8 items-start">
+          {/* Sidebar (desktop only) + content.
+              The content column is rendered ONCE. It used to be rendered twice
+              (a `hidden md:flex` desktop tree and an `md:hidden` mobile tree),
+              which on a phone mounted every account page twice: two copies of
+              every Supabase fetch, two of every effect, duplicate element ids,
+              and, worst of all, two of every PORTAL. A portal escapes its
+              `display:none` parent, so the hidden desktop copy's nationality
+              menu, date picker and delete dialog could paint over the phone
+              screen on top of the visible one's. One tree, one of each. */}
+          <div className="flex md:gap-8 items-start">
             {/* Sidebar */}
-            <div style={{ width: '220px', flexShrink: 0 }}>
+            <div className="hidden md:block" style={{ width: '220px', flexShrink: 0 }}>
               <div className="sticky flex flex-col gap-3" style={{ top: '88px' }}>
               <div
                 className="rounded-[22px] p-5"
@@ -397,11 +441,6 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
             <div className="flex-1 min-w-0">
               {children}
             </div>
-          </div>
-
-          {/* Mobile content */}
-          <div className="md:hidden">
-            {children}
           </div>
         </div>
       </div>

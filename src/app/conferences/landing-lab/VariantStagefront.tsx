@@ -316,6 +316,13 @@ export default function VariantStagefront({
         /* Hero search field: translucent light-on-dark, muted cream placeholder. */
         .sf-hero-search-input::placeholder { color: rgba(237,231,216,0.6); opacity: 1; }
         .sf-hero-search-input::-webkit-input-placeholder { color: rgba(237,231,216,0.6); }
+        /* iOS Safari zooms the whole page in when a focused input is under
+           16px, and the hero clamp bottoms out at 15px on a phone — so the
+           first tap on the homepage threw the layout sideways. 16px only
+           below the desktop breakpoint; the clamp still governs desktop. */
+        @media (max-width: 767px) {
+          .sf-hero-search-input { font-size: 16px !important; }
+        }
         /* Fluid hero aside: the trio grows with the viewport (356px was fixed —
            at 1440/1920 the cards read undersized with dead space around them).
            Width tracks ~23.5vw and the photo-card height tracks ~12.5vw so the

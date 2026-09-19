@@ -155,9 +155,9 @@ export default function OrganizerInvitePage() {
     return (
       <div className="min-h-screen flex flex-col" style={{ backgroundColor: NEU.base }}>
         <SiteNav />
-        <div className="relative z-10 flex-1 px-6 py-14 flex items-start justify-center">
+        <div className="relative z-10 flex-1 px-4 sm:px-6 py-10 sm:py-14 flex items-start justify-center">
           <div
-            className="w-full rounded-[24px] px-8 py-10"
+            className="w-full rounded-[24px] px-6 sm:px-8 py-8 sm:py-10"
             style={{
               maxWidth: 460,
               backgroundColor: NEU.surface,
@@ -186,14 +186,14 @@ export default function OrganizerInvitePage() {
             <div className="flex gap-3">
               <AuthLink
                 next={pathname}
-                className="flex-1 rounded-full py-2.5 font-bold text-sm focus:outline-none flex items-center justify-center gap-2"
+                className="flex-1 rounded-full py-3 sm:py-2.5 font-bold text-sm focus:outline-none flex items-center justify-center gap-2"
                 style={{ border: 'none', color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontFamily: OUTFIT, textDecoration: 'none' }}
               >
                 <LogIn size={14} /> SIGN IN
               </AuthLink>
               <AuthLink
                 mode="signup" next={pathname}
-                className="flex-1 inline-flex items-center gap-2 rounded-full py-2.5 font-bold text-sm focus:outline-none justify-center"
+                className="flex-1 inline-flex items-center gap-2 rounded-full py-3 sm:py-2.5 font-bold text-sm focus:outline-none justify-center"
                 style={primaryPillStyle}
               >
                 <UserPlus size={14} /> CREATE ACCOUNT
@@ -222,9 +222,9 @@ export default function OrganizerInvitePage() {
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: NEU.base }}>
       <SiteNav />
-      <div className="relative z-10 flex-1 px-6 py-14 flex items-start justify-center">
+      <div className="relative z-10 flex-1 px-4 sm:px-6 py-10 sm:py-14 flex items-start justify-center">
         <div
-          className="w-full rounded-[24px] px-8 py-10"
+          className="w-full rounded-[24px] px-6 sm:px-8 py-8 sm:py-10"
           style={{
             maxWidth: 460,
             backgroundColor: NEU.surface,
@@ -330,7 +330,7 @@ export default function OrganizerInvitePage() {
                     <button
                       onClick={() => respond(false)}
                       disabled={responding !== null}
-                      className="flex-1 rounded-full py-2.5 font-bold text-sm focus:outline-none flex items-center justify-center gap-2"
+                      className="flex-1 rounded-full py-3 sm:py-2.5 font-bold text-sm focus:outline-none flex items-center justify-center gap-2"
                       style={{
                         border: 'none', color: NEU.ink, backgroundColor: NEU.surface,
                         boxShadow: responding !== null ? 'none' : NEU.outSm,

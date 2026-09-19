@@ -45,6 +45,13 @@ export default function FooterLegal({
   const companyLines = companyLegalLines();
   const year = new Date().getFullYear();
 
+  // These five are 11.5px text, which gave them a 17px-tall hit area — a third
+  // of the 44px tap-target floor, on a row where "Terms of Service" and
+  // "Privacy Policy" sit two pixels apart. Padding the anchor (rather than
+  // growing the type) makes each one thumb-sized on a phone and leaves the
+  // desktop footer exactly as it was.
+  const hubLink = `${t.link} inline-flex items-center px-1.5 min-h-[38px] md:min-h-0 md:px-0`;
+
   return (
     <div
       className={`mx-auto mt-6 flex w-full max-w-5xl flex-col items-center gap-1.5 border-t pt-5 text-center ${className}`}
@@ -57,23 +64,23 @@ export default function FooterLegal({
       >
         {/* Hub links: every public footer is a crawl path to the two hubs
             that list everything else (CLAUDE.md §4, indexability). */}
-        <Link href="/conferences/explore" className={t.link}>
+        <Link href="/conferences/explore" className={hubLink}>
           Explore Conferences
         </Link>
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
-        <Link href="/blog" className={t.link}>
+        <Link href="/blog" className={hubLink}>
           MUN Guides
         </Link>
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
-        <Link href="/terms" className={t.link}>
+        <Link href="/terms" className={hubLink}>
           Terms of Service
         </Link>
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
-        <Link href="/privacy" className={t.link}>
+        <Link href="/privacy" className={hubLink}>
           Privacy Policy
         </Link>
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
-        <Link href="/privacy#your-rights" className={t.link}>
+        <Link href="/privacy#your-rights" className={hubLink}>
           Your Data &amp; GDPR Rights
         </Link>
       </nav>

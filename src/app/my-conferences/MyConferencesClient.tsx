@@ -408,19 +408,25 @@ function InviteCardShell({ title, subtitle, responding, onDecline, onAccept }: {
   const busy = responding !== null;
   return (
     <div
-      className="flex items-center gap-3.5 px-4 py-3.5"
+      /* Stacks on a phone. The 40px disc and the DECLINE + ACCEPT pair are
+         both non-shrinking and take ~220px of a 328px card, so the invited
+         conference's NAME — the one thing the row exists to say — truncated to
+         a letter or two. From `sm` up it is the single row it was. */
+      className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3.5 px-4 py-3.5"
       style={{ borderRadius: 18, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
     >
-      <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={Mail} iconColor={NEU.forest} size={40} />
-      <div className="min-w-0 flex-1">
-        <p className="font-bold text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-          {title}
-        </p>
-        <p className="text-xs truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-          {subtitle}
-        </p>
+      <div className="flex items-center gap-3.5 min-w-0 sm:flex-1">
+        <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={Mail} iconColor={NEU.forest} size={40} />
+        <div className="min-w-0 flex-1">
+          <p className="font-bold text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+            {title}
+          </p>
+          <p className="text-xs truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+            {subtitle}
+          </p>
+        </div>
       </div>
-      <div className="flex gap-2 flex-shrink-0">
+      <div className="flex gap-2 flex-shrink-0 justify-end sm:justify-start">
         <button
           onClick={onDecline}
           disabled={busy}
@@ -648,7 +654,7 @@ function DraftRowCard({ draft, onDelete }: { draft: DraftRow; onDelete: (draft: 
       <div className="flex items-center gap-2 flex-shrink-0">
         <Link
           href={`/conferences/${draft.slug}/apply?role=${encodeURIComponent(draft.role)}`}
-          className="inline-flex items-center focus:outline-none"
+          className="inline-flex items-center focus:outline-none min-h-11 sm:min-h-0"
           style={{
             padding: '8px 14px', borderRadius: 999, border: 'none',
             background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,

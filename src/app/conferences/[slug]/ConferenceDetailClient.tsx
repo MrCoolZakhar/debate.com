@@ -1946,8 +1946,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       {conference.contact_email && (
                         <a
                           href={`mailto:${conference.contact_email}`}
-                          className="flex items-center gap-1.5 text-xs mt-1 transition-colors"
-                          style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}
+                          className="flex items-center gap-1.5 text-xs mt-1 transition-colors min-h-11 sm:min-h-0"
+                          style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", textDecoration: 'none', overflowWrap: 'anywhere' }}
                           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-main)'; }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-muted)'; }}
                         >
@@ -2605,7 +2605,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     {pricingVisible && (<>
                     <button
                       onClick={() => setPricingOpen(v => !v)}
-                      className="mt-4 flex items-center gap-1.5 text-[11px] font-bold focus:outline-none transition-colors"
+                      /* 17px tall before: the only way into the fee breakdown
+                         was a hairline of text. 44px on a phone, unchanged
+                         from `sm` up. */
+                      className="mt-4 flex items-center gap-1.5 text-[11px] font-bold focus:outline-none transition-colors min-h-11 sm:min-h-0 px-2 -mx-2 sm:px-0 sm:mx-0"
                       style={{ color: 'var(--gv-main)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em', background: 'none', border: 'none', cursor: 'pointer' }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-accent)'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-main)'; }}
@@ -3070,7 +3073,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                 <div className="px-5 pb-5 pt-4">
                                   <button
                                     onClick={() => setExpandedRoster(c.id)}
-                                    className="w-full rounded-xl py-2.5 text-[11px] font-bold transition-colors focus:outline-none gv-lift"
+                                    className="w-full rounded-xl py-2.5 text-[11px] font-bold transition-colors focus:outline-none gv-lift min-h-11 sm:min-h-0"
                                     style={{
                                       backgroundColor: 'transparent',
                                       color: 'var(--gv-main)',
@@ -3200,7 +3203,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                               </div>
                               )}
                             </div>
-                            <div className="px-3 pb-4 overflow-y-auto" style={{ maxHeight: '54vh' }}>
+                            <div className="px-3 pb-4 overflow-y-auto" style={{ maxHeight: '54dvh' }}>
                               {slots.length === 0 ? (
                                 <p className="text-sm px-3 py-4" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
                                   The {isCrisis ? 'character' : 'country'} roster will be announced soon.
@@ -3310,7 +3313,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
         {/* ── Organizer edit modals ──────────────────────────────────── */}
         {isOrganizerViewer && editModal === 'banner' && (
           <ModalOverlay onClose={() => { if (!assetUploading && !editSaving) setEditModal(null); }}>
-            <div className="rounded-2xl p-6" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 'min(520px, 92vw)', maxHeight: '85vh', overflowY: 'auto' }}>
+            <div className="rounded-2xl p-6" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 'min(520px, 92vw)', maxHeight: '85dvh', overflowY: 'auto' }}>
               <div className="flex items-center justify-between mb-4">
                 <p className="text-base font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>Conference Banner</p>
                 <button onClick={() => { if (!assetUploading && !editSaving) setEditModal(null); }} className="focus:outline-none" style={{ color: 'var(--gv-muted)', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close"><X size={18} /></button>
@@ -3471,7 +3474,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
         {isOrganizerViewer && editModal === 'about' && (
           <ModalOverlay onClose={() => { if (!editSaving) setEditModal(null); }}>
-            <div className="rounded-2xl p-6" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 'min(480px, 92vw)', maxHeight: '85vh', overflowY: 'auto' }}>
+            <div className="rounded-2xl p-6" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 'min(480px, 92vw)', maxHeight: '85dvh', overflowY: 'auto' }}>
               <div className="flex items-center justify-between mb-4">
                 <p className="text-base font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>Contact &amp; Social Links</p>
                 <button onClick={() => { if (!editSaving) setEditModal(null); }} className="focus:outline-none" style={{ color: 'var(--gv-muted)', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close"><X size={18} /></button>

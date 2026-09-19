@@ -96,9 +96,9 @@ export default function DelegationInvitePage() {
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: NEU.base }}>
       <SiteNav />
-      <div className="relative z-10 flex-1 px-6 py-14 flex items-start justify-center">
+      <div className="relative z-10 flex-1 px-4 sm:px-6 py-10 sm:py-14 flex items-start justify-center">
         <div
-          className="w-full rounded-[24px] px-8 py-10"
+          className="w-full rounded-[24px] px-6 sm:px-8 py-8 sm:py-10"
           style={{
             maxWidth: 460,
             backgroundColor: NEU.surface,

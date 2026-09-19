@@ -225,7 +225,7 @@ export default function ParticipantView({
             <button
               onClick={() => setClaimNoticeDismissed(true)}
               className="flex-shrink-0 focus:outline-none"
-              style={{ color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+              style={{ color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer', padding: 14, margin: -10 }}
               aria-label="Dismiss"
             >
               <X size={15} />
@@ -285,7 +285,7 @@ export default function ParticipantView({
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <Link
                     href={`/conferences/${conferenceSlug}/apply?role=${selected.role}&edit=1`}
-                    className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-3.5 text-xs font-bold focus:outline-none transition-colors"
+                    className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-3.5 text-xs font-bold focus:outline-none transition-colors min-h-11 sm:min-h-0"
                     style={{ border: '1px solid #DDD4C0', color: '#1C1410', textDecoration: 'none', fontFamily: OUTFIT, letterSpacing: '0.04em' }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
@@ -297,7 +297,7 @@ export default function ParticipantView({
                       choice and cannot be undone from here. */}
                   <button
                     onClick={() => { setWithdrawConfirm(true); setWithdrawError(''); }}
-                    className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none transition-colors"
+                    className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none transition-colors min-h-11 sm:min-h-0"
                     style={{ border: 'none', background: 'transparent', color: '#8B2020', fontFamily: OUTFIT, letterSpacing: '0.04em', cursor: 'pointer' }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.07)'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
