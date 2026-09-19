@@ -123,7 +123,10 @@ export function TermsLine() {
   );
 }
 
-/** The left half of the split pop-up: one image, nothing else. */
+/** The picture. The left half of the split pop-up from 860px, and the HERO
+ *  band at the top of the phone sheet (same file, a landscape crop of it
+ *  through `object-position`). Hidden in between, and on the long steps of the
+ *  sheet, where every pixel of height belongs to the form. */
 export function AuthSideImage() {
   return (
     <div className="gv-auth-side">
@@ -200,6 +203,9 @@ export const KIT_CSS = `
 .gv-social:active{transform:scale(0.96)}
 .gv-social:disabled{opacity:0.55;cursor:default}
 .gv-social svg{width:22px;height:22px}
+/* The word beside the Google mark. The square tile is a desktop idiom; on a
+   phone the same button is a full-width outlined button with its label. */
+.gv-social-label{display:none}
 .gv-textbtn{align-self:flex-start;background:none;border:none;padding:2px 0;border-radius:4px;font-family:${OUTFIT};font-size:14px;font-weight:600;color:${INK};text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 .gv-textbtn-quiet{color:${INK_SOFT};font-weight:500}
 .gv-inline{color:${INK};font-weight:600;text-decoration:underline;text-underline-offset:2px}
@@ -247,12 +253,114 @@ export const KIT_CSS = `
 .gv-auth-terms{margin:14px 0 0;font-size:12px;line-height:1.5;color:${INK_SOFT};text-align:center}
 @keyframes gvAuthFade{from{opacity:0}to{opacity:1}}
 @keyframes gvAuthRise{from{opacity:0;transform:translateY(100px)}to{opacity:1;transform:none}}
+/* ── The phone sheet (≤743px) ────────────────────────────────────────────────
+   Owner, 19 Sep 2026: "the registration / log in pop-up is not made for
+   phone". It is a sheet, not a squashed dialog: the wall artwork as a hero
+   band at the top, the white form sheet with a rounded top edge and a grab
+   handle overlapping it, the content anchored (terms and Google sit at the
+   foot, never a dead empty half), the primary button sticky above the safe
+   area on the long steps, and Google as a full-width outlined button.
+   Heights are dvh/svh, never vh, and --gv-vvh / --gv-vvt (set by
+   AuthModal from visualViewport) hold the sheet above the on-screen
+   keyboard. Everything from 744px up is untouched. */
 @media (max-width:743px){
-  .gv-auth-backdrop{padding:0;align-items:flex-end}
-  .gv-auth-panel,.gv-auth-panel.gv-wide{max-width:none;height:100dvh;max-height:100dvh;border-radius:0;animation:gvAuthSheet 340ms cubic-bezier(0.2,0.8,0.2,1)}
-  .gv-auth-head{padding:14px 12px 0}
-  .gv-auth-body{padding:8px 24px calc(28px + env(safe-area-inset-bottom))}
+  .gv-auth-backdrop{padding:0;align-items:stretch;background:rgba(0,0,0,0.6);overscroll-behavior:none;
+    top:var(--gv-vvt,0px);bottom:auto;height:var(--gv-vvh,100dvh)}
+  .gv-auth-panel,.gv-auth-panel.gv-wide{max-width:none;width:100%;height:100%;max-height:none;border-radius:0;box-shadow:none;animation:gvAuthSheet 340ms cubic-bezier(0.2,0.8,0.2,1)}
+  /* The hero: the same artwork, cropped to a landscape band, sized so the
+     white sheet is about as tall as the step it holds: a tall hero over a compact sheet on the short steps (the bottom
+     sheet, Airbnb / Duolingo), a shorter one on the first screen, which
+     carries the most. Never a form floating in a white void. */
+  .gv-auth-side{display:block;position:relative;flex:0 0 auto;height:clamp(150px,30svh,268px);background:${FOREST}}
+  .gv-auth-panel[data-hero="1"]:not([data-step="email"]) .gv-auth-side{height:clamp(180px,50svh,430px)}
+  .gv-auth-side img{display:block;width:100%;height:100%;object-fit:cover;object-position:50% 20%}
+  .gv-auth-side::after{content:'';position:absolute;left:0;right:0;bottom:0;height:64px;background:linear-gradient(to bottom,rgba(27,56,40,0),rgba(27,56,40,0.34));pointer-events:none}
+  .gv-auth-panel[data-hero="0"] .gv-auth-side{display:none}
+  .gv-auth-main{position:relative;flex:1 1 auto;min-height:0;background:#FFFFFF}
+  .gv-auth-panel[data-hero="1"] .gv-auth-main{margin-top:-20px;border-radius:22px 22px 0 0;box-shadow:0 -12px 26px rgba(0,0,0,0.22)}
+  .gv-auth-panel[data-hero="1"] .gv-auth-main::before{content:'';position:absolute;top:9px;left:50%;margin-left:-19px;width:38px;height:4px;border-radius:999px;background:#DCDCDC}
+  .gv-auth-head{padding-top:calc(8px + env(safe-area-inset-top));padding-bottom:0;
+    padding-left:calc(8px + env(safe-area-inset-left));padding-right:calc(8px + env(safe-area-inset-right));min-height:56px}
+  .gv-auth-panel[data-hero="1"] .gv-auth-head{padding-top:19px}
+  /* The first screen has neither a back button nor a title, so its header
+     would be 56px of white holding one X. The X goes on the picture instead,
+     as a glass disc, and the form starts at the top of the sheet. */
+  .gv-auth-panel[data-hero="1"][data-step="email"] .gv-auth-head{position:absolute;z-index:3;display:block;top:-56px;right:calc(7px + env(safe-area-inset-right));left:auto;padding:0;min-height:0}
+  .gv-auth-panel[data-hero="1"][data-step="email"] .gv-auth-head-l{display:none}
+  .gv-auth-panel[data-hero="1"][data-step="email"] .gv-auth-icon{background:rgba(16,26,20,0.48);color:#FFFFFF;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+  .gv-auth-panel[data-hero="1"][data-step="email"] .gv-auth-body{padding-top:16px}
+  .gv-auth-head-title{font-size:16.5px}
+  .gv-auth-icon{width:44px;height:44px}
+  .gv-auth-skip{min-height:44px;padding:10px 10px;font-size:15px}
+  .gv-auth-body{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
+    padding-top:4px;padding-bottom:calc(18px + env(safe-area-inset-bottom));
+    padding-left:calc(20px + env(safe-area-inset-left));padding-right:calc(20px + env(safe-area-inset-right))}
+  .gv-auth-screen{gap:15px}
+  .gv-auth-brand{justify-content:flex-start;margin:2px 0 12px}
+  .gv-auth-mark{width:30px;height:30px}
+  .gv-auth-word{font-size:20px}
+  .gv-auth-big{text-align:left;font-size:27px;line-height:1.16;margin:0 0 6px}
+  .gv-auth-intro{display:block;margin:0 0 12px}
+  .gv-auth-sub,.gv-auth-qtitle,.gv-auth-count{text-align:left}
+  .gv-auth-qtitle{font-size:25px}
+  .gv-auth-terms{text-align:left;margin-top:14px}
+  /* The first screen is anchored top AND bottom: heading, email and Continue
+     at the top, the other way in (or / Google / terms) at the foot. */
+  .gv-auth-body>form,.gv-auth-body>.gv-auth-screen{min-height:100%}
+  .gv-auth-panel[data-step="email"] .gv-or{margin-top:auto}
+  /* Thumb-sized targets, 16px type (never a zoom on focus). */
+  .gv-fl input,.gv-chip,.gv-add,.gv-dp>div>button{height:58px!important}
+  .gv-green{height:56px;font-size:16.5px}
+  .gv-textbtn,.gv-auth-skip{padding-top:8px;padding-bottom:8px}
+  .gv-socials{display:block}
+  .gv-social{width:100%;height:56px;gap:12px;border:1px solid ${INK};border-radius:12px;font-family:${OUTFIT};font-size:16px;font-weight:600;color:${INK}}
+  .gv-social-label{display:inline}
+  .gv-opt{padding:16px}
+  .gv-list{max-height:min(46svh,340px)}
+  /* The long steps: the action stays on screen above the safe area. */
+  /* margin-top:auto so a SHORT long-step (a questionnaire question with two
+     answers) puts its action at the foot of the sheet instead of leaving the
+     bottom half empty; with more content than room the auto margin is 0 and
+     the button simply sticks. */
+  .gv-auth-panel[data-cta="sticky"] .gv-auth-body .gv-green{position:sticky;margin-top:auto;bottom:calc(env(safe-area-inset-bottom) + 6px);z-index:3;
+    box-shadow:0 0 0 10px #FFFFFF,0 -10px 18px rgba(255,255,255,0.95),0 10px 24px rgba(27,56,40,0.18)}
+}
+/* A short phone (an SE, an 8): the hero and the rhythm give height back so
+   the whole first screen still fits without a scroll. */
+@media (max-width:743px) and (max-height:740px){
+  .gv-auth-side{height:clamp(120px,22svh,180px)}
+  .gv-auth-panel[data-hero="1"]:not([data-step="email"]) .gv-auth-side{height:clamp(150px,44svh,300px)}
+  .gv-auth-screen{gap:12px}
+  .gv-auth-big{font-size:25px}
+  .gv-auth-intro{margin-bottom:8px}
+}
+/* A short phone (landscape, or the keyboard open): the hero would eat the
+   form, so it goes and the sheet is all form. */
+@media (max-width:743px) and (max-height:600px){
+  .gv-auth-side{display:none}
+  .gv-auth-panel[data-hero="1"] .gv-auth-main{margin-top:0;border-radius:0;box-shadow:none}
+  .gv-auth-panel[data-hero="1"] .gv-auth-main::before{content:none}
+  .gv-auth-panel[data-hero="1"] .gv-auth-head{padding-top:calc(8px + env(safe-area-inset-top))}
+  .gv-auth-panel[data-hero="1"][data-step="email"] .gv-auth-head{position:static;display:grid;padding:calc(8px + env(safe-area-inset-top)) 8px 0;right:auto}
+  .gv-auth-panel[data-hero="1"][data-step="email"] .gv-auth-head-l{display:block}
+  .gv-auth-panel[data-hero="1"][data-step="email"] .gv-auth-icon{background:transparent;color:${INK};-webkit-backdrop-filter:none;backdrop-filter:none}
+  .gv-auth-head{min-height:48px}
+  .gv-auth-brand{margin:0 0 8px}
+  .gv-auth-big{font-size:23px}
+  .gv-auth-intro{display:none}
 }
 @keyframes gvAuthSheet{from{transform:translateY(100%)}to{transform:none}}
+/* A landscape phone, where the pop-up is still the centred dialog (744px and
+   up): it gives its padding back so the form has the height instead. Below
+   744px the sheet already owns the whole screen, so this must not reach it. */
+@media (min-width:744px) and (max-height:480px){
+  .gv-auth-backdrop{padding:8px 12px}
+  .gv-auth-panel,.gv-auth-panel.gv-wide{max-height:calc(100dvh - 16px)}
+  .gv-auth-head{min-height:44px;padding-top:12px}
+  .gv-auth-brand{margin:0 auto 8px}
+  .gv-auth-big{font-size:22px;margin-bottom:6px}
+  .gv-auth-mark{width:28px;height:28px}
+}
+
 @media (prefers-reduced-motion:reduce){.gv-auth-backdrop,.gv-auth-panel{animation:none}}
 `;
