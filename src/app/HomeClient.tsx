@@ -40,11 +40,9 @@ const REJOIN_LOGOS: Record<string, string> = {
   WHO:    '/logos/who.png',
   IMF:    '/logos/IMF.png',
   G20:    '/logos/g20.svg',
-  G7:     '/logos/g7.png',
   LAS:    '/logos/arab-league.png',
   ASEAN:  '/logos/asean.png',
   WB:     '/logos/worldbank.svg',
-  BRICS:  '/logos/brics.png',
 };
 
 // ── Individual feature card components ──────────────────────────────────────

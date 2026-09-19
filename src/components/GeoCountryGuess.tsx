@@ -88,7 +88,7 @@ export function GeoGuessNote({ countryName, id }: { countryName: string; id?: st
     >
       <MapPin size={13} strokeWidth={2.3} className="flex-shrink-0" style={{ marginTop: 1, color: NEU.deepGold }} aria-hidden />
       <span>
-        We guessed <strong style={{ color: NEU.ink, fontWeight: 700 }}>{countryName}</strong> from your location.
+        We guessed{' '}<strong style={{ color: NEU.ink, fontWeight: 700 }}>{countryName}</strong>{' '}from your location.
         Change it if that isn&apos;t your nationality.
       </span>
     </p>
