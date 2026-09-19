@@ -93,7 +93,7 @@ interface Metrics {
     intent_skipped: number; intent_unasked: number; intent_other: number;
   };
   money: {
-    open: CurrencyRow[]; settled_24h: CurrencyRow[];
+    open: CurrencyRow[]; settled_24h: CurrencyRow[]; offline_24h?: CurrencyRow[];
     proofs: { pending: number; over_7d: number; oldest_days: number };
     credits_purchased: { lots: number; credits: number; lots_24h: number };
     credits_granted: number;
@@ -951,8 +951,12 @@ export default function DataTab() {
               side by side and never added. The 13:00 email does the same.
             </p>
             <p style={{ marginTop: 6 }}>
-              Outstanding is amount_cents minus amount_paid_cents on open and partial invoices, so a part-paid
-              invoice contributes only what is still owed.
+              Outstanding is amount_cents minus amount_paid_cents on open and partial invoices of accepted
+              participants, so a part-paid invoice contributes only what is still owed.
+            </p>
+            <p style={{ marginTop: 6 }}>
+              Received counts succeeded Stripe payments only: money that came in through Gavelling. An organiser
+              marking an invoice paid, or approving a proof, is recorded offline and listed on its own.
             </p>
             <p style={{ marginTop: 6, color: NEU.inkSoft }}>
               Credits purchased counts credit_lots with source = purchase only. The {int(m.money.credits_granted)} grant
@@ -979,7 +983,7 @@ export default function DataTab() {
 
           <div>
             <p style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: NEU.inkSoft, marginBottom: 7 }}>
-              Settled in the last 24 hours
+              Received via Gavelling, last 24 hours
             </p>
             {m.money.settled_24h.length === 0 ? (
               <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.inkSoft }}>Nothing settled today.</p>
@@ -989,6 +993,21 @@ export default function DataTab() {
                 label={`${r.currency} · ${int(r.payments ?? 0)} payment${(r.payments ?? 0) === 1 ? '' : 's'}`}
                 value={money(r.cents, r.currency)}
                 tone={NEU.green}
+              />
+            ))}
+          </div>
+
+          <div>
+            <p style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: NEU.inkSoft, marginBottom: 7 }}>
+              Recorded offline, last 24 hours
+            </p>
+            {(m.money.offline_24h ?? []).length === 0 ? (
+              <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.inkSoft }}>Nothing recorded today.</p>
+            ) : (m.money.offline_24h ?? []).map(r => (
+              <Row
+                key={r.currency}
+                label={`${r.currency} · ${int(r.payments ?? 0)} payment${(r.payments ?? 0) === 1 ? '' : 's'}`}
+                value={money(r.cents, r.currency)}
               />
             ))}
           </div>

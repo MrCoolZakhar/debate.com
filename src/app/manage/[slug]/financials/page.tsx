@@ -11,8 +11,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowRight, BadgePercent, CircleCheck, Clock, HandCoins, Hourglass,
-  PiggyBank, TrendingUp, Users,
+  ArrowRight, BadgePercent, CircleCheck, ClipboardCheck, Clock, HandCoins, Hourglass,
+  PiggyBank, Users,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { roundMoney } from '@/lib/finance';
@@ -51,7 +51,8 @@ export default function FinancialsOverviewPage() {
 
   return (
     <>
-      {/* ── 2 · Revenue overview — reconciled from the invoices/payments ledger ── */}
+      {/* ── 2 · Money — the payments ledger (conference_money_summary). Received is
+          money that came in through Gavelling; offline mark-paids sit apart. ── */}
       {loading || invLoading ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
           {[0, 1, 2, 3].map(i => (
@@ -64,35 +65,31 @@ export default function FinancialsOverviewPage() {
             emoji="Money bag"
             icon={PiggyBank}
             gradient={NEU_GRADIENTS.green}
-            value={disp(invTotals?.collected ?? 0)}
-            label={`Collected · ${fin.paidRows.length} paid`}
-            spark={cumulativeSpark(rows ?? [], r => r.payment_status === 'paid')}
+            value={disp(invTotals?.received ?? 0)}
+            label={`Received via Gavelling · ${invTotals?.receivedCount ?? 0} payment${invTotals?.receivedCount === 1 ? '' : 's'}`}
           />
           <NeuStatTile
             emoji="Hourglass not done"
             icon={Hourglass}
             gradient={NEU_GRADIENTS.amber}
             value={disp(invTotals?.pending ?? 0)}
-            label={`Pending · ${fin.pendingRows.length} accepted unpaid`}
+            label={`Outstanding · ${invTotals?.pendingCount ?? 0} open invoice${invTotals?.pendingCount === 1 ? '' : 's'} of accepted participants`}
             spark={cumulativeSpark(rows ?? [], r => (r.status === 'accepted' || r.status === 'assigned') && r.payment_status === 'unpaid')}
+          />
+          <NeuStatTile
+            emoji="Receipt"
+            icon={ClipboardCheck}
+            gradient={NEU_GRADIENTS.sage}
+            value={disp(invTotals?.offline ?? 0)}
+            label={`Recorded offline · ${invTotals?.offlineCount ?? 0} marked paid outside Gavelling`}
           />
           <NeuStatTile
             emoji="Money with wings"
             icon={HandCoins}
-            gradient={NEU_GRADIENTS.sage}
+            gradient={NEU_GRADIENTS.gold}
             value={disp(invTotals?.waived ?? 0)}
             label={`Waived · ${fin.waivedRows.length} fee${fin.waivedRows.length === 1 ? '' : 's'} forgone`}
             style={{ opacity: 0.72 }}
-          />
-          <NeuStatTile
-            emoji="Chart increasing"
-            icon={TrendingUp}
-            gradient={NEU_GRADIENTS.gold}
-            value={disp(invTotals?.expectedTotal ?? 0)}
-            label="Expected total · collected + pending"
-            spark={cumulativeSpark(rows ?? [], r =>
-              r.payment_status === 'paid'
-              || ((r.status === 'accepted' || r.status === 'assigned') && r.payment_status === 'unpaid'))}
           />
         </div>
       )}
@@ -147,7 +144,7 @@ export default function FinancialsOverviewPage() {
                 </p>
                 <p style={mutedCaption}>
                   {fin.acceptedDelegates} accepted delegate{fin.acceptedDelegates === 1 ? '' : 's'} × {disp(fee)}.
-                  Same full-fee assumption; the tiles above show actual discounted figures.
+                  Same full-fee assumption; the tiles above show money actually received.
                 </p>
               </NeuInset>
             </div>
@@ -213,12 +210,19 @@ export default function FinancialsOverviewPage() {
             {pipelineRows.map((r, i) => {
               const paid = r.payment_status === 'paid';
               const waived = r.payment_status === 'waived';
-              const amount = rowAmount(fee, r);
+              // A PAID row shows the money the ledger holds for it (received
+              // through Gavelling + recorded offline), never the fee: a free
+              // chair is stamped paid with nothing paid. Unpaid rows show what
+              // is due. Before the ledger loads, paid rows show a dash.
+              const rowMoney = invTotals ? (invTotals.byApplication.get(r.id) ?? null) : undefined;
+              const amount: number | null = paid
+                ? (rowMoney === undefined ? null : roundMoney((rowMoney?.received ?? 0) + (rowMoney?.offline ?? 0)))
+                : rowAmount(fee, r);
               const discounted = (Number(r.voucher_discount) || 0) > 0;
               // True paid_at when recorded; otherwise the application date,
               // labelled APPLIED so it never masquerades as a payment date.
               const hasPaidAt = paid && !!r.paid_at;
-              const method = paymentMethod(r);
+              const method = paymentMethod(r, rowMoney);
               return (
                 <div
                   key={r.id}
@@ -283,7 +287,7 @@ export default function FinancialsOverviewPage() {
                       minWidth: 64, textAlign: 'right', marginLeft: 'auto',
                     }}
                   >
-                    {disp(waived ? fee : amount)}
+                    {waived ? disp(fee) : amount === null ? '—' : disp(amount)}
                     {discounted && !waived && (
                       <BadgePercent size={11} strokeWidth={2.5} style={{ display: 'inline', marginLeft: 4, color: NEU.deepGold, verticalAlign: '-1.5px' }} />
                     )}

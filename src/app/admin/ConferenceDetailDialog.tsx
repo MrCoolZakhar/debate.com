@@ -35,6 +35,8 @@ import { DatePicker } from '@/components/DatePicker';
 import VerifiedCheck, { VERIFIED_BLUE } from '@/components/VerifiedCheck';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import { moneyFromCents, type ConferenceMoney } from '@/lib/conferenceMoney';
+import { formatFee } from '@/lib/utils';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { NEU, OUTFIT, EASE } from '@/components/neu';
 import { NUM, RED, fmtDate, int } from './staffBits';
@@ -80,6 +82,8 @@ export interface ConferenceDetail {
     paid: number; allocations: number; committees: number; live_sessions: number; invoices: number;
   };
   fees: { role: string; amount: number; currency: string }[];
+  /** conference_money_summary(): payments ledger, not payment_status. */
+  money?: ConferenceMoney | null;
 }
 type Detail = ConferenceDetail;
 
@@ -172,7 +176,9 @@ function Funnel({ detail }: { detail: Detail }) {
   const steps = [
     { key: 'applied', label: 'Applied', value: k.applications, colour: C.sky, icon: FileText },
     { key: 'accepted', label: 'Accepted', value: k.accepted, colour: C.forestLight, icon: BadgeCheck },
-    { key: 'paid', label: 'Paid', value: k.paid, colour: C.goldDeep, icon: CreditCard },
+    // Applicants with at least one succeeded payment on an invoice in their
+    // name. payment_status 'paid' is not money: free chairs are stamped paid.
+    { key: 'paid', label: 'Paid money', value: k.paid, colour: C.goldDeep, icon: CreditCard },
     { key: 'placed', label: 'Placed in a seat', value: k.allocations, colour: C.plum, icon: Armchair },
   ];
   const markers: { at: number; label: string; colour: string }[] = [];
@@ -258,6 +264,30 @@ function Funnel({ detail }: { detail: Detail }) {
           <strong style={{ color: C.ink }}>{int(k.withdrawn)}</strong> withdrawn
         </p>
       )}
+      {detail.money && (() => {
+        const m = detail.money;
+        const received = moneyFromCents(m.received_cents);
+        const offline = moneyFromCents(m.offline_cents);
+        const outstanding = moneyFromCents(m.outstanding_cents);
+        return (
+          <p className="mt-2" style={{ fontFamily: OUTFIT, fontSize: 12, color: C.inkSoft }}>
+            <strong style={{ color: C.ink }} title="Succeeded Stripe payments: money received through Gavelling">
+              {formatFee(received, m.currency)}
+            </strong> received via Gavelling ·{' '}
+            <strong style={{ color: C.ink }} title="Open invoice balances of accepted participants">
+              {formatFee(outstanding, m.currency)}
+            </strong> outstanding
+            {offline > 0 && (
+              <> ·{' '}
+                <strong style={{ color: C.ink }} title="Marked paid or proof approved by the organiser, outside Gavelling">
+                  {formatFee(offline, m.currency)}
+                </strong> recorded offline
+              </>
+            )}
+            {m.other_currencies.length > 0 && <> · plus payments in {m.other_currencies.map(o => o.cur).join(', ')}</>}
+          </p>
+        );
+      })()}
     </section>
   );
 }

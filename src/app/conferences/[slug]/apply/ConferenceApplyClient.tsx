@@ -2342,7 +2342,8 @@ function ConferenceApplyInner() {
    * Signed out, it reads with the anon client: committee_country_slots is
    * readable by anyone ("Anyone can read country slots by link") and
    * get_taken_allocations is SECURITY DEFINER, anon-executable, and returns
-   * only (committee, country_code) pairs for a public conference. A failed
+   * only (committee, country_code) pairs for any conference, private or public
+   * (private means unlisted, not restricted). A failed
    * taken read counts nothing as taken (the server decides at submit), and a
    * failed slots read leaves the committees with no availability shown
    * rather than FULL.

@@ -19,6 +19,7 @@ import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { roundMoney, formatFee, CURRENCY_CODES } from '@/lib/finance';
+import { useConferenceMoney, moneyFromCents, moneyByApplication } from '@/lib/conferenceMoney';
 import { FlagImg } from '@/components/FlagImg';
 import { getCountryByName } from '@/lib/countries';
 import { NEU, OUTFIT } from '@/components/neu';
@@ -143,20 +144,29 @@ export function formatRowDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-/** HOW the money moved (or didn't), derived from payment provenance columns.
- *  Mapping (in priority order):
- *   - paid + stripe_payment_intent_id     → STRIPE      (online checkout)
- *   - paid + self_paid                    → SELF-PAID   (participant funded own fee)
- *   - paid + !self_paid + society_id      → DELEGATION  (covered by a delegation pledge spot)
- *   - paid otherwise                      → MANUAL      (organiser marked paid, no provenance)
+/** HOW the money moved (or didn't). `money` is what the payments ledger holds
+ *  for this application (useInvoiceTotals().byApplication); when it is given,
+ *  it decides, because payment_status 'paid' alone is not money:
+ *   - received through Gavelling > 0      → STRIPE
+ *   - recorded offline > 0                → OFFLINE   (organiser marked paid / approved proof)
+ *   - paid, no money, delegation, !self   → DELEGATION (covered by a pledge spot)
+ *   - paid, no money otherwise            → NO PAYMENT (a free role, or marked paid with nothing recorded)
  *   - waived                              → fee_waiver_source (AMBASSADOR / UNLIMITED) when set
  *   - unpaid                              → no chip
- */
-export function paymentMethod(r: FinRow): { label: string; title: string } | null {
+ *  Without `money` (not loaded yet) it falls back to the provenance columns. */
+export function paymentMethod(
+  r: FinRow,
+  money?: { received: number; offline: number } | null,
+): { label: string; title: string } | null {
   if (r.payment_status === 'paid') {
+    if (money !== undefined) {
+      if (money && money.received > 0) return { label: 'STRIPE', title: 'Paid online through Gavelling' };
+      if (money && money.offline > 0) return { label: 'OFFLINE', title: 'Recorded as paid outside Gavelling (marked paid or proof approved)' };
+      if (r.society_id && !r.self_paid) return { label: 'DELEGATION', title: 'Covered by a delegation pledge spot, no payment of its own' };
+      return { label: 'NO PAYMENT', title: 'Registered with no money received: a free role, or marked paid with no payment recorded' };
+    }
     if (r.stripe_payment_intent_id) return { label: 'STRIPE', title: 'Paid online via Stripe checkout' };
-    if (r.self_paid) return { label: 'SELF-PAID', title: 'Participant funded their own fee' };
-    if (r.society_id) return { label: 'DELEGATION', title: 'Covered by a delegation pledge spot' };
+    if (r.society_id && !r.self_paid) return { label: 'DELEGATION', title: 'Covered by a delegation pledge spot' };
     return { label: 'MANUAL', title: 'Marked paid manually on the Applications page' };
   }
   if (r.payment_status === 'waived' && r.fee_waiver_source) {
@@ -229,8 +239,6 @@ export function useFinancialsData() {
     })();
   }, [conference?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fee = conference?.fee_amount ?? 0;
-
   // ── Derived money figures ────────────────────────────────────────────────
   const fin = useMemo(() => {
     const all = rows ?? [];
@@ -248,10 +256,8 @@ export function useFinancialsData() {
     );
     const waivedRows = live.filter(r => r.payment_status === 'waived');
 
-    const collected = roundMoney(paidRows.reduce((s, r) => s + rowAmount(fee, r), 0));
-    const pending = roundMoney(pendingRows.reduce((s, r) => s + rowAmount(fee, r), 0));
-    const waived = roundMoney(waivedRows.length * fee);
-    const expectedTotal = roundMoney(collected + pending);
+    // No money figures here on purpose: paid rows x fee counted every free
+    // chair as income. Money comes from useInvoiceTotals (the payments ledger).
 
     // Delegate estimate, expected_delegates is the organiser's own estimate
     // of DELEGATES, so reality is measured on the delegate pool only.
@@ -261,10 +267,9 @@ export function useFinancialsData() {
 
     return {
       live, paidRows, pendingRows, waivedRows,
-      collected, pending, waived, expectedTotal,
       acceptedDelegates, paidDelegates,
     };
-  }, [rows, fee]);
+  }, [rows]);
 
   const loading = rows === null;
 
@@ -272,52 +277,53 @@ export function useFinancialsData() {
 }
 
 // ── useInvoiceTotals ─────────────────────────────────────────────────────────
-// Reconciles the Overview stat tiles against the invoices/payments ledger
-// (PART 6) rather than the legacy applications.payment_status estimate above.
-// Collected is summed from amount_paid_cents across every invoice (captures
-// both fully settled AND partially-paid invoices — equivalent to summing
-// succeeded payments, one query instead of two). Pending is the outstanding
-// balance on open/partial invoices; waived is the full amount of waived
-// invoices, when any exist. Only invoices in the conference's own currency
-// are summed — disp()/the stat tiles assume one currency throughout, same as
-// the legacy `fin` figures, and mixed-currency add-ons are rare enough that
-// silently adding raw cents across currencies would be actively wrong.
+// The Overview stat tiles, from conference_money_summary()
+// (src/lib/conferenceMoney.ts), the same definition the dashboard money card
+// and /admin use. Invoices are synced first, as before.
+//   received     succeeded Stripe payments: money that came in THROUGH Gavelling
+//   offline      organiser mark-paid / approved proof: recorded, not received here
+//   pending      open balances of ACCEPTED participants' invoices
+//   waived       waived invoices of live applications
+// It used to sum invoices.amount_paid_cents, which counted offline mark-paids as
+// collected (and is not a payment record at all). payment_status 'paid' is never
+// money: a free chair is stamped paid on arrival.
+// Only the conference's own currency is shown; other currencies are listed by
+// the RPC (other_currencies) and never added in.
 
 export interface InvoiceTotals {
-  collected: number;
+  received: number;
+  receivedCount: number;
+  offline: number;
+  offlineCount: number;
   pending: number;
+  pendingCount: number;
   waived: number;
-  expectedTotal: number;
+  waivedCount: number;
+  /** Money per application (received + offline), conference currency. */
+  byApplication: Map<string, { received: number; offline: number }>;
 }
 
 export function useInvoiceTotals() {
   const { conference } = useManage();
   const { session } = useAuth();
-  const [totals, setTotals] = useState<InvoiceTotals | null>(null);
-
-  useEffect(() => {
-    if (!conference || !session) return;
-    const supabase = getAuthedClient(session.access_token);
-    const conferenceCurrency = (conference.fee_currency ?? 'USD').toUpperCase();
-    (async () => {
-      await supabase.rpc('sync_conference_invoices', { p_conference_id: conference.id });
-      const { data } = await supabase
-        .from('invoices')
-        .select('amount_cents, amount_paid_cents, status, currency')
-        .eq('conference_id', conference.id)
-        .neq('status', 'void');
-      const rows = ((data ?? []) as { amount_cents: number; amount_paid_cents: number; status: string; currency: string }[])
-        .filter(r => r.currency.toUpperCase() === conferenceCurrency);
-      const collected = roundMoney(rows.reduce((s, r) => s + r.amount_paid_cents, 0) / 100);
-      const pending = roundMoney(rows
-        .filter(r => r.status === 'open' || r.status === 'partial')
-        .reduce((s, r) => s + Math.max(0, r.amount_cents - r.amount_paid_cents), 0) / 100);
-      const waived = roundMoney(rows.filter(r => r.status === 'waived').reduce((s, r) => s + r.amount_cents, 0) / 100);
-      setTotals({ collected, pending, waived, expectedTotal: roundMoney(collected + pending) });
-    })();
-  }, [conference?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  return { totals, loading: totals === null };
+  const { money, loading } = useConferenceMoney(session?.access_token, conference?.id, {
+    detail: true,
+    beforeRead: async (c) => {
+      if (conference) await c.rpc('sync_conference_invoices', { p_conference_id: conference.id });
+    },
+  });
+  const totals = useMemo<InvoiceTotals | null>(() => money && ({
+    received: moneyFromCents(money.received_cents),
+    receivedCount: money.received_count,
+    offline: moneyFromCents(money.offline_cents),
+    offlineCount: money.offline_count,
+    pending: moneyFromCents(money.outstanding_cents),
+    pendingCount: money.outstanding_count,
+    waived: moneyFromCents(money.waived_cents),
+    waivedCount: money.waived_count,
+    byApplication: moneyByApplication(money),
+  }), [money]);
+  return { totals, loading };
 }
 
 // ── FinancialsCurrencyContext ────────────────────────────────────────────────

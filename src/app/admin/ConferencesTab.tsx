@@ -1342,7 +1342,9 @@ function ConferenceRow({
             )}
             <Count value={r.applications} label="apps" strong={pledged === 0} />
             {pledged > 0 && <Count value={pledged} label="pledged" tone={PLEDGED_GOLD} />}
-            <Count value={r.paid_applications} label="paid" tone={NEU.green} />
+            {/* Applicants with a succeeded payment (admin_conference_overview), not
+                payment_status 'paid': free chairs are stamped paid on arrival. */}
+            <Count value={r.paid_applications} label="paying" tone={NEU.green} />
           </div>
         </NeuInset>
 

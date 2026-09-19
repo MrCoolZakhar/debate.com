@@ -32,6 +32,8 @@ import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '
 import { hasExploredEmails } from '@/lib/emailsExplored';
 import { getConferenceIntent, intentRank } from '@/lib/conferenceIntent';
 import { outstandingPledgedSpots } from '@/lib/pledgedSpots';
+import { useConferenceMoney } from '@/lib/conferenceMoney';
+import RevenueReadout from '@/components/conferences/RevenueReadout';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import VerifiedCheck, { minutesToCheckmarkLabel } from '@/components/VerifiedCheck';
 
@@ -786,80 +788,7 @@ function ActivityModal({ events, now, onClose }: { events: ActivityEvent[]; now:
   );
 }
 
-// ── Revenue read-out ───────────────────────────────────────────────────────
-// Three numbers that answer "where is the money", without a second chart:
-//   Collected       paid applicants x fee — what has actually landed
-//   If everyone pays total applicants x fee — what the current pipeline is worth
-//   At target       expected delegates x fee — the ceiling the organiser planned for
-// A conference with no fee is a legitimate, finished state, not a zero — it
-// says so in words rather than printing "0 / 0 / 0" as if something were wrong.
-
-function RevenueReadout({
-  fee, currency, paidCount, owingCount, href,
-}: {
-  fee: number;
-  currency: string;
-  paidCount: number;
-  /** Accepted (or further along) and not yet paid. */
-  owingCount: number;
-  href: string;
-}) {
-  if (fee <= 0) {
-    return (
-      <NeuInset small style={{ padding: '8px 12px', borderRadius: 14 }}>
-        <p style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: NEU.muted }}>
-          No delegate fee set — nothing to collect.{' '}
-          <Link href={href} style={{ color: NEU.deepGold, fontWeight: 800, textDecoration: 'none' }}>
-            Add one
-          </Link>
-        </p>
-      </NeuInset>
-    );
-  }
-
-  const cells: { label: string; value: number; hint: string; accent: string }[] = [
-    { label: 'Collected', value: paidCount * fee, accent: NEU.deepGold, hint: `${paidCount} paid x ${formatFee(fee, currency)}` },
-    { label: 'Outstanding', value: owingCount * fee, accent: NEU.ink, hint: `${owingCount} accepted and not yet paid x ${formatFee(fee, currency)}` },
-  ];
-
-  return (
-    <NeuInset small style={{ padding: '8px 4px', borderRadius: 14 }}>
-      <div className="flex items-stretch">
-        {cells.map((c, i) => (
-          <div
-            key={c.label}
-            className="flex flex-col min-w-0 text-center"
-            title={c.hint}
-            style={{
-              flex: 1,
-              padding: '0 8px',
-              borderInlineStart: i === 0 ? undefined : '1px solid rgba(27,56,40,0.10)',
-            }}
-          >
-            <span
-              className="truncate"
-              style={{
-                fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.08em',
-                textTransform: 'uppercase', color: NEU.muted,
-              }}
-            >
-              {c.label}
-            </span>
-            <span
-              className="truncate"
-              style={{
-                fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: c.accent,
-                fontVariantNumeric: 'tabular-nums', marginTop: 2, lineHeight: 1.1,
-              }}
-            >
-              {formatFee(c.value, currency)}
-            </span>
-          </div>
-        ))}
-      </div>
-    </NeuInset>
-  );
-}
+// Revenue read-out (money card): src/components/conferences/RevenueReadout.tsx
 
 // ── Verification strip: the road to the blue checkmark ───────────────────
 // The seven verification stages are the checklist minus the delegate row.
@@ -1193,6 +1122,9 @@ export default function DashboardPage() {
         || emailsExplored
         || (!!verification && !verification.pending.includes('email')));
 
+  // Money card: the payments ledger, never payment_status x fee.
+  const { money } = useConferenceMoney(session?.access_token, conference?.id);
+
   // Recent-activity feed: recent applications + allocations, expanded into
   // per-timestamp events (submitted / paid / checked-in / resubmitted /
   // allocated), merged newest-first.
@@ -1411,11 +1343,6 @@ export default function DashboardPage() {
     a => a.status === 'accepted' || a.status === 'assigned' || a.status === 'checked-in'
   ).length;
   const paidApps = dash.apps.filter(a => a.payment_status === 'paid').length;
-  // Owed: accepted (or further along) and not yet paid. The money card's
-  // "Outstanding" figure.
-  const owingApps = dash.apps.filter(
-    a => (a.status === 'accepted' || a.status === 'assigned' || a.status === 'checked-in') && a.payment_status !== 'paid'
-  ).length;
   const delegateApps = dash.apps.filter(a => a.role === 'delegate' || a.role === 'head-delegate').length;
   const societies = new Set(dash.apps.map(a => a.society_id).filter(Boolean)).size;
   // People a delegation has pledged to bring who have no application row yet.
@@ -1918,8 +1845,7 @@ export default function DashboardPage() {
               <RevenueReadout
                 fee={fee}
                 currency={conference.fee_currency}
-                paidCount={paidApps}
-                owingCount={owingApps}
+                money={money}
                 href={`/manage/${slug}/financials/settings`}
               />
               <div className="flex items-center justify-between gap-3 flex-wrap">

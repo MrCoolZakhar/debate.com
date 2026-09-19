@@ -2735,6 +2735,19 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   const pct = seatCapacity > 0 ? Math.min(100, Math.round((seatsTaken / seatCapacity) * 100)) : 0;
                   return { slots, countryCapacity, countriesTaken, seatCapacity, seatsTaken, pct, hasDoubles: seatCapacity !== countryCapacity };
                 };
+                // Fill is shown to visitors only once EVERY committee of this
+                // conference holds at least one allocation (owner, 19 Sep 2026):
+                // a page where most committees read 0% advertises an empty
+                // conference. Until then no committee shows a count, a bar,
+                // TAKEN/OPEN chips or the availability sort. The organiser's
+                // own view (not preview) is unaffected. Counts come from
+                // get_committee_occupancy, which is empty until it loads, so
+                // nothing flashes 0% first. The apply flow keeps its own
+                // availability (get_taken_allocations) regardless.
+                const everyCommitteeAllocated = committees.length > 0
+                  && committees.every(c => Object.values(committeeOccupied[c.id] ?? {}).some(n => n > 0));
+                const showFill = showCounts && (!asVisitor || everyCommitteeAllocated);
+                const showSeatChips = showTakenCountries && (!asVisitor || everyCommitteeAllocated);
                 const DIFF_ORDER: Record<string, number> = { beginner: 0, intermediate: 1, advanced: 2, expert: 3 };
                 let sortedCommittees = [...committees];
                 if (sortKey === 'type') {
@@ -2798,7 +2811,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           dir={sortKey === 'difficulty' ? sortDir : null}
                           onClick={() => cycleSort('difficulty')}
                         />
-                        {showCounts && (
+                        {showFill && (
                           <SortButton
                             label="AVAILABILITY"
                             dir={sortKey === 'availability' ? sortDir : null}
@@ -3027,7 +3040,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                   {/* Capacity. Counts hidden: the card simply
                                       ends after the chairs row above, no gap
                                       left where this was. */}
-                                  {showCounts && (
+                                  {showFill && (
                                   <div className="w-full mt-4">
                                     <div className="flex items-center justify-between mb-1.5">
                                       <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '9.5px', letterSpacing: '0.08em', color: '#6B5F52' }}>
@@ -3162,7 +3175,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                   <p className="font-bold text-[16px] leading-snug" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
                                     {c.name}
                                   </p>
-                                  {showCounts && (
+                                  {showFill && (
                                   <p className="mt-1" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10px', letterSpacing: '0.1em', color: 'var(--gv-muted)', margin: '4px 0 0 0' }}>
                                     {hasDoubles
                                       ? `${seatsTaken}/${seatCapacity} SEATS FILLED`
@@ -3181,7 +3194,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                   <X size={15} />
                                 </button>
                               </div>
-                              {showCounts && (
+                              {showFill && (
                               <div className="mt-3 rounded-full overflow-hidden" style={{ height: '6px', backgroundColor: 'color-mix(in srgb, var(--gv-border) 65%, transparent)' }}>
                                 <div style={{ width: `${pct}%`, height: '100%', borderRadius: '9999px', background: 'linear-gradient(to right, var(--gv-main-mid), var(--gv-main-light))' }} />
                               </div>
@@ -3246,7 +3259,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                       >
                                         {s.country_name}
                                       </span>
-                                      {showTakenCountries && (
+                                      {showSeatChips && (
                                       <div className="flex items-center gap-1 flex-shrink-0">
                                         {Array.from({ length: seatsTakenHere }, (_, ti) => (
                                           <span
