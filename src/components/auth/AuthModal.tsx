@@ -215,6 +215,54 @@ function AuthModal({ request }: { request: AuthRequest }) {
   // conference form is open over the questionnaire, so its own Escape wins.
   useModalEscape(locked || nestedOpen ? () => {} : close, !nestedOpen);
 
+  // ── The phone keyboard ────────────────────────────────────────────────────
+  // A fixed, full-height sheet keeps the LAYOUT viewport's height when iOS
+  // opens the keyboard, so its foot (and the Continue button on it) ends up
+  // behind the keys. `--gv-vvh` / `--gv-vvt` carry the VISUAL viewport, which
+  // the sheet's height and top read at ≤743px; on a desktop browser (or any
+  // browser without visualViewport) nothing is set and the CSS falls back to
+  // 100dvh / 0. Read-only: no state, one rAF per event.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const root = document.documentElement;
+    let frame = 0;
+    const apply = () => {
+      frame = 0;
+      root.style.setProperty('--gv-vvh', `${Math.round(vv.height)}px`);
+      root.style.setProperty('--gv-vvt', `${Math.round(vv.offsetTop)}px`);
+    };
+    const schedule = () => { if (!frame) frame = window.requestAnimationFrame(apply); };
+    apply();
+    vv.addEventListener('resize', schedule);
+    vv.addEventListener('scroll', schedule);
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      vv.removeEventListener('resize', schedule);
+      vv.removeEventListener('scroll', schedule);
+      root.style.removeProperty('--gv-vvh');
+      root.style.removeProperty('--gv-vvt');
+    };
+  }, []);
+
+  // Keep the field the visitor just tapped in view inside the sheet: the
+  // keyboard animates in after the focus, so this waits for it. The body is
+  // pinned by useScrollLock, so only the sheet's own scroller moves.
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const onFocusIn = (e: FocusEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (!el || !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+      window.setTimeout(() => {
+        if (!el.isConnected) return;
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }, 260);
+    };
+    panel.addEventListener('focusin', onFocusIn);
+    return () => panel.removeEventListener('focusin', onFocusIn);
+  }, []);
+
   // Focus: first field on every step, back to the opener on close.
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
@@ -321,6 +369,11 @@ function AuthModal({ request }: { request: AuthRequest }) {
 
   const showBack = !locked && (inQuestions ? q > 0 : history.length > 0);
 
+  // Phone sheet (the CSS at ≤743px reads both): the hero band only on the
+  // short steps, and the sticky primary button on the long ones, where the
+  // form scrolls and the action must stay reachable above the safe area.
+  const longStep = step === 'signup' || step === 'finish' || inQuestions;
+
   const node = (
     <div
       className="gv-auth-backdrop"
@@ -337,6 +390,9 @@ function AuthModal({ request }: { request: AuthRequest }) {
         aria-modal="true"
         aria-labelledby="gv-auth-title"
         className={`gv-auth-panel gv-split${inQuestions ? ' gv-wide' : ''}`}
+        data-step={step}
+        data-hero={longStep ? '0' : '1'}
+        data-cta={longStep ? 'sticky' : undefined}
         onKeyDown={onKeyDown}
       >
         {/* Owner, 19 Sep 2026: the "Wall" layout. The designed image on the
@@ -395,6 +451,10 @@ function AuthModal({ request }: { request: AuthRequest }) {
               <div className="gv-socials">
                 <button type="button" onClick={startGoogle} disabled={oauthBusy} aria-label="Continue with Google" title="Continue with Google" className={`gv-social ${FOCUS}`}>
                   <GoogleIcon />
+                  {/* The word shows on the phone sheet only, where this is a
+                      full-width outlined button and a bare tile reads as a
+                      mystery. Same accessible name either way. */}
+                  <span className="gv-social-label">Continue with Google</span>
                 </button>
               </div>
               <p className="gv-auth-terms">

@@ -205,6 +205,23 @@ the full-screen sheet on phones. The image is ONE file, `public/auth/side.webp` 
 `AUTH_SIDE_ALT` in `authModalKit.tsx`, `object-fit: cover`, top-anchored, supply 800 x 1120 or larger);
 today it is a render of the mockup's wall, to be replaced by the owner's artwork.
 
+**On a phone it is a sheet, not a squashed dialog (19 Sep 2026, owner: "the registration / log in
+pop-up is not made for phone").** Below 744px the same artwork is a HERO band across the top
+(`object-position` crops it to landscape; the picture is still one file) and the white form sheet has a
+rounded top edge, a grab handle and overlaps it. The hero is sized so the sheet is about as tall as the
+step it holds (30svh on the first screen, 50svh on the short ones, gone on the long ones: Finish signing
+up, the basics and the questionnaire, where the form scrolls and the primary button is sticky above the
+safe area). Google is a full-width outlined button with its label (`.gv-social-label`, the square tile is
+the desktop idiom); fields are 58px and 16px, so iOS never zooms; the X and back are 44px; the first
+screen's X is a glass disc on the picture. Real-phone rules: dvh/svh only, `env(safe-area-inset-*)`
+padding, and AuthModal publishes the VISUAL viewport as `--gv-vvh` / `--gv-vvt` (rAF-coalesced, cleared
+on unmount) which the sheet's height and top read, so the on-screen keyboard cannot cover the focused
+field or the action; a `focusin` listener scrolls the tapped field into the middle of the sheet. Under
+600px tall (landscape, keyboard up) the hero goes and the sheet is all form; from 744px up NOTHING
+changed, and a short window there only loses the dialog's padding (`min-width:744px and
+max-height:480px`). The steps are told apart in CSS by `data-step` / `data-hero` / `data-cta` on the
+panel.
+
 ## 5c. Custom (parliamentary) committees
 
 `committee_type = 'custom'` is the fourth type: seats are members of groups (political groups, parties, benches) rather than countries. Groups live in `conference_committees.groups` (jsonb), a seat's group in `committee_country_slots.group_id`, and a seat or a group can carry a crest (`logo_url`). `src/lib/slotGroups.ts` is the contract: `effectiveSlotArt` decides what a seat draws (own crest, group crest, national flag, fallback), `loadSlotArtIndex` serves surfaces that render many seats, and `PARLIAMENT_PRESETS` seeds the usual chambers. Every flag renderer that matters goes through `FlagImg` or the assignment board's `CountryFlag`, both of which accept `logoUrl`. Debate, allocation and sessions are unchanged; only the seat's identity and picture differ.
