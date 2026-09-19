@@ -8,11 +8,12 @@ import Link from 'next/link';
 import {
   Building2, Rocket, Mail, Gavel, UsersRound, UserPlus, Wallet, Palette,
   Inbox, Globe2, CheckCircle2, AlertCircle, ArrowRight,
-  Activity, UserRoundCheck, MapPin, RotateCcw,
+  Activity, UserRoundCheck, MapPin, RotateCcw, CalendarDays,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
-import { getAuthedClient } from '@/lib/supabase-auth';
+import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
+import { friendlyError } from '@/lib/friendlyError';
 import { formatFee } from '@/lib/utils';
 import { LogoDisc } from '@/components/LogoDisc';
 import Avatar from '@/components/Avatar';
@@ -25,10 +26,14 @@ import Portal from '@/components/Portal';
 import DecorativeBleed from '@/components/DecorativeBleed';
 import ParticipantsChart, { toCumulativeSeries } from '@/components/conferences/ParticipantsChart';
 import ApplicantsDial from '@/components/conferences/ApplicantsDial';
+import TrafficSourcesCard from '@/components/conferences/TrafficSourcesCard';
+import { BENTO_BORDER } from '@/components/conferences/bento';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
 import { hasExploredEmails } from '@/lib/emailsExplored';
 import { getConferenceIntent, intentRank } from '@/lib/conferenceIntent';
 import { outstandingPledgedSpots } from '@/lib/pledgedSpots';
+import { useConferenceMoney } from '@/lib/conferenceMoney';
+import RevenueReadout from '@/components/conferences/RevenueReadout';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import VerifiedCheck, { minutesToCheckmarkLabel } from '@/components/VerifiedCheck';
 
@@ -41,7 +46,7 @@ function PublishModal({
   onClose,
   onPublished,
 }: {
-  conference: { id: string; slug: string; full_name: string };
+  conference: { id: string; slug: string; full_name: string; dates_tbd: boolean; start_date: string | null };
   onClose: () => void;
   onPublished: () => void;
 }) {
@@ -49,20 +54,32 @@ function PublishModal({
   useScrollLock(true);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState('');
-  const { session } = useAuth();
+
+  // Mirrors the database CHECK conferences_tbd_not_public: a conference with
+  // dates still TBD, or no start date at all, can never go public. Caught
+  // here rather than left to the write, so the organizer sees why and where
+  // to fix it instead of a raw constraint error.
+  const needsDates = conference.dates_tbd || !conference.start_date;
 
   async function handlePublish() {
     setPublishing(true);
     setPublishError('');
-    if (!session) { setPublishing(false); return; }
-    const supabase = getAuthedClient(session.access_token);
-    const { error } = await supabase
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setPublishing(false);
+      setPublishError('Your session has expired. Please refresh the page and sign in again.');
+      return;
+    }
+    const { data, error } = await supabase
       .from('conferences')
       .update({ is_public: true, status: 'public' })
-      .eq('id', conference.id);
-    if (error) {
+      .eq('id', conference.id)
+      .select('id');
+    if (error || !data || data.length !== 1) {
       setPublishing(false);
-      setPublishError(error.message);
+      setPublishError(error
+        ? friendlyError(error, "Couldn't publish your conference. Please try again.")
+        : "Couldn't publish your conference. Please refresh and try again.");
       return;
     }
     // Fire-and-forget: ping search engines (IndexNow) so the newly public
@@ -87,41 +104,75 @@ function PublishModal({
         style={{ backgroundColor: NEU.surface, boxShadow: NEU.out }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="font-black text-xl mb-2" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-          Publish Conference?
-        </h2>
-        <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-          Your conference will appear publicly on gavelling.com/conferences/explore and delegates will be able to apply.
-        </p>
-        {publishError && (
-          <p className="text-sm mb-4" style={{ color: RED, fontFamily: OUTFIT }}>{publishError}</p>
+        {needsDates ? (
+          <>
+            <h2 className="font-black text-xl mb-2" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+              Add your dates first
+            </h2>
+            <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+              Your conference dates are set to TBD. A conference needs real dates before it can be listed publicly. You can keep taking applications while it stays private.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={onClose}
+                className="flex-1 rounded-xl py-2.5 font-bold text-sm tracking-widest transition-colors focus:outline-none gv-lift"
+                style={{ border: '1.5px solid #DDD4C0', color: NEU.ink, backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+              >
+                CANCEL
+              </button>
+              <Link
+                href={`/manage/${conference.slug}/settings?tab=conference&focus=dates`}
+                className="flex-1 rounded-xl py-2.5 font-bold text-sm tracking-widest transition-colors focus:outline-none gv-lift flex items-center justify-center gap-2"
+                style={{ backgroundColor: '#1B3828', color: NEU.gold, fontFamily: OUTFIT, letterSpacing: '0.06em', textDecoration: 'none' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+              >
+                <CalendarDays size={15} strokeWidth={2.2} />
+                ADD DATES
+              </Link>
+            </div>
+          </>
+        ) : (
+          <>
+            <h2 className="font-black text-xl mb-2" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+              Publish Conference?
+            </h2>
+            <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+              Your conference will appear publicly on gavelling.com/conferences/explore and delegates will be able to apply.
+            </p>
+            {publishError && (
+              <p className="text-sm mb-4" style={{ color: RED, fontFamily: OUTFIT }}>{publishError}</p>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={onClose}
+                className="flex-1 rounded-xl py-2.5 font-bold text-sm tracking-widest transition-colors focus:outline-none gv-lift"
+                style={{ border: '1.5px solid #DDD4C0', color: NEU.ink, backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+              >
+                CANCEL
+              </button>
+              <button
+                onClick={handlePublish}
+                disabled={publishing}
+                className="flex-1 rounded-xl py-2.5 font-bold text-sm tracking-widest transition-colors focus:outline-none gv-lift"
+                style={{
+                  backgroundColor: publishing ? '#DDD4C0' : '#1B3828',
+                  color: publishing ? NEU.muted : NEU.gold,
+                  fontFamily: OUTFIT,
+                  letterSpacing: '0.06em',
+                }}
+                onMouseEnter={(e) => { if (!publishing) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                onMouseLeave={(e) => { if (!publishing) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+              >
+                {publishing ? 'PUBLISHING...' : 'PUBLISH NOW'}
+              </button>
+            </div>
+          </>
         )}
-        <div className="flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 rounded-xl py-2.5 font-bold text-sm tracking-widest transition-colors focus:outline-none gv-lift"
-            style={{ border: '1.5px solid #DDD4C0', color: NEU.ink, backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
-          >
-            CANCEL
-          </button>
-          <button
-            onClick={handlePublish}
-            disabled={publishing}
-            className="flex-1 rounded-xl py-2.5 font-bold text-sm tracking-widest transition-colors focus:outline-none gv-lift"
-            style={{
-              backgroundColor: publishing ? '#DDD4C0' : '#1B3828',
-              color: publishing ? NEU.muted : NEU.gold,
-              fontFamily: OUTFIT,
-              letterSpacing: '0.06em',
-            }}
-            onMouseEnter={(e) => { if (!publishing) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-            onMouseLeave={(e) => { if (!publishing) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-          >
-            {publishing ? 'PUBLISHING...' : 'PUBLISH NOW'}
-          </button>
-        </div>
       </div>
     </div></Portal>
   );
@@ -279,65 +330,50 @@ interface AppRow {
   advisors_pledged: number | null;
 }
 
-// ── Unallocated-delegates alert tile ───────────────────────────────────────
-// Amber alarm while accepted delegates await committee allocation; calm
-// green once everyone is placed. Links straight to the assignment board.
+// ── Unallocated-delegates alert ────────────────────────────────────────────
+// Shown ONLY while accepted delegates are waiting for a committee and country:
+// a warning with the number large and a direct way to the assignment board.
+// Nothing at all once everyone is placed (owner, 18 Sep 2026: no check mark).
 
 function UnallocatedTile({ count, href }: { count: number; href: string }) {
-  const [hovered, setHovered] = useState(false);
-  const ok = count === 0;
+  if (count <= 0) return null;
   return (
-    <Link
-      href={href}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      className="flex flex-col"
+    <div
+      role="status"
+      className="flex items-center"
       style={{
-        textDecoration: 'none',
         minWidth: 0,
-        justifyContent: 'space-between',
-        padding: '13px 15px',
-        borderRadius: 22,
-        backgroundColor: NEU.surface,
-        backgroundImage: ok
-          ? 'linear-gradient(rgba(61,122,82,0.10), rgba(61,122,82,0.10))'
-          : 'linear-gradient(rgba(184,132,74,0.12), rgba(184,132,74,0.12))',
-        border: ok ? '1.5px solid rgba(61,122,82,0.35)' : '1.5px solid rgba(184,132,74,0.4)',
-        boxShadow: hovered ? NEU.outHover : NEU.out,
-        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
-        transition: `box-shadow 260ms ${EASE}, transform 260ms ${EASE}`,
-        cursor: 'pointer',
+        gap: 12,
+        padding: '11px 12px 11px 14px',
+        borderRadius: 18,
+        background: 'linear-gradient(135deg, rgba(184,132,74,0.24) 0%, rgba(184,132,74,0.12) 100%)',
+        boxShadow: 'inset 0 0 0 1.5px rgba(160,104,44,0.55)',
       }}
     >
-      <div className="flex items-start justify-between gap-2">
-        <Emoji3D
-          name={ok ? 'Check mark button' : 'Red exclamation mark'}
-          size={32}
-          fallback={ok ? CheckCircle2 : AlertCircle}
-          fallbackColor={ok ? NEU.green : NEU.amber}
-        />
-        <ArrowRight size={13} style={{ color: ok ? NEU.green : NEU.amber, opacity: hovered ? 1 : 0.6, transform: hovered ? 'translateX(2px)' : 'none', transition: `transform 200ms ${EASE}` }} />
+      <AlertCircle size={22} strokeWidth={2.4} style={{ color: '#8A5A2E', flexShrink: 0 }} aria-hidden />
+      <p style={{ fontFamily: OUTFIT, fontSize: 34, fontWeight: 900, color: '#7A4A1C', fontVariantNumeric: 'tabular-nums', lineHeight: 1, flexShrink: 0 }}>
+        {count}
+      </p>
+      <div className="min-w-0" style={{ flex: 1 }}>
+        <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: '#6B3F14', lineHeight: 1.2 }}>
+          {count === 1 ? 'Delegate without a seat' : 'Delegates without a seat'}
+        </p>
+        <p style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: '#7A4A1C', marginTop: 2, lineHeight: 1.3 }}>
+          Accepted, still waiting for a committee and country.
+        </p>
       </div>
-      {ok ? (
-        <div>
-          <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.green, lineHeight: 1.2 }}>
-            All delegates allocated
-          </p>
-          <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.muted, marginTop: 3 }}>
-            Nothing waiting for assignment
-          </p>
-        </div>
-      ) : (
-        <div>
-          <p style={{ fontFamily: OUTFIT, fontSize: 27, fontWeight: 900, color: NEU.amber, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-            {count}
-          </p>
-          <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: '#8A5A2E', marginTop: 4 }}>
-            Unallocated delegates
-          </p>
-        </div>
-      )}
-    </Link>
+      <Link
+        href={href}
+        className="inline-flex items-center gap-1.5 flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7A4A1C] transition-transform active:scale-[0.97]"
+        style={{
+          fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, color: '#FFFFFF',
+          background: '#8A5A2E', borderRadius: 999, padding: '8px 13px', textDecoration: 'none',
+        }}
+      >
+        Assign now
+        <ArrowRight size={13} />
+      </Link>
+    </div>
   );
 }
 
@@ -534,14 +570,23 @@ function ActivityLine({ ev, now }: { ev: ActivityEvent; now: number }) {
  * card, so a busy conference never lengthens the page — the dashboard stays
  * one screen no matter how much has just happened.
  */
-export function RecentActivity({ events, now }: { events: ActivityEvent[]; now: number }) {
+export function RecentActivity({ events, now, fill = false }: {
+  events: ActivityEvent[];
+  now: number;
+  /** Paint every row, as many as the column's height shows (the rest scroll
+   *  inside the card), instead of leaving a gap under eight. The dashboard
+   *  always passes it: the gap showed whenever the priorities card was short,
+   *  most of all once every priority was done. */
+  fill?: boolean;
+}) {
   const [showAll, setShowAll] = useState(false);
   const [hovered, setHovered] = useState(false);
   // Nothing to expand into: an empty feed opens an empty modal, which is a
   // dead end rather than a disclosure. The card stays inert until there is
   // something to show.
   const openable = events.length > 0;
-  const hidden = Math.max(0, events.length - ACTIVITY_INLINE_LIMIT);
+  const inlineLimit = fill ? events.length : ACTIVITY_INLINE_LIMIT;
+  const hidden = Math.max(0, events.length - inlineLimit);
 
   return (
     <>
@@ -585,7 +630,7 @@ export function RecentActivity({ events, now }: { events: ActivityEvent[]; now: 
            keyboard user gets no indication that Enter does anything. */
         className="flex flex-col focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
         style={{
-          backgroundColor: NEU.surface, borderRadius: 22,
+          backgroundColor: NEU.surface, borderRadius: 22, border: BENTO_BORDER,
           padding: '13px 16px 14px', gap: 10, flex: 1, minHeight: 168,
           cursor: openable ? 'pointer' : 'default',
           boxShadow: openable && hovered ? NEU.outHover : NEU.out,
@@ -616,9 +661,20 @@ export function RecentActivity({ events, now }: { events: ActivityEvent[]; now: 
             Activity will appear here as delegates apply, pay, get allocated, and check in.
           </p>
         ) : (
-          <div className="flex flex-col gap-2" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-            {events.slice(0, ACTIVITY_INLINE_LIMIT).map(ev => <ActivityLine key={ev.key} ev={ev} now={now} />)}
-          </div>
+          fill ? (
+            /* Absolutely placed rows add no height of their own, so the card
+               takes exactly the space the column has left and fills it with
+               as many rows as fit (the rest scroll), never a gap. */
+            <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+              <div className="flex flex-col gap-2" style={{ position: 'absolute', inset: 0, overflowY: 'auto' }}>
+                {events.map(ev => <ActivityLine key={ev.key} ev={ev} now={now} />)}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+              {events.slice(0, inlineLimit).map(ev => <ActivityLine key={ev.key} ev={ev} now={now} />)}
+            </div>
+          )
         )}
       </div>
 
@@ -732,81 +788,7 @@ function ActivityModal({ events, now, onClose }: { events: ActivityEvent[]; now:
   );
 }
 
-// ── Revenue read-out ───────────────────────────────────────────────────────
-// Three numbers that answer "where is the money", without a second chart:
-//   Collected       paid applicants x fee — what has actually landed
-//   If everyone pays total applicants x fee — what the current pipeline is worth
-//   At target       expected delegates x fee — the ceiling the organiser planned for
-// A conference with no fee is a legitimate, finished state, not a zero — it
-// says so in words rather than printing "0 / 0 / 0" as if something were wrong.
-
-function RevenueReadout({
-  fee, currency, paidCount, totalCount, expected, href,
-}: {
-  fee: number;
-  currency: string;
-  paidCount: number;
-  totalCount: number;
-  expected: number;
-  href: string;
-}) {
-  if (fee <= 0) {
-    return (
-      <NeuInset small style={{ padding: '8px 12px', borderRadius: 14 }}>
-        <p style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: NEU.muted }}>
-          No delegate fee set — nothing to collect.{' '}
-          <Link href={href} style={{ color: NEU.deepGold, fontWeight: 800, textDecoration: 'none' }}>
-            Add one
-          </Link>
-        </p>
-      </NeuInset>
-    );
-  }
-
-  const cells: { label: string; value: number; hint: string; accent: string }[] = [
-    { label: 'Collected', value: paidCount * fee, accent: NEU.deepGold, hint: `${paidCount} paid x ${formatFee(fee, currency)}` },
-    { label: 'If everyone pays', value: totalCount * fee, accent: NEU.ink, hint: `${totalCount} applicant${totalCount === 1 ? '' : 's'} x ${formatFee(fee, currency)}` },
-    { label: 'At target', value: expected * fee, accent: NEU.ink, hint: expected > 0 ? `${expected} expected x ${formatFee(fee, currency)}` : 'Set an expected delegate count' },
-  ];
-
-  return (
-    <NeuInset small style={{ padding: '8px 4px', borderRadius: 14 }}>
-      <div className="flex items-stretch">
-        {cells.map((c, i) => (
-          <div
-            key={c.label}
-            className="flex flex-col min-w-0 text-center"
-            title={c.hint}
-            style={{
-              flex: 1,
-              padding: '0 8px',
-              borderInlineStart: i === 0 ? undefined : '1px solid rgba(27,56,40,0.10)',
-            }}
-          >
-            <span
-              className="truncate"
-              style={{
-                fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.08em',
-                textTransform: 'uppercase', color: NEU.muted,
-              }}
-            >
-              {c.label}
-            </span>
-            <span
-              className="truncate"
-              style={{
-                fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: c.accent,
-                fontVariantNumeric: 'tabular-nums', marginTop: 2, lineHeight: 1.1,
-              }}
-            >
-              {c.value > 0 || c.label === 'Collected' ? formatFee(c.value, currency) : '—'}
-            </span>
-          </div>
-        ))}
-      </div>
-    </NeuInset>
-  );
-}
+// Revenue read-out (money card): src/components/conferences/RevenueReadout.tsx
 
 // ── Verification strip: the road to the blue checkmark ───────────────────
 // The seven verification stages are the checklist minus the delegate row.
@@ -1140,6 +1122,9 @@ export default function DashboardPage() {
         || emailsExplored
         || (!!verification && !verification.pending.includes('email')));
 
+  // Money card: the payments ledger, never payment_status x fee.
+  const { money } = useConferenceMoney(session?.access_token, conference?.id);
+
   // Recent-activity feed: recent applications + allocations, expanded into
   // per-timestamp events (submitted / paid / checked-in / resubmitted /
   // allocated), merged newest-first.
@@ -1428,8 +1413,14 @@ export default function DashboardPage() {
   // in Settings, so nudging an organiser to configure them would be nudging
   // them at a holding page. The same row was removed from the SQL twin
   // `conference_setup_status()` (which drives the nudge emails and /admin) in
-  // the same change, so setup_total is 8 in both places. It was never a
+  // the same change. ("Get your first delegate" was removed on 8 Sep, so
+  // setup_total is now 7 in both places, all of them verification stages.) It was never a
   // verification criterion, so the blue checkmark is untouched.
+  // Client twin of conference_setup_status()'s 'page' item: real dates are
+  // now part of what "set up" means, because a TBD conference can never be
+  // public (CHECK conferences_tbd_not_public) — the same rule PublishModal
+  // checks before it ever tries the write.
+  const pageNeedsDates = conference.dates_tbd || !conference.start_date;
   const checklist = [
     {
       key: 'page',
@@ -1437,9 +1428,15 @@ export default function DashboardPage() {
       emoji: 'Artist palette',
       gradient: NEU_GRADIENTS.amber,
       title: 'Set up your conference page',
-      sub: 'Add a banner and a description delegates will see.',
-      done: !!conference.banner_url && !!conference.description?.trim(),
-      onClick: () => router.push(`/manage/${slug}/settings?tab=conference`),
+      sub: pageNeedsDates
+        ? ((!conference.banner_url || !conference.description?.trim())
+          ? 'Add your conference dates, a banner and a description.'
+          : "Add your conference dates. Without them it can't be published.")
+        : 'Add a banner and a description delegates will see.',
+      done: !!conference.banner_url && !!conference.description?.trim() && !conference.dates_tbd && !!conference.start_date,
+      onClick: () => router.push(pageNeedsDates
+        ? `/manage/${slug}/settings?tab=conference&focus=dates`
+        : `/manage/${slug}/settings?tab=conference`),
     },
     {
       key: 'committees',
@@ -1452,7 +1449,7 @@ export default function DashboardPage() {
         : seatShortfall > 0
           // Only ever shown below 70% coverage, so the gap quoted is the gap to
           // that bar, not to the full expected head count.
-          ? `Only ${seatCapacity} seats for ${expectedDelegates} expected delegates — ${seatShortfall} more covers most of them.`
+          ? `Only ${seatCapacity} seats for ${expectedDelegates} expected delegates. ${seatShortfall} more covers most of them.`
           : `${committeeCount} committee${committeeCount === 1 ? '' : 's'}, ${seatCapacity} seats.`,
       done: committeeCount > 0 && seatShortfall === 0,
       onClick: () => router.push(`/manage/${slug}/committees`),
@@ -1717,7 +1714,7 @@ export default function DashboardPage() {
             chip without truncating them to nothing. */}
         <div className="flex flex-col w-full xl:basis-[34%] xl:shrink-0 xl:min-w-[320px]" style={{ gap: 14 }}>
 
-        <NeuCard className="flex flex-col flex-shrink-0" style={{ padding: '14px 15px 11px' }}>
+        <NeuCard className="flex flex-col flex-shrink-0" style={{ padding: '14px 15px 11px', border: BENTO_BORDER }}>
           <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginBottom: 9 }}>
             <div className="min-w-0">
               <h2 style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>Set-up priorities</h2>
@@ -1808,7 +1805,7 @@ export default function DashboardPage() {
         </NeuCard>
 
         {/* Momentum feed, fills whatever height the right column dictates. */}
-        <RecentActivity events={activity} now={now} />
+        <RecentActivity events={activity} now={now} fill />
 
         </div>
 
@@ -1820,7 +1817,10 @@ export default function DashboardPage() {
             used to need their own tile row (allocation alert, money) so the
             card is full edge to edge instead of a big ring beside a
             paragraph. */}
-        <NeuCard className="flex-shrink-0" style={{ padding: '15px 18px' }}>
+        {/* Applicants against target, with the compact traction card on its
+            right (stacked below lg). */}
+        <div className="flex flex-col lg:flex-row items-stretch flex-shrink-0" style={{ gap: 14 }}>
+        <NeuCard className="flex-shrink-0 lg:flex-1 min-w-0" style={{ padding: '15px 18px', border: BENTO_BORDER }}>
           <div className="flex items-stretch flex-wrap" style={{ gap: 20 }}>
             {/* 224, not the 236 default: the dial's height IS this card's
                 height, and 224 is what the vertical budget affords once the
@@ -1845,9 +1845,7 @@ export default function DashboardPage() {
               <RevenueReadout
                 fee={fee}
                 currency={conference.fee_currency}
-                paidCount={paidApps}
-                totalCount={totalApps}
-                expected={expectedDelegates}
+                money={money}
                 href={`/manage/${slug}/financials/settings`}
               />
               <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -1869,6 +1867,10 @@ export default function DashboardPage() {
             </div>
           </div>
         </NeuCard>
+        <div className="flex-shrink-0 lg:w-[272px]">
+          <TrafficSourcesCard conferenceId={conference.id} />
+        </div>
+        </div>
 
         {/* The participants chart, sole occupant of this slot. It used to
             share the card with a revenue chart behind a two-pill switch; the
@@ -1877,7 +1879,7 @@ export default function DashboardPage() {
             is why `title` was empty before).
             Full right-column width on purpose: its SVG is a scaled viewBox,
             so squeezing it sideways shrinks the axis type with it. */}
-        <NeuCard className="flex flex-col flex-shrink-0" style={{ padding: '12px 16px 12px' }}>
+        <NeuCard className="flex flex-col flex-shrink-0" style={{ padding: '12px 16px 12px', border: BENTO_BORDER }}>
           <ParticipantsChart points={participantSeries} />
         </NeuCard>
 

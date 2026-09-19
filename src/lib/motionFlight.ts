@@ -22,6 +22,7 @@ import {
   addPendingMotion as addPendingMotionInDB,
   removePendingMotion as removePendingMotionInDB,
 } from '@/lib/committeeService';
+import { logMotionFailed, logMotionEdited } from '@/lib/motionLog';
 
 export type MotionNotice =
   /** `restore` is null when Undo is not offered (the motion that passed was Suspend or End). */
@@ -111,8 +112,12 @@ export function raiseMotionOptimistic(opts: {
   disruptiveness: number;
   motionOrder?: string[];
   update: Update;
+  /** Called once with the real id when the insert lands and the motion is still on the
+   *  floor. The ledger write for a raise / edit / Undo hangs off this (src/lib/motionLog.ts),
+   *  so a motion that never saved is never logged. */
+  onSaved?: (realId: string) => void;
 }): string {
-  const { committee, motion, disruptiveness, motionOrder, update } = opts;
+  const { committee, motion, disruptiveness, motionOrder, update, onSaved } = opts;
   const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const f = flight(committee.id);
   f.temps = new Set([...f.temps, tempId]);
@@ -145,6 +150,7 @@ export function raiseMotionOptimistic(opts: {
         pendingMotions: (c.pendingMotions ?? []).map((m) => (m.id === tempId ? { ...m, id: realId } : m)),
       }));
       settle();
+      onSaved?.(realId);
     })
     .catch(() => {
       update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== tempId) }));
@@ -194,7 +200,11 @@ export function fellOtherFloorMotions(opts: {
       && (m.type as string) !== 'join-request' && (m.type as string) !== 'gsl-request' && m.type !== 'custom',
   );
   if (fallen.length === 0) return;
-  for (const m of fallen) removeMotionEverywhere(committee, m.id, update);
+  for (const m of fallen) {
+    // The History line of a fallen motion says so. A temp one was never logged as raised.
+    if (!isTempMotionId(m.id)) logMotionFailed(committee, m, 'fell');
+    removeMotionEverywhere(committee, m.id, update);
+  }
   if (lifecyclePassed) {
     showMotionNotice(committee.id, { kind: 'fell', count: fallen.length, restore: null });
     return;
@@ -206,7 +216,12 @@ export function fellOtherFloorMotions(opts: {
     for (const m of fallen) {
       const { id: _id, disruptiveness: _d, ...motion } = m;
       void _id; void _d;
-      raiseMotionOptimistic({ committee, motion, disruptiveness: rank(m), motionOrder, update });
+      // Linked to its original line (motion-edited), so Undo neither scores a second raise
+      // nor leaves the line reading "fell".
+      raiseMotionOptimistic({
+        committee, motion, disruptiveness: rank(m), motionOrder, update,
+        onSaved: (realId) => { if (!isTempMotionId(m.id)) logMotionEdited(committee, m.id, realId, motion); },
+      });
     }
   };
   showMotionNotice(committee.id, { kind: 'fell', count: fallen.length, restore });

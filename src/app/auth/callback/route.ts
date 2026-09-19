@@ -2,7 +2,8 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import type { EmailOtpType } from '@supabase/supabase-js';
+import type { EmailOtpType, User } from '@supabase/supabase-js';
+import { PENDING_BASICS_COOKIE, pendingBasicsFor } from '@/lib/pendingBasics';
 
 // This route reads request cookies and must never be cached or prerendered.
 export const dynamic = 'force-dynamic';
@@ -13,12 +14,25 @@ function safeNext(raw: string | null): string {
   return '/';
 }
 
+/** `next` with `auth=finish` added, keeping its own query and hash. */
+function withAuthFinish(next: string): string {
+  const hashAt = next.indexOf('#');
+  const path = hashAt === -1 ? next : next.slice(0, hashAt);
+  const hash = hashAt === -1 ? '' : next.slice(hashAt);
+  return `${path}${path.includes('?') ? '&' : '?'}auth=finish${hash}`;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
   const tokenHash = searchParams.get('token_hash');
   const otpType = searchParams.get('type') as EmailOtpType | null;
   const next = safeNext(searchParams.get('next'));
+  // Started from the "Log in or sign up" modal (src/components/auth/AuthModal.tsx).
+  // Those users go back to the page they were on, never to /auth/onboarding: a
+  // missing nationality or date of birth re-opens the modal there, on its
+  // "Finish signing up" step (`?auth=finish`), which cannot be dismissed.
+  const viaModal = searchParams.get('via') === 'modal';
 
   const cookieStore = await cookies();
   const supabase = createServerClient(
@@ -92,7 +106,7 @@ export async function GET(request: NextRequest) {
    * forward them on afterwards. Users who already onboarded skip this and go
    * straight to next, so nobody loops.
    */
-  async function destinationFor(userId: string): Promise<string> {
+  async function destinationFor(userId: string, createdAt?: string | null): Promise<string> {
     // A recovery link exists to reach the reset form. Putting onboarding in
     // front of it interrupts a repair with a survey, and the session behind it
     // is a recovery session, so anyone who wanders off inside onboarding can
@@ -109,18 +123,74 @@ export async function GET(request: NextRequest) {
       .maybeSingle();
     // Two separate reasons to send someone to onboarding. education_level is
     // the original "has not onboarded" signal. nationality/date_of_birth are
-    // required at sign-up but only the e-mail form asks for them, so every
-    // Google account — and every account created before they were required —
-    // can be missing them while having onboarded long ago. Those users get the
+    // required at sign-up, but a Google account made from /auth/signin (or one
+    // whose sign-up answers could not be written), and every account created
+    // before they were required, can be missing them while having onboarded
+    // long ago. Those users get the
     // basics screen, which is the only unskippable thing in onboarding, and
     // then land on the questionnaire they can skip as usual.
     const needsOnboarding = !profile || profile.education_level == null;
     const needsBasics = !!profile && (!profile.nationality || !profile.date_of_birth);
+    if (viaModal) {
+      // No row yet (the signup trigger has not committed) is treated as
+      // missing basics too: the modal's finish step re-reads and closes itself
+      // if it turns out complete. A brand-new account (under a day old) with
+      // no education level gets the questionnaire in the same pop-up, the
+      // modal's stand-in for /auth/onboarding.
+      const created = createdAt ? Date.parse(createdAt) : NaN;
+      const isNew = Number.isFinite(created) && Date.now() - created < 24 * 60 * 60 * 1000;
+      if (!profile || needsBasics || (isNew && needsOnboarding)) return `${origin}${withAuthFinish(next)}`;
+      return `${origin}${next}`;
+    }
     if (needsOnboarding || needsBasics) {
       if (next === '/auth/onboarding') return `${origin}/auth/onboarding`;
       return `${origin}/auth/onboarding?next=${encodeURIComponent(next)}`;
     }
     return `${origin}${next}`;
+  }
+
+  /**
+   * Nationality and date of birth asked on /auth/signup BEFORE "Sign up with
+   * Google", parked in a short-lived cookie (src/lib/pendingBasics.ts). This
+   * route is the first thing that runs after Google, so it writes them here,
+   * before destinationFor decides whether the basics screen is still needed.
+   * Only for an account created after the answers were given, only into EMPTY
+   * columns (each update is conditional on the column being null), and the
+   * cookie is cleared whatever happens, so it is used at most once.
+   */
+  async function applyPendingBasics(user: User): Promise<void> {
+    const raw = cookieStore.get(PENDING_BASICS_COOKIE)?.value;
+    if (!raw) return;
+    try {
+      const basics = pendingBasicsFor(raw, user.created_at);
+      if (basics) {
+        const a = await supabase
+          .from('profiles')
+          .update({ nationality: basics.nationality })
+          .eq('id', user.id)
+          .is('nationality', null);
+        const b = await supabase
+          .from('profiles')
+          .update({ date_of_birth: basics.dateOfBirth })
+          .eq('id', user.id)
+          .is('date_of_birth', null);
+        // supabase-js resolves on a failed write. Keep the cookie then, so
+        // /auth/onboarding can try again from it.
+        if (a.error || b.error) return;
+      }
+    } catch {
+      // Never break a sign-in over this. destinationFor re-reads the row, so a
+      // write that did not land still routes to the basics screen, and
+      // /auth/onboarding retries from the same cookie.
+      return;
+    }
+    cookieStore.set(PENDING_BASICS_COOKIE, '', { path: '/', maxAge: 0 });
+  }
+
+  /** Every signed-in exit of this route goes through here. */
+  async function land(user: User): Promise<string> {
+    await applyPendingBasics(user);
+    return destinationFor(user.id, user.created_at);
   }
 
   // ── Email links (signup confirmation, magic link, recovery, email change) ──
@@ -134,7 +204,7 @@ export async function GET(request: NextRequest) {
       token_hash: tokenHash,
     });
     if (!error && data.user) {
-      return NextResponse.redirect(await destinationFor(data.user.id));
+      return NextResponse.redirect(await land(data.user));
     }
 
     // Same reasoning as the code branch below: this route gets hit twice for a
@@ -151,7 +221,7 @@ export async function GET(request: NextRequest) {
         shownReason: 'recovered',
         hadSession: true,
       });
-      return NextResponse.redirect(await destinationFor(existing.user.id));
+      return NextResponse.redirect(await land(existing.user));
     }
 
     const msg = (error?.message || '').toLowerCase();
@@ -165,7 +235,7 @@ export async function GET(request: NextRequest) {
   if (code) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error && data.user) {
-      return NextResponse.redirect(await destinationFor(data.user.id));
+      return NextResponse.redirect(await land(data.user));
     }
 
     // The exchange failed — but that does NOT mean sign-in failed.
@@ -187,7 +257,7 @@ export async function GET(request: NextRequest) {
         shownReason: 'recovered',
         hadSession: true,
       });
-      return NextResponse.redirect(await destinationFor(existing.user.id));
+      return NextResponse.redirect(await land(existing.user));
     }
 
     const msg = (error?.message || '').toLowerCase();

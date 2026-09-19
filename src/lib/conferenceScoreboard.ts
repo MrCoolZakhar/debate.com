@@ -249,6 +249,38 @@ function assembleScoringCommittee(
   };
 }
 
+/**
+ * The HEADLINE score of every delegation in one session, from raw rows, with exactly the
+ * arithmetic the chair's scoreboard and the organiser scoreboard use (`computeObjectiveScore`
+ * over the committee's own `getScoringConfig`, so motionRaised / motionPassed / right of
+ * reply / documents / manual rows all count, then `computeQualityScore` + `computeHeadline`
+ * for the blend). The organiser live wall calls this (18 Sep 2026): it used to carry its own
+ * hardcoded formula with no motion or right-of-reply points, so its "top / quietest" never
+ * matched the chair's board. `messageRows` must carry `sender`, `recipient` and `content`;
+ * `feedbackRows` `country`, `level`, `factor_scores`, `created_at`.
+ */
+export function sessionHeadlineScores(
+  row: DbRow,
+  delegateRows: DbRow[],
+  messageRows: DbRow[],
+  documentRows: DbRow[],
+  feedbackRows: DbRow[],
+): { country: string; objective: number; headline: number }[] {
+  const committee = assembleScoringCommittee(row, delegateRows, messageRows, documentRows);
+  const cfg = getScoringConfig(committee);
+  const feedback = feedbackRows.map((f) => ({
+    country: (f.country as string) ?? '',
+    level: ((f.level as string) ?? 'speech'),
+    factorScores: (f.factor_scores as Record<string, number>) ?? {},
+    createdAt: (f.created_at as string) ?? '',
+  }));
+  return committee.delegates.map((d) => {
+    const objective = computeObjectiveScore(committee, d.country).total;
+    const quality = computeQualityScore(feedback, d.country, cfg);
+    return { country: d.country, objective, headline: computeHeadline(objective, quality, cfg) };
+  });
+}
+
 // ── Per-delegate folds ───────────────────────────────────────────────────────
 
 /**

@@ -10,8 +10,9 @@
 // `contain` shows ivory bands above and below, `cover` shows the same bands
 // because they are part of the image. MUNCommand's round flags look full
 // because the artwork itself is drawn for a circle. So is ours now:
-// `public/flags/1x1/xx.svg` (circle-flags, MIT, see the README there), square
-// files whose emblems are re-centred for a disc, drawn `cover`.
+// `public/flags/1x1/xx.svg` (flag-icons and circle-flags, MIT, see the README
+// there for which flag comes from which set), square files with the emblem
+// inside the disc, drawn `cover`.
 //
 // Rectangles (tables, chips, inputs, the speaker card) keep `getFlagUrl`.
 //

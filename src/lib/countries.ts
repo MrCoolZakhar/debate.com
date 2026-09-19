@@ -27,13 +27,16 @@ export function getFlagUrl(code: string): string {
   return `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/${points}.svg`;
 }
 
-// SQUARE flag artwork for circles, bundled in public/flags/1x1/ (circle-flags by
-// HatScripts, MIT, see the README there). Twemoji flags are a 3:2 rectangle
+// SQUARE flag artwork for circles, bundled in public/flags/1x1/ (flag-icons by
+// Lipiridis and circle-flags by HatScripts, both MIT; the README there says
+// which flag comes from where and why). Twemoji flags are a 3:2 rectangle
 // floating in a transparent 36x36 box, so no object-fit can make one fill a
 // circle: it always shows bands. Use this through <CircleFlag>, never inline.
 // Rectangles keep using getFlagUrl.
 export function getCircleFlagUrl(code: string | null | undefined): string | null {
-  const c = (code ?? '').trim().toLowerCase();
+  let c = (code ?? '').trim().toLowerCase();
+  // "UK" is not ISO 3166 (it is GB) but people and imports write it.
+  if (c === 'uk') c = 'gb';
   return /^[a-z]{2}$/.test(c) ? `/flags/1x1/${c}.svg` : null;
 }
 
@@ -392,6 +395,39 @@ export const COUNTRY_NAME_ALIASES: Record<string, string> = {
   'dpr korea': 'North Korea',
   'lao people’s democratic republic': 'Laos',
   'arabie saoudite': 'Saudi Arabia',
+  // UN official short names with a parenthesis, and a few more seen on rosters.
+  // (Matched after `looseCountryKey`, so "Iran (Islamic Republic of)" arrives
+  // here as "iran islamic republic of", already listed above.)
+  'korea dpr': 'North Korea',
+  'korea democratic peoples republic of': 'North Korea',
+  'micronesia federated states': 'Micronesia',
+  'union of soviet socialist republics': 'Russia',
+  'kyrgyz republic': 'Kyrgyzstan',
+  'slovak republic': 'Slovakia',
+  czech: 'Czech Republic',
+  'the gambia': 'Gambia',
+  'gambia the': 'Gambia',
+  'the bahamas': 'Bahamas',
+  'bahamas the': 'Bahamas',
+  'republic of cyprus': 'Cyprus',
+  'hellenic republic': 'Greece',
+  'republic of china': 'Taiwan',
+  'taiwan province of china': 'Taiwan',
+  'palestinian territories': 'Palestine',
+  'occupied palestinian territory': 'Palestine',
+  'vatican city state': 'Holy See',
+  'holy see vatican city state': 'Holy See',
+  'eu': 'European Union',
+  'republic of kosovo': 'Kosovo',
+  'saint kitts nevis': 'Saint Kitts and Nevis',
+  'st kitts and nevis': 'Saint Kitts and Nevis',
+  'st lucia': 'Saint Lucia',
+  'st vincent and the grenadines': 'Saint Vincent and the Grenadines',
+  'saint vincent': 'Saint Vincent and the Grenadines',
+  'bosnia': 'Bosnia and Herzegovina',
+  'timor': 'Timor-Leste',
+  'turkiye republic of': 'Türkiye',
+  'netherlands kingdom of the': 'Netherlands',
 };
 
 /** Canonical EN name → every folded alias key that points at it. Lets a
@@ -406,13 +442,39 @@ const ALIAS_KEYS_BY_COUNTRY: Map<string, string[]> = (() => {
   return m;
 })();
 
+/**
+ * A second, looser key for `getCountryByName` when the folded name misses:
+ * curly apostrophes become straight ("Côte d’Ivoire"), a leading flag emoji
+ * or other symbol goes ("🇰🇷 Republic of Korea"), "&" reads "and", "St."
+ * reads "saint", and brackets and commas vanish, so the UN's own short names
+ * ("Iran (Islamic Republic of)", "Korea, Republic of") reach the alias table.
+ */
+function looseCountryKey(folded: string): string {
+  return folded
+    .replace(/[\u2018\u2019\u02bc`´]/g, "'")
+    .replace(/&/g, ' and ')
+    .replace(/\bst\.?\s/g, 'saint ')
+    .replace(/[^\p{L}\p{N}' -]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export function getCountryByName(name: string): Country | undefined {
   const n = fold(name);
   if (!n) return undefined;
   const direct = UN_COUNTRIES.find((c) => fold(c.name) === n);
   if (direct) return direct;
   const aliased = COUNTRY_NAME_ALIASES[n];
-  return aliased ? UN_COUNTRIES.find((c) => c.name === aliased) : undefined;
+  if (aliased) return UN_COUNTRIES.find((c) => c.name === aliased);
+  const loose = looseCountryKey(n);
+  if (!loose || loose === n) return undefined;
+  const looseNoApos = loose.replace(/'/g, '');
+  const hit =
+    UN_COUNTRIES.find((c) => fold(c.name) === loose) ??
+    UN_COUNTRIES.find((c) => fold(c.name).replace(/'/g, '') === looseNoApos);
+  if (hit) return hit;
+  const looseAlias = COUNTRY_NAME_ALIASES[loose] ?? COUNTRY_NAME_ALIASES[looseNoApos];
+  return looseAlias ? UN_COUNTRIES.find((c) => c.name === looseAlias) : undefined;
 }
 
 /** ISO code when the text names a country, otherwise its folded form. Use this

@@ -158,6 +158,9 @@ export function selectDelegateTips(
       // Nothing to say about speech length before there is a speech.
       case 'speakingTimePer10s': return mySpeeches.length > 0;
       case 'motionRaised': return moderatedEnabled || tourEnabled;
+      // Whether a motion passes is the room's decision, not advice a delegate can act on; the
+      // motionRaised tip already says "raise one".
+      case 'motionPassed': return false;
       case 'rightOfReply': return true;
       case 'wpSponsor': return true;
       case 'drSponsor': return true;

@@ -1,4 +1,5 @@
 'use client';
+import { openAuth } from '@/lib/authModal';
 import { use, useEffect, useState, useRef, useCallback, useMemo, Suspense } from 'react';
 import Portal from '@/components/Portal';
 import { anchorBox } from '@/components/voting/anchorPosition';
@@ -7,7 +8,7 @@ import FitToScreen from '@/components/FitToScreen';
 import GavelChip from '@/components/GavelChip';
 import CommitteeIdentityBadge, { emblemMonogram } from '@/components/CommitteeIdentityBadge';
 import SeatAddField from '@/components/SeatAddField';
-import { TopBarTab, TopBarIconButton } from '@/components/ChairTopBar';
+import { TopBarTab, TopBarIconButton, TOP_BAR_ROW_PX, useTopBarTwoRows } from '@/components/ChairTopBar';
 import SpeakerControls, { FloorProgress, SpeakerClock, POPOVER_TONES, type ControlLock } from '@/components/SpeakerControls';
 import { moderatorNameOf, notifyCommenterOnly } from '@/lib/commenterNotice';
 import DraggablePopover from '@/components/DraggablePopover';
@@ -1665,6 +1666,17 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
    *  under the top bar, and the bar is lifted over it so its Gavel, code, Chat, Scoreboard
    *  and Settings keep working (17 Sep 2026). Set by DocumentsModal. */
   const [docIntroActive, setDocIntroActive] = useState(false);
+  // Top bar in two rows when the tabs have no room beside the icon cluster (18 Sep 2026).
+  // Refs + one measurement hook; nothing here runs per second.
+  const topBarRef = useRef<HTMLElement | null>(null);
+  const topBarNavRef = useRef<HTMLElement | null>(null);
+  const topBarClusterRef = useRef<HTMLDivElement | null>(null);
+  const topBarTwoRows = useTopBarTwoRows(topBarRef, topBarNavRef, topBarClusterRef, [
+    language,
+    committee && committee.phase !== 'pre-session' && !sessionEnded && !docIntroActive ? 'tabs' : 'none',
+    (committee?.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length,
+    (committee?.documents ?? []).filter((d) => d.status === 'submitted').length,
+  ].join('|'));
   // The session-code presenter: the rect of the button it grows from, null = closed.
   const [codePresenterOrigin, setCodePresenterOrigin] = useState<DOMRect | null>(null);
   const closeCodePresenter = useCallback(() => setCodePresenterOrigin(null), []);
@@ -3628,7 +3640,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>{t('session_signin_title')}</h1>
           <p className="mb-6" style={{ color: '#6A5A4A' }}>{t('session_signin_chair_body')}</p>
           <button
-            onClick={() => router.push('/auth/signin?next=' + encodeURIComponent('/join?code=' + code))}
+            onClick={() => openAuth()}
             className="font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none gv-lift"
             style={{ backgroundColor: '#1B3828' }}
           >
@@ -4807,18 +4819,29 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       {/* Everything right of the sidebar: the top bar, the banners and the floor. The
           sidebar runs the full height of the screen, so this column starts at its edge. */}
       <div className="relative flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
-      <header className={`bg-[#FAF8F3] ps-2 pe-3 h-11 flex items-center gap-1.5 shrink-0${docIntroActive ? ' relative z-[46]' : ''}`} data-tutorial="topbar">
+      <header ref={topBarRef} className={`bg-[#FAF8F3] ps-2 pe-3 flex flex-wrap items-center content-start gap-x-1.5 shrink-0${docIntroActive ? ' relative z-[46]' : ''}`}
+        style={{ height: topBarTwoRows ? TOP_BAR_ROW_PX * 2 : TOP_BAR_ROW_PX }} data-tutorial="topbar">
         {docIntroActive ? (
           // During a document introduction the tabs step aside (the screen below is the
           // Documents flow); the right-hand cluster stays exactly as it is.
           <div className="flex-1 min-w-0" />
         ) : committee.phase !== 'pre-session' && !sessionEnded ? (
-          <nav aria-label={t('chair_hdr_controls')} className="flex flex-1 min-w-0 h-full items-center gap-1 py-1">
+          // Two rows when short of room (useTopBarTwoRows): the tabs drop to a full-width
+          // second row under the icon cluster (order-last + basis-full).
+          <nav ref={topBarNavRef} aria-label={t('chair_hdr_controls')}
+            className={`flex min-w-0 items-center gap-1 py-1 ${topBarTwoRows ? 'order-last basis-full w-full' : 'flex-1'}`}
+            style={{ height: TOP_BAR_ROW_PX, boxShadow: topBarTwoRows ? 'inset 0 1px 0 rgba(28,20,16,0.06)' : undefined }}>
             <TopBarTab
               tutorial="tab-rollcall"
               label={t('tab_roll_call')}
               active={showSliders}
-              onClick={() => { const opening = !showSliders; setShowSliders(opening); if (opening) setShowChat(false); setShowRollCall(true); }}
+              // Roll Call brings the roster back with it (18 Sep 2026, owner: "clicking Roll
+              // Call should expand the sidebar if it is collapsed"): with the sidebar folded
+              // to the flag rail, a press expands it AND opens the Roll Call tab, never closes it.
+              onClick={() => {
+                if (sidebarCollapsed) { toggleSidebarCollapsed(false); setShowSliders(true); setShowChat(false); setShowRollCall(true); return; }
+                const opening = !showSliders; setShowSliders(opening); if (opening) setShowChat(false); setShowRollCall(true);
+              }}
             />
             {(() => {
               const n = (committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length;
@@ -4844,6 +4867,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           <span className="text-[#6A5A4A] text-sm hidden sm:block truncate flex-1 min-w-0 px-2">{getCommitteeDisplayName(committee.name, language)}: {committee.topic}</span>
         )}
 
+        {/* The icon cluster: always in row one, at the inline end. */}
+        <div ref={topBarClusterRef} className="ms-auto flex min-w-0 items-center gap-1.5" style={{ height: TOP_BAR_ROW_PX }}>
         {/* The gavel lives here, on the front page, not buried in Settings, and shows for
             EVERY chair in BOTH states, so handover reads as a one-tap switch rather than an
             error. A genuinely solo chair has nobody to hand to, so the affordance stays hidden,
@@ -4910,6 +4935,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         <TopBarIconButton tutorial="tab-settings" onClick={() => setShowSettings(true)} label={t('chair_hdr_settings')}>
           <Settings size={21} strokeWidth={2} aria-hidden />
         </TopBarIconButton>
+        </div>
       </header>
       {!sessionEnded && gavelElsewhere && (
         <GavelDeviceBanner onUseThisDevice={() => committee && claimGavelForThisDevice(committee, headChairName || myChairName)} />
@@ -5529,7 +5555,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         blocked={showMotions || showDocuments || showSettings || showScoreboard || showChat || showTutorial || !!codePresenterOrigin}
       />
       {settingsSync.notice}
-      <NotificationStack extras={broadcastExtras} />
+      <NotificationStack extras={broadcastExtras} topPx={(topBarTwoRows ? TOP_BAR_ROW_PX * 2 : TOP_BAR_ROW_PX) + 8} />
       {showTutorial && committee && (
         <TutorialOverlay
           committee={committee}

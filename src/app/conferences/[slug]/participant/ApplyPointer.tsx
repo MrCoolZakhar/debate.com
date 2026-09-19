@@ -3,6 +3,7 @@
 // Friendly pointer shown in the person tab when there's nothing to show yet:
 // signed out, or signed in with no application to this conference.
 
+import { openAuth } from '@/lib/authModal';
 import { useRouter } from 'next/navigation';
 import { UserRound } from 'lucide-react';
 import { SectionCard, OUTFIT } from './shared';
@@ -35,7 +36,7 @@ export default function ApplyPointer({ conferenceSlug, signedOut, next }: {
             : 'Apply to this conference and your application status, documents, payment and messages with the organizing team will all live here.'}
         </p>
         <button
-          onClick={() => router.push(signedOut ? `/auth/signin?next=${encodeURIComponent(next ?? `/conferences/${conferenceSlug}/role`)}` : `/conferences/${conferenceSlug}/apply`)}
+          onClick={() => (signedOut ? openAuth({ next }) : router.push(`/conferences/${conferenceSlug}/apply`))}
           className="rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none transition-colors"
           style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none', cursor: 'pointer' }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}

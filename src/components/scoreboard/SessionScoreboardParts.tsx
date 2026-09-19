@@ -129,6 +129,8 @@ export function eventIcon(type: string): LucideIcon {
   switch (type) {
     case 'speech': return Mic;
     case 'motion-raised': return Gavel;
+    case 'motion-passed': return Gavel;
+    case 'motion': return Gavel;
     case 'right-of-reply': return CornerUpLeft;
     case 'manual-award': return Award;
     case 'manual-deduct': return Award;

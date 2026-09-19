@@ -46,7 +46,9 @@ Design consequences: mobile-first on every delegate and applicant surface; the c
 | **Conference fees**: Stripe Connect; 5% platform fee (`PLATFORM_FEE_RATE`) + 3% + fixed processing pass-through; every amount recomputed server-side in the `create-checkout` edge function. Manual payments with proof review exist as a fallback. | `src/lib/finance.ts`, `manage/[slug]/financials/*` |
 | **Gavelling Points**: earned (welcome bonus, awards at paid conferences), stored in `profiles.points_balance` via the `points_ledger` trigger. Spending is not built. | `points_ledger`, `publish_conference_awards()` |
 
-Hard rules: organisers are never charged; Unlimited status is server-verified; public fee display goes through the `conference_public_fees` view because `conferences.fee_amount` is a stale denormalised column (`src/lib/publicFees.ts`).
+**Money shown to anyone is the payments ledger, never `payment_status`** (19 Sep 2026). `conference_money_summary(conference, detail)` (`src/lib/conferenceMoney.ts`) is the one definition used by the dashboard money card, Financials and /admin: *received* = succeeded Stripe payments (money that came in through Gavelling), *offline* = succeeded manual payments (organiser mark-paid / approved proof), shown apart and never added, *outstanding* = open invoice balances of accepted participants. `payment_status = 'paid'` is an access flag: free registrations (chairs) are stamped paid on arrival and pledge-covered members are paid with no money of their own, so never multiply it by a fee. The daily report and `admin_platform_metrics` use the same split.
+
+Hard rules: organisers are never charged; Unlimited status is server-verified; public price display goes through `displayDelegatePrice` / `fetchDelegatePrices` in `src/lib/publicFees.ts` (reading the read-only `conference_public_fees` view), because `conferences.fee_amount` is a stale denormalised column: "TBD" and no Pricing details list until delegate applications are set up (delegate role config `is_enabled`, open now or opening later); once set up, the delegate price of the current fee stage (for an upcoming opening, the stage that applies at opening) with the Pricing details list ("Applications open {date}" when upcoming), "Free" at 0. The creation wizard asks no price.
 
 **Stripe's own limits are the thing that breaks a big bill, and they live only in
 the edge function.** `create-checkout` (v18, 8 Sep 2026; not in git, read it with
@@ -85,7 +87,14 @@ long invoice list hit them in production:
 - Every sitemap URL must be reachable by a plain server-rendered `<a href>` from another sitemap page: the homepage's crawl nav (conferences + hubs), `/conferences/explore`'s directory, `/blog`, and `FooterLegal` (Explore Conferences, MUN Guides on every public footer). A client-rendered list is not a link.
 - `www.gavelling.com` must 308 to `https://gavelling.com` at the Vercel domain level with a valid certificate.
 
-There is **no analytics or tracking** by policy (`/privacy`). The admin console (`/admin`, DB-gated by `is_platform_admin()`) is the only observability surface.
+There is **no third-party analytics or tracking** by policy (`/privacy`). The admin console (`/admin`, DB-gated by `is_platform_admin()`) is the only platform observability surface.
+
+**The one exception: anonymous conference page visits (18 Sep 2026).** Organisers see where applicants come from on `/manage/[slug]` (`src/components/conferences/TrafficSourcesCard.tsx`: visits 7 / 30 days / all time, applications started and submitted, conversion, a per-source table and a daily sparkline). How it stays inside the policy, and must stay:
+- `ConferenceViewBeacon` (mounted by `/conferences/[slug]/page.tsx`; the vanity `/<acronym>` 307s there with the referrer intact) posts ONCE per browser session per conference (`sessionStorage gavelling-view:<slug>`) to `/api/conference-view` with `{slug, source, host?}` only. The source is classified in the browser by `classifyTraffic` (`src/lib/trafficSource.ts`): `google`, `gavelling` (same origin, or an in-app navigation, detected because the navigation entry's path differs from the current one, since `document.referrer` then still names the site's entry page), `social`, `other_search`, `email`, `direct`, `other` (+ referring HOSTNAME only). utm_source / utm_medium win over the referrer. Skipped on localhost, 127.0.0.1 and `*.vercel.app`, which share the production database.
+- The route drops bot user agents and rate-limits 30 per minute per IP IN MEMORY; it stores no IP, no user agent, no cookie. It forwards the viewer's bearer token only so `record_conference_page_view(p_slug, p_source, p_host)` (SECURITY DEFINER, anon + authenticated) can skip the conference's own organisers; a direct RPC call bypasses the route's rate limit, so the RPC caps counting at 20,000 views per conference per day.
+- Storage: `conference_page_views (conference_id, day, source, views)` and `conference_page_view_hosts (conference_id, host, views, last_day)`, RLS read for `is_conference_organizer` only, no anon grant. `conference_traffic_summary(p_conference)` is the dashboard's one read (organisers only; applications counted are self-submitted ones, `invited_email is null`; "started" = submitted + open `application_drafts`).
+- Attribution: the beacon also keeps the first-touch category in `localStorage gavelling-first-touch:<slug>` (90 days) and `ConferenceApplyClient` writes it to `applications.traffic_source` on insert (category only, CHECK-constrained). An applicant cannot change it afterwards (`applications_keep_traffic_source_trg`).
+- Counting began 18 Sep 2026; nothing can be backfilled, so every conference's card opens on "Views are counted from today". Never add a cookie, a per-visitor id, an IP, a user agent, a full referrer URL or a third party to this pipeline.
 
 ---
 
@@ -146,10 +155,20 @@ Rules:
 
 One seal, the one social media uses (`src/components/VerifiedCheck.tsx`). Blue means verified, grey means not yet. Two things carry it:
 
-- **A conference** is verified automatically once every set-up stage is done: page, committees with enough seats, chairs, emails explored, secretariat, a payment method, published. The **secretariat** stage is a union of three routes: a second organiser, a pending co-organizer invite, or `conferences.solo_secretariat_ack_at` being set. That third route exists because the stage used to require a second person, which made the checkmark unreachable for the 167 conferences genuinely run by one organiser. It is stamped only when the organiser says so, from the dashboard checklist row or the Settings → Organizers tick, and it is reversible from Settings. "Get your first delegate" is on the checklist but is not a criterion. ("Set up awards" was the other non-criterion; it was removed from the checklist entirely when awards went behind the coming-soon screen, which changed nothing about verification.) The truth is `conference_setup_status()` in the database (`scratch-setup-status.sql` is a reference copy), which also reports minutes per stage and `verification_minutes_left`. `refresh_conference_verification()` stores the mark (dashboard calls it; cron sweeps hourly); a guard trigger rejects any direct write to `conferences.is_verified`. Public surfaces show the seal only when verified. The organiser's own screens (manage rail, dashboard) always show it, grey with "About N minutes to your checkmark" until earned.
+- **A conference** is verified automatically once every set-up stage is done: page, committees with enough seats, chairs, emails explored, secretariat, a payment method, published. The **secretariat** stage is a union of three routes: a second organiser, a pending co-organizer invite, or `conferences.solo_secretariat_ack_at` being set. That third route exists because the stage used to require a second person, which made the checkmark unreachable for the 167 conferences genuinely run by one organiser. It is stamped only when the organiser says so, from the dashboard checklist row or the Settings → Organizers tick, and it is reversible from Settings. The checklist has exactly these 7 stages (`setup_total` 7), all of them verification criteria. "Get your first delegate" (removed 8 Sep 2026) and "Set up awards" (removed when awards went behind the coming-soon screen) were the two former non-criteria. The truth is `conference_setup_status()` in the database (`scratch-setup-status.sql` is a reference copy), which also reports minutes per stage and `verification_minutes_left`. `refresh_conference_verification()` stores the mark (dashboard calls it; cron sweeps hourly); a guard trigger rejects any direct write to `conferences.is_verified`. Public surfaces show the seal only when verified. The organiser's own screens (manage rail, dashboard) always show it, grey with "About N minutes to your checkmark" until earned.
 - **An MUN CV entry** is blue when `source = 'gavelling_verified'` (written by the awards pipeline), grey when self-reported.
 
 Reminders: `queue_checkmark_emails()` (cron 10:30 daily) sends one "N minutes from its checkmark" email per organiser per conference, a follow-up after two weeks, and a congratulations when the mark lands, all through `email_outbox` and paced 48h from the organiser drip. `SetupReminderGate` (root layout) shows the same list once a day when an organiser with an unverified conference enters the site, via `my_incomplete_conferences()`.
+
+**Sign-up asks first (18 Sep 2026).** `/auth/signup` shows nationality and date of birth
+ABOVE "Sign up with Google" and refuses both ways of signing up without them (same rules as
+onboarding, `validateBasics` in `src/lib/pendingBasics.ts`). For Google the confirmed answers
+ride through the round trip in a 30-minute first-party cookie (`gv_pending_basics`, SameSite
+Lax); `/auth/callback` writes them into the new profile (only empty columns, only for an
+account created after the answers were given) and clears it, and `/auth/onboarding` retries
+from it if that write did not land. "Sign in with Google" clears it and still asks nothing
+before signing in, so a brand-new account made from the SIGN-IN page still meets the
+unskippable basics screen in onboarding and this gate. Invite pages link to one of those two.
 
 `CompleteBasicsGate` (root layout, 11 Sep 2026) is the backstop for accounts with no
 nationality or date of birth. Google sign-up creates the account before anything can be
@@ -162,6 +181,29 @@ without that tap, and nobody was backfilled. It stays off `/auth/*`, legal pages
 paths, `/account/profile` and every live-session route (a chair must never get a modal over
 a running committee). It publishes its state through `src/lib/basicsGateState.ts` so
 `CreditsWelcomeGate` and `SetupReminderGate` never open on top of it.
+
+**Log in / sign up is a pop-up (18 Sep 2026), Airbnb's exactly, in green.** `src/components/auth/AuthModal.tsx`
+(steps), `authModalKit.tsx` (white surfaces, floating-label fields, the green gradient button, KIT_CSS) and
+`AuthQuestionnaire.tsx`, mounted once in the root layout, opened by `openAuth({ next?, step?, email?, apply? })`
+from `src/lib/authModal.ts` (or `<AuthLink>` for links). First screen: X, gavel mark, "Log in or sign up",
+one Email field, Continue, "or", a square Google tile (no Apple). Continue asks the SECURITY DEFINER RPC
+`auth_email_status(email)` (`new` | `password` | `google` | `invalid`; it discloses whether an address has an
+account, a trade-off the owner approved) and the dialog moves to the password step, a "signs in with Google"
+step, or "Finish signing up" (name, date of birth, nationality, password) then the 6-digit code. A new
+account (made here, or under a day old with no `education_level`) then gets the /auth/onboarding
+questionnaire as four skippable steps in the same pop-up (same writes: `education_level`, `mun_countries`,
+`mun_experience_level`, `mun_cv_entries` via CVEntryModal). Google and email links return through
+`/auth/callback?via=modal` to the page the visitor was on (never `/auth/onboarding`), with `?auth=finish` when
+basics are missing or the account is new; the basics step is non-dismissable (Sign out is the only exit).
+`/auth/signin`, `/auth/signup` and `/auth/forgot` only redirect to `/?auth=...&next=...`; redirect guards
+still go through them. While the modal is open `CompleteBasicsGate` stands down and `useBasicsGateBlocking()`
+is true, so no two modals stack.
+Since 19 Sep 2026 it is the "Wall" split (owner picked mockup 1): from 860px wide a 400px image panel on
+the LEFT on every step and the form on the right (880 x at least 560, radius 24, left-aligned brand and
+heading, a one-line intro, a Terms line under the Google tile); below 860px the single 480px column, and
+the full-screen sheet on phones. The image is ONE file, `public/auth/side.webp` (`AUTH_SIDE_IMAGE` /
+`AUTH_SIDE_ALT` in `authModalKit.tsx`, `object-fit: cover`, top-anchored, supply 800 x 1120 or larger);
+today it is a render of the mockup's wall, to be replaced by the owner's artwork.
 
 ## 5c. Custom (parliamentary) committees
 
@@ -184,7 +226,7 @@ answer shapes what we lead them with afterwards.
   `{keys, other, answered_at, skipped}`. Three states must stay distinguishable: `'{}'` is
   never asked (every conference created before this shipped), `skipped: true` is asked and
   declined, a non-empty `keys` is answered. The follow-up email depends on that distinction.
-- **Asked before the insert, and required.** It is step 12 of 13 and the answer rides along
+- **Asked before the insert, and required.** It is step 11 of 12 and the answer rides along
   in `insertRow` as `intent: intentPayload(keys)`, so there is no post-create UPDATE to fail
   and nothing exists yet that a failed write could cost anyone. It was briefly the other way
   round, asked after creation to protect against exactly that; requiring it up front removes
@@ -280,8 +322,9 @@ Everything else, with line numbers and the reasons behind each rule, is in `AGEN
 - **Buttons with an icon or an indicator lead with the icon** (owner, 17 Sep 2026): a big icon, the word small beneath it (e.g. Vote in Documents, Finish in an introduction). A button that is icon only still carries a tooltip and an accessible name.
 - **No count or status pills like '15 delegations' or 'Observer' anywhere: show counts as plain typography and observer status as an icon.** (Owner, 17 Sep 2026. /create shows the count as a large tabular numeral and observers as the megaphone; the join seat picker shows seat state as icon + plain words.)
 - **No em dashes in user-facing copy.** Short sentences. Say what happened and what to do next.
+- **Errors are written for people, never for engineers.** Never render `error.message`, `err.message`, a Postgres, PostgREST, Storage or Stripe string, or a stack trace to a user. Route every caught error through `friendlyError(error, fallback)` from `src/lib/friendlyError.ts`, with a fallback that says what failed and what to do next. When a migration adds a CHECK a user can reach, add its plain sentence to `CONSTRAINT_MESSAGES` in the same change. Better still, check the condition in the UI first so the database never has to refuse (the TBD publish rule is the example).
 - Dates: the shared `DatePicker` only. Popovers: through `Portal` at fixed coordinates, flipped near edges, never clipped. Info hints open on hover. Long committee names show the acronym with the full name beneath (`committeeDisplayName`).
-- i18n: four locales in `src/lib/translations.ts` (en, es, fr, ar with RTL). The DB stores English; translate at render. Rules and the list of hand-maintained bypasses are in `.claude/TRANSLATIONS.md`, which must be updated when keys change. Manage surfaces are English-only by convention.
+- i18n: four locales in `src/lib/translations.ts` (en, es, fr, ar with RTL), **sessions only** (18 Sep 2026): `LanguageProvider` returns the stored language only on a sessions route (`src/lib/sessionRoutes.ts`) and English everywhere else, and only sessions surfaces show a picker. Every sessions picker offers "Request a language" (`LanguageRequestDialog`: language, email, Rules of Procedure file into the private `language-requests` bucket, a `language_requests` row (RLS insert-only, trigger rate limit 3 per email / 60 per hour, file must exist), and a team email to wearegavelling@gmail.com through `email_outbox`). The DB stores English; translate at render. Rules and the list of hand-maintained bypasses are in `.claude/TRANSLATIONS.md`, which must be updated when keys change. Manage surfaces are English-only by convention.
 - Polish reference: `.claude/skills/make-interfaces-feel-better/SKILL.md` (the only UI skill installed in this repo).
 
 ---

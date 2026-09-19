@@ -8,9 +8,10 @@ import { createCommittee as createCommitteeInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { UN_COUNTRIES, getCountryByName, getCountryDisplayName, countryMatchRank, findCountryFlexible, compareCountryNames } from '@/lib/countries';
 import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS, ICC_ROLES, ICJ_ROLES, CRISIS_MEMBERS, FIFA_MEMBERS, HOUSE_OF_COMMONS_ROLES, US_SENATE_MEMBERS, PRESS_ROLES, EUROPEAN_PARLIAMENT_MEMBERS } from '@/lib/presets';
-import { Check, ChevronLeft, ClipboardList, CornerDownLeft, Globe, Megaphone, PenLine, Plus, Search, UserRound, Wand2, X } from 'lucide-react';
+import { Check, ChevronLeft, ClipboardList, CornerDownLeft, Globe, Languages, Megaphone, PenLine, Plus, Search, UserRound, Wand2, X } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import Loader from '@/components/Loader';
+import LanguageRequestDialog from '@/components/LanguageRequestDialog';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCommitteeDisplayName, committeeDisplayName, deriveCommitteeAcronym, matchPresetEmblem } from '@/lib/presetNames';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
@@ -106,7 +107,7 @@ function getPresetAcronym(name: string, lang: string): string {
   return '';
 }
 
-const BUNDLES: Record<string, { label: string; acronym: string; logoPath?: string; members: string[] }> = {
+const BUNDLES: Record<string, { label: string; acronym: string; logoPath?: string; name?: string; members: string[] }> = {
   P5:         { label: 'P5',          acronym: 'UNSC', logoPath: '/logos/un.svg',            members: ['China', 'France', 'Russia', 'United Kingdom', 'United States'] },
   G7:         { label: 'G7',          acronym: 'G7',   logoPath: '/logos/g7.png',            members: ['Canada', 'France', 'Germany', 'Italy', 'Japan', 'United Kingdom', 'United States'] },
   BRICS:      { label: 'BRICS+',      acronym: 'BRICS', logoPath: '/logos/brics.png',        members: ['Brazil', 'Russia', 'India', 'China', 'South Africa', 'Egypt', 'Ethiopia', 'Iran', 'Saudi Arabia', 'United Arab Emirates'] },
@@ -114,6 +115,19 @@ const BUNDLES: Record<string, { label: string; acronym: string; logoPath?: strin
   EU:         { label: 'EU',          acronym: 'EU',   logoPath: '/logos/eu.png',            members: ['Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden'] },
   NATO:       { label: 'NATO',        acronym: 'NATO', logoPath: '/logos/nato.png',          members: ['Albania', 'Belgium', 'Bulgaria', 'Canada', 'Croatia', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Iceland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Montenegro', 'Netherlands', 'North Macedonia', 'Norway', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'Türkiye', 'United Kingdom', 'United States'] },
   ASEAN:      { label: 'ASEAN',       acronym: 'ASEAN', logoPath: '/logos/asean.png',        members: ['Brunei', 'Cambodia', 'Indonesia', 'Laos', 'Malaysia', 'Myanmar', 'Philippines', 'Singapore', 'Thailand', 'Timor-Leste', 'Vietnam'] },
+  // Added 18 Sep 2026 (owner: "think of 3 more bundles"). Membership as of Sep 2026:
+  // UNSC26 = the 2026 Council: the P5, the members elected for 2025-26 (Denmark, Greece,
+  //   Pakistan, Panama, Somalia) and for 2026-27 (Bahrain, Colombia, DR Congo, Latvia, Liberia).
+  // AU = all 55 member states, INCLUDING any suspended from AU activities after a coup (in
+  //   recent years Burkina Faso, Guinea, Madagascar, Mali, Niger, Sudan; Gabon was readmitted
+  //   in 2025; the list changes, so none are dropped): suspension is not expulsion,
+  //   and a simulation normally seats them (the chair removes a seat in one tap). The Sahrawi
+  //   Arab Democratic Republic is a full AU member but not a UN state, so it is added as a
+  //   custom seat.
+  // OPEC = the 12 current members (Angola left on 1 Jan 2024); OPEC+ partners are not members.
+  UNSC26:     { label: 'UNSC 2026',   acronym: 'UNSC', logoPath: '/logos/un.svg',            members: ['China', 'France', 'Russia', 'United Kingdom', 'United States', 'Bahrain', 'Colombia', 'DR Congo', 'Denmark', 'Greece', 'Latvia', 'Liberia', 'Pakistan', 'Panama', 'Somalia'] },
+  AU:         { label: 'AU',          acronym: 'AU',   logoPath: '/logos/au.svg', name: 'African Union',            members: ['Algeria', 'Angola', 'Benin', 'Botswana', 'Burkina Faso', 'Burundi', 'Cabo Verde', 'Cameroon', 'Central African Republic', 'Chad', 'Comoros', 'Congo', "Côte d'Ivoire", 'DR Congo', 'Djibouti', 'Egypt', 'Equatorial Guinea', 'Eritrea', 'Eswatini', 'Ethiopia', 'Gabon', 'Gambia', 'Ghana', 'Guinea', 'Guinea-Bissau', 'Kenya', 'Lesotho', 'Liberia', 'Libya', 'Madagascar', 'Malawi', 'Mali', 'Mauritania', 'Mauritius', 'Morocco', 'Mozambique', 'Namibia', 'Niger', 'Nigeria', 'Rwanda', 'Sahrawi Arab Democratic Republic', 'São Tomé and Príncipe', 'Senegal', 'Seychelles', 'Sierra Leone', 'Somalia', 'South Africa', 'South Sudan', 'Sudan', 'Tanzania', 'Togo', 'Tunisia', 'Uganda', 'Zambia', 'Zimbabwe'] },
+  OPEC:       { label: 'OPEC',        acronym: 'OPEC',                                        members: ['Algeria', 'Congo', 'Equatorial Guinea', 'Gabon', 'Iran', 'Iraq', 'Kuwait', 'Libya', 'Nigeria', 'Saudi Arabia', 'United Arab Emirates', 'Venezuela'] },
   ArabLeague: { label: 'Arab League', acronym: 'LAS',  logoPath: '/logos/arab-league.png',  members: ['Algeria', 'Bahrain', 'Comoros', 'Djibouti', 'Egypt', 'Iraq', 'Jordan', 'Kuwait', 'Lebanon', 'Libya', 'Mauritania', 'Morocco', 'Oman', 'Palestine', 'Qatar', 'Saudi Arabia', 'Somalia', 'Sudan', 'Syria', 'Tunisia', 'United Arab Emirates', 'Yemen'] },
 };
 
@@ -466,6 +480,7 @@ function CreatePageInner() {
   const t = useT();
   const { language, setLanguage } = useLanguage();
   const [showLangMenu, setShowLangMenu] = useState(false);
+  const [requestLangOpen, setRequestLangOpen] = useState(false);
   const router = useRouter();
   const { updateSetting } = useSettingsStore();
   // Chairs: committed chips plus the text still in the field. `chairNames` keeps the
@@ -646,9 +661,21 @@ function CreatePageInner() {
                 {language === code && <Check size={14} strokeWidth={2.6} className="ms-auto" style={{ color: C.goldDeep }} />}
               </button>
             ))}
+            <div className="my-1 h-px" style={{ backgroundColor: 'rgba(27,56,40,0.1)' }} />
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => { setShowLangMenu(false); setRequestLangOpen(true); }}
+              className="w-full flex items-center gap-2.5 h-10 px-3 rounded-xl text-start transition-colors hover:bg-[#1B3828]/[0.05] focus:outline-none"
+              style={{ fontFamily: OUTFIT, color: C.forest, fontWeight: 700, fontSize: '13px' }}
+            >
+              <Languages size={14} strokeWidth={2.2} style={{ width: 20 }} aria-hidden />
+              <span>{t('lang_request_open')}</span>
+            </button>
           </div>
         </>
       )}
+      <LanguageRequestDialog open={requestLangOpen} onClose={() => setRequestLangOpen(false)} />
     </div>
   );
 
@@ -690,7 +717,8 @@ function CreatePageInner() {
     : missingName && missingTopic ? t('create_cta_needs')
     : missingName ? t('create_cta_needs_name')
     : missingTopic ? t('create_cta_needs_topic')
-    : delegateCount > 0 ? (observerCount > 0 ? `${countLabel}, ${observerLabel}` : countLabel)
+    // Never the count on the button (owner, 18 Sep 2026): the roster above already states it.
+    : delegateCount > 0 ? null
     : t('create_cta_sub_later');
   // Incomplete: the press takes the chair to the first missing field instead of doing nothing.
   const onStart = () => {
@@ -720,11 +748,11 @@ function CreatePageInner() {
   const sortedDelegates = [...delegates].sort((a, b) => compareCountryNames(a, b, language));
 
   return (
-    <div className="relative min-h-screen w-full lg:flex lg:h-dvh lg:min-h-0 lg:flex-col lg:overflow-hidden" style={{ backgroundColor: C.page, WebkitFontSmoothing: 'antialiased', fontFamily: OUTFIT }}>
+    <div className="create-root relative min-h-screen w-full lg:flex lg:h-dvh lg:min-h-0 lg:flex-col lg:overflow-hidden" style={{ backgroundColor: C.page, WebkitFontSmoothing: 'antialiased', fontFamily: OUTFIT }}>
       <PageBackdrop />
       <CreateStyles />
 
-      <nav className="relative z-20 mx-auto flex h-14 w-full max-w-[1440px] flex-shrink-0 items-center gap-2 px-4 sm:gap-3 sm:px-6">
+      <nav className="relative z-20 mx-auto flex h-14 lg:h-12 w-full max-w-[1440px] flex-shrink-0 items-center gap-2 px-4 sm:gap-3 sm:px-6">
         <Link href="/sessions" className="flex flex-shrink-0 items-center focus:outline-none">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/GavellingLogo.png" alt="Gavelling" className="h-auto w-[112px] object-contain sm:w-[132px]" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
@@ -743,12 +771,13 @@ function CreatePageInner() {
         <ProfileAvatarMenu size={44} />
       </nav>
 
-      <main className="relative z-10 mx-auto grid w-full max-w-[1440px] grid-cols-[minmax(0,1fr)] gap-4 px-4 pb-4 sm:px-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,11fr)_minmax(0,10fr)] lg:gap-5 lg:pb-5">
+      <main className="relative z-10 mx-auto grid w-full max-w-[1440px] grid-cols-[minmax(0,1fr)] gap-4 px-4 pb-4 sm:px-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,11fr)_minmax(0,10fr)] lg:grid-rows-[minmax(0,1fr)] lg:gap-5 lg:pb-5">
         {/* ── Left: 1. Committee, then 2. Delegations (the controls) ─────────── */}
         {/* No conference sign-in prompt here (17 Sep 2026, owner: "not needed").
             A chair setting up a room is not looking for the organiser side. */}
         <Panel
           step={1}
+          className="lg:min-h-0"
           labelledBy="create-step-committee"
           title={t('create_step_committee')}
         >
@@ -763,18 +792,20 @@ function CreatePageInner() {
             chairsLine={chairsLine}
           />
 
-          <div className="mt-3.5 flex flex-shrink-0 flex-col gap-2">
-            <div>
+          {/* Name and topic side by side from sm, chairs across the row beneath (18 Sep 2026,
+              to give the paste field its height). */}
+          <div className="mt-2.5 grid flex-shrink-0 grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="min-w-0">
               <SmallLabel htmlFor="create-committee-name">{t('create_committee_name')}</SmallLabel>
               <CommitteeNameInput id="create-committee-name" value={committeeName} onChange={setCommitteeName} onPresetSelect={handleCommitteePreset} />
             </div>
-            <div>
+            <div className="min-w-0">
               <SmallLabel htmlFor="create-topic">{t('create_topic')}</SmallLabel>
               <input id="create-topic" type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
                 placeholder={language === 'ar' ? 'مثال: الحق في التعليم' : language === 'fr' ? "ex. Le droit à l'éducation" : language === 'es' ? 'ej. El derecho a la educación' : 'e.g. The right to education'}
                 className={INPUT_CLS} />
             </div>
-            <div>
+            <div className="min-w-0 sm:col-span-2">
               <SmallLabel htmlFor="create-chair-name">
                 {t('create_chairs')} <span style={{ fontWeight: 600, color: C.inkSoft, letterSpacing: '0.06em' }}>{t('create_optional')}</span>
               </SmallLabel>
@@ -796,13 +827,15 @@ function CreatePageInner() {
           </div>
 
           {/* ── 2. Delegations: add bar, quick bundles, paste. The list is on the right. */}
-          <section aria-labelledby="create-step-delegations" className="mt-4 flex flex-shrink-0 flex-col" style={{ paddingTop: 16, boxShadow: 'inset 0 1px 0 rgba(27,56,40,0.08)' }}>
-            <StepHeading step={2} labelledBy="create-step-delegations" title={t('create_step_delegations')} />
+          <section aria-labelledby="create-step-delegations" className="mt-2.5 flex flex-shrink-0 flex-col lg:min-h-0 lg:flex-1" style={{ paddingTop: 10, boxShadow: 'inset 0 1px 0 rgba(27,56,40,0.08)' }}>
+            {/* From lg the step heading and the add bar share one row (18 Sep 2026). */}
+            <div className="flex flex-shrink-0 flex-col lg:flex-row lg:items-center lg:gap-4">
+            <StepHeading step={2} labelledBy="create-step-delegations" title={t('create_step_delegations')} className="lg:mb-0 lg:flex-shrink-0" />
 
             {/* Add a country: the one add path (+ button, Enter, first typeahead row). */}
-            <div ref={addWrapRef} className="relative z-30 flex-shrink-0">
+            <div ref={addWrapRef} className="relative z-30 flex-shrink-0 lg:min-w-0 lg:flex-1">
               <label htmlFor="create-add-country" className="sr-only">{t('create_add_country')}</label>
-              <div className="flex h-[48px] items-center gap-2 rounded-[14px] bg-white/80 ps-3.5 pe-1.5 shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] transition-[box-shadow] duration-150 focus-within:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] lg:h-[46px]">
+              <div className="flex h-[48px] items-center gap-2 rounded-[14px] bg-white/80 ps-3.5 pe-1.5 shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] transition-[box-shadow] duration-150 focus-within:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] lg:h-[42px]">
                 <Search size={17} strokeWidth={2.2} className="shrink-0" style={{ color: C.inkSoft }} />
                 <input id="create-add-country" type="text" value={search} onChange={(e) => onSearchChange(e.target.value)}
                   autoComplete="off"
@@ -845,18 +878,23 @@ function CreatePageInner() {
               )}
             </div>
 
-            {/* Quick bundles. One row that scrolls sideways on a phone, wraps from sm.
+            </div>
+
+            {/* Quick bundles. One row that scrolls sideways on a phone, wraps from sm (two rows
+                at 1280 wide; 18 Sep 2026, owner: "the bundles are slightly clipped, you can
+                have 2 rows"). 32px chips, and a chip with no logo has no empty disc.
                 The Paste a list toggle used to sit at the end of this row; the paste
                 area is now always on screen (below), so there is nothing to open. */}
-            <div className="mt-3 flex-shrink-0">
+            <div className="mt-2 flex-shrink-0">
               <p id="create-presets-label" className="sr-only">{t('create_quick_bundles')}</p>
               <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 [&::-webkit-scrollbar]:hidden">
                 <div role="group" aria-labelledby="create-presets-label" className="contents">
                   {Object.entries(BUNDLES).map(([key, bundle]) => (
-                    <button key={key} type="button" onClick={() => addBundle(key)} title={t('create_quick_bundles')}
-                      className="group flex h-9 flex-shrink-0 items-center gap-1.5 rounded-full bg-[#1B3828]/[0.055] ps-1 pe-2.5 text-[12.5px] font-bold text-[#1B3828] shadow-[inset_0_0_0_1px_rgba(27,56,40,0.10)] transition-[background-color,color,box-shadow,transform] duration-150 hover:bg-[#1B3828] hover:text-[#EED98A] hover:shadow-[0_4px_14px_rgba(27,56,40,0.22)] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]">
-                      <span className="flex shrink-0 items-center justify-center rounded-full bg-white" style={{ width: 26, height: 26, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)' }}>
-                        {bundle.logoPath ? (
+                    <button key={key} type="button" onClick={() => addBundle(key)} title={bundle.name ? `${bundle.name} · ${t('create_quick_bundles')}` : t('create_quick_bundles')}
+                      className={`group flex h-8 flex-shrink-0 items-center gap-1.5 rounded-full bg-[#1B3828]/[0.055] ${bundle.logoPath ? 'ps-1' : 'ps-3'} pe-2.5 text-[12.5px] font-bold text-[#1B3828] shadow-[inset_0_0_0_1px_rgba(27,56,40,0.10)] transition-[background-color,color,box-shadow,transform] duration-150 hover:bg-[#1B3828] hover:text-[#EED98A] hover:shadow-[0_4px_14px_rgba(27,56,40,0.22)] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]`}>
+                      {bundle.logoPath && (
+                      <span className="flex shrink-0 items-center justify-center rounded-full bg-white" style={{ width: 24, height: 24, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)' }}>
+                        {(
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={bundle.logoPath} alt="" width={17} height={17} className="object-contain" onError={(e) => {
                             // Two bundles (G7, BRICS+) name logos that are not in /public: drop the empty disc.
@@ -865,8 +903,9 @@ function CreatePageInner() {
                             if (disc) disc.style.display = 'none';
                             if (chip) chip.style.paddingInlineStart = '12px';
                           }} />
-                        ) : null}
+                        )}
                       </span>
+                      )}
                       <span>{bundle.label}</span>
                       <span className="text-[11px] font-semibold tabular-nums text-[#544B3E] transition-colors group-hover:text-[#EED98A]/80">+{bundle.members.length}</span>
                     </button>
@@ -877,30 +916,36 @@ function CreatePageInner() {
 
             {/* Paste a list: always here, never behind a button (17 Sep 2026, owner:
                 "make the paste a list removed, but add the entire tab already").
-                Same matching as before: Auto-match opens the review modal. */}
-            <div className="mt-3 flex-shrink-0">
-              <div className="mb-1.5 flex items-center gap-1.5" style={{ color: C.inkSoft }}>
+                Same matching as before: Auto-match opens the review modal. Big, and from lg
+                it takes every pixel down to the foot of the panel (18 Sep 2026, owner: "make
+                the paste a list section big, extending to the bottom of the screen"). */}
+            <div className="mt-2 flex flex-shrink-0 flex-col lg:min-h-0 lg:flex-1">
+              {/* A one-line label, then the field takes every pixel below it. Auto-match sits
+                  INSIDE the field's lower corner (18 Sep 2026, owner: the box "must be genuinely
+                  big"), so it costs no height. The hint stays the field's tooltip and its
+                  description for screen readers. */}
+              <div className="mb-1.5 flex flex-shrink-0 items-center gap-1.5" style={{ color: C.inkSoft }}>
                 <ClipboardList size={14} strokeWidth={2.1} />
-                <label htmlFor="create-paste" className="uppercase" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em' }}>
+                <label htmlFor="create-paste" className="uppercase" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', lineHeight: 1.3 }}>
                   {t('create_paste_toggle')}
                 </label>
               </div>
-              <textarea id="create-paste" value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
-                placeholder={t('create_paste_placeholder')}
-                title={t('create_paste_hint')}
-                rows={3}
-                className="block w-full resize-none rounded-[14px] bg-white/80 px-3.5 py-2.5 lg:h-[58px] lg:py-2 text-base leading-relaxed text-[#1C1410] placeholder-[#8A7C6B] shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] transition-[box-shadow] duration-150 focus:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] focus:outline-none sm:text-[14px]" />
-              <div className="mt-2 flex flex-wrap items-center gap-3">
+              <div className="relative flex flex-col lg:min-h-0 lg:flex-1">
+                <textarea id="create-paste" value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
+                  placeholder={t('create_paste_placeholder')}
+                  title={t('create_paste_hint')}
+                  aria-describedby="create-paste-hint"
+                  rows={8}
+                  className="block w-full resize-none rounded-[14px] bg-white/80 px-3.5 pt-3 pb-14 lg:h-auto lg:min-h-[120px] lg:flex-1 text-base leading-relaxed text-[#1C1410] placeholder-[#8A7C6B] shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] transition-[box-shadow] duration-150 focus:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] focus:outline-none sm:text-[14px]" />
                 <button type="button" onClick={handlePaste} disabled={!pasteText.trim()}
-                  className="flex h-9 items-center gap-2 rounded-xl px-3.5 text-[13px] font-extrabold transition-[background-color,color,transform,opacity] duration-150 enabled:hover:bg-[#1B3828] enabled:hover:text-[#EED98A] enabled:active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none"
-                  style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: C.forest, boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.14)' }}>
+                  className="absolute bottom-2.5 end-2.5 flex h-9 items-center gap-2 rounded-xl px-3.5 text-[13px] font-extrabold transition-[background-color,color,transform,opacity] duration-150 enabled:hover:bg-[#2A5A3C] enabled:active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus-visible:shadow-[0_0_0_2px_#EDE7D8,0_0_0_4px_#1B3828]"
+                  style={{ backgroundColor: C.forest, color: C.gold, boxShadow: '0 2px 8px rgba(27,56,40,0.18)' }}>
                   <Wand2 size={15} strokeWidth={2.2} />
                   {stripArrow(t('create_auto_match'))}
                 </button>
-                {pasteError
-                  ? <p role="alert" className="text-[13px] font-semibold" style={{ color: '#8A6414' }}>{pasteError}</p>
-                  : <p className="min-w-0 flex-1 text-[12.5px] leading-snug" style={{ color: C.inkSoft, textWrap: 'pretty' }}>{t('create_paste_hint')}</p>}
               </div>
+              <p id="create-paste-hint" className="sr-only">{t('create_paste_hint')}</p>
+              {pasteError && <p role="alert" className="mt-1.5 flex-shrink-0 text-[13px] font-semibold" style={{ color: '#8A6414' }}>{pasteError}</p>}
             </div>
           </section>
         </Panel>
@@ -988,6 +1033,7 @@ function CreatePageInner() {
                           label={`${t('create_observer_toggle')}: ${display}`}
                           pressed={isObserver}
                           tone={isObserver ? 'gold' : 'neutral'}
+                          caption={isObserver ? t('rollcall_observer') : undefined}
                         >
                           <Megaphone size={16} strokeWidth={isObserver ? 2.2 : 1.8} />
                         </RowIconButton>

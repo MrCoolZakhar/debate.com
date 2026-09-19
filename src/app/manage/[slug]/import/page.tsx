@@ -43,6 +43,24 @@ function roleLabel(role: string) {
   return map[role] ?? role;
 }
 
+// Delegates (and head delegates) who will hold no allocation after this import,
+// split by why, so the preview can warn before anything is written. KenyaMUN
+// (18 Sep 2026) imported 286 delegates with no allocation because the
+// committee column did not match, and nothing on screen said so loudly.
+function countWithoutAllocation(rows: ClassifiedImportRow[]) {
+  let total = 0, unresolvedCommittee = 0, unresolvedCountry = 0, noCommittee = 0;
+  for (const r of rows) {
+    if (r.cls === 'error') continue;
+    if (r.resolved.role !== 'delegate' && r.resolved.role !== 'head-delegate') continue;
+    if (r.allocatedAfterImport) continue;
+    total++;
+    if (r.raw.committee.trim() && !r.resolved.committeeLabel) unresolvedCommittee++;
+    else if (!r.raw.committee.trim() || !r.raw.country.trim()) noCommittee++;
+    else unresolvedCountry++;
+  }
+  return { total, unresolvedCommittee, unresolvedCountry, noCommittee };
+}
+
 // ── Row outcome (post-execute) ──────────────────────────────────────────────
 
 type RowOutcome = 'imported' | 'imported-no-allocation' | 'updated' | 'unchanged' | 'skipped';
@@ -560,12 +578,24 @@ export default function ImportPage() {
   async function handleImportClick() {
     const importableCount = classifiedRows.filter(r => r.cls !== 'error').length;
     if (importableCount === 0) return;
+    const noAlloc = countWithoutAllocation(classifiedRows);
+    const baseBody = acceptMode === 'submitted'
+      ? 'This creates applications immediately (status: submitted, for the organizer to accept in Applications). Rows marked ERROR will be skipped.'
+      : 'This creates applications immediately (status: accepted, or assigned when allocated). Rows marked ERROR will be skipped.';
     const { confirmed } = await confirm({
       title: `Import ${importableCount} row${importableCount === 1 ? '' : 's'}?`,
-      body: acceptMode === 'submitted'
-        ? 'This creates applications immediately (status: submitted, for the organizer to accept in Applications). Rows marked ERROR will be skipped.'
-        : 'This creates applications immediately (status: accepted, or assigned when allocated). Rows marked ERROR will be skipped.',
-      confirmLabel: 'Import',
+      body: noAlloc.total > 0 ? (
+        <>
+          <span className="block mb-2 font-semibold" style={{ color: '#8B2020' }}>
+            {noAlloc.total} {noAlloc.total === 1 ? 'delegate' : 'delegates'} will be imported without a committee and country.
+            {noAlloc.unresolvedCommittee > 0 && ` ${noAlloc.unresolvedCommittee} of them name a committee that did not match.`}
+          </span>
+          <span className="block mb-2">Emails that mention their country or committee will not have one to show. Cancel to fix the file, or import and assign them later.</span>
+          <span className="block">{baseBody}</span>
+        </>
+      ) : baseBody,
+      confirmLabel: noAlloc.total > 0 ? 'Import anyway' : 'Import',
+      danger: noAlloc.total > 0,
     });
     if (!confirmed) return;
     if (importingRef.current) return;
@@ -611,6 +641,7 @@ export default function ImportPage() {
 
   const summary = summarizeRows(classifiedRows);
   const importableCount = summary.valid + summary.warning;
+  const noAllocation = countWithoutAllocation(classifiedRows);
   // Error rows whose problem is the email address itself, so the summary can
   // reassure the organizer they are fixable here rather than a dead end.
   const emailErrorCount = classifiedRows.filter(r => r.reasons.some(m => m.startsWith('Invalid email address'))).length;
@@ -842,6 +873,27 @@ export default function ImportPage() {
 
           <RowTable rows={classifiedRows} committees={contextCommittees} />
 
+          {noAllocation.total > 0 && (
+            <div
+              role="alert"
+              className="flex items-start gap-3 rounded-xl px-4 py-3.5 mt-6"
+              style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1.5px solid rgba(139,32,32,0.45)' }}
+            >
+              <AlertTriangle size={18} style={{ color: '#8B2020', flexShrink: 0, marginTop: 1 }} />
+              <div className="flex flex-col gap-1">
+                <p className="text-sm font-bold" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+                  {noAllocation.total} {noAllocation.total === 1 ? 'delegate' : 'delegates'} will be imported without a committee and country.
+                </p>
+                <p className="text-xs" style={{ color: '#6B2A1E', fontFamily: OUTFIT, lineHeight: 1.55 }}>
+                  {noAllocation.unresolvedCommittee > 0 && `${noAllocation.unresolvedCommittee} name a committee that did not match any of yours. `}
+                  {noAllocation.unresolvedCountry > 0 && `${noAllocation.unresolvedCountry} have a committee but a country that could not be placed. `}
+                  {noAllocation.noCommittee > 0 && `${noAllocation.noCommittee} have no committee or country in the file. `}
+                  Their Notes column says why. Emails that mention a country or committee will have nothing to show for them until they are assigned.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center gap-3 mt-6">
             <button
               onClick={handleImportClick}
@@ -1067,9 +1119,25 @@ function RowTable({ rows, committees }: { rows: ClassifiedImportRow[]; committee
                       {r.resolved.countryName}
                       {showSeat && <span style={{ color: '#9A8A78' }}>&middot; Seat {r.resolved.seat}</span>}
                     </span>
+                  ) : r.resolved.committeeLabel ? (
+                    // The committee matched, the country did not place (see Notes).
+                    <span>
+                      <span className="font-semibold">{r.resolved.committeeLabel}</span>
+                      {r.allocatedAfterImport
+                        ? <span style={{ color: '#9A8A78' }}>, keeps current allocation</span>
+                        : <span style={{ color: '#9A6B2F' }}>{r.raw.country ? `, ${r.raw.country.trim()} (not placed)` : ', no country'}</span>}
+                    </span>
                   ) : r.raw.committee ? (
-                    <span style={{ color: '#9A8A78' }}>{r.raw.committee}{r.raw.country ? `, ${r.raw.country}` : ''}</span>
+                    <span className="inline-flex items-center gap-1" style={{ color: '#8B2020' }}>
+                      <AlertTriangle size={11} style={{ flexShrink: 0 }} />
+                      {r.raw.committee}{r.raw.country ? `, ${r.raw.country}` : ''}
+                    </span>
                   ) : '—'}
+                  {r.resolved.committeeLabel && (r.resolved.committeeMatchedVia === 'parenthetical' || r.resolved.committeeMatchedVia === 'normalised') && (
+                    <span className="block mt-0.5" style={{ fontSize: 10.5, color: '#9A8A78' }} title={r.raw.committee}>
+                      matched from &ldquo;{r.raw.committee.trim().length > 42 ? `${r.raw.committee.trim().slice(0, 40)}…` : r.raw.committee.trim()}&rdquo;
+                    </span>
+                  )}
                 </td>
                 <td className="px-3 py-2.5" style={{ maxWidth: 280 }}>
                   {r.reasons.length > 0 ? (

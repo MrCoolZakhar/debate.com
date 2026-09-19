@@ -3,33 +3,48 @@
 `xx.svg`, one per ISO 3166-1 alpha-2 code (lowercase), plus the few special
 two-letter codes the source ships (`eu`, `un`, `xk`, `xx`).
 
-Source: [circle-flags](https://github.com/HatScripts/circle-flags) by HatScripts,
-npm `circle-flags@2.8.3`, the `flags/??.svg` files copied unmodified, EXCEPT the
-flags listed below.
+Two MIT sources, chosen flag by flag (18 Sep 2026, "some flags in the circles
+are still weird, Argentina, Cyprus"):
 
-### Overrides from flag-icons (17 Sep 2026)
+### 1. flag-icons (the default for every country, observer and entity we list)
 
-circle-flags draws national emblems as flat pictograms, and for these flags the
-pictogram was wrong or unrecognisable (Afghanistan had an invented ring and a
-bulging red band instead of the national emblem, `un.svg` was a ship's wheel
-instead of the UN world map and olive branches, the Holy See had no tiara,
-Iran had battlements instead of the takbir, Brazil had no stars or motto, and so
-on). These 22 files are the square `flags/1x1/xx.svg` artwork from
-[flag-icons](https://github.com/lipis/flag-icons) by Panayiotis Lipiridis,
-npm `flag-icons@7.5.0`, with only `width="512" height="512"` added to the root
-element. They are 512x512 squares with the emblem centred, so `CircleFlag`'s
-round clip draws them the same way:
+[flag-icons](https://github.com/lipis/flag-icons) by Panayiotis Lipiridis, npm
+`flag-icons@7.5.0`, the square `flags/1x1/xx.svg` artwork, with only
+`width="512" height="512"` added to the root element. It draws the real flag:
+official colours and the real emblems. circle-flags redraws every flag in one
+flat palette (#0052b4 blue, #338af3 sky, #d80027 red, #6da544 / #496e2d green,
+#ffda44 yellow), which made many flags simply wrong: Argentina a mid blue with a
+faceless twelve-point star for the Sun of May, Cyprus a yellow blob in a green
+horseshoe, Azerbaijan and the Bahamas the wrong blues, Belarus without its
+ornament band, Bolivia without its arms, Bosnia, Botswana, Bulgaria, Bangladesh,
+Algeria in the wrong shades, Brunei, Cambodia, Kenya, Angola as crude pictograms.
 
-`ad al af br bt bz do ec eg er gt ht ir kz md me mt pt sm sv un va`
+Used for all 202 codes in `UN_COUNTRIES` plus `un` and `eh`, EXCEPT the lists
+below. Where flag-icons uses a pure screen primary (#ff0, #0c0, #00f, `red`),
+the large fields were set to the flag's official shades:
+`bw cg ci cn dj gm gn jm jo kg km ml sd sl sn tz`.
 
-Afghanistan is the black-red-green tricolour with the emblem of the Islamic
-Republic, the flag the Afghan seat at the UN still uses. Any other flag stays
-circle-flags; do not replace a file with a newer circle-flags copy without
-checking this list.
+Three flag-icons files had an emblem the round clip cut through, and the emblem
+group was moved inward (a `transform` on that one group, nothing redrawn):
+`uy` (the Sun of May), `om` (the national emblem), `fj` (the shield).
 
-Each file is a 512x512 square whose artwork is already designed for a circle
-(emblems re-centred, masked to a disc), so it fills a round frame edge to edge.
-This is the same approach MUNCommand takes with its own bespoke round flags.
+### 2. circle-flags, recoloured (canton flags the square crop cuts)
+
+[circle-flags](https://github.com/HatScripts/circle-flags) by HatScripts, npm
+`circle-flags@2.8.3`. Its designers moved each canton inside the disc, which a
+square crop cannot do, so for these the geometry is circle-flags and the colours
+were replaced with the official ones (and #eee white with #fff):
+`cf ck li my sb sg to tv us uz ws`.
+
+(Australia, New Zealand, Niue and Greece keep flag-icons: their canton is cut at
+the rim exactly as the real flag would be, and nothing in it becomes illegible.)
+
+Files for codes we never list (territories, `xx`, etc.) are still the untouched
+circle-flags copies. Before replacing ANY file with a newer copy from either
+package, render it in a circle at 26, 52 and 164 px and compare.
+
+Each file is a 512x512 square, so it fills a round frame edge to edge. Nepal is
+the one flag that is not a rectangle and shows the page ground around it.
 
 Render them ONLY through `src/components/CircleFlag.tsx` (URL helper:
 `getCircleFlagUrl` in `src/lib/countries.ts`). Rectangular flags stay on

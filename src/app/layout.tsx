@@ -7,6 +7,7 @@ import DemoGate from '@/components/DemoGate';
 import CreditsWelcomeGate from '@/components/CreditsWelcomeGate';
 import SetupReminderGate from '@/components/SetupReminderGate';
 import CompleteBasicsGate from '@/components/CompleteBasicsGate';
+import AuthModalHost from '@/components/auth/AuthModal';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://gavelling.com'),
@@ -130,6 +131,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <LanguageProvider>
             {children}
             <DemoGate />
+            {/* "Log in or sign up" is a pop-up on every page (src/lib/authModal.ts).
+                While it is open the three gates below stand down. */}
+            <AuthModalHost />
             {/* CompleteBasicsGate takes precedence: the two gates after it stay
                 closed while it is checking or open (src/lib/basicsGateState.ts). */}
             <CompleteBasicsGate />

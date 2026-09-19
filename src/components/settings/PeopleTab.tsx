@@ -146,7 +146,6 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
       <ul aria-label={t('stg_people_chairs')} className="flex flex-wrap stg-rise" style={{ listStyle: 'none', margin: '2px 0 22px', padding: 0, gap: '14px 22px' }}>
         {chairNames.map((name) => {
           const isHead = name === head;
-          const me = !!myChairName && name === myChairName;
           const offline = !isHead && !!onlineChairs && !onlineChairs.has(name);
           const state = isHead ? t('stg_currently_moderating') : offline ? t('stg_currently_offline') : t('stg_currently_commenting');
           return (
@@ -169,7 +168,7 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
                 {name}
               </span>
               <span className="block" style={{ fontSize: T.caption, fontWeight: W.label, color: isHead ? '#7A5812' : K.inkSoft, lineHeight: LH.body }}>
-                {me ? `${t('gavel_you')} ` : ''}{state}
+                {state}
               </span>
             </li>
           );

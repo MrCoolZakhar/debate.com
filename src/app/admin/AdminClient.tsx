@@ -19,6 +19,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { NEU, OUTFIT, EASE, NEU_GRADIENTS, NeuIconDisc } from '@/components/neu';
 import ConferencesTab, { type AdminConferenceRow } from './ConferencesTab';
+import { isPastConference } from './conferenceDates';
 import { outstandingPledgedSpotsByConference, type PledgeRow } from '@/lib/pledgedSpots';
 
 // ── Sibling tabs. Each is self-contained: no required props, fetches its own
@@ -60,6 +61,8 @@ export default function AdminClient() {
    *  function's signature means dropping and recreating it), so it is a
    *  follow-up read, netted off client side. */
   const [pledged, setPledged] = useState<Record<string, number>>({});
+  /** Conference id → organizer_id, so a click on the organiser opens their account. */
+  const [organizerIds, setOrganizerIds] = useState<Record<string, string | null>>({});
   const [denied, setDenied] = useState(false);
   const [tab, setTab] = useState<TabKey>('data');
 
@@ -113,6 +116,7 @@ export default function AdminClient() {
       organizerOf[c.id] = c.organizer_id;
     }
     setLogos(logoMap);
+    setOrganizerIds(organizerOf);
 
     const organizerIds = Array.from(new Set(Object.values(organizerOf).filter((x): x is string => !!x)));
     if (organizerIds.length === 0) return;
@@ -129,7 +133,9 @@ export default function AdminClient() {
 
   useEffect(() => { if (!authLoading) void load(); }, [authLoading, load]);
 
-  const counts = useMemo(() => ({ conferences: rows?.length ?? 0 }), [rows]);
+  // The tab badge counts current and upcoming conferences only; past ones have
+  // their own section inside the tab and are not part of the total.
+  const counts = useMemo(() => ({ conferences: (rows ?? []).filter(r => !isPastConference(r)).length }), [rows]);
 
   if (authLoading || (!rows && !denied)) {
     return (
@@ -240,7 +246,7 @@ export default function AdminClient() {
             until a staff member actually opens it. */}
         <div role="tabpanel" id={`admin-panel-${tab}`} aria-labelledby={`admin-tab-${tab}`}>
           {tab === 'data' && <DataTab />}
-          {tab === 'conferences' && <ConferencesTab rows={rows} logos={logos} avatars={avatars} pledged={pledged} />}
+          {tab === 'conferences' && <ConferencesTab rows={rows} logos={logos} avatars={avatars} pledged={pledged} organizerIds={organizerIds} onChanged={() => void load()} />}
           {tab === 'users' && <UsersTab />}
           {tab === 'activity' && <ActivityTab />}
           {tab === 'live' && <LiveCommitteesTab />}

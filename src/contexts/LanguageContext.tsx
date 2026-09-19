@@ -1,22 +1,32 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { usePathname } from 'next/navigation';
 import { Language, TranslationKey, translations } from '@/lib/translations';
+import { isSessionsPath } from '@/lib/sessionRoutes';
 
 interface LanguageContextType {
+  /** The language this page renders in: the stored preference on a sessions
+   *  route, always English on the conferences side. */
   language: Language;
+  /** The stored preference, whatever the route. */
+  preferredLanguage: Language;
   setLanguage: (lang: Language) => void;
   t: (key: TranslationKey, vars?: Record<string, string | number>) => string;
 }
 
 const LanguageContext = createContext<LanguageContextType>({
   language: 'en',
+  preferredLanguage: 'en',
   setLanguage: () => {},
   t: (key) => key,
 });
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [language, setLanguageState] = useState<Language>('en');
+  const [preferredLanguage, setLanguageState] = useState<Language>('en');
+  const pathname = usePathname();
+  // Conferences is English only; sessions keep the chosen language.
+  const language: Language = isSessionsPath(pathname) ? preferredLanguage : 'en';
 
   useEffect(() => {
     try {
@@ -50,7 +60,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   }, [language]);
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t }}>
+    <LanguageContext.Provider value={{ language, preferredLanguage, setLanguage, t }}>
       {children}
     </LanguageContext.Provider>
   );

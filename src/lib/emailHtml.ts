@@ -46,6 +46,7 @@
 import { resolveTokens, splitResolvedText, UNRESOLVED_MARKER_PATTERN, type EmailTokenContext } from './emailTokens';
 import { companyLegalLines } from './companyDetails';
 import { conferenceAcronymLabel } from './conferenceLabels';
+import { emailCardDesignEnabled, renderEmailCardHtml } from './emailCard';
 import {
   type EmailBlock,
   type ButtonDestination,
@@ -146,6 +147,13 @@ export interface RenderEmailHtmlArgs {
   /** `seatLogo` is a seat's own or group crest (already a PNG/WebP URL); when
    *  present it replaces the twemoji flag for the `country` icon. */
   media?: { countryCode?: string | null; committeeEmblem?: string | null; seatLogo?: string | null };
+  /** EVENT_REGISTRY key, when this is an event email. Only the card design
+   *  reads it (the status pill, and a product snapshot on our own default
+   *  copy); the classic renderer ignores it. */
+  event?: string;
+  /** True when `blocks` are our default copy rather than the organiser's own
+   *  template. The card design adds product snapshots only then. */
+  isDefault?: boolean;
 }
 
 // ── Type + colour system ─────────────────────────────────────────────────────
@@ -200,7 +208,8 @@ const D_FOOTER_BG = '#1A1813';
 const BANNER_HEIGHT = 170;
 const CONTENT_WIDTH = 520; // 600 canvas − 40px padding either side
 
-function escapeHtml(s: string): string {
+/** @internal shared with emailCard.ts */
+export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -267,7 +276,8 @@ function inkOn(bg: string): string {
 /** Darkens `color` toward black until it clears 4.5:1 against `bg`. Used for
  *  the in-copy link colour, so a conference that picked a pale accent still
  *  gets readable links rather than near-invisible ones. */
-function readableOn(color: string, bg: string): string {
+/** @internal shared with emailCard.ts */
+export function readableOn(color: string, bg: string): string {
   const bgRgb = hexToRgb(bg);
   if (!bgRgb) return INK;
   let current = color;
@@ -333,7 +343,8 @@ function renderResolvedRun(text: string, linkColor: string): string {
 /** Applies **bold** / *italic* inline marks to already-resolved text. Marks
  *  are parsed AFTER token resolution and escaped per run — mark parsing never
  *  sees or emits raw HTML, so there is no injection surface. */
-function renderMarkedHtml(resolved: string, linkColor: string): string {
+/** @internal shared with emailCard.ts */
+export function renderMarkedHtml(resolved: string, linkColor: string): string {
   return parseInlineMarks(resolved)
     .map(run => {
       let html = renderResolvedRun(run.text, linkColor);
@@ -350,7 +361,8 @@ function renderMarkedHtml(resolved: string, linkColor: string): string {
  *  stored template — one block holding an entire letter — into something a
  *  person can read. Splitting after resolution is deliberate: a multi-line
  *  token value such as {{request_body}} gets the same treatment. */
-function renderParagraphChunks(resolved: string, linkColor: string, gap: number): string {
+/** @internal shared with emailCard.ts */
+export function renderParagraphChunks(resolved: string, linkColor: string, gap: number): string {
   // CRLF first: a large share of stored templates were pasted out of Word or
   // Outlook and carry \r\n, which would otherwise defeat the blank-line split
   // and leave a stray \r inside the text.
@@ -416,7 +428,8 @@ function renderBulletList(chunk: string, linkColor: string, marginBottom: number
  *  disambiguator in a mailbox — last year's edition is sitting right above
  *  this message. Degrades to the bare acronym when the caller did not select
  *  `start_date`. */
-function shortName(conference: EmailRenderConference): string {
+/** @internal shared with emailCard.ts */
+export function shortName(conference: EmailRenderConference): string {
   return conferenceAcronymLabel({ acronym: conference.acronym, start_date: conference.start_date ?? null })
     || conference.acronym
     || conference.full_name;
@@ -455,7 +468,8 @@ function hasDistinctFullName(conference: EmailRenderConference): boolean {
  * so a transparent crest arrives as a solid dark tile covering the disc behind
  * it. A URL that is not a Supabase public object passes through untouched.
  */
-function emailImageUrl(url: string, px: number): string {
+/** @internal shared with emailCard.ts */
+export function emailImageUrl(url: string, px: number): string {
   const marker = '/storage/v1/object/public/';
   if (!url.includes(marker)) return url;
   const base = url.split('?')[0].replace(marker, '/storage/v1/render/image/public/');
@@ -597,7 +611,8 @@ function renderReplyPanel(conference: EmailRenderConference, accent: string): st
  * lucide dropped its brand icons, and those stand-ins were never replaced.
  * These are proper marks; the web row is worth bringing in line separately.
  */
-function socialLinks(conference: EmailRenderConference): { label: string; url: string; icon: string }[] {
+/** @internal shared with emailCard.ts */
+export function socialLinks(conference: EmailRenderConference): { label: string; url: string; icon: string }[] {
   const pairs: [string, string, string | null | undefined][] = [
     ['Instagram', 'instagram', conference.instagram_url],
     ['Facebook', 'facebook', conference.facebook_url],
@@ -658,7 +673,8 @@ function renderHeader(
 /** Sensible label for a button whose label was left empty. Production is full
  *  of these (the composer allows an empty label), and every one of them used
  *  to render as the destination-blind "Learn more". */
-const BUTTON_FALLBACK_LABEL: Record<ButtonDestination, string> = {
+/** @internal shared with emailCard.ts */
+export const BUTTON_FALLBACK_LABEL: Record<ButtonDestination, string> = {
   conference_page: 'View the conference',
   apply_page: 'Continue my application',
   documents: 'View my conference',
@@ -844,7 +860,8 @@ function renderBlock(
 /** The grey line an inbox shows next to the subject. Without one, Gmail prints
  *  whatever text it finds first — historically the footer or an alt attribute.
  *  Derived from the first real paragraph so it is always true to the email. */
-function buildPreheader(blocks: EmailBlock[], ctx: EmailTokenContext): string {
+/** @internal shared with emailCard.ts */
+export function buildPreheader(blocks: EmailBlock[], ctx: EmailTokenContext): string {
   const paragraphs = blocks.filter(
     (b): b is Extract<EmailBlock, { type: 'paragraph' }> => b.type === 'paragraph' && !!b.content.trim(),
   );
@@ -892,7 +909,14 @@ export function renderEmailHtml({
   importClaimToken,
   variant = 'broadcast',
   media,
+  event,
+  isDefault,
 }: RenderEmailHtmlArgs): string {
+  // The card design (approved 18 Sep 2026) lives in emailCard.ts behind one
+  // switch. Until it is on, every email renders exactly as before.
+  if (emailCardDesignEnabled()) {
+    return renderEmailCardHtml({ blocks, conference, ctx, chairInviteToken, organizerInviteToken, importClaimToken, variant, media, event, isDefault });
+  }
   const siteUrl = getSiteUrl();
   const transactional = variant === 'transactional';
   const theme = resolveEmailTheme(conference.email_theme);

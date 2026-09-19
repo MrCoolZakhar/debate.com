@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { Ban, BellRing, Check, Copy, Eye, Gavel, KeyRound, Lock, MessageCircle, MessageSquareText, Smartphone, Volume2, Users } from 'lucide-react';
 import { clampGavelSeconds, primeGavelAudio, playGavelKnock, GAVEL_MIN_SECONDS, GAVEL_MAX_SECONDS, GAVEL_DEFAULT_SECONDS } from '@/lib/gavelSound';
-import { getCountryByName } from '@/lib/countries';
+import { getCountryByName, getCountryDisplayName } from '@/lib/countries';
+import { SeatFlag } from '@/components/SeatFlag';
 import { CircleFlag, flagMonogram } from '@/components/CircleFlag';
 import { ACTION_SKINS, DG } from '@/components/delegate/DelegateUI';
 import { K, T, W, LH, Section, SettingRow, GavelSwitch, InfoHint, TimeChooser } from './settingsKit';
@@ -69,10 +70,15 @@ function CodeTicket({ label, code, caption, secret = false, tone, copiedLabel, c
  * greys it out and strikes it through, so a chair reads the room's rules at a glance. The
  * label and its hint sit beneath (a hint is focusable, so it cannot live inside the switch).
  */
-function DelegateAbility({ id, label, hint, allowed, onChange, onLabel, offLabel, children }: {
+function DelegateAbility({ id, label, hint, allowed, onChange, onLabel, offLabel, invert = false, children }: {
   id: string; label: string; hint: string; allowed: boolean; onChange: (v: boolean) => void;
-  onLabel: string; offLabel: string; children: React.ReactNode;
+  onLabel: string; offLabel: string;
+  /** The replica is something the CHAIR sees only while delegates cannot do this (the
+   *  approval request): it is live when the ability is off and set aside when it is on. */
+  invert?: boolean;
+  children: React.ReactNode;
 }) {
+  const live = invert ? !allowed : allowed;
   return (
     <div className="flex flex-col" style={{ borderRadius: 16, background: K.page, boxShadow: 'inset 0 0 0 1px rgba(28,20,16,0.07)', padding: 8 }}>
       <button type="button" role="switch" aria-checked={allowed} aria-labelledby={`${id}-label`} aria-describedby={`${id}-state`}
@@ -80,23 +86,24 @@ function DelegateAbility({ id, label, hint, allowed, onChange, onLabel, offLabel
         className="stg-focus stg-press relative flex items-center justify-center overflow-hidden"
         style={{
           height: 150, borderRadius: 12, border: 'none', cursor: 'pointer', padding: 12,
-          background: allowed ? DG.ivory : '#E4DED0',
-          boxShadow: allowed ? 'inset 0 0 0 1.5px rgba(27,56,40,0.10)' : 'inset 0 0 0 1.5px rgba(28,20,16,0.06)',
+          background: live ? DG.ivory : '#E4DED0',
+          boxShadow: live ? 'inset 0 0 0 1.5px rgba(27,56,40,0.10)' : 'inset 0 0 0 1.5px rgba(28,20,16,0.06)',
         }}>
         <span aria-hidden className="flex items-center justify-center" style={{
-          filter: allowed ? 'none' : 'grayscale(1)', opacity: allowed ? 1 : 0.42,
+          filter: live ? 'none' : 'grayscale(1)', opacity: live ? 1 : 0.42,
           transitionProperty: 'opacity, filter', transitionDuration: '200ms',
         }}>
           {children}
         </span>
+        {!live && (
+          /* The strike: one line corner to corner over the replica. Red when delegates are
+             blocked; a quiet ink line when an inverted replica is simply not needed. */
+          <span aria-hidden className="absolute" style={{ left: '12%', right: '12%', top: '50%', height: 3, borderRadius: 3, background: allowed ? K.inkSoft : K.danger, opacity: allowed ? 0.5 : 0.8, transform: 'rotate(-18deg)' }} />
+        )}
         {!allowed && (
-          <>
-            {/* The strike: one line corner to corner over the replica. */}
-            <span aria-hidden className="absolute" style={{ left: '12%', right: '12%', top: '50%', height: 3, borderRadius: 3, background: K.danger, opacity: 0.8, transform: 'rotate(-18deg)' }} />
-            <span aria-hidden className="absolute inline-flex items-center justify-center" style={{ top: 8, insetInlineEnd: 8, width: 26, height: 26, borderRadius: 999, background: K.surface, color: K.danger, boxShadow: K.outSm }}>
-              <Ban size={15} strokeWidth={2.6} />
-            </span>
-          </>
+          <span aria-hidden className="absolute inline-flex items-center justify-center" style={{ top: 8, insetInlineEnd: 8, width: 26, height: 26, borderRadius: 999, background: K.surface, color: K.danger, boxShadow: K.outSm }}>
+            <Ban size={15} strokeWidth={2.6} />
+          </span>
         )}
       </button>
       <div className="flex items-center gap-1.5" style={{ padding: '10px 4px 2px', minHeight: 36 }}>
@@ -143,16 +150,25 @@ function RollCallReplica({ caption }: { caption: string }) {
   );
 }
 
-/** The two chunky buttons an absent delegate presses to join (AbsentBanner). */
-function JoinReplica({ present, voting }: { present: string; voting: string }) {
-  const btn: React.CSSProperties = {
-    display: 'flex', alignItems: 'center', height: 42, padding: '0 14px', borderRadius: 14, width: 196,
-    fontSize: T.body, fontWeight: W.title, textTransform: 'uppercase', letterSpacing: '0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-  };
+/**
+ * The request a chair gets when a delegation asks to join: the chair page's Waiting Room bar
+ * (the `join-request` strip under the top bar), drawn with a sample delegation asking for
+ * Present and Voting. Same pieces in the same order: the forest Waiting Room pill with its
+ * count, then the request chip (flag, name, P+V, Approve, Deny).
+ */
+function JoinRequestReplica({ waitingRoom, country, approve, deny }: { waitingRoom: string; country: string; approve: string; deny: string }) {
   return (
-    <span className="flex flex-col" style={{ gap: 12 }}>
-      <span style={{ ...btn, background: DG.cream, color: DG.forest, border: `2px solid ${DG.forest}`, boxShadow: `0 5px 0 ${DG.forest}` }}>{present}</span>
-      <span style={{ ...btn, background: `linear-gradient(180deg, ${DG.forestLift}, ${DG.forest})`, color: DG.ivory, boxShadow: `0 5px 0 ${DG.forestEdge}` }}>{voting}</span>
+    <span className="flex flex-col items-start" style={{ gap: 10, padding: 10, borderRadius: 12, background: '#F3EEE2', boxShadow: 'inset 0 -1px 0 rgba(27,56,40,0.4)', maxWidth: '100%' }}>
+      <span className="inline-flex items-center gap-1.5" style={{ padding: '4px 10px', borderRadius: 999, background: DG.forest, color: '#EED98A', fontSize: T.caption, fontWeight: W.title, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+        <span>🚪</span>{waitingRoom} · 1
+      </span>
+      <span className="flex flex-wrap items-center" style={{ gap: 8, padding: '5px 8px', borderRadius: 12, background: '#FAF8F3', border: '1px solid #DDD4C0', maxWidth: '100%' }}>
+        <SeatFlag country="France" size={20} className="object-contain shrink-0" />
+        <span style={{ fontSize: T.body, fontWeight: W.section, color: K.ink }}>{country}</span>
+        <span className="stg-num" style={{ padding: '2px 8px', borderRadius: 999, background: DG.forest, color: '#EED98A', fontSize: T.caption, fontWeight: W.title }}>P+V</span>
+        <span style={{ padding: '4px 10px', borderRadius: 8, background: DG.forest, color: '#EED98A', fontSize: T.caption, fontWeight: W.title }}>{approve}</span>
+        <span style={{ padding: '4px 9px', borderRadius: 8, border: '1px solid rgba(139,32,32,0.4)', color: '#8B2020', fontSize: T.caption, fontWeight: W.section }}>{deny}</span>
+      </span>
     </span>
   );
 }
@@ -202,7 +218,7 @@ function ChairAvatar({ name, state, isMe, youLabel, stateLabel }: {
   );
 }
 
-export default function AccessTab({ committee, s, upd, isViewOnly, myChairName, t, displayChairSuffix, onlineChairs }: TabProps & {
+export default function AccessTab({ committee, s, upd, isViewOnly, myChairName, t, language, displayChairSuffix, onlineChairs }: TabProps & {
   displayChairSuffix: string;
   /** Chair names on the chair-presence channel. Undefined on the voting page (no channel). */
   onlineChairs?: ReadonlySet<string>;
@@ -271,8 +287,9 @@ export default function AccessTab({ committee, s, upd, isViewOnly, myChairName, 
             </DelegateAbility>
             <DelegateAbility id="stg-can-join" label={t('stg_can_join')} hint={t('stg_can_join_note')}
               onLabel={t('stg_can_on')} offLabel={t('stg_can_off')}
-              allowed={!s.requireChairApproval} onChange={(v) => upd('requireChairApproval', !v)}>
-              <JoinReplica present={t('delegate_present_btn')} voting={t('delegate_pv_btn')} />
+              invert allowed={!s.requireChairApproval} onChange={(v) => upd('requireChairApproval', !v)}>
+              <JoinRequestReplica waitingRoom={t('stg_waiting_room')} country={getCountryDisplayName('France', language)}
+                approve={t('session_approve')} deny={t('session_deny')} />
             </DelegateAbility>
           </div>
         </Section>

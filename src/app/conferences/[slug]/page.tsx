@@ -5,6 +5,7 @@ import { absoluteUrl, pageMetadata } from '@/lib/seo';
 import { conferenceOgImageUrl } from '@/lib/ogVersion';
 import { supabase } from '@/lib/supabase';
 import ConferenceDetailClient from './ConferenceDetailClient';
+import ConferenceViewBeacon from '@/components/conferences/ConferenceViewBeacon';
 
 // Server-rendered shell only; the client always does its own live fetch on
 // mount (ConferenceDetailClient's fetchAll, unconditional) with the right
@@ -289,6 +290,8 @@ export default async function ConferenceDetailPage({ params }: { params: Promise
           dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
         />
       )}
+      {/* Anonymous, aggregate view count by source (no cookies): see src/lib/trafficSource.ts. */}
+      <ConferenceViewBeacon slug={slug} />
       <ConferenceDetailClient
         initialView="overview"
         initialConference={full as never}

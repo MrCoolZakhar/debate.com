@@ -17,6 +17,7 @@
 //     on the conference role view.
 //  4. Invalid / already-claimed tokens show a clean, self-contained card.
 
+import AuthLink from '@/components/auth/AuthLink';
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -303,20 +304,20 @@ export default function ImportInvitePage() {
         </>
       ) : (
         <div className="flex flex-col gap-3">
-          <Link
-            href={`/auth/signup?next=${encodeURIComponent(nextPath)}`}
+          <AuthLink
+            mode="signup" next={nextPath}
             className="inline-flex items-center justify-center rounded-full py-3 px-5 text-sm focus:outline-none"
             style={primaryPillStyle}
           >
             CREATE MY ACCOUNT
-          </Link>
-          <Link
-            href={`/auth/signin?next=${encodeURIComponent(nextPath)}`}
+          </AuthLink>
+          <AuthLink
+            next={nextPath}
             className="inline-flex items-center justify-center rounded-full py-3 px-5 text-sm focus:outline-none"
             style={secondaryPillStyle}
           >
             I ALREADY HAVE AN ACCOUNT
-          </Link>
+          </AuthLink>
         </div>
       )}
     </CardShell>

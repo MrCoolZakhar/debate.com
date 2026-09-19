@@ -14,7 +14,8 @@
  * The tabs in src/components/settings/ only render and call these.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Award, Eye, Gavel, KeyRound, Languages, ListOrdered, Sparkles, Star, Users, Vote, X, CircleAlert, Check } from 'lucide-react';
+import { Award, Eye, Gavel, KeyRound, Languages, ListOrdered, Sparkles, Star, Users, Vote, X, CircleAlert, Check, Plus } from 'lucide-react';
+import LanguageRequestDialog from '@/components/LanguageRequestDialog';
 import GrowDialog from '@/components/GrowDialog';
 import { Brand } from '@/components/Brand';
 import { useSettingsStore, CommitteeSettings, DEFAULT_SCORING, type ScoringConfig } from '@/lib/settingsStore';
@@ -50,6 +51,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
 }) {
   const t = useT();
   const { language, setLanguage } = useLanguage();
+  const [requestLangOpen, setRequestLangOpen] = useState(false);
   const [tab, setTab] = useState<SettingsTab>('access');
   const [writeFailed, setWriteFailed] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
@@ -287,6 +289,11 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
                   );
                 })}
               </div>
+              <button type="button" onClick={() => setRequestLangOpen(true)}
+                className="stg-focus stg-press flex w-full items-center justify-center gap-1.5"
+                style={{ marginTop: 8, height: 28, borderRadius: 9, border: '1px dashed rgba(243,234,208,0.28)', background: 'transparent', cursor: 'pointer', fontSize: T.caption, fontWeight: W.label, color: 'rgba(243,234,208,0.82)' }}>
+                <Plus size={12} strokeWidth={2.4} aria-hidden />{t('lang_request_open')}
+              </button>
             </div>
           </nav>
 
@@ -366,6 +373,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
               onConfirm={runConfirm}
             />
           )}
+          <LanguageRequestDialog open={requestLangOpen} onClose={() => setRequestLangOpen(false)} />
         </div>
       )}
     </GrowDialog>

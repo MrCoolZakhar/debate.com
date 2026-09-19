@@ -12,8 +12,9 @@ import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
-import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
+import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail, heldUnresolvedMessage } from '@/lib/emailEvents';
 import { queueAdHocEmail } from '@/lib/adHocEmail';
+import { summarizeUnresolved, recipientFieldsContext, unresolvedFieldLabel } from '@/lib/emailUnresolved';
 import type { EmailBlock } from '@/lib/emailBlocks';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { notifyErr, notifyOk, clearErr, clearOk } from '@/lib/appNotify';
@@ -1856,7 +1857,7 @@ export default function ApplicationsPage() {
   const searchParams = useSearchParams();
   const urlStatus = searchParams.get('status');
   const urlPayment = searchParams.get('payment');
-  const paymentsLive = isPaymentsLive(conference?.id, conference?.connect_onboarding_status, conference?.payment_method);
+  const paymentsLive = isPaymentsLive(conference?.id, conference?.connect_onboarding_status, conference?.payment_method, conference?.platform_collects);
   const [applications, setApplications] = useState<Application[]>([]);
   // Unpaid gating invoices (gates_acceptance=true, status not settled/waived/
   // void). Only app_fee rows ever carry the flag, since it comes from
@@ -2570,6 +2571,8 @@ export default function ApplicationsPage() {
         try {
           const result = await queueEventEmail(supabase, conference.id, 'application_accepted', [appId]);
           notifyIfNeeded(result, pushDraftNotice);
+          const held = heldUnresolvedMessage(result);
+          if (held) notifyErr(held, 'email-held');
           // Consolidation: application_accepted wins over payment_available.
           // payment_available only sends alone for this person when acceptance
           // actually resolved to nothing (off/unconfigured) for them.
@@ -2648,6 +2651,8 @@ export default function ApplicationsPage() {
       try {
         const result = await queueEventEmail(supabase, conference.id, 'application_accepted', [appId]);
         notifyIfNeeded(result, pushDraftNotice);
+        const held = heldUnresolvedMessage(result);
+        if (held) notifyErr(held, 'email-held');
         const acceptedIds = new Set(result.queuedApplicationIds ?? []);
 
         const roleConfig = roleConfigs.find(rc => rc.role === prevRow.role);
@@ -3743,11 +3748,16 @@ export default function ApplicationsPage() {
         recipientFilter: { source: 'applications', selection: 'manual', applicationIds: composeIds },
       });
       if (result.error) { setComposeError(result.error); return; }
-      const optNote = result.optedOut > 0
-        ? ` ${result.optedOut} skipped (opted out of these emails).`
+      const missingNote = result.skippedUnresolved > 0
+        ? ` ${result.skippedUnresolved} not sent, missing ${result.unresolvedFields.map(unresolvedFieldLabel).join(', ')}.`
         : '';
+      const optNote = (result.optedOut > 0
+        ? ` ${result.optedOut} skipped (opted out of these emails).`
+        : '') + missingNote;
       if (result.queued === 0) {
-        setComposeError(`Nothing was queued — everyone selected has opted out of these emails.`);
+        setComposeError(result.skippedUnresolved > 0
+          ? `Nothing was queued.${missingNote} Assign them first, or take those placeholders out of the message.`
+          : `Nothing was queued — everyone selected has opted out of these emails.`);
         return;
       }
       setComposeOpen(false);
@@ -5992,6 +6002,21 @@ export default function ApplicationsPage() {
         const recipients = composeIds
           .map(id => applications.find(a => a.id === id))
           .filter((a): a is Application => !!a);
+        // Who would get a ⚠field⚠ marker (a {{country}} with no allocation).
+        // queueAdHocEmail skips them whatever happens; this says so up front.
+        const composeBlocks: EmailBlock[] = composeBody.split(/\n{2,}/).map(t => t.trim()).filter(Boolean).map(content => ({ type: 'paragraph', content }));
+        const unresolved = summarizeUnresolved(composeSubject, composeBlocks, recipients.map(a => ({
+          id: a.id,
+          ctx: recipientFieldsContext({
+            delegate_name: a.profiles?.display_name ?? a.invited_name ?? null,
+            delegation_name: a.societies?.name ?? (a.society_id == null ? 'Independent' : null),
+            committee: a.assigned_committee?.abbreviation ?? a.assigned_committee?.name ?? null,
+            country: a.assigned_country_name ?? null,
+            payment_status: a.payment_status,
+          }),
+        })));
+        const unresolvedCount = unresolved.affectedIds.length;
+        const sendableCount = recipients.length - unresolvedCount;
         const close = () => { if (!bulkEmailBusy) setComposeOpen(false); };
         const labelStyle: React.CSSProperties = {
           fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.11em',
@@ -6089,6 +6114,18 @@ export default function ApplicationsPage() {
                 />
               </div>
 
+              {unresolvedCount > 0 && (
+                <div role="alert" className="mb-4" style={{ padding: '10px 14px', borderRadius: 12, backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.35)' }}>
+                  <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: REVIEW_DANGER, lineHeight: 1.45 }}>
+                    {unresolvedCount} of {recipients.length} {recipients.length === 1 ? 'recipient is' : 'recipients are'} missing {unresolved.fields.map(f => `${f.label} (${f.count})`).join(', ')}.
+                  </p>
+                  <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: NEU.inkSoft, lineHeight: 1.5 }}>
+                    Their email would show a marker such as &ldquo;⚠{unresolved.fields[0]?.key}⚠&rdquo;, so they will not be sent it.
+                    {sendableCount > 0 ? ` Sending goes to the ${sendableCount} with complete details only.` : ' Assign them first, or take those placeholders out.'}
+                  </p>
+                </div>
+              )}
+
               {composeError && (
                 <p className="mb-3" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: REVIEW_DANGER, lineHeight: 1.5 }}>
                   {composeError}
@@ -6098,7 +6135,7 @@ export default function ApplicationsPage() {
               <div className="flex flex-wrap items-center gap-3">
                 <button
                   onClick={handleSendCustomEmail}
-                  disabled={bulkEmailBusy}
+                  disabled={bulkEmailBusy || sendableCount === 0}
                   className="inline-flex items-center justify-center gap-2 focus:outline-none"
                   style={{
                     minHeight: 44, padding: '0 24px', borderRadius: 999, border: 'none',
@@ -6109,7 +6146,7 @@ export default function ApplicationsPage() {
                   }}
                 >
                   <Send size={15} strokeWidth={2.7} />
-                  {bulkEmailBusy ? 'SENDING…' : `SEND TO ${recipients.length}`}
+                  {bulkEmailBusy ? 'SENDING…' : `SEND TO ${sendableCount}`}
                 </button>
                 <button
                   onClick={close}

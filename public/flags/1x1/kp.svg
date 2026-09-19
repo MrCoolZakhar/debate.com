@@ -1,1 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><mask id="a"><circle cx="256" cy="256" r="256" fill="#fff"/></mask><g mask="url(#a)"><path fill="#0052b4" d="M0 0h512v89l-61.2 165.6L512 423v89H0v-89l62.5-174.6L0 89z"/><path fill="#eee" d="M0 89h512v33.4l-28.1 130L512 389.7V423H0v-33.4L30 255 0 122.4z"/><path fill="#d80027" d="M0 122.4h512v267.2H0z"/><circle cx="157.5" cy="256" r="98.5" fill="#eee"/><path fill="#d80027" d="m157.5 157.5 22.1 68h71.6l-58 42 22.3 68.3-58-42.3-58 42.2 22.2-68.1-57.9-42h71.6z"/></g></svg>
+<svg width="512" height="512" xmlns="http://www.w3.org/2000/svg" id="flag-icons-kp" viewBox="0 0 512 512">
+  <defs>
+    <clipPath id="kp-a">
+      <path fill-opacity=".7" d="M92.2 7.8h593.6v485.5H92.2z"/>
+    </clipPath>
+  </defs>
+  <g fill-rule="evenodd" clip-path="url(#kp-a)" transform="matrix(.86254 0 0 1.0546 -79.5 -8.3)">
+    <path fill="#fff" stroke="#000" stroke-width="1.1" d="M991.8 492.9H4.2V8.4h987.6z"/>
+    <path fill="#3e5698" d="M991.8 405.2H4.2V493h987.6z"/>
+    <path fill="#c60000" d="M991.8 384.9H4.2V116.4h987.6z"/>
+    <path fill="#3e5698" d="M991.8 8.4H4.2V96h987.6z"/>
+    <path fill="#fff" d="M473 250.7c0 60.1-61.5 108.9-137.4 108.9S198 310.8 198 250.6c0-60.1 61.6-108.9 137.6-108.9S473 190.5 473 250.7"/>
+    <path fill="#c40000" d="m402.9 326.8-66.1-38.6-67.1 39 26.3-62.8-66.1-38.5 82.4-.3 26.2-63 24.5 62.8 82.4-.4-67.2 39z"/>
+  </g>
+</svg>

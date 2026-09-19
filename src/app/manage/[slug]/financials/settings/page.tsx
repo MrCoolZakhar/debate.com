@@ -673,9 +673,19 @@ export default function FinancialsSettingsPage() {
                   </p>
                 ) : connectStatus === 'pending' ? (
                   <>
-                    <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.ink, lineHeight: 1.6 }}>
-                      Finish your Stripe onboarding — Stripe still needs a few details before payouts can start.
-                    </p>
+                    {conference.platform_collects ? (
+                      // platform_collects: card payments are charged on
+                      // Gavelling's own Stripe account, so delegates can pay
+                      // now (conference_payments_ready is true). Finishing
+                      // Connect stays available but is not a blocker.
+                      <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.ink, lineHeight: 1.6 }}>
+                        Card payments are live. Gavelling collects them for you while your own Stripe account finishes setting up.
+                      </p>
+                    ) : (
+                      <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.ink, lineHeight: 1.6 }}>
+                        Finish your Stripe onboarding — Stripe still needs a few details before payouts can start.
+                      </p>
+                    )}
                     {connectError && (
                       <p className="flex items-start gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, color: '#8B2020', lineHeight: 1.5 }}>
                         <TriangleAlert size={12} strokeWidth={2.4} style={{ marginTop: 2, flexShrink: 0 }} />

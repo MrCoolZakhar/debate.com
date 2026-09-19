@@ -9,11 +9,14 @@
 //
 //   Left   1. Committee: the emblem in a WHITE DISC with the live acronym / name,
 //          topic and chairs beside it (LiveCommitteeIdentity), then the name,
-//          topic and chairs fields. 2. Delegations: the add bar, the quick
-//          bundles and Paste a list.
+//          topic and chairs fields (name | topic side by side, chairs beneath).
+//          2. Delegations: the heading beside the add bar, the quick bundles wrapping to
+//          two rows (owner: "you can have 2 rows, it's ok"), then Paste a list filling the
+//          rest of the column (18 Sep 2026, owner: the box "must be genuinely big": 245px
+//          at 1280x800, 505 at 1920x1080), with Auto-match inside the field's lower corner.
 //   Right  the delegations only: a large count (DelegationCount, plain type, no
 //          pill), ONE column of countries that scrolls inside, and Start session
-//          (StartSessionButton) pinned at the foot.
+//          (StartSessionButton, centred on a forest gradient) pinned at the foot.
 //
 // Design rule (CLAUDE.md §8): no count or status pills. Counts are typography,
 // observer status is the megaphone icon.
@@ -23,7 +26,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Gavel, Loader2, Lock, Megaphone, Plus, X } from 'lucide-react';
+import { Loader2, Lock, Megaphone, Plus, X } from 'lucide-react';
 import { DEFAULT_EMBLEM, emblemMonogram } from '@/components/CommitteeIdentityBadge';
 import { C, OUTFIT, SHADOW } from '../join/joinUi';
 
@@ -31,7 +34,7 @@ export { C, OUTFIT, SHADOW };
 
 /** One input look for every field on the page. 16px on phones so iOS never zooms. */
 export const INPUT_CLS =
-  'w-full h-[48px] lg:h-[46px] rounded-[14px] bg-white/80 px-4 text-base sm:text-[15px] text-[#1C1410] placeholder-[#8A7C6B] ' +
+  'w-full h-[48px] lg:h-[42px] rounded-[14px] bg-white/80 px-4 text-base sm:text-[15px] text-[#1C1410] placeholder-[#8A7C6B] ' +
   'shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] focus:outline-none ' +
   'focus:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] transition-[box-shadow] duration-150';
 
@@ -47,13 +50,15 @@ export function CreateStyles() {
       @keyframes create-count-in { from { opacity: 0; transform: translateY(6px); filter: blur(3px); } to { opacity: 1; transform: none; filter: blur(0); } }
       .create-count-in { animation: create-count-in 220ms cubic-bezier(0.2,0,0,1) both; }
       .create-start { transition-property: transform, box-shadow, background-color; transition-duration: 180ms; transition-timing-function: cubic-bezier(0.2,0,0,1); }
-      .create-start-disc { transition-property: transform; transition-duration: 220ms; transition-timing-function: cubic-bezier(0.2,0,0,1); }
       @media (hover: hover) {
         .create-start.is-ready:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 rgba(238,217,138,0.28), inset 0 0 0 1px rgba(238,217,138,0.22), 0 4px 8px rgba(27,56,40,0.18), 0 18px 36px rgba(27,56,40,0.30) !important; }
-        .create-start.is-ready:hover .create-start-disc { transform: rotate(-12deg); }
       }
       .create-start.is-ready:active { transform: scale(0.96); }
-      @media (prefers-reduced-motion: reduce) { .create-emblem-in, .create-count-in { animation: none; } .create-start, .create-start-disc { transition: none; } .create-start.is-ready:hover .create-start-disc { transform: none; } }
+      /* One screen needs about 680px of height (18 Sep 2026: the paste field runs to the foot
+         of the panel and needs at least 120px). On a shorter lg window the page scrolls instead
+         of cutting the paste field off below the fold. */
+      @media (min-width: 1024px) and (max-height: 679px) { .create-root { height: auto !important; min-height: 100dvh !important; overflow: visible !important; } }
+      @media (prefers-reduced-motion: reduce) { .create-emblem-in, .create-count-in { animation: none; } .create-start { transition: none; } }
     `}</style>
   );
 }
@@ -80,14 +85,15 @@ export function Panel({ step, title, labelledBy, aside, children, className = ''
 }
 
 /** The numbered step heading: a forest disc with the gold numeral, then the title. */
-export function StepHeading({ step, title, labelledBy, aside }: {
+export function StepHeading({ step, title, labelledBy, aside, className = '' }: {
   step: number;
   title: string;
   labelledBy: string;
   aside?: ReactNode;
+  className?: string;
 }) {
   return (
-    <header className="mb-3 flex min-h-[32px] flex-shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+    <header className={`mb-2 ${className} flex min-h-[32px] flex-shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5`}>
       <span
         aria-hidden
         className="flex flex-shrink-0 items-center justify-center tabular-nums"
@@ -120,7 +126,8 @@ export function SmallLabel({ children, htmlFor, id }: { children: ReactNode; htm
 
 // ── The live committee identity ─────────────────────────────────────────────
 // (17 Sep 2026, owner: "I don't like the massive green block. Rather have the
-// committee logo in a white circle".) A compact row: the emblem in a white disc,
+// committee logo in a white circle".) Slightly larger since 18 Sep 2026 (owner: "make the
+// emblem and top section slightly bigger": disc up to 112px, name 30px). A compact row: the emblem in a white disc,
 // resolved by the caller (matchPresetEmblem), then the UN emblem, then forest
 // initials, never a broken image; beside it the acronym with the full name
 // beneath, the topic and the chairs, exactly as the chair masthead will state them.
@@ -141,12 +148,12 @@ export function LiveCommitteeIdentity({ src, primary, secondary, placeholder, to
   const monogram = emblemMonogram(primary || placeholder);
 
   return (
-    <div aria-hidden className="flex flex-shrink-0 items-center gap-4">
+    <div aria-hidden className="flex flex-shrink-0 items-center gap-5">
       {/* The white disc. The artwork is re-keyed, so a new match fades in instead of snapping. */}
       <span
         className="relative flex flex-shrink-0 items-center justify-center rounded-full bg-white"
         style={{
-          width: 'clamp(72px, 9.5vh, 96px)', aspectRatio: '1', containerType: 'size',
+          width: 'clamp(84px, 11.5vh, 112px)', aspectRatio: '1', containerType: 'size',
           boxShadow: '0 1px 2px rgba(27,56,40,0.10), 0 8px 22px rgba(27,56,40,0.14), inset 0 0 0 1px rgba(0,0,0,0.06)',
         }}
       >
@@ -173,23 +180,23 @@ export function LiveCommitteeIdentity({ src, primary, secondary, placeholder, to
           title={primary || placeholder}
           style={{
             fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '-0.015em', lineHeight: 1.12,
-            fontSize: (primary || placeholder).length > 22 ? 20 : 26,
+            fontSize: (primary || placeholder).length > 22 ? 23 : 30,
             color: hasName ? C.forest : C.muted,
           }}
         >
           {primary || placeholder}
         </p>
         {secondary && (
-          <p className="mt-0.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 500, lineHeight: 1.35, color: C.inkSoft }}>
+          <p className="mt-0.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 500, lineHeight: 1.35, color: C.inkSoft }}>
             {secondary}
           </p>
         )}
-        <p className="mt-1 line-clamp-2" style={{ fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.4, color: topic ? C.ink : C.muted, textWrap: 'pretty' }}>
+        <p className="mt-1 line-clamp-2" style={{ fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.4, color: topic ? C.ink : C.muted, textWrap: 'pretty' }}>
           <span style={{ fontWeight: 800, color: C.goldDeep }}>{topicLabel}</span>{' '}
           <span style={{ fontWeight: 500 }}>{topic || topicEmpty}</span>
         </p>
         {chairsLine && (
-          <p className="mt-0.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: C.inkSoft }}>
+          <p className="mt-0.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: C.inkSoft }}>
             {chairsLine}
           </p>
         )}
@@ -231,9 +238,12 @@ export function DelegationCount({ count, word, observersLine, liveLabel }: {
 }
 
 // ── Start session ────────────────────────────────────────────────────────────
-// The one primary action. Forest with gold, a gold gavel disc at the inline end,
-// a sub line that says what will happen (or what is missing), a soft lift on
-// hover, scale on press. When the form is incomplete it stays focusable
+// The one primary action (18 Sep 2026, owner: "centred, a gradient, no hammer in a
+// circle, and not the delegation count, it is listed above"). The label is centred on
+// a deep forest gradient with a faint gold rim; the sub line only says what is
+// MISSING (or that delegations can come later), never the count. No icon while ready;
+// a spinner leads the label while the room is created, a lock while incomplete.
+// Soft lift on hover, scale on press. When the form is incomplete it stays focusable
 // (aria-disabled) so a press can take the chair to the missing field.
 export function StartSessionButton({ label, sub, state, onClick }: {
   label: string;
@@ -251,10 +261,11 @@ export function StartSessionButton({ label, sub, state, onClick }: {
       aria-disabled={!ready || undefined}
       aria-busy={creating || undefined}
       disabled={creating}
-      className={`create-start group relative flex w-full items-center gap-3 overflow-hidden text-start focus:outline-none focus-visible:shadow-[0_0_0_3px_#EDE7D8,0_0_0_5px_#1B3828] ${ready ? 'is-ready active:scale-[0.96]' : ''}`}
+      className={`create-start group relative flex w-full flex-col items-center justify-center overflow-hidden px-6 text-center focus:outline-none focus-visible:shadow-[0_0_0_3px_#EDE7D8,0_0_0_5px_#1B3828] ${ready ? 'is-ready active:scale-[0.96]' : ''}`}
       style={{
-        minHeight: 64, borderRadius: 20, paddingInlineStart: 20, paddingInlineEnd: 8,
+        minHeight: 64, borderRadius: 20,
         backgroundColor: blocked ? 'rgba(27,56,40,0.06)' : C.forest,
+        backgroundImage: blocked ? undefined : 'linear-gradient(135deg, #2E6446 0%, #1F4230 42%, #1B3828 62%, #122A1D 100%)',
         boxShadow: blocked
           ? 'inset 0 0 0 1.5px rgba(27,56,40,0.14)'
           : 'inset 0 1px 0 rgba(238,217,138,0.22), inset 0 0 0 1px rgba(238,217,138,0.14), 0 2px 4px rgba(27,56,40,0.16), 0 12px 28px rgba(27,56,40,0.26)',
@@ -262,27 +273,19 @@ export function StartSessionButton({ label, sub, state, onClick }: {
       }}
     >
       {!blocked && <span aria-hidden className="pointer-events-none absolute inset-0" style={{ backgroundImage: GRAIN, backgroundSize: '300px 300px', mixBlendMode: 'overlay', opacity: 0.08 }} />}
-      <span className="relative flex min-w-0 flex-1 flex-col py-2.5">
-        <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 800, letterSpacing: '0.01em', lineHeight: 1.2, color: blocked ? C.forest : C.gold }}>
-          {label}
-        </span>
-        {sub && (
-          <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, lineHeight: 1.3, marginTop: 2, color: blocked ? C.inkSoft : 'rgba(237,231,216,0.72)' }}>
-            {sub}
+      <span className="relative flex max-w-full items-center justify-center gap-2 py-2.5">
+        {creating && <Loader2 size={18} strokeWidth={2.6} className="shrink-0 animate-spin" style={{ color: C.gold }} aria-hidden />}
+        {blocked && <Lock size={15} strokeWidth={2.4} className="shrink-0" style={{ color: C.muted }} aria-hidden />}
+        <span className="flex min-w-0 flex-col items-center">
+          <span className="max-w-full truncate" style={{ fontFamily: OUTFIT, fontSize: 18, fontWeight: 800, letterSpacing: '0.01em', lineHeight: 1.2, color: blocked ? C.forest : C.gold }}>
+            {label}
           </span>
-        )}
-      </span>
-      <span
-        aria-hidden
-        className="create-start-disc relative flex flex-shrink-0 items-center justify-center rounded-full"
-        style={{
-          width: 48, height: 48,
-          backgroundColor: blocked ? 'rgba(27,56,40,0.08)' : C.gold,
-          color: blocked ? C.muted : C.forest,
-          boxShadow: blocked ? 'none' : 'inset 0 1px 0 rgba(255,255,255,0.55), 0 2px 6px rgba(0,0,0,0.22)',
-        }}
-      >
-        {creating ? <Loader2 size={21} strokeWidth={2.6} className="animate-spin" /> : blocked ? <Lock size={18} strokeWidth={2.4} /> : <Gavel size={21} strokeWidth={2.3} className="rtl:-scale-x-100" />}
+          {sub && (
+            <span className="max-w-full truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, lineHeight: 1.3, marginTop: 2, color: blocked ? C.inkSoft : 'rgba(237,231,216,0.72)' }}>
+              {sub}
+            </span>
+          )}
+        </span>
       </span>
     </button>
   );
@@ -321,7 +324,7 @@ export function ChairTokenField({ id, chairs, draft, onDraft, onCommit, onRemove
   };
   return (
     <div
-      className="flex h-[48px] items-center gap-1.5 rounded-[14px] bg-white/80 ps-1.5 pe-1.5 shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] transition-[box-shadow] duration-150 focus-within:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] lg:h-[46px]"
+      className="flex h-[48px] items-center gap-1.5 rounded-[14px] bg-white/80 ps-1.5 pe-1.5 shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] transition-[box-shadow] duration-150 focus-within:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] lg:h-[42px]"
     >
       <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {chairs.map((name, i) => (
@@ -375,12 +378,16 @@ export function ChairTokenField({ id, chairs, draft, onDraft, onCommit, onRemove
   );
 }
 
-/** Square icon button used on roster rows: 36px, tinted on hover, scale on press. */
-export function RowIconButton({ onClick, label, pressed, tone = 'neutral', children }: {
+/** Square icon button used on roster rows: 36px, tinted on hover, scale on press.
+ *  `caption` (18 Sep 2026, owner: "when clicking observer, add little observer text below the
+ *  megaphone") draws a tiny uppercase word under the icon INSIDE the same 36px box (it may
+ *  overhang the box sideways into the row gap), so nothing else in the row moves. */
+export function RowIconButton({ onClick, label, pressed, tone = 'neutral', caption, children }: {
   onClick: () => void;
   label: string;
   pressed?: boolean;
   tone?: 'neutral' | 'danger' | 'gold';
+  caption?: string;
   children: ReactNode;
 }) {
   const hover =
@@ -394,10 +401,18 @@ export function RowIconButton({ onClick, label, pressed, tone = 'neutral', child
       title={label}
       aria-label={label}
       aria-pressed={pressed}
-      className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[10px] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828] active:scale-[0.96] transition-[color,background-color,transform] duration-150 ${hover}`}
+      className={`relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[10px] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828] active:scale-[0.96] transition-[color,background-color,transform] duration-150 ${hover}`}
       style={{ color: tone === 'gold' ? '#6E500F' : C.inkSoft, backgroundColor: tone === 'gold' ? 'rgba(238,217,138,0.62)' : undefined }}
     >
-      {children}
+      {caption ? (
+        <>
+          <span className="flex -translate-y-[5px]">{children}</span>
+          <span aria-hidden className="pointer-events-none absolute bottom-[3px] left-1/2 -translate-x-1/2 whitespace-nowrap uppercase"
+            style={{ fontFamily: OUTFIT, fontSize: 7.5, fontWeight: 800, letterSpacing: '0.08em', lineHeight: 1, color: tone === 'gold' ? '#6E500F' : C.inkSoft }}>
+            {caption}
+          </span>
+        </>
+      ) : children}
     </button>
   );
 }

@@ -9,6 +9,7 @@
 // which inserts the conference_organizers row with default (empty)
 // permissions and returns the slug so we can land straight on /manage/[slug].
 
+import AuthLink from '@/components/auth/AuthLink';
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter, usePathname, useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -183,20 +184,20 @@ export default function OrganizerInvitePage() {
             </p>
 
             <div className="flex gap-3">
-              <Link
-                href={`/auth/signin?next=${encodeURIComponent(pathname)}`}
+              <AuthLink
+                next={pathname}
                 className="flex-1 rounded-full py-2.5 font-bold text-sm focus:outline-none flex items-center justify-center gap-2"
                 style={{ border: 'none', color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontFamily: OUTFIT, textDecoration: 'none' }}
               >
                 <LogIn size={14} /> SIGN IN
-              </Link>
-              <Link
-                href={`/auth/signup?next=${encodeURIComponent(pathname)}`}
+              </AuthLink>
+              <AuthLink
+                mode="signup" next={pathname}
                 className="flex-1 inline-flex items-center gap-2 rounded-full py-2.5 font-bold text-sm focus:outline-none justify-center"
                 style={primaryPillStyle}
               >
                 <UserPlus size={14} /> CREATE ACCOUNT
-              </Link>
+              </AuthLink>
             </div>
           </div>
         </div>

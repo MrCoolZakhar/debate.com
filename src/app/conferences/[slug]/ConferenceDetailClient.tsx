@@ -1,5 +1,6 @@
 'use client';
 
+import { openAuth } from '@/lib/authModal';
 import { Fragment, useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -8,7 +9,7 @@ import SiteNav from '@/components/SiteNav';
 import FooterLegal from '@/components/FooterLegal';
 import Portal from '@/components/Portal';
 import { DifficultyTile, levelAccent } from '@/components/DifficultyTile';
-import { TruncatedTopic } from '@/components/TruncatedTopic';
+import { CardTopic, CommitteeDais, CommitteeInfoDialog, PersonAvatar, committeeHasMore } from '@/app/conferences/[slug]/CommitteeInfoDialog';
 import DecorativeBleed from '@/components/DecorativeBleed';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -24,7 +25,7 @@ import { uploadConferenceAsset } from '@/lib/conferenceAssets';
 // Checkout/invoice surfaces deliberately keep the exact formatFee.
 import { formatFeeCompact } from '@/lib/utils';
 import { activeFeePhase, activePhaseFee, type FeePhase } from '@/lib/finance';
-import { fetchDelegateFees, type ResolvedFee } from '@/lib/publicFees';
+import { fetchDelegatePrices, displayDelegatePrice, displayRolePrice, delegatePriceLabel, priceDate, upcomingOpening, type DelegatePrice } from '@/lib/publicFees';
 import { hasNothingToPay } from '@/lib/freeRegistration';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { normalizeBlocks } from '@/lib/customQuestions';
@@ -138,6 +139,8 @@ interface SecretariatMember {
   name: string;
   avatar_url: string | null;
   title: string | null;
+  /** profiles.id, links to the public MUN CV. Absent on rosters written before 18 Sep 2026. */
+  user_id?: string | null;
 }
 
 interface PartnerConference {
@@ -517,7 +520,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   const [roleConfigs, setRoleConfigs] = useState<RoleConfig[]>([]);
   /* Pricing read through the RLS-bypassing fees view, so an unpublished
      conference still shows its real price to a visitor holding the link. */
-  const [viewFee, setViewFee] = useState<ResolvedFee | null>(null);
+  const [viewPrice, setViewPrice] = useState<DelegatePrice | null>(null);
   const [myApplications, setMyApplications] = useState<MyApplication[]>([]);
   const [loading, setLoading] = useState(!initialConference);
   const [notFound, setNotFound] = useState(false);
@@ -780,20 +783,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   // Per committee, country_code -> seats_taken (1 or 2) — a double country
   // can be half-filled, so this needs the count, not just membership.
   const [committeeOccupied, setCommitteeOccupied] = useState<Record<string, Record<string, number>>>({});
-  // Per committee, HOW MANY chair invites are still unanswered — never who.
-  // `display_chairs` only ever carries chairs who accepted, so a committee that
-  // has invited its whole dais and is waiting on a reply used to render with no
-  // dais at all, reading as though nobody had been asked.
-  //
-  // A COUNT is the whole payload on purpose. An invitee may decline, and has
-  // not agreed to be listed publicly against this conference, so this page
-  // renders an unnamed "Chair to be confirmed" placeholder from it and never a
-  // name. anon cannot read `conference_chair_invites` (its only SELECT policies
-  // are invitee-reads-own and organizers-manage) and that is left exactly as it
-  // is: `get_committee_pending_chair_counts` is a SECURITY DEFINER count that
-  // returns no name, no email and no user id, gated on the same
-  // `conferences.is_public` test as the committee row itself.
-  const [committeePendingChairs, setCommitteePendingChairs] = useState<Record<string, number>>({});
+  // The public page names a chair only once they have accepted
+  // (`display_chairs`); an unanswered invite shows nothing at all.
+  // The committee whose "Show more" pop-up is open.
+  const [committeeInfoId, setCommitteeInfoId] = useState<string | null>(null);
   const [expandedRoster, setExpandedRoster] = useState<string | null>(null);
   // The committee roster modal is a modal — freeze the conference page behind it.
   useScrollLock(!!expandedRoster);
@@ -965,9 +958,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     /* Only needed when the role-config read was refused — i.e. an unpublished
        conference seen by someone who is not an organiser. Skipping it when the
        configs came through keeps the published path at its current query count. */
-    if (!roleConfigsRes.data || roleConfigsRes.data.length === 0) {
-      const fees = await fetchDelegateFees(supabase, [conf.id]);
-      setViewFee(fees.get(conf.id) ?? null);
+    if (!(roleConfigsRes.data as RoleConfig[] | null)?.some(r => r.role === 'delegate')) {
+      const prices = await fetchDelegatePrices(supabase, [conf]);
+      setViewPrice(prices.get(conf.id) ?? null);
     }
 
     // Paint NOW. The hero, stat strip, committees and apply CTA only need the
@@ -1104,14 +1097,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     // Public committee extras: full rosters, live occupancy
     const ccIds = ((committeesRes.data as Committee[]) ?? []).map(c => c.id);
     if (ccIds.length > 0) {
-      const [slotsRes, occRes, pendingChairsRes] = await Promise.all([
+      const [slotsRes, occRes] = await Promise.all([
         supabase
           .from('committee_country_slots')
           .select('conference_committee_id, country_code, country_name, delegation_size, logo_url, group_id')
           .in('conference_committee_id', ccIds)
           .order('country_name', { ascending: true }),
         supabase.rpc('get_committee_occupancy', { p_committee_ids: ccIds }),
-        supabase.rpc('get_committee_pending_chair_counts', { p_committee_ids: ccIds }),
       ]);
       const slotsMap: Record<string, CommitteeSlot[]> = {};
       for (const row of ((slotsRes.data ?? []) as (CommitteeSlot & { conference_committee_id: string })[])) {
@@ -1121,15 +1113,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
       for (const row of ((occRes.data ?? []) as { conference_committee_id: string; country_code: string; seats_taken: number }[])) {
         (occMap[row.conference_committee_id] ??= {})[row.country_code] = row.seats_taken;
       }
-      const pendingChairMap: Record<string, number> = {};
-      for (const row of ((pendingChairsRes.data ?? []) as { conference_committee_id: string; pending_chairs: number }[])) {
-        pendingChairMap[row.conference_committee_id] = row.pending_chairs;
-      }
       setCommitteeSlots(slotsMap);
       setCommitteeOccupied(occMap);
-      // A failed read leaves this empty, which is the card's behaviour before
-      // today: no placeholder rather than a wrong one.
-      setCommitteePendingChairs(pendingChairMap);
     }
 
     if (user && session) {
@@ -1387,34 +1372,21 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   const flagUrl = countryObj ? getFlagUrl(countryObj.code) : null;
   const enabledRoles = roleConfigs.filter(r => r.is_enabled);
   const now = new Date();
-  // Single source of truth for public fee displays (hero circle, cards): the
-  // delegate role config's fee, falling back to the conference-level fee
-  // only when no delegate role config exists yet.
+  // The hero's headline price is displayDelegatePrice (src/lib/publicFees.ts):
+  // TBD until delegate applications are launched, then the delegate price of
+  // the current fee stage, "Free" at 0. Two sources for the delegate config:
+  // the role configs read above, or, when that read is RLS-refused (an
+  // unpublished conference seen by a visitor holding the link), the
+  // RLS-bypassing fees view (`viewPrice`). Null while neither has arrived
+  // (the server seed paints before the role configs), so the medallion does
+  // not flash TBD on a conference that has a price.
   const delegateRoleConfig = roleConfigs.find(r => r.role === 'delegate') ?? null;
-  // Phase-aware: a conference whose delegate fee is split into fee_phases has a
-  // flat fee_amount of 0, which would otherwise advertise it as FREE. Resolve
-  // through activePhaseFee so the hero shows today's actual price.
-  //
-  // Three sources, in order. `viewFee` exists because the role-config query
-  // above is RLS-gated on `is_public`, so on an UNPUBLISHED conference it comes
-  // back empty for anonymous visitors — while this page itself still renders,
-  // since `conferences` is readable by anyone with the link. Without the view
-  // the hero silently fell back to the stale conference column and advertised
-  // the wrong price on every private conference. The role config is still
-  // preferred when readable: it is the same data and saves a render pass.
-  const resolvedRoleFee = delegateRoleConfig
-    ? activePhaseFee({ fee_amount: delegateRoleConfig.fee_amount, fee_phases: delegateRoleConfig.fee_phases }, now)
-    : null;
-  const heroFeeAmount = resolvedRoleFee
-    ? resolvedRoleFee.amount
-    : viewFee
-      ? viewFee.amount
-      : conference.fee_amount;
-  const heroFeeCurrency = delegateRoleConfig
-    ? (delegateRoleConfig.fee_currency ?? conference.fee_currency)
-    : viewFee
-      ? viewFee.currency
-      : conference.fee_currency;
+  const heroPrice: DelegatePrice | null = delegateRoleConfig
+    ? displayDelegatePrice(delegateRoleConfig, conference.fee_currency, now)
+    : viewPrice;
+  // Pricing details (and the role picker's prices) only once delegate
+  // applications are set up (enabled), open now or opening later.
+  const pricingVisible = heroPrice !== null && heroPrice.kind !== 'tbd' && enabledRoles.length > 0;
 
   function getRoleWindowStatus(r: RoleConfig): 'open' | 'closed' | 'opens-soon' | 'open-always' {
     if (!r.applications_open_at && !r.applications_close_at) return 'open-always';
@@ -2068,42 +2040,41 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     THE SECRETARIAT
                   </p>
                   <div className="flex flex-wrap justify-center gap-x-7 gap-y-6">
-                    {(conference.display_secretariat ?? []).map((m, i) => (
-                      <div key={`${m.name}-${i}`} className="flex flex-col items-center text-center" style={{ width: '108px' }}>
-                        {m.avatar_url ? (
-                          <img
-                            src={m.avatar_url}
-                            alt={m.name}
-                            style={{
-                              width: '72px', height: '72px', borderRadius: '9999px', objectFit: 'cover',
-                              boxShadow: '0 6px 16px color-mix(in srgb, var(--gv-main) 22%, transparent)',
-                              backgroundColor: 'var(--gv-bg)',
-                              outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: '-1px',
-                            }}
-                          />
-                        ) : (
-                          <span
-                            className="flex items-center justify-center"
-                            style={{
-                              width: '72px', height: '72px', borderRadius: '9999px',
-                              backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)',
-                              fontSize: '22px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
-                              boxShadow: '0 6px 16px color-mix(in srgb, var(--gv-main) 22%, transparent)',
-                            }}
-                          >
-                            {m.name.charAt(0).toUpperCase()}
+                    {(conference.display_secretariat ?? []).map((m, i) => {
+                      const inner = (
+                        <>
+                          <PersonAvatar name={m.name} url={m.avatar_url} px={72} />
+                          <span className="text-[13.5px] font-semibold mt-2.5 leading-tight" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+                            {m.name}
                           </span>
-                        )}
-                        <span className="text-[13.5px] font-semibold mt-2.5 leading-tight" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
-                          {m.name}
-                        </span>
-                        {m.title && (
-                          <span className="mt-1" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.1em', color: 'var(--gv-accent)', textTransform: 'uppercase' }}>
-                            {m.title}
-                          </span>
-                        )}
-                      </div>
-                    ))}
+                          {m.title && (
+                            <span className="mt-1" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.1em', color: 'var(--gv-accent)', textTransform: 'uppercase' }}>
+                              {m.title}
+                            </span>
+                          )}
+                        </>
+                      );
+                      // Linked to the public MUN CV when the roster carries the
+                      // account; plain for an entry without one.
+                      if (!m.user_id) {
+                        return (
+                          <div key={`${m.name}-${i}`} className="flex flex-col items-center text-center" style={{ width: '108px' }}>
+                            {inner}
+                          </div>
+                        );
+                      }
+                      return (
+                        <ProfileLink
+                          key={`${m.name}-${i}`}
+                          userId={m.user_id}
+                          name={m.name}
+                          className="flex flex-col items-center text-center rounded-lg transition-transform hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--gv-main)]"
+                          style={{ width: '108px' }}
+                        >
+                          {inner}
+                        </ProfileLink>
+                      );
+                    })}
                   </div>
                 </SectionCard>
               )}
@@ -2500,7 +2471,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           Sign in with a free account to start your application.
                         </p>
                         <button
-                          onClick={() => router.push(`/auth/signin?next=/conferences/${slug}`)}
+                          onClick={() => openAuth()}
                           className="w-full rounded-xl py-3 font-bold text-sm focus:outline-none"
                           style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', transition: `background-color 200ms ${EASE}, transform 160ms ${EASE}` }}
                           onMouseEnter={(e) => { const el = (e.currentTarget as HTMLElement); el.style.backgroundColor = 'white'; el.style.color = 'var(--gv-main)'; }}
@@ -2555,12 +2526,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                             {enabledRoles.map(r => {
                               const windowStatus = getRoleWindowStatus(r);
                               const open = windowStatus === 'open' || windowStatus === 'open-always';
-                              // Today's price: the active fee phase when one covers
-                              // today's date, otherwise the flat role fee.
-                              const resolved = activePhaseFee({ fee_amount: r.fee_amount, fee_phases: r.fee_phases });
-                              const fee = resolved.amount > 0
-                                ? formatFeeCompact(resolved.amount, r.fee_currency ?? conference.fee_currency)
-                                : 'Free';
+                              // The current stage's price (or the stage that applies
+                              // at opening), same rule as the headline: publicFees.
+                              const fee = delegatePriceLabel(displayRolePrice(r, conference.fee_currency, now));
                               const reason = windowStatus === 'closed'
                                 ? 'Applications closed'
                                 : windowStatus === 'opens-soon' && r.applications_open_at
@@ -2618,26 +2586,23 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         boxShadow: '0 10px 30px color-mix(in srgb, var(--gv-main) 10%, transparent), 0 0 0 8px rgba(238,217,138,0.12)',
                       }}
                     >
-                      {(() => {
-                        // Headline = today's delegate price: the delegate role's
-                        // active fee phase when one covers today, else the
-                        // unified role-config flat fee (falls back to the
-                        // conference fee when no role config exists).
-                        const delegatePhase = activeFeePhase(roleConfigs.find(r => r.role === 'delegate')?.fee_phases);
-                        const headlineFee = delegatePhase ? Number(delegatePhase.amount) : heroFeeAmount;
-                        return headlineFee === 0 ? (
-                          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '30px', color: 'var(--gv-main)', lineHeight: 1 }}>FREE</span>
-                        ) : (
-                          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontVariantNumeric: 'tabular-nums', fontSize: '38px', color: 'var(--gv-on-surface)', lineHeight: 1 }}>
-                            {formatFeeCompact(headlineFee, heroFeeCurrency)}
-                          </span>
-                        );
-                      })()}
+                      {heroPrice === null ? (
+                        <span aria-hidden style={{ display: 'block', height: '30px' }} />
+                      ) : heroPrice.kind === 'tbd' ? (
+                        <span title="Price to be announced" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '30px', color: 'var(--gv-muted)', lineHeight: 1 }}>TBD</span>
+                      ) : heroPrice.kind === 'free' ? (
+                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '30px', color: 'var(--gv-main)', lineHeight: 1 }}>FREE</span>
+                      ) : (
+                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontVariantNumeric: 'tabular-nums', fontSize: '38px', color: 'var(--gv-on-surface)', lineHeight: 1 }}>
+                          {formatFeeCompact(heroPrice.amount, heroPrice.currency)}
+                        </span>
+                      )}
                       <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: 'var(--gv-muted)', marginTop: '7px' }}>
                         PER DELEGATE
                       </span>
                     </div>
 
+                    {pricingVisible && (<>
                     <button
                       onClick={() => setPricingOpen(v => !v)}
                       className="mt-4 flex items-center gap-1.5 text-[11px] font-bold focus:outline-none transition-colors"
@@ -2656,8 +2621,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       <div className="w-full mt-4 pt-3" style={{ borderTop: '1px solid color-mix(in srgb, var(--gv-border) 60%, transparent)' }}>
                         {enabledRoles.map((r, i) => {
                           const phases = r.fee_phases ?? [];
-                          const activePhase = activeFeePhase(phases);
+                          // Highlight the stage that applies now, or at opening.
+                          const activePhase = activeFeePhase(phases, priceDate(r, now));
                           const currency = r.fee_currency ?? conference.fee_currency;
+                          const opensAt = upcomingOpening(r, now);
                           const fmtPhaseDate = (iso: string) =>
                             new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
                           return (
@@ -2667,12 +2634,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                   {capitalize(r.role.replace(/-/g, ' '))}
                                 </span>
                                 <span className="text-[13px] font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
-                                  {(() => {
-                                    const resolved = activePhaseFee({ fee_amount: r.fee_amount, fee_phases: phases });
-                                    return resolved.amount > 0 ? formatFeeCompact(resolved.amount, currency) : 'Free';
-                                  })()}
+                                  {delegatePriceLabel(displayRolePrice(r, conference.fee_currency, now))}
                                 </span>
                               </div>
+                              {opensAt && r.applications_open_at && (
+                                <p className="text-[11px] -mt-1 pb-1.5" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
+                                  Applications open {fmtWindowDate(r.applications_open_at)}
+                                </p>
+                              )}
                               {/* Fee phases breakdown, rendered only when the
                                   organizer configured date-windowed pricing */}
                               {phases.length > 0 && (
@@ -2727,6 +2696,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         })}
                       </div>
                     )}
+                    </>)}
                   </div>
                 </SectionCard>
 
@@ -2765,6 +2735,19 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   const pct = seatCapacity > 0 ? Math.min(100, Math.round((seatsTaken / seatCapacity) * 100)) : 0;
                   return { slots, countryCapacity, countriesTaken, seatCapacity, seatsTaken, pct, hasDoubles: seatCapacity !== countryCapacity };
                 };
+                // Fill is shown to visitors only once EVERY committee of this
+                // conference holds at least one allocation (owner, 19 Sep 2026):
+                // a page where most committees read 0% advertises an empty
+                // conference. Until then no committee shows a count, a bar,
+                // TAKEN/OPEN chips or the availability sort. The organiser's
+                // own view (not preview) is unaffected. Counts come from
+                // get_committee_occupancy, which is empty until it loads, so
+                // nothing flashes 0% first. The apply flow keeps its own
+                // availability (get_taken_allocations) regardless.
+                const everyCommitteeAllocated = committees.length > 0
+                  && committees.every(c => Object.values(committeeOccupied[c.id] ?? {}).some(n => n > 0));
+                const showFill = showCounts && (!asVisitor || everyCommitteeAllocated);
+                const showSeatChips = showTakenCountries && (!asVisitor || everyCommitteeAllocated);
                 const DIFF_ORDER: Record<string, number> = { beginner: 0, intermediate: 1, advanced: 2, expert: 3 };
                 let sortedCommittees = [...committees];
                 if (sortKey === 'type') {
@@ -2828,7 +2811,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           dir={sortKey === 'difficulty' ? sortDir : null}
                           onClick={() => cycleSort('difficulty')}
                         />
-                        {showCounts && (
+                        {showFill && (
                           <SortButton
                             label="AVAILABILITY"
                             dir={sortKey === 'availability' ? sortDir : null}
@@ -2914,19 +2897,6 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                             const isCrisis = c.committee_type === 'crisis';
                             const monogram = (c.abbreviation || c.name).replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase();
                             const chairs = c.display_chairs ?? [];
-                            const chairIds = c.chair_user_ids ?? [];
-                            // Link a chair to their public MUN CV only when we can safely
-                            // correlate display_chairs[i] ↔ chair_user_ids[i] (equal lengths ⇒
-                            // same order from the sync trigger); mismatched ⇒ don't link, to
-                            // avoid ever pointing at the wrong person's CV.
-                            const chairsLinkable = chairIds.length === chairs.length;
-                            // Outstanding chair invites, as a COUNT. Deliberately
-                            // never a name: someone who has been asked and has
-                            // not answered may decline, and has not agreed to be
-                            // listed publicly against this conference. The count
-                            // is enough to stop an already-spoken-for dais
-                            // reading as empty, which is all this needs to do.
-                            const pendingChairCount = committeePendingChairs[c.id] ?? 0;
                             const { countryCapacity, countriesTaken, seatCapacity, seatsTaken, pct, hasDoubles } = committeeStats(c);
 
                             return (
@@ -3035,125 +3005,42 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                             {ROMAN[ti] ?? String(ti + 1)}.
                                           </span>
                                           <span className="text-[12.5px] font-medium" style={{ color: '#2E2820', fontFamily: "'Outfit', sans-serif", lineHeight: 1.55 }}>
-                                            {/* First 75 characters, cut at a word, with an in-place Show more. */}
-                                            <TruncatedTopic text={topic} max={75} />
+                                            {/* First 120 characters, cut at a word. One Show more per committee, below. */}
+                                            <CardTopic text={topic} />
                                           </span>
                                         </div>
                                       ))}
+                                      {committeeHasMore(c.topics) && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setCommitteeInfoId(c.id)}
+                                          aria-haspopup="dialog"
+                                          className="mt-1.5 ml-[28px] rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[color:var(--gv-main)]"
+                                          style={{
+                                            fontFamily: "'Outfit', sans-serif", fontSize: '11.5px', fontWeight: 700,
+                                            color: 'var(--gv-main)', background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                                            textDecoration: 'underline', textDecorationColor: 'color-mix(in srgb, var(--gv-main) 35%, transparent)', textUnderlineOffset: 3,
+                                          }}
+                                        >
+                                          Show more
+                                        </button>
+                                      )}
                                     </div>
                                   )}
 
-                                  {/* Dais, pinned to the card bottom — shown when
-                                      chairs are assigned, or when the committee
-                                      has an unanswered invite out (unnamed
-                                      placeholder, see below) */}
+                                  {/* Dais, pinned to the card bottom. Only chairs
+                                      who accepted; nothing for an open invite. */}
                                   <div className="w-full mt-auto">
                                   {chairs.length > 0 && (
                                   <div className="w-full mt-4 pt-4" style={{ borderTop: '1px solid color-mix(in srgb, var(--gv-border) 55%, transparent)' }}>
-                                    <div className="flex items-start justify-center gap-6">
-                                      {chairs.map((ch, ci) => {
-                                        const uid = chairsLinkable ? chairIds[ci] : null;
-                                        const inner = (
-                                          <>
-                                            {ch.avatar_url ? (
-                                              /* eslint-disable-next-line @next/next/no-img-element */
-                                              <img
-                                                src={ch.avatar_url}
-                                                alt={ch.name}
-                                                style={{
-                                                  width: '52px', height: '52px', borderRadius: '9999px', objectFit: 'cover',
-                                                  boxShadow: '0 4px 12px color-mix(in srgb, var(--gv-main) 22%, transparent)',
-                                                  backgroundColor: 'var(--gv-bg)',
-                                                  outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: '-1px',
-                                                }}
-                                              />
-                                            ) : (
-                                              <span
-                                                className="flex items-center justify-center"
-                                                style={{
-                                                  width: '52px', height: '52px', borderRadius: '9999px',
-                                                  backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)',
-                                                  fontSize: '17px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
-                                                }}
-                                              >
-                                                {ch.name.charAt(0)}
-                                              </span>
-                                            )}
-                                            <span className="text-[11.5px] font-semibold mt-2 leading-tight" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
-                                              {ch.name}
-                                            </span>
-                                          </>
-                                        );
-                                        return uid ? (
-                                          <ProfileLink
-                                            key={ch.name}
-                                            userId={uid}
-                                            name={ch.name}
-                                            className="flex flex-col items-center text-center transition-transform hover:-translate-y-0.5"
-                                            style={{ width: '96px' }}
-                                          >
-                                            {inner}
-                                          </ProfileLink>
-                                        ) : (
-                                          <div key={ch.name} className="flex flex-col items-center text-center" style={{ width: '96px' }}>
-                                            {inner}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                    {/* A dais that is part seated, part invited.
-                                        The seated chairs are named above; this
-                                        line accounts for the rest without
-                                        naming anyone who has not accepted. */}
-                                    {pendingChairCount > 0 && (
-                                      <p
-                                        className="text-center text-[10.5px] font-semibold mt-2.5"
-                                        style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}
-                                      >
-                                        {pendingChairCount === 1
-                                          ? '1 more chair to be confirmed'
-                                          : `${pendingChairCount} more chairs to be confirmed`}
-                                      </p>
-                                    )}
-                                  </div>
-                                  )}
-
-                                  {/* No chair has accepted, but one or more have
-                                      been invited. An unnamed placeholder, on
-                                      purpose: an invitee may decline, and has
-                                      not agreed to appear publicly against this
-                                      conference, so this page shows THAT the
-                                      dais is being filled and never WHO. The
-                                      organiser surfaces (committees, assignment,
-                                      the live wall) are where the names live. */}
-                                  {chairs.length === 0 && pendingChairCount > 0 && (
-                                  <div className="w-full mt-4 pt-4" style={{ borderTop: '1px solid color-mix(in srgb, var(--gv-border) 55%, transparent)' }}>
-                                    <div className="flex flex-col items-center text-center">
-                                      <span
-                                        className="flex items-center justify-center"
-                                        style={{
-                                          width: '52px', height: '52px', borderRadius: '9999px',
-                                          border: '1.5px dashed color-mix(in srgb, var(--gv-accent) 70%, transparent)',
-                                          backgroundColor: 'color-mix(in srgb, var(--gv-accent) 10%, transparent)',
-                                          color: '#8A6614',
-                                        }}
-                                      >
-                                        <UserRound size={22} strokeWidth={1.75} />
-                                      </span>
-                                      <span
-                                        className="text-[11.5px] font-semibold mt-2 leading-tight"
-                                        style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif" }}
-                                      >
-                                        {pendingChairCount === 1 ? 'Chair to be confirmed' : 'Chairs to be confirmed'}
-                                      </span>
-                                    </div>
+                                    <CommitteeDais chairs={chairs} chairIds={c.chair_user_ids} />
                                   </div>
                                   )}
 
                                   {/* Capacity. Counts hidden: the card simply
                                       ends after the chairs row above, no gap
                                       left where this was. */}
-                                  {showCounts && (
+                                  {showFill && (
                                   <div className="w-full mt-4">
                                     <div className="flex items-center justify-between mb-1.5">
                                       <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '9.5px', letterSpacing: '0.08em', color: '#6B5F52' }}>
@@ -3240,6 +3127,18 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       </div>
                     )}
 
+                    {/* Show more: the committee's full information */}
+                    {(() => {
+                      const c = committeeInfoId ? committees.find(x => x.id === committeeInfoId) : null;
+                      if (!c) return null;
+                      const isCrisis = c.committee_type === 'crisis';
+                      const { countryCapacity } = committeeStats(c);
+                      const seatsLine = !isCrisis && c.delegation_size >= 2
+                        ? `${countryCapacity} countries · 2 delegates each`
+                        : `${countryCapacity} ${isCrisis ? 'roles' : 'seats'}`;
+                      return <CommitteeInfoDialog committee={c} seatsLine={seatsLine} onClose={() => setCommitteeInfoId(null)} />;
+                    })()}
+
                     {/* Roster modal, list format */}
                     {rosterCommittee && (() => {
                       const c = rosterCommittee;
@@ -3276,7 +3175,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                   <p className="font-bold text-[16px] leading-snug" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
                                     {c.name}
                                   </p>
-                                  {showCounts && (
+                                  {showFill && (
                                   <p className="mt-1" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10px', letterSpacing: '0.1em', color: 'var(--gv-muted)', margin: '4px 0 0 0' }}>
                                     {hasDoubles
                                       ? `${seatsTaken}/${seatCapacity} SEATS FILLED`
@@ -3295,7 +3194,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                   <X size={15} />
                                 </button>
                               </div>
-                              {showCounts && (
+                              {showFill && (
                               <div className="mt-3 rounded-full overflow-hidden" style={{ height: '6px', backgroundColor: 'color-mix(in srgb, var(--gv-border) 65%, transparent)' }}>
                                 <div style={{ width: `${pct}%`, height: '100%', borderRadius: '9999px', background: 'linear-gradient(to right, var(--gv-main-mid), var(--gv-main-light))' }} />
                               </div>
@@ -3360,7 +3259,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                       >
                                         {s.country_name}
                                       </span>
-                                      {showTakenCountries && (
+                                      {showSeatChips && (
                                       <div className="flex items-center gap-1 flex-shrink-0">
                                         {Array.from({ length: seatsTakenHere }, (_, ti) => (
                                           <span

@@ -28,7 +28,6 @@ import { NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuButton, NeuInset, Emoji3D } from '
 import { DatePicker } from '@/components/DatePicker';
 import { LogoCropModal } from '@/components/LogoCropModal';
 import { uploadConferenceAsset } from '@/lib/conferenceAssets';
-import { CurrencyPicker } from '@/components/CurrencyPicker';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { acronymProblem } from '@/lib/conferenceLabels';
 import { committeeDisplayName, deriveCommitteeAcronym, matchPresetEmblem } from '@/lib/presetNames';
@@ -50,13 +49,21 @@ const ROLE_DEFAULTS = ['delegate', 'chair', 'head-delegate', 'faculty-advisor', 
 
 // ── Step model ─────────────────────────────────────────────────────────────
 
-const TOTAL_STEPS = 13;
+const TOTAL_STEPS = 12;
 const REVIEW_STEP = TOTAL_STEPS;
 // 1 name+acronym · 2 format · 3 level · 4 where · 5 when · 6 delegates (REQUIRED)
-// · 7 committees (REQUIRED) · 8 fee · 9 logo (skippable) · 10 banner (skippable)
-// · 11 description + socials (skippable) · 12 what they will use Gavelling for
-// (REQUIRED) · 13 review. Every skippable step's "Do this later" leaves it
-// exactly as editable from Settings afterwards as it already was.
+// · 7 committees (REQUIRED) · 8 logo (skippable) · 9 banner (skippable)
+// · 10 description + socials (skippable) · 11 what they will use Gavelling for
+// (REQUIRED) · 12 review.
+//
+// THERE IS NO FEE STEP (owner, 18 Sep 2026). A price is not something to set
+// before a conference exists: the conference and the delegate role config are
+// created at a fee of 0 and applications closed, prices are set in Settings →
+// Financials, and every public surface shows "TBD" until delegate applications
+// are open (displayDelegatePrice in src/lib/publicFees.ts).
+//
+// Every skippable step's "Do this later" leaves it exactly as editable from
+// Settings afterwards as it already was.
 //
 // WHY COMMITTEES SIT AT 7. A conference with no committees cannot receive a
 // meaningful application, and the wizard used to let organisers leave without
@@ -64,13 +71,13 @@ const REVIEW_STEP = TOTAL_STEPS;
 // checklist's committee item is the first and biggest funnel cliff (169 → 83).
 // So the step is REQUIRED. It goes here, straight after the head count, because
 // "how many delegates" and "which rooms do they sit in" are one thought, and
-// because everything from 9 to 11 is presentation and skippable: a mandatory
+// because everything from 8 to 10 is presentation and skippable: a mandatory
 // step must not land AFTER a run of skippable ones, where the organiser has
 // already built up "skip everything" momentum. Seats and countries are
 // deliberately NOT asked here — they belong to the full editor at
 // /manage/[slug]/committees, and the step says so.
 
-// STEP 12, "What will you use Gavelling for?", is asked BEFORE the insert and
+// STEP 11, "What will you use Gavelling for?", is asked BEFORE the insert and
 // is REQUIRED.
 //
 // It used to be a bonus screen shown after the row was already real, recorded
@@ -769,9 +776,6 @@ export default function NewConferencePage() {
   const [committees, setCommittees] = useState<DraftCommittee[]>([]);
   const [editing, setEditing] = useState<{ draft: DraftCommittee; replacing: string | null } | null>(null);
   const [editorError, setEditorError] = useState('');
-  const [feeKind, setFeeKind] = useState<'free' | 'paid' | ''>('');
-  const [feeAmount, setFeeAmount] = useState('');
-  const [feeCurrency, setFeeCurrency] = useState('GBP');
 
   // Logo (mandatory) + banner (skippable). Assets upload to storage during
   // their step under a client-minted conference id, reused verbatim by the
@@ -792,7 +796,7 @@ export default function NewConferencePage() {
   const logoInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
-  // What they came here to do (step 12). Required, and written as part of the
+  // What they came here to do (step 11). Required, and written as part of the
   // conferences insert — there is no second write and nothing to fail.
   const [intentKeys, setIntentKeys] = useState<string[]>([]);
 
@@ -1016,11 +1020,11 @@ export default function NewConferencePage() {
             // `expectedDelegates > 0` and offers SET AN EXPECTED HEAD COUNT,
             // and admin's isShortOnSeats() skips it.
             expected_delegates: expectedDelegates ? parseInt(expectedDelegates) : 0,
-            // What they came here to do, step 12. Part of the insert, so it can
+            // What they came here to do, step 11. Part of the insert, so it can
             // never be a follow-up write that fails after the conference is real.
             intent: intentPayload(intentKeys),
-            fee_amount: feeKind === 'paid' ? parseFloat(feeAmount) || 0 : 0,
-            fee_currency: feeCurrency,
+            // No price is asked while creating (see the step model): the
+            // legacy conference-level fee columns keep their defaults.
             description: description.trim() || null,
             instagram_url: normalizeSocialUrl(instagram, 'instagram'),
             facebook_url: normalizeSocialUrl(facebook, 'facebook'),
@@ -1053,12 +1057,10 @@ export default function NewConferencePage() {
           return;
         }
 
-        // Seed default per-role application configs so the delegate fee
-        // entered above is the role config's fee from day one, otherwise
-        // Settings' own ensureRoleConfigs seeds it lazily with a $0 delegate
-        // fee the first time the organizer opens Settings, disagreeing with
-        // the fee just entered here. Non-fatal: that lazy fallback still
-        // covers this conference if the insert below fails.
+        // Seed default per-role application configs so every role has a row
+        // (fee 0, closed) from day one; prices are set in Settings →
+        // Financials. Non-fatal: Settings' own ensureRoleConfigs seeds them
+        // lazily if the insert below fails.
         const { error: roleConfigError } = await supabase.from('application_role_configs').insert(
           ROLE_DEFAULTS.map(role => ({
             conference_id: conferenceId,
@@ -1068,8 +1070,7 @@ export default function NewConferencePage() {
             // ready, and the INSERT trigger would coerce this to false anyway.
             // They open once financial setup is done, from Settings.
             is_enabled: false,
-            fee_amount: role === 'delegate' ? (parseFloat(feeAmount) || 0) : 0,
-            fee_currency: feeCurrency,
+            fee_amount: 0,
             auto_accept: false,
             payment_timing: 'anytime' as const,
             custom_questions: [],
@@ -1204,15 +1205,6 @@ export default function NewConferencePage() {
     advance(7);
   }
 
-  function continueStep8() {
-    if (!feeKind) { setStepError('Is your conference free or paid?'); return; }
-    if (feeKind === 'paid') {
-      const amt = parseFloat(feeAmount);
-      if (!feeAmount || isNaN(amt) || amt <= 0) { setStepError('Enter the delegate fee amount.'); return; }
-    }
-    advance(8);
-  }
-
   // Acronyms where there is one, so the row reads "UNSC, DISEC, WHO" rather
   // than three wrapped sentences. ReviewRow truncates a long list on its own.
   const committeesSummary = committees.length
@@ -1220,7 +1212,7 @@ export default function NewConferencePage() {
     : 'None yet';
 
   // Titles rather than the admin's SHOUTING short codes: this row sits beside
-  // "Committees" and "Fee" in a sentence-case list.
+  // "Committees" and "Logo" in a sentence-case list.
   const intentSummary = intentKeys.length
     ? INTENT_OPTIONS.filter((o) => intentKeys.includes(o.key)).map((o) => o.label).join(', ')
     : 'Not answered';
@@ -1245,8 +1237,7 @@ export default function NewConferencePage() {
     studentLevel && country && city.trim() && format &&
     parseInt(expectedDelegates) > 0 &&
     committees.length > 0 &&
-    intentKeys.length > 0 &&
-    (feeKind === 'free' || (feeKind === 'paid' && parseFloat(feeAmount) > 0));
+    intentKeys.length > 0;
 
   // Loading / auth spinner
   if (loading || !user) {
@@ -1691,67 +1682,10 @@ export default function NewConferencePage() {
               </WizardShell>
             )}
 
-            {/* ── Step 8, fee ────────────────────────────────────────── */}
+            {/* ── Step 8, logo (MANDATORY) ───────────────────────────── */}
             {step === 8 && (
               <WizardShell
                 step={8} total={TOTAL_STEPS}
-                title="Is there a delegate fee?"
-                sub="Free conferences fill fast. Paid fees are collected per delegate."
-                onBack={back}
-              >
-                <TwoTabPick
-                  options={[
-                    { key: 'free', label: 'Free', icon: <Emoji3D name="Party popper" size={52} />, sub: 'No delegate fee' },
-                    { key: 'paid', label: 'Paid', icon: <Emoji3D name="Money bag" size={52} />, sub: 'Delegates pay to attend' },
-                  ]}
-                  value={feeKind || null}
-                  onChange={(k) => { setFeeKind(k as 'free' | 'paid'); setStepError(''); }}
-                />
-                {feeKind === 'paid' && (
-                  <NeuInset style={{ padding: '18px 20px', borderRadius: 20, marginTop: 18 }}>
-                    <FieldLabel>Base delegate fee</FieldLabel>
-                    <p style={{ fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.55, color: NEU.muted, margin: '2px 0 12px' }}>
-                      Just your <strong style={{ color: NEU.ink }}>lowest / earliest</strong> delegate price for now. After you create the
-                      conference, Settings&nbsp;→&nbsp;Financials lets you add phased pricing (early-bird through later
-                      deadlines) and separate fees for <strong style={{ color: NEU.ink }}>delegations</strong> and
-                      <strong style={{ color: NEU.ink }}> faculty advisors</strong>.
-                    </p>
-                    {/* items-stretch so the amount input matches the picker's
-                        44px trigger height rather than sitting shorter than it. */}
-                    <div className="flex items-stretch gap-3">
-                      <CurrencyPicker
-                        value={feeCurrency}
-                        onChange={setFeeCurrency}
-                        ariaLabel="Base delegate fee currency"
-                        style={{ width: 132, flexShrink: 0 }}
-                      />
-                      <input
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        value={feeAmount}
-                        onChange={(e) => setFeeAmount(e.target.value)}
-                        placeholder="0.00"
-                        autoFocus
-                        style={{ ...bigInputStyle, flex: 1, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontVariantNumeric: 'tabular-nums' }}
-                        onFocus={focusForest}
-                        onBlur={blurClear}
-                      />
-                    </div>
-                  </NeuInset>
-                )}
-                {stepError && <ErrorNote>{stepError}</ErrorNote>}
-                <ContinueButton
-                  onClick={continueStep8}
-                  disabled={!feeKind || (feeKind === 'paid' && !(parseFloat(feeAmount) > 0))}
-                />
-              </WizardShell>
-            )}
-
-            {/* ── Step 9, logo (MANDATORY) ───────────────────────────── */}
-            {step === 9 && (
-              <WizardShell
-                step={9} total={TOTAL_STEPS}
                 title="Add your conference logo"
                 sub="Every conference needs a logo. It's how delegates recognise you across Gavelling."
                 onBack={back}
@@ -1802,19 +1736,19 @@ export default function NewConferencePage() {
                 {logoError && <ErrorNote>{logoError}</ErrorNote>}
                 {stepError && <ErrorNote>{stepError}</ErrorNote>}
                 <ContinueButton
-                  onClick={() => (logoUrl ? advance(9) : setStepError('A logo is required to continue.'))}
+                  onClick={() => (logoUrl ? advance(8) : setStepError('A logo is required to continue.'))}
                   disabled={!logoUrl || logoUploading}
                 />
                 <div className="flex justify-center" style={{ marginTop: 12 }}>
-                  <SkipLink onClick={() => advance(9)} label="Do this later" />
+                  <SkipLink onClick={() => advance(8)} label="Do this later" />
                 </div>
               </WizardShell>
             )}
 
-            {/* ── Step 10, banner (SKIPPABLE) ────────────────────────── */}
-            {step === 10 && (
+            {/* ── Step 9, banner (SKIPPABLE) ────────────────────────── */}
+            {step === 9 && (
               <WizardShell
-                step={10} total={TOTAL_STEPS}
+                step={9} total={TOTAL_STEPS}
                 title="Add a banner"
                 sub="A wide header image for your conference page. Pick a preset, upload your own, or skip for now."
                 onBack={back}
@@ -1867,17 +1801,17 @@ export default function NewConferencePage() {
                 </div>
 
                 {bannerError && <ErrorNote>{bannerError}</ErrorNote>}
-                <ContinueButton onClick={() => advance(10)} />
+                <ContinueButton onClick={() => advance(9)} />
                 <div className="flex justify-center" style={{ marginTop: 12 }}>
-                  <SkipLink onClick={() => { setBannerUrl(''); advance(10); }} label="Do this later" />
+                  <SkipLink onClick={() => { setBannerUrl(''); advance(9); }} label="Do this later" />
                 </div>
               </WizardShell>
             )}
 
-            {/* ── Step 11, description + socials (SKIPPABLE) ─────────── */}
-            {step === 11 && (
+            {/* ── Step 10, description + socials (SKIPPABLE) ─────────── */}
+            {step === 10 && (
               <WizardShell
-                step={11} total={TOTAL_STEPS}
+                step={10} total={TOTAL_STEPS}
                 title="Tell delegates about it"
                 sub="A short description and your social links for the public page. All optional, skip if you'd rather add them later."
                 onBack={back}
@@ -1912,13 +1846,13 @@ export default function NewConferencePage() {
                   </NeuInset>
                 </div>
 
-                <ContinueButton onClick={() => advance(11)} />
+                <ContinueButton onClick={() => advance(10)} />
                 <div className="flex justify-center" style={{ marginTop: 12 }}>
                   <SkipLink
                     onClick={() => {
                       setDescription('');
                       setInstagram(''); setFacebook(''); setTiktok(''); setWhatsapp(''); setWebsite('');
-                      advance(11);
+                      advance(10);
                     }}
                     label="Do this later"
                   />
@@ -1926,10 +1860,10 @@ export default function NewConferencePage() {
               </WizardShell>
             )}
 
-            {/* ── Step 12, what they will use Gavelling for (REQUIRED) ── */}
-            {step === 12 && (
+            {/* ── Step 11, what they will use Gavelling for (REQUIRED) ── */}
+            {step === 11 && (
               <WizardShell
-                step={12} total={TOTAL_STEPS}
+                step={11} total={TOTAL_STEPS}
                 title="What will you use Gavelling for?"
                 sub="Pick everything that applies. Your dashboard will put those first. Nothing is switched off by this."
                 onBack={back}
@@ -1998,12 +1932,12 @@ export default function NewConferencePage() {
                 <ContinueButton
                   label="Continue to review"
                   disabled={intentKeys.length === 0}
-                  onClick={() => (intentKeys.length > 0 ? advance(12) : setStepError('Pick at least one.'))}
+                  onClick={() => (intentKeys.length > 0 ? advance(11) : setStepError('Pick at least one.'))}
                 />
               </WizardShell>
             )}
 
-            {/* ── Step 13, review + create ───────────────────────────── */}
+            {/* ── Step 12, review + create ───────────────────────────── */}
             {step === REVIEW_STEP && (
               <WizardShell
                 step={REVIEW_STEP} total={TOTAL_STEPS}
@@ -2023,16 +1957,11 @@ export default function NewConferencePage() {
                     value={committeesSummary}
                     onEdit={() => editFromReview(7)}
                   />
-                  <ReviewRow
-                    label="Fee"
-                    value={feeKind === 'free' ? 'Free' : `${feeCurrency} ${parseFloat(feeAmount || '0').toFixed(2)} per delegate`}
-                    onEdit={() => editFromReview(8)}
-                  />
-                  <ReviewRow label="Logo" value={logoUrl ? 'Added' : 'Skipped'} onEdit={() => editFromReview(9)} />
-                  <ReviewRow label="Banner" value={bannerUrl ? 'Added' : 'Skipped'} onEdit={() => editFromReview(10)} />
-                  <ReviewRow label="Description" value={description.trim() ? 'Added' : 'Skipped'} onEdit={() => editFromReview(11)} />
-                  <ReviewRow label="Social links" value={socialsSummary || 'Skipped'} onEdit={() => editFromReview(11)} />
-                  <ReviewRow label="Using Gavelling for" value={intentSummary} onEdit={() => editFromReview(12)} />
+                  <ReviewRow label="Logo" value={logoUrl ? 'Added' : 'Skipped'} onEdit={() => editFromReview(8)} />
+                  <ReviewRow label="Banner" value={bannerUrl ? 'Added' : 'Skipped'} onEdit={() => editFromReview(9)} />
+                  <ReviewRow label="Description" value={description.trim() ? 'Added' : 'Skipped'} onEdit={() => editFromReview(10)} />
+                  <ReviewRow label="Social links" value={socialsSummary || 'Skipped'} onEdit={() => editFromReview(10)} />
+                  <ReviewRow label="Using Gavelling for" value={intentSummary} onEdit={() => editFromReview(11)} />
                 </div>
 
                 {/* Contact email, required by the directory, prefilled from your profile */}

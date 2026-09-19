@@ -19,7 +19,9 @@
 //
 // Colour still comes from the shared sequential ramp, darkest at the furthest
 // stage, so a colour means the same thing here as on the chart. Attention is a
-// separate gold marker plus a CHECK label — never hue alone.
+// separate marker. The visible CHECK pill, the gold swatch ring and the dashed
+// ring were removed (owner, 18 Sep 2026: "no need for a check"); a low stage is
+// still named "needs attention" in the dial's accessible label.
 
 import { OUTFIT } from '@/components/neu';
 import { FUNNEL_RAMP } from './ParticipantsChart';
@@ -28,7 +30,6 @@ const INK = '#1C1410';
 const INK_70 = '#4A4238';
 const MUTED = '#6B5F52';
 const TRACK = '#E7E1D1';
-const ATTENTION = '#B6871F';
 /** Pledged spots are gold, never a green from the funnel ramp: they are people
  *  who are coming but have not applied, so they must not read as a stage of the
  *  application funnel. */
@@ -175,12 +176,6 @@ export default function ApplicantsDial({
               <title>{`${a.label}: ${a.value.toLocaleString()}`}</title>
             </path>
           ))}
-          {arcs.some((a) => flagged.has(a.key)) && (
-            <circle
-              cx={cx} cy={cy} r={r + stroke / 2 + 4} fill="none"
-              stroke={ATTENTION} strokeWidth={1.5} strokeDasharray="3 5" opacity={0.85}
-            />
-          )}
         </svg>
 
         <div
@@ -234,13 +229,11 @@ export default function ApplicantsDial({
       <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 4, minWidth: 150 }}>
         {stages.map((s) => {
           const color = FUNNEL_RAMP[Math.min(stages.indexOf(s), FUNNEL_RAMP.length - 1)];
-          const isFlagged = flagged.has(s.key);
           const inner = (
             <>
               <span
                 style={{
                   width: 9, height: 9, borderRadius: 3, background: color, flexShrink: 0,
-                  boxShadow: isFlagged ? `0 0 0 2px ${ATTENTION}` : 'none',
                 }}
               />
               <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: INK_70 }}>
@@ -254,17 +247,6 @@ export default function ApplicantsDial({
               >
                 {s.value.toLocaleString()}
               </span>
-              {isFlagged && (
-                <span
-                  style={{
-                    flexShrink: 0, padding: '0 5px', borderRadius: 999,
-                    background: 'rgba(182,135,31,0.14)', color: ATTENTION,
-                    fontFamily: OUTFIT, fontSize: 9, fontWeight: 900, letterSpacing: '0.04em',
-                  }}
-                >
-                  CHECK
-                </span>
-              )}
             </>
           );
           return (

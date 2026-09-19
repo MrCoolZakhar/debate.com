@@ -26,6 +26,10 @@
  * way the sidebar counts them — everyone in the room, OBSERVERS INCLUDED — plus the quorum
  * pill when Settings → Voting → Quorum is set. They are a read-out of the room, not of the
  * ballot: the vote's own maths (which drops observers) stays in the Threshold drawer.
+ * Since 18 Sep 2026 (owner: "move them to the left side of the card, rotated 90 degrees, and
+ * bigger") they are `SideQuorumTabs`: the same tabs and numbers, larger, growing sideways out
+ * of the card's inline-start edge. Below 900px of window width there is no room beside the
+ * card, so the masthead keeps the horizontal QuorumRings there.
  *
  * The card is centred on the screen; the rules sit to its right (owner, 17 Sep 2026). Three
  * icon ribbons (Threshold with quorum, Abstentions, Veto), in the manner of the Settings
@@ -48,6 +52,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { CircleSlash, Megaphone, Scale, ShieldCheck, X, type LucideIcon } from 'lucide-react';
 import Portal from '@/components/Portal';
 import QuorumRings from '@/components/QuorumRings';
+import { SideQuorumTabs } from '@/components/voting/SideQuorumTabs';
 import { SeatCircleFlag, SIDEBAR_MONOGRAM } from '@/components/CircleFlag';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
@@ -397,6 +402,8 @@ export function VotingRollCall({
           .gv-rc-tab:not([aria-selected="true"]):hover { filter: brightness(1.18) }
           .gv-rc-tab:focus-visible .gv-rc-stitch { border: 2px solid #B6871F !important }
           .gv-rc-side-l { display: none } .gv-rc-side-r { display: contents }
+          .gv-rc-q-side { display: none }
+          @media (min-width: 900px) { .gv-rc-q-side { display: contents } .gv-rc-q-top { display: none } }
           @media (min-width: 1280px) {
             .gv-rc { --gv-rc-d: ${DRAWER_W}px }
             .gv-rc-side-l { display: block; flex: 0 0 calc(var(--gv-rc-d) + ${RIBBON_W_ON}px - 12px) }
@@ -436,9 +443,16 @@ export function VotingRollCall({
             <div aria-hidden className="gv-rc-side-l" />
 
             {/* ── The roll call card (the session's pre-session card) ── */}
+            {/* The wrapper carries the layout (and the z-index over the tucked drawer); the card
+                inside clips its rounded corners, so the sideways quorum tabs can sit OUTSIDE it,
+                growing out of its inline-start edge (owner, 18 Sep 2026). */}
+            <div className="gv-rc-card order-3 xl:order-none relative flex flex-col min-h-0 flex-1" style={{ minWidth: 0, zIndex: 2 }}>
+            <div className="gv-rc-q-side">
+              <SideQuorumTabs present={roomPresent} total={seats.length} quorumNeeded={roomQuorumNeeded} ground={FOREST} rtl={rtl} />
+            </div>
             <section
-              className="gv-rc-card order-3 xl:order-none relative flex flex-col min-h-0 flex-1 rounded-3xl overflow-hidden"
-              style={{ minWidth: 0, backgroundColor: FOREST, border: '1.5px solid #3D7A52', boxShadow: '0 32px 80px rgba(27,56,40,0.40)', zIndex: 2 }}
+              className="relative flex flex-col min-h-0 flex-1 rounded-3xl overflow-hidden"
+              style={{ minWidth: 0, backgroundColor: FOREST, border: '1.5px solid #3D7A52', boxShadow: '0 32px 80px rgba(27,56,40,0.40)' }}
               aria-label={t('voting_roll_call_heading')}
             >
               <div className="pointer-events-none absolute inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundSize: '300px 300px', mixBlendMode: 'overlay', opacity: 0.07 }} />
@@ -457,7 +471,10 @@ export function VotingRollCall({
                   <button type="button" disabled={readOnly || seats.length === 0} onClick={() => onBulkStatus('present')} className={bulkBtn} style={{ backgroundColor: 'rgba(61,122,82,0.40)', color: '#EDE7D8' }}>{t('rollcall_all_present')}</button>
                   <button type="button" disabled={readOnly || seats.length === 0} onClick={() => onBulkStatus('present-voting')} className={bulkBtn} style={{ backgroundColor: 'rgba(182,135,31,0.30)', color: GOLD }}>{t('rollcall_all_pv')}</button>
                 </div>
-                <QuorumRings present={roomPresent} total={seats.length} quorumNeeded={roomQuorumNeeded} ground={FOREST} />
+                {/* Narrow screens have no room beside the card: the tabs stay on the masthead. */}
+                <div className="gv-rc-q-top">
+                  <QuorumRings present={roomPresent} total={seats.length} quorumNeeded={roomQuorumNeeded} ground={FOREST} />
+                </div>
               </div>
 
               <div
@@ -552,6 +569,7 @@ export function VotingRollCall({
                 </button>
               </div>
             </section>
+            </div>
 
             {/* The settings side: the drawer and its ribbons, to the right of the card from xl
                 (display: contents below that, so the drawer takes its place above the card). */}

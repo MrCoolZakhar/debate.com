@@ -261,7 +261,7 @@ function RemovePledgeAction({
 export default function FinancialsInvoicesPage() {
   const { conference } = useManage();
   const { session } = useAuth();
-  const paymentsLive = isPaymentsLive(conference?.id, conference?.connect_onboarding_status, conference?.payment_method);
+  const paymentsLive = isPaymentsLive(conference?.id, conference?.connect_onboarding_status, conference?.payment_method, conference?.platform_collects);
   const { confirm, modal: confirmModal } = useConfirmModal();
 
   const [activeView, setActiveView] = useState<'transactions' | 'ledger'>('transactions');

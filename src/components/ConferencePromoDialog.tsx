@@ -21,17 +21,20 @@
  * Checked every 15 s by a timer that sets state exactly once (when it opens). No per-second
  * work, no committee state, no writes (RULES 3 to 5).
  *
+ * The look (18 Sep 2026, owner: "way too AI generated. Use bigger sized headings and less
+ * words"): ONE large heading, one short gold line, the two buttons. The benefit rows with
+ * their icon tiles and the eyebrow are gone.
+ *
  * The CTA opens the organiser landing (`/`, which leads with the secretariat path) in a NEW
  * tab, so the room underneath is untouched. Escape, the backdrop, the X and "Not now" close
  * it. GrowDialog supplies the focus trap, focus return and the reduced-motion fade.
  */
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, ClipboardCheck, LayoutGrid, Megaphone, X, type LucideIcon } from 'lucide-react';
+import { X } from 'lucide-react';
 import GrowDialog from '@/components/GrowDialog';
 import { useT } from '@/contexts/LanguageContext';
 import { caucusRemainingNow } from '@/lib/committeeService';
 import type { CaucusState } from '@/lib/types';
-import type { TranslationKey } from '@/lib/translations';
 
 const CHECK_EVERY_MS = 15_000;
 const SHOW_AFTER_SECONDS = 180;
@@ -55,11 +58,6 @@ function anotherDialogOpen(): boolean {
   return !!document.querySelector('[aria-modal="true"], [role="dialog"], [role="alertdialog"]');
 }
 
-const BENEFITS: { icon: LucideIcon; title: TranslationKey; body: TranslationKey }[] = [
-  { icon: LayoutGrid, title: 'promo_conf_ecosystem_title', body: 'promo_conf_ecosystem_body' },
-  { icon: Megaphone, title: 'promo_conf_promote_title', body: 'promo_conf_promote_body' },
-  { icon: ClipboardCheck, title: 'promo_conf_apps_title', body: 'promo_conf_apps_body' },
-];
 
 const FOREST = '#1B3828';
 const GOLD = '#EED98A';
@@ -117,7 +115,7 @@ export default function ConferencePromoDialog({
       originSelector=".floor-emblem-anchor"
       onClose={() => setOpen(false)}
       ariaLabel={t('promo_conf_label')}
-      panelClassName="w-full max-w-[480px] rounded-[28px] overflow-hidden"
+      panelClassName="w-full max-w-[460px] rounded-[28px] overflow-hidden"
       panelStyle={{
         background: `linear-gradient(160deg, #24493A 0%, ${FOREST} 46%, #132A1E 100%)`,
         boxShadow: '0 1px 0 rgba(238,217,138,0.18) inset, 0 0 0 1px rgba(238,217,138,0.10) inset, 0 30px 70px -20px rgba(8,22,14,0.65), 0 10px 24px -12px rgba(8,22,14,0.45)',
@@ -126,21 +124,16 @@ export default function ConferencePromoDialog({
       backdropStyle={{ background: 'rgba(10, 24, 16, 0.58)' }}
     >
       {(close) => (
-        <div className="relative px-7 pt-7 pb-6 sm:px-8 sm:pt-8">
-          <style>{`
-            @keyframes gv-promo-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-            .gv-promo-row { animation: gv-promo-rise 320ms cubic-bezier(0.2, 0, 0, 1) both; }
-            @media (prefers-reduced-motion: reduce) { .gv-promo-row { animation: none; } }
-          `}</style>
-          {/* The mark, faint, in the corner: the same emblem that sits on the floor. */}
+        <div className="relative px-8 pt-10 pb-7 sm:px-10 sm:pt-12">
+          {/* The mark, large and faint, bleeding off the corner: the emblem that sits on the floor. */}
           <div
             aria-hidden
-            className="pointer-events-none absolute -end-10 -top-10 h-44 w-44"
+            className="pointer-events-none absolute -end-16 -top-14 h-64 w-64"
             style={{
               WebkitMaskImage: 'url(/gavelling-mark.png)', maskImage: 'url(/gavelling-mark.png)',
               WebkitMaskSize: '100% 100%', maskSize: '100% 100%',
               WebkitMaskRepeat: 'no-repeat', maskRepeat: 'no-repeat',
-              backgroundColor: 'rgba(238,217,138,0.07)',
+              backgroundColor: 'rgba(238,217,138,0.08)',
             }}
           />
           <button
@@ -153,57 +146,23 @@ export default function ConferencePromoDialog({
             <X size={18} strokeWidth={2.25} />
           </button>
 
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: GOLD }}>
-            {t('promo_conf_eyebrow')}
-          </p>
-          <h2 className="mt-2 pe-8 text-[26px] font-black leading-[1.12]" style={{ color: '#FBF7EC', textWrap: 'balance' } as React.CSSProperties}>
+          <h2
+            className="relative pe-6 text-[40px] font-black leading-[1.02] sm:text-[46px]"
+            style={{ color: '#FBF7EC', letterSpacing: '-0.025em', textWrap: 'balance' } as React.CSSProperties}
+          >
             {t('promo_conf_title')}
           </h2>
-          <p className="mt-2.5 text-[14.5px] leading-relaxed" style={{ color: 'rgba(237,231,216,0.80)', textWrap: 'pretty' } as React.CSSProperties}>
+          <p className="relative mt-4 text-[16px] font-medium leading-snug" style={{ color: GOLD, textWrap: 'pretty' } as React.CSSProperties}>
             {t('promo_conf_body')}
           </p>
 
-          <ul className="mt-6 flex flex-col gap-2.5">
-            {BENEFITS.map(({ icon: Icon, title, body }, i) => (
-              <li
-                key={title}
-                className="gv-promo-row flex items-start gap-3.5 rounded-2xl px-3.5 py-3"
-                style={{
-                  animationDelay: `${140 + i * 90}ms`,
-                  background: 'rgba(255,255,255,0.045)',
-                  boxShadow: '0 0 0 1px rgba(238,217,138,0.08) inset',
-                }}
-              >
-                <span
-                  aria-hidden
-                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
-                  style={{ background: 'rgba(238,217,138,0.14)', color: GOLD, boxShadow: '0 0 0 1px rgba(238,217,138,0.16) inset' }}
-                >
-                  <Icon size={20} strokeWidth={2} />
-                </span>
-                <span className="min-w-0 pt-0.5">
-                  <span className="block text-[15px] font-bold leading-snug" style={{ color: '#FBF7EC' }}>{t(title)}</span>
-                  <span className="mt-0.5 block text-[13px] leading-snug" style={{ color: 'rgba(237,231,216,0.74)', textWrap: 'pretty' } as React.CSSProperties}>{t(body)}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-
-          <div className="mt-7 flex flex-col-reverse gap-2.5 sm:flex-row sm:items-center sm:justify-end">
-            <button
-              type="button"
-              onClick={close}
-              className="h-11 rounded-xl px-5 text-[14px] font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A] hover:bg-white/10 active:scale-[0.96]"
-              style={{ color: 'rgba(237,231,216,0.86)', transitionProperty: 'background-color, transform' }}
-            >
-              {t('promo_conf_later')}
-            </button>
+          <div className="relative mt-9 flex flex-col gap-2.5 sm:flex-row sm:items-center">
             <a
               href={LANDING_HREF}
               target="_blank"
               rel="noopener"
               onClick={() => close()}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-[14px] font-black focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FBF7EC] focus-visible:ring-offset-2 focus-visible:ring-offset-[#1B3828] hover:brightness-[1.04] active:scale-[0.96]"
+              className="inline-flex h-12 items-center justify-center rounded-2xl px-6 text-[15px] font-black focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FBF7EC] focus-visible:ring-offset-2 focus-visible:ring-offset-[#1B3828] hover:brightness-[1.04] active:scale-[0.96]"
               style={{
                 background: `linear-gradient(180deg, #F4E3A0 0%, ${GOLD} 100%)`,
                 color: FOREST,
@@ -213,9 +172,16 @@ export default function ConferencePromoDialog({
               }}
             >
               {t('promo_conf_cta')}
-              <ArrowUpRight size={17} strokeWidth={2.5} aria-hidden className="rtl:-scale-x-100" />
-              <span className="sr-only">({t('promo_conf_new_tab')})</span>
+              <span className="sr-only"> ({t('promo_conf_new_tab')})</span>
             </a>
+            <button
+              type="button"
+              onClick={close}
+              className="h-12 rounded-2xl px-5 text-[15px] font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A] hover:bg-white/10 active:scale-[0.96]"
+              style={{ color: 'rgba(237,231,216,0.86)', transitionProperty: 'background-color, transform' }}
+            >
+              {t('promo_conf_later')}
+            </button>
           </div>
         </div>
       )}

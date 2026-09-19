@@ -13,7 +13,7 @@
 //     so moving from the code step to the role step to the seat step never moves
 //     the code field or the button;
 //   • a flag-led seat list (JoinSeatPicker) instead of a native <select>;
-//   • a visible Sign in, through the existing /auth/signin?next= flow, with the
+//   • a visible Sign in, through the auth pop-up (openAuth), with the
 //     code and the role carried back;
 //   • a chair code typed or linked as CODE-1234 (the homepage routes those here
 //     with &mode=chair) looks up CODE and fills the chair code in. It used to look
@@ -21,6 +21,7 @@
 // Visual kit: ./joinUi.tsx. Seat list: ./JoinSeatPicker.tsx.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { openAuth } from '@/lib/authModal';
 import { useState, useEffect, useRef, Suspense, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -39,6 +40,7 @@ import { verifyConferenceAccess, type ConferenceAccess } from '@/lib/conferenceA
 import { getSessionJoinRules, getSeatAvailability, peekSeatToken, seatKey, type SeatAvailability } from '@/lib/seatClaims';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
+import SessionLanguageMenu from '@/components/SessionLanguageMenu';
 import { getCountryDisplayName } from '@/lib/countries';
 import { supabase, supabase as anonSupabase } from '@/lib/supabase';
 import { PRESET_LOGOS, deriveCommitteeAcronym, committeeDisplayName, matchPresetEmblem } from '@/lib/presetNames';
@@ -394,10 +396,9 @@ function JoinPageInner() {
     }
   }, [openPath, mode, openSeatCount, chairsOpen]);
 
-  const signInHref = '/auth/signin?next=' + encodeURIComponent(
-    lookupCode ? '/join?code=' + lookupCode + '&mode=' + mode : '/join',
-  );
-  const goSignIn = () => router.push(signInHref);
+  // Sign in is a pop-up (src/lib/authModal.ts): the join page stays put, and
+  // the signed-in session lands here through AuthProvider.
+  const goSignIn = () => openAuth({ next: lookupCode ? '/join?code=' + lookupCode + '&mode=' + mode : '/join' });
 
   const handleJoin = async () => {
     // ── Conference-linked session fork ──
@@ -563,12 +564,13 @@ function JoinPageInner() {
       <PageBackdrop />
 
       {/* ── Nav ─────────────────────────────────────────────────────────────── */}
-      <nav className="relative z-10 mx-auto flex h-16 w-full max-w-[1120px] items-center justify-between gap-3 px-4 sm:px-6">
+      <nav className="relative z-20 mx-auto flex h-16 w-full max-w-[1120px] items-center justify-between gap-3 px-4 sm:px-6">
         <Link href="/sessions" className="flex flex-shrink-0 items-center focus:outline-none">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/GavellingLogo.png" alt="Gavelling" className="h-auto w-[118px] object-contain sm:w-[140px]" />
         </Link>
         <div className="flex min-w-0 items-center gap-2">
+          <SessionLanguageMenu />
           <Link
             href="/create"
             aria-label={t('join_nav_create')}

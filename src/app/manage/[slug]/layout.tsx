@@ -61,6 +61,9 @@ export interface Conference {
   external_payment_url: string | null;
   external_payment_note: string | null;
   payment_gate_exempt: boolean;
+  /** Card payments charged on Gavelling's own Stripe account (no Connect
+   *  needed). conference_payments_ready() treats it as ready. */
+  platform_collects: boolean;
   predecessor_conference_id: string | null;
   predecessor_approved: boolean;
   min_age: number | null;
@@ -154,7 +157,7 @@ const CONFERENCE_COLUMNS = [
   'contact_email', 'student_level', 'description',
   'instagram_url', 'facebook_url', 'tiktok_url', 'whatsapp_url', 'website_url',
   'stripe_account_id', 'connect_onboarding_status', 'payout_country', 'payment_method',
-  'external_payment_url', 'external_payment_note', 'payment_gate_exempt', 'organizer_id',
+  'external_payment_url', 'external_payment_note', 'payment_gate_exempt', 'platform_collects', 'organizer_id',
   'predecessor_conference_id', 'predecessor_approved', 'min_age', 'max_age',
   'allocation_swap_mode', 'allocation_email_auto', 'email_theme',
   'financial_aid_enabled', 'aid_questions', 'aid_intro',

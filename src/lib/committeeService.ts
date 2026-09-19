@@ -1691,7 +1691,9 @@ export async function denyGslRequest(motionId: string, code: string, chairSuffix
 
 export type LedgerEventType =
   | 'speech' | 'motion-raised' | 'right-of-reply'
-  | 'manual-award' | 'manual-deduct' | 'custom';
+  | 'manual-award' | 'manual-deduct' | 'custom'
+  // Motion lifecycle (src/lib/motionLog.ts). Only motion-passed scores (motionPassed).
+  | 'motion-passed' | 'motion-failed' | 'motion-edited';
 
 // Generalised event writer — every point-earning action becomes a logged event on the
 // same messages + `__log__:` channel that speaking time already uses, so points are
@@ -1699,6 +1701,9 @@ export type LedgerEventType =
 export async function logEvent(committeeId: string, e: {
   country: string; type: LedgerEventType; sourceId?: string; // sourceId = which scoring source
   seconds?: number; context?: string; topic?: string; value?: number; note?: string;
+  // Motion events only (src/lib/motionLog.ts).
+  motionId?: string; motionType?: string; totalTime?: number; speakingTime?: number;
+  tourOrder?: string; outcome?: string; prevMotionId?: string;
 }, code: string, chairSuffix?: string): Promise<void> {
   const payload = JSON.stringify({ ...e, timestamp: serverNowIso() });   // database clock (T-1)
   const { error } = await sessionClient(code, chairSuffix).from('messages').insert({

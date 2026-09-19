@@ -1,5 +1,6 @@
 'use client';
 
+import { openAuth } from '@/lib/authModal';
 import React, { use, useEffect, useState, useRef, useCallback, useMemo, Suspense } from 'react';
 import SessionsHeaderLogo from '@/components/SessionsHeaderLogo';
 import { Mic, FileText, MessageCircle, MessageSquare, Clock, Mic2, Languages, LogOut, Check, FolderOpen, Hand } from 'lucide-react';
@@ -11,6 +12,7 @@ import {
 } from '@/components/delegate/DelegateUI';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
+import LanguageRequestDialog from '@/components/LanguageRequestDialog';
 import { Committee, CaucusState, Delegate, DocumentType, SpeakingLogEntry, DelegateStatus } from '@/lib/types';
 import ChatPanel from '@/components/ChatPanel';
 import { getScoringConfig } from '@/lib/scoring';
@@ -843,6 +845,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const [endedTab, setEndedTab] = useState<'ended' | 'session'>('ended');
   const [hoursRemaining, setHoursRemaining] = useState<number | null>(null);
   const [langOpen, setLangOpen] = useState(false);
+  const [requestLangOpen, setRequestLangOpen] = useState(false);
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
 
   const committeeIdRef = useRef('');
@@ -1398,7 +1401,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
   // Seat guard screens (see the claim effect above). Every one of them has a way back.
   const backToJoin = () => router.push('/join?code=' + encodeURIComponent(code.toUpperCase()));
-  const signInThenJoin = () => router.push('/auth/signin?next=' + encodeURIComponent('/join?code=' + code.toUpperCase()));
+  const signInThenJoin = () => openAuth({ next: '/join?code=' + code.toUpperCase() });
   // Also bumps loadAttempt, because losing the seat stopped the room subscription: without
   // this a delegate who took the seat back with "Use this device instead" would sit in a
   // room that never updates again.
@@ -1789,9 +1792,23 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   </button>
                 );
               })}
+              <button
+                type="button"
+                onClick={() => { setLangOpen(false); setRequestLangOpen(true); }}
+                className="dgv-focus w-full flex items-center gap-2.5 px-4 text-start"
+                style={{
+                  minHeight: 44, border: 'none', cursor: 'pointer',
+                  borderTop: `1px solid ${DG.hairline}`, background: 'transparent',
+                  fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: DG.forest,
+                }}
+              >
+                <Languages size={15} strokeWidth={2.25} aria-hidden />
+                <span className="flex-1">{t('lang_request_open')}</span>
+              </button>
             </div>
           </>
         )}
+        <LanguageRequestDialog open={requestLangOpen} onClose={() => setRequestLangOpen(false)} />
       </div>
 
       <button

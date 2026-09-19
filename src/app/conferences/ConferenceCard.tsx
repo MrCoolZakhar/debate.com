@@ -42,6 +42,7 @@ import { useState } from 'react';
 import { ArrowRight, Check, Users, CalendarDays, Gavel, MapPin } from 'lucide-react';
 import { getCountryByName } from '@/lib/countries';
 import { currencySymbol, formatFeeAmountCompact } from '@/lib/utils';
+import { TBD_PRICE, type DelegatePrice } from '@/lib/publicFees';
 import { LogoDisc } from '@/components/LogoDisc';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { formatConferenceDates } from '@/lib/conferenceDates';
@@ -70,6 +71,9 @@ export interface CardConference {
   expected_delegates: number;
   fee_amount: number;
   fee_currency: string;
+  /** The public delegate price (publicFees.displayDelegatePrice). The fee_*
+   *  columns above are never shown; absent means TBD. */
+  delegate_price?: DelegatePrice;
   format?: string;
   logo_url: string | null;
   banner_url: string | null;
@@ -125,6 +129,7 @@ export function ConferenceCard({
   const countryObj = getCountryByName(conf.country);
   // "Oxford, GB", ISO country code instead of the full country name (or flag)
   const countryCode = countryObj ? countryObj.code.toUpperCase() : conf.country;
+  const price = conf.delegate_price ?? TBD_PRICE;
   // Heading = acronym + edition year, but never doubled if the acronym/name
   // already carries that year (e.g. "Hult 2026" stays "Hult 2026").
   const headingLabel = conferenceAcronymLabel(conf);
@@ -264,7 +269,17 @@ export function ConferenceCard({
                 {conf.city}, {countryCode}
               </span>
             </span>
-            {conf.fee_amount === 0 ? (
+            {price.kind === 'tbd' ? (
+              <span
+                style={{
+                  fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 700,
+                  letterSpacing: '0.08em', color: 'rgba(237,231,216,0.85)', backgroundColor: 'rgba(237,231,216,0.10)',
+                  border: '1px solid rgba(237,231,216,0.28)', padding: '2px 9px', borderRadius: '9999px',
+                }}
+              >
+                TBD
+              </span>
+            ) : price.kind === 'free' ? (
               <span
                 style={{
                   fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
@@ -282,7 +297,7 @@ export function ConferenceCard({
                   border: '1px solid rgba(238,217,138,0.32)', padding: '2px 9px', borderRadius: '9999px', whiteSpace: 'nowrap',
                 }}
               >
-                {currencySymbol(conf.fee_currency)}{formatFeeAmountCompact(conf.fee_amount)}
+                {currencySymbol(price.currency)}{formatFeeAmountCompact(price.amount)}
               </span>
             )}
             {conf.expected_delegates > 0 && (
@@ -397,22 +412,28 @@ export function ConferenceCard({
           top: `${(compact ? 72 : 104) - 17}px`,
           display: 'inline-flex', alignItems: 'baseline', gap: '2px',
           backgroundColor: '#FAF8F3',
-          border: conf.fee_amount === 0 ? '2px solid rgba(61,122,82,0.5)' : '2px solid rgba(182,135,31,0.45)',
+          border: price.kind === 'tbd'
+            ? '2px solid rgba(28,20,16,0.18)'
+            : price.kind === 'free' ? '2px solid rgba(61,122,82,0.5)' : '2px solid rgba(182,135,31,0.45)',
           borderRadius: '9999px', padding: '5px 13px',
           boxShadow: '0 6px 16px rgba(27,56,40,0.18)',
         }}
       >
-        {conf.fee_amount === 0 ? (
+        {price.kind === 'tbd' ? (
+          <span title="Price to be announced" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '14px', letterSpacing: '0.08em', color: '#5C4F44' }}>
+            TBD
+          </span>
+        ) : price.kind === 'free' ? (
           <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '14px', letterSpacing: '0.08em', color: '#2A5A3C' }}>
             FREE
           </span>
         ) : (
           <>
             <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '14.5px', color: '#B6871F' }}>
-              {currencySymbol(conf.fee_currency)}
+              {currencySymbol(price.currency)}
             </span>
             <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: '16.5px', color: '#1C1410' }}>
-              {formatFeeAmountCompact(conf.fee_amount)}
+              {formatFeeAmountCompact(price.amount)}
             </span>
           </>
         )}

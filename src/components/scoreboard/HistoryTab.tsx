@@ -43,7 +43,8 @@
 
 import React, { useMemo, useState } from 'react';
 import {
-  ChevronRight, ListOrdered, Gavel, Users, MicVocal, CircleDot, Clock,
+  ChevronRight, ListOrdered, Gavel, Users, MicVocal, CircleDot, Clock, MessagesSquare,
+  Check, X, CornerDownRight, Hourglass,
   type LucideIcon,
 } from 'lucide-react';
 import { NEU, OUTFIT, EASE } from '@/components/neu';
@@ -55,8 +56,10 @@ import { useLanguage, useT } from '@/contexts/LanguageContext';
 import type { Committee } from '@/lib/types';
 import type { FeedbackEntry } from '@/lib/committeeService';
 import {
-  buildSessionHistory, type HistorySpeech, type HistoryEvent, type SegmentKind,
+  buildSessionHistory, type HistorySpeech, type HistoryEvent, type SegmentKind, type MotionStatus,
 } from '@/lib/sessionHistory';
+import { describeMotion } from '@/lib/motionLog';
+import { motionNames } from '@/lib/committeeFlags';
 import { eventIcon, TINT } from './SessionScoreboardParts';
 import EditableNote from './EditableNote';
 
@@ -65,7 +68,17 @@ const KIND_ICON: Record<SegmentKind, LucideIcon> = {
   'moderated-caucus': Gavel,
   'unmoderated-caucus': Users,
   'tour-de-table': MicVocal,
+  consultation: MessagesSquare,
   other: CircleDot,
+};
+
+/** How a motion line states its outcome: an icon and a plain word, never a pill (CLAUDE.md §8). */
+const STATUS_LOOK: Record<Exclude<MotionStatus, 'unknown'>, { icon: LucideIcon; color: string; key: 'sb_hist_motion_passed' | 'sb_hist_motion_rejected' | 'sb_hist_motion_failed' | 'sb_hist_motion_fell' | 'sb_hist_motion_pending' }> = {
+  passed: { icon: Check, color: '#1B3828', key: 'sb_hist_motion_passed' },
+  rejected: { icon: X, color: RED, key: 'sb_hist_motion_rejected' },
+  failed: { icon: X, color: RED, key: 'sb_hist_motion_failed' },
+  fell: { icon: CornerDownRight, color: SOFT, key: 'sb_hist_motion_fell' },
+  pending: { icon: Hourglass, color: '#8B5A20', key: 'sb_hist_motion_pending' },
 };
 
 export default function HistoryTab({ committee, feedback }: {
@@ -102,6 +115,8 @@ export default function HistoryTab({ committee, feedback }: {
       case 'moderated-caucus': return t('sb_hist_seg_moderated');
       case 'unmoderated-caucus': return t('sb_hist_seg_unmoderated');
       case 'tour-de-table': return t('sb_hist_seg_tour');
+      // No dedicated key: the committee's own (renamed or localized) motion name.
+      case 'consultation': return motionNames(committee, language).consultation;
       default: return t('sb_hist_seg_other');
     }
   };
@@ -159,8 +174,48 @@ export default function HistoryTab({ committee, feedback }: {
     </li>
   );
 
-  // ── A motion raised, a right of reply, a manual adjustment ────────────────
+  // ── A motion: who raised it, what it was, how it ended ────────────────────
+  // Indented under the segment's speeches' flag column, so a motion reads as a procedural
+  // line rather than as a speech (owner, 18 Sep 2026).
+  const renderMotion = (e: HistoryEvent) => {
+    const m = e.motion!;
+    const byChair = !e.country || e.country === '__chair__';
+    const what = describeMotion(committee, m, language) ?? t('sb_hist_motion_raised');
+    const look = m.status !== 'unknown' ? STATUS_LOOK[m.status] : null;
+    const who = byChair ? t('sb_hist_motion_chair') : getCountryDisplayName(e.country, language);
+    return (
+      <li style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBlock: 6, paddingInlineStart: 14, borderBlockEnd: `1px solid ${CARD_BORDER_COLOR}` }}>
+        {byChair ? (
+          <span aria-hidden className="inline-flex items-center justify-center" style={{ width: 20, height: 20, borderRadius: 999, flexShrink: 0, backgroundColor: TINT.forest.bg, color: TINT.forest.fg }}>
+            <Gavel size={11} strokeWidth={2.4} />
+          </span>
+        ) : (
+          <SeatCircleFlag country={e.country} size={20} decorative />
+        )}
+        <span
+          style={{ flex: 1, minWidth: 0, fontFamily: OUTFIT, fontSize: 12.5, color: NEU.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          title={`${who} · ${what}`}
+        >
+          <strong style={{ fontWeight: 700 }}>{who}</strong>
+          <span style={{ color: SOFT }}>{' · '}</span>
+          {what}
+        </span>
+        {look && (
+          <span className="inline-flex items-center gap-1" style={{ flexShrink: 0, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: look.color }}>
+            <look.icon size={12} strokeWidth={2.6} aria-hidden />
+            {t(look.key)}
+          </span>
+        )}
+        <span style={{ flexShrink: 0, minWidth: 40, textAlign: 'end', fontFamily: OUTFIT, fontSize: 11, color: SOFT, fontVariantNumeric: 'tabular-nums' }}>
+          {stamp(e.timestamp)}
+        </span>
+      </li>
+    );
+  };
+
+  // ── A right of reply, a manual adjustment ─────────────────────────────────
   const renderEvent = (e: HistoryEvent) => {
+    if (e.type === 'motion' && e.motion) return renderMotion(e);
     const Icon = eventIcon(e.type);
     const signed = e.type === 'manual-deduct' ? -Math.abs(e.value ?? 0) : e.type === 'manual-award' ? Math.abs(e.value ?? 0) : null;
     return (
@@ -183,6 +238,17 @@ export default function HistoryTab({ committee, feedback }: {
       </li>
     );
   };
+  // A right of reply carries the notes the Commenters wrote on it in the comment dock.
+  const renderEventWithNotes = (e: HistoryEvent) => (e.notes?.length ? (
+    <>
+      {renderEvent(e)}
+      <li style={{ paddingInlineStart: 36, paddingBlock: 4, borderBlockEnd: `1px solid ${CARD_BORDER_COLOR}` }}>
+        {e.notes.map((n) => (
+          <EditableNote key={n.id} id={n.id} content={n.content} author={n.chairName} />
+        ))}
+      </li>
+    </>
+  ) : renderEvent(e));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -265,7 +331,7 @@ export default function HistoryTab({ committee, feedback }: {
                   <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
                     {items.map((it, k) => (
                       <React.Fragment key={k}>
-                        {it.kind === 'speech' ? renderSpeech(it.s) : renderEvent(it.e)}
+                        {it.kind === 'speech' ? renderSpeech(it.s) : renderEventWithNotes(it.e)}
                       </React.Fragment>
                     ))}
                   </ol>

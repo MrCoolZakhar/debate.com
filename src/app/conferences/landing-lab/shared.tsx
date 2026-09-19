@@ -1,6 +1,6 @@
 'use client';
 
-import { formatFeeAmountCompact } from '@/lib/utils';
+import { delegatePriceLabel, TBD_PRICE, type DelegatePrice } from '@/lib/publicFees';
 import { formatConferenceDates } from '@/lib/conferenceDates';
 import FooterLegal from '@/components/FooterLegal';
 
@@ -45,6 +45,8 @@ export interface LabConference {
   end_date: string;
   fee_amount: number;
   fee_currency: string;
+  /** The public delegate price (publicFees.displayDelegatePrice); TBD when absent. */
+  delegate_price?: DelegatePrice;
   expected_delegates: number;
   logo_url: string | null;
   banner_url: string | null;
@@ -109,7 +111,7 @@ export function isConcluded(c: LabConference): boolean {
 }
 
 export function feeLabel(c: LabConference): string {
-  return c.fee_amount === 0 ? 'Free' : `${c.fee_currency} ${formatFeeAmountCompact(c.fee_amount)}`;
+  return delegatePriceLabel(c.delegate_price ?? TBD_PRICE);
 }
 
 /** "In 231 days" / "Happening now" / "Concluded", honest urgency (RA/Meetup register). */

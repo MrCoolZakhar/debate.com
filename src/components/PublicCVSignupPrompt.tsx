@@ -41,8 +41,8 @@
 //     readable page; there is no login wall on a public CV and there must
 //     never be one.
 
+import AuthLink from '@/components/auth/AuthLink';
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { X, ArrowRight, Trophy, Images, ClipboardCheck } from 'lucide-react';
 import { NEU, OUTFIT } from '@/components/neu';
 import Portal from '@/components/Portal';
@@ -241,17 +241,17 @@ function Prompt({ onClose }: { onClose: () => void }) {
             ))}
           </div>
 
-          {/* No `next` override: /auth/signup already defaults to
-              /auth/onboarding, which is the flow that walks a new delegate
-              through adding their first conferences. */}
-          <Link
-            href="/auth/signup"
+          {/* Opens the sign-up pop-up here; a new account lands on its own
+              MUN CV, where the first conferences are added. */}
+          <AuthLink
+            mode="signup"
+            next="/account/cv"
             onClick={onClose}
             className="inline-flex items-center justify-center gap-2 w-full"
             style={{ borderRadius: 14, padding: '13px 18px', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, letterSpacing: '0.04em', textTransform: 'uppercase', textDecoration: 'none', boxShadow: NEU.outSm }}
           >
             Register now <ArrowRight size={16} strokeWidth={2.4} />
-          </Link>
+          </AuthLink>
           <button
             onClick={onClose}
             style={{ marginTop: 12, background: 'none', border: 'none', color: NEU.muted, fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}

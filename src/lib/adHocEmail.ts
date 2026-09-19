@@ -25,6 +25,7 @@ import { resolveTokens, type EmailTokenContext } from '@/lib/emailTokens';
 import { renderEmailHtml, type EmailRenderConference, type EmailTheme } from '@/lib/emailHtml';
 import { flattenBlocksToPlainText, type EmailBlock } from '@/lib/emailBlocks';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
+import { unresolvedFields } from '@/lib/emailUnresolved';
 import { formatFee } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
 
@@ -84,6 +85,12 @@ export interface QueueAdHocEmailResult {
   queued: number;
   /** Recipients dropped by the marketing opt-out gate. */
   optedOut: number;
+  /** Recipients NOT sent to because a merge field would have rendered as
+   *  ⚠field⚠ in their subject or body (a {{country}} for someone with no
+   *  allocation). Never queued, whatever the caller asked. */
+  skippedUnresolved: number;
+  /** The fields that were missing for those recipients, e.g. ['committee', 'country']. */
+  unresolvedFields: string[];
   emailSendId: string | null;
   error?: string;
 }
@@ -133,6 +140,25 @@ function resolveFeeToken(
   return conference?.fee_amount ? formatFee(conference.fee_amount, conference.fee_currency) : null;
 }
 
+/** The per-recipient token values. Mirrors the Communications composer's
+ *  buildContext, so the preview, the pre-send check and the real send agree. */
+function contextFor(app: RecipientRow, conference: ConferenceRow, roleConfigs: RoleFeeConfigRow[]): EmailTokenContext {
+  return {
+    delegate_name: app.profiles?.display_name ?? app.invited_name ?? null,
+    role: roleLabel(app.role),
+    delegation_name: app.societies?.name ?? (app.society_id == null ? 'Independent' : null),
+    committee: app.assigned_committee?.abbreviation ?? app.assigned_committee?.name ?? null,
+    country: app.assigned_country_name ?? null,
+    payment_status: paymentStatusLabel(app.payment_status),
+    conference_name: conference.full_name,
+    conference_dates: formatDateRange(conference.start_date, conference.end_date),
+    fee: resolveFeeToken(app.role, roleConfigs, conference),
+    // From the assigned committee — lets an ad-hoc "session codes" email
+    // resolve per delegate.
+    session_code: app.assigned_committee?.session_code ?? null,
+  };
+}
+
 /**
  * Queues one organizer-composed email to `applicationIds`. Returns how many
  * outbox rows were written and how many recipients the marketing opt-out
@@ -143,7 +169,7 @@ export async function queueAdHocEmail(
   args: QueueAdHocEmailArgs
 ): Promise<QueueAdHocEmailResult> {
   const { conferenceId, sentBy, subject, blocks, applicationIds } = args;
-  const empty: QueueAdHocEmailResult = { queued: 0, optedOut: 0, emailSendId: null };
+  const empty: QueueAdHocEmailResult = { queued: 0, optedOut: 0, skippedUnresolved: 0, unresolvedFields: [], emailSendId: null };
   if (applicationIds.length === 0) return empty;
   if (!subject.trim() || blocks.length === 0) {
     return { ...empty, error: 'A subject and a message are both required.' };
@@ -205,9 +231,9 @@ export async function queueAdHocEmail(
   // Consent gate, through the shared predicate — an organizer-composed
   // broadcast is a 'marketing' email, exactly as the Communications composer
   // treats it. Manual selection never overrides an opt-out.
-  const recipients = allRecipients.filter(a => recipientAllowsCategory('marketing', a.profiles));
-  const optedOut = allRecipients.length - recipients.length;
-  if (recipients.length === 0) return { ...empty, optedOut };
+  const consenting = allRecipients.filter(a => recipientAllowsCategory('marketing', a.profiles));
+  const optedOut = allRecipients.length - consenting.length;
+  if (consenting.length === 0) return { ...empty, optedOut };
 
   const renderConf: EmailRenderConference = {
     slug: conference.slug,
@@ -227,6 +253,24 @@ export async function queueAdHocEmail(
   };
   const flatBody = flattenBlocksToPlainText(blocks, renderConf);
 
+  // Merge-field guard. A recipient whose subject or body would still carry a
+  // ⚠field⚠ marker after substitution is not sent to, full stop: KenyaMUN
+  // (18 Sep 2026) sent "⚠country⚠ to ⚠committee⚠" to 281 people. The
+  // composers show the count before sending and offer to send to the rest;
+  // this is the authoritative copy of that check, so no caller can skip it.
+  const missing = new Set<string>();
+  const withCtx = consenting.map(app => ({ app, ctx: contextFor(app, conference, roleConfigs) }));
+  const sendable = withCtx.filter(({ ctx }) => {
+    const keys = unresolvedFields(subject, blocks, ctx);
+    for (const k of keys) missing.add(k);
+    return keys.length === 0;
+  });
+  const skippedUnresolved = withCtx.length - sendable.length;
+  const unresolvedList = [...missing].sort();
+  if (sendable.length === 0) {
+    return { ...empty, optedOut, skippedUnresolved, unresolvedFields: unresolvedList };
+  }
+
   // The send summary goes in first so every outbox row can carry its real id
   // — that link is what lets Communications → History expand this send into a
   // per-recipient delivery breakdown.
@@ -239,7 +283,7 @@ export async function queueAdHocEmail(
       subject,
       body_html: renderEmailHtml({ blocks, conference: renderConf, ctx: {} }),
       recipient_filter: args.recipientFilter ?? {},
-      recipient_count: recipients.length,
+      recipient_count: sendable.length,
       scheduled_at: null,
       status: 'sent',
       sent_at: sentAtIso,
@@ -247,26 +291,11 @@ export async function queueAdHocEmail(
     .select('id')
     .single();
   if (sendError || !sendData) {
-    return { ...empty, optedOut, error: sendError?.message ?? 'Could not record this send.' };
+    return { ...empty, optedOut, skippedUnresolved, unresolvedFields: unresolvedList, error: sendError?.message ?? 'Could not record this send.' };
   }
   const emailSendId = (sendData as { id: string }).id;
 
-  const rows = recipients.map(app => {
-    const ctx: EmailTokenContext = {
-      delegate_name: app.profiles?.display_name ?? app.invited_name ?? null,
-      role: roleLabel(app.role),
-      delegation_name: app.societies?.name ?? (app.society_id == null ? 'Independent' : null),
-      committee: app.assigned_committee?.abbreviation ?? app.assigned_committee?.name ?? null,
-      country: app.assigned_country_name ?? null,
-      payment_status: paymentStatusLabel(app.payment_status),
-      conference_name: conference.full_name,
-      conference_dates: formatDateRange(conference.start_date, conference.end_date),
-      fee: resolveFeeToken(app.role, roleConfigs, conference),
-      // From the assigned committee — lets an ad-hoc "session codes" email
-      // resolve per delegate. Mirrors the Communications composer's
-      // buildContext, so the preview and the real send agree.
-      session_code: app.assigned_committee?.session_code ?? null,
-    };
+  const rows = sendable.map(({ app, ctx }) => {
     return {
       conference_id: conferenceId,
       // No template row: this copy is a one-off, not a saved template, and
@@ -286,9 +315,9 @@ export async function queueAdHocEmail(
 
   const { error: outboxError } = await supabase.from('email_outbox').insert(rows);
   if (outboxError) {
-    return { queued: 0, optedOut, emailSendId, error: outboxError.message };
+    return { queued: 0, optedOut, skippedUnresolved, unresolvedFields: unresolvedList, emailSendId, error: outboxError.message };
   }
 
   triggerEmailDelivery(supabase);
-  return { queued: rows.length, optedOut, emailSendId };
+  return { queued: rows.length, optedOut, skippedUnresolved, unresolvedFields: unresolvedList, emailSendId };
 }

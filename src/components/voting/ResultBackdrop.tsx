@@ -14,8 +14,11 @@
  *                               "back to the drawing board", xTeV7ycHGuPnKX92cE)
  *   vetoed  ur8pcK1C73Lqw       Schoolhouse Rock's Bill, the classic civics lesson in a bill
  *                               that does not become law
+ *   unanimous VCkClTdwnFRqAIPl2r a TV judge (Hot Bench) taking off his glasses: "It's
+ *                               unanimous." (owner, 18 Sep 2026: a different GIF and screen
+ *                               when the vote is unanimous; picked the same way, rating g)
  *
- * Rendering: the animated WebP drawn `object-fit: cover`, desaturated and faint, under a wash
+ * Rendering: the animated WebP drawn `object-fit: cover` at GIF_OPACITY (0.58), desaturated, under a wash
  * of the card's own colour so the verdict, the counts and the notes stay readable (the text
  * sits above in its own layer). Under prefers-reduced-motion the `<picture>` source serves the
  * STILL frame instead, so nothing moves. "Powered by GIPHY" sits small in the corner, as
@@ -26,14 +29,17 @@
  * is sent with no referrer. See AGENTS.md FEATURE: VOTING PAGE.
  */
 
-export type ResultKind = 'passed' | 'failed' | 'vetoed';
+export type ResultKind = 'passed' | 'failed' | 'vetoed' | 'unanimous';
 
 const MEDIA = 'https://media.giphy.com/media';
+/** 0.5 until 18 Sep 2026 (owner: "slightly less transparent, ever so slightly"). */
+const GIF_OPACITY = 0.58;
 
 export const RESULT_GIFS: Record<ResultKind, { id: string; animated: string; still: string }> = {
   passed: { id: '3fiimcA0K0ifzoL7FF', animated: `${MEDIA}/3fiimcA0K0ifzoL7FF/giphy.webp`, still: `${MEDIA}/3fiimcA0K0ifzoL7FF/480w_s.jpg` },
   failed: { id: 'jPFrxnj14Wv5IKV12T', animated: `${MEDIA}/jPFrxnj14Wv5IKV12T/giphy.webp`, still: `${MEDIA}/jPFrxnj14Wv5IKV12T/480w_s.jpg` },
   vetoed: { id: 'ur8pcK1C73Lqw', animated: `${MEDIA}/ur8pcK1C73Lqw/giphy.webp`, still: `${MEDIA}/ur8pcK1C73Lqw/480w_s.jpg` },
+  unanimous: { id: 'VCkClTdwnFRqAIPl2r', animated: `${MEDIA}/VCkClTdwnFRqAIPl2r/giphy.webp`, still: `${MEDIA}/VCkClTdwnFRqAIPl2r/480w_s.jpg` },
 };
 
 export function ResultBackdrop({ kind, tint }: { kind: ResultKind; /** The card's colour, washed over the GIF. */ tint: string }) {
@@ -51,7 +57,7 @@ export function ResultBackdrop({ kind, tint }: { kind: ResultKind; /** The card'
             referrerPolicy="no-referrer"
             decoding="async"
             className="absolute inset-0 w-full h-full object-cover"
-            style={{ opacity: 0.5, filter: 'saturate(0.55) contrast(0.95)' }}
+            style={{ opacity: GIF_OPACITY, filter: 'saturate(0.55) contrast(0.95)' }}
           />
         </picture>
         <div

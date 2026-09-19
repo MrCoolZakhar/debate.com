@@ -47,6 +47,7 @@ import CustomizationCard from './CustomizationCard';
 import { type FormBlock, normalizeBlocks, unpublishableQuestions } from '@/lib/customQuestions';
 import QuestionBuilder from '@/components/QuestionBuilder';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
+import { friendlyError } from '@/lib/friendlyError';
 import { INTENT_OPTIONS, getConferenceIntent, intentPayload } from '@/lib/conferenceIntent';
 import ProfileLink from '@/components/ProfileLink';
 
@@ -366,7 +367,7 @@ function placeLayer(el: HTMLElement, width: number, height: number): { left: num
 }
 
 function saveFailMessage(error?: { message: string } | null): string {
-  return "Couldn't save, please refresh and try again." + (error?.message ? ' ' + error.message : '');
+  return error ? friendlyError(error, "Couldn't save, please refresh and try again.") : "Couldn't save, please refresh and try again.";
 }
 
 // Exactly one plausible address, no spaces or pipes — catches the "a@x.com |
@@ -733,6 +734,22 @@ export default function SettingsPage() {
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     setIntentPulse(true);
     const t = setTimeout(() => setIntentPulse(false), 2600);
+    return () => clearTimeout(t);
+  }, [focusParam, activeTab, conference]);
+  // ── Dates deep link, from the dashboard's publish gate and setup checklist ─
+  // ?tab=conference&focus=dates scrolls the date fields into view and rings
+  // them once, same shape as the intent deep link above. Reuses focusParam,
+  // declared there — never a second copy of the same query read.
+  const [datesPulse, setDatesPulse] = useState(false);
+  const datesFocusedRef = useRef(false);
+  useEffect(() => {
+    if (focusParam !== 'dates' || activeTab !== 'conference' || datesFocusedRef.current) return;
+    const el = document.getElementById('dates-card');
+    if (!el) return;
+    datesFocusedRef.current = true;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setDatesPulse(true);
+    const t = setTimeout(() => setDatesPulse(false), 2600);
     return () => clearTimeout(t);
   }, [focusParam, activeTab, conference]);
   // The form builder edits whichever role the tab is on.
@@ -1302,7 +1319,7 @@ export default function SettingsPage() {
       // Revert the optimistic patch and surface the failure, a silent
       // no-op update (0 rows matched, no error) is treated as a failure too.
       setRoleConfigs(previous);
-      setRoleConfigError(error ? error.message : "Couldn't save, that role config wasn't found.");
+      setRoleConfigError(error ? friendlyError(error, "Couldn't save this role. Please try again.") : "Couldn't save, that role config wasn't found.");
       markStep(step, 'idle');
     } else {
       markStep(step, 'saved');
@@ -1399,7 +1416,7 @@ export default function SettingsPage() {
     setCopyPhasesBusy(false);
     if (error || !data || data.length === 0) {
       setRoleConfigs(previous);
-      setRoleConfigError(error ? error.message : "Couldn't copy those phases across.");
+      setRoleConfigError(error ? friendlyError(error, "Couldn't copy those phases across.") : "Couldn't copy those phases across.");
       return;
     }
     setCopyPhasesOpen(false);
@@ -1844,7 +1861,7 @@ export default function SettingsPage() {
       });
       if (error) {
         setIncomingClaims(previousClaims);
-        setLineageError(error.message);
+        setLineageError(friendlyError(error, "Couldn't save the previous edition. Please try again."));
         setLineageBusy(null);
         return;
       }
@@ -1924,7 +1941,7 @@ export default function SettingsPage() {
       }).select('id').single();
       if (error || !data) {
         setPartners(prev => prev.filter(p => p.id !== tempId));
-        setPartnerError(error?.message ?? "Couldn't add this partner. Please try again.");
+        setPartnerError(friendlyError(error, "Couldn't add this partner. Please try again."));
       } else {
         setPartners(prev => prev.map(p => p.id === tempId ? { ...p, id: (data as { id: string }).id } : p));
       }
@@ -1953,7 +1970,7 @@ export default function SettingsPage() {
       .upload(path, file, { contentType: file.type, upsert: true });
     if (error) {
       setCompanyLogoUploading(false);
-      setPartnerError("Couldn't upload the logo: " + error.message);
+      setPartnerError(friendlyError(error, "Couldn't upload the logo. Please try a different image."));
       return;
     }
     const { data: urlData } = supabase.storage.from('conference-assets').getPublicUrl(path);
@@ -1996,7 +2013,7 @@ export default function SettingsPage() {
     }).select('id, approved').single();
     if (error || !data) {
       setCompanySaving(false);
-      setPartnerError(error?.message ?? "Couldn't add this partner. Please try again.");
+      setPartnerError(friendlyError(error, "Couldn't add this partner. Please try again."));
       return;
     }
     const row = data as { id: string; approved: boolean };
@@ -2172,7 +2189,7 @@ export default function SettingsPage() {
       });
       if (error) {
         setIncomingPartnerClaims(previousIncoming);
-        setPartnerError(error.message);
+        setPartnerError(friendlyError(error, "Couldn't save this partner. Please try again."));
         setPartnerBusy(null);
         return;
       }
@@ -2523,7 +2540,7 @@ export default function SettingsPage() {
     const { error } = await supabase.storage.from('conference-assets').upload(path, file, { contentType: file.type, upsert: true });
     if (error) {
       setBannerUploading(false);
-      setBannerError("Couldn't upload the banner: " + error.message);
+      setBannerError(friendlyError(error, "Couldn't upload the banner. Please try a different image."));
       return;
     }
     const { data: urlData } = supabase.storage.from('conference-assets').getPublicUrl(path);
@@ -2584,7 +2601,7 @@ export default function SettingsPage() {
     const { error } = await supabase.storage.from('conference-assets').upload(path, file, { contentType: file.type, upsert: true });
     if (error) {
       setLogoUploading(false);
-      setLogoError("Couldn't upload the logo: " + error.message);
+      setLogoError(friendlyError(error, "Couldn't upload the logo. Please try a different image."));
       return;
     }
     const { data: urlData } = supabase.storage.from('conference-assets').getPublicUrl(path);
@@ -4210,67 +4227,78 @@ export default function SettingsPage() {
             </div>
 
             <div
-              className="flex gap-3 mb-3"
-              style={datesTbd ? { opacity: 0.4, pointerEvents: 'none' } : undefined}
-            >
-              <div className="flex-1">
-                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Start date</label>
-                <DatePicker
-                  value={startDate}
-                  onChange={(iso) => {
-                    setStartDate(iso);
-                    // Keep end ≥ start: clear a now-invalid end date.
-                    if (endDate && iso && endDate < iso) setEndDate('');
-                  }}
-                />
-              </div>
-              <div className="flex-1">
-                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>End date</label>
-                <DatePicker
-                  value={endDate}
-                  min={startDate || undefined}
-                  initialView={startDate || undefined}
-                  onChange={(iso) => setEndDate(iso)}
-                />
-              </div>
-            </div>
-
-            {/* Dates TBD: keeps the conference private (no public link) until real
-                dates are set — mirrors the DB CHECK conferences_tbd_not_public.
-                Applications can still open while dates are undecided. */}
-            <button
-              type="button"
-              onClick={() => {
-                setDatesTbd((prev) => {
-                  const nextTbd = !prev;
-                  // Turning TBD on clears any set dates so the row goes null.
-                  if (nextTbd) { setStartDate(''); setEndDate(''); }
-                  return nextTbd;
-                });
+              id="dates-card"
+              className="rounded-xl"
+              style={{
+                boxShadow: datesPulse
+                  ? '0 0 0 3px rgba(238,217,138,0.55), 0 1px 2px rgba(27,56,40,0.04)'
+                  : 'none',
+                transition: 'box-shadow 400ms ease',
               }}
-              className="flex items-start gap-3 w-full text-left mb-4 focus:outline-none"
             >
-              <span
-                className="flex items-center justify-center flex-shrink-0"
-                style={{
-                  width: '20px', height: '20px', borderRadius: '6px',
-                  marginTop: '1px',
-                  backgroundColor: datesTbd ? '#1B3828' : 'transparent',
-                  border: datesTbd ? '1.5px solid #1B3828' : '1.5px solid #C9BEA6',
-                  transition: 'background-color 150ms ease, border-color 150ms ease',
-                }}
+              <div
+                className="flex gap-3 mb-3"
+                style={datesTbd ? { opacity: 0.4, pointerEvents: 'none' } : undefined}
               >
-                {datesTbd && <Check size={13} strokeWidth={3} color="#EED98A" />}
-              </span>
-              <span>
-                <span className="block text-sm font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                  Dates are to be decided (TBD)
+                <div className="flex-1">
+                  <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Start date</label>
+                  <DatePicker
+                    value={startDate}
+                    onChange={(iso) => {
+                      setStartDate(iso);
+                      // Keep end ≥ start: clear a now-invalid end date.
+                      if (endDate && iso && endDate < iso) setEndDate('');
+                    }}
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>End date</label>
+                  <DatePicker
+                    value={endDate}
+                    min={startDate || undefined}
+                    initialView={startDate || undefined}
+                    onChange={(iso) => setEndDate(iso)}
+                  />
+                </div>
+              </div>
+
+              {/* Dates TBD: keeps the conference private (no public link) until real
+                  dates are set — mirrors the DB CHECK conferences_tbd_not_public.
+                  Applications can still open while dates are undecided. */}
+              <button
+                type="button"
+                onClick={() => {
+                  setDatesTbd((prev) => {
+                    const nextTbd = !prev;
+                    // Turning TBD on clears any set dates so the row goes null.
+                    if (nextTbd) { setStartDate(''); setEndDate(''); }
+                    return nextTbd;
+                  });
+                }}
+                className="flex items-start gap-3 w-full text-left mb-4 focus:outline-none"
+              >
+                <span
+                  className="flex items-center justify-center flex-shrink-0"
+                  style={{
+                    width: '20px', height: '20px', borderRadius: '6px',
+                    marginTop: '1px',
+                    backgroundColor: datesTbd ? '#1B3828' : 'transparent',
+                    border: datesTbd ? '1.5px solid #1B3828' : '1.5px solid #C9BEA6',
+                    transition: 'background-color 150ms ease, border-color 150ms ease',
+                  }}
+                >
+                  {datesTbd && <Check size={13} strokeWidth={3} color="#EED98A" />}
                 </span>
-                <span className="block text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                  A TBD conference stays private (no public link) until you add dates. Applications can still open.
+                <span>
+                  <span className="block text-sm font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                    Dates are to be decided (TBD)
+                  </span>
+                  <span className="block text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                    A TBD conference stays private (no public link) until you add dates. Applications can still open.
+                  </span>
                 </span>
-              </span>
-            </button>
+              </button>
+            </div>
 
             <div className="flex gap-3 mb-4">
               <div className="flex-1">
@@ -5660,7 +5688,7 @@ export default function SettingsPage() {
                 setDeleting(true);
                 const supabase = getAuthedClient(session.access_token);
                 const { error } = await supabase.rpc('delete_conference', { p_conference_id: view.id });
-                if (error) { setDeleteError(error.message || 'Could not delete view.'); setConfirmingDelete(false); setDeleting(false); return; }
+                if (error) { setDeleteError(friendlyError(error, 'Could not delete view.')); setConfirmingDelete(false); setDeleting(false); return; }
                 window.location.href = '/';
               }}
               onCancel={() => { if (!deleting) setConfirmingDelete(false); }}

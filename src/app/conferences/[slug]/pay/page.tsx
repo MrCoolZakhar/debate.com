@@ -23,6 +23,7 @@
 // pledge more spots (add_pledged_spots), which materialize as new
 // pledge_spot invoices in the list above rather than being paid inline.
 
+import AuthLink from '@/components/auth/AuthLink';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -63,6 +64,8 @@ interface PayConference {
   contact_email: string | null;
   payment_method: string | null;
   connect_onboarding_status: string;
+  /** Gavelling's own Stripe account collects card payments (no Connect). */
+  platform_collects: boolean | null;
   external_payment_url: string | null;
   external_payment_note: string | null;
   financial_aid_enabled: boolean;
@@ -382,7 +385,7 @@ export default function PayPage() {
         .from('conferences')
         .select(`
           id, full_name, fee_currency, contact_email,
-          payment_method, connect_onboarding_status, external_payment_url, external_payment_note,
+          payment_method, connect_onboarding_status, platform_collects, external_payment_url, external_payment_note,
           financial_aid_enabled, aid_questions, aid_intro, theme
         `)
         .eq('slug', slug)
@@ -496,13 +499,13 @@ export default function PayPage() {
             <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted, marginTop: 6 }}>
               You need to be signed in to pay or request financial aid.
             </p>
-            <Link
-              href={`/auth/signin?next=${encodeURIComponent(`/conferences/${slug}/pay`)}`}
+            <AuthLink
+              next={`/conferences/${slug}/pay`}
               className="inline-flex items-center justify-center rounded-xl px-5 py-2.5 mt-4 font-bold text-sm focus:outline-none"
               style={{ backgroundColor: NEU.forest, color: NEU.gold, fontFamily: OUTFIT, letterSpacing: '0.06em', textDecoration: 'none' }}
             >
               SIGN IN
-            </Link>
+            </AuthLink>
           </NeuCard>
         ) : !conference ? (
           <NeuCard style={{ padding: '32px', textAlign: 'center' }}>
@@ -1741,7 +1744,10 @@ function PayInvoiceAndActions({
   // free role can never come back 'locked' (see getGateState).
   const gateState = getGateState(roleConfig?.payment_timing ?? 'anytime', application.status, application.payment_status, fee);
   const payableNow = gateState !== 'under_review';
-  const paymentsEnabled = conference.payment_method === 'stripe' && conference.connect_onboarding_status === 'complete';
+  // platform_collects mirrors conference_payments_ready(): card payments are
+  // charged on Gavelling's own Stripe account, so Connect status is moot.
+  const paymentsEnabled = !!conference.platform_collects
+    || (conference.payment_method === 'stripe' && conference.connect_onboarding_status === 'complete');
   const externalPaymentUrl = conference.payment_method === 'manual' ? conference.external_payment_url : null;
   const manualActive = conference.payment_method === 'manual';
   // Gated on leaderApp, not primary — a dual-role user's primary application

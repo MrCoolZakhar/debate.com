@@ -1,5 +1,6 @@
 'use client';
 
+import { openAuth } from '@/lib/authModal';
 import { use, useEffect, useRef, useState } from 'react';
 import FitToScreen from '@/components/FitToScreen';
 import Portal from '@/components/Portal';
@@ -11,7 +12,7 @@ import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 import { SeatArtProvider } from '@/components/SeatFlag';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { Emoji } from '@/components/Emoji';
-import { Check, CornerDownRight, Eye, EyeOff, Flag, Minus, RotateCcw, ShieldAlert, SkipForward, Undo2, X } from 'lucide-react';
+import { Check, CornerDownRight, Crown, Eye, EyeOff, Flag, Minus, RotateCcw, ShieldAlert, ShieldCheck, SkipForward, Undo2, X } from 'lucide-react';
 import { VotingRollCall } from '@/components/voting/VotingRollCall';
 import { DeviceVoteGate, DeviceVotingPanel } from '@/components/voting/DeviceVotingPanel';
 import { VotingHeader, type VotingHeaderProps } from '@/components/voting/VotingHeader';
@@ -19,6 +20,8 @@ import { ResolutionPicker, type PickCardState } from '@/components/voting/Resolu
 import { VoterCarousel, type SeatMark as CarouselMark } from '@/components/voting/VoterCarousel';
 import { RightsQueue, RightsTimeField } from '@/components/voting/RightsQueue';
 import { ResultBackdrop } from '@/components/voting/ResultBackdrop';
+import { vetoListFor, holdsVeto, isVetoChoice } from '@/components/voting/vetoHolders';
+import { VetoFlash, VetoConfirm } from '@/components/voting/VetoFlash';
 import ChatDialog from '@/components/chat/ChatDialog';
 import ChatPanel from '@/components/ChatPanel';
 import ChatDisabledNotice from '@/components/ChatDisabledNotice';
@@ -456,6 +459,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   /** The draft resolution a new vote is about to open on. Choosing one (or Vote again) opens
    *  the roll call; confirming it starts the ballot. Every new ballot passes through it. */
   const [pendingDocId, setPendingDocId] = useState<string | null>(null);
+  /** The veto double check: a veto holder's Against waits here until the chair confirms it. */
+  const [vetoAsk, setVetoAsk] = useState<{ delegateId: string; country: string; choice: VoteChoice } | null>(null);
   /** Device ballot: how many delegations have voted, as DeviceVotingPanel last read it (header progress). */
   const [deviceCast, setDeviceCast] = useState<{ ballot: string; cast: number } | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -887,7 +892,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         <div className="text-center max-w-sm">
           <h1 className="text-2xl font-bold mb-2" style={{ color: '#1B3828' }}>{t('voting_signin_title')}</h1>
           <p className="mb-6" style={{ color: '#6A5A4A' }}>{t('voting_signin_body')}</p>
-          <Link href={'/auth/signin?next=' + encodeURIComponent('/join?code=' + code)} className="inline-block font-semibold text-white px-6 py-3 rounded-full transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>{t('session_signin_btn')}</Link>
+          <button type="button" onClick={() => openAuth()} className="inline-block font-semibold text-white px-6 py-3 rounded-full transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>{t('session_signin_btn')}</button>
         </div>
       </div>
     );
@@ -1094,13 +1099,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const presentAndPvDelegates = vote ? vote.order.map(liveSeat) : livePresentAndPv;
   const votableDelegates = vote ? vote.votable.map(liveSeat) : liveVotable;
 
-  /** The veto seats in force under a given rule set. `custom` → the chair-picked
-   *  list; `p5` → p5Delegations, falling back to the shipped P5 default. */
-  const vetoListFor = (s: CommitteeSettings): string[] => {
-    if (s.vetoMode === 'custom') return s.vetoCountries ?? [];
-    if (s.vetoMode === 'p5') return s.p5Delegations?.length ? s.p5Delegations : DEFAULT_SETTINGS.p5Delegations;
-    return [];
-  };
+  // The veto seats in force: `vetoListFor` / `holdsVeto` (src/components/voting/vetoHolders.ts),
+  // shared with the delegate phone's device ballot so both agree on who can veto.
 
   // ── Live outcome ───────────────────────────────────────────────────────────
   // One pure evaluation shared by the screen and the inline rules console, so
@@ -1419,6 +1419,18 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     });
   };
 
+  /**
+   * The ballot buttons go through here. An Against (with or without rights) from a delegation
+   * that holds a veto under the rules in force (`holdsVeto`, the same list `evaluate` uses) is
+   * a veto, so it is asked once more before it is cast (owner, 18 Sep 2026: "require a double
+   * check"). Confirming casts it exactly like any vote; VetoFlash then sees the veto land.
+   */
+  const castOrAskVeto = (delegateId: string, country: string, choice: VoteChoice) => {
+    if (isViewOnly) return;
+    if (isVetoChoice(choice) && holdsVeto(settings, country)) { setVetoAsk({ delegateId, country, choice }); return; }
+    castVoteAndAdvance(delegateId, country, choice);
+  };
+
   /** Pass (main ballot only): asked again at the end of the line, once. */
   const handlePass = (delegateId: string) => {
     advance((prev) => {
@@ -1446,6 +1458,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
    */
   const stepBack = () => {
     if (isViewOnly || !vote || !selectedDoc) return;
+    setVetoAsk(null);
     // A device ballot has no pointer to step back through: choices come from the devices.
     if (vote.method === 'device' && vote.status === 'voting') return;
     const docId = selectedDoc.id;
@@ -1479,6 +1492,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
    */
   const goToVoter = (index: number) => {
     if (isViewOnly || !vote || !selectedDoc) return;
+    setVetoAsk(null);
     if (vote.method === 'device' && vote.status === 'voting') return;
     if (vote.status !== 'voting') return;
     updateVote((prev) => {
@@ -2000,6 +2014,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       : m === 'against' ? 'voting_choice_against'
       : 'voting_choice_pass',
   );
+  /** The delegation on screen holds a veto under the rules in force. */
+  const currentHoldsVeto = !!currentDelegate && holdsVeto(settings, currentDelegate.country);
   // A device ballot not yet revealed: the delegations vote on their own devices (DeviceVotingPanel).
   const deviceBallotOpen = vote.method === 'device' && phase === 'voting' && currentVoterIndex < mainCount;
   const canStepBack = !isViewOnly && !(vote.method === 'device' && phase === 'voting') && (phase !== 'voting' || currentVoterIndex > 0);
@@ -2124,7 +2140,19 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             >
               {getCountryDisplayName(currentDelegate.country, language)}
             </h1>
-            <div className="h-8 mt-2 flex items-center">
+            <div className="h-8 mt-2 flex items-center gap-2">
+              {/* The delegation on screen can veto (owner, 18 Sep 2026): said on its card, so the
+                  dais knows before the placard goes up that an Against here fails the paper. */}
+              {currentHoldsVeto && (
+                <span
+                  className="inline-flex items-center gap-1.5 h-8 ps-2.5 pe-3.5 rounded-full text-[13.5px] font-semibold"
+                  style={{ backgroundColor: '#3E2447', color: '#F3D98A', boxShadow: '0 2px 6px rgba(62,36,71,0.22)' }}
+                  title={t('voting_veto_holder_hint')}
+                >
+                  <ShieldCheck size={15} strokeWidth={2.5} aria-hidden />
+                  {t('voting_veto_holder')}
+                </span>
+              )}
               {recordedMark ? (
                 <span className="inline-flex items-center gap-2 h-8 px-3.5 rounded-full text-[13.5px] font-medium" style={{ backgroundColor: 'rgba(182,135,31,0.16)', color: '#6A4A0A' }}>
                   {hideVotes && recordedMark !== 'pass' ? t('voting_recorded_hidden') : t('voting_recorded_choice', { choice: choiceLabel(recordedMark) })}
@@ -2176,13 +2204,13 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   <BallotButton
                     tone="against" icon={<X size={20} strokeWidth={3} />} label={t('voting_against')} sub={t('voting_with_rights_label')}
                     recorded={!hideVotes && recordedMark === 'against-rights'}
-                    onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'against-rights')}
+                    onClick={() => castOrAskVeto(currentDelegate.id, currentDelegate.country, 'against-rights')}
                   />
                 )}
                 <BallotButton
                   tone="against" wide icon={<X size={22} strokeWidth={3} />} label={t('voting_against')}
                   recorded={!hideVotes && recordedMark === 'against'}
-                  onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'against')}
+                  onClick={() => castOrAskVeto(currentDelegate.id, currentDelegate.country, 'against')}
                 />
               </div>
               <div className="flex items-center justify-between gap-4">
@@ -2379,10 +2407,20 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       {phase === 'result' && (() => {
         // Three outcomes, three looks (owner, 17 Sep 2026): passed forest, failed red, vetoed
         // aubergine. Vetoed is a failure a veto holder caused, from the live evaluation.
-        const kind: 'passed' | 'failed' | 'vetoed' = passed ? 'passed' : p5Veto ? 'vetoed' : 'failed';
+        //
+        // A fourth, UNANIMOUS (owner, 18 Sep 2026): the paper passed, nobody voted Against (with
+        // or without rights), at least one delegation voted For, and every delegation on the
+        // frozen ballot cast a vote (a device ballot revealed early is not unanimous). Abstentions
+        // do NOT break unanimity: an abstaining delegation chose not to oppose, which is what the
+        // word means in a committee record. Derived from the votes on screen, never stored:
+        // `documents.status` stays `passed` and `vote_state` gains nothing.
+        const unanimous = passed && againstCount === 0 && forCount > 0
+          && presentDelegates.every((d) => votes.some((v) => v.delegateId === d.id));
+        const kind: 'passed' | 'failed' | 'vetoed' | 'unanimous' = unanimous ? 'unanimous' : passed ? 'passed' : p5Veto ? 'vetoed' : 'failed';
         const look = {
           passed: { bg: '#1B3828', chipBg: '#EED98A', chipFg: '#1B3828', title: '#EED98A', soft: 'rgba(238,217,138,0.78)', shadow: '0 2px 4px rgba(27,56,40,0.2), 0 24px 64px rgba(27,56,40,0.30)' },
           failed: { bg: '#8B2020', chipBg: '#FFE1D6', chipFg: '#8B2020', title: '#FFFFFF', soft: 'rgba(255,222,210,0.82)', shadow: '0 2px 4px rgba(90,20,20,0.2), 0 24px 64px rgba(139,32,32,0.30)' },
+          unanimous: { bg: '#123024', chipBg: '#EED98A', chipFg: '#123024', title: '#EED98A', soft: 'rgba(243,217,138,0.86)', shadow: '0 0 0 2px #D9B44A, 0 0 0 6px rgba(238,217,138,0.28), 0 2px 4px rgba(18,48,36,0.24), 0 28px 72px rgba(18,48,36,0.40)' },
           vetoed: { bg: '#3E2447', chipBg: '#E9D6F0', chipFg: '#3E2447', title: '#FFFFFF', soft: 'rgba(233,214,240,0.84)', shadow: '0 2px 4px rgba(40,20,48,0.22), 0 24px 64px rgba(62,36,71,0.34)' },
         }[kind];
         const soft = look.soft;
@@ -2397,13 +2435,20 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               style={{ backgroundColor: look.bg, boxShadow: look.shadow }}
             >
               <ResultBackdrop kind={kind} tint={look.bg} />
+              {kind === 'unanimous' && (
+                // A gold frame inside the card: the unanimous look is the passed forest, crowned.
+                <span aria-hidden className="pointer-events-none absolute inset-3 rounded-[16px]" style={{ boxShadow: 'inset 0 0 0 1px rgba(238,217,138,0.55)' }} />
+              )}
               <div className="relative">
+              {kind === 'unanimous' && (
+                <p className="mb-3 text-[12px] font-bold uppercase tracking-[0.18em]" style={{ color: '#D9B44A' }}>{t('voting_result_unanimous_eyebrow')}</p>
+              )}
               <div className="flex items-center justify-center gap-3">
                 <span className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: look.chipBg, color: look.chipFg }} aria-hidden>
-                  {kind === 'passed' ? <Check size={22} strokeWidth={2.75} /> : kind === 'vetoed' ? <ShieldAlert size={21} strokeWidth={2.5} /> : <X size={22} strokeWidth={2.75} />}
+                  {kind === 'unanimous' ? <Crown size={21} strokeWidth={2.5} /> : kind === 'passed' ? <Check size={22} strokeWidth={2.75} /> : kind === 'vetoed' ? <ShieldAlert size={21} strokeWidth={2.5} /> : <X size={22} strokeWidth={2.75} />}
                 </span>
                 <span className="text-[40px] font-bold leading-none tracking-[-0.02em]" style={{ color: look.title, textShadow: '0 2px 12px rgba(0,0,0,0.35)' }}>
-                  {kind === 'passed' ? t('voting_pick_status_passed') : kind === 'vetoed' ? t('voting_pick_status_vetoed') : t('voting_pick_status_failed')}
+                  {kind === 'unanimous' ? t('voting_result_unanimous') : kind === 'passed' ? t('voting_pick_status_passed') : kind === 'vetoed' ? t('voting_pick_status_vetoed') : t('voting_pick_status_failed')}
                 </span>
               </div>
               <p className="text-[16px] font-medium mt-3 mb-6 leading-snug [text-wrap:balance]" style={{ color: soft }}>
@@ -2432,6 +2477,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   <p className="flex items-center gap-1.5 justify-center"><ShieldAlert size={16} strokeWidth={2.5} aria-hidden /> {settings.vetoMode === 'custom' ? t('voting_veto_exercised') : t('voting_p5_veto')}</p>
                 )}
                 {unanimousFail && <p>{t('voting_unanimous_fail')}</p>}
+                {kind === 'unanimous' && (
+                  <p style={{ color: '#EED98A' }}>{abstainCount > 0 ? t('voting_result_unanimous_note_abst', { n: abstainCount }) : t('voting_result_unanimous_note')}</p>
+                )}
                 {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'supermajority-2-3' && (
                   <p style={{ color: soft }}>{t('voting_supermajority', { for: forCount, total: totalDecisive, pct: totalDecisive > 0 ? Math.round(forCount / totalDecisive * 100) : 0 })}</p>
                 )}
@@ -2483,6 +2531,14 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       {headerDialogs}
 
       {endDebateModal}
+      <VetoFlash ballotKey={`${selectedDoc.id}:${vote.startedAt}`} votes={votes} rules={settings} />
+      {vetoAsk && !isViewOnly && phase === 'voting' && currentDelegate?.id === vetoAsk.delegateId && (
+        <VetoConfirm
+          country={getCountryDisplayName(vetoAsk.country, language)}
+          onCancel={() => setVetoAsk(null)}
+          onConfirm={() => { const a = vetoAsk; setVetoAsk(null); castVoteAndAdvance(a.delegateId, a.country, a.choice); }}
+        />
+      )}
     </div>
     </SeatArtProvider>
     </FitToScreen>

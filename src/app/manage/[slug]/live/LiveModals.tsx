@@ -199,6 +199,9 @@ export interface LiveCommittee {
   speechLogs: { country: string; seconds: number; context: string; topic: string; at: string | null }[];
   /** Every ledger row regardless of type, for counting non-speech activity. */
   eventLogs: { country: string; type: string; at: string | null }[];
+  /** Every delegation's HEADLINE score, computed by `sessionHeadlineScores`
+   *  (conferenceScoreboard.ts) with the chair scoreboard's own arithmetic. */
+  scores: { country: string; total: number }[];
   /** Most recent sign of life in the room, from any source we can see. Drives
    *  the staleness guard on the voting variant — see `votingLooksLive`. */
   lastActivityAt: string | null;
@@ -285,27 +288,14 @@ export function flagCodeFor(name: string): string {
   return getCountryByName(name)?.code ?? '';
 }
 
-// Score formula replicated from SettingsPanel.tsx computeScore:
-// attendance 5 if not absent; WP sponsor ×10; DR sponsor ×20;
-// speaking floor(totalSeconds/10); GSL speeches ×10; caucus speeches ×8.
-//
-// This used to be correct only by accident: it was handed EVERY ledger event and
-// leaned on `context` being absent on the non-speech ones (`motion-raised` and
-// `right-of-reply` pass neither `context` nor `seconds` — MotionsModal.tsx:1234,
-// chair/[code]/page.tsx:3965), so they scored zero rather than being excluded.
-// `lc.speechLogs` is now speech-only at the source, so the filters below are
-// load-bearing on purpose instead of by luck.
+// The live wall's scores ARE the chair's scores (18 Sep 2026). This used to replicate an
+// old formula by hand (attendance 5, WP 10, DR 20, a point per 10 s, GSL 10, caucus 8) with
+// no motion, right-of-reply or manual points, the committee's own point values ignored and
+// no blend, so the recap's "top" and "quietest" disagreed with the chair's board. The page
+// now computes them with scoring.ts (`sessionHeadlineScores`), and this only reads them.
 export function computeScores(lc: LiveCommittee): { country: string; total: number }[] {
-  return lc.delegates.map((d) => {
-    const attendancePoints = d.status !== 'absent' ? 5 : 0;
-    const wpPoints = lc.documents.filter((doc) => doc.type === 'working-paper' && doc.sponsors.includes(d.country)).length * 10;
-    const drPoints = lc.documents.filter((doc) => doc.type === 'draft-resolution' && doc.sponsors.includes(d.country)).length * 20;
-    const logs = lc.speechLogs.filter((e) => e.country === d.country);
-    const speakingPoints = Math.floor(logs.reduce((sum, e) => sum + (e.seconds || 0), 0) / 10);
-    const gslPoints = logs.filter((e) => e.context === 'speakers-list').length * 10;
-    const caucusPoints = logs.filter((e) => e.context === 'moderated-caucus' || e.context === 'unmoderated-caucus' || e.context === 'tour-de-table').length * 8;
-    return { country: d.country, total: attendancePoints + wpPoints + drPoints + speakingPoints + gslPoints + caucusPoints };
-  });
+  const byCountry = new Map(lc.scores.map((x) => [x.country, x.total]));
+  return lc.delegates.map((d) => ({ country: d.country, total: byCountry.get(d.country) ?? 0 }));
 }
 
 // ── Small shared bits ───────────────────────────────────────────────────────
