@@ -144,8 +144,10 @@ export function WizardShell({
             style={{
               left: 0,
               top: 2,
-              width: 40,
-              height: 40,
+              // 44 is the thumb minimum. The title block already reserves
+              // '0 48px' for this button, so nothing moves.
+              width: 44,
+              height: 44,
               borderRadius: 999,
               border: 'none',
               backgroundColor: NEU.surface,
@@ -414,6 +416,25 @@ function cardBaseStyle(selected: boolean, hovered: boolean, pressed = false): Re
 
 // ── TwoTabPick, two LARGE side-by-side cards ──────────────────────────────
 
+/**
+ * Phone rule for the two big cards. Side by side, a 375px screen leaves each
+ * card ~144px, and the 25px label is a flex item with `min-width: auto`, so
+ * "Independent" measured ~158px and the card's `overflow: hidden` simply cut
+ * it: the first question of the apply flow read "ndependen". Below 560px the
+ * pair stacks, and the picture and the card's floor shrink so both options
+ * still fit on one phone screen. From 560px up nothing changes — the template
+ * is the same `repeat(2, minmax(0, 1fr))` and every inline style stands.
+ */
+const TWO_TAB_CSS = `
+.gv-twotab{display:grid;gap:24px;padding:4px;grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:559px){
+  .gv-twotab{grid-template-columns:1fr;gap:14px}
+  .gv-twotab>button{min-height:0!important}
+  .gv-twotab .gv-twotab-art{height:150px!important;margin-bottom:18px!important}
+  .gv-twotab .gv-twotab-glyph{font-size:64px!important;height:84px!important;margin-bottom:14px!important}
+}
+`;
+
 export function TwoTabPick({
   options,
   value,
@@ -442,11 +463,8 @@ export function TwoTabPick({
   }
 
   return (
-    <div
-      role="radiogroup"
-      className="grid gap-6"
-      style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', padding: '4px' }}
-    >
+    <div role="radiogroup" className="gv-twotab">
+      <style>{TWO_TAB_CSS}</style>
       {options.map((opt, idx) => {
         const selected = value === opt.key;
         const hovered = hoverKey === opt.key;
@@ -477,6 +495,7 @@ export function TwoTabPick({
             {opt.image ? (
               <span
                 aria-hidden
+                className="gv-twotab-art"
                 style={{
                   display: 'block',
                   width: '100%',
@@ -493,7 +512,7 @@ export function TwoTabPick({
             ) : opt.icon ? (
               <span
                 aria-hidden
-                className="flex items-center justify-center"
+                className="gv-twotab-glyph flex items-center justify-center"
                 style={{ fontSize: 100, height: 124, marginBottom: 24 }}
               >
                 {opt.icon}
@@ -507,6 +526,12 @@ export function TwoTabPick({
                 fontSize: 25,
                 color: selected ? NEU.forest : NEU.ink,
                 padding: '0 14px',
+                // A flex item's automatic minimum size is its content, so a
+                // label longer than the card used to be clipped by the card's
+                // `overflow: hidden` rather than wrapping. Belt to the phone
+                // stacking rule's braces.
+                maxWidth: '100%',
+                overflowWrap: 'anywhere',
               }}
             >
               {opt.label}

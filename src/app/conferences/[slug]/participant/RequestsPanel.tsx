@@ -476,7 +476,7 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
             </div>
           )}
 
-          <div className="flex flex-col gap-3 mb-4" style={{ maxHeight: 420, overflowY: 'auto' }}>
+          <div className="flex flex-col gap-3 mb-4" style={{ maxHeight: 'min(420px, 50dvh)', overflowY: 'auto' }}>
             {messages.map(m => {
               const mine = m.sender_user_id === user?.id && !m.is_organizer;
               return (
@@ -495,7 +495,7 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
                       color: mine ? NEU.gold : NEU.ink,
                     }}
                   >
-                    <p className="text-sm" style={{ fontFamily: OUTFIT, whiteSpace: 'pre-wrap', lineHeight: 1.55, margin: 0 }}>{m.body}</p>
+                    <p className="text-sm" style={{ fontFamily: OUTFIT, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', lineHeight: 1.55, margin: 0 }}>{m.body}</p>
                   </div>
                   <span className="mt-1" style={{ fontSize: 10, color: NEU.muted, fontFamily: OUTFIT }}>
                     {fmtDate(m.created_at)} · {fmtTime(m.created_at)}
@@ -515,7 +515,7 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
                 onChange={e => setReplyText(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && !replying) handleReply(); }}
                 placeholder="Write a reply..."
-                className="flex-1 px-3.5 py-2.5 text-sm focus:outline-none"
+                className="flex-1 min-w-0 px-3.5 py-2.5 text-base sm:text-sm focus:outline-none"
                 style={inputStyle()}
               />
               <button
@@ -523,6 +523,7 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
                 disabled={replying || !replyText.trim()}
                 className="flex items-center justify-center rounded-xl px-3.5 focus:outline-none"
                 style={{
+                  minWidth: 44, minHeight: 44,
                   backgroundColor: replying || !replyText.trim() ? 'rgba(27,56,40,0.14)' : NEU.forest,
                   color: replying || !replyText.trim() ? NEU.muted : NEU.gold,
                   border: 'none', boxShadow: replying || !replyText.trim() ? 'none' : NEU.outSm,
@@ -541,7 +542,7 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
             value={newSubject}
             onChange={e => setNewSubject(e.target.value)}
             placeholder="Subject"
-            className="px-3.5 py-2.5 text-sm focus:outline-none"
+            className="px-3.5 py-2.5 text-base sm:text-sm focus:outline-none"
             style={inputStyle()}
           />
           <textarea
@@ -549,7 +550,7 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
             onChange={e => setNewBody(e.target.value)}
             placeholder="What's your question?"
             rows={4}
-            className="px-3.5 py-2.5 text-sm focus:outline-none resize-none"
+            className="px-3.5 py-2.5 text-base sm:text-sm focus:outline-none resize-none"
             style={inputStyle()}
           />
           <div className="flex gap-3">
@@ -587,7 +588,7 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search subjects..."
-              className="px-3.5 py-2 text-sm focus:outline-none"
+              className="px-3.5 py-2 text-base sm:text-sm focus:outline-none"
               style={{ ...inputStyle(), minWidth: 160, flex: '1 1 160px' }}
             />
             <div className="flex items-center gap-2 ml-auto">

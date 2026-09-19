@@ -305,7 +305,10 @@ export function ExperienceInfo({
         onBlur={scheduleClose}
         aria-label="How experience levels work"
         aria-expanded={open}
-        className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none transition-colors"
+        // `gv-tap20` is a phone-only hit-area grower: the profile page draws a
+        // pseudo-element around this 20px disc so a thumb can actually hit it.
+        // The disc's own size, colour and position are untouched.
+        className="gv-tap20 relative inline-flex items-center justify-center flex-shrink-0 focus:outline-none transition-colors"
         style={{
           width: '20px', height: '20px', borderRadius: '9999px',
           border: `1px solid ${btnBorder}`, backgroundColor: btnBg,

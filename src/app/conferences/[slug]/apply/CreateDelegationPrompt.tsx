@@ -425,7 +425,11 @@ function CreateDelegationDialogBody({
   return (
     <Portal>
       <div
-        className="fixed inset-0 flex items-end sm:items-center justify-center p-3 sm:p-6"
+        /* As a bottom sheet the panel edge sits 12px from the bottom of the
+           screen, which on an iPhone is inside the home indicator's swipe
+           zone: a tap on "Switch to Head Delegate" could be taken by the
+           system gesture instead. `sm:pb-6` restores the desktop padding. */
+        className="fixed inset-0 flex items-end sm:items-center justify-center p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-6"
         style={{ ...themeStyle, zIndex: 10000, backgroundColor: 'rgba(16,28,21,0.45)' }}
         onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}
       >

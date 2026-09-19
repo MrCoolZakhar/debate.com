@@ -339,8 +339,11 @@ export default function PositionPaperPage() {
     >
       <SiteNav />
       <div
-        className="flex-1 w-full max-w-[1100px] mx-auto px-6"
-        style={{ display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box', paddingTop: 88, paddingBottom: 24 }}
+        /* 88px of top padding was written for the desktop floating nav pill.
+           On a phone SiteNav's bar is already in normal flow above this, so
+           the same 88 was 88px of dead space at the top of a 667px screen. */
+        className="flex-1 w-full max-w-[1100px] mx-auto px-6 pt-4 lg:pt-[88px]"
+        style={{ display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box', paddingBottom: 24 }}
       >
         <ActionButton
           onClick={handleBack}
@@ -459,7 +462,7 @@ export default function PositionPaperPage() {
             {/* Body: chat left, PDF right */}
             <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-6" style={{ flex: 1, minHeight: 0 }}>
               {/* Chat */}
-              <NeuCard className="h-[480px] lg:h-full" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0, minHeight: 0 }}>
+              <NeuCard className="h-[min(480px,62dvh)] lg:h-full" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0, minHeight: 0 }}>
                 <div ref={threadRef} className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3" style={{ minHeight: 0 }}>
                   {messages.length === 0 ? (
                     <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted, textAlign: 'center', margin: 'auto 0' }}>
@@ -521,8 +524,12 @@ export default function PositionPaperPage() {
                     onChange={e => setBody(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                     placeholder="Write a message..."
-                    className="flex-1 focus:outline-none"
-                    style={{ border: 'none', borderRadius: 12, padding: '10px 14px', fontSize: 13, color: NEU.ink, backgroundColor: NEU.base, boxShadow: NEU.inSm, fontFamily: OUTFIT }}
+                    /* 16px on a phone: iOS zooms the whole page in on any
+                       focused field under 16px and never zooms back out, which
+                       leaves the delegate panning a magnified thread. The
+                       13px it had is restored from `sm` up. */
+                    className="flex-1 min-w-0 text-base sm:text-[13px] focus:outline-none"
+                    style={{ border: 'none', borderRadius: 12, padding: '10px 14px', color: NEU.ink, backgroundColor: NEU.base, boxShadow: NEU.inSm, fontFamily: OUTFIT }}
                   />
                   <SendButton onClick={handleSend} disabled={!body.trim() || sending} />
                 </div>
@@ -532,7 +539,7 @@ export default function PositionPaperPage() {
               </NeuCard>
 
               {/* PDF */}
-              <NeuCard className="h-[480px] lg:h-full" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0, minHeight: 0 }}>
+              <NeuCard className="h-[min(480px,62dvh)] lg:h-full" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0, minHeight: 0 }}>
                 <div className="flex items-center justify-between gap-3 px-4 py-3" style={{ borderBottom: '1px solid rgba(27,56,40,0.08)' }}>
                   <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5, color: NEU.ink, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {paper.file_name}

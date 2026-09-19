@@ -68,6 +68,40 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
   const t = useT();
   const navLinks = NAV_LINKS_CONFIG.map(l => ({ label: l[language], href: l.href }));
 
+  // The sheet animates on max-height, so it needs a PIXEL height — but that
+  // height used to be hand-computed arithmetic (480px plus a per-draft
+  // allowance). Anything the arithmetic did not know about was simply cut off:
+  // on a sessions path the language block (four locale buttons plus "Request a
+  // language", ~150px) pushed the content to 537px against the 480px cap, so
+  // SIGN OUT / SIGN IN — the last row, and the only way out of an account —
+  // was clipped and untappable at EVERY phone size. Measure the content
+  // instead, and clamp it to the room left under the 72px bar so a short phone
+  // scrolls the sheet rather than losing its last row.
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const [sheetMax, setSheetMax] = useState(0);
+  const [sheetScrolls, setSheetScrolls] = useState(false);
+  useEffect(() => {
+    // A closed sheet needs no measurement, and `sheetScrolls` is only ever read
+    // together with `menuOpen`, so there is nothing to reset on the way out.
+    if (!menuOpen) return;
+    const el = sheetRef.current;
+    if (!el) return;
+    const measure = () => {
+      const content = el.scrollHeight;
+      // Leave the bar itself plus a little breathing room below the sheet.
+      const room = Math.max(200, window.innerHeight - 72 - 12);
+      setSheetMax(Math.min(content, room));
+      setSheetScrolls(content > room);
+    };
+    measure();
+    // Drafts and the credit balance arrive after the sheet is already open, so
+    // re-measure on content growth rather than guessing at a dependency list.
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    window.addEventListener('resize', measure);
+    return () => { ro.disconnect(); window.removeEventListener('resize', measure); };
+  }, [menuOpen]);
+
   useEffect(() => {
     function handleMouseDown(e: MouseEvent) {
       if (langMenuRef.current && !langMenuRef.current.contains(e.target as Node)) {
@@ -365,7 +399,9 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
         <div className="md:hidden flex items-center gap-2">
         {user && <ProfileAvatarMenu size={56} />}
         <button
-          className="flex flex-col justify-center items-center w-10 h-10 gap-1.5"
+          // 44x44: the tap-target floor. This button only ever renders on a
+          // phone (the wrapper is md:hidden), so desktop is untouched.
+          className="flex flex-col justify-center items-center w-11 h-11 gap-1.5"
           onClick={() => setMenuOpen((v) => !v)}
           aria-label={menuOpen ? 'Close menu' : 'Open menu'}
         >
@@ -403,17 +439,18 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
         className={`md:hidden overflow-hidden transition-[max-height] duration-300 ${overlay ? 'absolute left-0 right-0 z-40' : 'relative z-20'}`}
         style={{
           top: overlay ? '72px' : undefined,
-          // Headroom for the drafts block (a heading + one row per draft, up
-          // to 3), or the sheet clips its own last item (SIGN OUT) at the
-          // 480px cap.
-          maxHeight: menuOpen
-            ? `${480 + (user && drafts.length > 0 ? 26 + 44 * Math.min(drafts.length, 3) : 0)}px`
-            : '0px',
+          // Measured, never guessed — see the sheetMax effect above.
+          maxHeight: menuOpen ? `${sheetMax}px` : '0px',
+          // Only a sheet that genuinely does not fit scrolls; `overflow-hidden`
+          // (the class) still handles the closed state and the X axis.
+          overflowY: menuOpen && sheetScrolls ? 'auto' : undefined,
+          overscrollBehavior: 'contain',
+          WebkitOverflowScrolling: 'touch',
           backgroundColor: '#FAF8F3',
           borderBottom: menuOpen ? '1px solid #DDD4C0' : 'none',
         }}
       >
-        <div className="flex flex-col px-6 py-4 gap-1">
+        <div ref={sheetRef} className="flex flex-col px-6 py-4 gap-1">
           {navLinks.map((link) => {
             const active = pathname === link.href;
             return (

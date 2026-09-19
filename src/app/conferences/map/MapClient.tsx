@@ -453,8 +453,16 @@ export default function MapClient() {
     <div
       style={{
         position: 'relative',
-        width: '100vw',
+        // 100vw counts the desktop scrollbar and so overhangs the page; 100%
+        // is the same width without that error.
+        width: '100%',
+        // On a phone 100vh is the viewport with the browser chrome RETRACTED,
+        // so a full-bleed map is always taller than what you can actually see:
+        // its bottom edge (and anything sitting there) hides under the address
+        // bar and the home indicator. `dvh` is the visible height, with vh
+        // first as the fallback for engines that lack it.
         height: '100vh',
+        maxHeight: '100dvh',
         overflow: 'hidden',
         backgroundColor: '#1B3828',
       }}

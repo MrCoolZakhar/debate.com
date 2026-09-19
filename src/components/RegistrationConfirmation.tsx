@@ -197,6 +197,16 @@ export default function RegistrationConfirmation({
           justify-content: center;
           perspective: 1700px;
         }
+        /* The status pill and the date chip are both absolutely positioned on
+           the hero's top row, one left, one right, and both are
+           white-space: nowrap — so neither can wrap or shrink. On a 360px
+           phone the pass is 312px wide and "Payment due" plus the
+           "Dates to be confirmed" fallback need more than the row has: the
+           chip landed ON TOP of the pill and hid the word "due". Below 460px
+           they stack instead. !important because both positions are inline. */
+        @media (max-width: 459px) {
+          .rc-datechip { top: 48px !important; left: 13px !important; right: auto !important; }
+        }
         @media (max-width: 900px) {
           .rc-stage { grid-template-columns: minmax(0,1fr); gap: 40px; justify-items: center; }
           .rc-pass { max-width: 380px; width: 100%; }
@@ -473,7 +483,7 @@ export default function RegistrationConfirmation({
                 href={calendarHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rc-link focus:outline-none"
+                className="rc-link focus:outline-none min-h-11 sm:min-h-0"
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 7,
                   fontFamily: OUTFIT, fontSize: 14, fontWeight: 700,
@@ -513,6 +523,10 @@ function PassRow({
           fontWeight: pending ? 500 : total ? 700 : 600,
           color: valueColor ?? (pending ? NEU.muted : NEU.ink),
           margin: 0, textAlign: 'right', fontVariantNumeric: 'tabular-nums',
+          // Values are user data (committee, delegation, an amount). A flex
+          // item's automatic minimum size is its content, so one long
+          // unspaced name pushed this row wider than the pass itself.
+          minWidth: 0, overflowWrap: 'anywhere',
         }}
       >
         {value}

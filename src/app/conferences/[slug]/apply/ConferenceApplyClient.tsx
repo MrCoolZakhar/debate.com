@@ -379,6 +379,16 @@ const STEP_MIN_BODY = 700;
  *  viewport cap so the Continue pill sits where it does in the real flow. */
 const PREVIEW_BANNER_H = 35;
 
+/** The Preferences committee list. A scrollport on a pointer screen, plain
+ *  page flow on a phone — see the comment at its render site. `dvh` rather
+ *  than `vh` so an iOS toolbar cannot push the box past the visible area;
+ *  the two are identical on a desktop browser. */
+const PREF_PICKER_CSS = `
+@media (min-width:640px){
+  .pref-picker-scroll{max-height:58dvh;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+}
+`;
+
 /** Human names for the wizard stages, shown on the WizardShell progress rail. */
 const STEP_LABEL: Record<StepKindName, string> = {
   society: 'Society',
@@ -411,9 +421,17 @@ function CreditInfoTip() {
     const b = btnRef.current;
     if (!b) return;
     const r = b.getBoundingClientRect();
-    const panelW = 280;
+    const panelW = Math.min(280, window.innerWidth - 16);
     const left = Math.min(Math.max(8, r.right - panelW), window.innerWidth - panelW - 8);
-    setPos({ top: r.bottom + 8, left });
+    // FLIP ABOVE when the panel will not fit below. `left` was clamped both
+    // ways, `top` was not — and this tip sits in the cost card near the foot
+    // of the Overview step, so on a phone its ~230px of copy opened off the
+    // bottom of a `position: fixed` layer that no amount of scrolling reaches.
+    const panelH = 240;
+    const top = r.bottom + 8 + panelH <= window.innerHeight
+      ? r.bottom + 8
+      : Math.max(8, r.top - 8 - panelH);
+    setPos({ top, left });
   }, []);
 
   const openNow = () => {
@@ -447,8 +465,14 @@ function CreditInfoTip() {
         onMouseLeave={scheduleClose}
         onFocus={openNow}
         onBlur={scheduleClose}
+        // Hover is the rule on a pointer screen, but a phone has no hover, so
+        // the only explanation of what a credit buys was unreachable there.
+        // A tap opens it (and it closes on blur or a tap elsewhere); the
+        // pointer behaviour is untouched. Deliberately not a toggle: iOS fires
+        // focus before click, so a toggle would close what focus just opened.
+        onClick={openNow}
         className="flex items-center justify-center rounded-full focus:outline-none"
-        style={{ width: 24, height: 24, backgroundColor: 'color-mix(in srgb, var(--gv-main) 8%, transparent)', border: 'none', cursor: 'default' }}
+        style={{ width: 24, height: 24, backgroundColor: 'color-mix(in srgb, var(--gv-main) 8%, transparent)', border: 'none', cursor: 'pointer' }}
       >
         <Info size={13} strokeWidth={2.4} style={{ color: NEU.forest }} />
       </button>
@@ -629,7 +653,12 @@ function RankedRow({
       onDragOver={onDragOver}
       onDrop={onDrop}
       onDragEnd={onDragEnd}
-      className="flex items-center gap-2"
+      /* Wraps on a phone. The rank medallion (26), committee disc (34), flag
+         (22) and the three controls (44 + 44 + 36) are all non-shrinking, so
+         at 375px they left the name column 39px and the delegate read their
+         own ranked choice as "Arg ent...". Below `sm` the controls take their
+         own line; from `sm` up the row is the single unwrapped line it was. */
+      className="flex flex-wrap sm:flex-nowrap items-center gap-2"
       style={{
         padding: '6px 8px 6px 10px', borderRadius: 16, backgroundColor: NEU.surface, boxShadow: NEU.outSm,
         opacity: isDragging ? 0.5 : 1,
@@ -685,7 +714,7 @@ function RankedRow({
         </p>
       </div>
 
-      <div className="flex items-center flex-shrink-0">
+      <div className="flex items-center flex-shrink-0 w-full justify-end sm:w-auto">
         <button
           type="button"
           onClick={() => onMove(-1)}
@@ -3260,7 +3289,7 @@ function ConferenceApplyInner() {
               onChange={(e) => { setVoucherCode(e.target.value.toUpperCase()); setVoucherError(''); }}
               placeholder="Voucher code"
               aria-label="Voucher code"
-              className="w-full rounded-xl px-3.5 py-2 text-sm focus:outline-none"
+              className="w-full rounded-xl px-3.5 py-2 text-base sm:text-sm focus:outline-none"
               style={{
                 border: '1.5px solid var(--gv-border)',
                 backgroundColor: 'var(--gv-surface)', color: NEU.ink, fontFamily: OUTFIT,
@@ -3280,7 +3309,7 @@ function ConferenceApplyInner() {
               onKeyDown={(e) => { if (e.key === 'Enter') handleApplyVoucher(); }}
               placeholder="Voucher code"
               aria-label="Voucher code"
-              className="flex-1 min-w-0 rounded-xl px-3.5 py-2 text-sm focus:outline-none"
+              className="flex-1 min-w-0 rounded-xl px-3.5 py-2 text-base sm:text-sm focus:outline-none"
               style={{
                 border: voucherError ? '1.5px solid #8B2020' : '1.5px solid var(--gv-border)',
                 backgroundColor: 'var(--gv-surface)', color: NEU.ink, fontFamily: OUTFIT,
@@ -3466,7 +3495,7 @@ function ConferenceApplyInner() {
                       setTimeout(() => setSocietyDropdownOpen(false), 150);
                     }}
                     placeholder="e.g. HultMUN, LSE MUN Society..."
-                    className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+                    className="w-full rounded-xl px-4 py-3 text-base sm:text-sm focus:outline-none"
                     style={{
                       border: societyError ? '1.5px solid #8B2020' : '1.5px solid var(--gv-border)',
                       backgroundColor: invitedSocietyId ? 'color-mix(in srgb, var(--gv-main) 5%, transparent)' : 'var(--gv-surface)',
@@ -3662,7 +3691,7 @@ function ConferenceApplyInner() {
                 setSpotsPledged(raw === '' ? '' : Math.max(1, Math.floor(Number(raw))));
                 setInvoicingError('');
               }}
-              className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+              className="w-full rounded-xl px-4 py-3 text-base sm:text-sm focus:outline-none"
               style={{ border: '1.5px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)', color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}
               onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gv-main)'; }}
               onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gv-border)'; }}
@@ -3724,7 +3753,7 @@ function ConferenceApplyInner() {
                   setAdvisorsPledged(raw === '' ? '' : Math.max(1, Math.floor(Number(raw))));
                   setInvoicingError('');
                 }}
-                className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+                className="w-full rounded-xl px-4 py-3 text-base sm:text-sm focus:outline-none"
                 style={{ border: '1.5px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)', color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}
                 onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gv-main)'; }}
                 onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gv-border)'; }}
@@ -3896,18 +3925,23 @@ function ConferenceApplyInner() {
             Scrollable, fixed-height viewport for the committee list. Expanding
             a committee's country tray now scrolls WITHIN this box instead of
             growing the page, so opening a committee never shifts / re-orders the
-            list above it (the jarring reflow the old inline layout caused). */}
+            list above it (the jarring reflow the old inline layout caused).
+
+            POINTER ONLY, from 640px up. On a phone the box was 58vh (471px of
+            an 812px screen) starting just below the fold, with
+            `overscroll-behavior: contain` deliberately blocking scroll
+            chaining — so a swipe anywhere in the lower two thirds of the
+            screen scrolled the committee list and never the page, and
+            Continue (measured at y 863) could not be reached by the natural
+            gesture. A phone has nothing to gain from the inner scrollport
+            anyway: the tray it protects against reflow is the whole screen
+            there. Below 640px the list simply grows and the page scrolls. */}
+        <style>{PREF_PICKER_CSS}</style>
         <div
           className="pref-picker-scroll"
           style={{
-            maxHeight: '58vh',
-            overflowY: 'auto',
-            overscrollBehavior: 'contain',
             paddingRight: 4,
             marginRight: -4,
-            // Anchor the scrollport so a tray opening at the bottom reveals in
-            // place rather than nudging the whole column.
-            scrollbarGutter: 'stable',
           }}
         >
         {committees.length === 0 ? (

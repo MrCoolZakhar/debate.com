@@ -227,7 +227,14 @@ export default function ContactClient() {
                 {/* Subject pills */}
                 <div className="flex flex-col gap-2.5">
                   <Label style={labelStyle}>{t('contact_label_subject')}</Label>
-                  <div className="flex flex-row flex-nowrap gap-2 overflow-x-auto">
+                  {/* Wraps, never scrolls sideways. As a nowrap row these four
+                      pills measured 571px against a 295px column on a 375px
+                      phone, so "Press & Media" and "Feedback" sat entirely off
+                      screen behind a hairline scrollbar — two of the four
+                      reasons to write to us, invisible on the device most
+                      people write from. The desktop column is ~530px, so they
+                      were partly hidden there too. */}
+                  <div className="flex flex-row flex-wrap gap-2">
                     {SUBJECTS.map((s) => {
                       const active = subject === s.id;
                       return (
@@ -235,7 +242,9 @@ export default function ContactClient() {
                           key={s.id}
                           onClick={() => setSubject(s.id)}
                           style={{
+                            // 40px tall: a thumb-sized target on a phone.
                             padding: '7px 16px',
+                            minHeight: 40,
                             borderRadius: 9999,
                             fontSize: 13,
                             fontWeight: active ? 800 : 600,

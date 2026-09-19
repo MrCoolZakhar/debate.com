@@ -116,8 +116,15 @@ export default function CVPage() {
 
   return (
     <div>
-      <div className="flex items-end justify-between gap-4 mb-8">
-        <div>
+      {/* Two columns is a desktop shape. On a 375px phone the text column was
+          squeezed to 150px (about twenty characters a line) for its whole
+          356px height while 161px of the row sat empty beside it, and the
+          Share pill and + disc floated in the middle of the paragraph.
+          `flex-wrap` + `w-full` under 640px stacks them: the text gets the
+          page, the two buttons sit on their own row under it. Desktop is the
+          same row it always was. (18 Sep 2026 phone audit.) */}
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
+        <div className="min-w-0 flex-1 basis-full sm:basis-auto">
           <Eyebrow className="mb-2">Delegate Record</Eyebrow>
           <h1
             className="font-black text-[26px] mb-1"
@@ -147,7 +154,7 @@ export default function CVPage() {
                 href={publicHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline' }}
+                style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3, display: 'inline-block', paddingBlock: 6 }}
               >
                 See what visitors see
               </a>
@@ -155,15 +162,15 @@ export default function CVPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-shrink-0">
+        <div className="flex items-center gap-2.5 flex-shrink-0 w-full sm:w-auto">
           {/* Share — copies a public read-only link to this CV */}
           <button
             onClick={handleShare}
             aria-label="Copy a public link to your CV"
             title={copied ? 'Link copied' : 'Share your CV'}
-            className="inline-flex items-center gap-2 rounded-full focus:outline-none"
+            className="inline-flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-full focus:outline-none"
             style={{
-              height: '42px',
+              height: '48px',
               padding: '0 16px',
               backgroundColor: NEU_SURFACE,
               color: '#1B3828',

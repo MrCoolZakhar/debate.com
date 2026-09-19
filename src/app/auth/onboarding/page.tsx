@@ -302,7 +302,7 @@ export default function OnboardingPage() {
   // nothing.
   if (basicsNeeded !== false) {
     return (
-      <div className="min-h-screen w-full flex flex-col" style={{ backgroundColor: NEU.base ?? '#EDE7D8' }}>
+      <div className="min-h-[100dvh] w-full flex flex-col" style={{ backgroundColor: NEU.base ?? '#EDE7D8' }}>
         <div className="flex items-center" style={{ padding: '18px 22px' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/gavel-mark.png" alt="Gavelling" className="h-9 w-9 object-contain" />
@@ -330,7 +330,12 @@ export default function OnboardingPage() {
                 placeholder="Start typing a country..."
                 inputStyle={{
                   backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0', borderRadius: 12,
-                  color: NEU.ink, fontFamily: OUTFIT, fontSize: 14, paddingTop: 12, paddingBottom: 12,
+                  // 16px is the iOS no-zoom floor. At 14 this field zoomed the
+                  // whole unskippable gate sideways the moment it was tapped,
+                  // which is the worst possible screen for that to happen on.
+                  // CompleteBasicsGate (the modal twin of this screen) already
+                  // used 16; these two must not disagree.
+                  color: NEU.ink, fontFamily: OUTFIT, fontSize: 16, paddingTop: 12, paddingBottom: 12,
                 }}
               />
               {basicsGuess && <GeoGuessNote countryName={basicsGuess} />}
@@ -379,7 +384,7 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen w-full" style={{ backgroundColor: NEU.base ?? '#EDE7D8' }}>
+    <div className="min-h-[100dvh] w-full" style={{ backgroundColor: NEU.base ?? '#EDE7D8' }}>
       {/* Top bar: mark on the left, escape hatch on the right */}
       <div className="flex items-center justify-between" style={{ padding: '18px 22px' }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -387,8 +392,12 @@ export default function OnboardingPage() {
         <button
           type="button"
           onClick={skipAll}
-          className="text-sm font-semibold focus:outline-none"
+          className="inline-flex items-center text-sm font-semibold focus:outline-none"
           style={{
+            // The only way out of onboarding was a 20px-tall line of text.
+            // 44px tall with its own padding, so a thumb can reach it.
+            minHeight: 44,
+            padding: '0 4px',
             fontFamily: OUTFIT,
             // The escape hatch is a sentence the new user has to read to know
             // they can leave. NEU.muted is 2.71:1 on the ivory page and fails
@@ -431,6 +440,9 @@ export default function OnboardingPage() {
             sub="Search and pick as many as you like, and we'll surface conferences in your region."
             onBack={() => setStep(1)}
           >
+            {/* `minColumnWidth` so the grid DROPS to two columns on a phone
+                instead of squeezing three 100px cards into 375px, where every
+                country name truncated to "Unit…". (18 Sep 2026 phone audit.) */}
             <CardSelect
               options={countryOptions}
               value={countries}
@@ -438,6 +450,8 @@ export default function OnboardingPage() {
               multiple
               searchable
               columns={3}
+              minColumnWidth={128}
+              wrapText
             />
             <StepFooter
               onNext={() => setStep(3)}
@@ -455,7 +469,21 @@ export default function OnboardingPage() {
             sub="A rough starting point. Your level updates automatically as your MUN CV grows."
             onBack={() => setStep(2)}
           >
-            <CardSelect options={LEVEL_OPTIONS} value={level} onChange={pickLevel} columns={2} size="lg" />
+            {/* At 375px these cards are 148px wide and every label was cut to
+                one ellipsised line: "Begin…", "Interm…", "Advan…", "0-1
+                confer…". A delegate could not read the level they were
+                picking. `wrapText` lets two or three words use two lines;
+                `minColumnWidth` keeps the pair side by side wherever they
+                actually fit. (18 Sep 2026 phone audit.) */}
+            <CardSelect
+              options={LEVEL_OPTIONS}
+              value={level}
+              onChange={pickLevel}
+              columns={2}
+              size="lg"
+              wrapText
+              minColumnWidth={158}
+            />
             <StepFooter
               onNext={() => setStep(4)}
               nextLabel={level ? 'Continue' : 'Skip this question'}

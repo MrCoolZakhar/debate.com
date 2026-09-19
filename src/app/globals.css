@@ -417,6 +417,43 @@ html, body {
   transform: none;
 }
 
+/* ── Blog on a phone ───────────────────────────────────────────────────────
+   The 34 posts each hand-roll an inline `style` object (see
+   src/app/blog/layout.tsx for the full reasoning), so their padding and their
+   table widths are fixed pixel values that no media query can reach. `.gv-blog`
+   is the section wrapper that layout.tsx adds; everything below is scoped to it
+   and to phone widths, so the desktop article is byte-for-byte unchanged.
+
+   `!important` is load-bearing here and nowhere else: an inline style beats any
+   class, and the values being corrected ARE inline styles. */
+@media (max-width: 640px) {
+  /* The five posts that carry a table already wrap it in an overflow-x
+     scroller, so nothing was ever unreadable — it just had to be swiped
+     sideways inside a 247px window. Trimming the cell padding shrinks the
+     table's min-content width, and with the wider measure below the common
+     case (the motions threshold table) now fits outright and needs no swipe
+     at all. The posts' own scrollers stay as they are: deliberately NOT
+     `display: block` on the table, which would fight the `min-width` the
+     comparison posts set on theirs. */
+  .gv-blog table th,
+  .gv-blog table td {
+    padding: 8px 10px !important;
+  }
+
+  /* 24px of page padding plus 40px of card padding left a 247px measure on a
+     375px phone. Give the words back about 45px a side. */
+  .gv-blog article {
+    padding: 24px 20px 30px !important;
+    border-radius: 16px !important;
+  }
+  /* The page wrapper's own 24px side padding, halved. Scoped to the direct
+     child of the wrapper so it can only ever hit the post's outermost box. */
+  .gv-blog > div {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+}
+
 /* The rise is decoration; the shadow still communicates depth without it. */
 @media (prefers-reduced-motion: reduce) {
   .gv-lift,

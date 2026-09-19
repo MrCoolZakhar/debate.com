@@ -118,7 +118,7 @@ const PRO_FEATURES: PlanFeature[] = [
 ];
 
 const UNLIMITED_FEATURES: PlanFeature[] = [
-  { text: 'Unlimited Gavelling credits — never think about it' },
+  { text: 'Unlimited Gavelling credits. Never think about it' },
   { text: 'Your MUN historical statistics', comingSoon: true },
   { text: 'Unlimited email builder use as a conference organizer', comingSoon: true },
   { text: 'Premium job board opportunities', comingSoon: true },
@@ -568,6 +568,16 @@ export default function UnlimitedPage() {
 
   return (
     <div>
+      {/* Phone sizing for the three controls that actually take money or a
+          code: the quantity keys were 26px, the voucher field 36px tall at
+          14px (which makes iOS Safari zoom the page on focus) and REDEEM 36px.
+          Grown on a phone only; the desktop control keeps its compact size.
+          (18 Sep 2026 phone audit.) */}
+      <style>{`@media (max-width:743px){
+  .gv-step{width:40px!important;height:40px!important}
+  .gv-voucher{font-size:16px!important;min-height:48px}
+  .gv-redeem{min-height:48px}
+}`}</style>
       <Eyebrow className="mb-2">Credits</Eyebrow>
       <h1
         className="font-black text-[26px] mb-1"
@@ -589,7 +599,7 @@ export default function UnlimitedPage() {
         >
           <ArrowLeft size={15} strokeWidth={2.4} style={{ color: NEU.deepGold, flexShrink: 0 }} />
           <p className="text-sm font-semibold" style={{ color: '#7A5A20', fontFamily: OUTFIT, lineHeight: 1.5 }}>
-            Add a credit to finish your application — we&apos;ll take you right back.
+            Add a credit to finish your application. We&apos;ll take you right back.
           </p>
         </div>
       )}
@@ -644,7 +654,7 @@ export default function UnlimitedPage() {
                   type="button"
                   onClick={() => setBuyQty(q => Math.max(1, q - 1))}
                   disabled={buyBusy || buyQty <= 1}
-                  className="flex items-center justify-center rounded-full focus:outline-none"
+                  className="gv-step flex items-center justify-center rounded-full focus:outline-none"
                   style={{ width: 26, height: 26, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', cursor: buyBusy || buyQty <= 1 ? 'default' : 'pointer', opacity: buyBusy || buyQty <= 1 ? 0.5 : 1 }}
                 >
                   <Minus size={13} strokeWidth={2.6} style={{ color: NEU.ink }} />
@@ -656,7 +666,7 @@ export default function UnlimitedPage() {
                   type="button"
                   onClick={() => setBuyQty(q => Math.min(20, q + 1))}
                   disabled={buyBusy || buyQty >= 20}
-                  className="flex items-center justify-center rounded-full focus:outline-none"
+                  className="gv-step flex items-center justify-center rounded-full focus:outline-none"
                   style={{ width: 26, height: 26, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', cursor: buyBusy || buyQty >= 20 ? 'default' : 'pointer', opacity: buyBusy || buyQty >= 20 ? 0.5 : 1 }}
                 >
                   <Plus size={13} strokeWidth={2.6} style={{ color: NEU.ink }} />
@@ -712,7 +722,7 @@ export default function UnlimitedPage() {
             Gavelling Pro
           </h2>
           <p className="text-[13px] mb-5" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6 }}>
-            {formatFee(proPrice.monthly, proPrice.currency)}/mo — 1 credit every month + archive &amp; upcoming tools.
+            {formatFee(proPrice.monthly, proPrice.currency)}/mo. One credit every month, plus archive and upcoming tools.
           </p>
 
           <div className="flex flex-col gap-3.5 flex-1">
@@ -779,7 +789,7 @@ export default function UnlimitedPage() {
             Gavelling Unlimited
           </h2>
           <p className="text-[13px] mb-5" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6 }}>
-            Unlimited credits — never think about it.
+            Unlimited credits. Never think about it.
           </p>
 
           <div className="flex flex-col gap-3.5 flex-1">
@@ -908,7 +918,7 @@ export default function UnlimitedPage() {
               }}
             >
               <Crown size={12} strokeWidth={2.4} style={{ color: NEU.deepGold }} />
-              AMBASSADOR STATUS — ALWAYS COVERED
+              AMBASSADOR STATUS: ALWAYS COVERED
             </span>
           )}
           {unlimitedRemaining > 0 && (
@@ -936,7 +946,7 @@ export default function UnlimitedPage() {
               onKeyDown={(e) => { if (e.key === 'Enter') handleRedeem(); }}
               placeholder="Voucher code"
               aria-label="Voucher code"
-              className="flex-1 min-w-0 rounded-xl px-3.5 py-2 text-sm focus:outline-none"
+              className="gv-voucher flex-1 min-w-0 rounded-xl px-3.5 py-2 text-sm focus:outline-none"
               style={{
                 border: 'none', backgroundColor: 'transparent', color: NEU.ink,
                 fontFamily: OUTFIT, letterSpacing: '0.08em', textTransform: 'uppercase',
@@ -945,7 +955,7 @@ export default function UnlimitedPage() {
             <button
               onClick={handleRedeem}
               disabled={redeemBusy || !redeemCode.trim()}
-              className="rounded-full px-4 py-1.5 text-xs font-extrabold focus:outline-none flex-shrink-0"
+              className="gv-redeem rounded-full px-4 py-1.5 text-xs font-extrabold focus:outline-none flex-shrink-0"
               style={{
                 border: 'none', fontFamily: OUTFIT, letterSpacing: '0.1em',
                 background: redeemBusy || !redeemCode.trim() ? 'rgba(27,56,40,0.14)' : NEU.forest,
