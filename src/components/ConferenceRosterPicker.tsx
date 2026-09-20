@@ -14,6 +14,8 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Globe, Users, PenLine, Megaphone, Info, ArrowDownAZ, X, ImagePlus, Replace, FolderInput, Plus, Check, GripVertical } from 'lucide-react';
 import Portal from '@/components/Portal';
+// One implementation of "where may a fixed layer be drawn" (keyboard-aware).
+import { viewBox, useReposition } from '@/lib/visualViewport';
 import { UN_COUNTRIES, getFlagUrl, getCountryByName, findCountryFlexible, countryMatchRank } from '@/lib/countries';
 import {
   UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS,
@@ -99,10 +101,11 @@ function HoverInfo({ children, ariaLabel = 'What do these controls mean?' }: { c
     const el = triggerRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
+    const v = viewBox();
     const margin = 10;
     let left = r.right - PANEL_W;
-    left = Math.max(margin, Math.min(left, window.innerWidth - PANEL_W - margin));
-    const flip = r.bottom + 8 + EST_H > window.innerHeight - margin && r.top - 8 - EST_H > margin;
+    left = Math.max(v.left + margin, Math.min(left, v.right - PANEL_W - margin));
+    const flip = r.bottom + 8 + EST_H > v.bottom - margin && r.top - 8 - EST_H > v.top + margin;
     const top = flip ? r.top - 8 : r.bottom + 8;
     setPos({ top, left, flip });
   }, []);
@@ -110,16 +113,8 @@ function HoverInfo({ children, ariaLabel = 'What do these controls mean?' }: { c
   const show = () => { if (closeTimer.current) clearTimeout(closeTimer.current); place(); setOpen(true); };
   const hide = () => { closeTimer.current = setTimeout(() => setOpen(false), 160); };
 
-  useEffect(() => {
-    if (!open) return;
-    place();
-    window.addEventListener('resize', place);
-    window.addEventListener('scroll', place, true);
-    return () => {
-      window.removeEventListener('resize', place);
-      window.removeEventListener('scroll', place, true);
-    };
-  }, [open, place]);
+  useEffect(() => { if (open) place(); }, [open, place]);
+  useReposition(open, place);
 
   useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current); }, []);
 
@@ -289,28 +284,40 @@ function useAnchoredDropdown<T extends HTMLElement>(
   anchorRef: React.RefObject<T | null>,
   estHeight = 300,
 ) {
-  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number; maxHeight: number; up: boolean } | null>(null);
   const place = useCallback(() => {
     const el = anchorRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
+    // The VISIBLE band, not the window: this dropdown hangs off a focused text
+    // field, so on a phone the keyboard is up and `window.innerHeight` is
+    // describing a screen half of which the organiser cannot see.
+    const v = viewBox();
     const margin = 8;
-    let top = r.bottom + 4;
-    if (top + estHeight > window.innerHeight - margin && r.top - 4 - estHeight > margin) {
-      top = r.top - 4 - estHeight;
-    }
-    setPos({ top: Math.max(margin, top), left: r.left, width: r.width });
+    const below = v.bottom - margin - (r.bottom + 4);
+    const above = (r.top - 4) - (v.top + margin);
+    // Open downwards unless upwards is both possible and genuinely roomier.
+    const up = below < estHeight && above > below;
+    const room = Math.max(96, Math.min(estHeight, up ? above : below));
+    setPos({
+      // Flipped, the menu is pinned to the trigger's TOP edge and pulled up by
+      // its own height with `translateY(-100%)` at the render site. Positioning
+      // it at `r.top - room` instead would park a two-row menu 300px above the
+      // field it belongs to, because `room` is the cap, not the height.
+      top: up ? r.top - 4 : r.bottom + 4,
+      left: Math.max(v.left + margin, Math.min(r.left, v.right - margin - r.width)),
+      width: r.width,
+      // Never taller than the room it was given, so the last match is always
+      // reachable instead of sitting off the bottom of the screen.
+      maxHeight: room,
+      up,
+    });
   }, [anchorRef, estHeight]);
   useEffect(() => {
     if (!open) { setPos(null); return; }
     place();
-    window.addEventListener('resize', place);
-    window.addEventListener('scroll', place, true);
-    return () => {
-      window.removeEventListener('resize', place);
-      window.removeEventListener('scroll', place, true);
-    };
   }, [open, place]);
+  useReposition(open, place);
   return pos;
 }
 
@@ -351,7 +358,7 @@ export function ConferenceCommitteeNameInput({ value, onChange, onPresetSelect }
       />
       {menuOpen && pos && (
         <Portal>
-        <div className="rounded-xl overflow-hidden" style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 9999, backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 8px 32px rgba(27,56,40,0.14), 0 2px 8px rgba(27,56,40,0.08)', maxHeight: 280, overflowY: 'auto' }}>
+        <div className="rounded-xl overflow-hidden" style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, transform: pos.up ? 'translateY(-100%)' : undefined, zIndex: 9999, backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 8px 32px rgba(27,56,40,0.14), 0 2px 8px rgba(27,56,40,0.08)', maxHeight: pos.maxHeight, overflowY: 'auto', overscrollBehavior: 'contain' }}>
           {matches.slice(0, 8).map((p, i) => (
             <button
               key={p.name}
@@ -429,9 +436,16 @@ function useFloatingPos(
     const el = anchorRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
+    const v = viewBox();
     const margin = 8;
-    const left = Math.max(margin, Math.min(r.left, window.innerWidth - width - margin));
-    const up = r.bottom + 6 + estHeight > window.innerHeight - margin && r.top - 6 - estHeight > margin;
+    const left = Math.max(v.left + margin, Math.min(r.left, v.right - width - margin));
+    // Flip above whenever below cannot hold the panel and above can. The old
+    // test demanded the FULL estimated height below AND above, so on a phone,
+    // where neither side holds 300px, it always opened downwards and ran off
+    // the bottom of the screen.
+    const below = v.bottom - margin - (r.bottom + 6);
+    const above = (r.top - 6) - (v.top + margin);
+    const up = below < estHeight && above > below;
     setPos({ top: up ? r.top - 6 : r.bottom + 6, left, up });
   }, [anchorRef, width, estHeight]);
   useEffect(() => {
@@ -440,14 +454,9 @@ function useFloatingPos(
       return () => cancelAnimationFrame(id);
     }
     const id = requestAnimationFrame(place);
-    window.addEventListener('resize', place);
-    window.addEventListener('scroll', place, true);
-    return () => {
-      cancelAnimationFrame(id);
-      window.removeEventListener('resize', place);
-      window.removeEventListener('scroll', place, true);
-    };
+    return () => cancelAnimationFrame(id);
   }, [open, anchorKey, place]);
+  useReposition(open, place);
   return pos;
 }
 
@@ -489,6 +498,33 @@ div:last-child > .gv-rs-row { border-bottom-color:transparent; }
 .gv-rs-menu-btn { display:flex; align-items:center; gap:7px; width:100%; text-align:left; padding:7px 10px; border-radius:8px; border:0; background:transparent; cursor:pointer; font-family:'Outfit',sans-serif; font-size:12px; font-weight:600; color:#1C1410; }
 .gv-rs-menu-btn:hover, .gv-rs-menu-btn:focus-visible { background:rgba(27,56,40,0.06); outline:none; }
 .gv-rs-menu-btn.gv-rs-danger { color:#8B2020; }
+
+/* ── Touch ────────────────────────────────────────────────────────────────
+   Every rule above is written for a pointer: the controls are 22px squares
+   that only reach full contrast when the ROW is hovered, and the "remove this
+   seat's flag" cross is opacity: 0 until its own art is hovered. A finger
+   hovers nothing, so on a phone the cross did not exist at all and the rest
+   were 22px targets on a 34px row — a seat could not be removed.
+
+   hover: none is the device, not the width: a narrow desktop window keeps
+   the compact pointer row, and a large touchscreen gets the finger-sized one.
+   44px targets (the WCAG 2.1 AA floor), a row tall enough to hold them, the
+   cross always drawn, and full contrast with no hover to wait for. */
+@media (hover: none) {
+  .gv-rs-row { height:auto; min-height:52px; gap:2px; padding:5px 2px; flex-wrap:wrap; }
+  /* A floor on the name, so a wide control cluster (a custom committee shows
+     five) wraps onto its own line instead of squeezing the seat's name to
+     nothing. Without it min-w-0 lets the name collapse and the row never
+     wraps. */
+  .gv-rs-name { min-width:45%; }
+  .gv-rs-ctls { margin-left:auto; }
+  .gv-rs-ctl { width:44px; height:44px; border-radius:10px; color:#6E5F4E; }
+  .gv-rs-ctl.gv-rs-danger { color:#8B2020; }
+  .gv-rs-ctl.gv-rs-lit { color:#B6871F; }
+  .gv-rs-art-x { opacity:1; top:-8px; right:-10px; width:18px; height:18px; }
+  .gv-rs-pill { padding:8px 12px; font-size:12px; }
+  .gv-rs-menu-btn { padding:12px 12px; font-size:13px; }
+}
 `;
 
 export function ConferenceRosterSelected({
@@ -1058,16 +1094,16 @@ export function ConferenceRosterSelected({
                             onChange={(e) => setEditDraft(e.target.value)}
                             onKeyDown={(e) => { if (e.key === 'Enter') commitRename(idx, editDraft); else if (e.key === 'Escape') setEditingIdx(null); }}
                             onBlur={() => commitRename(idx, editDraft)}
-                            className="flex-1 min-w-0 text-[13px] bg-transparent outline-none"
+                            className="gv-rs-name flex-1 min-w-0 text-base sm:text-[13px] bg-transparent outline-none"
                             style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", borderBottom: '1px solid #1B3828' }}
                           />
                         ) : (
-                          <span className="flex-1 min-w-0 text-[13px] font-semibold truncate" title={row.name} style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                          <span className="gv-rs-name flex-1 min-w-0 text-[13px] font-semibold truncate" title={row.name} style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
                             {row.name}
                           </span>
                         )}
                         {!isEditing && (
-                          <span className="flex items-center gap-0.5 shrink-0">
+                          <span className="gv-rs-ctls flex items-center gap-0.5 shrink-0">
                             {/* Importance: country mode only. Vertical dashes: count + colour encode the tier. */}
                             {!isCharacter && (
                               <ImportanceDashes tier={row.importance} onClick={() => cycleTier(idx)} />
@@ -1387,7 +1423,7 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
                   if (e.key === 'Escape') setSearch('');
                 }}
                 placeholder={isCharacter ? 'Type a character or role name, press Enter…' : 'Search countries or type a name…'}
-                className="flex-1 bg-transparent px-3 py-2 text-sm focus:outline-none"
+                className="flex-1 min-w-0 bg-transparent px-3 py-2 text-base sm:text-sm focus:outline-none"
                 style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
               />
               {search.trim() && (isCharacter || available[0]) && (
@@ -1396,7 +1432,7 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
             </div>
             {searchMenuOpen && searchPos && (
               <Portal>
-              <div className="rounded-xl overflow-hidden" style={{ position: 'fixed', top: searchPos.top, left: searchPos.left, width: searchPos.width, zIndex: 9999, backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 8px 24px rgba(27,56,40,0.12)' }}>
+              <div className="rounded-xl overflow-hidden" style={{ position: 'fixed', top: searchPos.top, left: searchPos.left, width: searchPos.width, transform: searchPos.up ? 'translateY(-100%)' : undefined, zIndex: 9999, backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 8px 24px rgba(27,56,40,0.12)', maxHeight: searchPos.maxHeight, overflowY: 'auto', overscrollBehavior: 'contain' }}>
                 {available.slice(0, 5).map((c, i) => (
                   <button
                     key={c.code}

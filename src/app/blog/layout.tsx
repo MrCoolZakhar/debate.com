@@ -1,21 +1,27 @@
+import './blog.css';
+
 /**
  * Blog shell.
  *
- * Every one of the 34 posts is a standalone page that hand-rolls its own
- * inline `style` object: a page wrapper with `padding: '48px 24px 80px'` and an
- * <article> with `padding: '40px 40px 48px'`, plus <table>s sized for a desktop
- * column. Inline styles cannot carry a media query, so on a 375px phone that
- * arithmetic left a 247px text measure and pushed wide tables past the right
- * edge — and because `html, body { overflow-x: clip }` (globals.css) is the
- * site's overflow backstop, the overflowing column was not merely off screen,
- * it was unreachable: no horizontal scroll, no way to read it.
+ * Two jobs, both small:
  *
- * Rather than edit 34 files (and have them drift), this wrapper gives the whole
- * section one hook, `.gv-blog`, that globals.css uses to apply phone-only
- * corrections. Nothing here changes the desktop rendering.
+ *  1. Load `blog.css` once for the whole section. That stylesheet is where the
+ *     prose lives now. Before it, each of the 34 posts hand-rolled an inline
+ *     `style` object, and because an inline style cannot carry a media query
+ *     the measure was a fixed pixel column: about 247px of text on a 375px
+ *     phone, with tables running off an edge the page could not scroll to
+ *     (`html, body { overflow-x: clip }` in globals.css is the site's overflow
+ *     backstop, so the overflow was unreachable rather than merely off screen).
+ *     Every correction had to be an `!important` override fighting the inline
+ *     value it was correcting. Classes end that argument.
  *
- * Deliberately a plain server component with no chrome of its own: the posts
- * still own their own header and back link.
+ *  2. Carry `.gv-blog`, which is where blog.css hangs its custom properties
+ *     (the measure, the type scale, the palette), so a post inherits the whole
+ *     system by existing inside this layout.
+ *
+ * Deliberately still a plain server component with no chrome: the header and
+ * the footer come from BlogChrome, which the index and ArticleLayout each
+ * mount, because that is the level that knows the page's own shape.
  */
 export default function BlogLayout({ children }: { children: React.ReactNode }) {
   return <div className="gv-blog">{children}</div>;

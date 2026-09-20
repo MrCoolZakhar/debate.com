@@ -44,6 +44,7 @@ import VerifiedCheck from '@/components/VerifiedCheck';
 import {
   CommitteeEditorModal,
   ModalOverlay,
+  MODAL_PANEL_MAX_HEIGHT,
   type EditableCommittee,
 } from '@/components/CommitteeEditorModal';
 import { useScrollLock } from '@/hooks/useScrollLock';
@@ -3313,7 +3314,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
         {/* ── Organizer edit modals ──────────────────────────────────── */}
         {isOrganizerViewer && editModal === 'banner' && (
           <ModalOverlay onClose={() => { if (!assetUploading && !editSaving) setEditModal(null); }}>
-            <div className="rounded-2xl p-6" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 'min(520px, 92vw)', maxHeight: '85dvh', overflowY: 'auto' }}>
+            <div className="rounded-2xl p-6" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 'min(520px, 92vw)', maxHeight: MODAL_PANEL_MAX_HEIGHT, overflowY: 'auto' }}>
               <div className="flex items-center justify-between mb-4">
                 <p className="text-base font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>Conference Banner</p>
                 <button onClick={() => { if (!assetUploading && !editSaving) setEditModal(null); }} className="focus:outline-none" style={{ color: 'var(--gv-muted)', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close"><X size={18} /></button>
@@ -3474,7 +3475,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
         {isOrganizerViewer && editModal === 'about' && (
           <ModalOverlay onClose={() => { if (!editSaving) setEditModal(null); }}>
-            <div className="rounded-2xl p-6" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 'min(480px, 92vw)', maxHeight: '85dvh', overflowY: 'auto' }}>
+            <div className="rounded-2xl p-6" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 'min(480px, 92vw)', maxHeight: MODAL_PANEL_MAX_HEIGHT, overflowY: 'auto' }}>
               <div className="flex items-center justify-between mb-4">
                 <p className="text-base font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>Contact &amp; Social Links</p>
                 <button onClick={() => { if (!editSaving) setEditModal(null); }} className="focus:outline-none" style={{ color: 'var(--gv-muted)', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close"><X size={18} /></button>

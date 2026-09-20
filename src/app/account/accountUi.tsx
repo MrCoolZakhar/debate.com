@@ -15,6 +15,33 @@ export const OUTFIT = "'Outfit', sans-serif";
 // existing importers keep resolving. Nothing renders as monospace anymore.
 export const MONO = OUTFIT;
 
+// ── Type scale ───────────────────────────────────────────────────────────────
+// ONE scale for the /account family, on the Settings dialog's 1:1.6 ratio
+// (AGENTS.md, FEATURE: SETTINGS, "Type and text"). Settings runs 33 / 21 / 13 /
+// 11 on a chair's laptop; this is the same scale stepped up one notch to 35 /
+// 22 / 14 / 12, because /account is read on a phone as often as on a desktop
+// and 13px body plus 12px hints is what made this page squint-y. 14 is the
+// floor for anything that is a sentence, a label or a button.
+//
+// `caption` is the one off-ratio step (14 / 1.6 = 8.75px is not readable), same
+// compromise Settings makes at 11. Colour carries the rest of the hierarchy:
+// ink for what must be read, inkSoft for hints, forest/gold for section marks.
+// Never write a bare `text-xs` or a literal fontSize in this folder again —
+// reach for T.
+export const T = {
+  /** Page or hero headline. */
+  title: 35,
+  /** Card / section heading. */
+  section: 22,
+  /** Labels, buttons, controls, any sentence the reader must actually read. */
+  body: 14,
+  /** Units, hints, eyebrows, footnotes. Never a sentence the page depends on. */
+  caption: 12,
+} as const;
+
+/** Weights that go with the scale. */
+export const W = { title: 800, section: 700, label: 600, body: 400 } as const;
+
 // ── Pill / Tag ───────────────────────────────────────────────────────────────
 // The crafted replacement for the old DM-Mono / UPPERCASE / letter-spaced grey
 // pill. This one uses Outfit in normal case, a warm tint tied to meaning, a soft
@@ -69,7 +96,7 @@ export function Pill({
 }) {
   const t = PILL_TONES[tone] ?? PILL_TONES.neutral;
   const pad = size === 'sm' ? '2px 9px' : '3px 11px';
-  const fs = size === 'sm' ? '11px' : '12px';
+  const fs = size === 'sm' ? '11.5px' : `${T.caption}px`;
   return (
     <span
       title={title}
@@ -342,7 +369,7 @@ export function ExperienceInfo({
           >
             <style>{`@keyframes accFade{from{opacity:0;transform:translateY(${pos.placement === 'above' ? '6px' : '-6px'})}to{opacity:1;transform:translateY(0)}}`}</style>
             <div className="flex items-start justify-between gap-2 mb-2.5">
-              <p className="font-bold text-[13px]" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
+              <p className="font-bold" style={{ fontSize: T.body, color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
                 How experience levels work
               </p>
               <button
@@ -382,17 +409,17 @@ export function ExperienceInfo({
                     >
                       <LevelInsignia level={band.level} size={14} />
                     </span>
-                    <span className="flex-1" style={{ fontFamily: OUTFIT, fontSize: '13px', fontWeight: isCurrent ? 700 : 600, color: '#1C1410' }}>
+                    <span className="flex-1" style={{ fontFamily: OUTFIT, fontSize: T.body, fontWeight: isCurrent ? 700 : 600, color: '#1C1410' }}>
                       {band.label}
                     </span>
-                    <span style={{ fontFamily: OUTFIT, fontSize: '11px', fontWeight: 600, color: '#B6871F', fontVariantNumeric: 'tabular-nums' }}>
+                    <span style={{ fontFamily: OUTFIT, fontSize: T.caption, fontWeight: 600, color: '#B6871F', fontVariantNumeric: 'tabular-nums' }}>
                       {bandRange(i)}
                     </span>
                   </div>
                 );
               })}
             </div>
-            <p className="text-[11.5px] mt-3 pt-2.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: 0, borderTop: '1px solid rgba(221,212,192,0.6)', lineHeight: 1.55 }}>
+            <p className="mt-3 pt-2.5" style={{ fontSize: T.caption, color: '#6E5F4E', fontFamily: OUTFIT, margin: 0, borderTop: '1px solid rgba(221,212,192,0.6)', lineHeight: 1.55 }}>
               Your level is derived from the number of conferences on your MUN CV.
             </p>
           </div>
@@ -411,7 +438,10 @@ export function Eyebrow({ children, color = '#B6871F', className = '', size = 's
   /** 'sm' keeps the original tiny eyebrow; 'md'/'lg' make a section heading more prominent. */
   size?: 'sm' | 'md' | 'lg';
 }) {
-  const fontSize = size === 'lg' ? '11.5px' : size === 'md' ? '10.5px' : '9px';
+  // An eyebrow is a micro-label, so it lives at or under `caption` — but 9px
+  // was below the threshold at which uppercase letter-spaced Outfit is legible
+  // at all, on a phone or on a laptop. The steps now bottom out at 10.5.
+  const fontSize = size === 'lg' ? `${T.caption}px` : size === 'md' ? '11.5px' : '10.5px';
   const letterSpacing = size === 'lg' ? '0.16em' : '0.14em';
   return (
     <p
@@ -428,6 +458,45 @@ export function Eyebrow({ children, color = '#B6871F', className = '', size = 's
     >
       {children}
     </p>
+  );
+}
+
+// ── CardTitle ──────────────────────────────────────────────────────────────
+
+/**
+ * The heading of an /account card. `T.section`, Outfit, sentence case, the
+ * colour carrying the meaning — the same shape Settings gives a group title.
+ *
+ * It replaces `<Eyebrow size="lg">` on card headings. An eyebrow is a 12px
+ * uppercase letter-spaced micro-label; using one as the title of a card left
+ * the biggest thing in the card smaller than its own body text, and uppercase
+ * letter-spaced labels standing in for headings are the house's "#1 AI tell"
+ * (docs/ui-audit/00-DESIGN-RULEBOOK.md §1). Eyebrows are still eyebrows.
+ */
+export function CardTitle({ children, color = '#1C1410', className = '', style = {} }: {
+  children: React.ReactNode;
+  color?: string;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <h2
+      className={className}
+      style={{
+        fontFamily: OUTFIT,
+        fontWeight: W.section,
+        // Fluid only at the bottom end, so a 320px phone never has the title
+        // push the icon disc beside it out of the row.
+        fontSize: `clamp(19px, 5.2vw, ${T.section}px)`,
+        lineHeight: 1.2,
+        letterSpacing: '-0.01em',
+        color,
+        margin: 0,
+        ...style,
+      }}
+    >
+      {children}
+    </h2>
   );
 }
 

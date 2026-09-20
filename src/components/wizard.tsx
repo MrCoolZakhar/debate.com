@@ -560,6 +560,36 @@ export function TwoTabPick({
 
 // ── CardSelect, grid of select cards ──────────────────────────────────────
 
+/**
+ * Phone rule for the card grid, the same move TwoTabPick already makes.
+ *
+ * `columns` was written for the 720px wizard shell and was then applied
+ * verbatim at 375px: `columns={4}` gave four ~62px cards, and every label was
+ * an ellipsis after three characters ("50-…", "100…"). The organiser could not
+ * read the option they were choosing — the creation wizard's step 6 was the
+ * worst of it, but every `columns >= 3` step had the same shape.
+ *
+ * Below 560px a grid of three or more columns therefore drops to TWO, and the
+ * label and sub wrap instead of truncating. Nothing above 560px changes: the
+ * template is still `repeat(columns, minmax(0, 1fr))` and every inline style
+ * stands, so the desktop wizard is byte-for-byte what it was.
+ *
+ * It is done with custom properties rather than an inline `gridTemplateColumns`
+ * because an inline style beats a media query; the property is inline, the
+ * template that reads it is not.
+ *
+ * A caller that passes `minColumnWidth` opts out: its grid is already
+ * `auto-fit`, which reflows on its own.
+ */
+const CARD_SELECT_CSS = `
+.gv-cardsel{grid-template-columns:repeat(var(--gv-cols,3),minmax(0,1fr))}
+@media (max-width:559px){
+  .gv-cardsel{grid-template-columns:repeat(var(--gv-cols-phone,2),minmax(0,1fr))}
+  .gv-cardsel .gv-cardsel-line{white-space:normal;overflow:visible;text-overflow:clip;text-wrap:balance;line-height:1.25}
+  .gv-cardsel .gv-cardsel-sub{text-wrap:pretty;line-height:1.35}
+}
+`;
+
 export function CardSelect({
   options,
   value,
@@ -676,15 +706,21 @@ export function CardSelect({
         </p>
       )}
 
+      <style>{CARD_SELECT_CSS}</style>
       <div
         role={multiple ? 'group' : 'radiogroup'}
-        className={big ? 'grid gap-5' : 'grid gap-4'}
+        className={`gv-cardsel ${big ? 'grid gap-5' : 'grid gap-4'}`}
         style={{
-          gridTemplateColumns: minColumnWidth
+          // An inline template beats the phone media query, so it is only set
+          // for the opt-in auto-fit grid, which is responsive by itself.
+          ...(minColumnWidth
             // min(100%, …) so a card can still shrink below the floor on a
             // phone narrower than the floor itself, rather than overflowing.
-            ? `repeat(auto-fit, minmax(min(100%, ${minColumnWidth}px), 1fr))`
-            : `repeat(${columns}, minmax(0, 1fr))`,
+            ? { gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${minColumnWidth}px), 1fr))` }
+            : {
+                '--gv-cols': columns,
+                '--gv-cols-phone': Math.min(columns, 2),
+              } as React.CSSProperties),
           maxHeight: searchable ? 360 : undefined,
           overflowY: searchable ? 'auto' : undefined,
           padding: '6px',
@@ -745,7 +781,7 @@ export function CardSelect({
                 </span>
               )}
               <span
-                className={wrapText ? 'w-full' : 'truncate w-full'}
+                className={`gv-cardsel-line ${wrapText ? 'w-full' : 'truncate w-full'}`}
                 style={{
                   fontFamily: OUTFIT,
                   fontWeight: big ? 800 : 700,
@@ -762,7 +798,7 @@ export function CardSelect({
               </span>
               {opt.sub && (
                 <span
-                  className={wrapText ? 'w-full' : 'truncate w-full'}
+                  className={`gv-cardsel-line gv-cardsel-sub ${wrapText ? 'w-full' : 'truncate w-full'}`}
                   style={{
                     fontFamily: OUTFIT,
                     fontSize: big ? 14.5 : 12,

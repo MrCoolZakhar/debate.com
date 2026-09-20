@@ -9,7 +9,7 @@ import { cvHref } from '@/lib/cvLink';
 import { CVEntryModal, type CVEntry } from '@/components/CVEntryModal';
 import { ShareAchievementModal } from '@/components/ShareAchievementModal';
 import Loader from '@/components/Loader';
-import { Eyebrow, GlassCard, OUTFIT, MONO } from '../accountUi';
+import { Eyebrow, GlassCard, OUTFIT, MONO, T } from '../accountUi';
 import { TimelineEntry, CVStatsRow } from './CVTimeline';
 
 // ── Page ───────────────────────────────────────────────────────────────────
@@ -142,8 +142,8 @@ export default function CVPage() {
               tell people plainly and link them to the page as a stranger sees
               it. If an opt-out is ever built, this line changes with it. */}
           <p
-            className="text-xs mt-2 max-w-md"
-            style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: '8px 0 0', lineHeight: 1.6 }}
+            className="mt-2 max-w-md"
+            style={{ fontSize: T.caption, color: '#6E5F4E', fontFamily: OUTFIT, margin: '8px 0 0', lineHeight: 1.6 }}
           >
             <strong style={{ color: '#5C5140', fontWeight: 800 }}>This page is public.</strong>{' '}
             Anyone with the link can read it without signing in, and conference organisers see it
@@ -178,7 +178,7 @@ export default function CVPage() {
               boxShadow: '0 4px 14px rgba(27,56,40,0.10)',
               fontFamily: OUTFIT,
               fontWeight: 800,
-              fontSize: '12.5px',
+              fontSize: T.body,
               letterSpacing: '0.02em',
               cursor: 'pointer',
               transition: 'transform 160ms cubic-bezier(0.22,1,0.36,1)',
@@ -251,7 +251,7 @@ export default function CVPage() {
           >
             <Plus size={26} strokeWidth={2.6} />
           </button>
-          <p className="text-[12px] mt-3" style={{ color: '#B6871F', fontFamily: MONO, letterSpacing: '0.1em', margin: '12px 0 0 0' }}>
+          <p className="mt-3" style={{ fontSize: T.caption, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.1em', margin: '12px 0 0 0' }}>
             ADD YOUR FIRST ENTRY
           </p>
         </GlassCard>

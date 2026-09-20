@@ -138,8 +138,8 @@ export function MonogramMedallion({ text, isCrisis = false, tone, size }: { text
 // existing `import { ModalOverlay } from '@/components/CommitteeEditorModal'`
 // call sites keep working.
 
-import { ModalOverlay } from '@/components/ModalOverlay';
-export { ModalOverlay };
+import { ModalOverlay, MODAL_PANEL_MAX_HEIGHT } from '@/components/ModalOverlay';
+export { ModalOverlay, MODAL_PANEL_MAX_HEIGHT };
 
 // ── Session minting ───────────────────────────────────────────────────────────
 
@@ -1213,9 +1213,9 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
           The editor is a main panel plus a docked rail (chairs, then the
           selected roster). The pair is sized as a single `min()` box and the
           rail takes a clamped share of it, so the columns NEVER wrap: a
-          wrapped rail would push the whole dialog past the viewport, and
-          ModalOverlay centres its child without scrolling — the overflow would
-          simply be unreachable at both ends.
+          wrapped rail would push the whole dialog past the viewport, and even
+          though the backdrop scrolls now, a dialog that tall is miserable to
+          work in.
 
           Widths at the three sizes this was checked at:
             1440 → box 980, rail 303, main 665
@@ -1230,18 +1230,26 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
           panel was being squeezed to ~96px of content: labels overlapped, the
           form scrolled sideways inside itself, and the editor was unusable.
           Under the breakpoint the pair therefore stacks — main first, rail
-          beneath, both full width — and the SCROLL MOVES UP to this row, since
-          a stack is taller than the viewport and ModalOverlay does not scroll.
-          The per-panel caps have to live in the same media query rather than
-          inline, or their inline specificity would win and re-cap the stack. */}
+          beneath, both full width — and the SCROLL MOVES UP to this row, so the
+          editor keeps its own scroller and its own edges instead of riding the
+          backdrop's. The per-panel caps have to live in the same media query
+          rather than inline, or their inline specificity would win and re-cap
+          the stack.
+
+          The caps are `dvh`, never `vh`: on iOS Safari `vh` is the LARGE
+          viewport, i.e. the height the page would have with the address bar
+          collapsed, so `88vh` was taller than the screen actually showed and
+          the bottom of the editor sat under the toolbar. `--gv-modal-gutter`
+          comes from the backdrop and already counts its padding and the safe
+          area. */}
       <style>{`
-        .gv-ced-row { flex-direction: column; max-height: 88vh; overflow-y: auto; }
+        .gv-ced-row { flex-direction: column; max-height: calc(100dvh - var(--gv-modal-gutter, 88px)); overflow-y: auto; overscroll-behavior: contain; }
         .gv-ced-main { max-height: none; overflow-y: visible; }
         .gv-ced-rail { flex: 0 0 auto; max-height: none; }
         @media (min-width: 760px) {
           .gv-ced-row { flex-direction: row; max-height: none; overflow-y: visible; }
-          .gv-ced-main { max-height: 88vh; overflow-y: auto; }
-          .gv-ced-rail { flex: 0 0 clamp(250px, 31%, 320px); max-height: 88vh; }
+          .gv-ced-main { max-height: 88dvh; overflow-y: auto; }
+          .gv-ced-rail { flex: 0 0 clamp(250px, 31%, 320px); max-height: 88dvh; }
         }
       `}</style>
       {/* 32px, not 24: ModalOverlay's backdrop is `px-4`, so a wider box

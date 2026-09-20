@@ -34,19 +34,11 @@ const STATIC_PAGES: { path: string; lastModified: string; changeFrequency: 'dail
   { path: '/terms',             lastModified: '2026-08-28', changeFrequency: 'yearly',  priority: 0.3 },
 ];
 
-// Blog post content dates. Posts come from the manifest (src/app/blog/posts.ts),
-// so a new post can never be left out of the sitemap; add its date here.
-const BLOG_DEFAULT_DATE = '2026-06-07';
-const BLOG_DATES: Record<string, string> = {
-  'how-to-run-mun-committee': '2026-06-01',
-  'best-mun-software-2026': '2026-07-21',
-  'muncommand-alternative': '2026-07-21',
-  'mymun-alternative': '2026-08-13',
-  'muncoordinated-alternative': '2026-07-21',
-  'general-speakers-list-guide': '2026-06-01',
-  'mun-motions-explained': '2026-06-01',
-  'how-to-chair-first-mun': '2026-06-01',
-};
+// Blog post content dates now live ON the post, in the manifest
+// (src/app/blog/posts.ts): `updated ?? date`. They used to be a second table
+// here, which meant a post could carry one date in its own JSON-LD and a
+// different one in the sitemap, and a new post silently inherited a default
+// date it never had. One field, one truth, and a new post cannot be forgotten.
 const BLOG_PRIORITY: Record<string, number> = {
   'best-mun-software-2026': 0.9,
   'muncommand-alternative': 0.9,
@@ -84,12 +76,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     .reduce((a, b) => Math.max(a, b), 0);
   // Hubs list conferences, so they change when a conference does.
   const hubDate = newestConference ? new Date(newestConference) : new Date('2026-09-17');
+  const newestPost = new Date(
+    articles.map((a) => a.updated ?? a.date).sort().at(-1) ?? '2026-08-13',
+  );
 
   return [
     { url: url('/'), lastModified: hubDate, changeFrequency: 'daily', priority: 1 },
     { url: url('/conferences/explore'), lastModified: hubDate, changeFrequency: 'daily', priority: 0.9 },
     { url: url('/conferences/map'), lastModified: hubDate, changeFrequency: 'weekly', priority: 0.6 },
-    { url: url('/blog'), lastModified: new Date('2026-08-13'), changeFrequency: 'weekly', priority: 0.9 },
+    // /blog lists the posts, so it changes when the newest post does. Derived
+    // rather than hardcoded: a hand-kept date here went stale every time a post
+    // was added, which is the same "lastmod that lies" problem as above.
+    { url: url('/blog'), lastModified: newestPost, changeFrequency: 'weekly', priority: 0.9 },
     ...STATIC_PAGES.map((p) => ({
       url: url(p.path),
       lastModified: new Date(p.lastModified),
@@ -118,7 +116,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }),
     ...articles.map((a) => ({
       url: url(`/blog/${a.slug}`),
-      lastModified: new Date(BLOG_DATES[a.slug] ?? BLOG_DEFAULT_DATE),
+      lastModified: new Date(a.updated ?? a.date),
       changeFrequency: 'monthly' as const,
       priority: BLOG_PRIORITY[a.slug] ?? 0.8,
     })),

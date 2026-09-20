@@ -452,7 +452,7 @@ function AllocationPicker({
       <div
         className="flex flex-col"
         style={{
-          width: 'min(94vw, 560px)', maxHeight: '84vh',
+          width: 'min(94vw, 560px)', maxHeight: '84dvh',
           backgroundColor: NEU.surface, borderRadius: 24, padding: 24,
           boxShadow: `${NEU.out}, 0 24px 60px rgba(27,56,40,0.28)`,
         }}

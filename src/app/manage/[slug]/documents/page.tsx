@@ -149,7 +149,7 @@ function UploadStudyGuideModal({
 
   return (
     <ModalOverlay onClose={onClose}>
-      <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 24, maxWidth: 448, width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(27,56,40,0.18)' }}>
+      <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 24, maxWidth: 448, width: '100%', maxHeight: '90dvh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(27,56,40,0.18)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <h2 style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 16, color: '#1C1410' }}>Upload Study Guide</h2>
           <button onClick={onClose} className="focus:outline-none" style={{ color: '#9A8A78' }}><X size={18} /></button>

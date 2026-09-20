@@ -820,7 +820,7 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
 
   return (
     <ModalOverlay onClose={onClose}>
-      <div className="rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 460, maxWidth: 'calc(100vw - 32px)', maxHeight: '80vh', overflowY: 'auto' }}>
+      <div className="rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 460, maxWidth: 'calc(100vw - 32px)', maxHeight: '80dvh', overflowY: 'auto' }}>
         <div className="flex items-start justify-between gap-3 mb-5">
           <div>
             <p style={{ margin: 0, fontFamily: "'Outfit', sans-serif", fontSize: '9px', fontWeight: 700, letterSpacing: '0.16em', color: '#B6871F' }}>

@@ -26,6 +26,7 @@ import { UN_COUNTRIES, getCountryByName, getFlagUrl, countryMatchRank } from '@/
 import { CONFERENCE_COMMITTEE_PRESETS } from '@/components/ConferenceRosterPicker';
 import { LogoDisc } from '@/components/LogoDisc';
 import Portal from '@/components/Portal';
+import { viewBox, useReposition } from '@/lib/visualViewport';
 import {
   Eyebrow, Pill, LevelBadge, LEVEL_ACCENT, AwardArtwork, AWARD_LIST, isCustomAward,
   monogramFor, OUTFIT, MONO,
@@ -142,28 +143,40 @@ function useAnchoredDropdown<T extends HTMLElement>(
   anchorRef: React.RefObject<T | null>,
   estHeight = 280,
 ) {
-  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number; maxHeight: number; up: boolean } | null>(null);
   const place = useCallback(() => {
     const el = anchorRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
+    // The VISIBLE band, not the window. These menus hang off focused text
+    // fields, so on a phone the keyboard is up and `window.innerHeight` is
+    // describing a screen half of which the reader cannot see.
+    const v = viewBox();
     const margin = 8;
-    let top = r.bottom + 6;
-    if (top + estHeight > window.innerHeight - margin && r.top - 6 - estHeight > margin) {
-      top = r.top - 6 - estHeight;
-    }
-    setPos({ top: Math.max(margin, top), left: r.left, width: r.width });
+    const below = v.bottom - margin - (r.bottom + 6);
+    const above = (r.top - 6) - (v.top + margin);
+    // Flip up whenever below cannot hold the menu and above is roomier. The
+    // old test demanded the FULL estimated height on BOTH sides, so on a phone,
+    // where neither side holds 280px, it always opened downwards and ran off
+    // the bottom of the screen.
+    const up = below < estHeight && above > below;
+    const room = Math.max(96, Math.min(estHeight, up ? above : below));
+    setPos({
+      // Flipped, the menu is pinned to the trigger's top edge and pulled up by
+      // its OWN height with `translateY(-100%)` at the render site; offsetting
+      // by `room` would park a two-row menu 280px above its field.
+      top: up ? r.top - 6 : r.bottom + 6,
+      left: Math.max(v.left + margin, Math.min(r.left, v.right - margin - r.width)),
+      width: r.width,
+      maxHeight: room,
+      up,
+    });
   }, [anchorRef, estHeight]);
   useEffect(() => {
     if (!open) { setPos(null); return; }
     place();
-    window.addEventListener('resize', place);
-    window.addEventListener('scroll', place, true);
-    return () => {
-      window.removeEventListener('resize', place);
-      window.removeEventListener('scroll', place, true);
-    };
   }, [open, place]);
+  useReposition(open, place);
   return pos;
 }
 
@@ -214,8 +227,8 @@ function CommitteeAutocomplete({
       {menuOpen && pos && (
         <Portal>
           <div
-            className="rounded-xl overflow-hidden"
-            style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 9999, backgroundColor: 'rgba(250,248,243,0.98)', border: '1px solid #DDD4C0', boxShadow: '0 16px 40px rgba(27,56,40,0.16)' }}
+            className="rounded-xl overflow-y-auto"
+            style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, transform: pos.up ? 'translateY(-100%)' : undefined, maxHeight: pos.maxHeight, overscrollBehavior: 'contain', zIndex: 9999, backgroundColor: 'rgba(250,248,243,0.98)', border: '1px solid #DDD4C0', boxShadow: '0 16px 40px rgba(27,56,40,0.16)' }}
           >
             {matches.map((p) => (
               <button
@@ -294,7 +307,7 @@ function AllocationAutocomplete({
         <Portal>
           <div
             className="rounded-xl overflow-y-auto"
-            style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 9999, maxHeight: '224px', backgroundColor: 'rgba(250,248,243,0.98)', border: '1px solid #DDD4C0', boxShadow: '0 16px 40px rgba(27,56,40,0.16)' }}
+            style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, transform: pos.up ? 'translateY(-100%)' : undefined, zIndex: 9999, maxHeight: Math.min(224, pos.maxHeight), overscrollBehavior: 'contain', backgroundColor: 'rgba(250,248,243,0.98)', border: '1px solid #DDD4C0', boxShadow: '0 16px 40px rgba(27,56,40,0.16)' }}
           >
             {matches.map((c) => (
               <button
@@ -1079,9 +1092,11 @@ export function CVEntryModal({
             {suggestMenuOpen && suggestPos && (
               <Portal>
                 <div
-                  className="rounded-xl overflow-hidden"
+                  className="rounded-xl overflow-y-auto"
                   style={{
                     position: 'fixed', top: suggestPos.top, left: suggestPos.left, width: suggestPos.width, zIndex: 9999,
+                    transform: suggestPos.up ? 'translateY(-100%)' : undefined,
+                    maxHeight: suggestPos.maxHeight, overscrollBehavior: 'contain',
                     backgroundColor: 'rgba(250,248,243,0.98)',
                     border: '1px solid #DDD4C0',
                     boxShadow: '0 16px 40px rgba(27,56,40,0.16)',

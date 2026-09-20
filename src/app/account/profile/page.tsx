@@ -9,7 +9,7 @@ import { UN_COUNTRIES, getCountryByName, getFlagUrl, countryMatchRank } from '@/
 import { deriveExperienceLevel, experienceProgress } from '@/lib/munExperience';
 import { ageAt } from '@/lib/age';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
-import { Eyebrow, GlassCard, PillToggle, Pill, ExperienceInfo, LevelInsignia, OUTFIT } from '../accountUi';
+import { CardTitle, Eyebrow, GlassCard, PillToggle, Pill, ExperienceInfo, LevelInsignia, OUTFIT, T } from '../accountUi';
 import { NEU, NeuIconDisc, NEU_GRADIENTS } from '@/components/neu';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { DatePicker } from '@/components/DatePicker';
@@ -43,10 +43,23 @@ type NotifFields = {
   notify_email_reminders:    boolean;
 };
 
+// Every hint, field note and description on this page used to be `#9A8A78`,
+// which is the `muted` token: a 3.15:1 wash that neu.tsx says in as many words
+// must NEVER carry body copy (it is for rules, disabled glyphs and
+// placeholders). Half of what this page asks a person to READ was painted in
+// it, at 12px. Size alone would not have fixed that, so the hints changed
+// colour as well as size: `#6E5F4E` is the warm secondary ink the account
+// pills already use, about 6.4:1 on the cream card.
+const HINT = '#6E5F4E';
+
 const inputStyle: React.CSSProperties = {
   border: '1px solid #DDD4C0',
   backgroundColor: 'rgba(250,248,243,0.9)',
   color: '#1C1410',
+  // 14px is the floor for anything typed into (T.body) and also the point
+  // below which iOS zooms the page on focus; the inputs were `text-sm`, i.e.
+  // exactly 14, so this only states it rather than changing it.
+  fontSize: T.body,
   fontFamily: OUTFIT,
 };
 
@@ -525,21 +538,21 @@ export default function ProfilePage() {
       <div className="relative pb-5 mb-7" style={{ borderBottom: '2px solid rgba(182,135,31,0.35)', zIndex: 1 }}>
         <Eyebrow className="mb-2" size="lg">My Profile</Eyebrow>
         <h1
-          className="font-black text-[26px] md:text-[30px] mb-1 flex items-baseline gap-2 flex-wrap"
-          style={{ color: '#1C1410', fontFamily: OUTFIT, letterSpacing: '-0.01em' }}
+          className="font-black mb-1 flex items-baseline gap-2 flex-wrap"
+          style={{ fontSize: `clamp(28px, 8vw, ${T.title}px)`, lineHeight: 1.1, color: '#1C1410', fontFamily: OUTFIT, letterSpacing: '-0.01em' }}
         >
           <span>{displayName || 'Your Profile'}</span>
           {headerAge !== null && (
             <span
               className="inline-flex items-center gap-1"
-              style={{ fontFamily: OUTFIT, fontSize: '20px', fontWeight: 700, color: '#B6871F', letterSpacing: '0', fontVariantNumeric: 'tabular-nums' }}
+              style={{ fontFamily: OUTFIT, fontSize: T.section, fontWeight: 700, color: '#B6871F', letterSpacing: '0', fontVariantNumeric: 'tabular-nums' }}
             >
               <Cake size={17} strokeWidth={2.2} style={{ color: '#B6871F', transform: 'translateY(1px)' }} />
               ({headerAge})
             </span>
           )}
         </h1>
-        <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: 0 }}>
+        <p style={{ fontSize: T.body, color: HINT, fontFamily: OUTFIT, margin: 0 }}>
           Manage your Gavelling account details.
         </p>
       </div>
@@ -598,7 +611,7 @@ export default function ProfilePage() {
                   className="inline-flex items-center gap-2 max-w-full"
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
                 >
-                  <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: '12.5px', letterSpacing: '0.18em', color: '#EED98A', margin: 0, textTransform: 'uppercase' }}>
+                  <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: T.caption, letterSpacing: '0.18em', color: '#EED98A', margin: 0, textTransform: 'uppercase' }}>
                     Your MUN Rank
                   </p>
                   <ExperienceInfo tone="gold" align="left" currentLevel={exp.level} />
@@ -620,7 +633,7 @@ export default function ProfilePage() {
               style={{ padding: '6px 12px', backgroundColor: 'rgba(250,248,243,0.10)', border: '1px solid rgba(238,217,138,0.28)' }}
             >
               <TrendingUp size={16} strokeWidth={2.4} style={{ color: '#EED98A' }} />
-              <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '12px', color: 'rgba(250,248,243,0.92)', fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: T.caption, color: 'rgba(250,248,243,0.92)', fontVariantNumeric: 'tabular-nums' }}>
                 {cvCount ?? 0} conference{(cvCount ?? 0) === 1 ? '' : 's'}
               </span>
             </div>
@@ -635,14 +648,14 @@ export default function ProfilePage() {
               />
             </div>
             <div className="flex items-center justify-between mt-3 gap-3 flex-wrap">
-              <span style={{ fontFamily: OUTFIT, fontSize: '13px', fontWeight: 600, color: 'rgba(250,248,243,0.92)' }}>
+              <span style={{ fontFamily: OUTFIT, fontSize: T.body, fontWeight: 600, color: 'rgba(250,248,243,0.92)' }}>
                 {exp.nextLabel
                   ? `Attend more conferences to increase your rank`
                   : `Top tier reached. You're an Expert delegate`}
               </span>
               <span
                 className="inline-flex items-center gap-1.5"
-                style={{ fontFamily: OUTFIT, fontSize: '12.5px', fontWeight: 700, color: '#EED98A' }}
+                style={{ fontFamily: OUTFIT, fontSize: T.body, fontWeight: 700, color: '#EED98A' }}
               >
                 {exp.nextLabel
                   ? `Add conferences to your MUN CV to rank up`
@@ -679,10 +692,10 @@ export default function ProfilePage() {
                     <Star size={16} strokeWidth={2} style={{ color: '#B6871F', fill: '#B6871F' }} />
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[14px] font-bold" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
+                    <p className="font-bold" style={{ fontSize: T.body, color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
                       How was {conferenceAcronymLabel(conf)}?
                     </p>
-                    <p className="text-[12px] truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: '1px 0 0 0' }}>
+                    <p className="truncate" style={{ fontSize: T.caption, color: HINT, fontFamily: OUTFIT, margin: '1px 0 0 0' }}>
                       Leave a review of{' '}
                       <Link
                         href={`/conferences/${conf.slug}`}
@@ -694,8 +707,8 @@ export default function ProfilePage() {
                   </div>
                   <button
                     onClick={() => openReviewForm(conf.id)}
-                    className="flex-shrink-0 rounded-xl py-2 px-4 text-[11px] font-bold focus:outline-none transition-colors"
-                    style={{ backgroundColor: formOpen ? 'transparent' : '#1B3828', color: formOpen ? '#1B3828' : '#EED98A', border: formOpen ? '1px solid #DDD4C0' : '1px solid #1B3828', fontFamily: OUTFIT, letterSpacing: '0.08em', cursor: 'pointer' }}
+                    className="flex-shrink-0 rounded-xl py-2 px-4 font-bold focus:outline-none transition-colors"
+                    style={{ fontSize: T.caption, backgroundColor: formOpen ? 'transparent' : '#1B3828', color: formOpen ? '#1B3828' : '#EED98A', border: formOpen ? '1px solid #DDD4C0' : '1px solid #1B3828', fontFamily: OUTFIT, letterSpacing: '0.08em', cursor: 'pointer' }}
                   >
                     {formOpen ? 'CLOSE' : 'LEAVE A REVIEW'}
                   </button>
@@ -746,14 +759,14 @@ export default function ProfilePage() {
                       onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
                     />
                     {reviewError && (
-                      <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: OUTFIT, margin: '8px 0 0 0' }}>
+                      <p className="mt-2" style={{ fontSize: T.caption, color: '#8B2020', fontFamily: OUTFIT, margin: '8px 0 0 0' }}>
                         {reviewError}
                       </p>
                     )}
                     <button
                       onClick={() => handleSubmitReview(conf)}
                       disabled={reviewRating < 1 || reviewSubmitting}
-                      className="mt-3 rounded-xl py-2.5 px-6 font-bold text-[13px] focus:outline-none transition-colors"
+                      className="mt-3 rounded-xl py-2.5 px-6 font-bold focus:outline-none transition-colors"
                       style={{
                         backgroundColor: reviewRating < 1 || reviewSubmitting ? '#DDD4C0' : '#1B3828',
                         color: reviewRating < 1 || reviewSubmitting ? '#9A8A78' : '#EED98A',
@@ -785,8 +798,8 @@ export default function ProfilePage() {
         />
 
         <div className="relative flex items-center gap-2.5 mb-6" style={{ zIndex: 1 }}>
-          <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={User} size={30} />
-          <Eyebrow size="lg">Basic Information</Eyebrow>
+          <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={User} size={38} />
+          <CardTitle>Basic Information</CardTitle>
         </div>
 
         {/* Avatar — roughly double the previous size, upload affordance intact.
@@ -838,13 +851,13 @@ export default function ProfilePage() {
             <button
               onClick={() => avatarInputRef.current?.click()}
               disabled={avatarUploading}
-              className="inline-flex items-center gap-2 rounded-full px-4 text-[13px] font-bold focus:outline-none"
-              style={{ minHeight: 44, whiteSpace: 'nowrap', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, border: 'none', cursor: avatarUploading ? 'default' : 'pointer', boxShadow: NEU.outSm }}
+              className="inline-flex items-center gap-2 rounded-full px-4 font-bold focus:outline-none"
+              style={{ fontSize: T.body, minHeight: 44, whiteSpace: 'nowrap', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, border: 'none', cursor: avatarUploading ? 'default' : 'pointer', boxShadow: NEU.outSm }}
             >
               <Camera size={14} strokeWidth={2.2} />
               {displayAvatar ? 'Change photo' : 'Upload photo'}
             </button>
-            <p className="text-[12.5px] mt-2" style={{ color: avatarError ? '#8B2020' : '#9A8A78', fontFamily: OUTFIT }}>
+            <p className="mt-2" style={{ fontSize: T.caption, color: avatarError ? '#8B2020' : HINT, fontFamily: OUTFIT }}>
               {avatarError || 'JPG or PNG, up to 5MB.'}
             </p>
             <input
@@ -861,8 +874,8 @@ export default function ProfilePage() {
           {/* Display Name */}
           <div>
             <label
-              className="flex items-center gap-1.5 text-[13px] font-semibold mb-1.5"
-              style={{ color: '#1C1410', fontFamily: OUTFIT }}
+              className="flex items-center gap-1.5 font-semibold mb-1.5"
+              style={{ fontSize: T.body, color: '#1C1410', fontFamily: OUTFIT }}
             >
               <User size={13} strokeWidth={2.3} style={{ color: '#B6871F' }} />
               Display Name
@@ -881,8 +894,8 @@ export default function ProfilePage() {
           {/* Email (read-only) */}
           <div>
             <label
-              className="flex items-center gap-1.5 text-[13px] font-semibold mb-1.5"
-              style={{ color: '#1C1410', fontFamily: OUTFIT }}
+              className="flex items-center gap-1.5 font-semibold mb-1.5"
+              style={{ fontSize: T.body, color: '#1C1410', fontFamily: OUTFIT }}
             >
               <Mail size={13} strokeWidth={2.3} style={{ color: '#B6871F' }} />
               Email
@@ -900,7 +913,7 @@ export default function ProfilePage() {
                 cursor: 'not-allowed',
               }}
             />
-            <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+            <p className="mt-1" style={{ fontSize: T.caption, color: HINT, fontFamily: OUTFIT }}>
               Email cannot be changed here.
             </p>
           </div>
@@ -911,8 +924,8 @@ export default function ProfilePage() {
                 card boundary can clip it, and it flips above near the bottom edge. */}
             <div ref={natWrapRef} className="relative">
               <label
-                className="flex items-center gap-1.5 text-[13px] font-semibold mb-1.5"
-                style={{ color: '#1C1410', fontFamily: OUTFIT }}
+                className="flex items-center gap-1.5 font-semibold mb-1.5"
+                style={{ fontSize: T.body, color: '#1C1410', fontFamily: OUTFIT }}
               >
                 <MapPin size={13} strokeWidth={2.3} style={{ color: '#B6871F' }} />
                 Nationality
@@ -995,8 +1008,8 @@ export default function ProfilePage() {
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label
-                  className="flex items-center gap-1.5 text-[13px] font-semibold"
-                  style={{ color: '#1C1410', fontFamily: OUTFIT }}
+                  className="flex items-center gap-1.5 font-semibold"
+                  style={{ fontSize: T.body, color: '#1C1410', fontFamily: OUTFIT }}
                 >
                   <Cake size={13} strokeWidth={2.3} style={{ color: '#B6871F' }} />
                   Date of Birth
@@ -1015,11 +1028,11 @@ export default function ProfilePage() {
                 placeholder="Select your date of birth"
               />
               {dobError ? (
-                <p className="text-xs mt-1" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+                <p className="mt-1" style={{ fontSize: T.caption, color: '#8B2020', fontFamily: OUTFIT }}>
                   {dobError}
                 </p>
               ) : (
-                <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                <p className="mt-1" style={{ fontSize: T.caption, color: HINT, fontFamily: OUTFIT }}>
                   Your age is calculated automatically.
                 </p>
               )}
@@ -1031,8 +1044,8 @@ export default function ProfilePage() {
               it saves immediately (optimistic) on toggle. */}
           <div>
             <label
-              className="flex items-center gap-1.5 text-[13px] font-semibold mb-1.5"
-              style={{ color: '#1C1410', fontFamily: OUTFIT }}
+              className="flex items-center gap-1.5 font-semibold mb-1.5"
+              style={{ fontSize: T.body, color: '#1C1410', fontFamily: OUTFIT }}
             >
               <GraduationCap size={13} strokeWidth={2.3} style={{ color: '#B6871F' }} />
               Education
@@ -1096,8 +1109,9 @@ export default function ProfilePage() {
                         role="radio"
                         aria-checked={active}
                         onClick={() => handleEducationChange(o.key)}
-                        className="relative z-[1] inline-flex items-center justify-center gap-2 rounded-full py-2.5 px-3 text-[13px] font-bold focus:outline-none"
+                        className="relative z-[1] inline-flex items-center justify-center gap-2 rounded-full py-2.5 px-3 font-bold focus:outline-none"
                         style={{
+                          fontSize: T.body,
                           background: 'transparent',
                           border: 'none',
                           cursor: 'pointer',
@@ -1115,7 +1129,7 @@ export default function ProfilePage() {
                 </div>
               );
             })()}
-            <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+            <p className="mt-1.5" style={{ fontSize: T.caption, color: HINT, fontFamily: OUTFIT }}>
               Shown as your level when you apply to conferences.
             </p>
           </div>
@@ -1125,8 +1139,9 @@ export default function ProfilePage() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="rounded-full px-6 font-bold text-[13px] focus:outline-none transition-colors"
+            className="rounded-full px-6 font-bold focus:outline-none transition-colors"
             style={{
+              fontSize: T.body,
               minHeight: 44,
               backgroundColor: saving ? '#DDD4C0' : '#1B3828',
               color: saving ? '#9A8A78' : '#EED98A',
@@ -1165,10 +1180,10 @@ export default function ProfilePage() {
           style={{ top: '-24px', right: '-14px', color: 'rgba(27,56,40,0.045)', zIndex: 0 }}
         />
         <div className="relative flex items-center gap-2.5 mb-1.5" style={{ zIndex: 1 }}>
-          <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={Bell} size={30} />
-          <Eyebrow size="lg">Notification Preferences</Eyebrow>
+          <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={Bell} size={38} />
+          <CardTitle>Notification Preferences</CardTitle>
         </div>
-        <p className="relative text-[13px] mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT, zIndex: 1 }}>
+        <p className="relative mb-4" style={{ fontSize: T.body, color: HINT, fontFamily: OUTFIT, zIndex: 1 }}>
           Control which emails Gavelling sends you.
         </p>
 
@@ -1197,10 +1212,10 @@ export default function ProfilePage() {
                 />
               </span>
               <div className="flex-1 min-w-0 pr-2">
-                <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
+                <p className="font-semibold" style={{ fontSize: T.body, color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
                   {row.label}
                 </p>
-                <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: '2px 0 0 0' }}>
+                <p className="mt-0.5" style={{ fontSize: T.caption, lineHeight: 1.5, color: HINT, fontFamily: OUTFIT, margin: '2px 0 0 0' }}>
                   {row.desc}
                 </p>
               </div>
@@ -1221,7 +1236,7 @@ export default function ProfilePage() {
         {/* Functional emails (chair/import invites, replies to your own
            requests) aren't gated by these toggles, see ALWAYS_SEND_EVENTS
            in src/lib/emailEvents.ts, opting out would break the product. */}
-        <p className="text-xs mt-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+        <p className="mt-4" style={{ fontSize: T.caption, lineHeight: 1.5, color: HINT, fontFamily: OUTFIT }}>
           Invitations and direct replies to your messages are always sent, regardless of these settings.
         </p>
       </GlassCard>
@@ -1235,13 +1250,14 @@ export default function ProfilePage() {
           >
             <ShieldAlert size={16} strokeWidth={2.2} style={{ color: '#8B2020' }} />
           </span>
-          <Eyebrow size="lg" color="#8B2020">Account</Eyebrow>
+          <CardTitle color="#8B2020">Account</CardTitle>
         </div>
         <div className="flex gap-3">
           <button
             onClick={handleSignOut}
-            className="flex-1 rounded-full py-2.5 font-semibold text-[13px] focus:outline-none transition-colors"
+            className="flex-1 rounded-full py-2.5 font-semibold focus:outline-none transition-colors"
             style={{
+              fontSize: T.body,
               border: '1px solid rgba(139,32,32,0.3)',
               color: '#8B2020',
               backgroundColor: 'transparent',
@@ -1256,8 +1272,9 @@ export default function ProfilePage() {
           </button>
           <button
             onClick={openDeleteAccount}
-            className="flex-1 rounded-full py-2.5 font-semibold text-[13px] focus:outline-none transition-colors"
+            className="flex-1 rounded-full py-2.5 font-semibold focus:outline-none transition-colors"
             style={{
+              fontSize: T.body,
               border: '1px solid #8B2020',
               color: '#FFFFFF',
               backgroundColor: '#8B2020',
@@ -1309,7 +1326,7 @@ export default function ProfilePage() {
                 </div>
               )}
               <div className="mt-4">
-                <label className="block text-xs font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                <label className="block font-semibold mb-1.5" style={{ fontSize: T.body, color: '#1C1410', fontFamily: OUTFIT }}>
                   Type DELETE to confirm
                 </label>
                 <input

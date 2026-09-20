@@ -1,11 +1,15 @@
 import type { Metadata } from 'next';
-import { pageMetadata } from '@/lib/seo';
-import Link from 'next/link';
-import { articles } from './posts';
+import { pageMetadata, SITE_URL } from '@/lib/seo';
+import { articles, type BlogCategory } from './posts';
+import { SHELVES, SHELF_ORDER, byNewest } from '@/components/blog/blogTaxonomy';
+import BlogChrome from '@/components/blog/BlogChrome';
+import BlogCard from '@/components/blog/BlogCard';
+import BlogShelfNav from '@/components/blog/BlogShelfNav';
 
 export const metadata: Metadata = pageMetadata({
   title: 'MUN Resources & Guides',
-  description: 'Practical guides for Model UN chairs and delegates: how to run a committee, manage the GSL, handle motions, and run great MUN sessions.',
+  description:
+    'Practical guides for Model UN chairs and delegates: how to run a committee, manage the GSL, handle motions, and run great MUN sessions.',
   path: '/blog',
   ogTitle: 'MUN Resources & Guides: Gavelling Blog',
   ogDescription: 'Practical guides for Model UN chairs and delegates.',
@@ -16,11 +20,11 @@ const itemListSchema = {
   '@type': 'ItemList',
   name: 'MUN Resources & Guides',
   description: 'Practical guides for Model UN chairs and delegates.',
-  url: 'https://gavelling.com/blog',
+  url: `${SITE_URL}/blog`,
   itemListElement: articles.map((a, i) => ({
     '@type': 'ListItem',
     position: i + 1,
-    url: `https://gavelling.com/blog/${a.slug}`,
+    url: `${SITE_URL}/blog/${a.slug}`,
     name: a.title,
   })),
 };
@@ -29,43 +33,99 @@ const breadcrumbSchema = {
   '@context': 'https://schema.org',
   '@type': 'BreadcrumbList',
   itemListElement: [
-    { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://gavelling.com' },
-    { '@type': 'ListItem', position: 2, name: 'Blog', item: 'https://gavelling.com/blog' },
+    { '@type': 'ListItem', position: 1, name: 'Home', item: SITE_URL },
+    { '@type': 'ListItem', position: 2, name: 'Blog', item: `${SITE_URL}/blog` },
   ],
 };
 
 export default function BlogIndexPage() {
+  const lead = articles.find((a) => a.featured) ?? byNewest(articles)[0];
+  const counts = SHELF_ORDER.reduce(
+    (acc, key) => ({ ...acc, [key]: articles.filter((a) => a.category === key).length }),
+    {} as Record<BlogCategory, number>,
+  );
+
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
-    <div style={{ minHeight: '100vh', backgroundColor: '#EDE7D8', padding: '48px 24px' }}>
-      <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-        <Link href="/" style={{ fontSize: '13px', color: '#6A5A4A', textDecoration: 'none', display: 'inline-block', marginBottom: '32px' }}>
-          ← Back to Gavelling
-        </Link>
-        <h1 style={{ fontSize: '32px', fontWeight: 900, color: '#1B3828', marginBottom: '8px', lineHeight: 1.2 }}>
-          MUN Resources
-        </h1>
-        <p style={{ fontSize: '16px', color: '#6A5A4A', marginBottom: '48px' }}>
-          Practical guides for chairs and delegates.
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {articles.map((a) => (
-            <Link
-              key={a.slug}
-              href={`/blog/${a.slug}`}
-              style={{ display: 'block', padding: '24px', borderRadius: '16px', backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', textDecoration: 'none' }}
+
+      <BlogChrome>
+        <div className="mx-auto w-full max-w-[1060px] px-4 sm:px-8">
+          <header className="pt-6 pb-9 sm:pt-10 sm:pb-12">
+            <h1
+              className="m-0 font-extrabold"
+              style={{
+                color: '#1B3828',
+                fontSize: 'clamp(32px, 6vw, 52px)',
+                lineHeight: 1.06,
+                letterSpacing: '-0.025em',
+              }}
             >
-              <h2 style={{ fontSize: '17px', fontWeight: 800, color: '#1B3828', marginBottom: '6px', lineHeight: 1.3 }}>
-                {a.title}
-              </h2>
-              <p style={{ fontSize: '14px', color: '#6A5A4A', margin: 0 }}>{a.description}</p>
-            </Link>
-          ))}
+              MUN guides
+            </h1>
+            <p
+              className="m-0 mt-4 max-w-[52ch]"
+              style={{ color: '#55483C', fontSize: 'clamp(16.5px, 2.4vw, 19px)', lineHeight: 1.6 }}
+            >
+              {articles.length} guides to running a Model UN committee, written for the people in the room:
+              the chair at the dais, the delegate on the floor, and the secretariat keeping the day on time.
+            </p>
+          </header>
+
+          {/* The lead guide. One post is the protagonist of this page; the rest
+              are shelved below it (rulebook §2: every viewport has one obvious
+              protagonist). Which post it is comes from `featured` in the
+              manifest, so it is an editorial decision, not a date accident. */}
+          <BlogCard post={lead} lead />
+
+          {/* Not wrapped in a spacing div: a sticky element travels only inside
+              its own parent's box, and a wrapper sized to the rail would let it
+              stick for its own height and no further. Its parent is this page
+              container, so it stays with the reader down the whole index. */}
+          <BlogShelfNav counts={counts} />
+
+          {SHELF_ORDER.map((key) => {
+            const shelf = SHELVES[key];
+            const Icon = shelf.icon;
+            // Every post is listed under its shelf, the lead one included: a
+            // reader who skipped past the top of the page should still find it
+            // where it belongs, and /blog must link to every post exactly once
+            // per shelf so the crawl graph is simple to reason about.
+            const posts = byNewest(articles.filter((a) => a.category === key));
+            if (posts.length === 0) return null;
+
+            return (
+              <section key={key} id={key} className="gv-shelf pt-12 sm:pt-14">
+                <div
+                  className="flex flex-wrap items-baseline gap-x-4 gap-y-1.5 border-b pb-4"
+                  style={{ borderColor: '#DDD4C0' }}
+                >
+                  <h2
+                    className="m-0 inline-flex items-center gap-2.5 font-extrabold"
+                    style={{ color: '#1B3828', fontSize: 'clamp(21px, 3vw, 26px)', letterSpacing: '-0.014em' }}
+                  >
+                    <Icon size={22} strokeWidth={2.2} aria-hidden="true" style={{ color: shelf.accent }} />
+                    {shelf.label}
+                  </h2>
+                  <p className="m-0 text-[14.5px]" style={{ color: '#55483C' }}>
+                    {shelf.lead}
+                  </p>
+                </div>
+
+                <div
+                  className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
+                  style={{ '--gv-accent': shelf.accent } as React.CSSProperties}
+                >
+                  {posts.map((post) => (
+                    <BlogCard key={post.slug} post={post} />
+                  ))}
+                </div>
+              </section>
+            );
+          })}
         </div>
-      </div>
-    </div>
+      </BlogChrome>
     </>
   );
 }

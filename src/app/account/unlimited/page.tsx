@@ -9,7 +9,7 @@ import { useCredits } from '@/hooks/useCredits';
 import { CreditCoin } from '@/components/CreditCoin';
 import { extractFunctionErrorMessage, unlimitedPricing, creditPricing, proPricing } from '@/lib/payments';
 import { formatFee } from '@/lib/finance';
-import { Eyebrow, GlassCard } from '../accountUi';
+import { Eyebrow, GlassCard, T } from '../accountUi';
 import { NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuButton, NeuPill, NeuIconDisc, NeuInset } from '@/components/neu';
 import Loader from '@/components/Loader';
 
@@ -85,7 +85,7 @@ function PlanFeatureRow({ feature, accent }: { feature: PlanFeature; accent: 'fo
         style={{ marginTop: 1 }}
       />
       <span className="flex-1 flex flex-wrap items-center gap-1.5">
-        <span className="text-[13px]" style={{ color: NEU.ink, fontFamily: OUTFIT, fontWeight: 600, lineHeight: 1.5 }}>
+        <span style={{ fontSize: T.body, color: NEU.ink, fontFamily: OUTFIT, fontWeight: 600, lineHeight: 1.5 }}>
           {feature.text}
         </span>
         {feature.comingSoon && (
@@ -155,7 +155,7 @@ function UnlimitedPurchaseButtons({
         {busy === 'yearly' ? 'STARTING CHECKOUT…' : annualLabel(price)}
       </NeuButton>
       {purchaseError && (
-        <p className="text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+        <p style={{ fontSize: T.caption, color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
           {purchaseError}
         </p>
       )}
@@ -613,30 +613,30 @@ export default function UnlimitedPage() {
                 you count are visibly one object. */}
             <CreditCoin size={48} title="Gavelling credits" style={{ marginTop: 2 }} />
             <div>
-              <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.2em', color: NEU.muted, marginBottom: 4 }}>
+              <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: T.caption, letterSpacing: '0.2em', color: NEU.inkSoft, marginBottom: 4 }}>
                 YOUR CREDITS
               </p>
               <p className="font-black text-[34px] leading-none" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
                 {creditBalanceLoading || creditBalance === null ? '—' : creditBalance}
               </p>
               {creditLotsLoaded && (permanentCredits > 0 || expiringCredits > 0) && (
-                <p className="text-xs mt-2" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                <p className="mt-2" style={{ fontSize: T.caption, color: NEU.inkSoft, fontFamily: OUTFIT }}>
                   {permanentCredits} permanent
                   {expiringCredits > 0 && soonestExpiry ? ` · ${expiringCredits} expire ${formatExpiry(soonestExpiry)}` : ''}
                 </p>
               )}
-              <p className="text-[11px] mt-1.5" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6, maxWidth: 340 }}>
+              <p className="mt-1.5" style={{ fontSize: T.caption, color: NEU.inkSoft, fontFamily: OUTFIT, lineHeight: 1.6, maxWidth: 340 }}>
                 Purchased credits never expire. Credits included with a subscription refresh monthly and don&apos;t roll over.
               </p>
               {creditsConfirming ? (
                 <div className="flex items-center gap-2 mt-2.5">
                   <Loader2 size={14} strokeWidth={2.4} className="animate-spin" style={{ color: NEU.deepGold }} />
-                  <p className="text-xs font-semibold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+                  <p className="font-semibold" style={{ fontSize: T.caption, color: NEU.ink, fontFamily: OUTFIT }}>
                     Confirming your purchase…
                   </p>
                 </div>
               ) : creditsConfirmTimedOut ? (
-                <p className="text-xs mt-2.5" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6 }}>
+                <p className="mt-2.5" style={{ fontSize: T.caption, color: NEU.inkSoft, fontFamily: OUTFIT, lineHeight: 1.6 }}>
                   Payment received. Your credits will appear here within a minute.
                 </p>
               ) : null}
@@ -645,7 +645,7 @@ export default function UnlimitedPage() {
 
           {/* Buy credits, quantity stepper + live total */}
           <div className="flex flex-col gap-2.5" style={{ minWidth: 220 }}>
-            <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.14em', color: NEU.muted }}>
+            <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: T.caption, letterSpacing: '0.14em', color: NEU.inkSoft }}>
               BUY CREDITS
             </p>
             <div className="flex items-center gap-3">
@@ -672,7 +672,7 @@ export default function UnlimitedPage() {
                   <Plus size={13} strokeWidth={2.6} style={{ color: NEU.ink }} />
                 </button>
               </div>
-              <span className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+              <span style={{ fontSize: T.caption, color: NEU.inkSoft, fontFamily: OUTFIT }}>
                 {formatFee(creditPrice.each, creditPrice.currency)} each
               </span>
             </div>
@@ -685,7 +685,7 @@ export default function UnlimitedPage() {
               {buyBusy ? 'STARTING CHECKOUT…' : `BUY FOR ${formatFee(buyTotal, creditPrice.currency)}`}
             </NeuButton>
             {buyError && (
-              <p className="text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+              <p style={{ fontSize: T.caption, color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
                 {buyError}
               </p>
             )}
@@ -702,7 +702,7 @@ export default function UnlimitedPage() {
           <h2 className="font-black text-lg mt-4 mb-1" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
             Free
           </h2>
-          <p className="text-[13px] mb-5" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6 }}>
+          <p className="mb-5" style={{ fontSize: T.body, color: NEU.inkSoft, fontFamily: OUTFIT, lineHeight: 1.6 }}>
             Apply with credits · full platform access.
           </p>
 
@@ -721,7 +721,7 @@ export default function UnlimitedPage() {
           <h2 className="font-black text-lg mt-4 mb-1" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
             Gavelling Pro
           </h2>
-          <p className="text-[13px] mb-5" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6 }}>
+          <p className="mb-5" style={{ fontSize: T.body, color: NEU.inkSoft, fontFamily: OUTFIT, lineHeight: 1.6 }}>
             {formatFee(proPrice.monthly, proPrice.currency)}/mo. One credit every month, plus archive and upcoming tools.
           </p>
 
@@ -750,7 +750,7 @@ export default function UnlimitedPage() {
                   {portalBusy ? 'OPENING…' : 'MANAGE SUBSCRIPTION'}
                 </button>
                 {portalError && (
-                  <p className="text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+                  <p style={{ fontSize: T.caption, color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
                     {portalError}
                   </p>
                 )}
@@ -766,7 +766,7 @@ export default function UnlimitedPage() {
                   {busy === 'pro' ? 'STARTING CHECKOUT…' : `${formatFee(proPrice.monthly, proPrice.currency)} A MONTH`}
                 </NeuButton>
                 {purchaseError && (
-                  <p className="text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+                  <p style={{ fontSize: T.caption, color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
                     {purchaseError}
                   </p>
                 )}
@@ -788,7 +788,7 @@ export default function UnlimitedPage() {
           <h2 className="font-black text-lg mt-4 mb-1" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
             Gavelling Unlimited
           </h2>
-          <p className="text-[13px] mb-5" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6 }}>
+          <p className="mb-5" style={{ fontSize: T.body, color: NEU.inkSoft, fontFamily: OUTFIT, lineHeight: 1.6 }}>
             Unlimited credits. Never think about it.
           </p>
 
@@ -812,13 +812,13 @@ export default function UnlimitedPage() {
                 <NeuPill active gradient={NEU_GRADIENTS.green}>
                   <Check size={11} strokeWidth={2.6} /> ACTIVE
                 </NeuPill>
-                <p className="text-xs font-semibold" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                <p className="font-semibold" style={{ fontSize: T.caption, color: NEU.inkSoft, fontFamily: OUTFIT }}>
                   {subscription!.current_period_end
                     ? `Free trial, ${trialDaysLeft(subscription!.current_period_end)} day${trialDaysLeft(subscription!.current_period_end) === 1 ? '' : 's'} left`
                     : 'Free trial'}
                 </p>
                 {subscription!.current_period_end && (
-                  <p className="text-[11px]" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.5 }}>
+                  <p style={{ fontSize: T.caption, color: NEU.inkSoft, fontFamily: OUTFIT, lineHeight: 1.5 }}>
                     Your trial ends {formatExpiry(subscription!.current_period_end)}. Subscribe any time to keep Unlimited.
                   </p>
                 )}
@@ -831,7 +831,7 @@ export default function UnlimitedPage() {
                   {busy === 'monthly' ? 'STARTING CHECKOUT…' : 'SUBSCRIBE TO KEEP IT'}
                 </NeuButton>
                 {purchaseError && (
-                  <p className="text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+                  <p style={{ fontSize: T.caption, color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
                     {purchaseError}
                   </p>
                 )}
@@ -841,7 +841,7 @@ export default function UnlimitedPage() {
                 <NeuPill active gradient={NEU_GRADIENTS.green}>
                   <Check size={11} strokeWidth={2.6} /> ACTIVE
                 </NeuPill>
-                <p className="text-xs font-semibold" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                <p className="font-semibold" style={{ fontSize: T.caption, color: NEU.inkSoft, fontFamily: OUTFIT }}>
                   {planLabel(subscription!)}
                 </p>
                 {subscription!.plan === 'unlimited_monthly' && (
@@ -861,7 +861,7 @@ export default function UnlimitedPage() {
                   </button>
                 )}
                 {portalError && (
-                  <p className="text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+                  <p style={{ fontSize: T.caption, color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
                     {portalError}
                   </p>
                 )}
@@ -877,7 +877,7 @@ export default function UnlimitedPage() {
                 <NeuPill active gradient={ENDED_GRADIENT}>
                   <Minus size={11} strokeWidth={2.6} /> ENDED
                 </NeuPill>
-                <p className="text-xs font-semibold" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                <p className="font-semibold" style={{ fontSize: T.caption, color: NEU.inkSoft, fontFamily: OUTFIT }}>
                   {lapsedUnlimitedCopy(lapsedSubscription)}
                 </p>
                 <UnlimitedPurchaseButtons
@@ -889,7 +889,7 @@ export default function UnlimitedPage() {
                 />
               </div>
             ) : confirmTimedOut ? (
-              <p className="text-[13px]" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6 }}>
+              <p style={{ fontSize: T.body, color: NEU.inkSoft, fontFamily: OUTFIT, lineHeight: 1.6 }}>
                 Payment received. Unlimited will activate here within a minute.
               </p>
             ) : (
@@ -934,7 +934,7 @@ export default function UnlimitedPage() {
             </span>
           )}
         </div>
-        <p className="text-xs mb-3" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.65 }}>
+        <p className="mb-3" style={{ fontSize: T.caption, color: NEU.inkSoft, fontFamily: OUTFIT, lineHeight: 1.65 }}>
           Have a Gavelling code? Redeem it here. Subscription codes are single-use per account.
         </p>
         <NeuInset small className="p-2">
@@ -988,7 +988,7 @@ export default function UnlimitedPage() {
           <p className="text-sm font-semibold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
             Gavelling Points: {balance}
           </p>
-          <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+          <p style={{ fontSize: T.caption, color: NEU.inkSoft, fontFamily: OUTFIT }}>
             Rewards are coming soon.
           </p>
         </div>
