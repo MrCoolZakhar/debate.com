@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, H3, Callout } from '@/components/blog/prose';
 import Link from 'next/link';
 
@@ -58,6 +59,9 @@ export default function Article() {
 
         <H3>Roll Call Vote</H3>
         <p>Used for resolutions and other substantive matters. Each delegation is called in alphabetical order and votes aloud: &quot;In Favour,&quot; &quot;Against,&quot; or &quot;Abstain.&quot; Delegates may also pass (defer) and vote at the end. Roll call votes create a permanent record of each country&apos;s position, which is why they matter diplomatically and for awards consideration.</p>
+
+        <PhotoFigure id="mun-scimun-placards" caption="Placards up: a vote in a disarmament committee." />
+
 
         <H2>Understanding the Threshold</H2>
         <p>Whether a resolution passes depends on the voting threshold set by your <Link href="/blog/mun-rules-of-procedure">rules of procedure</Link>:</p>

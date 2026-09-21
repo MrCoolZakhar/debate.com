@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, FactCard, TableWrap } from '@/components/blog/prose';
 
 export const metadata: Metadata = pageMetadata({
@@ -59,6 +60,9 @@ export default function Article4() {
         <p>
           Motions are distinct from working papers and draft resolutions, which are substantive documents about the committee&apos;s topic. A motion is always procedural. It affects how the committee operates, not the content of its conclusions. Motions are also separate from points, which our guide to <Link href="/blog/mun-points-explained">MUN points explained</Link> covers.
         </p>
+
+        <PhotoFigure id="mun-bratislava-vote" caption="A committee votes on a motion by raising placards." />
+
 
         <H2>2. How to Make a Motion</H2>
         <p>

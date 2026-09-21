@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, H3, Callout } from '@/components/blog/prose';
 import Link from 'next/link';
 
@@ -52,6 +53,9 @@ export default function Article() {
 
         <H2>Working Paper vs. Draft Resolution</H2>
         <p>The terms are often used interchangeably but technically mean different things. A <strong><Link href="/blog/mun-working-paper-guide">working paper</Link></strong> is an informal document used to develop ideas; it does not need to follow strict resolution format and is not voted on directly. A <strong>draft resolution</strong> is a formally formatted document submitted to the committee for debate and a vote. Most conferences require a draft resolution to have a minimum number of sponsors before it can be introduced.</p>
+
+        <PhotoFigure id="un-general-assembly-floor" caption="The UN General Assembly Hall, where the real resolutions are adopted." />
+
 
         <H2>Resolution Structure</H2>
         <p>Every MUN resolution has the same structure: a header, preambulatory clauses, and operative clauses.</p>

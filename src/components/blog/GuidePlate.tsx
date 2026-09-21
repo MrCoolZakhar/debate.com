@@ -1,6 +1,11 @@
 /**
  * GuidePlate: the cover drawing on a blog card, and the hero of an article.
  *
+ * NOW THE FALLBACK (21 Sep 2026). Posts name a licensed `photo` in the
+ * manifest (src/components/blog/photos.ts), and that photo is the hero and the
+ * card picture. The drawing is drawn only for a post with no photo, or whose
+ * photo was removed. The reasoning below is kept for that case.
+ *
  * WHY A DRAWING AND NOT A PHOTOGRAPH
  *
  * The rulebook (docs/ui-audit/00-DESIGN-RULEBOOK.md §1) wants imagery and calls

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, H3, Callout } from '@/components/blog/prose';
 
 export const metadata: Metadata = pageMetadata({
@@ -52,6 +53,9 @@ export default function Article() {
 
         <H2>What Is a MUN Position Paper?</H2>
         <p>A position paper is a one-to-two page document written from your assigned country&apos;s perspective on the committee topic(s). It is submitted to the dais before the conference and may be graded as part of your overall award. Its purpose is to articulate your country&apos;s official stance, the reasoning behind it, and the solutions your delegation will advocate for.</p>
+
+        <PhotoFigure id="mun-delegate-notes" caption="Your position paper becomes your notes once debate starts." />
+
 
         <H2>Standard Format</H2>
         <p>Most conferences follow a similar structure. Always check your specific conference&apos;s guidelines; some have strict page limits, required headings, or particular citation formats.</p>

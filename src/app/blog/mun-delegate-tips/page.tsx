@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, Callout } from '@/components/blog/prose';
 
 export const metadata: Metadata = pageMetadata({
@@ -58,6 +59,9 @@ export default function Article() {
           <li><strong>Know the topic cold, not just your position.</strong> The best delegates can explain every major bloc&apos;s perspective, not just their own. This makes you a more effective negotiator.</li>
           <li><strong>Read the background guide.</strong> It exists for a reason. Chairs write questions to guide. Read it and answer every question from your country&apos;s perspective.</li>
         </ul>
+
+        <PhotoFigure id="mun-jakarta-council" caption="Preparation shows at the table: delegates in a model Security Council." />
+
 
         <H2>Your Opening Speech: Make It Count</H2>
         <p>The opening speech (GSL speech) is your first impression. Most delegates use it to summarise their country&apos;s general position. Good delegates use it to signal leadership and attract bloc members.</p>

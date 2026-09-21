@@ -5,6 +5,8 @@ import { SHELVES, SHELF_ORDER, byNewest } from '@/components/blog/blogTaxonomy';
 import BlogChrome from '@/components/blog/BlogChrome';
 import BlogCard from '@/components/blog/BlogCard';
 import BlogShelfNav from '@/components/blog/BlogShelfNav';
+import { PhotoCreditsList } from '@/components/blog/BlogPhoto';
+import type { PhotoId } from '@/components/blog/photos';
 
 export const metadata: Metadata = pageMetadata({
   title: 'MUN Resources & Guides',
@@ -44,6 +46,11 @@ export default function BlogIndexPage() {
     (acc, key) => ({ ...acc, [key]: articles.filter((a) => a.category === key).length }),
     {} as Record<BlogCategory, number>,
   );
+
+  // Every photo a card on this page shows, once, in first-seen order: the
+  // cards carry a plain-text credit (a card is one link), and this list at the
+  // foot is where each credit links to its source and its licence.
+  const photoIds = [...new Set(articles.map((a) => a.photo).filter((p): p is PhotoId => !!p))];
 
   return (
     <>
@@ -124,6 +131,25 @@ export default function BlogIndexPage() {
               </section>
             );
           })}
+
+          {photoIds.length > 0 ? (
+            <section aria-labelledby="photo-credits" className="mt-16 border-t pt-8" style={{ borderColor: '#DDD4C0' }}>
+              <h2 id="photo-credits" className="m-0 text-[17px] font-extrabold" style={{ color: '#1B3828' }}>
+                Photo credits
+              </h2>
+              <p className="m-0 mt-2 max-w-[62ch] text-[13.5px] leading-[1.6]" style={{ color: '#55483C' }}>
+                Every photograph on these guides is used under an open licence or is in the public domain, and is
+                credited beside it. If a photo is yours and you would like it credited differently or removed, email{' '}
+                <a href="mailto:wearegavelling@gmail.com" className="underline" style={{ color: '#1B3828' }}>
+                  wearegavelling@gmail.com
+                </a>
+                .
+              </p>
+              <div className="mt-5">
+                <PhotoCreditsList ids={photoIds} />
+              </div>
+            </section>
+          ) : null}
         </div>
       </BlogChrome>
     </>

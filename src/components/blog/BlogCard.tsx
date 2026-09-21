@@ -16,6 +16,7 @@ import { CalendarDays, Clock, ArrowRight } from 'lucide-react';
 import type { BlogPost } from '@/app/blog/posts';
 import { SHELVES, formatPostDate } from './blogTaxonomy';
 import GuidePlate from './GuidePlate';
+import { CardPhoto } from './BlogPhoto';
 
 const C = {
   surface: '#FAF8F3',
@@ -88,7 +89,11 @@ export default function BlogCard({ post, lead = false }: { post: BlogPost; lead?
           </span>
         </div>
         <div className="order-1 md:order-2" style={{ aspectRatio: '400 / 250' }}>
-          <GuidePlate category={post.category} slug={post.slug} tone="deep" bare />
+          {post.photo ? (
+            <CardPhoto id={post.photo} lead />
+          ) : (
+            <GuidePlate category={post.category} slug={post.slug} tone="deep" bare />
+          )}
         </div>
       </Link>
     );
@@ -101,7 +106,11 @@ export default function BlogCard({ post, lead = false }: { post: BlogPost; lead?
       style={{ background: C.surface, border: `1.5px solid ${C.rule}`, '--gv-accent': shelf.accent } as React.CSSProperties}
     >
       <div style={{ aspectRatio: '400 / 250', borderBottom: `1.5px solid ${C.rule}` }}>
-        <GuidePlate category={post.category} slug={post.slug} tone="light" />
+        {post.photo ? (
+          <CardPhoto id={post.photo} />
+        ) : (
+          <GuidePlate category={post.category} slug={post.slug} tone="light" />
+        )}
       </div>
       <div className="flex flex-1 flex-col gap-2.5 p-5">
         <span className="inline-flex items-center gap-1.5 text-[12.5px] font-bold" style={{ color: shelf.accent }}>

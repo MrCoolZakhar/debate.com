@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, Callout, ChairScript } from '@/components/blog/prose';
 import Link from 'next/link';
 
@@ -54,6 +55,9 @@ export default function Article() {
         <H2>What Is an Unmoderated Caucus?</H2>
         <p>An unmoderated caucus (often called an &quot;unmod&quot;) is a recess from formal debate. The committee suspends its rules of procedure for a set period (typically ten to thirty minutes) and delegates are free to leave their seats, form groups, and negotiate informally. No speakers list, no timer per delegate, no points of order. Just conversation.</p>
         <p>The purpose is always the same: to advance work that formal debate cannot accomplish quickly. This almost always means drafting working papers or merging blocs.</p>
+
+        <PhotoFigure id="un-security-council-before-debate" caption="Diplomats talk on their feet before a Security Council meeting, the real version of an unmoderated caucus." />
+
 
         <H2>How to Propose an Unmoderated Caucus</H2>
         <p>Any delegate can raise a placard and propose: &quot;I move for an unmoderated caucus of [duration].&quot; Some conferences require a stated purpose; others do not. Our <Link href="/blog/mun-procedure-styles-compared">comparison of MUN procedure styles</Link> shows how caucus rules differ between rulesets. The motion requires a simple majority to pass. There is no speakers list, no amendment. It either passes or fails.</p>

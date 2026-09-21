@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, Callout } from '@/components/blog/prose';
 
 export const metadata: Metadata = pageMetadata({
@@ -53,6 +54,9 @@ export default function Article() {
         <H2>UNSC Composition</H2>
         <p>The real Security Council has fifteen members: five permanent members (P5) and ten non-permanent members elected for two-year terms. MUN simulations replicate this structure, sometimes with a fixed list of assigned nations, sometimes allowing the conference to choose which ten non-permanent members to include.</p>
         <p>The P5 are: the United States, United Kingdom, France, Russia, and China. Each holds permanent veto power over substantive resolutions. Our <Link href="/blog/mun-country-profiles">MUN country profiles</Link> are a quick way to read up on your seat.</p>
+
+        <PhotoFigure id="un-security-council-nameplates" caption="Nameplates on the real Security Council table." />
+
 
         <H2>The Veto: How It Actually Works</H2>
         <p>A Security Council resolution passes only if it receives nine or more affirmative votes AND no P5 member votes Against. A single P5 member voting Against defeats the resolution, regardless of whether the other fourteen members vote in favour. This is the veto. Our guide to <Link href="/blog/mun-voting-procedures">MUN voting procedures</Link> covers how votes are run.</p>

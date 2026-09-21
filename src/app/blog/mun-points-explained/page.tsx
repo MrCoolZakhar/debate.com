@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, Callout, ChairScript, FactCard, TableWrap } from '@/components/blog/prose';
 
 export const metadata: Metadata = pageMetadata({
@@ -64,6 +65,9 @@ export default function Article() {
           </table>
         </TableWrap>
         <p className="gv-note">Interrupt rules follow the common formulations in UNA-USA style and THIMUN style rulesets. Check your own conference&rsquo;s document.</p>
+
+        <PhotoFigure id="un-hrc-session" caption="A full session of the Human Rights Council in Geneva." />
+
 
         <H2>Point of Order</H2>
         <FactCard title="Point of Order">
