@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, H3 } from '@/components/blog/prose';
 
 export const metadata: Metadata = pageMetadata({
@@ -63,6 +64,9 @@ export default function Article3() {
         <p>
           The critical property of the GSL is its permanence: unlike caucus speaker queues, which are wiped when a caucus ends, the GSL survives throughout the entire session. A delegate who signed up at the beginning of day one might still be on the list at the end of day two. This continuity gives the GSL its role as the committee&apos;s primary formal debate channel.
         </p>
+
+        <PhotoFigure id="youth-parliament-speaker" caption="A delegate takes the floor from his seat." />
+
 
         <H2>2. How the GSL Works, Step by Step</H2>
         <H3>Opening the list</H3>

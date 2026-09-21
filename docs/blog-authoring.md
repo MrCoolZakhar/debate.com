@@ -58,6 +58,8 @@ In `src/app/blog/posts.ts`, in the array, at the position you want it read in
 | `readingMinutes` | Whole minutes: words / 220, rounded up. |
 | `featured` | At most ONE post in the file may set it. That post takes the lead card at the top of `/blog`. |
 | `related` | Optional. Slugs to put FIRST in this post's "Keep reading" block. Rarely needed; see below. |
+| `photo` | Optional. A photo id from `src/components/blog/photos.ts`: the article hero and the index card. Leave it out and the post gets the drawn cover. See section 5. |
+| `author` | Optional. `'peter'` (see `src/components/blog/authors.ts`). Adds a byline and an author box; the post's JSON-LD `author` must then be `authorJsonLd('peter')`. Leave it out for a post published by Gavelling. |
 
 **Order matters.** The array is the editorial order, and `RelatedGuides` walks
 it: each post offers up to three guides from its own shelf and then tops up
@@ -268,22 +270,32 @@ A checklist: things ticked off rather than things in an order.
 
 ---
 
-## 5. Cover art
+## 5. Cover photo, and the drawing behind it
 
-Nothing to do. Every post gets a drawing, chosen by its `category` and varied
-by a hash of its `slug`, so a shelf of twelve guides is twelve pictures rather
-than one picture twelve times. It is inline SVG drawn from the product's own
-vocabulary (a gavel and its knock, the motion ladder, a delegation at the
-podium, a floor of committee rooms, two software panels).
+Every post names a `photo` in the manifest. It is the article's hero (eager,
+with its credit underneath) and the picture on its index and "Keep reading"
+cards. Pick one relevant to the topic, and not one already used by the posts
+next to it on the same shelf.
 
-**Do not add stock photography.** It carries a licence, a credit line and a few
-hundred kilobytes, and at fifty posts that is fifty of each. If a post needs a
-real diagram in the body, draw it as inline SVG in Gavelling's palette
-(`src/components/blog/GuidePlate.tsx` is the reference) rather than shipping a
-bitmap.
+**Only photos from `src/components/blog/photos.ts`, and only licensed ones.**
+Every entry there is free for commercial use, checked on the file's own source
+page: Wikimedia Commons under CC0, public domain (US federal works included),
+CC BY or CC BY-SA. No UN Photo library images, no stock agencies, nothing from
+a Model UN platform, nothing associated with MyMUN, and nothing whose only
+licence is "credit us". Credit is shown next to every photo: under the hero,
+under an inline figure, as plain text on a card, and with links in the
+"Photo credits" list at the foot of `/blog`.
 
-To add a new drawing, add a motif to `GuidePlate.tsx` and point a shelf at it
-in `blogTaxonomy.ts`. Both are small and self-contained.
+To add a photo: a 1200 x 750 WebP (16:10, quality about 78) in
+`public/blog/photos/`, and an entry in `photos.ts` with its alt text (what is
+actually in it), author, licence, licence URL and source page.
+
+**An inline photo** in the body: `<PhotoFigure id="..." caption="..." />` from
+`@/components/blog/BlogPhoto`. One per post at most, where it genuinely helps.
+
+A post with no `photo` (or whose photo is removed from `photos.ts`) falls back
+to the drawn cover: inline SVG chosen by its `category` and varied by its
+position on the shelf (`GuidePlate.tsx`, `blogTaxonomy.ts`).
 
 ---
 

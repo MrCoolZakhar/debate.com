@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, H3, Callout } from '@/components/blog/prose';
 import Link from 'next/link';
 
@@ -52,6 +53,9 @@ export default function Article() {
 
         <H2>Quorum</H2>
         <p>Quorum is the minimum number of delegates that must be present for a committee to conduct formal business. Most conferences set quorum at a simple majority of enrolled delegations (50% + 1). If quorum is not met, the chair cannot open debate or hold votes. Chairs verify quorum during roll call at the start of each session.</p>
+
+        <PhotoFigure id="mun-model-security-council" caption="A model Security Council in session." />
+
 
         <H2>The Speakers List (GSL)</H2>
         <p>The General Speakers List (GSL) is the primary mechanism for formal debate. Delegates add themselves by raising their placard when the chair opens the list. The default speaker time is set by the chair at the beginning of the session and can be changed by motion. The GSL persists through the entire conference unless formally suspended or closed by vote.</p>

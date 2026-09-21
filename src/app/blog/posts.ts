@@ -16,6 +16,9 @@
 // place: RelatedGuides tops its same-shelf picks up from it, so the link
 // graph is a ring and no post is a dead end. The index sorts by date instead.
 
+import type { BlogAuthorKey } from '@/components/blog/authors';
+import type { PhotoId } from '@/components/blog/photos';
+
 /** The five shelves. `src/components/blog/blogTaxonomy.ts` gives each one its
  *  icon, its accent colour, its cover artwork and the words a reader sees. */
 export type BlogCategory = 'chairing' | 'delegates' | 'procedure' | 'organisers' | 'software';
@@ -46,11 +49,24 @@ export interface BlogPost {
   related?: string[];
   /** At most one post sets this. It takes the lead card at the top of /blog. */
   featured?: boolean;
+  /**
+   * A named author (src/components/blog/authors.ts). Leave it out for a post
+   * published by Gavelling. With it, the article shows a byline and an author
+   * box, and its JSON-LD author should be `authorJsonLd(author)`.
+   */
+  author?: BlogAuthorKey;
+  /**
+   * The post's photograph (src/components/blog/photos.ts): the article hero
+   * and the index card. Only licensed photos live there, each with its credit.
+   * Leave it out and the post gets the drawn cover (GuidePlate) instead.
+   */
+  photo?: PhotoId;
 }
 
 export const articles: BlogPost[] = [
   {
     slug: 'how-to-run-mun-committee',
+    photo: 'mun-beijing-disec',
     featured: true,
     title: "How to Run a Model UN Committee: Chair's Complete Guide (2026)",
     description: 'Step-by-step guide covering roll call, GSL, caucuses, voting procedures, and closing the session.',
@@ -60,6 +76,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'best-mun-software-2026',
+    photo: 'mun-jakarta-council',
     title: 'Best MUN Software in 2026: Full Comparison for Chairs and Directors',
     description: 'Gavelling, MUN Command, Muncoordinated, wxMUN, spreadsheets, and timer apps compared: features, pricing, and which fits your conference.',
     category: 'software',
@@ -69,6 +86,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'muncommand-alternative',
+    photo: 'mun-chairs-dais',
     title: 'MUN Command vs Gavelling: Honest Comparison & Free Alternative (2026)',
     description: 'MUN Command charges €1 per user per day. Gavelling covers sessions and conference management free. Full side-by-side.',
     category: 'software',
@@ -77,6 +95,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mymun-alternative',
+    photo: 'un-general-assembly-floor',
     title: 'mymun Alternative 2026: mymun and MUN Command vs Gavelling',
     description: 'MUN Command is mymun’s software and the brands are merging. What it costs, what its free tier does not save, and where each tool actually wins.',
     category: 'software',
@@ -85,6 +104,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'muncoordinated-alternative',
+    photo: 'mun-thessaloniki-council',
     title: 'Muncoordinated vs Gavelling: Which Free MUN Software in 2026?',
     description: 'Two free MUN tools, two very different scopes: open-source dais tool vs full conference platform. Honest comparison.',
     category: 'software',
@@ -93,6 +113,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'general-speakers-list-guide',
+    photo: 'un-general-assembly',
     title: 'General Speakers List (GSL) in MUN: Complete Guide for Chairs and Delegates',
     description: 'Everything you need to know about the GSL: how it works, yielding time, points, and chair tips.',
     category: 'procedure',
@@ -101,6 +122,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-motions-explained',
+    photo: 'un-hrc-panels',
     title: 'MUN Motions Explained: Types, How to Propose, and Voting Rules',
     description: 'A complete reference for every motion type: moderated caucus, unmoderated caucus, adjournment, and more.',
     category: 'procedure',
@@ -109,6 +131,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'how-to-chair-first-mun',
+    photo: 'mun-chairs-dais',
     title: 'How to Chair Your First MUN Committee: Practical Guide for New Chairs',
     description: 'A warm, practical guide for first-time chairs covering preparation, opening, debate management, and handling the unexpected.',
     category: 'chairing',
@@ -117,6 +140,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'how-to-run-moderated-caucus',
+    photo: 'youth-parliament-speaker',
     title: 'How to Run a Moderated Caucus in MUN: Chair Guide',
     description: 'Complete chair guide to opening, managing speaker time, keeping order, and closing a moderated caucus.',
     category: 'chairing',
@@ -125,6 +149,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'unmoderated-caucus-guide',
+    photo: 'mun-unmoderated-caucus',
     title: 'Unmoderated Caucus in MUN: What It Is and How to Use It',
     description: 'What an unmoderated caucus is, how delegates should use the time, and tips for chairs on managing unmod periods.',
     category: 'procedure',
@@ -133,6 +158,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-voting-procedures',
+    photo: 'mun-bratislava-vote',
     title: 'MUN Voting Procedures Explained: In Favour, Against, Abstain',
     description: 'Simple majority, supermajority, roll call votes, abstentions, and everything else about voting in MUN committees.',
     category: 'procedure',
@@ -141,6 +167,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-delegate-tips',
+    photo: 'mun-scimun-placards',
     title: 'MUN Delegate Tips: How to Stand Out in Any Committee',
     description: 'Practical tips for research, speeches, bloc-building, and winning Best Delegate at any MUN conference.',
     category: 'delegates',
@@ -149,6 +176,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-position-paper-guide',
+    photo: 'mun-research-workshop',
     title: 'How to Write a MUN Position Paper: Format, Tips & Examples',
     description: 'Step-by-step guide to the correct format, what to include, common mistakes, and examples that impress chairs.',
     category: 'delegates',
@@ -157,6 +185,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-resolution-writing',
+    photo: 'mun-delegate-notes',
     title: 'How to Write a MUN Resolution: Clauses, Format & Examples',
     description: 'Preambulatory clauses, operative clauses, correct format, sponsor rules, and getting your resolution passed.',
     category: 'delegates',
@@ -165,6 +194,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-rules-of-procedure',
+    photo: 'un-trusteeship-chamber',
     title: 'MUN Rules of Procedure: Complete Reference Guide',
     description: 'Points, motions, yields, quorum, voting thresholds, and how rules differ across major MUN conferences.',
     category: 'procedure',
@@ -173,6 +203,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-security-council-guide',
+    photo: 'un-security-council',
     title: 'MUN Security Council Guide: Veto, P5, and How UNSC Works',
     description: 'Veto power, P5 dynamics, procedure differences, and how to chair or delegate in a Security Council simulation.',
     category: 'procedure',
@@ -181,6 +212,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-crisis-committee-guide',
+    photo: 'un-security-council-high-level',
     title: 'MUN Crisis Committee Guide: How Crisis Committees Work',
     description: 'Crisis arcs, directive writing, backroom vs frontroom, and how to perform as a delegate in a MUN crisis committee.',
     category: 'chairing',
@@ -189,6 +221,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'free-mun-tools',
+    photo: 'mun-research-workshop',
     title: 'Free MUN Tools in 2026: Best Software for Chairs and Delegates',
     description: 'A detailed comparison of free MUN tools: Gavelling, spreadsheets, timer apps, and what actually works in a real session.',
     category: 'software',
@@ -197,6 +230,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-conference-preparation',
+    photo: 'mun-jakarta-council',
     title: 'How to Prepare for a MUN Conference: Complete Pre-Conference Checklist',
     description: 'Week-by-week preparation timeline: research, position papers, practice speeches, rules, and what to pack.',
     category: 'delegates',
@@ -205,6 +239,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-public-speaking-tips',
+    photo: 'mun-keynote-podium',
     title: 'MUN Public Speaking Tips: How to Speak Confidently in Committee',
     description: 'Structure speeches, manage nerves, use your voice effectively, and make every speaking slot count.',
     category: 'delegates',
@@ -213,6 +248,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-opening-speech',
+    photo: 'youth-parliament-speaker',
     title: 'How to Write a MUN Opening Speech: Templates and Examples',
     description: 'Four-part structure, length guide, real example speeches, and the most common mistakes to avoid.',
     category: 'delegates',
@@ -221,6 +257,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-working-paper-guide',
+    photo: 'mun-unmoderated-caucus',
     title: 'MUN Working Paper Guide: How to Draft, Merge, and Introduce',
     description: 'Writing working papers quickly, getting sponsors, merging blocs, and converting to a draft resolution.',
     category: 'delegates',
@@ -229,6 +266,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-amendment-guide',
+    photo: 'mun-delegate-notes',
     title: 'MUN Amendments Explained: Friendly vs Unfriendly, How to Submit',
     description: 'Friendly and unfriendly amendments, how to submit them, voting order, and strategic use in committee.',
     category: 'procedure',
@@ -237,6 +275,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-right-of-reply',
+    photo: 'youth-parliament-chamber',
     title: 'Right of Reply in MUN: When and How to Use It',
     description: 'What qualifies for a right of reply, how to request it, chair discretion, and how to use it effectively.',
     category: 'procedure',
@@ -245,6 +284,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'tour-de-table-mun',
+    photo: 'mun-model-security-council',
     title: 'Tour de Table in MUN: What It Is and How Chairs Run It',
     description: 'How tour de table differs from the GSL, when to use it, and how chairs manage it with software.',
     category: 'procedure',
@@ -253,6 +293,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-director-guide',
+    photo: 'mun-vienna-dais',
     title: 'MUN Director Guide: How to Run a Model UN Conference',
     description: 'Planning committees, briefing chairs, managing logistics, overseeing awards, and wrapping up successfully.',
     category: 'organisers',
@@ -261,6 +302,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-chair-script',
+    photo: 'mun-vienna-dais',
     title: 'MUN Chair Script: Exact Phrases for Every Situation',
     description: 'Word-for-word chair language for opening, roll call, GSL, caucuses, voting, points of order, and closing.',
     category: 'chairing',
@@ -269,6 +311,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-bloc-building',
+    photo: 'un-security-council-before-debate',
     title: 'MUN Bloc Building: How to Form and Lead a Coalition',
     description: 'How to find allies, draft collaboratively, handle defections, and lead a coalition to a passed resolution.',
     category: 'delegates',
@@ -277,6 +320,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-awards-guide',
+    photo: 'mun-best-delegation-award',
     title: 'MUN Awards Guide: How Best Delegate Is Chosen',
     description: 'What chairs look for, how to improve your score, and what consistently disqualifies delegates from awards.',
     category: 'delegates',
@@ -285,6 +329,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-conference-planning',
+    photo: 'mun-vienna-committee',
     title: 'How to Plan a MUN Conference: Step-by-Step for Schools and Clubs',
     description: 'Complete planning timeline: venue, committees, background guides, registration, technology, and conference day.',
     category: 'organisers',
@@ -293,6 +338,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-technology-guide',
+    photo: 'hybrid-meeting',
     title: 'MUN Technology Guide: Software, Apps, and Tools for Modern Committees',
     description: 'Committee management software, document collaboration, delegate apps, and what chairs and directors need.',
     category: 'software',
@@ -301,6 +347,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-online-committees',
+    photo: 'hybrid-meeting',
     title: 'Online MUN Committees: How to Chair and Participate Remotely',
     description: 'Managing procedure remotely, keeping delegates engaged, and the tools that work for virtual and hybrid MUN.',
     category: 'chairing',
@@ -309,6 +356,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-faculty-advisor-guide',
+    photo: 'mun-athens-delegation',
     title: 'MUN Faculty Advisor Guide: How to Prepare and Support Your Team',
     description: 'Building a MUN program, choosing conferences, reviewing position papers, and supporting delegates at the event.',
     category: 'organisers',
@@ -317,6 +365,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-points-of-order',
+    photo: 'mun-scimun-placards',
     title: 'Points of Order in MUN: When to Use Them and When Not To',
     description: 'What qualifies as a point of order, how to raise it correctly, and how chairs should rule, for delegates and chairs.',
     category: 'procedure',
@@ -325,6 +374,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-committee-types',
+    photo: 'un-ecosoc-chamber',
     title: 'Model UN Committee Types Explained: Which One Should You Pick?',
     description: 'Every kind of committee on a conference list, what debate actually feels like in each, and who it suits',
     category: 'delegates',
@@ -333,6 +383,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-crisis-directive-guide',
+    photo: 'mun-delegate-notes',
     title: 'How to Write a MUN Crisis Directive: Three Kinds, Four Worked Examples',
     description: 'What a directive is, the difference between public, private and press, and full annotated examples with the backroom response each one earns',
     category: 'chairing',
@@ -342,6 +393,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'is-mun-worth-it',
+    photo: 'mun-geneva-students',
     title: 'Is Model UN Worth It? An Honest Answer',
     description: 'What Model UN is genuinely worth on an application and in working life, which skills really transfer, and when it is a waste of your weekends',
     category: 'delegates',
@@ -350,6 +402,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-country-allocation',
+    photo: 'un-security-council-nameplates',
     title: 'MUN Country Allocation: An Organiser’s Guide to Seating a Conference',
     description: 'How to turn a pile of delegate applications into a seated conference: preference forms, double delegations, committee balance and the reallocation requests you can prevent',
     category: 'organisers',
@@ -358,6 +411,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-conference-registration-payments',
+    photo: 'un-general-assembly',
     title: 'MUN Conference Registration and Payments: Fees, Invoices and Refunds',
     description: 'How to take money from schools in six countries without losing track of who paid, plus a refund policy you can publish before the first payment arrives',
     category: 'organisers',
@@ -366,6 +420,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-country-research',
+    photo: 'un-security-council-nameplates',
     title: 'How to Research Your Country for MUN: A Method, Not a Reading List',
     description: 'Find your country’s actual position in one evening using voting records, treaty reservations and mission statements, and take one page into committee',
     category: 'delegates',
@@ -375,6 +430,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-difficult-delegates',
+    photo: 'mun-thessaloniki-council',
     title: 'How to Handle Difficult Delegates: Eight Problems and the Exact Intervention',
     description: 'The eight delegates who derail a committee, the smallest fix for each, the words to say from the dais, and the point at which it stops being yours to handle',
     category: 'chairing',
@@ -383,6 +439,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'start-mun-club',
+    photo: 'mun-research-workshop',
     title: 'How to Start a MUN Club at Your School: From Proposal to First Conference',
     description: 'Getting the approval, finding an advisor, recruiting members, an eight-week first term, and the succession plan that stops the club dying in year three',
     category: 'organisers',
@@ -392,6 +449,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-speech-examples',
+    photo: 'youth-parliament-chamber',
     title: 'MUN Speech Examples: Twelve Speeches, Under a Minute Each',
     description: 'Full worked speeches for the opening, the caucus, the vote, the reply and the close, with the timing marks and why each one works',
     category: 'delegates',
@@ -401,6 +459,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-common-mistakes',
+    photo: 'mun-thessaloniki-council',
     title: 'Common MUN Mistakes: 25 Errors Chairs See Every Weekend',
     description: 'The research, writing, speaking, procedure and bloc mistakes that cost delegates the room, each with the specific thing to do instead',
     category: 'delegates',
@@ -409,6 +468,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'how-to-become-a-mun-chair',
+    photo: 'mun-model-security-council',
     title: 'How to Become a MUN Chair: Applying, Interviewing and Getting Picked',
     description: 'What secretariats look for in a chair application, what the interview really tests, and how to get your first dais',
     category: 'chairing',
@@ -417,6 +477,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-background-guide-writing',
+    photo: 'mun-research-workshop',
     title: 'How to Write a MUN Background Guide (Study Guide): Structure, Template and Schedule',
     description: 'A structure that produces a guide delegates actually read, a page budget for each section, and a six-week schedule that gets it done on time',
     category: 'chairing',
@@ -425,6 +486,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-judging-rubric',
+    photo: 'mun-vienna-committee',
     title: 'How to Judge a MUN Committee: The Chair’s Scoring Rubric',
     description: 'Five criteria, a weighting you can defend, how to take evidence during a session, and the biases that quietly decide most award slates',
     category: 'chairing',
@@ -433,6 +495,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-award-categories',
+    photo: 'mun-award-plaques',
     title: 'MUN Award Categories Explained: Every Award and What It Means',
     description: 'Best Delegate, Outstanding, Honourable Mention, Verbal Commendation, best paper and delegation awards: what each one signals and how many a committee gives',
     category: 'chairing',
@@ -441,6 +504,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-secretariat-roles',
+    photo: 'mun-chairs-dais',
     title: 'Recruiting and Running a MUN Secretariat: Roles, Team Size and Handover',
     description: 'Every secretariat role, what it actually does week by week, how big a team you need at your size, and the handover that decides whether the conference survives',
     category: 'organisers',
@@ -449,6 +513,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'how-to-run-crisis-committee',
+    photo: 'un-security-council',
     title: 'How to Run a Crisis Committee: Arc, Backroom and Pacing',
     description: 'Designing a crisis arc before the conference, staffing a backroom, pacing updates, and the three moves that recover a committee whose story has died',
     category: 'chairing',
@@ -457,6 +522,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-crisis-backroom-guide',
+    photo: 'un-security-council-huddle',
     title: 'The MUN Crisis Backroom: How Crisis Staff Actually Work',
     description: 'What happens to a directive after you hand it up: triage, writing updates, playing characters, keeping a world bible, and saying no well',
     category: 'chairing',
@@ -465,6 +531,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-controlling-the-floor',
+    photo: 'mun-general-assembly-hemicycle',
     title: 'How to Keep Debate Moving When a MUN Committee Stalls',
     description: 'Diagnose a quiet, circular or chaotic room, then eleven interventions with the exact words to say from the dais',
     category: 'chairing',
@@ -473,6 +540,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-negotiation-tactics',
+    photo: 'un-security-council-huddle',
     title: 'Negotiation and Diplomacy in MUN: How to Get Your Clause Into Someone Else’s Resolution',
     description: 'Interests over positions, mapping the room, what you actually have to trade, and how to merge papers without losing the clause you came for',
     category: 'delegates',
@@ -481,6 +549,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-points-explained',
+    photo: 'mun-taipei-placards',
     title: 'Points in MUN: Order, Inquiry, Information and Personal Privilege',
     description: 'All four points, what each is for, whether it can interrupt a speaker, the exact wording, and how the circuits differ',
     category: 'procedure',
@@ -489,6 +558,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'what-is-model-un',
+    photo: 'un-general-assembly',
     title: "What Is Model UN? A Complete Beginner's Explanation",
     description:
       'What actually happens in a Model UN committee, from roll call to the final vote, explained in ten minutes for someone who has never been in the room',
@@ -498,6 +568,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-glossary',
+    photo: 'un-ecosoc-chamber',
     title: 'MUN Glossary: Every Term, Explained Plainly',
     description:
       'Every word you will hear in a committee room, defined in one sentence, with what it means in practice and the terms people get wrong',
@@ -507,6 +578,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-position-paper-examples',
+    photo: 'mun-model-security-council',
     title: 'MUN Position Paper Examples: Three Full Papers, Annotated',
     description:
       'Three complete Model UN position papers at three quality levels, with the chair notes on each and the exact reason the weak one scores low',
@@ -516,6 +588,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-clause-phrases',
+    photo: 'un-trusteeship-chamber',
     title: 'Preambulatory and Operative Clauses: The Complete Phrase List',
     description:
       'Every accepted preambulatory and operative phrase, what each one commits the committee to, and which verbs a General Assembly committee is not allowed to use',
@@ -525,6 +598,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-resolution-example',
+    photo: 'un-general-assembly-floor',
     title: 'Model UN Resolution Example: A Full Resolution, Line by Line',
     description:
       'One complete draft resolution, annotated clause by clause with the politics behind each line, plus the amended version that passed and the vote that carried it',
@@ -534,6 +608,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-for-beginners',
+    photo: 'mun-athens-delegation',
     title: 'Model UN for Beginners: Your First Conference, Hour by Hour',
     description:
       'A walkthrough of your first Model UN conference from the registration desk to the closing ceremony, with the one thing to do in each hour',
@@ -543,6 +618,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'start-a-mun-conference',
+    photo: 'mun-general-assembly-hemicycle',
     title: 'How to Start a MUN Conference From Scratch',
     description:
       'The whole job of founding a Model UN conference, from the first meeting to the closing gavel, with what it genuinely costs and what you can skip in year one',
@@ -552,6 +628,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-conference-budget',
+    photo: 'mun-beijing-disec',
     title: 'MUN Conference Budget: What It Costs and How to Set Your Fees',
     description:
       'A real line-item budget for a Model UN conference, how to price a delegate fee that covers it, and the four costs first-time organisers forget',
@@ -561,6 +638,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'thimun-rules-of-procedure',
+    photo: 'un-geneva-assembly-hall',
     title: 'THIMUN Rules of Procedure: The Complete Guide',
     description:
       'How debate actually runs under THIMUN procedure, and exactly what changes if you learned Model UN on the North American circuit',
@@ -570,6 +648,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'una-usa-rules-of-procedure',
+    photo: 'un-general-assembly-floor',
     title: 'UNA-USA Rules of Procedure: The Complete Guide',
     description:
       'The UNA-USA ruleset as it is actually run, from setting the agenda to rights of explanation, including the five rules most conferences quietly modify',
@@ -579,6 +658,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-award-ceremony-guide',
+    photo: 'mun-best-delegation-award',
     title: 'MUN Closing Ceremony: How to Run Awards Without a Controversy',
     description: 'Award policy set before the conference, slates collected from chairs, ratification, delegation tallies, and a run of show that takes 45 minutes',
     category: 'organisers',
@@ -587,6 +667,8 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-accessibility',
+    photo: 'un-geneva-assembly-hall',
+    author: 'peter',
     title: 'Accessible MUN Conferences: A Practical Inclusion Guide for Organisers',
     description: 'What to change so your conference is genuinely attendable: venue, documents, committee procedure, cost, and the access statement that increases attendance',
     category: 'organisers',
@@ -595,6 +677,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-dress-code',
+    photo: 'mun-vienna-dais',
     title: 'What to Wear to Model UN: The Dress Code, Explained Plainly',
     description: 'What western business attire actually means, a workable outfit on a student budget, the shoe mistake everyone makes once, and what chairs really notice',
     category: 'delegates',
@@ -603,6 +686,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-procedure-styles-compared',
+    photo: 'mun-general-assembly-hemicycle',
     title: 'THIMUN vs UNA-USA vs Harvard Style: MUN Procedures Compared',
     description: 'The three main families of Model UN procedure side by side, what transfers between them, what actively misleads you, and which to run at your own conference',
     category: 'procedure',
@@ -611,6 +695,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-head-delegate-guide',
+    photo: 'mun-athens-delegation',
     title: 'MUN Head Delegate Guide: Leading a School Delegation',
     description: 'The job nobody writes down: selecting a delegation, distributing assignments, running preparation, holding the team together at a conference, and handing it over',
     category: 'delegates',
@@ -619,6 +704,8 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'host-hybrid-mun-conference',
+    photo: 'hybrid-meeting',
+    author: 'peter',
     title: 'How to Host an Online or Hybrid MUN Conference: The Organiser Guide',
     description: 'Time zones, session length, the software stack, running caucus remotely, the hybrid trap, chair workload, fees, and the test week you cannot skip',
     category: 'organisers',
@@ -627,6 +714,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-country-profiles',
+    photo: 'un-hrc-session',
     title: 'MUN Country Profiles: Policy Briefs for 20 Commonly Assigned Countries',
     description: 'A one-screen policy brief for the countries assigned most often, plus the blank template to build one for any delegation you are given',
     category: 'delegates',
@@ -635,6 +723,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'university-mun-guide',
+    photo: 'mun-vienna-committee',
     title: 'University Model UN: How It Differs From High School MUN',
     description: 'What changes at university level: preparation depth, committee types, travel team selection, funding, staffing, and what MUN is actually worth afterwards',
     category: 'delegates',
@@ -643,6 +732,8 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-visa-invitation-letters',
+    photo: 'mun-geneva-students',
+    author: 'peter',
     title: 'MUN Visa Invitation Letters: What to Write, When, and What Not to Promise',
     description: 'What a conference invitation letter must contain, lead times, who signs it, the sentences to leave out, and how to handle a refusal',
     category: 'organisers',
@@ -651,6 +742,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-press-corps-guide',
+    photo: 'un-geneva-press-conference',
     title: 'MUN Press Corps: How a Press Committee Works and How to Win in One',
     description: 'The two press models, what a press delegate does all day, the article forms, interviewing without disrupting a room, and how to run a press committee',
     category: 'delegates',
@@ -659,6 +751,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-conference-marketing',
+    photo: 'mun-taipei-placards',
     title: "Marketing a MUN Conference: How to Fill Your Committees",
     description: "How delegations actually decide which conference to attend, and how to reach them before the other conference does",
     category: 'organisers',
@@ -667,6 +760,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-conference-day-operations',
+    photo: 'un-security-council-before-debate',
     title: "Running Conference Day: The MUN Operations Manual",
     description: "An hour-by-hour run of show for both days of a Model UN conference, and the fifteen things that go wrong",
     category: 'organisers',
@@ -675,6 +769,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-team-fundraising',
+    photo: 'mun-award-plaques',
     title: "MUN Team Fundraising: How to Pay for Conferences",
     description: "Nine ways school Model UN teams actually raise the money, ranked by what they return per hour of work",
     category: 'organisers',
@@ -683,6 +778,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-conference-sponsorship',
+    photo: 'mun-keynote-podium',
     title: "MUN Conference Sponsorship: Finding and Keeping Sponsors",
     description: "What sponsors are actually buying, what to offer at each tier, and the proposal that gets a meeting",
     category: 'organisers',
@@ -691,6 +787,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'choosing-mun-conferences',
+    photo: 'mun-bratislava-vote',
     title: "Choosing MUN Conferences: A Circuit Guide for Teams",
     description: "How to build a season that develops your team instead of exhausting it, and how to read a conference before you commit",
     category: 'organisers',
@@ -699,6 +796,8 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-safeguarding',
+    photo: 'youth-parliament-chamber',
+    author: 'peter',
     title: "Safeguarding at MUN Conferences: A Policy Guide for Organisers",
     description: "The safeguarding policy a student-run Model UN conference needs, and the situations it has to cover",
     category: 'organisers',
@@ -707,6 +806,8 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-chaperone-guide',
+    photo: 'mun-jakarta-council',
+    author: 'peter',
     title: "Chaperoning a MUN Delegation: The Trip Guide for Advisors",
     description: "Everything to arrange before you travel with a Model UN delegation, and the rules to set once you arrive",
     category: 'organisers',
@@ -715,6 +816,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-club-curriculum',
+    photo: 'mun-thessaloniki-council',
     title: "The MUN Club Curriculum: Ten Sessions to a First Conference",
     description: "Ten ready-to-run hour-long sessions that take a group with no experience to a real Model UN conference",
     category: 'organisers',
@@ -723,6 +825,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-on-your-cv',
+    photo: 'mun-award-plaques',
     title: "Putting Model UN on Your CV and University Application",
     description: "How to write four years of Model UN into three lines that a reader who was not there will believe",
     category: 'delegates',
@@ -731,6 +834,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-conference-venue-logistics',
+    photo: 'venue-banquet-hall',
     title: "MUN Conference Venue and Logistics: How to Choose and What to Ask",
     description: "How many rooms a Model UN conference needs, what each one must have, and everything to ask before you sign",
     category: 'organisers',

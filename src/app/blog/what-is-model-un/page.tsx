@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, H3, Callout, ChairScript, TableWrap } from '@/components/blog/prose';
 
 export const metadata: Metadata = pageMetadata({
@@ -60,6 +61,9 @@ export default function Article() {
         <p>
           The two sounds that organise the day are the gavel and the clock. The gavel opens the session, closes debate and ends votes. The clock decides how long you speak, which is normally 60 to 90 seconds on a general speakers list. That constraint shapes everything about how people write and talk.
         </p>
+
+        <PhotoFigure id="mun-vienna-committee" caption="Students debating at a Model UN conference in Vienna." />
+
 
         <H2>The day, in order</H2>
         <p>

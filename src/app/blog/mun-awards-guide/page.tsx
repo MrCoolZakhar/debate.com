@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, Callout } from '@/components/blog/prose';
 
 export const metadata: Metadata = pageMetadata({
@@ -58,6 +59,9 @@ export default function Article() {
           <li><strong>Verbal Commendation:</strong> Recognised for specific contributions: a particularly good speech, strong position paper, or key amendment.</li>
           <li><strong>Best Position Paper:</strong> Some conferences award separately for the pre-submitted position paper.</li>
         </ul>
+
+        <PhotoFigure id="mun-award-plaques" caption="Award certificates and a gavel plaque after a conference." />
+
 
         <H2>What Chairs Actually Look For</H2>
         <p>Most experienced chairs assess delegates across five dimensions. Our <Link href="/blog/mun-judging-rubric">MUN judging rubric</Link> sets them out as a full scoring sheet.</p>

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import { authorJsonLd } from '@/components/blog/authors';
 import { H2, Callout, FactCard, TableWrap } from '@/components/blog/prose';
 
 export const metadata: Metadata = pageMetadata({
@@ -21,7 +22,7 @@ const articleSchema = {
   url: 'https://gavelling.com/blog/mun-safeguarding',
   datePublished: '2026-09-20',
   dateModified: '2026-09-20',
-  author: { '@type': 'Organization', name: 'Gavelling', url: 'https://gavelling.com' },
+  author: authorJsonLd('peter'),
   publisher: JSONLD_PUBLISHER,
   image: 'https://gavelling.com/og-image.png',
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://gavelling.com/blog/mun-safeguarding' },

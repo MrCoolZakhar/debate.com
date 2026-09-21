@@ -16,6 +16,7 @@ import { CalendarDays, Clock, ArrowRight } from 'lucide-react';
 import type { BlogPost } from '@/app/blog/posts';
 import { SHELVES, formatPostDate } from './blogTaxonomy';
 import GuidePlate from './GuidePlate';
+import { CardPhoto } from './BlogPhoto';
 
 const C = {
   surface: '#FAF8F3',
@@ -42,9 +43,52 @@ function Meta({ post, tone }: { post: BlogPost; tone: 'light' | 'deep' }) {
   );
 }
 
-export default function BlogCard({ post, lead = false }: { post: BlogPost; lead?: boolean }) {
+export default function BlogCard({
+  post,
+  lead = false,
+  compact = false,
+}: {
+  post: BlogPost;
+  lead?: boolean;
+  compact?: boolean;
+}) {
   const shelf = SHELVES[post.category];
   const Icon = shelf.icon;
+
+  // The "Start here" picks at the top of /blog: a small thumbnail beside the
+  // shelf and headline, nothing else, so six fit where one lead card used to.
+  if (compact) {
+    return (
+      <Link
+        href={`/blog/${post.slug}`}
+        className="gv-card group flex h-full items-stretch gap-3 overflow-hidden rounded-2xl p-2.5 no-underline"
+        style={{ background: C.surface, border: `1.5px solid ${C.rule}`, '--gv-accent': shelf.accent } as React.CSSProperties}
+      >
+        <div className="w-[92px] shrink-0 overflow-hidden rounded-xl sm:w-[104px]" style={{ aspectRatio: '1 / 1' }}>
+          {post.photo ? (
+            <CardPhoto id={post.photo} thumb />
+          ) : (
+            <GuidePlate category={post.category} slug={post.slug} tone="light" bare />
+          )}
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 py-0.5 pr-1">
+          <span className="inline-flex items-center gap-1.5 text-[11.5px] font-bold" style={{ color: shelf.accent }}>
+            <Icon size={13} strokeWidth={2.3} aria-hidden="true" />
+            {shelf.label}
+          </span>
+          <h3
+            className="m-0 line-clamp-3 font-extrabold"
+            style={{ color: C.forest, fontSize: '14.5px', lineHeight: 1.28, letterSpacing: '-0.005em' }}
+          >
+            {post.title}
+          </h3>
+          <span className="text-[11.5px]" style={{ color: C.muted }}>
+            {post.readingMinutes} min read
+          </span>
+        </div>
+      </Link>
+    );
+  }
 
   if (lead) {
     return (
@@ -88,7 +132,11 @@ export default function BlogCard({ post, lead = false }: { post: BlogPost; lead?
           </span>
         </div>
         <div className="order-1 md:order-2" style={{ aspectRatio: '400 / 250' }}>
-          <GuidePlate category={post.category} slug={post.slug} tone="deep" bare />
+          {post.photo ? (
+            <CardPhoto id={post.photo} lead />
+          ) : (
+            <GuidePlate category={post.category} slug={post.slug} tone="deep" bare />
+          )}
         </div>
       </Link>
     );
@@ -101,7 +149,11 @@ export default function BlogCard({ post, lead = false }: { post: BlogPost; lead?
       style={{ background: C.surface, border: `1.5px solid ${C.rule}`, '--gv-accent': shelf.accent } as React.CSSProperties}
     >
       <div style={{ aspectRatio: '400 / 250', borderBottom: `1.5px solid ${C.rule}` }}>
-        <GuidePlate category={post.category} slug={post.slug} tone="light" />
+        {post.photo ? (
+          <CardPhoto id={post.photo} />
+        ) : (
+          <GuidePlate category={post.category} slug={post.slug} tone="light" />
+        )}
       </div>
       <div className="flex flex-1 flex-col gap-2.5 p-5">
         <span className="inline-flex items-center gap-1.5 text-[12.5px] font-bold" style={{ color: shelf.accent }}>

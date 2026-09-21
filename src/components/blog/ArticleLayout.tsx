@@ -23,6 +23,8 @@ import ArticleToc from './ArticleToc';
 import RelatedGuides from './RelatedGuides';
 import BlogChrome from './BlogChrome';
 import { collectHeadings } from './prose';
+import { AuthorByline, AuthorBox } from './AuthorCredit';
+import { HeroPhoto, PhotoCredit } from './BlogPhoto';
 
 const C = {
   forest: '#1B3828',
@@ -198,7 +200,13 @@ export default function ArticleLayout({
                 {dek ?? post.description}
               </p>
 
-              <div className="mt-6">
+              {post.author ? (
+                <div className="mt-6">
+                  <AuthorByline author={post.author} />
+                </div>
+              ) : null}
+
+              <div className={post.author ? 'mt-4' : 'mt-6'}>
                 <MetaLine date={post.date} updated={post.updated} minutes={post.readingMinutes} />
               </div>
             </div>
@@ -206,12 +214,26 @@ export default function ArticleLayout({
             {/* Deliberately NOT `order-first`: on a phone the headline is what
                 the reader came for, so the cover follows the title block
                 rather than pushing it down the screen. */}
-            <div
-              className="overflow-hidden rounded-2xl"
-              style={{ aspectRatio: '400 / 250', boxShadow: '0 14px 36px rgba(27,56,40,0.20)' }}
-            >
-              <GuidePlate category={post.category} slug={post.slug} tone="deep" />
-            </div>
+            {post.photo ? (
+              <figure className="m-0">
+                <div
+                  className="overflow-hidden rounded-2xl"
+                  style={{ aspectRatio: '400 / 250', boxShadow: '0 14px 36px rgba(27,56,40,0.20)', background: '#DDD4C0' }}
+                >
+                  <HeroPhoto id={post.photo} />
+                </div>
+                <figcaption className="mt-2">
+                  <PhotoCredit id={post.photo} />
+                </figcaption>
+              </figure>
+            ) : (
+              <div
+                className="overflow-hidden rounded-2xl"
+                style={{ aspectRatio: '400 / 250', boxShadow: '0 14px 36px rgba(27,56,40,0.20)' }}
+              >
+                <GuidePlate category={post.category} slug={post.slug} tone="deep" />
+              </div>
+            )}
           </header>
 
           <hr className="mt-10 mb-9 border-0" style={{ height: '1.5px', background: C.rule }} />
@@ -224,7 +246,14 @@ export default function ArticleLayout({
             <div className="lg:col-start-2 lg:row-start-1">
               <ArticleToc items={headings} />
             </div>
-            <article className="gv-prose lg:col-start-1 lg:row-start-1">{children}</article>
+            {post.author ? (
+              <div className="lg:col-start-1 lg:row-start-1">
+                <article className="gv-prose">{children}</article>
+                <AuthorBox author={post.author} />
+              </div>
+            ) : (
+              <article className="gv-prose lg:col-start-1 lg:row-start-1">{children}</article>
+            )}
           </div>
 
           <div className="mt-14">

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, H3, Callout, ChairScript } from '@/components/blog/prose';
 import Link from 'next/link';
 
@@ -53,6 +54,9 @@ export default function Article() {
         <H2>What Is a Moderated Caucus?</H2>
         <p>A moderated caucus is a structured debate period proposed by a delegate and approved by the committee through a simple majority vote. It differs from the <Link href="/blog/general-speakers-list-guide">General Speakers List (GSL)</Link> in three key ways: it has a fixed total time, a fixed per-speaker time, and a specific topic or purpose. When the caucus ends, the committee returns to the GSL exactly where it left off.</p>
         <p>Common purposes include: &quot;to discuss the humanitarian crisis in the conflict zone,&quot; &quot;to debate funding mechanisms for the proposed resolution,&quot; or simply &quot;to continue general debate.&quot; The purpose helps the chair keep speakers on topic.</p>
+
+        <PhotoFigure id="un-hrc-panels" caption="At the real UN, delegations raise their name panels to ask for the floor." />
+
 
         <H2>Step 1: Accepting the Motion</H2>
         <p>A delegate raises a placard and proposes: &quot;I move for a moderated caucus of [total time] with [per-speaker time] per speaker on the topic of [purpose].&quot; You need at least one second. Then you put it to a vote.</p>

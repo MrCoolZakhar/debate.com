@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, H3 } from '@/components/blog/prose';
 
 export const metadata: Metadata = pageMetadata({
@@ -68,6 +69,9 @@ export default function Article1() {
         <p>
           Using a digital tool like <strong>Gavelling</strong> lets you pre-load your delegate roster, set speaking times, and configure voting thresholds before you walk into the room. Delegates receive a 6-character session code and join on their own devices: no downloads, no paper lists. Setting this up the evening before means your opening is seamless.
         </p>
+
+        <PhotoFigure id="mun-chairs-dais" caption="The dais runs the room: student chairs presiding over a Security Council committee." />
+
 
         <H2>2. Opening the Session: Roll Call</H2>
         <p>

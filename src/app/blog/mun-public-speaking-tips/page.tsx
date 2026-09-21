@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, Callout } from '@/components/blog/prose';
 
 export const metadata: Metadata = pageMetadata({
@@ -58,6 +59,9 @@ export default function Article() {
           <li><strong>Close (10 seconds):</strong> A call to action or a clear statement of what your delegation supports. &quot;France urges this committee to adopt a legally binding framework, and invites like-minded delegations to co-sponsor our working paper.&quot;</li>
         </ul>
         <Callout>The most <Link href="/blog/mun-common-mistakes">common mistake</Link>: trying to say too much. One clear argument, delivered well, is more persuasive than five arguments delivered nervously. Cut until it hurts.</Callout>
+
+        <PhotoFigure id="youth-parliament-chamber" caption="The audience a speech has to reach: a full chamber of delegates." />
+
 
         <H2>Managing Nerves</H2>
         <p>Nerves are not the enemy. Unmanaged nerves are. A small amount of adrenaline actually improves performance. Here is how to keep it manageable:</p>
