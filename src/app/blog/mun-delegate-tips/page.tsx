@@ -1,8 +1,8 @@
-import Link from 'next/link';
-import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
-import React from 'react';
+import ArticleLayout from '@/components/blog/ArticleLayout';
+import { H2, Callout } from '@/components/blog/prose';
 
 export const metadata: Metadata = pageMetadata({
   title: 'MUN Delegate Tips: How to Stand Out in Any Committee',
@@ -38,94 +38,66 @@ const breadcrumbSchema = {
   ],
 };
 
-const s: Record<string, React.CSSProperties> = {
-  page: { minHeight: '100vh', backgroundColor: '#EDE7D8', padding: '48px 24px 80px' },
-  wrap: { maxWidth: '720px', margin: '0 auto' },
-  back: { fontSize: '13px', color: '#6A5A4A', textDecoration: 'none', display: 'inline-block', marginBottom: '32px' },
-  h1: { fontSize: '36px', fontWeight: 900, color: '#1B3828', lineHeight: 1.15, marginBottom: '12px' },
-  meta: { fontSize: '13px', color: '#9A8A78', marginBottom: '40px' },
-  article: { backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', borderRadius: '20px', padding: '40px 40px 48px' },
-  h2: { fontSize: '22px', fontWeight: 800, color: '#1B3828', marginTop: '40px', marginBottom: '12px' },
-  h3: { fontSize: '17px', fontWeight: 700, color: '#1B3828', marginTop: '24px', marginBottom: '8px' },
-  p: { fontSize: '16px', color: '#1C1410', lineHeight: 1.75, marginBottom: '16px' },
-  ul: { paddingLeft: '20px', marginBottom: '16px' },
-  li: { fontSize: '16px', color: '#1C1410', lineHeight: 1.75, marginBottom: '6px' },
-  callout: { backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', borderLeft: '4px solid #1B3828', borderRadius: '8px', padding: '16px 20px', marginBottom: '24px' },
-  calloutText: { fontSize: '15px', color: '#1B3828', fontStyle: 'italic', margin: 0 },
-  cta: { marginTop: '48px', padding: '28px 32px', backgroundColor: '#1B3828', borderRadius: '16px', textAlign: 'center' as const },
-  ctaText: { fontSize: '16px', color: '#EDE7D8', marginBottom: '12px' },
-  ctaLink: { display: 'inline-block', fontSize: '15px', fontWeight: 800, color: '#EED98A', textDecoration: 'none' },
-};
-
 export default function Article() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
-      <div style={s.page}>
-        <div style={s.wrap}>
-          <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>MUN Delegate Tips: How to Stand Out in Any Committee</h1>
-          <p style={s.meta}>By Gavelling · June 2026 · 11 min read</p>
-          <article style={s.article}>
+      <ArticleLayout
+        slug="mun-delegate-tips"
+        pitch="Gavelling gives delegates real-time visibility into their queue position and speaking time."
+      >
 
-            <p style={s.p}>Every delegate walks into committee wanting to make an impact. Few do. The gap between a forgettable delegate and one who earns Best Delegate is rarely about intelligence or knowledge. It is almost always about preparation, strategy, and presence. These tips apply whether you are attending your first conference or your fifteenth.</p>
+        <p>Every delegate walks into committee wanting to make an impact. Few do. The gap between a forgettable delegate and one who earns Best Delegate is rarely about intelligence or knowledge. It is almost always about preparation, strategy, and presence. These tips apply whether you are attending your first conference or your fifteenth.</p>
 
-            <h2 style={s.h2}>Before the Conference: Research Like a Diplomat</h2>
-            <p style={s.p}>The single biggest differentiator in MUN is preparation. Delegates who know their country's position cold can spend committee time on strategy instead of scrambling to figure out what they believe.</p>
-            <ul style={s.ul}>
-              <li style={s.li}><strong>Read your country's UN voting record.</strong> The UN Digital Library and Dag Hammarskjöld Library both have full voting records. How has your country voted on similar resolutions in the last five years?</li>
-              <li style={s.li}><strong>Find your country's official statements.</strong> Ministry of Foreign Affairs websites often publish speeches given at UN sessions. These are gold: they tell you exactly how your country phrases its positions.</li>
-              <li style={s.li}><strong>Know the topic cold, not just your position.</strong> The best delegates can explain every major bloc's perspective, not just their own. This makes you a more effective negotiator.</li>
-              <li style={s.li}><strong>Read the background guide.</strong> It exists for a reason. Chairs write questions to guide. Read it and answer every question from your country's perspective.</li>
-            </ul>
+        <H2>Before the Conference: Research Like a Diplomat</H2>
+        <p>The single biggest differentiator in MUN is preparation. Delegates who know their country&apos;s position cold can spend committee time on strategy instead of scrambling to figure out what they believe. Our <Link href="/blog/mun-country-research">country research method</Link> shows how to get there.</p>
+        <ul>
+          <li><strong>Read your country&apos;s UN voting record.</strong> The UN Digital Library and Dag Hammarskjöld Library both have full voting records. How has your country voted on similar resolutions in the last five years?</li>
+          <li><strong>Find your country&apos;s official statements.</strong> Ministry of Foreign Affairs websites often publish speeches given at UN sessions. These are gold: they tell you exactly how your country phrases its positions.</li>
+          <li><strong>Know the topic cold, not just your position.</strong> The best delegates can explain every major bloc&apos;s perspective, not just their own. This makes you a more effective negotiator.</li>
+          <li><strong>Read the background guide.</strong> It exists for a reason. Chairs write questions to guide. Read it and answer every question from your country&apos;s perspective.</li>
+        </ul>
 
-            <h2 style={s.h2}>Your Opening Speech: Make It Count</h2>
-            <p style={s.p}>The opening speech (GSL speech) is your first impression. Most delegates use it to summarise their country's general position. Good delegates use it to signal leadership and attract bloc members.</p>
-            <ul style={s.ul}>
-              <li style={s.li}><strong>State your position clearly in the first thirty seconds.</strong> Do not make delegates guess where you stand.</li>
-              <li style={s.li}><strong>Propose something.</strong> Even a vague framework ("Denmark proposes a three-pillar approach to climate adaptation financing") gives other delegates something to react to and rally around.</li>
-              <li style={s.li}><strong>End with a call to action.</strong> "Denmark invites like-minded delegations to collaborate on a working paper addressing these priorities" signals that you are ready to lead.</li>
-            </ul>
-            <div style={s.callout}><p style={s.calloutText}>Sixty seconds is enough time for a strong opening speech. Do not pad it. Say what your country believes, what you propose, and who you want to work with. Sit down.</p></div>
+        <H2>Your Opening Speech: Make It Count</H2>
+        <p>The opening speech (GSL speech) is your first impression. Most delegates use it to summarise their country&apos;s general position. Good delegates use it to signal leadership and attract bloc members.</p>
+        <ul>
+          <li><strong>State your position clearly in the first thirty seconds.</strong> Do not make delegates guess where you stand.</li>
+          <li><strong>Propose something.</strong> Even a vague framework (&quot;Denmark proposes a three-pillar approach to climate adaptation financing&quot;) gives other delegates something to react to and rally around.</li>
+          <li><strong>End with a call to action.</strong> &quot;Denmark invites like-minded delegations to collaborate on a working paper addressing these priorities&quot; signals that you are ready to lead.</li>
+        </ul>
+        <Callout>Sixty seconds is enough time for a strong opening speech. Do not pad it. Say what your country believes, what you propose, and who you want to work with. Sit down.</Callout>
 
-            <h2 style={s.h2}>Building a Bloc: The Real Game</h2>
-            <p style={s.p}>Most awards go to delegates who drive resolution drafting. That requires a bloc. Here is how to build one:</p>
-            <ul style={s.ul}>
-              <li style={s.li}><strong>Approach delegates during unmoderated caucuses, not formal debate.</strong> Walk up, introduce yourself by country, and ask their position on the key issue. Keep it short.</li>
-              <li style={s.li}><strong>Find common ground first.</strong> Even opposing blocs usually agree on the problem. Start there and work outward to solutions.</li>
-              <li style={s.li}><strong>Be the one who starts the draft.</strong> Any working paper, even a rough one, draws people to you. Blank Google Docs have no gravity.</li>
-              <li style={s.li}><strong>Be inclusive deliberately.</strong> Invite one or two delegates from opposing blocs into your working paper. This strengthens your resolution and earns the chair's respect.</li>
-            </ul>
+        <H2>Building a Bloc: The Real Game</H2>
+        <p>Most awards go to delegates who drive resolution drafting. That requires a bloc. Here is how to build one:</p>
+        <ul>
+          <li><strong>Approach delegates during unmoderated caucuses, not formal debate.</strong> Walk up, introduce yourself by country, and ask their position on the key issue. Keep it short.</li>
+          <li><strong>Find common ground first.</strong> Even opposing blocs usually agree on the problem. Start there and work outward to solutions. Our <Link href="/blog/mun-negotiation-tactics">negotiation guide</Link> covers the rest.</li>
+          <li><strong>Be the one who starts the draft.</strong> Any working paper, even a rough one, draws people to you. Blank Google Docs have no gravity.</li>
+          <li><strong>Be inclusive deliberately.</strong> Invite one or two delegates from opposing blocs into your working paper. This strengthens your resolution and earns the chair&apos;s respect.</li>
+        </ul>
 
-            <h2 style={s.h2}>Speaking in Debate: Quality Over Quantity</h2>
-            <p style={s.p}>A common mistake is raising your placard for every speaking slot regardless of what you have to say. Chairs and fellow delegates notice when speeches are filler. Say something substantive, or yield your time.</p>
-            <ul style={s.ul}>
-              <li style={s.li}><strong>Respond to what was just said.</strong> The most impactful speeches directly engage with the previous speaker's argument. This shows you are listening, not just waiting to speak.</li>
-              <li style={s.li}><strong>Use specific data.</strong> Numbers anchor arguments. "Over 800 million people lack access to safe drinking water" lands harder than "many people face water scarcity."</li>
-              <li style={s.li}><strong>Propose concrete operative clauses.</strong> Do not just describe the problem, propose a solution. This advances the committee's work and marks you as a constructive delegate.</li>
-            </ul>
+        <H2>Speaking in Debate: Quality Over Quantity</H2>
+        <p>A <Link href="/blog/mun-common-mistakes">common mistake</Link> is raising your placard for every speaking slot regardless of what you have to say. Chairs and fellow delegates notice when speeches are filler. Say something substantive, or yield your time.</p>
+        <ul>
+          <li><strong>Respond to what was just said.</strong> The most impactful speeches directly engage with the previous speaker&apos;s argument. This shows you are listening, not just waiting to speak.</li>
+          <li><strong>Use specific data.</strong> Numbers anchor arguments. &quot;Over 800 million people lack access to safe drinking water&quot; lands harder than &quot;many people face water scarcity.&quot;</li>
+          <li><strong>Propose concrete operative clauses.</strong> Do not just describe the problem, propose a solution. This advances the committee&apos;s work and marks you as a constructive delegate.</li>
+        </ul>
 
-            <h2 style={s.h2}>Points and Motions: Use Them Strategically</h2>
-            <p style={s.p}>Points of information, points of order, and motions are procedural tools. Used well, they show command of the room. Used poorly, they signal desperation or inexperience.</p>
-            <ul style={s.ul}>
-              <li style={s.li}><strong>Points of information:</strong> Ask a genuine clarifying question, not a disguised speech. Chairs respect brevity.</li>
-              <li style={s.li}><strong>Motions for a moderated caucus:</strong> Propose one when formal debate has stalled and your bloc needs to make a specific argument in a focused setting.</li>
-              <li style={s.li}><strong>Motion to extend the speakers list:</strong> Use this when you have not yet spoken and want to make sure you get a slot.</li>
-            </ul>
+        <H2>Points and Motions: Use Them Strategically</H2>
+        <p>Points of information, points of order, and motions are procedural tools. Used well, they show command of the room. Used poorly, they signal desperation or inexperience. See our guide to <Link href="/blog/mun-points-explained">points in MUN</Link> for when each one is in order.</p>
+        <ul>
+          <li><strong>Points of information:</strong> Ask a genuine clarifying question, not a disguised speech. Chairs respect brevity.</li>
+          <li><strong>Motions for a moderated caucus:</strong> Propose one when formal debate has stalled and your bloc needs to make a specific argument in a focused setting.</li>
+          <li><strong>Motion to extend the speakers list:</strong> Use this when you have not yet spoken and want to make sure you get a slot.</li>
+        </ul>
 
-            <h2 style={s.h2}>What Chairs Notice When Awarding Best Delegate</h2>
-            <p style={s.p}>Awards vary by conference, but most chairs are looking for the same things: substantive contribution to debate, leadership in bloc-building, quality of resolution language, adherence to rules of procedure, and consistent, respectful engagement with all delegates, not just your allies.</p>
-            <p style={s.p}>Being the loudest is not the same as being the best. The delegate who quietly drafts an amendment that bridges two opposing blocs often impresses more than the one who gives six speeches.</p>
-
-            <RelatedGuides currentSlug="mun-delegate-tips" />
-            <div style={s.cta}>
-              <p style={s.ctaText}>Gavelling gives delegates real-time visibility into their queue position and speaking time.</p>
-              <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>
-            </div>
-          </article>
-        </div>
-      </div>
+        <H2>What Chairs Notice When Awarding Best Delegate</H2>
+        <p>Awards vary by conference, but most chairs are looking for the same things: substantive contribution to debate, leadership in bloc-building, quality of resolution language, adherence to rules of procedure, and consistent, respectful engagement with all delegates, not just your allies.</p>
+        <p>Being the loudest is not the same as being the best. The delegate who quietly drafts an amendment that bridges two opposing blocs often impresses more than the one who gives six speeches.</p>
+        <p>To see the room from the other side, read <Link href="/blog/how-to-become-a-mun-chair">how to become a MUN chair</Link>.</p>
+      </ArticleLayout>
     </>
   );
 }

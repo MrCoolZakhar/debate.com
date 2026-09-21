@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
+import { friendlyError } from '@/lib/friendlyError';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -63,13 +64,14 @@ export default function ContactClient() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setSubmitError(`Error ${res.status}: ${body.error ?? 'Unknown error'}`);
+        console.error('[contact]', res.status, body);
+        setSubmitError("Couldn't send your message. Please try again.");
         setSending(false);
         return;
       }
       setSubmitted(true);
     } catch (err) {
-      setSubmitError(`Network error: ${err instanceof Error ? err.message : 'Could not reach server'}`);
+      setSubmitError(friendlyError(err, "We couldn't reach Gavelling. Check your connection and try again."));
     } finally {
       setSending(false);
     }

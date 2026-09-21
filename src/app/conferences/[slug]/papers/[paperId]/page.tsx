@@ -10,7 +10,7 @@
 import AuthLink from '@/components/auth/AuthLink';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Check, Download, Send, X } from 'lucide-react';
+import { ArrowLeft, Check, Download, ExternalLink, FileText, Send, X } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
@@ -149,6 +149,105 @@ function SignInLink({ next }: { next: string }) {
     >
       SIGN IN
     </AuthLink>
+  );
+}
+
+// ── The paper, below `lg` ────────────────────────────────────────────────────
+//
+// An <iframe src="*.pdf"> is not a PDF viewer on iOS Safari. It renders the
+// FIRST page, scaled to the frame, and nothing scrolls: page 2 of a position
+// paper simply does not exist on an iPhone. Android Chrome is no better — it
+// shows a download strip instead of the document.
+//
+// So below `lg` the paper is handed to the platform. The phone's own viewer
+// pinches, scrolls, searches, prints and shares; it is a better reader than
+// anything this page could draw, and it costs no bundle.
+//
+// The repo's pdf.js viewer (src/components/documents/PdfViewer.tsx) was the
+// other candidate and was NOT chosen. It is built for the chair's introduction
+// screen: a floating toolbar, zoom steps driven by ctrl+wheel (a trackpad
+// gesture, not a touch one), canvases drawn at devicePixelRatio × the
+// FitToScreen scale, and no touch pinch or double-tap path at all. On a phone
+// it would be a worse reader than the native one AND pull pdfjs-dist onto a
+// screen that is mostly a review thread. If it ever grows real touch gestures,
+// this is the place to reconsider.
+//
+// Rendered as a sibling of the desktop card and toggled by `hidden lg:*` on
+// both, so which one shows is CSS, never a JS width guess that flashes the
+// wrong one before hydration.
+function formatBytes(bytes: number): string {
+  if (!bytes || bytes < 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function PaperHandoff({ fileName, fileUrl, sizeBytes }: { fileName: string; fileUrl: string; sizeBytes: number }) {
+  const size = formatBytes(sizeBytes);
+  return (
+    /* `display` stays in the className, never the inline style: NeuCard spreads
+       `style` last, and an inline `display: flex` would beat `lg:hidden` and
+       leave this card on screen beside the desktop embed. */
+    <NeuCard className="lg:hidden flex flex-col" style={{ padding: 20, flexDirection: 'column', gap: 16 }}>
+      <div className="flex items-start gap-3">
+        <span
+          aria-hidden
+          className="flex items-center justify-center flex-shrink-0"
+          style={{
+            width: 46, height: 46, borderRadius: 14,
+            background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
+            color: NEU.gold, boxShadow: `0 4px 12px ${NEU_GRADIENTS.forest[0]}40`,
+          }}
+        >
+          <FileText size={22} strokeWidth={1.9} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14.5, color: NEU.ink, margin: 0, overflowWrap: 'anywhere' }}>
+            {fileName}
+          </p>
+          <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.inkSoft, margin: '3px 0 0 0' }}>
+            PDF{size ? ` · ${size}` : ''}
+          </p>
+        </div>
+      </div>
+
+      {/* Primary: full width, 48px, icon leading the word (rulebook §7). */}
+      <a
+        href={fileUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center justify-center gap-2.5 focus:outline-none"
+        style={{
+          minHeight: 48, borderRadius: 14, textDecoration: 'none',
+          background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
+          color: NEU.gold, fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, letterSpacing: '0.05em',
+          boxShadow: `0 6px 16px ${NEU_GRADIENTS.forest[0]}45`,
+        }}
+      >
+        <ExternalLink size={17} strokeWidth={2.2} />
+        OPEN THE PDF
+      </a>
+
+      <a
+        href={fileUrl}
+        download={fileName}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center justify-center gap-2 focus:outline-none"
+        style={{
+          minHeight: 44, borderRadius: 14, textDecoration: 'none',
+          backgroundColor: NEU.surface, border: '1.5px solid #D8CDB6',
+          color: NEU.forest, fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, letterSpacing: '0.05em',
+        }}
+      >
+        <Download size={16} strokeWidth={2.2} />
+        DOWNLOAD
+      </a>
+
+      <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, margin: 0, lineHeight: 1.5, textAlign: 'center' }}>
+        Opens in your phone&apos;s PDF reader, so you can pinch to zoom and read every page.
+      </p>
+    </NeuCard>
   );
 }
 
@@ -538,8 +637,8 @@ export default function PositionPaperPage() {
                 )}
               </NeuCard>
 
-              {/* PDF */}
-              <NeuCard className="h-[min(480px,62dvh)] lg:h-full" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0, minHeight: 0 }}>
+              {/* PDF, desktop: embedded, the paper is the protagonist */}
+              <NeuCard className="hidden lg:flex lg:h-full" style={{ flexDirection: 'column', overflow: 'hidden', padding: 0, minHeight: 0 }}>
                 <div className="flex items-center justify-between gap-3 px-4 py-3" style={{ borderBottom: '1px solid rgba(27,56,40,0.08)' }}>
                   <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5, color: NEU.ink, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {paper.file_name}
@@ -561,6 +660,9 @@ export default function PositionPaperPage() {
                 </div>
                 <iframe src={paper.file_url} title={paper.file_name} className="flex-1 w-full" style={{ border: 'none' }} />
               </NeuCard>
+
+              {/* PDF, phone and tablet: hand it to the native viewer. */}
+              <PaperHandoff fileName={paper.file_name} fileUrl={paper.file_url} sizeBytes={paper.file_size_bytes} />
             </div>
           </>
         )}

@@ -44,7 +44,7 @@ import { normalizeBlocks, type FormBlock } from '@/lib/customQuestions';
 import {
   type InvoiceRow, invoiceLabel, invoiceDueCents, centsToFee, isInvoicePayable, isInvoiceSettled,
 } from '@/lib/invoices';
-import { ModalOverlay } from '@/components/CommitteeEditorModal';
+import { ModalOverlay, MODAL_PANEL_MAX_HEIGHT } from '@/components/CommitteeEditorModal';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuCard, NeuIconDisc, type NeuGradient,
 } from '@/components/neu';
@@ -1002,7 +1002,7 @@ function AddonsModal({
     <ModalOverlay onClose={() => { if (!saving) onClose(); }}>
       <div
         className="rounded-2xl p-6 flex flex-col gap-4"
-        style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 460, maxWidth: 'calc(100vw - 32px)', maxHeight: '85dvh', overflowY: 'auto' }}
+        style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 460, maxWidth: 'calc(100vw - 32px)', maxHeight: MODAL_PANEL_MAX_HEIGHT, overflowY: 'auto' }}
       >
         <div className="flex items-center justify-between gap-3">
           <p className="font-black text-lg" style={{ color: 'var(--gv-on-surface)', fontFamily: OUTFIT }}>Buy Add-ons</p>
@@ -1307,7 +1307,7 @@ function AdvisorTicketsModal({
            page scroll locked, so a card taller than the phone is clipped at
            BOTH ends and its buttons cannot be reached. Every dialog here
            carries its own cap. */
-        style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 400, maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100dvh - 80px)', overflowY: 'auto' }}
+        style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 400, maxWidth: 'calc(100vw - 32px)', maxHeight: MODAL_PANEL_MAX_HEIGHT, overflowY: 'auto' }}
       >
         <div className="flex items-center justify-between gap-3">
           <p className="font-black text-lg" style={{ color: 'var(--gv-on-surface)', fontFamily: OUTFIT }}>Buy Advisor Tickets</p>
@@ -1507,7 +1507,7 @@ function ProofUploadModal({
     <ModalOverlay onClose={() => { if (!submitting) onClose(); }}>
       <div
         className="rounded-2xl p-6 flex flex-col gap-4"
-        style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 420, maxWidth: 'calc(100vw - 32px)', maxHeight: '85dvh', overflowY: 'auto' }}
+        style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 420, maxWidth: 'calc(100vw - 32px)', maxHeight: MODAL_PANEL_MAX_HEIGHT, overflowY: 'auto' }}
       >
         <div className="flex items-center justify-between gap-3">
           <p className="font-black text-lg" style={{ color: 'var(--gv-on-surface)', fontFamily: OUTFIT }}>Upload Payment Proof</p>
@@ -2401,7 +2401,7 @@ function PayInvoiceAndActions({
 
       {stubMessage && (
         <ModalOverlay onClose={() => setStubMessage(null)}>
-          <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 380, maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100dvh - 80px)', overflowY: 'auto' }}>
+          <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 380, maxWidth: 'calc(100vw - 32px)', maxHeight: MODAL_PANEL_MAX_HEIGHT, overflowY: 'auto' }}>
             <div
               className="flex items-center justify-center flex-shrink-0"
               style={{ width: 44, height: 44, borderRadius: '9999px', backgroundColor: 'rgba(184,132,74,0.14)', border: '1px solid rgba(184,132,74,0.3)' }}

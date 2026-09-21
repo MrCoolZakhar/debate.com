@@ -32,7 +32,39 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   arc_submission_link_url_https: "The button link must start with https://",
   arc_submission_link_shape: "Add a message, a button label and a link together, or leave all three empty.",
   application_role_configs_collect_mun_experience_role_check: "MUN experience can only be collected for chairs and secretariat.",
+  conference_committees_topics_check: "A committee can have at most 3 topics.",
+  conference_committees_total_slots_check: "A committee needs at least one seat.",
+  email_templates_recurring_interval_floor: "Reminders can be sent every 3 to 60 days.",
+  email_templates_recurring_max_sends_range: "Reminders can be sent between 1 and 10 times.",
+  vouchers_amount_check: "A voucher needs an amount above zero.",
+  vouchers_percent_range: "A percentage voucher must be between 1 and 100.",
+  applications_aid_requested_amount_nonneg: "The amount you request can't be negative.",
+  financial_aid_requests_requested_amount_check: "The amount you request can't be negative.",
+  // enforce_role_config_timeline(): the application window and the fee
+  // phases are one timeline (see src/lib/roleTimeline.ts for the rules).
+  arc_timeline_phase_dates: "Each price needs a start date on or before its end date.",
+  arc_timeline_phases_overlap: "Two prices cover the same day. Start each price the day after the previous one ends.",
+  arc_timeline_phases_gap: "There is a gap between two prices. Start each price the day after the previous one ends, so every day has one price.",
+  arc_timeline_open_after_first_price: "Applications would open after your first price has ended. Pick an earlier opening date, or remove that price.",
+  arc_timeline_close_before_last_price: "Applications would close before your last price starts. Pick a later closing date, or remove that price.",
+  arc_timeline_open_before_close: "Applications must open before they close. Move one of the two dates.",
+  arc_timeline_after_conference: "Applications can't close after the conference ends. Move the closing date, or the last price's end date, to the conference's last day or earlier.",
 };
+
+/** Supabase Auth (GoTrue) errors, matched by code first and by message text
+ *  second for older clients that send no code at all. */
+const AUTH_MESSAGES: { codes: string[]; pattern?: RegExp; message: string }[] = [
+  { codes: ['invalid_credentials'], pattern: /Invalid login credentials/, message: "That email and password don't match. Check them and try again, or reset your password." },
+  { codes: ['user_already_exists', 'email_exists'], pattern: /already registered/, message: 'An account with this email already exists. Sign in instead.' },
+  { codes: ['weak_password'], pattern: /Password should be/, message: 'That password is too weak. Use at least 8 characters.' },
+  { codes: ['over_email_send_rate_limit', 'over_request_rate_limit'], pattern: /rate limit|security purposes/, message: 'That is a few too many in a row. Wait a minute or two and try again.' },
+  { codes: ['same_password'], pattern: /should be different/, message: 'Your new password must be different from your current one.' },
+  { codes: ['email_address_invalid'], pattern: /Unable to validate email address/, message: "That email address doesn't look right. Check it and try again." },
+  { codes: ['otp_expired'], message: 'That code has expired. Ask for a new one and try again.' },
+  { codes: ['signup_disabled'], message: 'New sign-ups are paused right now. Please try again later.' },
+  { codes: ['provider_disabled'], message: "That sign-in option isn't available right now. Try email and password instead." },
+  { codes: ['session_not_found', 'refresh_token_not_found'], message: 'Your session has expired. Please refresh the page and sign in again.' },
+];
 
 /** By SQLSTATE code, when the message itself gives nothing more specific to
  *  say (no named constraint, not one of our own trigger messages). */
@@ -47,7 +79,33 @@ const CODE_MESSAGES: Record<string, string> = {
   '22008': "One of the values isn't in the right format.",
 };
 
+/** By the HINT our own triggers attach to a refusal (RAISE ... USING hint),
+ *  for the refusals a person reaches in the normal course of things and
+ *  deserves a better sentence than the trigger's own message. */
+const HINT_MESSAGES: Record<string, string> = {
+  // guard_application_write(): the role's application window.
+  role_closed: "Applications for this role have closed, so this application can't be sent. Your answers are saved. Contact the organising team if you think this is a mistake.",
+  role_not_open: "Applications for this role haven't opened yet. Your answers are saved, so you can send them once applications open.",
+};
+
 const DEFAULT_FALLBACK = 'Something went wrong. Please try again.';
+
+/** Marks an error whose message we wrote ourselves, for a person, at the
+ *  point it was thrown. friendlyError passes it through untouched rather
+ *  than running it through the generic resolution below, which exists to
+ *  translate a message nobody wrote for a person in the first place. */
+export class UserFacingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'UserFacingError';
+  }
+}
+
+/** The plain sentence for a named CHECK (or a trigger rule raised under a
+ *  constraint name), for UI that checks the rule itself before saving. */
+export function constraintMessage(name: string): string | null {
+  return CONSTRAINT_MESSAGES[name] ?? null;
+}
 
 /** Loose shape covering PostgrestError, StorageError, FunctionsHttpError and
  *  a plain Error — every property optional, read defensively. */
@@ -92,6 +150,10 @@ export function friendlyError(error: unknown, fallback: string = DEFAULT_FALLBAC
   // eslint-disable-next-line no-console
   console.error('[friendlyError]', error);
 
+  // A message we wrote ourselves, for a person, at the point it was thrown.
+  // Nothing generic below can improve on it.
+  if (error instanceof UserFacingError) return error.message;
+
   const message = extractMessage(error);
   const code = extractCode(error);
 
@@ -100,6 +162,13 @@ export function friendlyError(error: unknown, fallback: string = DEFAULT_FALLBAC
   if (constraintMatch) {
     const known = CONSTRAINT_MESSAGES[constraintMatch[1]];
     if (known) return known;
+  }
+
+  // a2. Supabase Auth (GoTrue) errors: code first, then message text for
+  // older clients that send no code at all.
+  for (const entry of AUTH_MESSAGES) {
+    if (code && entry.codes.includes(code)) return entry.message;
+    if (entry.pattern && entry.pattern.test(message)) return entry.message;
   }
 
   // b. Network.
@@ -119,6 +188,10 @@ export function friendlyError(error: unknown, fallback: string = DEFAULT_FALLBAC
 
   // e. By SQLSTATE.
   if (code && CODE_MESSAGES[code]) return CODE_MESSAGES[code];
+
+  // e2. Our own trigger refusals, by hint.
+  const hint = isErrorLike(error) && typeof error.hint === 'string' ? error.hint : '';
+  if (hint && HINT_MESSAGES[hint]) return HINT_MESSAGES[hint];
 
   // f. Our own trigger messages: written for people already, but only trust
   // them once they clear looksTechnical — a RAISE EXCEPTION can still quote

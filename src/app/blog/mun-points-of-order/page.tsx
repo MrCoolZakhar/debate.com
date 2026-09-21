@@ -1,8 +1,8 @@
-import Link from 'next/link';
-import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
-import React from 'react';
+import ArticleLayout from '@/components/blog/ArticleLayout';
+import { H2, Callout, ChairScript } from '@/components/blog/prose';
+import Link from 'next/link';
 
 export const metadata: Metadata = pageMetadata({
   title: 'Points of Order in MUN: When to Use Them and When Not To',
@@ -38,97 +38,66 @@ const breadcrumbSchema = {
   ],
 };
 
-const s: Record<string, React.CSSProperties> = {
-  page: { minHeight: '100vh', backgroundColor: '#EDE7D8', padding: '48px 24px 80px' },
-  wrap: { maxWidth: '720px', margin: '0 auto' },
-  back: { fontSize: '13px', color: '#6A5A4A', textDecoration: 'none', display: 'inline-block', marginBottom: '32px' },
-  h1: { fontSize: '36px', fontWeight: 900, color: '#1B3828', lineHeight: 1.15, marginBottom: '12px' },
-  meta: { fontSize: '13px', color: '#9A8A78', marginBottom: '40px' },
-  article: { backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', borderRadius: '20px', padding: '40px 40px 48px' },
-  h2: { fontSize: '22px', fontWeight: 800, color: '#1B3828', marginTop: '40px', marginBottom: '12px' },
-  h3: { fontSize: '17px', fontWeight: 700, color: '#1B3828', marginTop: '24px', marginBottom: '8px' },
-  p: { fontSize: '16px', color: '#1C1410', lineHeight: 1.75, marginBottom: '16px' },
-  ul: { paddingLeft: '20px', marginBottom: '16px' },
-  li: { fontSize: '16px', color: '#1C1410', lineHeight: 1.75, marginBottom: '6px' },
-  callout: { backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', borderLeft: '4px solid #1B3828', borderRadius: '8px', padding: '16px 20px', marginBottom: '24px' },
-  calloutText: { fontSize: '15px', color: '#1B3828', fontStyle: 'italic', margin: 0 },
-  script: { backgroundColor: '#1B3828', borderRadius: '12px', padding: '20px 24px', marginBottom: '24px' },
-  scriptText: { fontSize: '14px', color: '#EDE7D8', fontStyle: 'italic', margin: 0, lineHeight: 1.7 },
-  cta: { marginTop: '48px', padding: '28px 32px', backgroundColor: '#1B3828', borderRadius: '16px', textAlign: 'center' as const },
-  ctaText: { fontSize: '16px', color: '#EDE7D8', marginBottom: '12px' },
-  ctaLink: { display: 'inline-block', fontSize: '15px', fontWeight: 800, color: '#EED98A', textDecoration: 'none' },
-};
-
 export default function Article() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
-      <div style={s.page}>
-        <div style={s.wrap}>
-          <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>Points of Order in MUN: When to Use Them and When Not To</h1>
-          <p style={s.meta}>By Gavelling · June 2026 · 8 min read</p>
-          <article style={s.article}>
+      <ArticleLayout
+        slug="mun-points-of-order"
+        pitch="Gavelling keeps your committee running on procedure: timers, speakers lists, and motions all enforced automatically."
+      >
 
-            <p style={s.p}>The point of order is one of the most misused procedures in Model UN. Raised correctly, it demonstrates procedural mastery and earns chairs' respect. Raised incorrectly, or too frequently, it signals inexperience, irritates the room, and wastes everyone's time. This guide clarifies exactly what a point of order is, when it applies, and how both delegates and chairs should handle it.</p>
+        <p>The point of order is one of the most misused procedures in Model UN. Raised correctly, it demonstrates procedural mastery and earns chairs&apos; respect. Raised incorrectly, or too frequently, it signals inexperience, irritates the room, and wastes everyone&apos;s time. This guide clarifies exactly what a point of order is, when it applies, and how both delegates and chairs should handle it. For every other point, see our guide to <Link href="/blog/mun-points-explained">MUN points explained</Link>.</p>
 
-            <h2 style={s.h2}>What Is a Point of Order?</h2>
-            <p style={s.p}>A point of order is raised when a delegate believes the chair has made a procedural error: specifically, that the rules of procedure are being violated. It is the only point that can interrupt a speaker mid-speech (at most conferences). This exceptional power comes with a correspondingly high bar: it must address a genuine procedural violation, not a substantive disagreement.</p>
-            <div style={s.callout}><p style={s.calloutText}>The test is simple: does the chair's action or ruling violate a specific rule in the rules of procedure document? If yes, a point of order is appropriate. If you simply disagree with the chair's judgement call, it is not.</p></div>
+        <H2>What Is a Point of Order?</H2>
+        <p>A point of order is raised when a delegate believes the chair has made a procedural error: specifically, that the rules of procedure are being violated. It is the only point that can interrupt a speaker mid-speech (at most conferences). Our <Link href="/blog/mun-procedure-styles-compared">comparison of MUN procedure styles</Link> shows where the rules differ. This exceptional power comes with a correspondingly high bar: it must address a genuine procedural violation, not a substantive disagreement.</p>
+        <Callout>The test is simple: does the chair&apos;s action or ruling violate a specific rule in the rules of procedure document? If yes, a point of order is appropriate. If you simply disagree with the chair&apos;s judgement call, it is not.</Callout>
 
-            <h2 style={s.h2}>Valid Reasons to Raise a Point of Order</h2>
-            <ul style={s.ul}>
-              <li style={s.li}>The chair has called the wrong country from the speakers list (factual error)</li>
-              <li style={s.li}>The chair has allowed a motion that is out of order under the rules (e.g., a motion that requires a second has not received one)</li>
-              <li style={s.li}>The chair has stated a vote threshold incorrectly</li>
-              <li style={s.li}>The chair has allowed a speaker to run significantly over time without intervention</li>
-              <li style={s.li}>The committee is conducting business without quorum</li>
-            </ul>
+        <H2>Valid Reasons to Raise a Point of Order</H2>
+        <ul>
+          <li>The chair has called the wrong country from the speakers list (factual error)</li>
+          <li>The chair has allowed a motion that is out of order under the rules (e.g., a motion that requires a second has not received one)</li>
+          <li>The chair has stated a vote threshold incorrectly</li>
+          <li>The chair has allowed a speaker to run significantly over time without intervention</li>
+          <li>The committee is conducting business without quorum</li>
+        </ul>
 
-            <h2 style={s.h2}>Invalid Reasons to Raise a Point of Order</h2>
-            <ul style={s.ul}>
-              <li style={s.li}>You disagree with the chair's ruling on a matter of judgement</li>
-              <li style={s.li}>You want to make a speech but are not on the speakers list</li>
-              <li style={s.li}>Another delegate said something factually incorrect (this is a point of information, not a point of order)</li>
-              <li style={s.li}>The room is uncomfortable or you cannot hear (this is a point of personal privilege)</li>
-              <li style={s.li}>You want to draw attention to your delegation</li>
-            </ul>
+        <H2>Invalid Reasons to Raise a Point of Order</H2>
+        <ul>
+          <li>You disagree with the chair&apos;s ruling on a matter of judgement</li>
+          <li>You want to make a speech but are not on the speakers list</li>
+          <li>Another delegate said something factually incorrect (this is a point of information, not a point of order)</li>
+          <li>The room is uncomfortable or you cannot hear (this is a point of personal privilege)</li>
+          <li>You want to draw attention to your delegation</li>
+        </ul>
 
-            <h2 style={s.h2}>How to Raise a Point of Order Correctly</h2>
-            <p style={s.p}>Raise your placard and clearly state: "Point of order." The chair should acknowledge you and yield the floor. State your point concisely:</p>
-            <div style={s.script}><p style={s.scriptText}>"The delegation of Canada rises on a point of order. The chair has allowed the delegate of France to speak for a third consecutive time on the caucus speakers list without the intervening speakers required under Rule 14 of this conference's procedure."</p></div>
-            <p style={s.p}>State the specific rule being violated if you know it. A point of order that cites a specific rule is significantly more credible than a vague objection.</p>
+        <H2>How to Raise a Point of Order Correctly</H2>
+        <p>Raise your placard and clearly state: &quot;Point of order.&quot; The chair should acknowledge you and yield the floor. State your point concisely:</p>
+        <ChairScript>&quot;The delegation of Canada rises on a point of order. The chair has allowed the delegate of France to speak for a third consecutive time on the caucus speakers list without the intervening speakers required under Rule 14 of this conference&apos;s procedure.&quot;</ChairScript>
+        <p>State the specific rule being violated if you know it. A point of order that cites a specific rule is significantly more credible than a vague objection. Rule numbers come from your conference handbook, and our <Link href="/blog/una-usa-rules-of-procedure">UNA-USA</Link> and <Link href="/blog/thimun-rules-of-procedure">THIMUN</Link> guides cover the two common rulesets.</p>
 
-            <h2 style={s.h2}>How Chairs Should Rule on Points of Order</h2>
-            <p style={s.p}>When a point of order is raised, the chair must rule on it immediately. There is no deliberation, no putting it to a committee vote. The chair states:</p>
-            <div style={s.script}><p style={s.scriptText}>"The chair rules this point of order well-taken. [Corrective action stated.] The committee will continue."</p></div>
-            <p style={s.p}>Or:</p>
-            <div style={s.script}><p style={s.scriptText}>"The chair rules this point of order not well-taken. [Brief reason if appropriate.] The committee will continue."</p></div>
-            <p style={s.p}>New chairs often feel pressure to accept every point of order to avoid conflict. Do not. If the point does not identify a genuine procedural violation, rule it not well-taken firmly but politely. Accepting spurious points of order encourages more of them.</p>
+        <H2>How Chairs Should Rule on Points of Order</H2>
+        <p>When a point of order is raised, the chair must rule on it immediately. There is no deliberation, no putting it to a committee vote. The chair states:</p>
+        <ChairScript>&quot;The chair rules this point of order well-taken. [Corrective action stated.] The committee will continue.&quot;</ChairScript>
+        <p>Or:</p>
+        <ChairScript>&quot;The chair rules this point of order not well-taken. [Brief reason if appropriate.] The committee will continue.&quot;</ChairScript>
+        <p>New chairs often feel pressure to accept every point of order to avoid conflict. Do not. If the point does not identify a genuine procedural violation, rule it not well-taken firmly but politely. Accepting spurious points of order encourages more of them.</p>
 
-            <h2 style={s.h2}>Appealing a Chair's Ruling</h2>
-            <p style={s.p}>Most rules of procedure allow a delegation to appeal the chair's ruling on a point of order. The appeal is put to a committee vote: if a majority votes to overturn the chair, the ruling is reversed. This is a nuclear option used rarely in practice. Chairs who are consistently overturned on appeals have a credibility problem; delegates who appeal frivolously are burning political capital they need for resolution votes.</p>
+        <H2>Appealing a Chair&apos;s Ruling</H2>
+        <p>Most rules of procedure allow a delegation to appeal the chair&apos;s ruling on a point of order. The appeal is put to a committee vote: if a majority votes to overturn the chair, the ruling is reversed. This is a nuclear option used rarely in practice. Chairs who are consistently overturned on appeals have a credibility problem; delegates who appeal frivolously are burning political capital they need for resolution votes.</p>
 
-            <h2 style={s.h2}>Point of Order vs. Other Points</h2>
-            <ul style={s.ul}>
-              <li style={s.li}><strong>Point of Order:</strong> Procedural violation by the chair. Can interrupt a speaker. Chair must rule immediately.</li>
-              <li style={s.li}><strong>Point of Personal Privilege:</strong> Delegate's ability to participate is impaired (cannot hear, room too cold). Cannot interrupt a speaker (usually). Chair addresses the issue.</li>
-              <li style={s.li}><strong>Point of Information to the Chair:</strong> A question about procedure directed to the chair. Cannot interrupt a speaker. Chair answers or defers.</li>
-              <li style={s.li}><strong>Point of Information to the Delegate:</strong> A question directed to the delegate currently speaking, subject to their acceptance. Must be brief.</li>
-            </ul>
+        <H2>Point of Order vs. Other Points</H2>
+        <ul>
+          <li><strong>Point of Order:</strong> Procedural violation by the chair. Can interrupt a speaker. Chair must rule immediately.</li>
+          <li><strong>Point of Personal Privilege:</strong> Delegate&apos;s ability to participate is impaired (cannot hear, room too cold). Cannot interrupt a speaker (usually). Chair addresses the issue.</li>
+          <li><strong>Point of Information to the Chair:</strong> A question about procedure directed to the chair. Cannot interrupt a speaker. Chair answers or defers.</li>
+          <li><strong>Point of Information to the Delegate:</strong> A question directed to the delegate currently speaking, subject to their acceptance. Must be brief.</li>
+        </ul>
 
-            <h2 style={s.h2}>The Credibility Cost</h2>
-            <p style={s.p}>Every point of order you raise is a signal to the chair and to the committee. Raise one legitimate point of order and your procedural knowledge is respected. Raise three spurious ones in a single session and you become the delegate who cried wolf, and future valid points are greeted with skepticism. Use this tool deliberately, not reflexively.</p>
-
-            <RelatedGuides currentSlug="mun-points-of-order" />
-            <div style={s.cta}>
-              <p style={s.ctaText}>Gavelling keeps your committee running on procedure: timers, speakers lists, and motions all enforced automatically.</p>
-              <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>
-            </div>
-          </article>
-        </div>
-      </div>
+        <H2>The Credibility Cost</H2>
+        <p>Every point of order you raise is a signal to the chair and to the committee. Raise one legitimate point of order and your procedural knowledge is respected. Raise three spurious ones in a single session and you become the delegate who cried wolf, and future valid points are greeted with skepticism. Use this tool deliberately, not reflexively.</p>
+      </ArticleLayout>
     </>
   );
 }

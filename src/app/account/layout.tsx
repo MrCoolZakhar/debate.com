@@ -260,7 +260,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                         color: '#B6871F',
                         fontFamily: "'Outfit', sans-serif",
                         fontWeight: 700,
-                        fontSize: '9px',
+                        fontSize: '11px',
                         letterSpacing: '0.12em',
                       }}
                     >
@@ -273,7 +273,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
 
                 <p
                   className="px-3 mb-1.5"
-                  style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: '#B6871F', textTransform: 'uppercase' }}
+                  style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11px', letterSpacing: '0.14em', color: '#B6871F', textTransform: 'uppercase' }}
                 >
                   ACCOUNT
                 </p>
@@ -418,10 +418,10 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                       <CalendarCheck size={17} strokeWidth={2.5} style={{ color: '#FAF8F3' }} />
                     </span>
                     <span className="flex-1 min-w-0">
-                      <span className="block" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '8px', letterSpacing: '0.14em', color: '#B6871F', textTransform: 'uppercase' }}>
+                      <span className="block" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '11px', letterSpacing: '0.14em', color: '#B6871F', textTransform: 'uppercase' }}>
                         YOUR HUB
                       </span>
-                      <span className="block" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '13.5px', color: '#7A5A20', letterSpacing: '0.01em' }}>
+                      <span className="block" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '14px', color: '#7A5A20', letterSpacing: '0.01em' }}>
                         My Conferences
                       </span>
                     </span>

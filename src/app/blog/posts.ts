@@ -1,180 +1,740 @@
-// Single source of truth for the blog post manifest.
-// Used by the /blog index and the RelatedGuides cross-linking component.
+// ── The blog manifest: the one source of truth for every post ───────────────
+//
+// Everything about a post that is NOT its prose lives here. Four things read
+// this file, so a post listed here is automatically everywhere it belongs:
+//
+//   • /blog                the index, its shelves, its filters, its cover art
+//   • src/app/sitemap.ts   the URL and its `lastmod` (`updated ?? date`)
+//   • RelatedGuides        the "keep reading" block at the foot of an article
+//   • ArticleLayout        the breadcrumb, the eyebrow, the meta line, the art
+//
+// TO ADD A POST: add an entry here, then create src/app/blog/<slug>/page.tsx
+// from the template in docs/blog-authoring.md. Nothing else needs editing:
+// the sitemap, the index, the filters and the cross-links all follow.
+//
+// Order in this array is the editorial order and it is load-bearing in one
+// place: RelatedGuides tops its same-shelf picks up from it, so the link
+// graph is a ring and no post is a dead end. The index sorts by date instead.
+
+/** The five shelves. `src/components/blog/blogTaxonomy.ts` gives each one its
+ *  icon, its accent colour, its cover artwork and the words a reader sees. */
+export type BlogCategory = 'chairing' | 'delegates' | 'procedure' | 'organisers' | 'software';
+
 export interface BlogPost {
   slug: string;
   title: string;
   description: string;
+  category: BlogCategory;
+  /** First published, ISO date. Shown on the card and under the article title. */
+  date: string;
+  /** Date the CONTENT last changed, ISO. Leave it out until it really changes:
+   *  it is the sitemap's `lastmod`, and a lastmod that moves for nothing
+   *  teaches Google to ignore ours (see the note in src/app/sitemap.ts). */
+  updated?: string;
+  /** Whole minutes: words / 220, rounded up. Rendered as plain typography. */
+  readingMinutes: number;
+  /**
+   * Slugs to put FIRST in this post's "Keep reading" block, in this order.
+   *
+   * Optional, and rarely needed: the default (same shelf first, nearest in this
+   * array, then topped up from the ring) is right most of the time. Reach for
+   * it when a guide has a genuine sequel on another shelf, e.g. a delegate's
+   * position-paper guide pointing at the chair's guide to judging them.
+   * Unknown slugs are ignored rather than throwing, so a typo costs a link and
+   * not a page. Anything you do not name is filled in as usual.
+   */
+  related?: string[];
+  /** At most one post sets this. It takes the lead card at the top of /blog. */
+  featured?: boolean;
 }
 
 export const articles: BlogPost[] = [
   {
     slug: 'how-to-run-mun-committee',
+    featured: true,
     title: "How to Run a Model UN Committee: Chair's Complete Guide (2026)",
     description: 'Step-by-step guide covering roll call, GSL, caucuses, voting procedures, and closing the session.',
+    category: 'chairing',
+    date: '2026-06-01',
+    readingMinutes: 10,
   },
   {
     slug: 'best-mun-software-2026',
     title: 'Best MUN Software in 2026: Full Comparison for Chairs and Directors',
     description: 'Gavelling, MUN Command, Muncoordinated, wxMUN, spreadsheets, and timer apps compared: features, pricing, and which fits your conference.',
+    category: 'software',
+    date: '2026-06-01',
+    updated: '2026-07-21',
+    readingMinutes: 11,
   },
   {
     slug: 'muncommand-alternative',
     title: 'MUN Command vs Gavelling: Honest Comparison & Free Alternative (2026)',
     description: 'MUN Command charges €1 per user per day. Gavelling covers sessions and conference management free. Full side-by-side.',
+    category: 'software',
+    date: '2026-07-21',
+    readingMinutes: 8,
   },
   {
     slug: 'mymun-alternative',
     title: 'mymun Alternative 2026: mymun and MUN Command vs Gavelling',
     description: 'MUN Command is mymun’s software and the brands are merging. What it costs, what its free tier does not save, and where each tool actually wins.',
+    category: 'software',
+    date: '2026-08-13',
+    readingMinutes: 10,
   },
   {
     slug: 'muncoordinated-alternative',
     title: 'Muncoordinated vs Gavelling: Which Free MUN Software in 2026?',
     description: 'Two free MUN tools, two very different scopes: open-source dais tool vs full conference platform. Honest comparison.',
+    category: 'software',
+    date: '2026-07-21',
+    readingMinutes: 7,
   },
   {
     slug: 'general-speakers-list-guide',
     title: 'General Speakers List (GSL) in MUN: Complete Guide for Chairs and Delegates',
     description: 'Everything you need to know about the GSL: how it works, yielding time, points, and chair tips.',
+    category: 'procedure',
+    date: '2026-06-01',
+    readingMinutes: 9,
   },
   {
     slug: 'mun-motions-explained',
     title: 'MUN Motions Explained: Types, How to Propose, and Voting Rules',
     description: 'A complete reference for every motion type: moderated caucus, unmoderated caucus, adjournment, and more.',
+    category: 'procedure',
+    date: '2026-06-01',
+    readingMinutes: 10,
   },
   {
     slug: 'how-to-chair-first-mun',
     title: 'How to Chair Your First MUN Committee: Practical Guide for New Chairs',
     description: 'A warm, practical guide for first-time chairs covering preparation, opening, debate management, and handling the unexpected.',
+    category: 'chairing',
+    date: '2026-06-01',
+    readingMinutes: 11,
   },
   {
     slug: 'how-to-run-moderated-caucus',
     title: 'How to Run a Moderated Caucus in MUN: Chair Guide',
     description: 'Complete chair guide to opening, managing speaker time, keeping order, and closing a moderated caucus.',
+    category: 'chairing',
+    date: '2026-06-07',
+    readingMinutes: 9,
   },
   {
     slug: 'unmoderated-caucus-guide',
     title: 'Unmoderated Caucus in MUN: What It Is and How to Use It',
     description: 'What an unmoderated caucus is, how delegates should use the time, and tips for chairs on managing unmod periods.',
+    category: 'procedure',
+    date: '2026-06-07',
+    readingMinutes: 8,
   },
   {
     slug: 'mun-voting-procedures',
     title: 'MUN Voting Procedures Explained: In Favour, Against, Abstain',
     description: 'Simple majority, supermajority, roll call votes, abstentions, and everything else about voting in MUN committees.',
+    category: 'procedure',
+    date: '2026-06-07',
+    readingMinutes: 10,
   },
   {
     slug: 'mun-delegate-tips',
     title: 'MUN Delegate Tips: How to Stand Out in Any Committee',
     description: 'Practical tips for research, speeches, bloc-building, and winning Best Delegate at any MUN conference.',
+    category: 'delegates',
+    date: '2026-06-07',
+    readingMinutes: 11,
   },
   {
     slug: 'mun-position-paper-guide',
     title: 'How to Write a MUN Position Paper: Format, Tips & Examples',
     description: 'Step-by-step guide to the correct format, what to include, common mistakes, and examples that impress chairs.',
+    category: 'delegates',
+    date: '2026-06-07',
+    readingMinutes: 10,
   },
   {
     slug: 'mun-resolution-writing',
     title: 'How to Write a MUN Resolution: Clauses, Format & Examples',
     description: 'Preambulatory clauses, operative clauses, correct format, sponsor rules, and getting your resolution passed.',
+    category: 'delegates',
+    date: '2026-06-07',
+    readingMinutes: 12,
   },
   {
     slug: 'mun-rules-of-procedure',
     title: 'MUN Rules of Procedure: Complete Reference Guide',
     description: 'Points, motions, yields, quorum, voting thresholds, and how rules differ across major MUN conferences.',
+    category: 'procedure',
+    date: '2026-06-07',
+    readingMinutes: 13,
   },
   {
     slug: 'mun-security-council-guide',
     title: 'MUN Security Council Guide: Veto, P5, and How UNSC Works',
     description: 'Veto power, P5 dynamics, procedure differences, and how to chair or delegate in a Security Council simulation.',
+    category: 'procedure',
+    date: '2026-06-07',
+    readingMinutes: 11,
   },
   {
     slug: 'mun-crisis-committee-guide',
     title: 'MUN Crisis Committee Guide: How Crisis Committees Work',
     description: 'Crisis arcs, directive writing, backroom vs frontroom, and how to perform as a delegate in a MUN crisis committee.',
+    category: 'chairing',
+    date: '2026-06-07',
+    readingMinutes: 12,
   },
   {
     slug: 'free-mun-tools',
     title: 'Free MUN Tools in 2026: Best Software for Chairs and Delegates',
     description: 'A detailed comparison of free MUN tools: Gavelling, spreadsheets, timer apps, and what actually works in a real session.',
+    category: 'software',
+    date: '2026-06-07',
+    readingMinutes: 9,
   },
   {
     slug: 'mun-conference-preparation',
     title: 'How to Prepare for a MUN Conference: Complete Pre-Conference Checklist',
     description: 'Week-by-week preparation timeline: research, position papers, practice speeches, rules, and what to pack.',
+    category: 'delegates',
+    date: '2026-06-07',
+    readingMinutes: 10,
   },
   {
     slug: 'mun-public-speaking-tips',
     title: 'MUN Public Speaking Tips: How to Speak Confidently in Committee',
     description: 'Structure speeches, manage nerves, use your voice effectively, and make every speaking slot count.',
+    category: 'delegates',
+    date: '2026-06-07',
+    readingMinutes: 9,
   },
   {
     slug: 'mun-opening-speech',
     title: 'How to Write a MUN Opening Speech: Templates and Examples',
     description: 'Four-part structure, length guide, real example speeches, and the most common mistakes to avoid.',
+    category: 'delegates',
+    date: '2026-06-07',
+    readingMinutes: 9,
   },
   {
     slug: 'mun-working-paper-guide',
     title: 'MUN Working Paper Guide: How to Draft, Merge, and Introduce',
     description: 'Writing working papers quickly, getting sponsors, merging blocs, and converting to a draft resolution.',
+    category: 'delegates',
+    date: '2026-06-07',
+    readingMinutes: 10,
   },
   {
     slug: 'mun-amendment-guide',
     title: 'MUN Amendments Explained: Friendly vs Unfriendly, How to Submit',
     description: 'Friendly and unfriendly amendments, how to submit them, voting order, and strategic use in committee.',
+    category: 'procedure',
+    date: '2026-06-07',
+    readingMinutes: 8,
   },
   {
     slug: 'mun-right-of-reply',
     title: 'Right of Reply in MUN: When and How to Use It',
     description: 'What qualifies for a right of reply, how to request it, chair discretion, and how to use it effectively.',
+    category: 'procedure',
+    date: '2026-06-07',
+    readingMinutes: 7,
   },
   {
     slug: 'tour-de-table-mun',
     title: 'Tour de Table in MUN: What It Is and How Chairs Run It',
     description: 'How tour de table differs from the GSL, when to use it, and how chairs manage it with software.',
+    category: 'procedure',
+    date: '2026-06-07',
+    readingMinutes: 8,
   },
   {
     slug: 'mun-director-guide',
     title: 'MUN Director Guide: How to Run a Model UN Conference',
     description: 'Planning committees, briefing chairs, managing logistics, overseeing awards, and wrapping up successfully.',
+    category: 'organisers',
+    date: '2026-06-07',
+    readingMinutes: 12,
   },
   {
     slug: 'mun-chair-script',
     title: 'MUN Chair Script: Exact Phrases for Every Situation',
     description: 'Word-for-word chair language for opening, roll call, GSL, caucuses, voting, points of order, and closing.',
+    category: 'chairing',
+    date: '2026-06-07',
+    readingMinutes: 11,
   },
   {
     slug: 'mun-bloc-building',
     title: 'MUN Bloc Building: How to Form and Lead a Coalition',
     description: 'How to find allies, draft collaboratively, handle defections, and lead a coalition to a passed resolution.',
+    category: 'delegates',
+    date: '2026-06-07',
+    readingMinutes: 9,
   },
   {
     slug: 'mun-awards-guide',
     title: 'MUN Awards Guide: How Best Delegate Is Chosen',
     description: 'What chairs look for, how to improve your score, and what consistently disqualifies delegates from awards.',
+    category: 'delegates',
+    date: '2026-06-07',
+    readingMinutes: 9,
   },
   {
     slug: 'mun-conference-planning',
     title: 'How to Plan a MUN Conference: Step-by-Step for Schools and Clubs',
     description: 'Complete planning timeline: venue, committees, background guides, registration, technology, and conference day.',
+    category: 'organisers',
+    date: '2026-06-07',
+    readingMinutes: 13,
   },
   {
     slug: 'mun-technology-guide',
     title: 'MUN Technology Guide: Software, Apps, and Tools for Modern Committees',
     description: 'Committee management software, document collaboration, delegate apps, and what chairs and directors need.',
+    category: 'software',
+    date: '2026-06-07',
+    readingMinutes: 9,
   },
   {
     slug: 'mun-online-committees',
     title: 'Online MUN Committees: How to Chair and Participate Remotely',
     description: 'Managing procedure remotely, keeping delegates engaged, and the tools that work for virtual and hybrid MUN.',
+    category: 'chairing',
+    date: '2026-06-07',
+    readingMinutes: 10,
   },
   {
     slug: 'mun-faculty-advisor-guide',
     title: 'MUN Faculty Advisor Guide: How to Prepare and Support Your Team',
     description: 'Building a MUN program, choosing conferences, reviewing position papers, and supporting delegates at the event.',
+    category: 'organisers',
+    date: '2026-06-07',
+    readingMinutes: 11,
   },
   {
     slug: 'mun-points-of-order',
     title: 'Points of Order in MUN: When to Use Them and When Not To',
     description: 'What qualifies as a point of order, how to raise it correctly, and how chairs should rule, for delegates and chairs.',
+    category: 'procedure',
+    date: '2026-06-07',
+    readingMinutes: 8,
+  },
+  {
+    slug: 'mun-committee-types',
+    title: 'Model UN Committee Types Explained: Which One Should You Pick?',
+    description: 'Every kind of committee on a conference list, what debate actually feels like in each, and who it suits',
+    category: 'delegates',
+    date: '2026-09-20',
+    readingMinutes: 10,
+  },
+  {
+    slug: 'mun-crisis-directive-guide',
+    title: 'How to Write a MUN Crisis Directive: Three Kinds, Four Worked Examples',
+    description: 'What a directive is, the difference between public, private and press, and full annotated examples with the backroom response each one earns',
+    category: 'chairing',
+    date: '2026-09-20',
+    readingMinutes: 11,
+    related: ['mun-crisis-committee-guide'],
+  },
+  {
+    slug: 'is-mun-worth-it',
+    title: 'Is Model UN Worth It? An Honest Answer',
+    description: 'What Model UN is genuinely worth on an application and in working life, which skills really transfer, and when it is a waste of your weekends',
+    category: 'delegates',
+    date: '2026-09-20',
+    readingMinutes: 8,
+  },
+  {
+    slug: 'mun-country-allocation',
+    title: 'MUN Country Allocation: An Organiser’s Guide to Seating a Conference',
+    description: 'How to turn a pile of delegate applications into a seated conference: preference forms, double delegations, committee balance and the reallocation requests you can prevent',
+    category: 'organisers',
+    date: '2026-09-20',
+    readingMinutes: 9,
+  },
+  {
+    slug: 'mun-conference-registration-payments',
+    title: 'MUN Conference Registration and Payments: Fees, Invoices and Refunds',
+    description: 'How to take money from schools in six countries without losing track of who paid, plus a refund policy you can publish before the first payment arrives',
+    category: 'organisers',
+    date: '2026-09-20',
+    readingMinutes: 10,
+  },
+  {
+    slug: 'mun-country-research',
+    title: 'How to Research Your Country for MUN: A Method, Not a Reading List',
+    description: 'Find your country’s actual position in one evening using voting records, treaty reservations and mission statements, and take one page into committee',
+    category: 'delegates',
+    date: '2026-09-20',
+    readingMinutes: 10,
+    related: ['mun-position-paper-guide'],
+  },
+  {
+    slug: 'mun-difficult-delegates',
+    title: 'How to Handle Difficult Delegates: Eight Problems and the Exact Intervention',
+    description: 'The eight delegates who derail a committee, the smallest fix for each, the words to say from the dais, and the point at which it stops being yours to handle',
+    category: 'chairing',
+    date: '2026-09-20',
+    readingMinutes: 11,
+  },
+  {
+    slug: 'start-mun-club',
+    title: 'How to Start a MUN Club at Your School: From Proposal to First Conference',
+    description: 'Getting the approval, finding an advisor, recruiting members, an eight-week first term, and the succession plan that stops the club dying in year three',
+    category: 'organisers',
+    date: '2026-09-20',
+    readingMinutes: 10,
+    related: ['mun-faculty-advisor-guide'],
+  },
+  {
+    slug: 'mun-speech-examples',
+    title: 'MUN Speech Examples: Twelve Speeches, Under a Minute Each',
+    description: 'Full worked speeches for the opening, the caucus, the vote, the reply and the close, with the timing marks and why each one works',
+    category: 'delegates',
+    date: '2026-09-20',
+    readingMinutes: 12,
+    related: ['mun-opening-speech'],
+  },
+  {
+    slug: 'mun-common-mistakes',
+    title: 'Common MUN Mistakes: 25 Errors Chairs See Every Weekend',
+    description: 'The research, writing, speaking, procedure and bloc mistakes that cost delegates the room, each with the specific thing to do instead',
+    category: 'delegates',
+    date: '2026-09-20',
+    readingMinutes: 8,
+  },
+  {
+    slug: 'how-to-become-a-mun-chair',
+    title: 'How to Become a MUN Chair: Applying, Interviewing and Getting Picked',
+    description: 'What secretariats look for in a chair application, what the interview really tests, and how to get your first dais',
+    category: 'chairing',
+    date: '2026-09-20',
+    readingMinutes: 11,
+  },
+  {
+    slug: 'mun-background-guide-writing',
+    title: 'How to Write a MUN Background Guide (Study Guide): Structure, Template and Schedule',
+    description: 'A structure that produces a guide delegates actually read, a page budget for each section, and a six-week schedule that gets it done on time',
+    category: 'chairing',
+    date: '2026-09-20',
+    readingMinutes: 11,
+  },
+  {
+    slug: 'mun-judging-rubric',
+    title: 'How to Judge a MUN Committee: The Chair’s Scoring Rubric',
+    description: 'Five criteria, a weighting you can defend, how to take evidence during a session, and the biases that quietly decide most award slates',
+    category: 'chairing',
+    date: '2026-09-20',
+    readingMinutes: 10,
+  },
+  {
+    slug: 'mun-award-categories',
+    title: 'MUN Award Categories Explained: Every Award and What It Means',
+    description: 'Best Delegate, Outstanding, Honourable Mention, Verbal Commendation, best paper and delegation awards: what each one signals and how many a committee gives',
+    category: 'chairing',
+    date: '2026-09-20',
+    readingMinutes: 8,
+  },
+  {
+    slug: 'mun-secretariat-roles',
+    title: 'Recruiting and Running a MUN Secretariat: Roles, Team Size and Handover',
+    description: 'Every secretariat role, what it actually does week by week, how big a team you need at your size, and the handover that decides whether the conference survives',
+    category: 'organisers',
+    date: '2026-09-20',
+    readingMinutes: 10,
+  },
+  {
+    slug: 'how-to-run-crisis-committee',
+    title: 'How to Run a Crisis Committee: Arc, Backroom and Pacing',
+    description: 'Designing a crisis arc before the conference, staffing a backroom, pacing updates, and the three moves that recover a committee whose story has died',
+    category: 'chairing',
+    date: '2026-09-20',
+    readingMinutes: 12,
+  },
+  {
+    slug: 'mun-crisis-backroom-guide',
+    title: 'The MUN Crisis Backroom: How Crisis Staff Actually Work',
+    description: 'What happens to a directive after you hand it up: triage, writing updates, playing characters, keeping a world bible, and saying no well',
+    category: 'chairing',
+    date: '2026-09-20',
+    readingMinutes: 11,
+  },
+  {
+    slug: 'mun-controlling-the-floor',
+    title: 'How to Keep Debate Moving When a MUN Committee Stalls',
+    description: 'Diagnose a quiet, circular or chaotic room, then eleven interventions with the exact words to say from the dais',
+    category: 'chairing',
+    date: '2026-09-20',
+    readingMinutes: 10,
+  },
+  {
+    slug: 'mun-negotiation-tactics',
+    title: 'Negotiation and Diplomacy in MUN: How to Get Your Clause Into Someone Else’s Resolution',
+    description: 'Interests over positions, mapping the room, what you actually have to trade, and how to merge papers without losing the clause you came for',
+    category: 'delegates',
+    date: '2026-09-20',
+    readingMinutes: 11,
+  },
+  {
+    slug: 'mun-points-explained',
+    title: 'Points in MUN: Order, Inquiry, Information and Personal Privilege',
+    description: 'All four points, what each is for, whether it can interrupt a speaker, the exact wording, and how the circuits differ',
+    category: 'procedure',
+    date: '2026-09-20',
+    readingMinutes: 9,
+  },
+  {
+    slug: 'what-is-model-un',
+    title: "What Is Model UN? A Complete Beginner's Explanation",
+    description:
+      'What actually happens in a Model UN committee, from roll call to the final vote, explained in ten minutes for someone who has never been in the room',
+    category: 'delegates',
+    date: '2026-09-20',
+    readingMinutes: 9,
+  },
+  {
+    slug: 'mun-glossary',
+    title: 'MUN Glossary: Every Term, Explained Plainly',
+    description:
+      'Every word you will hear in a committee room, defined in one sentence, with what it means in practice and the terms people get wrong',
+    category: 'procedure',
+    date: '2026-09-20',
+    readingMinutes: 12,
+  },
+  {
+    slug: 'mun-position-paper-examples',
+    title: 'MUN Position Paper Examples: Three Full Papers, Annotated',
+    description:
+      'Three complete Model UN position papers at three quality levels, with the chair notes on each and the exact reason the weak one scores low',
+    category: 'delegates',
+    date: '2026-09-20',
+    readingMinutes: 11,
+  },
+  {
+    slug: 'mun-clause-phrases',
+    title: 'Preambulatory and Operative Clauses: The Complete Phrase List',
+    description:
+      'Every accepted preambulatory and operative phrase, what each one commits the committee to, and which verbs a General Assembly committee is not allowed to use',
+    category: 'delegates',
+    date: '2026-09-20',
+    readingMinutes: 11,
+  },
+  {
+    slug: 'mun-resolution-example',
+    title: 'Model UN Resolution Example: A Full Resolution, Line by Line',
+    description:
+      'One complete draft resolution, annotated clause by clause with the politics behind each line, plus the amended version that passed and the vote that carried it',
+    category: 'delegates',
+    date: '2026-09-20',
+    readingMinutes: 11,
+  },
+  {
+    slug: 'mun-for-beginners',
+    title: 'Model UN for Beginners: Your First Conference, Hour by Hour',
+    description:
+      'A walkthrough of your first Model UN conference from the registration desk to the closing ceremony, with the one thing to do in each hour',
+    category: 'delegates',
+    date: '2026-09-20',
+    readingMinutes: 9,
+  },
+  {
+    slug: 'start-a-mun-conference',
+    title: 'How to Start a MUN Conference From Scratch',
+    description:
+      'The whole job of founding a Model UN conference, from the first meeting to the closing gavel, with what it genuinely costs and what you can skip in year one',
+    category: 'organisers',
+    date: '2026-09-20',
+    readingMinutes: 10,
+  },
+  {
+    slug: 'mun-conference-budget',
+    title: 'MUN Conference Budget: What It Costs and How to Set Your Fees',
+    description:
+      'A real line-item budget for a Model UN conference, how to price a delegate fee that covers it, and the four costs first-time organisers forget',
+    category: 'organisers',
+    date: '2026-09-20',
+    readingMinutes: 9,
+  },
+  {
+    slug: 'thimun-rules-of-procedure',
+    title: 'THIMUN Rules of Procedure: The Complete Guide',
+    description:
+      'How debate actually runs under THIMUN procedure, and exactly what changes if you learned Model UN on the North American circuit',
+    category: 'procedure',
+    date: '2026-09-20',
+    readingMinutes: 11,
+  },
+  {
+    slug: 'una-usa-rules-of-procedure',
+    title: 'UNA-USA Rules of Procedure: The Complete Guide',
+    description:
+      'The UNA-USA ruleset as it is actually run, from setting the agenda to rights of explanation, including the five rules most conferences quietly modify',
+    category: 'procedure',
+    date: '2026-09-20',
+    readingMinutes: 11,
+  },
+  {
+    slug: 'mun-award-ceremony-guide',
+    title: 'MUN Closing Ceremony: How to Run Awards Without a Controversy',
+    description: 'Award policy set before the conference, slates collected from chairs, ratification, delegation tallies, and a run of show that takes 45 minutes',
+    category: 'organisers',
+    date: '2026-09-20',
+    readingMinutes: 11,
+  },
+  {
+    slug: 'mun-accessibility',
+    title: 'Accessible MUN Conferences: A Practical Inclusion Guide for Organisers',
+    description: 'What to change so your conference is genuinely attendable: venue, documents, committee procedure, cost, and the access statement that increases attendance',
+    category: 'organisers',
+    date: '2026-09-20',
+    readingMinutes: 12,
+  },
+  {
+    slug: 'mun-dress-code',
+    title: 'What to Wear to Model UN: The Dress Code, Explained Plainly',
+    description: 'What western business attire actually means, a workable outfit on a student budget, the shoe mistake everyone makes once, and what chairs really notice',
+    category: 'delegates',
+    date: '2026-09-20',
+    readingMinutes: 7,
+  },
+  {
+    slug: 'mun-procedure-styles-compared',
+    title: 'THIMUN vs UNA-USA vs Harvard Style: MUN Procedures Compared',
+    description: 'The three main families of Model UN procedure side by side, what transfers between them, what actively misleads you, and which to run at your own conference',
+    category: 'procedure',
+    date: '2026-09-20',
+    readingMinutes: 9,
+  },
+  {
+    slug: 'mun-head-delegate-guide',
+    title: 'MUN Head Delegate Guide: Leading a School Delegation',
+    description: 'The job nobody writes down: selecting a delegation, distributing assignments, running preparation, holding the team together at a conference, and handing it over',
+    category: 'delegates',
+    date: '2026-09-20',
+    readingMinutes: 11,
+  },
+  {
+    slug: 'host-hybrid-mun-conference',
+    title: 'How to Host an Online or Hybrid MUN Conference: The Organiser Guide',
+    description: 'Time zones, session length, the software stack, running caucus remotely, the hybrid trap, chair workload, fees, and the test week you cannot skip',
+    category: 'organisers',
+    date: '2026-09-20',
+    readingMinutes: 11,
+  },
+  {
+    slug: 'mun-country-profiles',
+    title: 'MUN Country Profiles: Policy Briefs for 20 Commonly Assigned Countries',
+    description: 'A one-screen policy brief for the countries assigned most often, plus the blank template to build one for any delegation you are given',
+    category: 'delegates',
+    date: '2026-09-20',
+    readingMinutes: 11,
+  },
+  {
+    slug: 'university-mun-guide',
+    title: 'University Model UN: How It Differs From High School MUN',
+    description: 'What changes at university level: preparation depth, committee types, travel team selection, funding, staffing, and what MUN is actually worth afterwards',
+    category: 'delegates',
+    date: '2026-09-20',
+    readingMinutes: 9,
+  },
+  {
+    slug: 'mun-visa-invitation-letters',
+    title: 'MUN Visa Invitation Letters: What to Write, When, and What Not to Promise',
+    description: 'What a conference invitation letter must contain, lead times, who signs it, the sentences to leave out, and how to handle a refusal',
+    category: 'organisers',
+    date: '2026-09-20',
+    readingMinutes: 10,
+  },
+  {
+    slug: 'mun-press-corps-guide',
+    title: 'MUN Press Corps: How a Press Committee Works and How to Win in One',
+    description: 'The two press models, what a press delegate does all day, the article forms, interviewing without disrupting a room, and how to run a press committee',
+    category: 'delegates',
+    date: '2026-09-20',
+    readingMinutes: 9,
+  },
+  {
+    slug: 'mun-conference-marketing',
+    title: "Marketing a MUN Conference: How to Fill Your Committees",
+    description: "How delegations actually decide which conference to attend, and how to reach them before the other conference does",
+    category: 'organisers',
+    date: '2026-09-20',
+    readingMinutes: 12,
+  },
+  {
+    slug: 'mun-conference-day-operations',
+    title: "Running Conference Day: The MUN Operations Manual",
+    description: "An hour-by-hour run of show for both days of a Model UN conference, and the fifteen things that go wrong",
+    category: 'organisers',
+    date: '2026-09-20',
+    readingMinutes: 12,
+  },
+  {
+    slug: 'mun-team-fundraising',
+    title: "MUN Team Fundraising: How to Pay for Conferences",
+    description: "Nine ways school Model UN teams actually raise the money, ranked by what they return per hour of work",
+    category: 'organisers',
+    date: '2026-09-20',
+    readingMinutes: 11,
+  },
+  {
+    slug: 'mun-conference-sponsorship',
+    title: "MUN Conference Sponsorship: Finding and Keeping Sponsors",
+    description: "What sponsors are actually buying, what to offer at each tier, and the proposal that gets a meeting",
+    category: 'organisers',
+    date: '2026-09-20',
+    readingMinutes: 11,
+  },
+  {
+    slug: 'choosing-mun-conferences',
+    title: "Choosing MUN Conferences: A Circuit Guide for Teams",
+    description: "How to build a season that develops your team instead of exhausting it, and how to read a conference before you commit",
+    category: 'organisers',
+    date: '2026-09-20',
+    readingMinutes: 11,
+  },
+  {
+    slug: 'mun-safeguarding',
+    title: "Safeguarding at MUN Conferences: A Policy Guide for Organisers",
+    description: "The safeguarding policy a student-run Model UN conference needs, and the situations it has to cover",
+    category: 'organisers',
+    date: '2026-09-20',
+    readingMinutes: 13,
+  },
+  {
+    slug: 'mun-chaperone-guide',
+    title: "Chaperoning a MUN Delegation: The Trip Guide for Advisors",
+    description: "Everything to arrange before you travel with a Model UN delegation, and the rules to set once you arrive",
+    category: 'organisers',
+    date: '2026-09-20',
+    readingMinutes: 11,
+  },
+  {
+    slug: 'mun-club-curriculum',
+    title: "The MUN Club Curriculum: Ten Sessions to a First Conference",
+    description: "Ten ready-to-run hour-long sessions that take a group with no experience to a real Model UN conference",
+    category: 'organisers',
+    date: '2026-09-20',
+    readingMinutes: 12,
+  },
+  {
+    slug: 'mun-on-your-cv',
+    title: "Putting Model UN on Your CV and University Application",
+    description: "How to write four years of Model UN into three lines that a reader who was not there will believe",
+    category: 'delegates',
+    date: '2026-09-20',
+    readingMinutes: 11,
+  },
+  {
+    slug: 'mun-conference-venue-logistics',
+    title: "MUN Conference Venue and Logistics: How to Choose and What to Ask",
+    description: "How many rooms a Model UN conference needs, what each one must have, and everything to ask before you sign",
+    category: 'organisers',
+    date: '2026-09-20',
+    readingMinutes: 12,
   },
 ];

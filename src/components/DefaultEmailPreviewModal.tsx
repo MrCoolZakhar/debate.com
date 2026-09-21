@@ -89,7 +89,7 @@ export default function DefaultEmailPreviewModal({
     <ModalOverlay onClose={onClose}>
       <div
         className="rounded-2xl p-6 flex flex-col"
-        style={{ width: 'min(94vw, 680px)', maxHeight: '88vh', backgroundColor: '#FAF8F3', border: `1px solid ${BORDER}`, boxShadow: '0 20px 50px rgba(27,56,40,0.25)' }}
+        style={{ width: 'min(94vw, 680px)', maxHeight: '88dvh', backgroundColor: '#FAF8F3', border: `1px solid ${BORDER}`, boxShadow: '0 20px 50px rgba(27,56,40,0.25)' }}
       >
         <div className="flex items-start justify-between gap-3 mb-1">
           <div className="min-w-0">

@@ -915,7 +915,7 @@ export default function FinancialsInvoicesPage() {
         <ModalOverlay onClose={() => setProofBatch(null)}>
           <div
             className="rounded-2xl p-6 flex flex-col gap-4"
-            style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 480, maxWidth: 'calc(100vw - 32px)', maxHeight: '85vh', overflowY: 'auto' }}
+            style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 480, maxWidth: 'calc(100vw - 32px)', maxHeight: '85dvh', overflowY: 'auto' }}
           >
             <div className="flex items-center justify-between gap-3">
               <p className="font-black text-lg" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Payment Proof</p>

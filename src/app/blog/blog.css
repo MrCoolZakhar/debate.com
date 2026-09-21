@@ -1,0 +1,485 @@
+/* ── The blog stylesheet ────────────────────────────────────────────────────
+ *
+ * Imported once, by src/app/blog/layout.tsx, so it loads on /blog and on the
+ * posts and nowhere else.
+ *
+ * WHY A STYLESHEET AND NOT INLINE STYLES
+ *
+ * The 34 posts used to hand-roll an inline `style` object each. Inline styles
+ * cannot carry a media query, so the measure was a fixed pixel column: on a
+ * 375 px phone that arithmetic left about 247 px of text (later nudged to
+ * 305 px), and tables ran off an edge the page could not scroll to. Every fix
+ * had to be an `!important` override from globals.css fighting the inline
+ * value it was correcting.
+ *
+ * So the prose is CLASSES now. One rule set, `.gv-prose`, decides the measure,
+ * the scale and the rhythm for every post at every width, and a new post
+ * inherits all of it by writing plain <p> and <h2>.
+ *
+ * THE MEASURE is the point of the whole file: `--gv-measure` is 34rem (544 px),
+ * MEASURED at 69 characters per line in the app's shipping sans at 17 px (the
+ * app loads no webfont for body text, so that is SF Pro or Segoe UI, not
+ * Outfit). 42rem, the obvious-looking choice, measured 85 characters, which is
+ * a newspaper column's worth past comfortable. On a phone the page gutter is
+ * 16 px a side and the prose fills what is left, so a 375 px screen reads at
+ * 343 px instead of the 247 px it used to.
+ *
+ * THE SCALE is 1:1.6 between body and h2, the ratio the sessions side settled
+ * on (AGENTS.md → FEATURE: SETTINGS, "Type and text"). Sizes are written once,
+ * here, as custom properties.
+ */
+
+.gv-blog {
+  --gv-measure: 34rem;
+  --gv-body: 17px;
+  --gv-lh: 1.75;
+  --gv-h2: 27px;
+  --gv-h3: 19.5px;
+  --gv-caption: 13.5px;
+  --gv-ink: #1c1410;
+  --gv-ink-soft: #55483c;
+  --gv-forest: #1b3828;
+  --gv-rule: #ddd4c0;
+  --gv-rule-strong: #cdc0a6;
+  --gv-surface: #faf8f3;
+  --gv-surface-alt: #f2ecdf;
+  --gv-gold: #b6871f;
+  /* Set per article by ArticleLayout, from the shelf the post sits on. */
+  --gv-accent: #2a5a3c;
+}
+
+/* ── Shelf anchors ────────────────────────────────────────────────────────── */
+/* A jump to /blog#chairing has to clear two things that sit over the top of the
+   page: SiteNav's floating link pill (fixed, 72px tall, md and up) and the
+   sticky shelf rail under it. Without this the shelf heading lands behind both. */
+
+.gv-shelf {
+  scroll-margin-top: 84px;
+}
+
+@media (min-width: 768px) {
+  .gv-shelf {
+    scroll-margin-top: 140px;
+  }
+}
+
+/* ── The card lift ────────────────────────────────────────────────────────── */
+/* One rule for every card in the section (index, shelves, "keep reading"), so
+   the whole blog moves the same way. Transform and opacity only, no shadow
+   animation on the colour channel, and it is switched off under
+   `prefers-reduced-motion` at the foot of this file. */
+
+.gv-card {
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms ease, border-color 150ms ease;
+  will-change: transform;
+}
+
+.gv-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--gv-accent, #2a5a3c);
+  box-shadow: 0 14px 30px rgba(27, 56, 40, 0.14);
+}
+
+/* The lead card is already the most elevated thing on the page; it lifts
+   further rather than dropping to the ordinary card's shadow. */
+.gv-card-lead:hover {
+  box-shadow: 0 24px 56px rgba(27, 56, 40, 0.28);
+  border-color: transparent;
+}
+
+.gv-card:focus-visible {
+  outline: 2.5px solid #b6871f;
+  outline-offset: 3px;
+}
+
+/* ── Prose ────────────────────────────────────────────────────────────────── */
+
+.gv-prose {
+  max-width: var(--gv-measure);
+  color: var(--gv-ink);
+  font-size: var(--gv-body);
+  line-height: var(--gv-lh);
+  /* A long URL or a table word can be wider than a phone. Break it rather than
+     push the column out of the viewport, which `overflow-x: clip` on body
+     (globals.css) would then make unreachable rather than merely off screen. */
+  overflow-wrap: anywhere;
+}
+
+.gv-prose > * {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+.gv-prose > *:last-child {
+  margin-bottom: 0;
+}
+
+/* The lead paragraph: the first one, set larger, the way a magazine opens.
+   `.gv-lead` is explicit rather than `:first-child` so a post that opens with a
+   callout or a figure does not accidentally shout its caption. */
+.gv-prose .gv-lead,
+.gv-prose > p:first-child {
+  font-size: 19.5px;
+  line-height: 1.66;
+  color: var(--gv-ink);
+}
+
+.gv-prose h2 {
+  font-size: var(--gv-h2);
+  font-weight: 800;
+  line-height: 1.22;
+  color: var(--gv-forest);
+  letter-spacing: -0.01em;
+  margin-top: 2.75rem;
+  margin-bottom: 0.75rem;
+  /* Scroll-margin so an anchor jump from the contents does not tuck the
+     heading under the sticky site header. */
+  scroll-margin-top: 92px;
+}
+
+/* The editorial detail: a short accent rule over every section heading. Drawn
+   on the heading itself, so it can never end up orphaned at a column break. */
+.gv-prose h2::before {
+  content: '';
+  display: block;
+  width: 34px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--gv-accent);
+  margin-bottom: 14px;
+}
+
+.gv-prose h2:first-child {
+  margin-top: 0;
+}
+
+.gv-prose h3 {
+  font-size: var(--gv-h3);
+  font-weight: 700;
+  line-height: 1.34;
+  color: var(--gv-forest);
+  margin-top: 1.75rem;
+  margin-bottom: 0.5rem;
+  scroll-margin-top: 92px;
+}
+
+.gv-prose strong {
+  font-weight: 700;
+  color: var(--gv-forest);
+}
+
+.gv-prose em {
+  font-style: italic;
+}
+
+.gv-prose a {
+  color: var(--gv-forest);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--gv-gold);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  transition: color 140ms ease, text-decoration-color 140ms ease;
+}
+
+.gv-prose a:hover {
+  color: var(--gv-accent);
+  text-decoration-color: var(--gv-accent);
+}
+
+/* ── Lists ────────────────────────────────────────────────────────────────── */
+
+.gv-prose ul,
+.gv-prose ol {
+  padding-left: 1.4rem;
+  margin-bottom: 1.25rem;
+}
+
+.gv-prose li {
+  margin-bottom: 0.45rem;
+  padding-left: 0.25rem;
+}
+
+.gv-prose li::marker {
+  color: var(--gv-accent);
+  font-weight: 700;
+}
+
+/* A checklist: things a chair ticks off, not things in an order. */
+.gv-prose ul.gv-check {
+  list-style: none;
+  padding-left: 0;
+}
+
+.gv-prose ul.gv-check li {
+  position: relative;
+  padding-left: 1.75rem;
+  margin-bottom: 0.6rem;
+}
+
+.gv-prose ul.gv-check li::before {
+  content: '\2713';
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--gv-accent);
+  font-weight: 700;
+}
+
+/* ── The heading anchor ───────────────────────────────────────────────────── */
+/* A section heading is a link target; make it copyable without cluttering the
+   page. The mark is invisible until the heading is hovered or the link itself
+   is focused, so a keyboard reader can still reach it. */
+
+.gv-anchor {
+  margin-left: 0.4rem;
+  color: var(--gv-rule-strong);
+  text-decoration: none;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 140ms ease, color 140ms ease;
+}
+
+.gv-prose h2:hover .gv-anchor,
+.gv-anchor:focus-visible {
+  opacity: 1;
+}
+
+.gv-anchor:hover {
+  color: var(--gv-accent);
+}
+
+/* ── Callout: the aside a chair should remember ───────────────────────────── */
+
+.gv-callout {
+  display: flex;
+  gap: 13px;
+  align-items: flex-start;
+  background: var(--gv-surface-alt);
+  border: 1.5px solid var(--gv-rule-strong);
+  border-left: 4px solid var(--gv-accent);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin: 1.75rem 0;
+  font-size: 15.5px;
+  line-height: 1.68;
+  color: var(--gv-forest);
+}
+
+/* The migrated posts whose callout spans several lines kept a plain <div> and
+   so have no icon to sit beside. Same box, no icon column. */
+.gv-callout-plain {
+  display: block;
+}
+
+.gv-callout > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--gv-accent);
+}
+
+.gv-callout p {
+  margin: 0;
+}
+
+.gv-callout p + p {
+  margin-top: 0.6rem;
+}
+
+/* ── Chair script: words to say out loud ──────────────────────────────────── */
+/* Forest ground, gold quote mark, Playfair italic. Playfair is the one serif
+   the app actually loads (src/app/layout.tsx), and it is already the editorial
+   accent on /join, so the blog is not introducing a font. */
+
+.gv-script {
+  position: relative;
+  background: linear-gradient(135deg, #2a5a3c 0%, #1b3828 100%);
+  border-radius: 14px;
+  padding: 22px 24px 22px 56px;
+  margin: 1.75rem 0;
+  color: #ede7d8;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-style: italic;
+  font-size: 17px;
+  line-height: 1.66;
+  box-shadow: 0 10px 26px rgba(27, 56, 40, 0.18);
+}
+
+.gv-script::before {
+  content: '\201C';
+  position: absolute;
+  left: 18px;
+  top: 10px;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 52px;
+  line-height: 1;
+  color: #eed98a;
+  opacity: 0.85;
+}
+
+.gv-script p {
+  margin: 0;
+}
+
+.gv-script p + p {
+  margin-top: 0.7rem;
+}
+
+/* ── A small print note ───────────────────────────────────────────────────── */
+
+.gv-prose .gv-note {
+  font-size: var(--gv-caption);
+  line-height: 1.68;
+  color: var(--gv-ink-soft);
+}
+
+/* ── Fact card: a titled block inside the prose ───────────────────────────── */
+
+.gv-fact {
+  background: var(--gv-surface);
+  border: 1.5px solid var(--gv-rule);
+  border-radius: 12px;
+  padding: 15px 18px;
+  margin: 0.75rem 0;
+}
+
+.gv-fact-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gv-forest);
+  margin: 0 0 4px;
+  line-height: 1.35;
+}
+
+.gv-fact-body {
+  font-size: 15.5px;
+  line-height: 1.66;
+  color: var(--gv-ink);
+  margin: 0;
+}
+
+/* ── Tables ───────────────────────────────────────────────────────────────── */
+/* The comparison posts carry real tables. They may be wider than a phone, so
+   the WRAPPER scrolls sideways (and says so), never the page. */
+
+.gv-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+  margin: 1.5rem 0;
+  border: 1.5px solid var(--gv-rule-strong);
+  border-radius: 12px;
+  background: var(--gv-surface);
+}
+
+.gv-prose table {
+  width: 100%;
+  min-width: 460px;
+  border-collapse: collapse;
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+
+.gv-prose thead th {
+  background: var(--gv-forest);
+  color: #ede7d8;
+  text-align: left;
+  font-weight: 700;
+  padding: 11px 14px;
+  vertical-align: bottom;
+}
+
+.gv-prose thead th:first-child {
+  border-top-left-radius: 10px;
+}
+
+.gv-prose thead th:last-child {
+  border-top-right-radius: 10px;
+}
+
+.gv-prose tbody td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--gv-rule);
+  color: var(--gv-ink);
+  vertical-align: top;
+}
+
+/* Zebra. `nth-child(odd)` matches what the posts drew by hand, which keyed on
+   `i % 2 === 0`, i.e. the first body row was the tinted one. */
+.gv-prose tbody tr:nth-child(odd) td {
+  background: var(--gv-surface-alt);
+}
+
+.gv-prose tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ── Phone ────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .gv-blog {
+    --gv-body: 16.5px;
+    --gv-lh: 1.72;
+    --gv-h2: 22px;
+    --gv-h3: 18px;
+  }
+
+  .gv-prose .gv-lead,
+  .gv-prose > p:first-child {
+    font-size: 18px;
+    line-height: 1.6;
+  }
+
+  .gv-prose h2 {
+    margin-top: 2.2rem;
+    scroll-margin-top: 76px;
+  }
+
+  .gv-prose h3 {
+    scroll-margin-top: 76px;
+  }
+
+  .gv-callout {
+    padding: 14px 16px;
+    font-size: 15px;
+  }
+
+  .gv-script {
+    padding: 20px 18px 20px 46px;
+    font-size: 16px;
+  }
+
+  .gv-script::before {
+    left: 14px;
+    font-size: 44px;
+  }
+
+  .gv-prose table {
+    font-size: 13.5px;
+    min-width: 420px;
+  }
+
+  .gv-prose thead th,
+  .gv-prose tbody td {
+    padding: 9px 11px;
+  }
+
+  /* The anchor mark is a hover affordance and there is no hover on a phone. */
+  .gv-anchor {
+    display: none;
+  }
+}
+
+/* ── Motion ───────────────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .gv-card,
+  .gv-prose a,
+  .gv-anchor {
+    transition: none !important;
+  }
+
+  .gv-card:hover {
+    transform: none !important;
+  }
+}

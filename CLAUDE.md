@@ -50,6 +50,22 @@ Design consequences: mobile-first on every delegate and applicant surface; the c
 
 Hard rules: organisers are never charged; Unlimited status is server-verified; public price display goes through `displayDelegatePrice` / `fetchDelegatePrices` in `src/lib/publicFees.ts` (reading the read-only `conference_public_fees` view), because `conferences.fee_amount` is a stale denormalised column: "TBD" and no Pricing details list until delegate applications are set up (delegate role config `is_enabled`, open now or opening later); once set up, the delegate price of the current fee stage (for an upcoming opening, the stage that applies at opening) with the Pricing details list ("Applications open {date}" when upcoming), "Free" at 0. The creation wizard asks no price.
 
+**A role's application window and its fee phases are one timeline (21 Sep 2026).** Since 19 Sep
+`guard_application_write()` refuses a non-organiser application outside `applications_open_at` /
+`applications_close_at`; MUNBU WS then advertised a Late price for days nobody could apply on. Now
+the trigger `enforce_role_config_timeline()` (via `role_timeline_normalise()`, mirrored client-side
+in `src/lib/roleTimeline.ts`) runs on INSERT or any write of those two columns or `fee_phases`:
+dated prices must be back to back (overlap / gap refused), and when they exist they ARE the window
+(open on the first price's start day, close on the last price's end day, conference timezone else
+UTC; the edited side wins, the other follows), open before close, never close after the
+conference's last day. Refusals raise named `arc_timeline_*` constraints with sentences in
+`CONSTRAINT_MESSAGES`. Settings (`settings/timelineUi.tsx`) derives the same answer before saving,
+says what moved in one line, and shows a warning with a one-click fix for rows saved before the
+rule. Existing rows were not rewritten. The apply page and the conference page judge "open" by the
+database clock (`src/lib/applicationWindow.ts`) and show the closed / not-yet-open state before the
+form; a window refusal at submit is not a crash alert. There is no payment deadline or invoice due
+date anywhere in the schema.
+
 **Stripe's own limits are the thing that breaks a big bill, and they live only in
 the edge function.** `create-checkout` (v18, 8 Sep 2026; not in git, read it with
 the Supabase MCP tools) has two guards, and both exist because a delegation with a
@@ -72,7 +88,7 @@ long invoice list hit them in production:
 
 ## 4. Growth loops (what the code is built to do)
 
-1. **Content SEO**: 34 posts in `src/app/blog/posts.ts` (the sitemap is generated from that manifest), the competitor-alternative posts carry the highest sitemap priority. Bare `/join` and `/create` stay indexable; `/join?code=...` is noindex by header.
+1. **Content SEO**: 84 posts in `src/app/blog/posts.ts` (the sitemap is generated from that manifest), the competitor-alternative posts carry the highest sitemap priority. Bare `/join` and `/create` stay indexable; `/join?code=...` is noindex by header.
 2. **Public conference pages** as landing pages: dynamic sitemap (was ISR, which froze for days on Vercel), IndexNow ping on publish, dynamic OG cards (`/api/og/*`), `pageMetadata()` makes a missing OG image structurally impossible (`src/lib/seo.ts`; `npm run check:og`).
 3. **The MUN CV as a credential**: every profile link resolves to `/cv/<name>-<hex>`; `ShareAchievementModal` fires after a new entry; `PublicCVSignupPrompt` converts the reader. **Awards are the first thing that writes a `gavelling_verified` entry**; before that every CV entry was self-reported, which is why the awards pipeline matters commercially.
 4. **Job board** for chairs and secretariat, cross-conference.
@@ -339,7 +355,7 @@ Everything else, with line numbers and the reasons behind each rule, is in `AGEN
 - **Buttons with an icon or an indicator lead with the icon** (owner, 17 Sep 2026): a big icon, the word small beneath it (e.g. Vote in Documents, Finish in an introduction). A button that is icon only still carries a tooltip and an accessible name.
 - **No count or status pills like '15 delegations' or 'Observer' anywhere: show counts as plain typography and observer status as an icon.** (Owner, 17 Sep 2026. /create shows the count as a large tabular numeral and observers as the megaphone; the join seat picker shows seat state as icon + plain words.)
 - **No em dashes in user-facing copy.** Short sentences. Say what happened and what to do next.
-- **Errors are written for people, never for engineers.** Never render `error.message`, `err.message`, a Postgres, PostgREST, Storage or Stripe string, or a stack trace to a user. Route every caught error through `friendlyError(error, fallback)` from `src/lib/friendlyError.ts`, with a fallback that says what failed and what to do next. When a migration adds a CHECK a user can reach, add its plain sentence to `CONSTRAINT_MESSAGES` in the same change. Better still, check the condition in the UI first so the database never has to refuse (the TBD publish rule is the example).
+- **Errors are written for people, never for engineers.** Never render `error.message`, `err.message`, a Postgres, PostgREST, Storage or Stripe string, or a stack trace to a user. Route every caught error through `friendlyError(error, fallback)` from `src/lib/friendlyError.ts`, with a fallback that says what failed and what to do next. When a migration adds a CHECK a user can reach, add its plain sentence to `CONSTRAINT_MESSAGES` in the same change. Better still, check the condition in the UI first so the database never has to refuse (the TBD publish rule is the example). Our own human-written thrown errors use `new UserFacingError('...')` so friendlyError passes them through. The one exemption is `src/app/admin/*`, seen only by platform admins, where raw errors are kept on purpose for debugging; do not copy that pattern anywhere else.
 - Dates: the shared `DatePicker` only. Popovers: through `Portal` at fixed coordinates, flipped near edges, never clipped. Info hints open on hover. Long committee names show the acronym with the full name beneath (`committeeDisplayName`).
 - i18n: four locales in `src/lib/translations.ts` (en, es, fr, ar with RTL), **sessions only** (18 Sep 2026): `LanguageProvider` returns the stored language only on a sessions route (`src/lib/sessionRoutes.ts`) and English everywhere else, and only sessions surfaces show a picker. Every sessions picker offers "Request a language" (`LanguageRequestDialog`: language, email, Rules of Procedure file into the private `language-requests` bucket, a `language_requests` row (RLS insert-only, trigger rate limit 3 per email / 60 per hour, file must exist), and a team email to wearegavelling@gmail.com through `email_outbox`). The DB stores English; translate at render. Rules and the list of hand-maintained bypasses are in `.claude/TRANSLATIONS.md`, which must be updated when keys change. Manage surfaces are English-only by convention.
 - Polish reference: `.claude/skills/make-interfaces-feel-better/SKILL.md` (the only UI skill installed in this repo).

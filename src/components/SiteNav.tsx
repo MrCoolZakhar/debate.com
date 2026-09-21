@@ -143,16 +143,39 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
     window.location.href = '/';
   }
 
-  return (
-    <>
-      {/*
-        Floating pill nav (desktop only). Fixed to the viewport so it stays visible
-        while the rest of the header, logo (left), language toggle + auth (right) —
-        scrolls away with the page. The 72px-tall wrapper vertically aligns the pill
-        with the logo/CTA row at scroll top; pointer-events are limited to the pill
-        itself so the transparent band never blocks clicks on the content behind it.
-      */}
-      <div className="hidden md:flex fixed top-0 left-1/2 -translate-x-1/2 z-40 h-[72px] items-center pointer-events-none">
+  /*
+    The desktop pill nav. It sits in the MIDDLE of the header row, between the
+    logo (left) and the language/auth controls (right).
+
+    It used to be `position: fixed; top: 0; z-40`, so it stayed pinned to the
+    viewport while the rest of its own header scrolled away — a translucent
+    object floating over whatever the page put in its top 72px. That is a
+    collision machine, and it collided: the conference detail page's sticky
+    section tabs stick at `top: 12px` under a `z-30`, so the pill covered them
+    outright; the public CV bar is `sticky top-0 z-20`; the apply wizard's step
+    rail (PREFERENCES / EXPERIENCE ...) scrolled straight under it. Raising the
+    pill's z-index is the wrong direction — it is the thing doing the covering.
+    Giving pages an opt-out (a data attribute, an observer that hides the nav
+    when a sticky bar is in view) means the nav vanishes and reappears as you
+    scroll, which is the "controls that vanish or move" the rulebook rules out,
+    and it would still need every page to cooperate.
+
+    So the pill is simply part of the header now, like the two things beside it:
+    absolutely centred inside `<nav>` (which is `relative`, or `absolute` in
+    overlay mode — both are positioning contexts), at the exact y it already
+    occupied at scroll top, so nothing moves visually. Nothing in the document
+    is fixed to the top any more, so NO page can be covered by it, today or
+    when a page grows a sticky bar tomorrow. The header is reachable the way
+    the brand mark and the account menu already were: at the top of the page.
+
+    Pointer events stay limited to the pill itself so the centred band cannot
+    swallow a click meant for the logo row behind it.
+  */
+  const desktopPill = (
+    <div
+      className="hidden md:flex absolute inset-y-0 left-1/2 -translate-x-1/2 items-center pointer-events-none"
+      style={{ zIndex: 1 }}
+    >
         <div
           className="flex items-center rounded-full pointer-events-auto"
           style={{
@@ -207,12 +230,16 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
             );
           })}
         </div>
-      </div>
+    </div>
+  );
 
+  return (
+    <>
       <nav
         className={`${overlay ? 'absolute top-0 left-0 right-0' : 'relative'} z-30 flex items-center justify-between px-6 md:px-14 shrink-0`}
         style={{ height: '72px' }}
       >
+        {desktopPill}
         {/* Logo + language toggle (left side) */}
         <div className="flex items-center gap-1">
           <Link href="/" onClick={() => setMenuOpen(false)} style={{ textDecoration: 'none' }}>

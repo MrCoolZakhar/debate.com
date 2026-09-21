@@ -8,7 +8,7 @@
 
 import { useState } from 'react';
 import { TriangleAlert } from 'lucide-react';
-import { ModalOverlay } from '@/components/CommitteeEditorModal';
+import { ModalOverlay, MODAL_PANEL_MAX_HEIGHT } from '@/components/CommitteeEditorModal';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { currencySymbol } from '@/lib/utils';
@@ -112,7 +112,7 @@ export default function AidRequestModal({
     <ModalOverlay onClose={() => { if (!submitting) onClose(); }}>
       <div
         className="rounded-2xl p-6 flex flex-col gap-4"
-        style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 440, maxWidth: 'calc(100vw - 32px)', maxHeight: '85dvh', overflowY: 'auto' }}
+        style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 440, maxWidth: 'calc(100vw - 32px)', maxHeight: MODAL_PANEL_MAX_HEIGHT, overflowY: 'auto' }}
       >
         <p className="font-black text-lg" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
           {societyId ? 'Request Financial Aid for Your Delegation' : 'Request Financial Aid'}

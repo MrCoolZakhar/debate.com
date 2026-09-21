@@ -24,6 +24,7 @@ import ObserverParticipant from './ObserverParticipant';
 import RequestsPanel from './RequestsPanel';
 import ApplyPointer from './ApplyPointer';
 import type { ParticipantApplication, ParticipantRoleConfig, ParticipantAllocation, ParticipantCommittee } from './types';
+import { friendlyError, UserFacingError } from '@/lib/friendlyError';
 
 const DELEGATE_ROLES = new Set(['delegate', 'head-delegate']);
 
@@ -148,11 +149,11 @@ export default function ParticipantView({
       const { data, error } = await supabase.rpc('withdraw_application', { p_application_id: applicationId });
       if (error) throw error;
       const result = data as { ok?: boolean; error?: string } | null;
-      if (!result?.ok) throw new Error(result?.error ?? 'Could not withdraw your application. Please try again.');
+      if (!result?.ok) throw new UserFacingError(result?.error ?? 'Could not withdraw your application. Please try again.');
       setWithdrawConfirm(false);
       onApplicationWithdrawn?.(applicationId);
     } catch (err: unknown) {
-      setWithdrawError(err instanceof Error ? err.message : 'Could not withdraw your application. Please try again.');
+      setWithdrawError(friendlyError(err, 'Could not withdraw your application. Please try again.'));
     } finally {
       setWithdrawing(false);
     }

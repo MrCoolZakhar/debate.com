@@ -32,6 +32,7 @@ import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { acronymProblem } from '@/lib/conferenceLabels';
 import { committeeDisplayName, deriveCommitteeAcronym, matchPresetEmblem } from '@/lib/presetNames';
 import { INTENT_OPTIONS, intentPayload } from '@/lib/conferenceIntent';
+import { friendlyError } from '@/lib/friendlyError';
 // Pure presentation from the committee editor (the medallion fallback and the
 // canonical type labels) and the account pages' rank insignia, so a committee
 // card here draws exactly what /manage/[slug]/committees draws. Nothing
@@ -1053,7 +1054,7 @@ export default function NewConferencePage() {
 
         if (dbError || !slug) {
           setSubmitting(false);
-          setError('Failed to create conference: ' + (dbError?.message ?? 'could not assign a URL.'));
+          setError(dbError ? friendlyError(dbError, "Couldn't create your conference. Please try again.") : "Couldn't create your conference: we couldn't assign a URL for it. Please try again.");
           return;
         }
 
@@ -1130,7 +1131,7 @@ export default function NewConferencePage() {
           // the id and slug, and let Create again retry just the committees.
           createdSlugRef.current = slug;
           setError(
-            'Your conference was saved, but its committees were not: ' + committeesError.message +
+            friendlyError(committeesError, "Your conference was saved, but its committees were not.") +
             ' Tap Create conference again to add them.'
           );
           return;
@@ -1138,7 +1139,7 @@ export default function NewConferencePage() {
         // Nothing was created. The id is spent, a retry needs a fresh one (the
         // uploaded logo/banner URLs stay valid whatever id the next row gets).
         conferenceIdRef.current = crypto.randomUUID();
-        setError('Could not save your committees: ' + committeesError.message + '. Nothing was created, please try again.');
+        setError(friendlyError(committeesError, 'Could not save your committees.') + ' Nothing was created, please try again.');
         return;
       }
 
@@ -1148,7 +1149,7 @@ export default function NewConferencePage() {
       router.push('/manage/' + slug);
     } catch (err) {
       setSubmitting(false);
-      setError('Unexpected error: ' + (err instanceof Error ? err.message : String(err)));
+      setError(friendlyError(err, 'Something went wrong. Please try again.'));
     }
   }
 

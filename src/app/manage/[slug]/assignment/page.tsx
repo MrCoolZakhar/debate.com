@@ -1506,7 +1506,7 @@ function NeuModalCard({ children, width = 480 }: { children: React.ReactNode; wi
         width: `min(92vw, ${width}px)`,
         backgroundColor: NEU.surface,
         borderRadius: 24,
-        maxHeight: '88vh',
+        maxHeight: '88dvh',
         overflowY: 'auto',
         boxShadow: `${NEU.out}, 0 24px 60px rgba(27,56,40,0.28)`,
       }}

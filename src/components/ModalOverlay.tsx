@@ -15,6 +15,10 @@
 //     never collapses a whole stack of nested dialogs
 //   • `role="dialog"` + `aria-modal` on the backdrop
 //
+//   • a backdrop that SCROLLS, so a dialog taller than the screen is never cut
+//     off at both ends with its buttons out of reach (20 Sep 2026 phone audit)
+//   • safe-area padding, so a panel never sits under the notch or the home bar
+//
 // It is deliberately NOT used for dropdowns, typeaheads, tooltips or hover
 // cards — those are non-modal floating layers that must keep the page scrolling
 // (see the PaymentMenu portal pattern in AGENTS.md).
@@ -78,6 +82,69 @@ export function useModalEscape(onClose: () => void, enabled: boolean = true) {
   }, [enabled]);
 }
 
+/* ── The backdrop's own layout ───────────────────────────────────────────────
+ *
+ * It used to be `fixed inset-0 flex items-center justify-center` with NO
+ * overflow, over a locked page. A dialog taller than the window was therefore
+ * centred on an unscrollable box: it was cut at BOTH ends and its footer
+ * buttons could not be reached at all. That is the shape of most organiser
+ * dialogs on a 375x812 phone, and of any dialog on a short laptop window.
+ *
+ * Two changes fix it for every call site at once:
+ *
+ *  • the backdrop scrolls (`overflow-y:auto`), with `overscroll-behavior:
+ *    contain` so a flick at the end of the dialog does not start scrolling
+ *    whatever is behind it.
+ *
+ *  • the panel centres with `margin:auto` instead of `items/justify-center`.
+ *    On a panel that FITS the two are identical, so desktop is unchanged; on a
+ *    panel that does not, an auto margin resolves to 0 against negative free
+ *    space, so the panel starts at the top edge and every pixel of it is
+ *    scrollable. Flex centering instead splits the overflow across both edges
+ *    and puts the top of the dialog above the scroll origin, where nothing can
+ *    reach it. This is the whole bug.
+ *
+ * The panel wrapper also carries the safe-area insets, so a full-height dialog
+ * clears the notch and the home indicator. It is a transparent wrapper, so this
+ * is a gap around the card, not padding inside it.
+ */
+const MODAL_CSS = `
+.gv-modal-backdrop{
+  position:fixed; inset:0; z-index:50; display:flex;
+  overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
+  --gv-modal-gutter: calc(88px + env(safe-area-inset-top,0px) + env(safe-area-inset-bottom,0px));
+}
+.gv-modal-panel{ margin:auto; min-width:0; max-width:100%;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  padding-left:env(safe-area-inset-left,0px);
+  padding-right:env(safe-area-inset-right,0px);
+}
+`;
+
+/**
+ * The height a dialog CARD should cap itself at, when it wants its own inner
+ * scroll (a fixed header or a sticky footer that must stay put) rather than
+ * riding the backdrop's.
+ *
+ * Use it with `overflowY: 'auto'` on the same element:
+ *
+ * ```tsx
+ * <div style={{ maxHeight: MODAL_PANEL_MAX_HEIGHT, overflowY: 'auto' }}>
+ * ```
+ *
+ * It reads `--gv-modal-gutter` off the backdrop, which is the house `py-10`
+ * plus the notch and the home indicator. Hand-written `85dvh` /
+ * `calc(100dvh - 80px)` caps are the same idea re-derived per call site and
+ * getting the safe area wrong; they were replaced by this.
+ *
+ * The gutter is the DEFAULT padding, not a measurement: a call site that
+ * overrides `paddingClassName` with less vertical padding simply gets a
+ * slightly shorter card than it could have. Nothing is ever cut off, because
+ * the backdrop scrolls either way.
+ */
+export const MODAL_PANEL_MAX_HEIGHT = 'calc(100dvh - var(--gv-modal-gutter, 88px))';
+
 export interface ModalOverlayProps {
   children: React.ReactNode;
   onClose: () => void;
@@ -130,11 +197,12 @@ export function ModalOverlay({
         aria-modal={dialogRole ? true : undefined}
         aria-labelledby={dialogRole && labelledBy ? labelledBy : undefined}
         aria-label={dialogRole && !labelledBy ? label : undefined}
-        className={`fixed inset-0 z-50 flex items-center justify-center ${paddingClassName}`}
+        className={`gv-modal-backdrop ${paddingClassName}`}
         style={{ backgroundColor: scrimColor }}
         onClick={onClose}
       >
-        <div onClick={e => e.stopPropagation()}>{children}</div>
+        <style>{MODAL_CSS}</style>
+        <div className="gv-modal-panel" onClick={e => e.stopPropagation()}>{children}</div>
       </div>
     </Portal>
   );
