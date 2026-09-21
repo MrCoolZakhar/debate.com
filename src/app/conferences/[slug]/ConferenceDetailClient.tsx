@@ -50,6 +50,7 @@ import {
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { themeCssVars, type ConferenceTheme } from '@/lib/theme';
 import { friendlyError } from '@/lib/friendlyError';
+import { useServerNow } from '@/lib/applicationWindow';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -1330,6 +1331,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   // reuses the same value once it is.
   const activeTheme: ConferenceTheme = previewing ? (conference?.theme_draft ?? {}) : (conference?.theme ?? {});
   const themeVars = themeCssVars(activeTheme);
+  // The database's clock, so whether a role is open is decided the way
+  // guard_application_write() decides it, not by a phone set a day off.
+  const serverNowMs = useServerNow();
 
   // Loading.
   //
@@ -1373,7 +1377,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   const countryObj = getCountryByName(conference.country);
   const flagUrl = countryObj ? getFlagUrl(countryObj.code) : null;
   const enabledRoles = roleConfigs.filter(r => r.is_enabled);
-  const now = new Date();
+  const now = new Date(serverNowMs);
   // The hero's headline price is displayDelegatePrice (src/lib/publicFees.ts):
   // TBD until delegate applications are launched, then the delegate price of
   // the current fee stage, "Free" at 0. Two sources for the delegate config:
@@ -2470,7 +2474,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           {(conference.min_age != null || conference.max_age != null) && <MinAgeChip minAge={conference.min_age} maxAge={conference.max_age} />}
                         </div>
                         <p className="text-xs mb-4" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 70%, transparent)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
-                          Sign in with a free account to start your application.
+                          {enabledRoles.length > 0 && !hasOpenRoles
+                            ? 'Applications are currently closed.'
+                            : 'Sign in with a free account to start your application.'}
                         </p>
                         <button
                           onClick={() => openAuth()}
@@ -2627,7 +2633,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         {enabledRoles.map((r, i) => {
                           const phases = r.fee_phases ?? [];
                           // Highlight the stage that applies now, or at opening.
-                          const activePhase = activeFeePhase(phases, priceDate(r, now));
+                          // A closed role has no current stage: nobody can apply
+                          // at any price, so no phase is marked CURRENT.
+                          const roleClosed = getRoleWindowStatus(r) === 'closed';
+                          const activePhase = roleClosed ? null : activeFeePhase(phases, priceDate(r, now));
                           const currency = r.fee_currency ?? conference.fee_currency;
                           const opensAt = upcomingOpening(r, now);
                           const fmtPhaseDate = (iso: string) =>
@@ -2639,12 +2648,17 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                   {capitalize(r.role.replace(/-/g, ' '))}
                                 </span>
                                 <span className="text-[13px] font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
-                                  {delegatePriceLabel(displayRolePrice(r, conference.fee_currency, now))}
+                                  {roleClosed ? 'Closed' : delegatePriceLabel(displayRolePrice(r, conference.fee_currency, now))}
                                 </span>
                               </div>
                               {opensAt && r.applications_open_at && (
                                 <p className="text-[11px] -mt-1 pb-1.5" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
                                   Applications open {fmtWindowDate(r.applications_open_at)}
+                                </p>
+                              )}
+                              {roleClosed && r.applications_close_at && (
+                                <p className="text-[11px] -mt-1 pb-1.5" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+                                  Applications closed {fmtWindowDate(r.applications_close_at)}
                                 </p>
                               )}
                               {/* Fee phases breakdown, rendered only when the

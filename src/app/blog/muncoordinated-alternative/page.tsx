@@ -110,7 +110,7 @@ export default function MuncoordinatedAlternative() {
         <ul>
           <li><strong>Delegates get their own live view.</strong> On Gavelling, every delegate joins with a 6-character code and sees their queue position, the current speaker, documents, and a direct chat line to the dais from their own device. No more &quot;am I still on the list?&quot;</li>
           <li><strong>Faculty advisors get a view too.</strong> A read-only observer mode shows advisors their whole delegation live.</li>
-          <li><strong>A full conference layer.</strong> Delegate applications, smart country-role allocation, delegation management for schools, payments and financial aid, study guide distribution, position paper review, staff recruitment, awards, and a public conference directory with a world map. Muncoordinated, as a community project, does not attempt registration, payments, or conference logistics.</li>
+          <li><strong>A full conference layer.</strong> Delegate applications, <Link href="/blog/mun-country-allocation" style={{ color: '#1B3828', fontWeight: 600 }}>smart country-role allocation</Link>, delegation management for schools, <Link href="/blog/mun-conference-registration-payments" style={{ color: '#1B3828', fontWeight: 600 }}>payments and financial aid</Link>, study guide distribution, position paper review, staff recruitment, awards, and a public conference directory with a world map. Muncoordinated, as a community project, does not attempt registration, payments, or conference logistics.</li>
           <li><strong>Active product development.</strong> Gavelling ships new features continuously as a maintained product; Muncoordinated advances at the pace of community contribution, and support is community-based.</li>
         </ul>
 
@@ -158,7 +158,7 @@ export default function MuncoordinatedAlternative() {
 
         <H2>When Gavelling is the better pick</H2>
         <p>
-          If you want delegates and advisors in the loop live, or you are running an actual conference — applications, allocations, fees, study guides — rather than a single committee room, Gavelling covers the whole lifecycle in one free platform. There is no paid tier waiting behind the free one.
+          If you want delegates and advisors in the loop live, or you are <Link href="/blog/start-a-mun-conference" style={{ color: '#1B3828', fontWeight: 600 }}>running an actual conference</Link> — applications, allocations, fees, study guides — rather than a single committee room, Gavelling covers the whole lifecycle in one free platform. There is no paid tier waiting behind the free one.
         </p>
 
         <p>

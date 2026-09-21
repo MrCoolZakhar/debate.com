@@ -49,16 +49,16 @@ export default function Article1() {
       >
 
         <p>
-          Chairing a Model UN committee is one of the most rewarding roles in the MUN experience, and one of the most demanding. You are simultaneously a facilitator, timekeeper, procedural authority, and energy manager. This guide walks you through every stage of a committee session, from your first gavel strike to adjournment.
+          Chairing a Model UN committee is one of the most rewarding roles in the MUN experience, and one of the most demanding. You are simultaneously a facilitator, timekeeper, procedural authority, and energy manager. This guide walks you through every stage of a committee session, from your first gavel strike to adjournment. For the energy side of the job, read our guide to <Link href="/blog/mun-controlling-the-floor" style={{ color: '#1B3828', fontWeight: 600 }}>controlling the floor</Link>.
         </p>
 
         <H2>1. Before the Session: Preparation</H2>
         <p>
-          The quality of a committee session is largely determined before it starts. Chairs who walk in prepared radiate confidence; chairs who improvise burn energy managing avoidable chaos.
+          The quality of a committee session is largely determined before it starts. Chairs who walk in prepared radiate confidence; chairs who improvise burn energy managing avoidable chaos. It also helps to know in advance <Link href="/blog/mun-difficult-delegates" style={{ color: '#1B3828', fontWeight: 600 }}>how to handle difficult delegates</Link>.
         </p>
         <H3>Know your rules of procedure</H3>
         <p>
-          Different conferences use different rules of procedure: THIMUN, HMUN, ILMUNC, or a conference-specific variant. Read yours cover to cover before the session. The most important things to memorise: voting thresholds for each motion type, the order of precedence for motions, and how to handle Points of Order vs Points of Information.
+          Different conferences use different rules of procedure: <Link href="/blog/thimun-rules-of-procedure" style={{ color: '#1B3828', fontWeight: 600 }}>THIMUN</Link>, HMUN, ILMUNC, or a conference-specific variant. Read yours cover to cover before the session. The most important things to memorise: voting thresholds for each motion type, the order of precedence for motions, and how to handle Points of Order vs Points of Information.
         </p>
         <H3>Prepare your delegate roster and committee topic</H3>
         <p>
@@ -156,7 +156,7 @@ export default function Article1() {
         </p>
         <H3>Security Council vetoes</H3>
         <p>
-          In the UN Security Council, any of the five permanent members (China, France, Russia, UK, USA) can veto a substantive resolution by voting Against, regardless of how other members vote. A single P5 Against vote defeats the resolution.
+          In the UN Security Council, any of the five permanent members (China, France, Russia, UK, USA) can veto a substantive resolution by voting Against, regardless of how other members vote. A single P5 Against vote defeats the resolution. Our <Link href="/blog/mun-security-council-guide" style={{ color: '#1B3828', fontWeight: 600 }}>Security Council guide</Link> covers this in detail.
         </p>
 
         <H2>7. Closing the Session</H2>
@@ -164,7 +164,7 @@ export default function Article1() {
           At the end of a session, a delegate typically motions to adjourn the meeting. The chair calls the vote and, if passed, formally closes the session with a gavel strike. A brief closing statement from the chair, thanking delegates for their participation and summarising what was accomplished, leaves the committee on a positive note.
         </p>
         <p>
-          If you used Gavelling, the session data (speaker history, votes, chat, documents) is archived automatically and accessible for post-conference review or delegate feedback.
+          If you used Gavelling, the session data (speaker history, votes, chat, documents) is archived automatically and accessible for post-conference review or delegate feedback. If your conference gives awards, see our <Link href="/blog/mun-judging-rubric" style={{ color: '#1B3828', fontWeight: 600 }}>MUN judging rubric</Link>.
         </p>
       </ArticleLayout>
     </>

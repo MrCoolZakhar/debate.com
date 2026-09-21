@@ -319,7 +319,7 @@ export default function MymunAlternative() {
         <H3>Choose Gavelling if</H3>
         <ul>
           <li>You would rather spend €600 to €3,000 on your conference than on your software.</li>
-          <li>You want one system for applications, allocation, payments and the live committee, with no import step between the last two.</li>
+          <li>You want one system for applications, <Link href="/blog/mun-country-allocation">allocation</Link>, <Link href="/blog/mun-conference-registration-payments">payments</Link> and the live committee, with no import step between the last two.</li>
           <li>Your delegates pay by bank transfer as often as by card, and you need real invoices and payment-proof review rather than a paid checkbox.</li>
           <li>You want your chairs to be able to open a free session tonight, mid-week, to practise — and still have it there tomorrow.</li>
           <li>Your allocation is the hard part, and you want the software to explain its suggestions rather than just accept your clicks.</li>

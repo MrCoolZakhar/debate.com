@@ -114,7 +114,7 @@ export default function MunCommandAlternative() {
           MUN Command splits into two products. The free <strong>Session App</strong> is deliberately limited — 3 debate modes and 3 motion types at the time of writing — which is workable for a practice session but not for a real conference. The full <strong>Conference App</strong> is priced at <strong>€1 per user per day</strong> (free for up to 10 users).
         </p>
         <p>
-          Per-user-per-day pricing scales with exactly the thing you want to grow: attendance. A 200-delegate conference running three days is looking at roughly <strong>€600</strong> in software fees — often a meaningful slice of a school or university conference budget that could otherwise fund venue, printing, or financial aid.
+          Per-user-per-day pricing scales with exactly the thing you want to grow: attendance. A 200-delegate conference running three days is looking at roughly <strong>€600</strong> in software fees — often a meaningful slice of a school or university <Link href="/blog/mun-conference-budget" style={{ color: '#1B3828', fontWeight: 600 }}>conference budget</Link> that could otherwise fund venue, printing, or financial aid.
         </p>
 
         <H2>Where Gavelling differs</H2>
@@ -125,7 +125,7 @@ export default function MunCommandAlternative() {
           <li><strong>Free.</strong> Committee sessions and conference management both. No per-user fees, no per-day fees, no feature-limited tier to outgrow mid-session.</li>
           <li><strong>No delegate accounts for sessions.</strong> Delegates join a live committee with a 6-character code on any device. Nothing to install, nothing to sign up for, nothing for 200 delegates to get stuck on during roll call.</li>
           <li><strong>Full session toolkit.</strong> Roll call with live quorum, General Speakers List with timer, moderated and unmoderated caucuses, Tour de Table, motion queue ranked by disruptiveness, voting with configurable thresholds and P5 veto mode, delegate–chair chat, document workflow, suspend/resume.</li>
-          <li><strong>Conference layer included.</strong> Public conference listing and discovery, delegate applications, smart country-role allocation, delegation management for schools, payments and financial aid, study guides, position paper review, chair and staff recruitment, awards, and a shareable MUN CV for every delegate.</li>
+          <li><strong>Conference layer included.</strong> Public conference listing and discovery, delegate applications, <Link href="/blog/mun-country-allocation" style={{ color: '#1B3828', fontWeight: 600 }}>smart country-role allocation</Link>, delegation management for schools, <Link href="/blog/mun-conference-registration-payments" style={{ color: '#1B3828', fontWeight: 600 }}>payments and financial aid</Link>, study guides, position paper review, chair and staff recruitment, awards, and a shareable MUN CV for every delegate.</li>
           <li><strong>Web-only by design.</strong> There is no native app to install — which is a limitation if you specifically want one, and an advantage on conference day when nobody has to.</li>
         </ul>
 

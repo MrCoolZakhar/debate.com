@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
 import { H2, Callout } from '@/components/blog/prose';
@@ -52,13 +53,13 @@ export default function Article() {
         <H2>What a Good MUN Tool Needs to Do</H2>
         <p>Before comparing tools, it helps to list what a chair actually needs during committee:</p>
         <ul>
-          <li><strong>Speakers list management</strong>: adding, removing, reordering delegates on the GSL</li>
+          <li><strong>Speakers list management</strong>: adding, removing, reordering delegates on the <Link href="/blog/general-speakers-list-guide">GSL</Link></li>
           <li><strong>Speaker timer</strong>: per-speech countdown with automatic advance to the next speaker</li>
           <li><strong>Roll call</strong>: tracking which delegates are present, present and voting, or absent</li>
           <li><strong>Caucus management</strong>: separate caucus queue, caucus timer, total time tracking</li>
           <li><strong>Motions tracking</strong>: logging pending motions and their disruptiveness order</li>
           <li><strong>Delegate-facing display</strong>: letting delegates see their queue position and the current speaker</li>
-          <li><strong>Voting</strong>: recording roll call votes with In Favour / Against / Abstain</li>
+          <li><strong>Voting</strong>: recording <Link href="/blog/mun-voting-procedures">roll call votes</Link> with In Favour / Against / Abstain</li>
         </ul>
 
         <H2>Gavelling (Free)</H2>
@@ -77,7 +78,7 @@ export default function Article() {
         <p>Some large conferences use custom PowerPoint presentations displayed on a projector to show the current speaker, queue, and timer. These require someone dedicated to updating slides in real time, effectively a third dais member whose sole job is clicking through slides. Functional at scale, impractical for smaller committees.</p>
 
         <H2>openMUN and Other Open-Source Tools</H2>
-        <p>Several open-source MUN tools exist but most are unmaintained or require technical setup (running a local server, installing dependencies). For a school MUN club or an advisor without technical resources, these are not practical options.</p>
+        <p>Several open-source MUN tools exist but most are unmaintained or require technical setup (running a local server, installing dependencies). For a <Link href="/blog/start-mun-club">school MUN club</Link> or an advisor without technical resources, these are not practical options.</p>
 
         <H2>What We Recommend</H2>
         <p>For the vast majority of conferences (school MUN, regional conferences, even large university conferences), Gavelling covers everything needed without cost, setup, or technical expertise. The only scenario where a custom solution makes sense is a very large conference (300+ delegates) with extremely specific technical requirements and a dedicated IT team.</p>

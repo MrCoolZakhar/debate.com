@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
@@ -46,10 +47,10 @@ export default function Article() {
         slug="mun-technology-guide"
         pitch="Replace your paper list and phone timer with Gavelling, the purpose-built MUN committee platform."
       >
-        <p>Model UN has historically been a paper-heavy activity. Position papers were printed. Speakers lists were handwritten. Timers were phone stopwatches. In 2026, that is changing fast, and the conferences that embrace good technology run notably better than those that do not. This guide covers every category of MUN technology and what actually works in practice.</p>
+        <p>Model UN has historically been a paper-heavy activity. Position papers were printed. Speakers lists were handwritten. Timers were phone stopwatches. In 2026, that is changing fast, and the conferences that embrace good technology run notably better than those that do not. This guide covers every category of MUN technology and what actually works in practice. If some of your delegates join remotely, read our guide to <Link href="/blog/host-hybrid-mun-conference">hosting a hybrid MUN conference</Link> too.</p>
 
         <H2>Committee Management Software</H2>
-        <p>The biggest technology upgrade any committee can make. Purpose-built MUN software handles the chair's workflow in one place: roll call, speakers list, per-speaker timers, caucus queues, motions, documents, and voting. The alternative (paper lists, phone timers, and separate apps for each function) introduces errors and slows everything down.</p>
+        <p>The biggest technology upgrade any committee can make. Purpose-built MUN software handles the chair&apos;s workflow in one place: roll call, speakers list, per-speaker timers, caucus queues, motions, documents, and voting. The alternative (paper lists, phone timers, and separate apps for each function) introduces errors and slows everything down. Our comparison of the <Link href="/blog/best-mun-software-2026">best MUN software in 2026</Link> covers the options.</p>
         <H3>What to Look For</H3>
         <ul>
           <li><strong>Real-time delegate view:</strong> Delegates should be able to see the current speaker and their queue position without the chair having to announce it constantly.</li>
@@ -65,13 +66,13 @@ export default function Article() {
 
         <H2>Communication During Committee</H2>
         <p>Chairs frequently need to communicate with the secretariat, co-chairs in other rooms, or crisis staff during committee. A dedicated committee communication channel (a WhatsApp group or a Slack workspace per committee) is more reliable than walking between rooms. Set this up before conference day.</p>
-        <p>Gavelling's built-in chat lets chairs send messages directly to individual delegates and to all delegates, which is useful for distributing document links, announcing unmod times, or privately flagging procedure issues without interrupting formal debate.</p>
+        <p>Gavelling&apos;s built-in chat lets chairs send messages directly to individual delegates and to all delegates, which is useful for distributing document links, announcing unmod times, or privately flagging procedure issues without interrupting formal debate.</p>
 
         <H2>Projection and Display</H2>
-        <p>In large committee rooms, projecting the current speakers list and timer is a significant quality-of-life improvement for delegates. Gavelling's chair view can be mirrored to a projector, so delegates at the back of a 100-person room can see exactly who is speaking and how much time remains. This reduces the number of times delegates ask the chair "who is next?"</p>
+        <p>In large committee rooms, projecting the current speakers list and timer is a significant quality-of-life improvement for delegates. Gavelling&apos;s chair view can be mirrored to a projector, so delegates at the back of a 100-person room can see exactly who is speaking and how much time remains. This reduces the number of times delegates ask the chair &quot;who is next?&quot;</p>
 
         <H2>Voting Technology</H2>
-        <p>For roll call votes, manually recording each country's vote in alphabetical order while maintaining committee order is error-prone. Dedicated voting screens (Gavelling's /voting page routes delegates through their individual vote on any device) make the process faster and produce an automatic tally that eliminates counting errors.</p>
+        <p>For roll call <Link href="/blog/mun-voting-procedures">votes</Link>, manually recording each country&apos;s vote in alphabetical order while maintaining committee order is error-prone. Dedicated voting screens (Gavelling&apos;s /voting page routes delegates through their individual vote on any device) make the process faster and produce an automatic tally that eliminates counting errors.</p>
 
         <H2>Research Tools for Delegates</H2>
         <ul>
@@ -80,6 +81,7 @@ export default function Article() {
           <li><strong>CIA World Factbook:</strong> Quick country statistics and background.</li>
           <li><strong>Google Scholar:</strong> Academic papers on international law, humanitarian issues, and development topics for position paper citations.</li>
         </ul>
+        <p>Our guide to <Link href="/blog/mun-country-research">MUN country research</Link> shows how to use sources like these.</p>
 
         <H2>What Technology Cannot Replace</H2>
         <p>Technology handles logistics; it cannot replace substance. The best committee management software in the world does not fix a poorly prepared chair or a committee with no working papers. Use technology to handle the mechanics (timers, lists, votes) and invest the time saved in better preparation and stronger chair-delegate relationships.</p>

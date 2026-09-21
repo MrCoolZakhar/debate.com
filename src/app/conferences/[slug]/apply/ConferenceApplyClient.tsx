@@ -22,6 +22,7 @@ import { computeCheckout, activePhaseFee, type VoucherInput, type FeePhase } fro
 import { queueParticipantEventEmail } from '@/lib/emailEvents';
 import { reportBlocked } from '@/lib/reportCrash';
 import { friendlyError, UserFacingError } from '@/lib/friendlyError';
+import { roleWindowState, useServerNow, isApplicationWindowRefusal, formatWindowInstant } from '@/lib/applicationWindow';
 import { themeCssVars, type ConferenceTheme } from '@/lib/theme';
 import {
   type ApplyDraftAnswers, type ApplyDraftRow,
@@ -901,6 +902,22 @@ function ConferenceApplyInner() {
   // stranger, with canPreview still false, leaves this false and the page
   // behaves exactly as it does today, walls and all.
   const previewing = isPreview && canPreview;
+  // The database's clock, ticking, so the role's window is judged exactly as
+  // guard_application_write() judges it, and a form left open past the
+  // closing minute turns into the closed screen by itself.
+  const appNow = useServerNow();
+  // Plural, for "Applications for delegates closed on ...".
+  const roleNouns = role === 'staff' ? 'staff' : role === 'secretariat' ? 'secretariat members' : `${role.replace(/-/g, ' ')}s`;
+  /** One plain sentence for a role that cannot take a new application now. */
+  function windowClosedSentence(w: ReturnType<typeof roleWindowState>): string {
+    if (w === 'not_open' && roleConfig?.applications_open_at) {
+      return `Applications for ${roleNouns} open on ${formatWindowInstant(roleConfig.applications_open_at)}. Your answers are saved, so you can send them then.`;
+    }
+    if (w === 'closed' && roleConfig?.applications_close_at) {
+      return `Applications for ${roleNouns} closed on ${formatWindowInstant(roleConfig.applications_close_at)}, so this application can't be sent. Your answers are saved.`;
+    }
+    return `Applications for ${roleNouns} are not open right now, so this application can't be sent. Your answers are saved.`;
+  }
   // An organizer previewing sees their unpublished draft colours; everyone
   // else sees the published ones. conference can be null before it loads.
   const activeTheme: ConferenceTheme = previewing ? (conference?.theme_draft ?? {}) : (conference?.theme ?? {});
@@ -2677,6 +2694,17 @@ function ConferenceApplyInner() {
       await handleResubmit();
       return;
     }
+    // The database refuses a new application outside the role's window
+    // (guard_application_write). Say so here, before anything is written
+    // (a head delegate's delegation is created before the application).
+    // The draft keeps autosaving, so nothing typed is lost.
+    {
+      const w = roleWindowState(roleConfig, appNow);
+      if (w !== 'open') {
+        setSubmitError(windowClosedSentence(w));
+        return;
+      }
+    }
     setSubmitting(true);
     setSubmitError('');
     if (!session) { setSubmitError('Session expired. Please sign in again.'); setSubmitting(false); return; }
@@ -2838,7 +2866,12 @@ function ConferenceApplyInner() {
         // A failed insert stops the applicant dead and never reaches an error
         // boundary — the catch below turns it into a tidy inline message and
         // nobody is ever told. Report it.
-        if (appError) { reportBlocked('submit application', appError, { conferenceSlug: slug, role }); throw appError; }
+        // A refusal because the role's window closed (or has not opened) is
+        // a business rule, not a crash: no alert, and a plain sentence below.
+        if (appError) {
+          if (!isApplicationWindowRefusal(appError)) reportBlocked('submit application', appError, { conferenceSlug: slug, role });
+          throw appError;
+        }
         newAppId = (app as { id: string }).id;
         submittedAppIdRef.current = newAppId;
       }
@@ -2921,7 +2954,9 @@ function ConferenceApplyInner() {
       const timingParam = roleConfig?.payment_timing ? `&timing=${roleConfig.payment_timing}` : '';
       router.push(`/conferences/${slug}/apply/confirmation?role=${role}${timingParam}`);
     } catch (err: unknown) {
-      setSubmitError(friendlyError(err, 'Something went wrong. Please try again.'));
+      setSubmitError(isApplicationWindowRefusal(err)
+        ? friendlyError(err, 'Applications for this role are closed. Your answers are saved.')
+        : friendlyError(err, 'Something went wrong. Please try again.'));
       setSubmitting(false);
       // They're still in the flow with unsaved edits — keep saving them.
       draftOffRef.current = false;
@@ -5367,25 +5402,40 @@ function ConferenceApplyInner() {
   // BEFORE turning it on"). Four live conferences are missing their
   // secretariat/staff rows today, those roles being the most recently added.
   // Safe with a null roleConfig: every other read of it is optional-chained.
-  if (!previewing && (!roleConfig || !roleConfig.is_enabled) && !canEdit) {
+  // The role's window, judged exactly like guard_application_write(): off,
+  // not open yet, or closed. Shown BEFORE the form, so nobody fills in a
+  // whole application the database will refuse (MUNBU WS, 21 Sep 2026).
+  const roleWindow = roleWindowState(roleConfig, appNow);
+  if (!previewing && roleWindow !== 'open' && !canEdit) {
+    const openAt = roleWindow === 'not_open' ? roleConfig?.applications_open_at ?? null : null;
+    const closeAt = roleWindow === 'closed' ? roleConfig?.applications_close_at ?? null : null;
     return (
       <div className="min-h-screen flex flex-col" style={{ ...themeCssVars(activeTheme), backgroundColor: 'var(--gv-bg)' }}>
         <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
         <SiteNav />
-        <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
-          <div className="rounded-2xl p-10 text-center max-w-sm w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
-            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
-              Applications are not open
+        <div className="relative z-10 flex-1 flex items-center justify-center px-4 sm:px-6 py-20">
+          <div className="rounded-2xl p-8 sm:p-10 text-center max-w-sm w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
+            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", textWrap: 'balance' }}>
+              {openAt
+                ? `Applications for ${roleNouns} open on ${formatWindowInstant(openAt)}`
+                : closeAt
+                  ? `Applications for ${roleNouns} closed on ${formatWindowInstant(closeAt)}`
+                  : 'Applications are not open'}
             </h2>
-            <p className="text-sm mb-4" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
-              Applications for {role.replace(/-/g, ' ')} are not currently open for this conference.
+            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6, textWrap: 'pretty' }}>
+              {openAt
+                ? 'Come back then to apply. The conference page has everything else in the meantime.'
+                : closeAt
+                  ? 'New applications for this role are no longer accepted. The conference page shows any other roles that are still open.'
+                  : `Applications for ${roleNouns} are not currently open for this conference.`}
+              {guestDraftRow && ' The answers you already filled in are still saved in this browser.'}
             </p>
             <Link
               href={`/conferences/${slug}`}
-              className="text-sm font-semibold"
-              style={{ color: 'var(--gv-main)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
+              className="inline-block rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
+              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
             >
-              ← Back
+              VIEW CONFERENCE
             </Link>
           </div>
         </div>

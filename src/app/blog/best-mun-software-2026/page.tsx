@@ -154,7 +154,7 @@ export default function Article2() {
         </ul>
         <H3>Conferences layer (live)</H3>
         <p>
-          Gavelling Conferences adds end-to-end conference management at no cost: delegate applications, smart country-role allocations, delegation management for schools, payments and financial aid, study guide distribution, position paper review, chair and staff recruitment, awards, a shareable MUN CV for every delegate, and a public conference directory where delegates <Link href="/conferences/explore" style={{ color: '#1B3828', fontWeight: 600 }}>find and apply to conferences worldwide</Link>.
+          Gavelling Conferences adds end-to-end conference management at no cost: delegate applications, <Link href="/blog/mun-country-allocation" style={{ color: '#1B3828', fontWeight: 600 }}>smart country-role allocations</Link>, delegation management for schools, <Link href="/blog/mun-conference-registration-payments" style={{ color: '#1B3828', fontWeight: 600 }}>payments and financial aid</Link>, study guide distribution, position paper review, chair and staff recruitment, awards, a shareable MUN CV for every delegate, and a public conference directory where delegates <Link href="/conferences/explore" style={{ color: '#1B3828', fontWeight: 600 }}>find and apply to conferences worldwide</Link>.
         </p>
         <H3>Limitations</H3>
         <p>
@@ -289,7 +289,7 @@ export default function Article2() {
           <strong>MUN Command</strong> is a genuinely capable paid alternative — its debate-mode depth and native apps are real advantages if the €1 per user per day fits your budget. <strong>Muncoordinated</strong> remains the best minimal open-source dais tool. Google Sheets and timer apps still work for small informal sessions, but for anything delegates will remember, a dedicated platform is the professional choice.
         </p>
         <p>
-          See also: <Link href="/blog/how-to-run-mun-committee" style={{ color: '#1B3828', fontWeight: 600 }}>How to Run a MUN Committee</Link> for a complete guide to session procedure.
+          See also: <Link href="/blog/how-to-run-mun-committee" style={{ color: '#1B3828', fontWeight: 600 }}>How to Run a MUN Committee</Link> for a complete guide to session procedure, and <Link href="/blog/start-a-mun-conference" style={{ color: '#1B3828', fontWeight: 600 }}>How to Start a MUN Conference From Scratch</Link> if you are organising one.
         </p>
       </ArticleLayout>
     </>

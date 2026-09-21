@@ -1,7 +1,8 @@
 /**
  * The authoring kit: the handful of elements a post is allowed to use.
  *
- * A post's body is plain semantic HTML (<p>, <ul>, <li>, <strong>, <a>) styled
+ * A post's body is plain semantic HTML (<p>, <ul>, <li>, <strong>, and <a> for
+ * external links only; internal links are next/link <Link>) styled
  * by `.gv-prose` in src/app/blog/blog.css, plus the five components below for
  * the things plain HTML cannot express on its own. Nothing here takes a colour,
  * a size or a `style`: if a post could restyle itself, 50 posts would drift

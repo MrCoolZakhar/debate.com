@@ -97,7 +97,7 @@ export default function Article3() {
             <strong>Yield to another delegate</strong>: the named delegation speaks for whatever time remains. This is a useful tactical tool: yielding to an ally gives them floor time without them needing to wait for their position in the queue.
           </li>
           <li>
-            <strong>Yield to points/questions</strong>: the floor is briefly opened for points of information from other delegates. The original speaker must answer within the remaining time. Not all rules of procedure allow this.
+            <strong>Yield to points/questions</strong>: the floor is briefly opened for points of information from other delegates. The original speaker must answer within the remaining time. Not all rules of procedure allow this, as our <Link href="/blog/mun-procedure-styles-compared">comparison of MUN procedure styles</Link> shows.
           </li>
         </ul>
         <p>
@@ -106,7 +106,7 @@ export default function Article3() {
 
         <H2>4. Points During the GSL</H2>
         <p>
-          While the GSL is running, delegates may raise procedural Points that interrupt normal order:
+          While the GSL is running, delegates may raise procedural Points that interrupt normal order (our guide to <Link href="/blog/mun-points-explained">MUN points explained</Link> covers them all):
         </p>
         <H3>Point of Information</H3>
         <p>
@@ -114,11 +114,11 @@ export default function Article3() {
         </p>
         <H3>Point of Order</H3>
         <p>
-          A challenge to the chair&apos;s procedural ruling or a note that procedure is not being followed correctly. Not a question, but a formal challenge. The chair must address it immediately. Point of Order always takes precedence over the floor.
+          A challenge to the chair&apos;s procedural ruling or a note that procedure is not being followed correctly. Not a question, but a formal challenge. The chair must address it immediately. Point of Order always takes precedence over the floor. See our <Link href="/blog/mun-points-of-order">points of order guide</Link> for what qualifies.
         </p>
         <H3>Right of Reply</H3>
         <p>
-          When a delegate&apos;s nation has been directly and personally attacked in a speech, they may request a Right of Reply. If granted by the chair, they are inserted at the top of the GSL with a shorter time limit (usually 30 seconds) specifically to respond to the attack. Right of Reply cannot be used for general disagreement, only for personal or national insults.
+          When a delegate&apos;s nation has been directly and personally attacked in a speech, they may request a Right of Reply. If granted by the chair, they are inserted at the top of the GSL with a shorter time limit (usually 30 seconds) specifically to respond to the attack. Right of Reply cannot be used for general disagreement, only for personal or national insults. Our <Link href="/blog/mun-right-of-reply">right of reply guide</Link> covers it in detail.
         </p>
 
         <H2>5. How Chairs Should Manage the GSL</H2>
@@ -141,7 +141,7 @@ export default function Article3() {
         </p>
         <ul>
           <li><strong>GSL</strong>: best for formal position statements, broad debate, or when you want to hear from a wide range of delegations.</li>
-          <li><strong>Moderated Caucus</strong>: best for focused debate on a specific sub-topic with a controlled number of speakers and a clear time limit.</li>
+          <li><strong><Link href="/blog/how-to-run-moderated-caucus">Moderated Caucus</Link></strong>: best for focused debate on a specific sub-topic with a controlled number of speakers and a clear time limit.</li>
           <li><strong>Unmoderated Caucus</strong>: best for informal negotiation, bloc-building, and working paper drafting.</li>
         </ul>
         <p>

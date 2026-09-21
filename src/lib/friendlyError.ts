@@ -40,6 +40,15 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   vouchers_percent_range: "A percentage voucher must be between 1 and 100.",
   applications_aid_requested_amount_nonneg: "The amount you request can't be negative.",
   financial_aid_requests_requested_amount_check: "The amount you request can't be negative.",
+  // enforce_role_config_timeline(): the application window and the fee
+  // phases are one timeline (see src/lib/roleTimeline.ts for the rules).
+  arc_timeline_phase_dates: "Each price needs a start date on or before its end date.",
+  arc_timeline_phases_overlap: "Two prices cover the same day. Start each price the day after the previous one ends.",
+  arc_timeline_phases_gap: "There is a gap between two prices. Start each price the day after the previous one ends, so every day has one price.",
+  arc_timeline_open_after_first_price: "Applications would open after your first price has ended. Pick an earlier opening date, or remove that price.",
+  arc_timeline_close_before_last_price: "Applications would close before your last price starts. Pick a later closing date, or remove that price.",
+  arc_timeline_open_before_close: "Applications must open before they close. Move one of the two dates.",
+  arc_timeline_after_conference: "Applications can't close after the conference ends. Move the closing date, or the last price's end date, to the conference's last day or earlier.",
 };
 
 /** Supabase Auth (GoTrue) errors, matched by code first and by message text
@@ -70,6 +79,15 @@ const CODE_MESSAGES: Record<string, string> = {
   '22008': "One of the values isn't in the right format.",
 };
 
+/** By the HINT our own triggers attach to a refusal (RAISE ... USING hint),
+ *  for the refusals a person reaches in the normal course of things and
+ *  deserves a better sentence than the trigger's own message. */
+const HINT_MESSAGES: Record<string, string> = {
+  // guard_application_write(): the role's application window.
+  role_closed: "Applications for this role have closed, so this application can't be sent. Your answers are saved. Contact the organising team if you think this is a mistake.",
+  role_not_open: "Applications for this role haven't opened yet. Your answers are saved, so you can send them once applications open.",
+};
+
 const DEFAULT_FALLBACK = 'Something went wrong. Please try again.';
 
 /** Marks an error whose message we wrote ourselves, for a person, at the
@@ -81,6 +99,12 @@ export class UserFacingError extends Error {
     super(message);
     this.name = 'UserFacingError';
   }
+}
+
+/** The plain sentence for a named CHECK (or a trigger rule raised under a
+ *  constraint name), for UI that checks the rule itself before saving. */
+export function constraintMessage(name: string): string | null {
+  return CONSTRAINT_MESSAGES[name] ?? null;
 }
 
 /** Loose shape covering PostgrestError, StorageError, FunctionsHttpError and
@@ -164,6 +188,10 @@ export function friendlyError(error: unknown, fallback: string = DEFAULT_FALLBAC
 
   // e. By SQLSTATE.
   if (code && CODE_MESSAGES[code]) return CODE_MESSAGES[code];
+
+  // e2. Our own trigger refusals, by hint.
+  const hint = isErrorLike(error) && typeof error.hint === 'string' ? error.hint : '';
+  if (hint && HINT_MESSAGES[hint]) return HINT_MESSAGES[hint];
 
   // f. Our own trigger messages: written for people already, but only trust
   // them once they clear looksTechnical — a RAISE EXCEPTION can still quote

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
@@ -46,7 +47,7 @@ export default function Article() {
         slug="mun-online-committees"
         pitch="Gavelling works for in-person, online, and hybrid MUN committees: delegates join from any device."
       >
-        <p>Online MUN has moved from a pandemic emergency measure to a permanent fixture of the global MUN landscape. Conferences in 2026 range from fully in-person to fully virtual to hybrid models where some delegates attend in-room and others join remotely. Each format presents distinct challenges for chairs and delegates. This guide covers how to make online committee sessions work.</p>
+        <p>Online MUN has moved from a pandemic emergency measure to a permanent fixture of the global MUN landscape. Conferences in 2026 range from fully in-person to fully virtual to <Link href="/blog/host-hybrid-mun-conference">hybrid models</Link> where some delegates attend in-room and others join remotely. Each format presents distinct challenges for chairs and delegates. This guide covers how to make online committee sessions work.</p>
 
         <H2>Why Online MUN Is Genuinely Harder</H2>
         <p>Running a committee remotely is not simply a physical committee moved to video call. The mechanics are different in ways that catch many chairs off guard:</p>
@@ -58,22 +59,23 @@ export default function Article() {
         </ul>
 
         <H2>Essential Setup for Online Chairs</H2>
+        <p>Our <Link href="/blog/mun-technology-guide">MUN technology guide</Link> covers the wider tool choice.</p>
         <ul>
           <li><strong>A reliable committee management platform.</strong> Gavelling works equally well for online committees: delegates join via their phone or laptop, add themselves to the speakers list digitally, and see the timer in real time. This replaces placard raises entirely.</li>
           <li><strong>A stable video conferencing platform.</strong> Zoom is standard at most online conferences. Microsoft Teams and Google Meet are alternatives. Have a backup plan for your backup plan, because these platforms still fail.</li>
           <li><strong>A dedicated co-chair to manage tech.</strong> One chair runs debate; the other manages the waiting room, mutes unmuted delegates, manages breakout rooms, and handles technical support tickets. Never try to do both alone.</li>
-          <li><strong>A clear "raise hand" protocol.</strong> Use Zoom's raise hand feature or a reaction emoji as the replacement for placard raises. Announce the protocol at the start of every session.</li>
+          <li><strong>A clear &quot;raise hand&quot; protocol.</strong> Use Zoom&apos;s raise hand feature or a reaction emoji as the replacement for placard raises. Announce the protocol at the start of every session.</li>
         </ul>
 
         <H2>Managing the GSL Online</H2>
-        <p>Opening the speakers list online works best through a committee management platform rather than a video chat chat box. Delegates request to speak through Gavelling, which queues them in order. The chair does not need to monitor a scrolling chat feed and can focus on the delegate currently speaking.</p>
+        <p>Opening the <Link href="/blog/general-speakers-list-guide">speakers list</Link> online works best through a committee management platform rather than a video chat chat box. Delegates request to speak through Gavelling, which queues them in order. The chair does not need to monitor a scrolling chat feed and can focus on the delegate currently speaking.</p>
         <Callout>Never use the video chat box as your speakers list. It scrolls, names get lost, and the chair ends up missing delegates. Use a dedicated platform.</Callout>
 
         <H2>Online Moderated Caucuses</H2>
         <p>Online moderated caucuses work almost identically to in-person: the chair unmutes the speaker, starts the timer, and calls the next delegate when time expires. The main difference: explicitly mute speakers when their time expires rather than relying on them to stop talking. Online environments make over-running more common because there is no physical gavel cue.</p>
 
         <H2>Online Unmoderated Caucuses</H2>
-        <p>This is where online MUN most struggles. The natural coalition-building of an in-person unmod (walking up to someone, having a two-minute conversation) does not translate to a 60-person Zoom call. Approaches that work:</p>
+        <p>This is where online MUN most struggles. The natural coalition-building of an in-person unmod (walking up to someone, having a two-minute conversation) does not translate to a 60-person Zoom call. Our <Link href="/blog/unmoderated-caucus-guide">unmoderated caucus guide</Link> covers the in-person version. Approaches that work online:</p>
         <ul>
           <li><strong>Pre-assigned breakout rooms.</strong> Create rooms labelled by bloc name or working paper number before the session. During the unmod, send delegates to their relevant room and circulate between rooms as a chair.</li>
           <li><strong>Use the main room for cross-bloc negotiation.</strong> Let smaller blocs use the main room while larger groups go to breakout rooms.</li>
@@ -90,7 +92,7 @@ export default function Article() {
         </ul>
 
         <H2>Hybrid Committees</H2>
-        <p>Hybrid committees, where some delegates are in-room and others are remote, are the hardest format to run well. The in-room delegates have natural advantages (easier to get the chair's attention, more energy, better audio). Compensate by actively calling on remote delegates during debate and giving them explicit priority during caucus slot allocation.</p>
+        <p>Hybrid committees, where some delegates are in-room and others are remote, are the hardest format to run well. The in-room delegates have natural advantages (easier to get the chair&apos;s attention, more energy, better audio). Compensate by actively calling on remote delegates during debate and giving them explicit priority during caucus slot allocation.</p>
       </ArticleLayout>
     </>
   );

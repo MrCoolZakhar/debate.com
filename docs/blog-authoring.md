@@ -93,6 +93,7 @@ can be a dead end. That is why `related` is capped at five of the six slots.
 
 ```tsx
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
 import { H2, H3, Callout, ChairScript, FactCard, TableWrap } from '@/components/blog/prose';
@@ -142,7 +143,8 @@ export default function Article() {
         <p>The opening paragraph. It is set larger than the rest, automatically.</p>
 
         <H2>A section heading</H2>
-        <p>Ordinary prose. Plain tags. <strong>Bold</strong>, <em>italic</em> and links all work.</p>
+        <p>Ordinary prose. Plain tags. <strong>Bold</strong> and <em>italic</em> work, and so does a
+          link to <Link href="/blog/mun-glossary">another guide</Link>.</p>
 
         <H3>A sub heading</H3>
         <ul>
@@ -171,6 +173,19 @@ Import only the prose components you actually use, or lint will complain.
 
 Plain HTML for everything ordinary. These six for everything else. **Nothing
 here takes a colour, a size or a `style`.**
+
+### Links
+
+- **Internal links use `<Link>` from `next/link`**, never a plain `<a>`:
+  `<Link href="/blog/mun-glossary">the glossary</Link>`. A plain `<a href="/...">`
+  to one of our own pages fails lint (`@next/next/no-html-link-for-pages`) and
+  throws away client-side navigation. `<Link>` still renders a real `<a href>` in
+  the server HTML, so crawlers see it exactly as they would a plain tag.
+- **External links are a plain `<a href="https://...">`.**
+- Link other guides in the body where the topic comes up, two to five per post,
+  with anchor text that says what the reader gets. "Keep reading" at the foot is
+  automatic and does not replace in-body links. Only link to a slug whose
+  `src/app/blog/<slug>/` directory exists.
 
 ### `<H2>` and `<H3>`
 

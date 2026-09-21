@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
+import Link from 'next/link';
 import ArticleLayout from '@/components/blog/ArticleLayout';
 import { H2, H3, Callout } from '@/components/blog/prose';
 
@@ -47,15 +48,15 @@ export default function Article() {
         pitch="Set up all your conference committees in Gavelling before conference day: sessions, delegates, and settings ready to go."
       >
 
-        <p>Directing a Model UN conference is one of the most complex leadership experiences available to students. You are responsible for every committee running simultaneously, dozens of chair relationships, hundreds of delegates, venue logistics, and the overall quality of the academic and social programme. This guide covers the full arc, from initial planning to post-conference wrap-up.</p>
+        <p>Directing a Model UN conference is one of the most complex leadership experiences available to students. You are responsible for every committee running simultaneously, dozens of chair relationships, hundreds of delegates, venue logistics, and the overall quality of the academic and social programme. This guide covers the full arc, from initial planning to post-conference wrap-up. For the day itself, see our guide to <Link href="/blog/mun-conference-day-operations">MUN conference day operations</Link>.</p>
 
         <H2>What Does a MUN Director Do?</H2>
-        <p>The director (sometimes called Secretary-General, Director-General, or simply the conference head depending on your secretariat structure) is responsible for the overall conference programme. Specific responsibilities typically include:</p>
+        <p>The director (sometimes called Secretary-General, Director-General, or simply the conference head depending on your <Link href="/blog/mun-secretariat-roles">secretariat structure</Link>) is responsible for the overall conference programme. Specific responsibilities typically include:</p>
         <ul>
-          <li>Selecting committee topics and assigning country allocations</li>
+          <li>Selecting committee topics and assigning <Link href="/blog/mun-country-allocation">country allocations</Link></li>
           <li>Recruiting and managing the dais staff (chairs, co-chairs, crisis directors)</li>
-          <li>Overseeing background guide production</li>
-          <li>Managing delegate registration and school liaison</li>
+          <li>Overseeing <Link href="/blog/mun-background-guide-writing">background guide production</Link></li>
+          <li>Managing <Link href="/blog/mun-conference-registration-payments">delegate registration</Link> and school liaison</li>
           <li>Running the awards process and ensuring consistency across committees</li>
           <li>Coordinating venue logistics, scheduling, and technology</li>
         </ul>

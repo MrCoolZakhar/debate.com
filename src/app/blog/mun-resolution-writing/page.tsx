@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
 import { H2, H3, Callout } from '@/components/blog/prose';
+import Link from 'next/link';
 
 export const metadata: Metadata = pageMetadata({
   title: 'How to Write a MUN Resolution: Clauses, Format & Examples',
@@ -47,10 +48,10 @@ export default function Article() {
         pitch="Gavelling lets delegates submit working papers and draft resolutions directly to the chair during committee."
       >
 
-        <p>A Model UN resolution is the formal output of a committee's work. It is the document that delegates spend hours debating, amending, and eventually voting on. Writing one that is both substantive and passable requires understanding the format, choosing the right language, and building a coalition wide enough to get it across the line. This guide covers everything from your first clause to the final vote.</p>
+        <p>A Model UN resolution is the formal output of a committee&apos;s work. It is the document that delegates spend hours debating, amending, and eventually voting on. Writing one that is both substantive and passable requires understanding the format, choosing the right language, and building a coalition wide enough to get it across the line. This guide covers everything from your first clause to the final vote. Keep our full list of <Link href="/blog/mun-clause-phrases">MUN clause phrases</Link> open while you draft, and read a complete <Link href="/blog/mun-resolution-example">MUN resolution example</Link> to see the finished format.</p>
 
         <H2>Working Paper vs. Draft Resolution</H2>
-        <p>The terms are often used interchangeably but technically mean different things. A <strong>working paper</strong> is an informal document used to develop ideas; it does not need to follow strict resolution format and is not voted on directly. A <strong>draft resolution</strong> is a formally formatted document submitted to the committee for debate and a vote. Most conferences require a draft resolution to have a minimum number of sponsors before it can be introduced.</p>
+        <p>The terms are often used interchangeably but technically mean different things. A <strong><Link href="/blog/mun-working-paper-guide">working paper</Link></strong> is an informal document used to develop ideas; it does not need to follow strict resolution format and is not voted on directly. A <strong>draft resolution</strong> is a formally formatted document submitted to the committee for debate and a vote. Most conferences require a draft resolution to have a minimum number of sponsors before it can be introduced.</p>
 
         <H2>Resolution Structure</H2>
         <p>Every MUN resolution has the same structure: a header, preambulatory clauses, and operative clauses.</p>
@@ -73,7 +74,7 @@ export default function Article() {
         <Callout>Preambulatory clauses are italicised in formal resolution format. They do not create obligations; they only set context. Keep them tight. Three to five is usually enough.</Callout>
 
         <H3>Operative Clauses</H3>
-        <p>Operative clauses are the resolution's actual content. They begin with a strong verb in the third person and end with a semicolon, except the final one which ends with a period. They are numbered and are what gets debated, amended, and voted on.</p>
+        <p>Operative clauses are the resolution&apos;s actual content. They begin with a strong verb in the third person and end with a semicolon, except the final one which ends with a period. They are numbered and are what gets debated, amended, and voted on.</p>
         <p>Common operative phrases:</p>
         <ul>
           <li><em>Calls upon:</em> requests but does not require action</li>
@@ -87,7 +88,7 @@ export default function Article() {
         </ul>
 
         <H2>Writing Good Operative Clauses</H2>
-        <p>The most common mistake in resolution writing is vagueness. "Encourages member states to cooperate on climate change" is not a clause; it is a platitude. A well-written operative clause specifies who does what, how, by when, and with what resources.</p>
+        <p>The most common mistake in resolution writing is vagueness. &quot;Encourages member states to cooperate on climate change&quot; is not a clause; it is a platitude. A well-written operative clause specifies who does what, how, by when, and with what resources.</p>
         <p>Compare:</p>
         <ul>
           <li><strong>Weak:</strong> Urges member states to address the refugee crisis;</li>
@@ -98,11 +99,11 @@ export default function Article() {
         <p>Operative clauses can have sub-clauses, labelled (a), (b), (c). Use them when a clause has several component parts. Sub-clauses end with a comma except the last, which ends with the semicolon that closes the parent clause.</p>
 
         <H2>Getting Your Resolution Passed</H2>
-        <p>A brilliantly written resolution that cannot get a majority is useless. Draft with coalition-building in mind from the start:</p>
+        <p>A brilliantly written resolution that cannot get a majority is useless. Draft with <Link href="/blog/mun-bloc-building">coalition-building</Link> in mind from the start:</p>
         <ul>
           <li>Invite opposing bloc delegates to contribute language on operative clauses where you can find common ground.</li>
-          <li>Use "calls upon" and "encourages" for politically sensitive clauses that might lose votes if worded more strongly.</li>
-          <li>Be willing to accept friendly amendments that broaden support without gutting your resolution's substance.</li>
+          <li>Use &quot;calls upon&quot; and &quot;encourages&quot; for politically sensitive clauses that might lose votes if worded more strongly.</li>
+          <li>Be willing to accept <Link href="/blog/mun-amendment-guide">friendly amendments</Link> that broaden support without gutting your resolution&apos;s substance.</li>
         </ul>
       </ArticleLayout>
     </>

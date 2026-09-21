@@ -53,7 +53,7 @@ export default function Article5() {
           Every experienced MUN chair remembers the first time they sat behind the dais. The nerves. The weight of the gavel. The realisation that seventy people are about to look to you for direction.
         </p>
         <p>
-          Here is the truth: you do not need to be perfect. Delegates do not expect perfection. They expect fairness, composure, and forward momentum. This guide will give you everything you need to deliver all three.
+          Here is the truth: you do not need to be perfect. Delegates do not expect perfection. They expect fairness, composure, and forward momentum. This guide will give you everything you need to deliver all three. If you have not been appointed yet, start with <Link href="/blog/how-to-become-a-mun-chair" style={{ color: '#1B3828', fontWeight: 600 }}>how to become a MUN chair</Link>.
         </p>
 
         <H2>1. You Don&apos;t Need to Know Everything</H2>
@@ -72,7 +72,7 @@ export default function Article5() {
           Print your rules of procedure and keep them in front of you. No one expects you to have them memorised. Using them shows competence, not weakness.
         </p>
         <p>
-          See also: <Link href="/blog/mun-motions-explained" style={{ color: '#1B3828', fontWeight: 600 }}>MUN Motions Explained</Link>, a complete reference to keep open during your session.
+          See also: <Link href="/blog/mun-motions-explained" style={{ color: '#1B3828', fontWeight: 600 }}>MUN Motions Explained</Link>, a complete reference to keep open during your session. For the delegates who test you, read our guide to <Link href="/blog/mun-difficult-delegates" style={{ color: '#1B3828', fontWeight: 600 }}>handling difficult delegates</Link>.
         </p>
 
         <H2>2. Preparation Checklist (Before the Conference)</H2>
@@ -91,6 +91,9 @@ export default function Article5() {
             <li key={i}>{item}</li>
           ))}
         </ul>
+        <p>
+          If you are writing the study guide yourself, our guide to <Link href="/blog/mun-background-guide-writing" style={{ color: '#1B3828', fontWeight: 600 }}>writing a MUN background guide</Link> covers it.
+        </p>
 
         <H2>3. Day-Of Setup (30 Minutes Before)</H2>
         <ul>
@@ -121,7 +124,7 @@ export default function Article5() {
 
         <H2>5. Managing Debate: The First Hour</H2>
         <p>
-          The first hour sets the tone for the entire conference. Move quickly, be consistent, and project calm authority even if you feel anything but.
+          The first hour sets the tone for the entire conference. Move quickly, be consistent, and project calm authority even if you feel anything but. Our guide to <Link href="/blog/mun-controlling-the-floor" style={{ color: '#1B3828', fontWeight: 600 }}>controlling the floor</Link> goes deeper.
         </p>
         <H3>Opening the GSL</H3>
         <p>
@@ -181,6 +184,7 @@ export default function Article5() {
         <ul>
           <li><strong>Debrief with your co-chair.</strong> What went well? What would you do differently? This 10-minute conversation is how you improve.</li>
           <li><strong>Review delegate feedback.</strong> Gavelling collects optional delegate feedback at session end. Reading it, even the harsh comments, accelerates your development faster than anything else.</li>
+          <li><strong>Prepare for awards.</strong> If your conference gives awards, see our <Link href="/blog/mun-judging-rubric" style={{ color: '#1B3828', fontWeight: 600 }}>MUN judging rubric</Link>.</li>
           <li><strong>Archive your notes.</strong> Gavelling stores the session record automatically: speaker history, motions, votes, chat. This is useful for writing committee reports and for your own review.</li>
         </ul>
 

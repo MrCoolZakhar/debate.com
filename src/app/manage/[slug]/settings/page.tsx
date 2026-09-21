@@ -47,7 +47,9 @@ import CustomizationCard from './CustomizationCard';
 import { type FormBlock, normalizeBlocks, unpublishableQuestions } from '@/lib/customQuestions';
 import QuestionBuilder from '@/components/QuestionBuilder';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
-import { friendlyError } from '@/lib/friendlyError';
+import { friendlyError, constraintMessage } from '@/lib/friendlyError';
+import { normaliseRoleTimeline, linkNeighbourPhase } from '@/lib/roleTimeline';
+import { useConferenceTimezone, timelineNotice, TimelineNotice, TimelineWarning } from './timelineUi';
 import { INTENT_OPTIONS, getConferenceIntent, intentPayload } from '@/lib/conferenceIntent';
 import ProfileLink from '@/components/ProfileLink';
 
@@ -308,17 +310,6 @@ const STEPS = [
  *  auto-advance (which step to land on next), so the two never disagree. */
 function stepsForRole(role: string): typeof STEPS[number][] {
   return role === 'secretariat' || role === 'staff' ? STEPS.filter(s => s.n !== 2) : [...STEPS];
-}
-
-/** True when any two dated fee phases have intersecting [start, end] windows. */
-function feePhasesOverlap(phases: FeePhase[]): boolean {
-  const dated = phases.filter(p => p.start_date && p.end_date);
-  for (let i = 0; i < dated.length; i++) {
-    for (let j = i + 1; j < dated.length; j++) {
-      if (dated[i].start_date <= dated[j].end_date && dated[j].start_date <= dated[i].end_date) return true;
-    }
-  }
-  return false;
 }
 
 /** UTC instant from the database to the local wall-clock value a
@@ -688,6 +679,9 @@ export default function SettingsPage() {
   const [roleConfigs, setRoleConfigs] = useState<RoleConfig[]>([]);
   const [configVersion, setConfigVersion] = useState(0);
   const [roleConfigError, setRoleConfigError] = useState('');
+  // The one line under the window or the fee phases saying what the timeline
+  // rule moved, or why an edit was not saved (src/lib/roleTimeline.ts).
+  const [timelineMsg, setTimelineMsg] = useState<{ role: string; where: 'window' | 'phases'; kind: 'info' | 'error'; text: string } | null>(null);
   /** Why the form builder is refusing to save. Sits beside the builder, not up
    *  with roleConfigError, because the question that caused it is down here. */
   const [blocksBlocked, setBlocksBlocked] = useState('');
@@ -1288,7 +1282,7 @@ export default function SettingsPage() {
     }
   }
 
-  async function saveRoleConfig(role: string, updates: Partial<RoleConfig>) {
+  async function saveRoleConfig(role: string, updates: Partial<RoleConfig>, localOnly: Partial<RoleConfig> = {}) {
     const step = stepForUpdates(updates as Record<string, unknown>);
     if (!conference) return;
     if (!session) return;
@@ -1296,7 +1290,7 @@ export default function SettingsPage() {
     // Optimistic: patch local state immediately so the control reflects the
     // click at once, independent of any other save's in-flight DB round trip.
     const previous = roleConfigs;
-    setRoleConfigs(prev => prev.map(rc => (rc.role === role ? { ...rc, ...updates } : rc)));
+    setRoleConfigs(prev => prev.map(rc => (rc.role === role ? { ...rc, ...updates, ...localOnly } : rc)));
     setRoleConfigError('');
     markStep(step, 'saving');
 
@@ -1313,7 +1307,7 @@ export default function SettingsPage() {
       .update(updates)
       .eq('conference_id', conference.id)
       .eq('role', role)
-      .select('id');
+      .select('id, applications_open_at, applications_close_at, fee_phases');
 
     if (error || !data || data.length === 0) {
       // Revert the optimistic patch and surface the failure, a silent
@@ -1322,6 +1316,12 @@ export default function SettingsPage() {
       setRoleConfigError(error ? friendlyError(error, "Couldn't save this role. Please try again.") : "Couldn't save, that role config wasn't found.");
       markStep(step, 'idle');
     } else {
+      // The timeline trigger may have moved a date (enforce_role_config_timeline):
+      // show what the database stored, never our own guess.
+      const row = data[0] as Pick<RoleConfig, 'applications_open_at' | 'applications_close_at' | 'fee_phases'>;
+      setRoleConfigs(prev => prev.map(rc => (rc.role === role
+        ? { ...rc, applications_open_at: row.applications_open_at, applications_close_at: row.applications_close_at, fee_phases: row.fee_phases }
+        : rc)));
       markStep(step, 'saved');
     }
   }
@@ -1371,11 +1371,68 @@ export default function SettingsPage() {
     );
   }
 
+  const conferenceTz = useConferenceTimezone(conference?.id);
+  const timelineCtx = {
+    timeZone: conferenceTz,
+    conferenceEnd: conference?.dates_tbd ? null : (conference?.end_date ?? null),
+  };
+
+  /**
+   * Every write to a role's window or fee phases goes through here. It applies
+   * the same rules as the database trigger (src/lib/roleTimeline.ts): the side
+   * the organiser edited wins, the other follows, and a contradiction is not
+   * sent at all. Returns false when it refused. Only the edited columns and
+   * the derived window go to the database; derived prices are shown locally
+   * and derived again by the trigger, so an organiser who may not change
+   * prices can still move a closing date.
+   */
+  function saveTimeline(
+    role: string,
+    change: Partial<Pick<RoleConfig, 'applications_open_at' | 'applications_close_at' | 'fee_phases'>>,
+    where: 'window' | 'phases',
+  ): boolean {
+    const current = roleConfigs.find(rc => rc.role === role);
+    if (!current) return false;
+    const input = {
+      applications_open_at: 'applications_open_at' in change ? change.applications_open_at ?? null : current.applications_open_at,
+      applications_close_at: 'applications_close_at' in change ? change.applications_close_at ?? null : current.applications_close_at,
+      fee_phases: 'fee_phases' in change ? change.fee_phases ?? null : current.fee_phases,
+    };
+    const changed = {
+      phases: 'fee_phases' in change,
+      open: 'applications_open_at' in change,
+      close: 'applications_close_at' in change,
+    };
+    const res = normaliseRoleTimeline(input, changed, timelineCtx);
+    if (!res.ok) {
+      setTimelineMsg({ role, where, kind: 'error', text: constraintMessage(res.rule) ?? "These dates don't fit together, so they were not saved." });
+      // The label and amount fields are uncontrolled: remount them so they
+      // show what is stored, not the refused value.
+      setConfigVersion(v => v + 1);
+      return false;
+    }
+    // fee_phases first when prices were edited: the first key names the step
+    // whose "saved" tick lights up (stepForUpdates).
+    const updates: Partial<RoleConfig> = changed.phases
+      ? { fee_phases: res.fee_phases, applications_open_at: res.applications_open_at, applications_close_at: res.applications_close_at }
+      : { applications_open_at: res.applications_open_at, applications_close_at: res.applications_close_at };
+    const localOnly: Partial<RoleConfig> = {};
+    if (!changed.phases && JSON.stringify(res.fee_phases) !== JSON.stringify(current.fee_phases)) localOnly.fee_phases = res.fee_phases;
+    const note = timelineNotice(res, timelineCtx);
+    setTimelineMsg(note ? { role, where, kind: 'info', text: note } : null);
+    void saveRoleConfig(role, updates, localOnly);
+    return true;
+  }
+
   // Patch one field of one fee phase and persist the whole jsonb array —
   // rides saveRoleConfig's optimistic-update-with-rollback.
   function updateFeePhase(role: string, phases: FeePhase[], idx: number, patch: Partial<FeePhase>) {
-    const next = phases.map((p, i) => (i === idx ? { ...p, ...patch } : p));
-    void saveRoleConfig(role, { fee_phases: next });
+    let next = phases.map((p, i) => (i === idx ? { ...p, ...patch } : p));
+    // A new end date pulls the next price's start along (and a new start the
+    // previous price's end), so prices stay back to back.
+    if (patch.end_date !== undefined) next = linkNeighbourPhase(next, idx, 'end_date');
+    if (patch.start_date !== undefined) next = linkNeighbourPhase(next, idx, 'start_date');
+    if (!saveTimeline(role, { fee_phases: next }, 'phases')) return;
     // The moment this role has at least one phase with both ends of its window
     // filled in, offer to give the other roles the same one. Once per role per
     // visit — a suggestion, never a nag.
@@ -1412,13 +1469,20 @@ export default function SettingsPage() {
       .update(patch)
       .eq('conference_id', conference.id)
       .in('role', targets)
-      .select('id');
+      .select('role, applications_open_at, applications_close_at, fee_phases');
     setCopyPhasesBusy(false);
     if (error || !data || data.length === 0) {
       setRoleConfigs(previous);
       setRoleConfigError(error ? friendlyError(error, "Couldn't copy those phases across.") : "Couldn't copy those phases across.");
       return;
     }
+    // Each target's window now follows the copied prices (the timeline
+    // trigger): show the dates the database stored.
+    const stored = new Map((data as Pick<RoleConfig, 'role' | 'applications_open_at' | 'applications_close_at' | 'fee_phases'>[]).map(r => [r.role, r]));
+    setRoleConfigs(prev => prev.map(rc => {
+      const r = stored.get(rc.role);
+      return r ? { ...rc, applications_open_at: r.applications_open_at, applications_close_at: r.applications_close_at, fee_phases: r.fee_phases } : rc;
+    }));
     setCopyPhasesOpen(false);
     setConfigVersion(v => v + 1);
     setCopyPhasesNotice(`Copied to ${targets.length} ${targets.length === 1 ? 'role' : 'roles'}`);
@@ -3202,7 +3266,7 @@ export default function SettingsPage() {
                               withTime
                               clearable
                               value={toDatetimeLocal(config.applications_open_at)}
-                              onChange={(v) => saveRoleConfig(role, { applications_open_at: fromDatetimeLocal(v) })}
+                              onChange={(v) => { saveTimeline(role, { applications_open_at: fromDatetimeLocal(v) }, 'window'); }}
                               placeholder="Opens as soon as it is switched on"
                               zoneNote={`Times are in ${localZoneLabel()}.`}
                             />
@@ -3220,7 +3284,7 @@ export default function SettingsPage() {
                               withTime
                               clearable
                               value={toDatetimeLocal(config.applications_close_at)}
-                              onChange={(v) => saveRoleConfig(role, { applications_close_at: fromDatetimeLocal(v) })}
+                              onChange={(v) => { saveTimeline(role, { applications_close_at: fromDatetimeLocal(v) }, 'window'); }}
                               min={toDatetimeLocal(config.applications_open_at).slice(0, 10) || undefined}
                               placeholder="Stays open until switched off"
                               zoneNote={`Times are in ${localZoneLabel()}.`}
@@ -3237,6 +3301,22 @@ export default function SettingsPage() {
                                 Times are in {localZoneLabel()}. Applicants see these in their own timezone.
                               </p>
                             )}
+                            {(config.fee_phases ?? []).some(p => p.start_date && p.end_date) && (
+                              <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                                With fee phases, applications open when the first price starts and close when the last price ends. Changing one moves the other.
+                              </p>
+                            )}
+                            {timelineMsg?.role === role && timelineMsg.where === 'window' && (
+                              timelineMsg.kind === 'info'
+                                ? <TimelineNotice text={timelineMsg.text} />
+                                : <p role="alert" className="text-xs rounded-lg px-3 py-2 mt-2" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}>{timelineMsg.text}</p>
+                            )}
+                            <TimelineWarning
+                              config={config}
+                              roleLabel={role}
+                              ctx={timelineCtx}
+                              onFix={(patch) => { saveTimeline(role, patch, 'window'); }}
+                            />
                           </div>
                           <div>
                             <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
@@ -3527,9 +3607,9 @@ export default function SettingsPage() {
                                   <button
                                     type="button"
                                     disabled={hasInvalidPhase}
-                                    onClick={() => saveRoleConfig(role, {
+                                    onClick={() => { saveTimeline(role, {
                                       fee_phases: [...phases, { label: `Phase ${phases.length + 1}`, start_date: '', end_date: '', amount: config.fee_amount }],
-                                    })}
+                                    }, 'phases'); }}
                                     className="text-[11px] font-bold focus:outline-none hover:underline"
                                     style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', background: 'none', border: 'none', opacity: hasInvalidPhase ? 0.45 : 1, cursor: hasInvalidPhase ? 'not-allowed' : 'pointer' }}
                                   >
@@ -3613,7 +3693,7 @@ export default function SettingsPage() {
                                         <button
                                           type="button"
                                           aria-label={`Remove ${phase.label || 'phase'}`}
-                                          onClick={() => saveRoleConfig(role, { fee_phases: phases.filter((_, i) => i !== pi) })}
+                                          onClick={() => { saveTimeline(role, { fee_phases: phases.filter((_, i) => i !== pi) }, 'phases'); }}
                                           className="text-sm font-bold focus:outline-none justify-self-center"
                                           style={{ color: '#8B2020', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1 }}
                                         >
@@ -3628,14 +3708,20 @@ export default function SettingsPage() {
                                       </Fragment>
                                     );
                                   })}
-                                  {feePhasesOverlap(phases) && (
-                                    <p className="text-xs mt-1" style={{ color: '#B8844A', fontFamily: "'Outfit', sans-serif" }}>
-                                      Two phases have overlapping date windows, the phase listed first wins on overlapping days.
-                                    </p>
-                                  )}
                                   <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                                    Dates are inclusive. When no phase covers today, the flat fee above applies ({config.fee_currency} {config.fee_amount}).
+                                    Dates are inclusive and each price starts the day after the previous one ends. Applications open when the first price starts and close when the last one ends.
                                   </p>
+                                  {timelineMsg?.role === role && timelineMsg.where === 'phases' && (
+                                    timelineMsg.kind === 'info'
+                                      ? <TimelineNotice text={timelineMsg.text} />
+                                      : <p role="alert" className="text-xs rounded-lg px-3 py-2 mt-2" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}>{timelineMsg.text}</p>
+                                  )}
+                                  <TimelineWarning
+                                    config={config}
+                                    roleLabel={role}
+                                    ctx={timelineCtx}
+                                    onFix={(patch) => { saveTimeline(role, patch, 'phases'); }}
+                                  />
                                 </>
                               )}
                             </div>

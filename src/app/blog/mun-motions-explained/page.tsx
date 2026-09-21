@@ -49,7 +49,7 @@ export default function Article4() {
       >
 
         <p>
-          Motions are the mechanism through which delegates change what the committee is doing: shifting from formal debate to a caucus, extending speaking time, moving to a vote, or closing the session. Understanding every motion type, when to use it, and what threshold it requires is essential for both chairs and experienced delegates.
+          Motions are the mechanism through which delegates change what the committee is doing: shifting from formal debate to a caucus, extending speaking time, moving to a vote, or closing the session. Understanding every motion type, when to use it, and what threshold it requires is essential for both chairs and experienced delegates. The <Link href="/blog/mun-glossary">MUN glossary</Link> defines any term you have not met yet.
         </p>
 
         <H2>1. What Is a Motion in MUN?</H2>
@@ -57,7 +57,7 @@ export default function Article4() {
           A motion is a formal proposal by a delegate to change the committee&apos;s mode of debate or take a procedural action. Motions interrupt or redirect the current floor activity. They are debated briefly (if at all) and put to a vote before taking effect.
         </p>
         <p>
-          Motions are distinct from working papers and draft resolutions, which are substantive documents about the committee&apos;s topic. A motion is always procedural. It affects how the committee operates, not the content of its conclusions.
+          Motions are distinct from working papers and draft resolutions, which are substantive documents about the committee&apos;s topic. A motion is always procedural. It affects how the committee operates, not the content of its conclusions. Motions are also separate from points, which our guide to <Link href="/blog/mun-points-explained">MUN points explained</Link> covers.
         </p>
 
         <H2>2. How to Make a Motion</H2>
@@ -141,6 +141,9 @@ export default function Article4() {
         </ul>
         <p>
           If two delegates raise the same type of motion simultaneously, the chair may entertain both and let the committee vote on each in sequence, or combine them into a single vote.
+        </p>
+        <p>
+          The exact list and order depend on the ruleset. Our <Link href="/blog/una-usa-rules-of-procedure">UNA-USA rules of procedure</Link> and <Link href="/blog/thimun-rules-of-procedure">THIMUN rules of procedure</Link> guides cover each one.
         </p>
 
         <H2>6. Chair Tips for Managing Motions</H2>

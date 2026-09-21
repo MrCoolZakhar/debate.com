@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
 import { H2, Callout } from '@/components/blog/prose';
@@ -50,13 +51,13 @@ export default function Article() {
         <p>Standing up to address a committee of seventy delegates is nerve-wracking for almost everyone the first time. The good news: effective MUN speaking is a learnable skill, not a personality trait. These techniques work for introverts and extroverts alike, and they improve quickly with practice.</p>
 
         <H2>The Structure Every MUN Speech Needs</H2>
-        <p>Rambling speeches lose the room. Every MUN speech (regardless of length) should have three components: a hook, a body, and a close.</p>
+        <p>Rambling speeches lose the room. Every MUN speech (regardless of length) should have three components: a hook, a body, and a close. Our <Link href="/blog/mun-opening-speech">opening speech guide</Link> applies it to your first speech.</p>
         <ul>
-          <li><strong>Hook (5 seconds):</strong> Grab attention immediately. A striking statistic, a direct statement of position, or a challenge to the previous speaker. "Over 100 million people are currently displaced, more than at any point since World War II."</li>
+          <li><strong>Hook (5 seconds):</strong> Grab attention immediately. A striking statistic, a direct statement of position, or a challenge to the previous speaker. &quot;Over 100 million people are currently displaced, more than at any point since World War II.&quot;</li>
           <li><strong>Body (45 seconds):</strong> Your argument. One or two points maximum in a sixty-second speech. Do not try to say everything.</li>
-          <li><strong>Close (10 seconds):</strong> A call to action or a clear statement of what your delegation supports. "France urges this committee to adopt a legally binding framework, and invites like-minded delegations to co-sponsor our working paper."</li>
+          <li><strong>Close (10 seconds):</strong> A call to action or a clear statement of what your delegation supports. &quot;France urges this committee to adopt a legally binding framework, and invites like-minded delegations to co-sponsor our working paper.&quot;</li>
         </ul>
-        <Callout>The most common mistake: trying to say too much. One clear argument, delivered well, is more persuasive than five arguments delivered nervously. Cut until it hurts.</Callout>
+        <Callout>The most <Link href="/blog/mun-common-mistakes">common mistake</Link>: trying to say too much. One clear argument, delivered well, is more persuasive than five arguments delivered nervously. Cut until it hurts.</Callout>
 
         <H2>Managing Nerves</H2>
         <p>Nerves are not the enemy. Unmanaged nerves are. A small amount of adrenaline actually improves performance. Here is how to keep it manageable:</p>
@@ -73,14 +74,14 @@ export default function Article() {
           <li><strong>Project to the back wall.</strong> Imagine the last row of the room and speak to them. This automatically raises your volume without shouting.</li>
           <li><strong>Pause deliberately.</strong> A one-second pause before a key point makes it land harder. It also gives you a moment to remember what comes next without fumbling.</li>
           <li><strong>Vary your pace.</strong> Say important facts slowly. Use normal speed for transitions. The variation holds attention.</li>
-          <li><strong>Do not apologise.</strong> Avoid openers like "I just wanted to say..." or "Sorry, I think..." Start with your point.</li>
+          <li><strong>Do not apologise.</strong> Avoid openers like &quot;I just wanted to say...&quot; or &quot;Sorry, I think...&quot; Start with your point.</li>
         </ul>
 
         <H2>Responding in the Moment</H2>
-        <p>Planned speeches are one thing. Spontaneous responses to what another delegate just said are another, and they are what separates good delegates from great ones. When you have thirty seconds to formulate a rebuttal:</p>
+        <p>Planned speeches are one thing. Spontaneous responses to what another delegate just said are another, and they are what separates good delegates from great ones. When you have thirty seconds to formulate a rebuttal (and if you were misrepresented, see <Link href="/blog/mun-right-of-reply">right of reply</Link>):</p>
         <ul>
           <li>Identify the one thing you disagree with most strongly. Do not try to rebut everything.</li>
-          <li>Name the specific claim: "The delegate of Russia asserted that sanctions have been ineffective. The evidence contradicts this."</li>
+          <li>Name the specific claim: &quot;The delegate of Russia asserted that sanctions have been ineffective. The evidence contradicts this.&quot;</li>
           <li>Offer one piece of counter-evidence or reasoning.</li>
           <li>State your alternative position.</li>
         </ul>
@@ -90,7 +91,7 @@ export default function Article() {
         <p>Avoid crossing your arms, looking at the floor, or gripping the podium. Open posture (shoulders back, arms at your sides or resting lightly) communicates that you belong at the podium.</p>
 
         <H2>Practise by Watching Others</H2>
-        <p>Search for recordings of real UN speeches and MUN award-winning speeches. Watch what effective speakers do differently. Pay attention to pace, structure, and how they handle transitions. Then practise with a timer in front of a mirror or a trusted classmate who will give honest feedback.</p>
+        <p>Search for recordings of real UN speeches and MUN award-winning speeches. Watch what effective speakers do differently, or read our <Link href="/blog/mun-speech-examples">MUN speech examples</Link>. Pay attention to pace, structure, and how they handle transitions. Then practise with a timer in front of a mirror or a trusted classmate who will give honest feedback.</p>
       </ArticleLayout>
     </>
   );
