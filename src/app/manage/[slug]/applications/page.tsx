@@ -4,8 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   ArrowRight, BadgeCheck, Ban, Briefcase, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
-  Download, Eye, Filter, Gavel, Globe, GraduationCap, HandCoins, HeartHandshake, Inbox, Info, Landmark, LogOut, MapPin,
-  Loader2, Mail, MessageSquareText, MoreHorizontal, PencilLine, Plus, RotateCcw, Search, Send, SlidersHorizontal, Trash2, Trophy, Undo2, User, UserRoundCheck,
+  Download, Eye, Filter, Gavel, GraduationCap, HandCoins, Inbox, Info, Landmark, LogOut,
+  Loader2, Mail, MoreHorizontal, PencilLine, Plus, RotateCcw, Search, Send, SlidersHorizontal, Trash2, Undo2, User, UserRoundCheck,
   UserX, Users, Wallet, X,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -29,23 +29,21 @@ import { getCountryByName, UN_COUNTRIES } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
 import { checkInApplication, undoCheckIn } from '@/lib/checkIn';
 import { isPaymentsLive } from '@/lib/payments';
-import { formatFee } from '@/lib/utils';
 import {
-  NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuStatTile, NeuIconDisc, NeuInset,
+  NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuStatTile, NeuIconDisc,
 } from '@/components/neu';
 import {
   poolForRole, fillFreeSpots, releasePoolSpot, POOL_SPOTS_COLUMN, MemberAvatar, markNotAttending, undoNotAttending,
 } from '@/app/manage/[slug]/assignment/delegationShared';
-import { LevelInsignia, LEVEL_ACCENT, AwardArtwork, monogramFor } from '@/app/account/accountUi';
+import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { type CustomQuestion, type CustomAnswers, normalizeBlocks, questionsOf, displayAnswer } from '@/lib/customQuestions';
 import { useScrollLock } from '@/hooks/useScrollLock';
+import DelegationsBoard, { PeopleDelegationsSwitch } from './DelegationsBoard';
 // Same vocabulary the team invite wizard in Settings uses — never a parallel
 // list. Only the library, not the wizard component itself.
 import { ORGANIZER_SECTIONS, bundlePermissions } from '@/lib/organizerPermissions';
-// Same role-label vocabulary the MUN CV timeline uses (Delegate/Chair/Faculty
-// Advisor/Secretariat/Other), so a chair/secretariat application's listed
-// conferences read consistently with how the applicant's own CV describes them.
-import { ENTRY_TYPE_MAP, type EntryType } from '@/components/CVEntryModal';
+// The applicant pop-up (hero, action bar, five tabs) and its ?app= URL state.
+import ApplicantDetailDialog, { useApplicantUrlSync } from './ApplicantDetail/ApplicantDetailDialog';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -164,30 +162,7 @@ interface QuickCommittee {
 // is imported from delegationShared.tsx, the canonical location (F: fillFreeSpots
 // consolidation). This page no longer keeps its own copy.
 
-// One row of the previewed applicant's MUN CV (mun_cv_entries), fetched on demand
-// when the review modal opens. Mirrors the fields the /account/cv page reads.
-interface PreviewCvEntry {
-  id: string;
-  entry_type: string;
-  conference_name: string;
-  committee: string | null;
-  allocation: string | null;
-  awards: string[] | null;
-  award: string | null;
-  logo_url: string | null;
-  event_date: string | null;
-  description: string | null;
-}
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-// Same tri-color scheme as AidRequestsSection's StatusChip, so a request's
-// status reads consistently whether seen from Applications or Financial Aid.
-const AID_STATUS_STYLES: Record<string, { bg: string; color: string; border: string; label: string }> = {
-  pending: { bg: 'rgba(184,132,74,0.16)', color: '#9A6B2F', border: 'rgba(184,132,74,0.42)', label: 'PENDING' },
-  approved: { bg: 'rgba(61,122,82,0.17)', color: '#2A5A3C', border: 'rgba(61,122,82,0.45)', label: 'APPROVED' },
-  denied: { bg: 'rgba(154,138,120,0.16)', color: '#6B5F52', border: 'rgba(154,138,120,0.35)', label: 'DENIED' },
-};
 
 // Real ISO 3166-1 alpha-2 codes, so a committee "country" that is actually a
 // crisis/JCC character name (country_code stores the character, e.g. "Indira
@@ -483,65 +458,12 @@ function LevelBadge({ level, count }: { level: string; count?: number }) {
  *  The button itself turns GREEN once paid (#9) so no separate PAID badge is
  *  needed. "Remove waiver" stays reachable for any legacy waived rows. Portaled +
  *  edge-flipped so the clipping row card never cuts the menu off. */
-// Status inks for the review dialog. These four carry meaning that no `neu.tsx`
-// token expresses (rejection, aid, on-site check-in, a blocking warning), so
+// Status inks for the review dialog's actions. These two carry meaning that no
+// `neu.tsx` token expresses (rejection, a blocking warning), so
 // they stay literal — but each one is contrast-checked against the surface it
 // actually sits on. Everything else in the dialog comes from NEU.
 const REVIEW_DANGER = '#8B2020';        // 8.51:1 on NEU.surface
-const REVIEW_AID_INK = '#8A6614';       // 4.73:1 on the aid wash
-const REVIEW_CHECKED_INK = '#1F6E52';   // 5.80:1 on NEU.surface
 const REVIEW_WARN_INK = '#7A5320';      // replaces #9A6B2F, which measured 4.38:1
-
-/** Review dialog layout CSS. Inline styles cannot express media queries, and
- *  the dialog needs exactly two: the two-column body collapses to one column
- *  on a narrow window, and the padding tightens on a phone. Scoped by the
- *  `appRev*` class prefix so it cannot leak into the list behind it. */
-const REVIEW_CSS = `
-.appRevGrid { display: grid; gap: 24px; grid-template-columns: 300px minmax(0, 1fr); align-items: start; }
-/* Substance first in the DOM so the phone (and a screen reader) reads the
-   applicant's own words before the metadata; the rail is pulled back to
-   column 1 only once there are two columns to have. */
-.appRevMain { grid-column: 2; min-width: 0; }
-.appRevRail { grid-column: 1; grid-row: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
-/* Nothing to put in the rail (an invited row has no profile, and a faculty
-   advisor or a chair with preferences off has none of the things this rail
-   shows). Don't reserve a column for a void. */
-.appRevGrid.appRevNoRail { grid-template-columns: minmax(0, 1fr); }
-.appRevGrid.appRevNoRail .appRevMain { grid-column: 1; }
-@media (max-width: 900px) {
-  .appRevGrid { grid-template-columns: 1fr; gap: 18px; }
-  .appRevMain, .appRevRail { grid-column: 1; grid-row: auto; }
-}
-.appRevPad { padding: clamp(16px, 3.2vw, 26px) clamp(16px, 3.2vw, 30px); }
-/* 58ch measured in Outfit's '0' advance, which is wider than the typeface's
-   average glyph — the real measure lands at ~70 characters, inside the 45-75
-   comfortable-reading band. A flat 62ch overshot it at 75. */
-.appRevAnswer { max-width: 58ch; }
-/* Every control in the dialog carries Tailwind's focus:outline-none, which on
-   its own leaves a keyboard user with no visible focus at all. Give it back as
-   a forest ring — outline, not box-shadow, so the neu extrusion underneath is
-   untouched. Element-qualified so it outranks .focus\\:outline-none:focus. */
-.appRevDialog button:focus-visible,
-.appRevDialog a:focus-visible,
-.appRevDialog [tabindex]:focus-visible,
-.appRevMenu button:focus-visible {
-  outline: 2.5px solid ${NEU.forest};
-  outline-offset: 2px;
-}
-/* Enter transition, in the same rise-and-settle language as the neuFadeIn the
-   popovers in this file already use — a touch longer and with a hair of scale,
-   because a full dialog arriving needs more travel than a menu. neuFadeIn is
-   redeclared here (identically) so anything portaled out of the dialog still
-   finds the keyframes it names. */
-@keyframes neuFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes appRevScrimIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes appRevCardIn { from { opacity: 0; transform: translateY(10px) scale(0.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
-.appRevScrim { animation: appRevScrimIn 180ms cubic-bezier(0.22,1,0.36,1); }
-.appRevDialog { animation: appRevCardIn 220ms cubic-bezier(0.22,1,0.36,1); }
-@media (prefers-reduced-motion: reduce) {
-  .appRevScrim, .appRevDialog { animation: none; }
-}
-`;
 
 /** Overflow menu for the review dialog's rarely-used, mostly destructive
  *  actions (remove from conference, attendance toggle). Keeps them reachable
@@ -1876,7 +1798,9 @@ export default function ApplicationsPage() {
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState('');
   const [roleConfigs, setRoleConfigs] = useState<RoleConfigLite[]>([]);
-  const [reviewId, setReviewId] = useState<string | null>(null);
+  // Seeded from ?app=<id> so the applicant pop-up is linkable and survives a
+  // reload; useApplicantUrlSync (below) keeps the URL in step afterwards.
+  const [reviewId, setReviewId] = useState<string | null>(() => searchParams.get('app'));
   // The review dialog card, for the focus trap in the effect below.
   const reviewCardRef = useRef<HTMLDivElement | null>(null);
   // Conferences done in any capacity, per user, count of their mun_cv_entries
@@ -1894,11 +1818,9 @@ export default function ApplicationsPage() {
   const setFlashMsg = useCallback((msg: string) => {
     if (msg) notifyOk(msg, 'applications'); else clearOk('applications');
   }, []);
-  // Previewed applicant's MUN CV, fetched on demand when the review modal opens.
-  const [previewCv, setPreviewCv] = useState<PreviewCvEntry[] | null>(null);
-  const [previewCvLoading, setPreviewCvLoading] = useState(false);
   // The applicant's financial_aid_requests row (if any), fetched on demand
-  // when the review modal opens — same lazy pattern as previewCv.
+  // when the review modal opens. (Their MUN CV and payments ledger are read
+  // and cached by the pop-up itself, ApplicantDetail/data.ts.)
   const [previewAid, setPreviewAid] = useState<PreviewAidRequest | null>(null);
   // App ids with a write in flight, double-click guard for row actions.
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
@@ -1957,13 +1879,16 @@ export default function ApplicationsPage() {
     const t = setTimeout(() => setSearch(searchInput.trim().toLowerCase()), 180);
     return () => clearTimeout(t);
   }, [searchInput]);
-  // Delegation/society popup (#6): the society whose members are being shown,
-  // or null when closed. Populated from the already-loaded applications, so no
-  // extra fetch is needed.
-  const [delegationView, setDelegationView] = useState<{ id: string; name: string } | null>(null);
-  // The delegation/society popup is a modal too. Separate ref-counted lock, so it
-  // can sit on top of the review dialog without releasing that one on close.
-  useScrollLock(!!delegationView);
+  // People | Delegations (docs/delegations-redesign.md). Delegations are their
+  // own list with their own counts and filters (DelegationsBoard.tsx); they
+  // never share rows with people. Seeded from ?view=delegations and
+  // ?delegation=<id> so other pages can deep link. The read-only delegation
+  // popup that used to live here is gone: the delegation name on a person row
+  // opens this list with that delegation expanded instead.
+  const [listView, setListView] = useState<'people' | 'delegations'>(
+    () => (searchParams.get('view') === 'delegations' ? 'delegations' : 'people'),
+  );
+  const [delegationFocus, setDelegationFocus] = useState<string | null>(() => searchParams.get('delegation'));
   // ── In-progress drafts. Its OWN state, fed by its OWN query, never merged
   // into `applications` — see the DraftRow comment block. Collapsed by default
   // so the submitted list stays the page's subject.
@@ -2331,36 +2256,9 @@ export default function ApplicationsPage() {
     };
   }, [openDialogId]);
 
-  // Fetch the previewed applicant's MUN CV on demand (#13). Cleared + refetched
-  // whenever the review target changes; skipped for unregistered rows.
-  useEffect(() => {
-    const app = applications.find(a => a.id === reviewId);
-    const uid = app?.user_id;
-    if (!reviewId || !uid || !accessToken) { setPreviewCv(null); return; }
-    let cancelled = false;
-    setPreviewCv(null);
-    setPreviewCvLoading(true);
-    (async () => {
-      const supabase = getAuthedClient(accessToken);
-      const { data } = await supabase
-        .from('mun_cv_entries')
-        .select('id, entry_type, conference_name, committee, allocation, awards, award, logo_url, event_date, description')
-        .eq('user_id', uid);
-      if (cancelled) return;
-      const rows = ((data ?? []) as PreviewCvEntry[]).slice().sort((a, b) => {
-        const da = a.event_date ?? '';
-        const db = b.event_date ?? '';
-        return db.localeCompare(da);
-      });
-      setPreviewCv(rows);
-      setPreviewCvLoading(false);
-    })();
-    return () => { cancelled = true; };
-    // `applications` is deliberately not a dep — this only needs the user_id
-    // behind the currently reviewed row, and re-running on every list refetch
-    // would re-fire the CV query for no reason.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reviewId, accessToken]);
+  // ?app=<id> follows the open pop-up; an id that matches no application is
+  // dropped from the address bar once the list has loaded.
+  useApplicantUrlSync(reviewId, !!reviewId && applications.some(a => a.id === reviewId), !loading);
 
   // Fetch the applicant's financial_aid_requests row on demand — surfaces aid
   // in the review modal so an organiser doesn't have to switch to the
@@ -3443,7 +3341,11 @@ export default function ApplicationsPage() {
 
       try {
         const pool = poolForRole(app.role);
-        if (app.society_id && pool) {
+        // Only a SELF-FUNDED paid spot ever added to the pool (handleMarkPaid,
+        // settle_invoice_effects), so only that one comes off. A member the
+        // delegation covered used an existing spot; taking one away here
+        // quietly shrank every delegation whose covered member was unmarked.
+        if (app.society_id && pool && prevRow.payment_status === 'paid' && prevRow.self_paid) {
           const spotsColumn = POOL_SPOTS_COLUMN[pool];
           const { data: soc } = await supabase.from('societies').select(spotsColumn).eq('id', app.society_id).single();
           const current = (soc as Record<string, number> | null)?.[spotsColumn] ?? 0;
@@ -4141,6 +4043,12 @@ export default function ApplicationsPage() {
         }}
       />
 
+      <PeopleDelegationsSwitch
+        view={listView}
+        onChange={v => { clearSelection(); if (v === 'delegations') setDraftsView(false); setListView(v); }}
+        applications={applications}
+      />
+
       {/* Stat tiles, plus Drafts.
           Drafts used to live in a collapsed panel further down the page, which
           is the wrong place for the only group of people here who have not
@@ -4150,6 +4058,7 @@ export default function ApplicationsPage() {
           A 20-column grid rather than 7 equal ones: the six counts take three
           columns each and Drafts takes two, so it reads as a smaller, separate
           thing without the other tiles having to shrink much to make room. */}
+      {listView === 'people' && (
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-[repeat(20,minmax(0,1fr))] gap-3 mb-6">
         {statItems.map(s => (
           <div key={s.label} className="lg:col-span-3">
@@ -4169,12 +4078,34 @@ export default function ApplicationsPage() {
           />
         </div>
       </div>
+      )}
+
+      {/* Delegations: their own list, counts and filters. Decisions go through
+          the same runBulk + handleAccept / handleReject as the people list. */}
+      {listView === 'delegations' && !loading && (
+        <DelegationsBoard
+          conference={conference}
+          applications={applications}
+          drafts={drafts}
+          search={search}
+          focusId={delegationFocus}
+          canAccept={a => a.attending && a.status === 'submitted' && a.role !== 'secretariat' && !isAcceptBlockedByFee(a)}
+          canReject={a => a.attending && a.status === 'submitted'}
+          onAcceptAll={(apps, name) => runBulk(apps, { title: `Accept ${apps.length} from ${name}?`, body: 'Each member is accepted on their own, exactly as from the People list: acceptance emails and delegation spot cover run per person.', confirmLabel: `Accept ${apps.length}` }, a => handleAccept(a.id))}
+          onRejectAll={(apps, name) => runBulk(apps, { title: `Reject ${apps.length} from ${name}?`, body: 'This rejects the members who are waiting. You can reinstate them later.', confirmLabel: `Reject ${apps.length}`, danger: true }, a => handleReject(a.id))}
+          onMessage={openComposeEmail}
+          onRemindPay={apps => { void handleBulkRemindPay(apps); }}
+          onOpenMember={id => setReviewId(id)}
+          onChanged={() => { void loadApplications({ silent: true }); }}
+          busy={!!bulkRunning || bulkEmailBusy}
+        />
+      )}
 
       {/* Visible reminder that a filter is narrowing the list — a role/status/
           payment/date filter can never silently hide rows again. Withdrawn/
           removed applicants are excluded from the default view on purpose
           (not a user-applied filter), so they're left out of this count too. */}
-      {!draftsView && !loading && filtered.length < defaultScopeCount && (
+      {listView === 'people' && !draftsView && !loading && filtered.length < defaultScopeCount && (
         <p className="mb-3" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.muted }}>
           Showing {filtered.length} of {defaultScopeCount} — filters active
         </p>
@@ -4188,7 +4119,7 @@ export default function ApplicationsPage() {
       )}
 
       {/* Empty state */}
-      {!draftsView && !loading && filtered.length === 0 && (
+      {listView === 'people' && !draftsView && !loading && filtered.length === 0 && (
         <NeuCard style={{ padding: '48px 24px' }}>
           <div className="flex flex-col items-center text-center">
             <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Inbox} emoji="Inbox tray" size={48} />
@@ -4203,7 +4134,7 @@ export default function ApplicationsPage() {
       )}
 
       {/* Select-all bar */}
-      {!draftsView && !loading && filtered.length > 0 && (
+      {listView === 'people' && !draftsView && !loading && filtered.length > 0 && (
         <div className="flex items-center gap-2.5 mb-3 px-1">
           <SelectBox
             checked={allVisibleSelected}
@@ -4223,7 +4154,7 @@ export default function ApplicationsPage() {
       )}
 
       {/* Application list */}
-      {!draftsView && !loading && filtered.length > 0 && (
+      {listView === 'people' && !draftsView && !loading && filtered.length > 0 && (
         <div className="flex flex-col gap-3" style={{ paddingBottom: selectedApps.length > 0 ? BULK_BAR_CLEARANCE : 0 }}>
           {/* The whole card is the preview affordance (#1) — the separate
               PREVIEW button is gone, so it can never be clipped by the card's
@@ -4373,11 +4304,11 @@ export default function ApplicationsPage() {
 
                       {app.societies?.name && (
                         // Clicking the delegation/society name opens its members
-                        // in a popup (#6). stopPropagation so it doesn't also
+                        // in the Delegations list, expanded. stopPropagation so it doesn't also
                         // fire the row's open-preview click.
                         app.society_id ? (
                           <button
-                            onClick={e => { e.stopPropagation(); setDelegationView({ id: app.society_id!, name: app.societies!.name }); }}
+                            onClick={e => { e.stopPropagation(); clearSelection(); setDelegationFocus(app.society_id); setListView('delegations'); window.scrollTo({ top: 0 }); }}
                             title={`View ${app.societies.name} delegation`}
                             className="flex items-center gap-1.5 truncate max-w-full focus:outline-none group"
                             style={{ marginTop: 5, fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: NEU.ink, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
@@ -4752,7 +4683,7 @@ export default function ApplicationsPage() {
           the DraftRow comment block.
 
           Counts: this section reads `drafts`. Nothing above it does. */}
-      {!loading && (draftsView || drafts.length > 0) && (
+      {listView === 'people' && !loading && (draftsView || drafts.length > 0) && (
         <div style={{ marginTop: 26, paddingBottom: selectedApps.length > 0 ? BULK_BAR_CLEARANCE : 0 }}>
           <div
             style={{
@@ -5187,11 +5118,11 @@ export default function ApplicationsPage() {
         </div>
       )}
 
-      {/* Applicant review dialog. Three fixed planes — a header that never
-          scrolls, a two-column body (the applicant's own words as the main
-          column, metadata as a pressed-in rail), and a footer that keeps the
-          decision reachable no matter how long the answers run.
-          Rendered before confirmModal so confirm dialogs (same z-50) stack on top. */}
+      {/* Applicant pop-up (ApplicantDetail/ApplicantDetailDialog.tsx): a hero
+          with the person, an action bar with every decision this dialog has
+          always offered, then Overview / Preferences / Experience / Answers /
+          Payment. Rendered before confirmModal so confirm dialogs (same z-50)
+          stack on top. */}
       {(() => {
         const app = applications.find(a => a.id === reviewId);
         if (!app) return null;
@@ -5202,7 +5133,6 @@ export default function ApplicationsPage() {
         // never a country — allocation elsewhere in this pane stays
         // isDelegate-only.
         const showsPreferences = isDelegate || app.role === 'chair';
-        const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
         // No recorded level → treat as "beginner" (#11).
         const expLabel = app.profiles?.mun_experience_level ?? app.experience_level ?? 'beginner';
         // Chair/secretariat only: the conferences they listed on THIS
@@ -5249,18 +5179,6 @@ export default function ApplicationsPage() {
         // fully active. Restores the moment they're marked attending again.
         const notAttendingLock: React.CSSProperties = !app.attending ? { opacity: 0.45, pointerEvents: 'none' } : {};
 
-        // ── Shared presentation tokens for this dialog ────────────────────
-        const sectionLabel: React.CSSProperties = {
-          fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.12em',
-          color: NEU.forest, textTransform: 'uppercase',
-        };
-        const railLabel: React.CSSProperties = {
-          fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.1em',
-          color: NEU.forest, textTransform: 'uppercase',
-        };
-        const railValue: React.CSSProperties = {
-          fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.ink, lineHeight: 1.5,
-        };
         // Primary action: the one thing this status is asking the organiser to
         // do. 44px minimum, gradient, sits first in the footer.
         const primaryBtn: React.CSSProperties = {
@@ -5378,610 +5296,130 @@ export default function ApplicationsPage() {
           </button>
         );
 
-        // A metadata row in the rail: micro-label above, real value below.
-        const railRow = (icon: LucideGlyph, label: string, value: React.ReactNode) => {
-          const Icon = icon;
-          return (
-            <div>
-              <p className="flex items-center gap-1.5 mb-1" style={railLabel}>
-                <Icon size={11} strokeWidth={2.6} />
-                {label}
+        // The decisions, exactly as the old footer offered them. Rendered twice
+        // by the dialog's needs: with the payment menu in the action bar, and
+        // without it while the Payment tab (which shows it) is open.
+        const decisionControls = (withPayment: boolean) => (
+          <>
+            {app.status === 'submitted' && isAcceptBlockedByFee(app) && (
+              <p
+                className="mb-2.5 rounded-xl px-3.5 py-2.5"
+                style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, lineHeight: 1.5, color: REVIEW_WARN_INK, backgroundColor: 'rgba(184,132,74,0.14)', boxShadow: NEU.inSm }}
+              >
+                {ACCEPT_BLOCKED_MESSAGE}
               </p>
-              <div style={railValue}>{value}</div>
-            </div>
-          );
-        };
+            )}
 
-        const hasContextRail = !!app.profiles?.nationality
-          || (showsPreferences && prefs.length > 0)
-          || ((app.status === 'assigned' || app.status === 'checked-in') && !!app.assigned_country_name)
-          || (app.status === 'checked-in' && !!app.checked_in_at)
-          // Always shown for chair/secretariat, even with zero entries: the
-          // row says "No MUN experience listed" rather than not existing.
-          || isMunExperienceRole;
-
-        // Invited/claim-path rows carry no profile at all — no nationality, no
-        // age, no MUN CV — and a faculty advisor has no country preferences
-        // either, so for them every rail block is empty. Reserving a 300px
-        // column for nothing leaves a void beside the answers, so the grid
-        // drops to a single column and the answers start at the left edge.
-        const hasRail = hasContextRail || hasAidRequest || !!app.user_id;
-
-        const answerBody = (ans: string) => (
-          <p
-            className="appRevAnswer whitespace-pre-wrap"
-            style={{
-              fontFamily: OUTFIT,
-              fontSize: ans ? 15 : 13.5,
-              lineHeight: 1.62,
-              color: ans ? NEU.ink : NEU.inkSoft,
-              fontStyle: ans ? 'normal' : 'italic',
-              overflowWrap: 'anywhere',
-            }}
-          >
-            {ans || 'No answer provided.'}
-          </p>
-        );
-
-        return (
-          <Portal><div
-            className="appRevScrim fixed inset-0 z-50 flex items-center justify-center"
-            style={{ backgroundColor: 'rgba(27,20,16,0.42)', padding: 'clamp(10px, 3vw, 32px)' }}
-            onClick={closeReview}
-          >
-            <style>{REVIEW_CSS}</style>
-            <div
-              ref={reviewCardRef}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="app-review-name"
-              className="appRevDialog w-full flex flex-col"
-              style={{
-                width: 'min(1080px, 100%)',
-                // Against the scrim's own padding, so the card can never be
-                // taller than the space it is centred in.
-                maxHeight: '100%',
-                backgroundColor: NEU.surface,
-                boxShadow: NEU.out,
-                borderRadius: 22,
-                fontFamily: OUTFIT,
-                overflow: 'hidden',
-              }}
-              onClick={e => e.stopPropagation()}
-            >
-              {/* ── Header, fixed plane ──────────────────────────────────── */}
-              <div
-                className="appRevPad flex items-start gap-4 flex-shrink-0"
-                style={{ backgroundColor: NEU.surface, boxShadow: '0 8px 18px -14px rgba(27,56,40,0.55)', zIndex: 2 }}
-              >
-                {/* Avatar → public MUN CV, in a new tab: the organiser is
-                    mid-review here and must not lose the open drawer. */}
-                <ProfileLink userId={app.user_id} name={name} newTab style={{ display: 'block', flexShrink: 0 }}>
-                  {app.profiles?.avatar_url ? (
-                    <img
-                      src={app.profiles.avatar_url}
-                      alt=""
-                      className="rounded-2xl object-cover flex-shrink-0"
-                      style={{ width: 60, height: 60, boxShadow: NEU.outSm }}
-                    />
-                  ) : (
-                    <div
-                      className="flex-shrink-0 flex items-center justify-center rounded-2xl"
-                      style={{ width: 60, height: 60, background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`, boxShadow: NEU.outSm }}
-                    >
-                      <span className="font-black" style={{ color: NEU.gold, fontSize: 24, fontFamily: OUTFIT }}>
-                        {name.trim().charAt(0).toUpperCase() || '?'}
-                      </span>
-                    </div>
-                  )}
-                </ProfileLink>
-                <div className="flex-1 min-w-0">
-                  {/* Name → the same CV, same new-tab reasoning. */}
-                  <ProfileLink userId={app.user_id} name={name} newTab style={{ display: 'block' }}>
-                    <h2
-                      id="app-review-name"
-                      className="font-black truncate"
-                      style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 22, lineHeight: 1.2 }}
-                    >
-                      {name}
-                    </h2>
-                  </ProfileLink>
-                  {email && (
-                    <p className="truncate" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontSize: 13, fontWeight: 500, marginTop: 1 }}>
-                      {email}
-                    </p>
-                  )}
-                  <div className="flex flex-wrap items-center gap-2 mt-2">
-                    {!app.user_id && <NotRegisteredChip />}
-                    <RolePill role={app.role} size="sm" />
-                    {app.role === 'chair' && app.fee_waiver_source === 'chair_invite' && <InvitedChip />}
-                    <StatusPill
-                      status={app.status}
-                      size="sm"
-                      awaitingResubmission={app.status === 'rejected' && (roleConfig?.allow_resubmission ?? false)}
-                    />
-                    {!app.attending && <NotAttendingBadge size="sm" />}
-                    {app.resubmitted_at && (
-                      <span
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold"
-                        title="The applicant edited and resubmitted this application"
-                        style={{ fontSize: 11, fontFamily: OUTFIT, letterSpacing: '0.06em', backgroundColor: 'rgba(182,135,31,0.18)', color: REVIEW_AID_INK, border: '1px solid rgba(182,135,31,0.4)' }}
-                      >
-                        <RotateCcw size={11} strokeWidth={2.5} />
-                        RESUBMITTED {formatDate(app.resubmitted_at)}
-                      </span>
-                    )}
-                    <LevelChip level={expLabel} count={confCount} />
-                  </div>
+            {app.status === 'submitted' ? (
+              /* Undecided (#5): ACCEPT and REJECT side by side across the bar.
+                 Wired to handleAccept and the shared reject flow. */
+              <div className="flex flex-wrap items-center gap-2.5">
+                <div className="apdBig" style={{ flex: '1 1 320px', minWidth: 0 }}>
+                  {renderBigDecisionControls(app, !app.attending)}
                 </div>
-                <button
-                  onClick={closeReview}
-                  aria-label="Close review"
-                  className="flex-shrink-0 inline-flex items-center justify-center rounded-full focus:outline-none"
-                  style={{
-                    width: 32, height: 32, border: 'none', color: NEU.inkSoft,
-                    backgroundColor: NEU.surface, boxShadow: NEU.outSm, cursor: 'pointer',
-                    transition: `box-shadow 200ms ${EASE_LOCAL}, color 200ms ${EASE_LOCAL}`,
-                  }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; (e.currentTarget as HTMLElement).style.color = NEU.ink; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; (e.currentTarget as HTMLElement).style.color = NEU.inkSoft; }}
-                >
-                  <X size={16} strokeWidth={2.4} />
-                </button>
+                {withPayment && paymentControls}
               </div>
-
-              {/* ── Body, the only scrolling plane ───────────────────────── */}
-              <div className="appRevPad flex-1" style={{ overflowY: 'auto', minHeight: 0, paddingTop: 4 }}>
-                <div className={`appRevGrid${hasRail ? '' : ' appRevNoRail'}`}>
-
-                  {/* Metadata rail: pressed-in wells, scannable, never the headline. */}
-                  {hasRail && <div className="appRevRail">
-                    {hasContextRail && (
-                      <NeuInset style={{ padding: '15px 16px', borderRadius: 16 }}>
-                        <div className="flex flex-col gap-3.5">
-                          {app.profiles?.nationality && railRow(Globe, 'Nationality', (
-                            <span className="inline-flex items-center gap-2">
-                              <CountryFlag name={app.profiles.nationality} size={16} />
-                              {app.profiles.nationality}
-                            </span>
-                          ))}
-                          {isMunExperienceRole && railRow(GraduationCap, `MUN experience (${munExperience.length})`, (
-                            munExperience.length === 0 ? (
-                              <span style={{ color: NEU.inkSoft, fontStyle: 'italic', fontWeight: 500 }}>
-                                No MUN experience listed
-                              </span>
-                            ) : (
-                              <div className="flex flex-col gap-2.5">
-                                {munExperience.map((entry) => {
-                                  const type = ENTRY_TYPE_MAP[entry.entry_type as EntryType] ?? ENTRY_TYPE_MAP.other;
-                                  const detail = [entry.allocation, entry.committee].filter(Boolean).join(' · ');
-                                  return (
-                                    <div key={entry.id} className="flex flex-col gap-1">
-                                      <span className="inline-flex items-center gap-1.5 flex-wrap" style={{ fontWeight: 800 }}>
-                                        {entry.conference_name}
-                                        <span
-                                          style={{
-                                            fontSize: 9.5, fontWeight: 800, letterSpacing: '0.05em',
-                                            textTransform: 'uppercase', color: type.chipInk,
-                                            padding: '1px 7px', borderRadius: 999,
-                                            background: `linear-gradient(150deg, ${type.accent}1C, ${type.accent}0C), ${NEU.surface}`,
-                                            border: `1px solid ${type.accent}33`,
-                                          }}
-                                        >
-                                          {type.label}
-                                        </span>
-                                      </span>
-                                      {(detail || entry.event_date) && (
-                                        <span style={{ color: NEU.inkSoft, fontSize: 12.5, fontWeight: 500, lineHeight: 1.5 }}>
-                                          {[detail, entry.event_date ? formatDate(entry.event_date) : null].filter(Boolean).join('  ·  ')}
-                                        </span>
-                                      )}
-                                      {entry.awards.length > 0 && (
-                                        <div className="flex flex-wrap gap-1 mt-0.5">
-                                          {entry.awards.map((award) => (
-                                            <span
-                                              key={award}
-                                              className="inline-flex items-center"
-                                              style={{
-                                                fontSize: 10.5, fontFamily: OUTFIT, fontWeight: 700,
-                                                padding: '1px 7px', borderRadius: 999,
-                                                backgroundColor: 'rgba(182,135,31,0.14)', color: REVIEW_AID_INK,
-                                                border: '1px solid rgba(182,135,31,0.35)',
-                                              }}
-                                            >
-                                              {award}
-                                            </span>
-                                          ))}
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )
-                          ))}
-                          {showsPreferences && prefs.length > 0 && railRow(MapPin, app.role === 'chair' ? 'Committee preferences' : 'Preferences', (
-                            <div className="flex flex-col gap-1.5">
-                              {prefs.map(p => (
-                                <span
-                                  key={p.preference_order}
-                                  className="inline-flex items-center gap-2"
-                                  title={app.role === 'chair' ? (p.conference_committees?.name ?? 'Unknown') : `${p.conference_committees?.name ?? 'Unknown'}, ${p.country_name}`}
-                                  style={{ fontVariantNumeric: 'tabular-nums' }}
-                                >
-                                  <span style={{ color: NEU.inkSoft, fontWeight: 800, minWidth: 14 }}>{p.preference_order}.</span>
-                                  <span style={{ fontWeight: 700 }}>{committeeAbbr(p.conference_committees)}</span>
-                                  {app.role !== 'chair' && (
-                                    <>
-                                      <CountryFlag name={p.country_name} code={p.country_code} size={14} />
-                                      <span style={{ color: NEU.inkSoft, fontWeight: 500 }}>{p.country_name}</span>
-                                    </>
-                                  )}
-                                </span>
-                              ))}
-                            </div>
-                          ))}
-                          {(app.status === 'assigned' || app.status === 'checked-in') && app.assigned_country_name && railRow(BadgeCheck, 'Assigned', (
-                            <div className="flex flex-col gap-1">
-                              <span className="inline-flex items-center gap-2" style={{ fontWeight: 800 }}>
-                                <CountryFlag name={app.assigned_country_name} code={app.assigned_country_code} size={14} />
-                                {app.assigned_country_name}
-                              </span>
-                              {app.assigned_committee?.name && (
-                                <span style={{ color: NEU.inkSoft, fontSize: 12.5, fontWeight: 500, lineHeight: 1.5 }}>
-                                  {[app.assigned_committee.name, (app.assigned_committee.topics ?? []).join(', ')].filter(Boolean).join('  ·  ')}
-                                </span>
-                              )}
-                            </div>
-                          ))}
-                          {app.status === 'checked-in' && app.checked_in_at && railRow(UserRoundCheck, 'Checked in', (
-                            <span style={{ color: REVIEW_CHECKED_INK, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                              {formatDateTime(app.checked_in_at)}
-                            </span>
-                          ))}
-                        </div>
-                      </NeuInset>
-                    )}
-
-                    {/* Financial aid (read-only — approve/deny still lives on the Financial Aid tab) */}
-                    {hasAidRequest && (
-                      <NeuInset style={{ padding: '15px 16px', borderRadius: 16, backgroundColor: 'rgba(184,132,74,0.13)' }}>
-                        <div className="flex items-center justify-between gap-2 mb-2">
-                          <p className="flex items-center gap-1.5" style={{ ...railLabel, color: REVIEW_AID_INK }}>
-                            <HeartHandshake size={12} strokeWidth={2.6} />
-                            Financial aid
-                          </p>
-                          {aidStatus && (
-                            <span
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold flex-shrink-0"
-                              style={{
-                                fontSize: 11, fontFamily: OUTFIT, letterSpacing: '0.06em',
-                                backgroundColor: (AID_STATUS_STYLES[aidStatus] ?? AID_STATUS_STYLES.pending).bg,
-                                color: (AID_STATUS_STYLES[aidStatus] ?? AID_STATUS_STYLES.pending).color,
-                                border: `1px solid ${(AID_STATUS_STYLES[aidStatus] ?? AID_STATUS_STYLES.pending).border}`,
-                              }}
-                            >
-                              {(AID_STATUS_STYLES[aidStatus] ?? AID_STATUS_STYLES.pending).label}
-                            </span>
-                          )}
-                        </div>
-                        {aidRequestedAmount != null && (
-                          <p className="mb-2" style={{ ...railValue, fontWeight: 500 }}>
-                            Requested <span style={{ fontWeight: 800 }}>{formatFee(aidRequestedAmount, aidCurrency)}</span>
-                            {previewAid?.status === 'approved' && previewAid.granted_amount != null && (
-                              <> · Granted <span style={{ fontWeight: 800 }}>{formatFee(previewAid.granted_amount, aidCurrency)}</span></>
-                            )}
-                          </p>
-                        )}
-                        <p
-                          className="whitespace-pre-wrap"
-                          style={{
-                            fontFamily: OUTFIT, fontSize: 13.5, lineHeight: 1.6,
-                            color: aidStatement ? NEU.ink : NEU.inkSoft,
-                            fontStyle: aidStatement ? 'normal' : 'italic',
-                            overflowWrap: 'anywhere',
-                          }}
+            ) : (
+              <div className="flex flex-wrap items-center gap-2.5">
+                {app.status === 'accepted' && (
+                  <>
+                    {isDelegate && (
+                      <span style={notAttendingLock}>
+                        <Link
+                          href={`/manage/${conference.slug}/assignment`}
+                          className="inline-flex items-center gap-2 focus:outline-none"
+                          style={primaryBtn}
                         >
-                          {aidStatement || 'No statement provided.'}
-                        </p>
-                      </NeuInset>
-                    )}
-
-                    {/* Previous MUN experience (#13) — their MUN CV as a compact list:
-                        conference logo, name, committee/allocation, role, and any award
-                        artwork. Fetched on demand from mun_cv_entries. */}
-                    {app.user_id && (
-                      <NeuInset style={{ padding: '15px 16px', borderRadius: 16 }}>
-                        <p className="flex items-center gap-1.5 mb-2.5" style={railLabel}>
-                          <Trophy size={12} strokeWidth={2.6} />
-                          MUN record
-                        </p>
-                        {previewCvLoading ? (
-                          <div className="flex justify-center py-3">
-                            <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
-                          </div>
-                        ) : previewCv && previewCv.length > 0 ? (
-                          <div className="flex flex-col gap-2">
-                            {previewCv.map(e => {
-                              const roleTxt = e.entry_type === 'chair' ? 'Chair'
-                                : e.entry_type === 'secretariat' ? 'Secretariat'
-                                : e.entry_type === 'other' ? 'Other' : 'Delegate';
-                              const where = [e.committee, e.allocation].map(s => (s ?? '').trim()).filter(Boolean).join('  ·  ');
-                              const awardsList = (e.awards && e.awards.length > 0)
-                                ? e.awards
-                                : (e.award && e.award !== 'None' ? [e.award] : []);
-                              return (
-                                <div
-                                  key={e.id}
-                                  className="flex items-center gap-2.5"
-                                  style={{ padding: '9px 10px', borderRadius: 13, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
-                                >
-                                  <LogoDisc src={e.logo_url} size={34} fallbackText={monogramFor(e.conference_name)} alt={e.conference_name} />
-                                  <div className="min-w-0 flex-1">
-                                    <p className="truncate" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, color: NEU.ink }}>{e.conference_name}</p>
-                                    {where && <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.inkSoft, fontWeight: 500 }}>{where}</p>}
-                                    <p style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: NEU.forest, marginTop: 1 }}>{roleTxt}</p>
-                                  </div>
-                                  {awardsList.length > 0 && (
-                                    <span className="inline-flex items-center gap-1 flex-shrink-0">
-                                      {awardsList.map(a => <AwardArtwork key={a} name={a} size={22} />)}
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <p style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.inkSoft, fontStyle: 'italic' }}>
-                            No MUN experience recorded yet.
-                          </p>
-                        )}
-                      </NeuInset>
-                    )}
-                  </div>}
-
-                  {/* Main column: what the applicant actually wrote. */}
-                  <div className="appRevMain">
-                    {/* Rejection note (rejected) */}
-                    {app.status === 'rejected' && app.organizer_note && (
-                      <div
-                        className="mb-5"
-                        style={{ borderRadius: 14, padding: '13px 15px', backgroundColor: 'rgba(139,32,32,0.07)', boxShadow: NEU.inSm }}
-                      >
-                        <p className="mb-1" style={{ ...railLabel, color: REVIEW_DANGER }}>Note sent to them</p>
-                        <p style={{ fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.6, color: NEU.ink }}>
-                          &ldquo;{app.organizer_note}&rdquo;
-                        </p>
-                      </div>
-                    )}
-
-                    <p className="flex items-center gap-2 mb-4" style={sectionLabel}>
-                      <MessageSquareText size={13} strokeWidth={2.6} />
-                      Their application
-                    </p>
-
-                    {questions.length === 0 && orphanedAnswers.length === 0 ? (
-                      <p style={{ fontFamily: OUTFIT, fontSize: 13.5, color: NEU.inkSoft, fontStyle: 'italic' }}>
-                        No custom questions configured for this role.
-                      </p>
-                    ) : (
-                      <div className="flex flex-col gap-5">
-                        {questions.map(q => {
-                          const ans = displayAnswer(q, answers[q.id]);
-                          return (
-                            <div key={q.id}>
-                              <p className="flex items-center gap-2 mb-1.5" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink, lineHeight: 1.45 }}>
-                                {q.label}
-                                {q.archived && (
-                                  <span
-                                    className="flex-shrink-0 font-bold px-2 py-0.5 rounded-full"
-                                    style={{ fontSize: 11, color: NEU.forest, backgroundColor: 'rgba(27,56,40,0.09)', letterSpacing: '0.05em' }}
-                                  >
-                                    ARCHIVED
-                                  </span>
-                                )}
-                              </p>
-                              {answerBody(ans)}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {/* Answers whose question has since been deleted outright.
-                        The disclaimer is said ONCE for the whole group; each
-                        answer then reads exactly like a matched one, labelled
-                        by the key it was stored under so it stays identifiable. */}
-                    {orphanedAnswers.length > 0 && (
-                      <div className="mt-6 pt-5" style={{ borderTop: `1px solid rgba(27,56,40,0.12)` }}>
-                        <p className="flex items-center gap-2 mb-1" style={sectionLabel}>
-                          <MessageSquareText size={13} strokeWidth={2.6} />
-                          Answers to removed questions
-                        </p>
-                        <p className="mb-4" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.inkSoft, lineHeight: 1.55 }}>
-                          These questions are no longer in the form, so their answers are shown under the field they were saved as.
-                        </p>
-                        <div className="flex flex-col gap-5">
-                          {orphanedAnswers.map(([key, value]) => {
-                            const ans = Array.isArray(value) ? value.join(', ') : value;
-                            return (
-                              <div key={key}>
-                                <p className="mb-1.5" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink, lineHeight: 1.45, overflowWrap: 'anywhere' }}>
-                                  {key}
-                                </p>
-                                {answerBody(ans)}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Footer, fixed plane. The decision is always reachable. ── */}
-              <div
-                className="appRevPad flex-shrink-0"
-                style={{ backgroundColor: NEU.surface, boxShadow: '0 -8px 18px -14px rgba(27,56,40,0.55)', zIndex: 2, paddingTop: 16, paddingBottom: 16 }}
-              >
-                {app.status === 'submitted' && isAcceptBlockedByFee(app) && (
-                  <p
-                    className="mb-2.5 rounded-xl px-3.5 py-2.5"
-                    style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, lineHeight: 1.5, color: REVIEW_WARN_INK, backgroundColor: 'rgba(184,132,74,0.14)', boxShadow: NEU.inSm }}
-                  >
-                    {ACCEPT_BLOCKED_MESSAGE}
-                  </p>
-                )}
-
-                {app.status === 'submitted' ? (
-                  /* Undecided (#5): ACCEPT and REJECT dominate the pane as two
-                     large full-width buttons. Wired to handleAccept and the
-                     shared reject flow — the same handlers as before. */
-                  <div className="flex flex-col gap-3">
-                    {renderBigDecisionControls(app, !app.attending)}
-                    {paymentControls && <div className="flex items-center gap-2">{paymentControls}</div>}
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    {app.status === 'accepted' && (
-                      <>
-                        {isDelegate && (
-                          <span style={notAttendingLock}>
-                            <Link
-                              href={`/manage/${conference.slug}/assignment`}
-                              className="inline-flex items-center gap-2 focus:outline-none"
-                              style={primaryBtn}
-                            >
-                              ASSIGN
-                              <ArrowRight size={16} strokeWidth={2.6} />
-                            </Link>
-                          </span>
-                        )}
-                        {checkInControls}
-                        {paymentControls}
-                        {rejectControls}
-                      </>
-                    )}
-
-                    {(app.status === 'assigned' || app.status === 'checked-in') && (
-                      <>
-                        {checkInControls}
-                        {paymentControls}
-                      </>
-                    )}
-
-                    {app.status === 'rejected' && reinstateBtn(() => openReinstateConfirm(app))}
-                    {app.status === 'withdrawn' && reinstateBtn(() => handleReinstateFromWithdrawn(app.id))}
-
-                    {(app.status === 'accepted' || app.status === 'assigned' || app.status === 'checked-in') && (
-                      <span style={{ marginLeft: 'auto' }}>
-                        <ReviewMoreMenu items={moreItems} disabled={rowBusy} />
+                          ASSIGN
+                          <ArrowRight size={16} strokeWidth={2.6} />
+                        </Link>
                       </span>
                     )}
-                  </div>
+                    {checkInControls}
+                    {withPayment && paymentControls}
+                    {rejectControls}
+                  </>
+                )}
+
+                {(app.status === 'assigned' || app.status === 'checked-in') && (
+                  <>
+                    {checkInControls}
+                    {withPayment && paymentControls}
+                  </>
+                )}
+
+                {app.status === 'rejected' && reinstateBtn(() => openReinstateConfirm(app))}
+                {app.status === 'withdrawn' && reinstateBtn(() => handleReinstateFromWithdrawn(app.id))}
+
+                {(app.status === 'accepted' || app.status === 'assigned' || app.status === 'checked-in') && (
+                  <span style={{ marginLeft: 'auto' }}>
+                    <ReviewMoreMenu items={moreItems} disabled={rowBusy} />
+                  </span>
                 )}
               </div>
-            </div>
-          </div></Portal>
+            )}
+          </>
         );
-      })()}
 
-      {/* Delegation / society popup (#6). Lists every applicant sharing this
-          society, drawn from the already-loaded applications — no extra fetch.
-          Rows mirror the review modal styling and open that member's own
-          preview on click. */}
-      {delegationView && (() => {
-        const members = applications
-          .filter(a => a.society_id === delegationView.id)
-          .sort((a, b) => {
-            // Head delegate first, then by name.
-            if (a.is_head_delegate !== b.is_head_delegate) return a.is_head_delegate ? -1 : 1;
-            const an = a.profiles?.display_name ?? a.invited_name ?? '';
-            const bn = b.profiles?.display_name ?? b.invited_name ?? '';
-            return an.localeCompare(bn);
-          });
-        const close = () => setDelegationView(null);
-        const allocatedCount = members.filter(m => m.status === 'assigned' || m.status === 'checked-in').length;
         return (
-          <Portal><div
-            className="fixed inset-0 z-50 flex items-center justify-center px-4 py-10"
-            style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-            onClick={close}
-          >
-            <div
-              className="w-full max-w-xl rounded-2xl p-7 overflow-y-auto"
-              style={{ maxHeight: '85vh', backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
-              onClick={e => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="flex items-start gap-4 mb-5">
-                <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={Building2} size={46} />
-                <div className="flex-1 min-w-0">
-                  <p className="mb-0.5" style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', color: NEU.deepGold, textTransform: 'uppercase' }}>
-                    Delegation
-                  </p>
-                  <h2 className="font-black text-lg truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }} title={delegationView.name}>{delegationView.name}</h2>
-                  <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT, fontWeight: 600 }}>
-                    {members.length} member{members.length === 1 ? '' : 's'} · {allocatedCount} allocated
-                  </p>
-                </div>
-                <button
-                  onClick={close}
-                  aria-label="Close delegation"
-                  className="gv-lift flex-shrink-0 flex items-center justify-center rounded-lg focus:outline-none transition-colors"
-                  style={{ width: 30, height: 30, border: '1px solid #DDD4C0', color: NEU.muted, backgroundColor: 'transparent' }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                >
-                  <X size={15} />
-                </button>
-              </div>
-
-              {members.length === 0 ? (
-                <p className="text-center py-8" style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.muted }}>
-                  No members found for this delegation.
-                </p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {members.map(m => {
-                    const mName = m.profiles?.display_name ?? m.invited_name ?? 'Unknown';
-                    const mAlloc = (m.status === 'assigned' || m.status === 'checked-in') && m.assigned_committee
-                      ? committeeAbbr(m.assigned_committee)
-                      : null;
-                    return (
-                      <button
-                        key={m.id}
-                        onClick={() => { setDelegationView(null); setReviewId(m.id); }}
-                        className="flex items-center gap-3 w-full text-left focus:outline-none"
-                        style={{ padding: '10px 12px', borderRadius: 14, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', cursor: 'pointer' }}
-                      >
-                        <MemberAvatar name={mName} url={m.profiles?.avatar_url ?? null} size={40} />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 800, color: NEU.ink }}>{mName}</span>
-                            {m.is_head_delegate && (
-                              <span className="inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.08em', padding: '2px 7px', borderRadius: 999, backgroundColor: 'rgba(27,56,40,0.1)', color: NEU.forest, border: '1px solid rgba(27,56,40,0.2)' }}>
-                                <Users size={8} strokeWidth={2.5} /> HEAD
-                              </span>
-                            )}
-                          </div>
-                          {mAlloc && (
-                            <span className="inline-flex items-center gap-1.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: NEU.muted, marginTop: 1 }}>
-                              <BadgeCheck size={12} strokeWidth={2.4} style={{ color: NEU.deepGold }} />
-                              {mAlloc}{m.assigned_country_name ? ` · ${m.assigned_country_name}` : ''}
-                            </span>
-                          )}
-                        </div>
-                        <RolePill role={m.role} size="sm" />
-                        <StatusPill status={m.status} size="sm" awaitingResubmission={false} />
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div></Portal>
+          <ApplicantDetailDialog
+            key={app.id}
+            app={app}
+            name={name}
+            email={email}
+            age={ageForApp(app, questions)}
+            cardRef={reviewCardRef}
+            onClose={closeReview}
+            conferenceSlug={conference.slug}
+            accessToken={accessToken ?? null}
+            chips={(
+              <>
+                {!app.user_id && <NotRegisteredChip />}
+                <RolePill role={app.role} size="sm" />
+                {app.role === 'chair' && app.fee_waiver_source === 'chair_invite' && <InvitedChip />}
+                <StatusPill
+                  status={app.status}
+                  size="sm"
+                  awaitingResubmission={app.status === 'rejected' && (roleConfig?.allow_resubmission ?? false)}
+                />
+                {!app.attending && <NotAttendingBadge size="sm" />}
+                {app.resubmitted_at && (
+                  <span
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold"
+                    title="The applicant edited and resubmitted this application"
+                    style={{ fontSize: 11, fontFamily: OUTFIT, letterSpacing: '0.04em', backgroundColor: 'rgba(238,217,138,0.18)', color: '#EED98A', border: '1px solid rgba(238,217,138,0.45)' }}
+                  >
+                    <RotateCcw size={11} strokeWidth={2.5} />
+                    Resubmitted {formatDate(app.resubmitted_at)}
+                  </span>
+                )}
+                <LevelChip level={expLabel} count={confCount} />
+              </>
+            )}
+            actions={decisionControls(true)}
+            actionsWithoutPayment={decisionControls(false)}
+            paymentControls={paymentControls}
+            isDelegate={isDelegate}
+            showsPreferences={showsPreferences}
+            feeCharged={roleChargesFee(app.role)}
+            experienceLevel={expLabel}
+            answerItems={questions.map(q => ({ key: q.id, label: q.label, answer: displayAnswer(q, answers[q.id]), archived: !!q.archived }))}
+            orphanAnswers={orphanedAnswers.map(([key, value]) => ({ key, label: key, answer: Array.isArray(value) ? value.join(', ') : String(value ?? '') }))}
+            listedExperience={munExperience}
+            showListedExperience={isMunExperienceRole}
+            aid={hasAidRequest ? {
+              status: aidStatus,
+              statement: aidStatement ?? null,
+              requestedAmount: aidRequestedAmount ?? null,
+              grantedAmount: previewAid?.status === 'approved' ? (previewAid.granted_amount ?? null) : null,
+              currency: aidCurrency,
+            } : null}
+            onOpenDelegation={app.society_id ? () => {
+              closeReview();
+              setDelegationFocus(app.society_id);
+              setListView('delegations');
+            } : undefined}
+          />
         );
       })()}
 

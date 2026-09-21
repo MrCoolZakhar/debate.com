@@ -151,3 +151,28 @@ Method: public pages screenshotted on the dev server at 1280x800 (not signed in)
 12. **Em dashes across user-facing copy.** About 20 in English strings in `translations.ts` (voting rule sentences, resume errors) plus dozens in communications (38), applications (30), the live wall (47 across `CommitteeCard` and `LiveModals`), the apply flow (25) and the delegate page (21). Direction: one sweep with short sentences; keep a lone dash only as an empty-value placeholder in tables.
 13. **The Conferences promo pop-up in sessions.** Owner verdict on 18 Sep: "way too AI generated". Direction: bigger headings, a third of the words, one image or the product itself instead of three icon tiles.
 14. **Admin console.** Internal, so last, but `DataTab` alone has 19 uppercase letter-spaced labels and the console keeps growing (past conferences, detail pop-ups). Direction: apply the Settings type scale and tab colours before adding more to it.
+
+---
+
+## 9. ONE SCREEN, NO PAGE SCROLL (21 SEP 2026)
+
+Owner, on the organiser dashboard: "there is lots of empty space and the page is scrollable. You need to take notes of what pages simply can't be scrollable." The rule:
+
+**A page that is a place you work FROM (a console, a dashboard, a set-up screen) fits one window at 1280x800 and above, and never scrolls as a page.** It is checked at 1280x800, 1440x900 and 1536x864, and it must still fit a real laptop viewport with the browser chrome taken off (about 1280x700). Only a list INSIDE it scrolls (a priorities list, an activity feed, a roster, a country list), with the rest of the screen standing still. No dead areas either: a card that is shorter than its neighbours gives the height to something that can use it (a feed, a chart), never to empty cream.
+
+How it is built, so it does not drift:
+- **The grid takes exactly the window** (`height: calc(100dvh - top bar)`, rows `auto` then `minmax(0, 1fr)`), and every card spends the height it is given. Nothing that grows with the WIDTH (a chart drawn at a fixed aspect ratio, a square dial) may set a row's height: the chart draws in `fill` mode and the dial is sized from the space it has.
+- **Nothing hangs off the bottom.** A decorative glyph with a negative `bottom`, a card shadow or a margin under the last row adds a page scroll on its own.
+- **Below 1024 px wide, or under 600 px tall, it is an ordinary scrolling stack.** Phones and tablets scroll; the one-screen rule is a laptop and desktop rule.
+- Consoles that must stay legible on a projector (the sessions pages) use `FitToScreen`, which scales one fixed layout to the window. Conference-side pages do not: they fit by laying out, never by scaling.
+
+**Must fit one screen (1280x800 and up):**
+- Organiser dashboard `/manage/[slug]` (the one-screen grid in `src/components/conferences/dashboardLayout.tsx`).
+- Chair session `/chair/[code]`, voting `/voting/[code]`, faculty advisor `/advisor/[code]` (all `FitToScreen`).
+- The sessions set-up screens: `/create` (committee type through `FitToScreen`, the build screen by layout, only the country list scrolls), the voting roll call, Settings tabs such as Motions.
+- The document introduction screen (the paper and the floating timer; the paper scrolls inside its viewer).
+
+**Scroll by design (never force these into one screen):**
+- Lists that grow with the conference: applications, assignment, committees, documents, communications, financials history and invoices, jobs, the live status wall `/manage/[slug]/live` (one card per committee, 30 committees do not fit a laptop), the scoreboard.
+- Long forms and reading: organiser Settings, the creation wizard steps with many fields, the apply flow, account and CV pages, the blog and every article, public conference pages, explore and map, legal pages.
+- `/join`: an ordinary scrolling page with fixed slots (it used to be `FitToScreen`, which resized as content arrived).
