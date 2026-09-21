@@ -32,7 +32,30 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   arc_submission_link_url_https: "The button link must start with https://",
   arc_submission_link_shape: "Add a message, a button label and a link together, or leave all three empty.",
   application_role_configs_collect_mun_experience_role_check: "MUN experience can only be collected for chairs and secretariat.",
+  conference_committees_topics_check: "A committee can have at most 3 topics.",
+  conference_committees_total_slots_check: "A committee needs at least one seat.",
+  email_templates_recurring_interval_floor: "Reminders can be sent every 3 to 60 days.",
+  email_templates_recurring_max_sends_range: "Reminders can be sent between 1 and 10 times.",
+  vouchers_amount_check: "A voucher needs an amount above zero.",
+  vouchers_percent_range: "A percentage voucher must be between 1 and 100.",
+  applications_aid_requested_amount_nonneg: "The amount you request can't be negative.",
+  financial_aid_requests_requested_amount_check: "The amount you request can't be negative.",
 };
+
+/** Supabase Auth (GoTrue) errors, matched by code first and by message text
+ *  second for older clients that send no code at all. */
+const AUTH_MESSAGES: { codes: string[]; pattern?: RegExp; message: string }[] = [
+  { codes: ['invalid_credentials'], pattern: /Invalid login credentials/, message: "That email and password don't match. Check them and try again, or reset your password." },
+  { codes: ['user_already_exists', 'email_exists'], pattern: /already registered/, message: 'An account with this email already exists. Sign in instead.' },
+  { codes: ['weak_password'], pattern: /Password should be/, message: 'That password is too weak. Use at least 8 characters.' },
+  { codes: ['over_email_send_rate_limit', 'over_request_rate_limit'], pattern: /rate limit|security purposes/, message: 'That is a few too many in a row. Wait a minute or two and try again.' },
+  { codes: ['same_password'], pattern: /should be different/, message: 'Your new password must be different from your current one.' },
+  { codes: ['email_address_invalid'], pattern: /Unable to validate email address/, message: "That email address doesn't look right. Check it and try again." },
+  { codes: ['otp_expired'], message: 'That code has expired. Ask for a new one and try again.' },
+  { codes: ['signup_disabled'], message: 'New sign-ups are paused right now. Please try again later.' },
+  { codes: ['provider_disabled'], message: "That sign-in option isn't available right now. Try email and password instead." },
+  { codes: ['session_not_found', 'refresh_token_not_found'], message: 'Your session has expired. Please refresh the page and sign in again.' },
+];
 
 /** By SQLSTATE code, when the message itself gives nothing more specific to
  *  say (no named constraint, not one of our own trigger messages). */
@@ -48,6 +71,17 @@ const CODE_MESSAGES: Record<string, string> = {
 };
 
 const DEFAULT_FALLBACK = 'Something went wrong. Please try again.';
+
+/** Marks an error whose message we wrote ourselves, for a person, at the
+ *  point it was thrown. friendlyError passes it through untouched rather
+ *  than running it through the generic resolution below, which exists to
+ *  translate a message nobody wrote for a person in the first place. */
+export class UserFacingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'UserFacingError';
+  }
+}
 
 /** Loose shape covering PostgrestError, StorageError, FunctionsHttpError and
  *  a plain Error — every property optional, read defensively. */
@@ -92,6 +126,10 @@ export function friendlyError(error: unknown, fallback: string = DEFAULT_FALLBAC
   // eslint-disable-next-line no-console
   console.error('[friendlyError]', error);
 
+  // A message we wrote ourselves, for a person, at the point it was thrown.
+  // Nothing generic below can improve on it.
+  if (error instanceof UserFacingError) return error.message;
+
   const message = extractMessage(error);
   const code = extractCode(error);
 
@@ -100,6 +138,13 @@ export function friendlyError(error: unknown, fallback: string = DEFAULT_FALLBAC
   if (constraintMatch) {
     const known = CONSTRAINT_MESSAGES[constraintMatch[1]];
     if (known) return known;
+  }
+
+  // a2. Supabase Auth (GoTrue) errors: code first, then message text for
+  // older clients that send no code at all.
+  for (const entry of AUTH_MESSAGES) {
+    if (code && entry.codes.includes(code)) return entry.message;
+    if (entry.pattern && entry.pattern.test(message)) return entry.message;
   }
 
   // b. Network.

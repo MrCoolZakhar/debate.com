@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createAuthClient } from '@/lib/supabase-auth';
+import { friendlyError } from '@/lib/friendlyError';
 import Loader from '@/components/Loader';
 import {
   AuthLayout,
@@ -63,7 +64,7 @@ export default function ResetPasswordPage() {
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
     if (error) {
-      setError(error.message);
+      setError(friendlyError(error, "Couldn't update your password. Please try again."));
       return;
     }
     setDone(true);

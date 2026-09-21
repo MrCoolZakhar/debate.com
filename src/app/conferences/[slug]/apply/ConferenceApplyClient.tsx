@@ -21,6 +21,7 @@ import { creditPricing, extractFunctionErrorMessage } from '@/lib/payments';
 import { computeCheckout, activePhaseFee, type VoucherInput, type FeePhase } from '@/lib/finance';
 import { queueParticipantEventEmail } from '@/lib/emailEvents';
 import { reportBlocked } from '@/lib/reportCrash';
+import { friendlyError, UserFacingError } from '@/lib/friendlyError';
 import { themeCssVars, type ConferenceTheme } from '@/lib/theme';
 import {
   type ApplyDraftAnswers, type ApplyDraftRow,
@@ -2706,7 +2707,7 @@ function ConferenceApplyInner() {
             .maybeSingle();
           if (socLookupError) {
             reportBlocked('resolve delegation', socLookupError, { conferenceSlug: slug, role });
-            throw new Error('We could not look up your delegation. Please try again.');
+            throw new UserFacingError('We could not look up your delegation. Please try again.');
           }
 
           if (existingSoc) {
@@ -2719,12 +2720,12 @@ function ConferenceApplyInner() {
               .single();
             if (socInsertError) {
               reportBlocked('create delegation', socInsertError, { conferenceSlug: slug, role });
-              throw new Error('We could not create your delegation. Please try again.');
+              throw new UserFacingError('We could not create your delegation. Please try again.');
             }
             societyId = (newSoc as { id: string } | null)?.id ?? null;
             if (!societyId) {
               reportBlocked('create delegation', new Error('insert returned no row'), { conferenceSlug: slug, role });
-              throw new Error('We could not create your delegation. Please try again.');
+              throw new UserFacingError('We could not create your delegation. Please try again.');
             }
           }
         }
@@ -2905,7 +2906,7 @@ function ConferenceApplyInner() {
         const { error: prefInsertError } = await supabase.from('application_preferences').insert(prefRows);
         if (prefInsertError) {
           reportBlocked('save application preferences', prefInsertError, { conferenceSlug: slug, role });
-          throw new Error('Your application went through, but we could not save your committee ranking. Please press Submit again to save it.');
+          throw new UserFacingError('Your application went through, but we could not save your committee ranking. Please press Submit again to save it.');
         }
       }
 
@@ -2920,8 +2921,7 @@ function ConferenceApplyInner() {
       const timingParam = roleConfig?.payment_timing ? `&timing=${roleConfig.payment_timing}` : '';
       router.push(`/conferences/${slug}/apply/confirmation?role=${role}${timingParam}`);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
-      setSubmitError(msg);
+      setSubmitError(friendlyError(err, 'Something went wrong. Please try again.'));
       setSubmitting(false);
       // They're still in the flow with unsaved edits — keep saving them.
       draftOffRef.current = false;
@@ -2972,7 +2972,7 @@ function ConferenceApplyInner() {
             .maybeSingle();
           if (socLookupError) {
             reportBlocked('resolve delegation', socLookupError, { conferenceSlug: slug, role });
-            throw new Error('We could not look up your delegation. Please try again.');
+            throw new UserFacingError('We could not look up your delegation. Please try again.');
           }
 
           if (existingSoc) {
@@ -2985,12 +2985,12 @@ function ConferenceApplyInner() {
               .single();
             if (socInsertError) {
               reportBlocked('create delegation', socInsertError, { conferenceSlug: slug, role });
-              throw new Error('We could not create your delegation. Please try again.');
+              throw new UserFacingError('We could not create your delegation. Please try again.');
             }
             societyId = (newSoc as { id: string } | null)?.id ?? null;
             if (!societyId) {
               reportBlocked('create delegation', new Error('insert returned no row'), { conferenceSlug: slug, role });
-              throw new Error('We could not create your delegation. Please try again.');
+              throw new UserFacingError('We could not create your delegation. Please try again.');
             }
           }
         }
@@ -3033,7 +3033,7 @@ function ConferenceApplyInner() {
       const result = data as { ok: boolean; resubmitted?: boolean; error?: string };
       if (!result.ok) {
         reportBlocked('resubmit application', new Error(result.error ?? 'rpc returned ok:false'), { conferenceSlug: slug, role });
-        throw new Error(result.error ?? 'Could not resubmit your application. Please try again.');
+        throw new UserFacingError(result.error ?? 'Could not resubmit your application. Please try again.');
       }
 
       // Re-consume the credit that was refunded when this application was
@@ -3062,8 +3062,7 @@ function ConferenceApplyInner() {
       await discardDraft(supabase);
       router.push(`/conferences/${slug}/apply/confirmation?role=${role}&resubmitted=1`);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
-      setSubmitError(msg);
+      setSubmitError(friendlyError(err, 'Something went wrong. Please try again.'));
       setSubmitting(false);
     }
   }
@@ -3091,13 +3090,12 @@ function ConferenceApplyInner() {
       const { data, error } = await supabase.rpc('withdraw_application', { p_application_id: existingApp.id });
       if (error) throw error;
       const result = data as { ok: boolean; error?: string } | null;
-      if (!result?.ok) throw new Error(result?.error ?? 'Could not withdraw your application. Please try again.');
+      if (!result?.ok) throw new UserFacingError(result?.error ?? 'Could not withdraw your application. Please try again.');
       refreshCredits();
       await discardDraft(supabase);
       router.push('/my-conferences');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Could not withdraw your application. Please try again.';
-      setWithdrawError(msg);
+      setWithdrawError(friendlyError(err, 'Could not withdraw your application. Please try again.'));
       setWithdrawing(false);
     }
   }
@@ -4446,14 +4444,15 @@ function ConferenceApplyInner() {
       }));
       try {
         const { data, error } = await supabase.from('mun_cv_entries').insert(rows).select('id');
-        if (error || !data || data.length !== rows.length) {
-          throw new Error(error?.message ?? 'Could not save to your MUN CV. Please try again.');
+        if (error) throw error;
+        if (!data || data.length !== rows.length) {
+          throw new UserFacingError('Could not save to your MUN CV. Please try again.');
         }
         setCvSaveResult({ addedCount: rows.length });
         await loadMunCvRows();
         await refreshCvCount();
       } catch (err: unknown) {
-        setCvSaveError(err instanceof Error ? err.message : 'Could not save to your MUN CV. Please try again.');
+        setCvSaveError(friendlyError(err, 'Could not save to your MUN CV. Please try again.'));
       } finally {
         setSavingToCv(false);
       }

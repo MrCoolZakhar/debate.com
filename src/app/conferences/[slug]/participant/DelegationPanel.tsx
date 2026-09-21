@@ -23,6 +23,7 @@ import { NEU, NeuButton } from '@/components/neu';
 import ProfileLink from '@/components/ProfileLink';
 import Loader from '@/components/Loader';
 import { queueParticipantEventEmail } from '@/lib/emailEvents';
+import { friendlyError } from '@/lib/friendlyError';
 import {
   POOL_MEMBER_SELECT, pledgeSatisfied, pledgeText, MemberAvatar,
   type PoolMember,
@@ -337,7 +338,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
 
     if (allocationSwapMode === 'self_serve') {
       const { data, error } = await supabase.rpc('perform_delegation_swap', { p_app_a: swapA.id, p_app_b: swapB.id });
-      if (error) { setSwapError(error.message || 'Could not swap allocations.'); setSwapping(false); return; }
+      if (error) { setSwapError(friendlyError(error, 'Could not swap allocations.')); setSwapping(false); return; }
       const result = data as SwapRpcResult;
       if (!result.ok) { setSwapError(result.error ?? 'Could not swap allocations.'); setSwapping(false); return; }
       // The RPC's own return is the authoritative post-swap state, the
@@ -373,7 +374,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
       const { data: reqRow, error } = await supabase.from('conference_requests').insert({
         conference_id: conferenceId, user_id: user.id, kind: 'swap_request', subject, metadata,
       }).select('id').single();
-      if (error || !reqRow) { setSwapError(error?.message ?? 'Could not send the swap request.'); setSwapping(false); return; }
+      if (error || !reqRow) { setSwapError(friendlyError(error, 'Could not send the swap request.')); setSwapping(false); return; }
       await supabase.from('conference_request_messages').insert({
         request_id: (reqRow as { id: string }).id, sender_user_id: user.id, is_organizer: false,
         body: `Requesting to swap allocations: ${nameA} (${allocA}) ↔ ${nameB} (${allocB}).`,
