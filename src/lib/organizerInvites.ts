@@ -8,6 +8,7 @@
 import type { getAuthedClient } from '@/lib/supabase-auth';
 import { queueOrganizerInviteEmail } from '@/lib/emailEvents';
 import type { BundleId, PermissionMap } from '@/lib/organizerPermissions';
+import { friendlyError } from '@/lib/friendlyError';
 
 type AuthedClient = ReturnType<typeof getAuthedClient>;
 
@@ -76,7 +77,7 @@ export async function sendOrganizerInvite(
     p_permissions: args.permissions,
     p_public_title: args.publicTitle?.trim() || null,
   });
-  if (error) return { ok: false, error: error.message || 'Could not send that invite.' };
+  if (error) return { ok: false, error: friendlyError(error, 'Could not send that invite.') };
 
   const result = data as CreateOrganizerInviteRpcResult;
   if (!result.ok) return { ok: false, error: result.error ?? 'Could not send that invite.' };
@@ -131,6 +132,6 @@ export async function revokeOrganizerInvite(
     .update({ status: 'revoked', responded_at: new Date().toISOString() })
     .eq('id', inviteId)
     .eq('status', 'pending');
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: friendlyError(error, 'Could not withdraw that invite.') };
   return { ok: true };
 }

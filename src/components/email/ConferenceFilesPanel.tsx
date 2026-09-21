@@ -37,6 +37,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { Emoji3D, NEU, NEU_GRADIENTS, OUTFIT, EASE } from '@/components/neu';
 import { SOFT, AMBER_INK, CARD_BORDER } from '@/app/manage/[slug]/live/tokens';
 import type { EmailBlock } from '@/lib/emailBlocks';
+import { friendlyError } from '@/lib/friendlyError';
 
 const FOREST = '#1B3828';
 const INK = '#1C1410';
@@ -80,7 +81,7 @@ export function useConferenceFiles(conferenceId: string, accessToken: string | n
         .eq('conference_committees.conference_id', conferenceId)
         .order('created_at', { ascending: false });
       if (cancelled) return;
-      if (err) { setError(err.message); setFiles([]); return; }
+      if (err) { setError(friendlyError(err, "Couldn't load your files. Please refresh the page.")); setFiles([]); return; }
       const rows = (data ?? []) as unknown as Record<string, unknown>[];
       setFiles(rows.map(r => {
         // PostgREST returns an embedded one-to-one as an object, but an older

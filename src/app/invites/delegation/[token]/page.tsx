@@ -25,6 +25,7 @@ import Link from 'next/link';
 import { Users2 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabaseAuthClient } from '@/lib/supabase-auth';
+import { friendlyError } from '@/lib/friendlyError';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import { Eyebrow, OUTFIT } from '@/app/account/accountUi';
@@ -61,7 +62,7 @@ export default function DelegationInvitePage() {
     if (!token) { setState('failed'); setError('This invite link is missing its token.'); return; }
 
     const { data, error: rpcErr } = await supabaseAuthClient.rpc('resolve_delegation_invite', { p_token: token });
-    if (rpcErr) { setState('failed'); setError(rpcErr.message || 'Could not open this invite.'); return; }
+    if (rpcErr) { setState('failed'); setError(friendlyError(rpcErr, 'Could not open this invite.')); return; }
 
     const result = (data ?? null) as Resolved | null;
     if (!result || !result.ok || !result.slug) {

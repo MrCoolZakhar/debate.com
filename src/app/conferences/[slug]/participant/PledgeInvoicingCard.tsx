@@ -16,6 +16,7 @@ import { formatFee, currencySymbol } from '@/lib/utils';
 import { type FormBlock, type CustomAnswers, questionsOf, validateAnswers, answerIsEmpty } from '@/lib/customQuestions';
 import CustomQuestionsField from '@/components/CustomQuestionsField';
 import { SectionCard, OUTFIT } from './shared';
+import { friendlyError } from '@/lib/friendlyError';
 
 interface DelegationAidRequest {
   status: 'pending' | 'approved' | 'denied';
@@ -96,7 +97,7 @@ export default function PledgeInvoicingCard({
     const result = data as { ok?: boolean; error?: string } | null;
     if (error || !result?.ok) {
       setAidSubmitting(false);
-      setAidSubmitError(result?.error || error?.message || 'Could not submit your request. Please try again.');
+      setAidSubmitError(result?.error || friendlyError(error, 'Could not submit your request. Please try again.'));
       return;
     }
     setAidSubmitting(false);

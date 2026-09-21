@@ -19,6 +19,7 @@ import { NEU, OUTFIT } from '@/components/neu';
 import Avatar from '@/components/Avatar';
 import ProfileLink from '@/components/ProfileLink';
 import { type CustomAnswers, normalizeBlocks, questionsOf, displayAnswer } from '@/lib/customQuestions';
+import { friendlyError } from '@/lib/friendlyError';
 
 interface AidRequestRow {
   id: string;
@@ -177,7 +178,7 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
       .select('id');
     if (error || !data || data.length !== 1) {
       setBusyId(null);
-      setActionError(error ? error.message : 'Could not save the decision. Please try again.');
+      setActionError(friendlyError(error, 'Could not save the decision. Please try again.'));
       return;
     }
 
@@ -247,7 +248,7 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
       .select('id');
     if (error || !data || data.length !== 1) {
       setBusyId(null);
-      setActionError(error ? error.message : 'Could not save the decision. Please try again.');
+      setActionError(friendlyError(error, 'Could not save the decision. Please try again.'));
       return;
     }
     try {

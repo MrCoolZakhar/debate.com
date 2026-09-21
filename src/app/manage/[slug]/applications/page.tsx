@@ -44,6 +44,11 @@ import DelegationsBoard, { PeopleDelegationsSwitch } from './DelegationsBoard';
 import { ORGANIZER_SECTIONS, bundlePermissions } from '@/lib/organizerPermissions';
 // The applicant pop-up (hero, action bar, five tabs) and its ?app= URL state.
 import ApplicantDetailDialog, { useApplicantUrlSync } from './ApplicantDetail/ApplicantDetailDialog';
+// Same role-label vocabulary the MUN CV timeline uses (Delegate/Chair/Faculty
+// Advisor/Secretariat/Other), so a chair/secretariat application's listed
+// conferences read consistently with how the applicant's own CV describes them.
+import { ENTRY_TYPE_MAP, type EntryType } from '@/components/CVEntryModal';
+import { friendlyError, UserFacingError } from '@/lib/friendlyError';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -2530,7 +2535,7 @@ export default function ApplicationsPage() {
 
     (async () => {
       const supabase = await getFreshAuthedClient();
-      if (!supabase) throw new Error('Your session has expired, please refresh and sign in again.');
+      if (!supabase) throw new UserFacingError('Your session has expired, please refresh and sign in again.');
       const { data, error } = await supabase.rpc('accept_secretariat_application', {
         p_application_id: appId,
         p_permissions: permissions,
@@ -2539,8 +2544,8 @@ export default function ApplicationsPage() {
       // Verified write: an error, or null data, is a failure. The RPC's own
       // exception is already written for a person to read — surfaced as-is,
       // never swallowed or replaced with something generic.
-      if (error) throw new Error(error.message);
-      if (!data) throw new Error('Could not accept the application. Please try again.');
+      if (error) throw error;
+      if (!data) throw new UserFacingError('Could not accept the application. Please try again.');
       const organizerId = data as string;
 
       // Secondary effects, exactly what a plain accept does — a failure here
@@ -2576,7 +2581,7 @@ export default function ApplicationsPage() {
       })
       .catch((e: unknown) => {
         restoreRow(prevRow);
-        setSecretariatError(e instanceof Error ? e.message : 'Could not accept the application. The change was reverted.');
+        setSecretariatError(friendlyError(e, 'Could not accept the application. The change was reverted.'));
       })
       .finally(() => {
         markBusy(appId, false);
@@ -2647,7 +2652,8 @@ export default function ApplicationsPage() {
           } else {
             const { error: refundError } = await freshSupabase.rpc('refund_credit_for_application', { p_application_id: appId });
             if (refundError) {
-              setActionError(`Rejected, but the credit was not refunded (${refundError.message}). Refund it manually or refresh to verify.`);
+              console.error('[applications]', refundError);
+              setActionError('Rejected, but the credit refund could not be confirmed. Refresh to verify.');
             }
           }
         } catch {
@@ -3023,7 +3029,8 @@ export default function ApplicationsPage() {
           } else {
             const { error: refundError } = await freshSupabase.rpc('refund_credit_for_application', { p_application_id: appId });
             if (refundError) {
-              setActionError(`Withdrawn, but the credit was not refunded (${refundError.message}). Refund it manually or refresh to verify.`);
+              console.error('[applications]', refundError);
+              setActionError('Withdrawn, but the credit refund could not be confirmed. Refresh to verify.');
             }
           }
         } catch {
@@ -3187,13 +3194,13 @@ export default function ApplicationsPage() {
       // account (those belong in 'rejected' / 'withdrawn', not deleted), and
       // removes the allocation in the SAME transaction as the row.
       const { data, error } = await supabase.rpc('delete_application', { p_application_id: appId });
-      if (error) throw new Error(error.message);
+      if (error) throw error;
       const res = (data ?? {}) as { ok?: boolean; error?: string };
-      if (!res.ok) throw new Error(res.error || 'the delete was rejected');
+      if (!res.ok) throw new UserFacingError(res.error || 'the delete was rejected');
     })()
       .then(scheduleReconcile)
       .catch((e: unknown) => {
-        const reason = e instanceof Error && e.message ? e.message : 'the delete was rejected';
+        const reason = friendlyError(e, 'the delete was rejected');
         // The row is back, so the ledger must stop claiming it is deleted.
         pendingPatches.current.delete(appId);
         setApplications(cur => {
@@ -3253,11 +3260,11 @@ export default function ApplicationsPage() {
             .select('id')
             .eq('application_id', app.id)
             .not('status', 'in', '(settled,waived,void)');
-          if (invoiceReadError) settleFailure = invoiceReadError.message;
+          if (invoiceReadError) settleFailure = friendlyError(invoiceReadError, 'Please try again.');
           for (const inv of (openInvoices ?? []) as { id: string }[]) {
             if (settleFailure) break;
             const { error: settleError } = await supabase.rpc('mark_invoice_paid', { p_invoice_id: inv.id });
-            if (settleError) settleFailure = settleError.message;
+            if (settleError) settleFailure = friendlyError(settleError, 'Please try again.');
           }
           if (settleFailure) {
             setActionError(`Marked paid, but their invoice could not be settled (${settleFailure}). They may still be blocked from acceptance. Settle it in Financials, under Invoices.`);
@@ -3326,11 +3333,11 @@ export default function ApplicationsPage() {
           .select('id')
           .eq('application_id', app.id)
           .eq('status', 'settled');
-        if (settledReadError) reopenFailure = settledReadError.message;
+        if (settledReadError) reopenFailure = friendlyError(settledReadError, 'Please try again.');
         for (const inv of (settled ?? []) as { id: string }[]) {
           if (reopenFailure) break;
           const { error: reopenError } = await supabase.rpc('mark_invoice_unpaid', { p_invoice_id: inv.id });
-          if (reopenError) reopenFailure = reopenError.message;
+          if (reopenError) reopenFailure = friendlyError(reopenError, 'Please try again.');
         }
         if (reopenFailure) {
           setActionError(`Marked unpaid, but their invoice still shows as settled (${reopenFailure}). Reopen it in Financials, under Invoices.`);

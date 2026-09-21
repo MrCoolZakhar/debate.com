@@ -47,6 +47,7 @@ import GuidedWalkthrough, {
 } from '@/components/GuidedWalkthrough';
 import ProfileLink from '@/components/ProfileLink';
 import Portal from '@/components/Portal';
+import { friendlyError, UserFacingError } from '@/lib/friendlyError';
 
 /** THE GOLD THAT CAN CARRY TEXT — and this page's replacement for `AMBER_INK`.
  *
@@ -2749,7 +2750,7 @@ function CommunicationsPageInner() {
 
     if (builderTemplateId) {
       const { error } = await supabase.from('email_templates').update(payload).eq('id', builderTemplateId);
-      if (error) { if (!opts.silent) setBuilderError(error.message); return null; }
+      if (error) { if (!opts.silent) setBuilderError(friendlyError(error, "Couldn't save this email. Please try again.")); return null; }
       void loadTemplates(); // silent background refresh, never blocks the builder
       return builderTemplateId;
     }
@@ -2759,7 +2760,7 @@ function CommunicationsPageInner() {
       event_key: builderEventKey,
       ...payload,
     }).select('id').single();
-    if (error) { if (!opts.silent) setBuilderError(error.message); return null; }
+    if (error) { if (!opts.silent) setBuilderError(friendlyError(error, "Couldn't save this email. Please try again.")); return null; }
     const newId = (data as { id: string }).id;
     setBuilderTemplateId(newId);
     void loadTemplates(); // silent background refresh, never blocks the builder
@@ -2803,11 +2804,11 @@ function CommunicationsPageInner() {
       const supabase = getAuthedClient(session.access_token);
       (async () => {
         const res = await turnOnDefaultEmail(supabase, conference.id, ev.key);
-        if (!res.ok) throw new Error(res.error ?? 'Could not turn this on.');
+        if (!res.ok) throw new UserFacingError(res.error ?? 'Could not turn this on.');
         void loadTemplates();
       })()
         .catch((e: unknown) => {
-          showFlash('err', e instanceof Error ? e.message : 'Could not turn this on.');
+          showFlash('err', friendlyError(e, 'Could not turn this on.'));
         })
         .finally(() => setTogglingEventKeys(s => { const next = new Set(s); next.delete(ev.key); return next; }));
       return;
@@ -2823,7 +2824,7 @@ function CommunicationsPageInner() {
       if (error) throw error;
     })().catch((e: unknown) => {
       setTemplates(ts => ts.map(t => (t.id === template.id ? { ...t, enabled: prev } : t)));
-      showFlash('err', e instanceof Error ? e.message : 'Could not update the notification toggle.');
+      showFlash('err', friendlyError(e, 'Could not update the notification toggle.'));
     });
   }
 
@@ -2843,7 +2844,7 @@ function CommunicationsPageInner() {
       if (error) throw error;
     })().catch((e: unknown) => {
       setTemplates(ts => ts.map(t => (t.id === template.id ? prev : t)));
-      showFlash('err', e instanceof Error ? e.message : 'Could not update the reminder settings.');
+      showFlash('err', friendlyError(e, 'Could not update the reminder settings.'));
     });
   }
 
@@ -2865,7 +2866,7 @@ function CommunicationsPageInner() {
       updated_at: new Date().toISOString(),
     }).select('id, conference_id, event_key, name, subject, body, body_blocks, enabled, delivery, updated_at, audience, recurring_enabled, recurring_interval_days, recurring_max_sends').single();
     setDuplicatingIds(prev => { const nextSet = new Set(prev); nextSet.delete(t.id); return nextSet; });
-    if (error || !data) { showFlash('err', error?.message ?? 'Could not duplicate the template.'); return; }
+    if (error || !data) { showFlash('err', friendlyError(error, 'Could not duplicate the template.')); return; }
     setTemplates(prev => [...prev, data as EmailTemplate]);
     showFlash('ok', 'Duplicated as a new draft.');
   }
@@ -2886,7 +2887,7 @@ function CommunicationsPageInner() {
     setDeletingIds(s => { const next = new Set(s); next.delete(t.id); return next; });
     if (error) {
       setTemplates(snapshot);
-      showFlash('err', error.message);
+      showFlash('err', friendlyError(error, "Couldn't delete this email. Please try again."));
       return;
     }
     showFlash('ok', 'Deleted.');
@@ -2919,7 +2920,7 @@ function CommunicationsPageInner() {
       const supabase = getAuthedClient(session.access_token);
       const { error } = await supabase.from('conferences').update({ email_theme: themeDraft }).eq('id', conference.id);
       setThemeSaving(false);
-      if (error) { setThemeError(error.message); return; }
+      if (error) { setThemeError(friendlyError(error, "Couldn't save the email style. Please try again.")); return; }
       lastSavedThemeRef.current = themeDraft;
       setThemeSaved(true);
       setTimeout(() => setThemeSaved(false), 2000);
@@ -3721,7 +3722,7 @@ function CommunicationsPageInner() {
       setInboxMessages(prev => prev.filter(m => m.id !== tempId));
       setInboxRequests(prev => prev.map(r => (r.id === req.id ? { ...r, ...prevReq } : r)));
       setReplyText(cur => (cur ? cur : body));
-      setReplyError(e instanceof Error ? e.message : 'Could not send the reply.');
+      setReplyError(friendlyError(e, 'Could not send the reply.'));
     });
   }
 
@@ -3744,7 +3745,7 @@ function CommunicationsPageInner() {
       if (error) throw error;
     })().catch((e: unknown) => {
       setInboxRequests(prev => prev.map(r => (r.id === req.id ? { ...r, ...prevReq } : r)));
-      showFlash('err', e instanceof Error ? e.message : `Could not ${close ? 'close' : 'reopen'} the thread.`);
+      showFlash('err', friendlyError(e, `Could not ${close ? 'close' : 'reopen'} the thread.`));
     });
   }
 
@@ -3764,10 +3765,10 @@ function CommunicationsPageInner() {
     setDeletingThread(true);
     const supabase = getAuthedClient(session.access_token);
     const { error: msgError } = await supabase.from('conference_request_messages').delete().eq('request_id', req.id);
-    if (msgError) { showFlash('err', msgError.message); setDeletingThread(false); return; }
+    if (msgError) { showFlash('err', friendlyError(msgError, "Couldn't delete this thread. Please try again.")); setDeletingThread(false); return; }
     const { error } = await supabase.from('conference_requests').delete().eq('id', req.id);
     setDeletingThread(false);
-    if (error) { showFlash('err', error.message); return; }
+    if (error) { showFlash('err', friendlyError(error, "Couldn't delete this thread. Please try again.")); return; }
 
     setInboxRequests(prev => prev.filter(r => r.id !== req.id));
     setInboxMessages(prev => prev.filter(m => m.request_id !== req.id));
@@ -3789,7 +3790,7 @@ function CommunicationsPageInner() {
       if (!app_a || !app_b) { setSwapError('This request is missing the application ids to swap.'); return; }
       setSwapActing(true);
       const { data, error } = await supabase.rpc('perform_delegation_swap', { p_app_a: app_a, p_app_b: app_b });
-      if (error) { setSwapError(error.message || 'Could not perform the swap.'); setSwapActing(false); return; }
+      if (error) { setSwapError(friendlyError(error, 'Could not perform the swap.')); setSwapActing(false); return; }
       const result = data as { ok: boolean; error?: string };
       if (!result.ok) { setSwapError(result.error ?? 'Could not perform the swap.'); setSwapActing(false); return; }
       setSwapActing(false);
@@ -3842,7 +3843,7 @@ function CommunicationsPageInner() {
       // has already been applied and is not undone here.
       setInboxMessages(prev => prev.filter(m => m.id !== tempId));
       setInboxRequests(prev => prev.map(r => (r.id === req.id ? { ...r, ...prevReq } : r)));
-      setSwapError(e instanceof Error ? e.message : 'Could not record the decision.');
+      setSwapError(friendlyError(e, 'Could not record the decision.'));
     });
   }
 

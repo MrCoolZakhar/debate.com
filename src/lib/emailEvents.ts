@@ -12,6 +12,7 @@ import { activePhaseFee, type FeePhase } from '@/lib/finance';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import { getDefaultEventEmail } from '@/lib/defaultEmails';
 import { loadSlotArtIndex, artFromIndex, slotArtKey, type SlotArtIndex } from '@/lib/slotGroups';
+import { friendlyError } from '@/lib/friendlyError';
 
 // ── Event registry ────────────────────────────────────────────────────────────
 // Single source of truth for platform email events, shared by this lib
@@ -634,7 +635,7 @@ export async function turnOnDefaultEmail(
 
   if (existing) {
     const { error } = await supabase.from('email_templates').update({ enabled: true }).eq('id', (existing as { id: string }).id);
-    return { ok: !error, error: error?.message };
+    return { ok: !error, error: error ? friendlyError(error, 'Could not turn this on.') : undefined };
   }
 
   const { error } = await supabase.from('email_templates').insert({
@@ -651,7 +652,7 @@ export async function turnOnDefaultEmail(
     // Inserting it off would quietly reduce what people already receive.
     ...(event?.recurring ? { recurring_enabled: true, recurring_interval_days: 3, recurring_max_sends: 3 } : {}),
   });
-  return { ok: !error, error: error?.message };
+  return { ok: !error, error: error ? friendlyError(error, 'Could not turn this on.') : undefined };
 }
 
 // ── Chair invite email ──────────────────────────────────────────────────────

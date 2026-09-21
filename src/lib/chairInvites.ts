@@ -5,6 +5,7 @@
 
 import type { getAuthedClient } from '@/lib/supabase-auth';
 import { queueChairInviteEmail } from '@/lib/emailEvents';
+import { friendlyError } from '@/lib/friendlyError';
 
 export interface SendChairInviteArgs {
   conferenceId: string;
@@ -74,7 +75,7 @@ export async function sendChairInvite(
     p_email: args.email.trim(),
     p_name: args.name?.trim() || null,
   });
-  if (error) return { ok: false, error: error.message || 'Could not invite that chair.' };
+  if (error) return { ok: false, error: friendlyError(error, 'Could not invite that chair.') };
 
   const result = data as CreateChairInviteRpcResult;
   if (!result.ok) return { ok: false, error: result.error ?? 'Could not invite that chair.' };

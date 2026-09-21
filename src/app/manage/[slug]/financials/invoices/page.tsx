@@ -28,6 +28,7 @@ import {
   NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuCard, NeuInset, NeuIconDisc,
 } from '@/components/neu';
 import { inputStyle, mutedCaption, formatRowDate, roleLabel } from '../shared';
+import { friendlyError } from '@/lib/friendlyError';
 
 const first = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null));
 
@@ -335,7 +336,7 @@ export default function FinancialsInvoicesPage() {
       reportBlocked('mark invoice paid', error ?? new Error(result?.error ?? 'rpc returned ok:false'), {
         invoiceId: inv.id, kind: inv.kind,
       });
-      setActionError(result?.error || error?.message || 'Could not mark this invoice paid.');
+      setActionError(result?.error || friendlyError(error, 'Could not mark this invoice paid.'));
       return;
     }
     setInvoices(cur => (cur ?? []).map(i => (i.id === inv.id ? { ...i, status: 'settled', amount_paid_cents: i.amount_cents } : i)));
@@ -352,7 +353,7 @@ export default function FinancialsInvoicesPage() {
     const { data, error } = await supabase.rpc('mark_invoice_unpaid', { p_invoice_id: inv.id });
     const result = data as { ok?: boolean; error?: string } | null;
     markBusy(inv.id, false);
-    if (error || !result?.ok) { setActionError(result?.error || error?.message || 'Could not mark this invoice unpaid.'); return; }
+    if (error || !result?.ok) { setActionError(result?.error || friendlyError(error, 'Could not mark this invoice unpaid.')); return; }
     setInvoices(cur => (cur ?? []).map(i => (i.id === inv.id ? { ...i, status: 'open', amount_paid_cents: 0 } : i)));
   }
 
@@ -365,7 +366,7 @@ export default function FinancialsInvoicesPage() {
     const { data, error } = await supabase.rpc('remove_pledged_spot_invoice', { p_invoice_id: inv.id });
     const result = data as { ok?: boolean; error?: string } | null;
     if (error || !result?.ok) {
-      return { ok: false, error: result?.error || error?.message || 'Could not remove this spot. Please try again.' };
+      return { ok: false, error: result?.error || friendlyError(error, 'Could not remove this spot. Please try again.') };
     }
     setInvoices(await fetchInvoicesData());
     return { ok: true };
@@ -479,7 +480,7 @@ export default function FinancialsInvoicesPage() {
         batchId: batch.id,
       });
       setBatches(cur => (cur ?? []).map(b => (b.id === batch.id ? { ...b, status: previous, paid_at: b.paid_at } : b)));
-      setTxActionError(result?.error || error?.message || 'Could not approve this payment.');
+      setTxActionError(result?.error || friendlyError(error, 'Could not approve this payment.'));
       return;
     }
     setInvoices(await fetchInvoicesData());
@@ -507,7 +508,7 @@ export default function FinancialsInvoicesPage() {
     markTxBusy(batch.id, false);
     if (error || !result?.ok) {
       setBatches(cur => (cur ?? []).map(b => (b.id === batch.id ? { ...b, status: previous } : b)));
-      setTxActionError(result?.error || error?.message || 'Could not reject this payment.');
+      setTxActionError(result?.error || friendlyError(error, 'Could not reject this payment.'));
     }
   }
 

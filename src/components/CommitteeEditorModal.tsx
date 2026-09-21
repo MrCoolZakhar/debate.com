@@ -37,6 +37,7 @@ import {
   type PendingChairInvite,
 } from '@/lib/chairInvites';
 import { queueEventEmail } from '@/lib/emailEvents';
+import { friendlyError } from '@/lib/friendlyError';
 
 // ── Design constants ──────────────────────────────────────────────────────────
 
@@ -194,7 +195,7 @@ export async function sessionCommitteeClient(
     .select('code, settings, topic')
     .eq('id', sessionId)
     .maybeSingle();
-  if (error) return { error: `the live session could not be read (${error.message})` };
+  if (error) { console.error('[committee-editor]', error); return { error: 'the live session could not be read' }; }
   if (!data?.code) return { error: 'the live session row is missing', missing: true };
   const settings = (data.settings as Record<string, unknown> | null) ?? {};
   const suffix = settings.chairJoinSuffix;
@@ -281,8 +282,8 @@ export async function mintConferenceSession(
       time_remaining: 90,
     });
     if (csErr) {
-      console.error('Error creating current_speaker for minted session:', csErr);
-      onProblem?.(`the speaker slot could not be created (${csErr.message})`);
+      console.error('[committee-editor] Error creating current_speaker for minted session:', csErr);
+      onProblem?.('the speaker slot could not be created');
     }
     if (seats.length > 0) {
       const observerSet = new Set(observers.map((o) => o.toLowerCase()));
@@ -296,8 +297,8 @@ export async function mintConferenceSession(
         }))
       );
       if (dErr) {
-        console.error('Error seating delegates on minted session:', dErr);
-        onProblem?.(`the ${seats.length} seats could not be added to the live session (${dErr.message})`);
+        console.error('[committee-editor] Error seating delegates on minted session:', dErr);
+        onProblem?.(`the ${seats.length} seats could not be added to the live session`);
       }
     }
     // THE LINK IS THE WHOLE POINT OF THE MINT. Without `session_id` the live
@@ -313,9 +314,9 @@ export async function mintConferenceSession(
       .eq('id', confCommitteeId)
       .select('id');
     if (linkErr || !linked || linked.length === 0) {
-      console.error('Error linking minted session to conference committee:', linkErr);
+      console.error('[committee-editor] Error linking minted session to conference committee:', linkErr);
       onProblem?.(
-        `the session was created but not linked to the committee${linkErr ? ` (${linkErr.message})` : ''}, so the live wall, the scoreboard and awards cannot see it`,
+        'the session was created but not linked to the committee, so the live wall, the scoreboard and awards cannot see it',
       );
     }
     return code;
@@ -773,7 +774,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
     const ext = file.name.split('.').pop();
     const path = 'committee-emblems/' + conferenceId + '-' + Date.now() + '.' + ext;
     const { error: upErr } = await supabase.storage.from('conference-assets').upload(path, file, { contentType: file.type, upsert: true });
-    if (upErr) { setError('Upload failed: ' + upErr.message); setLogoUploading(false); return; }
+    if (upErr) { setError(friendlyError(upErr, "Couldn't upload the logo. Please try a different image.")); setLogoUploading(false); return; }
     const { data: urlData } = supabase.storage.from('conference-assets').getPublicUrl(path);
     setLogoUrl(urlData.publicUrl);
     setEmblemManuallySet(true);
@@ -848,7 +849,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
       delegation_size: delegationSize,
       groups: isCustom ? groups : [],
     }).select('id').single();
-    if (err || !created) { setError(err?.message ?? 'Failed to create committee.'); return false; }
+    if (err || !created) { setError(friendlyError(err, "Couldn't create the committee. Please try again.")); return false; }
     await supabase.from('committee_country_slots').insert(
       roster.map((r) => ({
         conference_committee_id: created.id,
@@ -951,7 +952,10 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
       if ('error' in res) sessErrors.push(res.error);
       else { sessDb = res.client; sessSettings = res.settings; sessTopic = res.topic; }
     }
-    const noteSess = (what: string, message: string) => sessErrors.push(`${what} (${message})`);
+    const noteSess = (what: string, message: string) => {
+      console.error('[committee-editor]', message);
+      sessErrors.push(what);
+    };
 
     if (removed.length > 0) {
       await supabase.from('conference_allocations').delete().eq('conference_committee_id', ex.id).in('country_name', removed);
@@ -1136,7 +1140,8 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
       groups: isCustom ? groups : [],
     }).eq('id', ex.id).select('id');
     if (ccErr || !ccUpd || ccUpd.length !== 1) {
-      setError(`Could not save the committee${ccErr ? ` (${ccErr.message})` : ''}. Please try again.`);
+      if (ccErr) console.error('[committee-editor]', ccErr);
+      setError('Could not save the committee. Please try again.');
       return 'fail';
     }
     // `committees` UPDATE is gated on is_session_chair too — same client, same

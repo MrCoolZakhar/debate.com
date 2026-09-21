@@ -19,6 +19,7 @@ import {
   type ExistingApplication,
 } from '@/lib/applicantImport';
 import { queueImportJoinInviteEmails } from '@/lib/emailEvents';
+import { friendlyError } from '@/lib/friendlyError';
 
 const OUTFIT = "'Outfit', sans-serif";
 
@@ -433,7 +434,7 @@ export default function ImportPage() {
       const { error: insertError } = await supabase.from('applications').insert(insertRows);
       if (insertError) {
         for (const r of toCreate) {
-          results.push({ row: r, outcome: 'skipped', note: `Import failed: ${insertError.message}` });
+          results.push({ row: r, outcome: 'skipped', note: friendlyError(insertError, 'Import failed. Please try again.') });
         }
         // Updates are independent of the insert, so they still run below.
         toCreate.length = 0;
@@ -535,7 +536,7 @@ export default function ImportPage() {
         results.push({
           row: r,
           outcome: 'imported-no-allocation',
-          note: allocError.code === '23505' ? 'Country was allocated to someone else in the meantime.' : `Allocation failed: ${allocError.message}`,
+          note: allocError.code === '23505' ? 'Country was allocated to someone else in the meantime.' : friendlyError(allocError, 'Allocation failed. Please try again.'),
         });
         continue;
       }
@@ -1296,7 +1297,7 @@ function ImportedDelegatesTab({ conference, session, confirm, fixApplicationId }
       });
       const result = (data ?? null) as { ok: boolean; message?: string; requeued?: number } | null;
       if (error || !result?.ok) {
-        setRowError({ id: row.id, message: result?.message ?? error?.message ?? 'Could not save that email address.' });
+        setRowError({ id: row.id, message: result?.message ?? friendlyError(error, 'Could not save that email address.') });
         return;
       }
       setEditingId(null);

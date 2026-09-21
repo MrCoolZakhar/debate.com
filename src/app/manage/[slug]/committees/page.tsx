@@ -25,6 +25,7 @@ import { NEU, NEU_GRADIENTS, OUTFIT, NeuButton, NeuCard, NeuInset, NeuPill } fro
 import ProfileLink from '@/components/ProfileLink';
 import Portal from '@/components/Portal';
 import { ChairCodeChip, loadOpenDaisChairCodes } from './ChairCodeChip';
+import { friendlyError, UserFacingError } from '@/lib/friendlyError';
 import {
   CommitteeEditorModal,
   MonogramMedallion,
@@ -1410,7 +1411,7 @@ export default function CommitteesPage() {
         if ('error' in res) {
           // The row is already gone (a previously orphaned link, or a second
           // click). Nothing to delete, so carry on to the committee itself.
-          if (!res.missing) throw new Error(res.error);
+          if (!res.missing) throw new UserFacingError(res.error);
           sessionGone = true;
         } else {
           // `.select('id')` is not decoration: an RLS mismatch on a DELETE is
@@ -1421,8 +1422,11 @@ export default function CommitteesPage() {
             .delete()
             .eq('id', c.session_id)
             .select('id');
-          if (sessionError) throw new Error(`the live session refused the delete (${sessionError.message})`);
-          if (!gone || gone.length === 0) throw new Error('the live session refused the delete');
+          if (sessionError) {
+            console.error('[committees]', sessionError);
+            throw new UserFacingError('the live session refused the delete');
+          }
+          if (!gone || gone.length === 0) throw new UserFacingError('the live session refused the delete');
           sessionGone = true;
         }
       }
@@ -1432,10 +1436,10 @@ export default function CommitteesPage() {
         .delete()
         .eq('id', c.id)
         .select('id');
-      if (error) throw new Error(error.message);
-      if (!removed || removed.length === 0) throw new Error('the committee refused the delete');
+      if (error) throw error;
+      if (!removed || removed.length === 0) throw new UserFacingError('the committee refused the delete');
     })().catch((e: unknown) => {
-      const reason = e instanceof Error && e.message ? e.message : 'the delete was rejected';
+      const reason = friendlyError(e, 'the delete was rejected');
       if (removedRow) {
         setCommittees(prev => {
           const next = prev.filter(x => x.id !== c.id);

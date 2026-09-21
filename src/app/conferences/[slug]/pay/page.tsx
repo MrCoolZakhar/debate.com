@@ -50,6 +50,7 @@ import {
 } from '@/components/neu';
 import { themeCssVars, type ConferenceTheme } from '@/lib/theme';
 import { getGateState, roleLabel, statusPriority } from '../participant/shared';
+import { friendlyError } from '@/lib/friendlyError';
 import AidRequestModal from '../participant/AidRequestModal';
 import DelegationCreditsCard from '../participant/DelegationCreditsCard';
 import PledgeInvoicingCard from '../participant/PledgeInvoicingCard';
@@ -991,7 +992,7 @@ function AddonsModal({
     const result = data as { ok?: boolean; error?: string } | null;
     setSaving(false);
     if (rpcError || !result?.ok) {
-      setError(result?.error || rpcError?.message || 'Could not save your add-ons. Please try again.');
+      setError(result?.error || friendlyError(rpcError, 'Could not save your add-ons. Please try again.'));
       return;
     }
     onSaved();
@@ -1184,7 +1185,7 @@ function AddSpotsPanel({
     const result = data as { ok?: boolean; spots_pledged?: number; error?: string } | null;
     setAdding(false);
     if (rpcError || !result?.ok) {
-      setError(result?.error || rpcError?.message || 'Could not add spots. Please try again.');
+      setError(result?.error || friendlyError(rpcError, 'Could not add spots. Please try again.'));
       return;
     }
     setJustAdded(countNum);
@@ -1292,7 +1293,7 @@ function AdvisorTicketsModal({
     const result = data as { ok?: boolean; error?: string } | null;
     setAdding(false);
     if (rpcError || !result?.ok) {
-      setError(result?.error || rpcError?.message || 'Could not add advisor tickets. Please try again.');
+      setError(result?.error || friendlyError(rpcError, 'Could not add advisor tickets. Please try again.'));
       return;
     }
     onAdded();
@@ -1497,7 +1498,7 @@ function ProofUploadModal({
         rpcError ?? new Error(result?.error ?? 'rpc returned ok:false'),
         { conferenceId, invoiceCount: invoiceIds.length },
       );
-      setError(result?.error || rpcError?.message || 'Could not submit your payment. Please try again.');
+      setError(result?.error || friendlyError(rpcError, 'Could not submit your payment. Please try again.'));
       return;
     }
     onSubmitted();
@@ -1842,7 +1843,7 @@ function PayInvoiceAndActions({
     const { data, error } = await supabase.rpc('remove_pledged_spot_invoice', { p_invoice_id: invoiceId });
     const result = data as { ok?: boolean; error?: string } | null;
     if (error || !result?.ok) {
-      return { ok: false, error: result?.error || error?.message || 'Could not remove this. Please try again.' };
+      return { ok: false, error: result?.error || friendlyError(error, 'Could not remove this. Please try again.') };
     }
     onInvoiceRemoved(invoiceId);
     onInvoicesChanged();
@@ -1906,7 +1907,7 @@ function PayInvoiceAndActions({
     const result = data as { ok?: boolean; error?: string } | null;
     setVoucherApplying(false);
     if (error || !result?.ok) {
-      setVoucherError(result?.error || error?.message || 'Could not apply that code. Please try again.');
+      setVoucherError(result?.error || friendlyError(error, 'Could not apply that code. Please try again.'));
       return;
     }
     if (!code) setVoucherCode('');

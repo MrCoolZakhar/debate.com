@@ -10,6 +10,7 @@
 
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { formatFee } from '@/lib/finance';
+import { friendlyError } from '@/lib/friendlyError';
 
 /**
  * The client used for every create-checkout invoke.
@@ -380,5 +381,5 @@ export async function extractFunctionErrorMessage(error: unknown): Promise<strin
       // non-JSON error body, fall through to the generic message
     }
   }
-  return (error as Error | null)?.message || 'Could not start checkout. Please try again.';
+  return friendlyError(error, 'Could not start checkout. Please try again.');
 }

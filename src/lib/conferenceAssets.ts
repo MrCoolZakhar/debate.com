@@ -6,6 +6,7 @@
 // are treated exactly like logos: small, PNG, transparency preserved.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { friendlyError } from '@/lib/friendlyError';
 
 export type ConferenceAssetFolder = 'banners' | 'logos' | 'seat-logos' | 'group-logos';
 
@@ -118,7 +119,7 @@ export async function uploadConferenceAsset(
     .from('conference-assets')
     .upload(path, outFile, { contentType, upsert: true });
   if (error) {
-    return { error: 'Upload failed: ' + error.message };
+    return { error: friendlyError(error, "Couldn't upload the image. Please try a different one.") };
   }
   const { data } = supabase.storage.from('conference-assets').getPublicUrl(path);
   return { url: data.publicUrl };

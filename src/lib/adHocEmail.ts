@@ -28,6 +28,7 @@ import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import { unresolvedFields } from '@/lib/emailUnresolved';
 import { formatFee } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
+import { friendlyError } from '@/lib/friendlyError';
 
 interface ConferenceRow {
   slug: string;
@@ -212,7 +213,7 @@ export async function queueAdHocEmail(
   const readError = confRes.error ?? recipientsRes.error ?? roleConfigsRes.error;
   if (readError) {
     const which = confRes.error ? 'conference' : recipientsRes.error ? 'recipients' : 'role fees';
-    return { ...empty, error: `Could not load the ${which} for this send: ${readError.message}` };
+    return { ...empty, error: friendlyError(readError, `Could not load the ${which} for this send. Refresh the page and try again.`) };
   }
 
   const conference = confRes.data as ConferenceRow | null;
@@ -291,7 +292,7 @@ export async function queueAdHocEmail(
     .select('id')
     .single();
   if (sendError || !sendData) {
-    return { ...empty, optedOut, skippedUnresolved, unresolvedFields: unresolvedList, error: sendError?.message ?? 'Could not record this send.' };
+    return { ...empty, optedOut, skippedUnresolved, unresolvedFields: unresolvedList, error: friendlyError(sendError, 'Could not record this send.') };
   }
   const emailSendId = (sendData as { id: string }).id;
 
@@ -315,7 +316,7 @@ export async function queueAdHocEmail(
 
   const { error: outboxError } = await supabase.from('email_outbox').insert(rows);
   if (outboxError) {
-    return { queued: 0, optedOut, skippedUnresolved, unresolvedFields: unresolvedList, emailSendId, error: outboxError.message };
+    return { queued: 0, optedOut, skippedUnresolved, unresolvedFields: unresolvedList, emailSendId, error: friendlyError(outboxError, 'Could not queue this send. Please try again.') };
   }
 
   triggerEmailDelivery(supabase);

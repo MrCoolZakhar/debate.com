@@ -73,6 +73,7 @@ import ConferenceFilesPanel, {
 import DesignPanel, { type DesignControls } from '@/components/email/DesignPanel';
 import RecipientRoster from '@/components/email/RecipientRoster';
 import type { ReachGroup } from '@/components/email/AudienceReach';
+import { friendlyError } from '@/lib/friendlyError';
 
 const FOREST = '#1B3828';
 const GOLD = '#EED98A';
@@ -568,7 +569,7 @@ function useImageUpload(conferenceId: string, accessToken: string | null) {
       .from('conference-assets')
       .upload(path, file, { contentType: file.type, upsert: false });
     setUploading(false);
-    if (upErr) { setError("Couldn't upload the image: " + upErr.message); return null; }
+    if (upErr) { setError(friendlyError(upErr, "Couldn't upload the image. Please try a different one.")); return null; }
     const { data } = supabase.storage.from('conference-assets').getPublicUrl(path);
     return data.publicUrl;
   }, [accessToken, conferenceId]);
@@ -1027,7 +1028,7 @@ export default function EmailComposer({
       status: 'pending',
     });
     setSendingTest(false);
-    if (error) { setTestMessage(`Couldn't send the test: ${error.message}`); return; }
+    if (error) { setTestMessage(friendlyError(error, "Couldn't send the test email. Please try again.")); return; }
     triggerEmailDelivery(supabase);
     const missing = unresolvedRecipients && unresolvedRecipients.affected > 0
       ? ` ${unresolvedRecipients.affected} of ${unresolvedRecipients.total} real recipients are missing ${unresolvedRecipients.fields.map(f => f.label).join(', ')} and will not be sent it.`
