@@ -28,6 +28,7 @@ import { reportBlocked } from '@/lib/reportCrash';
 import SiteNav from '@/components/SiteNav';
 import { Eyebrow, OUTFIT } from '@/app/account/accountUi';
 import { NEU, NEU_GRADIENTS, NeuIconDisc, NeuButton } from '@/components/neu';
+import { formatConferenceDates } from '@/lib/conferenceDates';
 
 const MONO_STACK = "'DM Mono', monospace";
 const DANGER = '#8B2020';
@@ -80,14 +81,8 @@ const secondaryPillStyle: React.CSSProperties = {
   fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.05em', boxShadow: NEU.outSm,
 };
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
 function formatDateRange(start: string | null, end: string | null): string | null {
-  if (!start || !end) return start ? formatDate(start) : null;
-  if (start === end) return formatDate(start);
-  return `${formatDate(start)} to ${formatDate(end)}`;
+  return formatConferenceDates(start, end, { style: 'dmy', fallback: '' }) || null;
 }
 
 function roleLabel(role: string): string {

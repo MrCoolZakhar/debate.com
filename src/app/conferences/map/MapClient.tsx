@@ -211,7 +211,7 @@ async function fetchContinentDetail(countries: string[]): Promise<{ highlighted:
 
 function formatMonthYear(iso: string | null): string | null {
   if (!iso) return null;
-  const d = new Date(iso);
+  const d = new Date(`${iso}T00:00:00`);
   if (isNaN(d.getTime())) return null;
   return d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
 }

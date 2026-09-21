@@ -19,6 +19,7 @@ import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import NotificationStack from '@/components/notifications/NotificationStack';
 import VerifiedCheck, { minutesToCheckmarkLabel } from '@/components/VerifiedCheck';
+import { formatConferenceDates } from '@/lib/conferenceDates';
 
 // ── Conference type ────────────────────────────────────────────────────────
 
@@ -237,23 +238,6 @@ const NAV_SECTIONS = (slug: string, badges: NavBadges = NO_BADGES) => [
   },
 ];
 
-// ── Date range helper (mirrors communications page formatDateRange) ───────
-
-function formatConfDate(d: string) {
-  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-function formatConfDateRange(start: string, end: string): string {
-  if (!start || !end) return '';
-  if (start === end) return formatConfDate(start);
-  const s = new Date(start);
-  const e = new Date(end);
-  const sameMonth = s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear();
-  if (sameMonth) {
-    return `${s.toLocaleDateString('en-GB', { day: 'numeric' })} – ${formatConfDate(end)}`;
-  }
-  return `${formatConfDate(start)} – ${formatConfDate(end)}`;
-}
 
 // ── Status pill styles (shared by rail + mobile drawer) ───────────────────
 // More vibrant than the old muted greys: saturated tints on translucent bases
@@ -286,7 +270,7 @@ function SideRail({
   const [expanded, setExpanded] = useState(false);
   const sections = NAV_SECTIONS(slug, badges);
   const statusStyle = STATUS_STYLES[conference?.status ?? 'private'] ?? STATUS_STYLES.private;
-  const year = conference ? new Date(conference.start_date + 'T00:00:00').getFullYear() : null;
+  const year = conference?.start_date ? Number(conference.start_date.slice(0, 4)) : null;
 
   return (
     <aside
@@ -358,7 +342,7 @@ function SideRail({
                   lineHeight: 1.3, marginTop: '1px',
                 }}
               >
-                {formatConfDateRange(conference.start_date, conference.end_date)}
+                {formatConferenceDates(conference.start_date, conference.end_date, { style: 'dmy-end-year-spaced', fallback: 'Dates TBD' })}
               </span>
             )}
           </div>
@@ -530,7 +514,7 @@ function SidebarContent({
   const sections = NAV_SECTIONS(slug, badges);
 
   const statusStyle = STATUS_STYLES[conference?.status ?? 'private'] ?? STATUS_STYLES.private;
-  const year = conference ? new Date(conference.start_date + 'T00:00:00').getFullYear() : null;
+  const year = conference?.start_date ? Number(conference.start_date.slice(0, 4)) : null;
 
   return (
     <div className="flex flex-col h-full">
@@ -565,7 +549,7 @@ function SidebarContent({
                 lineHeight: 1.3, marginTop: '1px',
               }}
             >
-              {formatConfDateRange(conference.start_date, conference.end_date)}
+              {formatConferenceDates(conference.start_date, conference.end_date, { style: 'dmy-end-year-spaced', fallback: 'Dates TBD' })}
             </span>
           )}
         </div>

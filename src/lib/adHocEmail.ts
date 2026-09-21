@@ -29,6 +29,7 @@ import { unresolvedFields } from '@/lib/emailUnresolved';
 import { formatFee } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
 import { friendlyError } from '@/lib/friendlyError';
+import { formatConferenceDates } from '@/lib/conferenceDates';
 
 interface ConferenceRow {
   slug: string;
@@ -110,20 +111,8 @@ function paymentStatusLabel(status: string | null): string | null {
   return map[status] ?? status;
 }
 
-function formatDate(d: string | null): string {
-  if (!d) return 'TBD';
-  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
 function formatDateRange(start: string | null, end: string | null): string {
-  if (!start || !end) return 'TBD';
-  if (start === end) return formatDate(start);
-  const s = new Date(start);
-  const e = new Date(end);
-  if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
-    return `${s.toLocaleDateString('en-GB', { day: 'numeric' })}–${formatDate(end)}`;
-  }
-  return `${formatDate(start)} – ${formatDate(end)}`;
+  return formatConferenceDates(start, end, { fallback: 'TBD' });
 }
 
 /** Role- and phase-aware {{fee}}, same resolution queueEventEmail and the

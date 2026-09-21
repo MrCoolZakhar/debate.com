@@ -13,6 +13,7 @@ import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import { getDefaultEventEmail } from '@/lib/defaultEmails';
 import { loadSlotArtIndex, artFromIndex, slotArtKey, type SlotArtIndex } from '@/lib/slotGroups';
 import { friendlyError } from '@/lib/friendlyError';
+import { formatConferenceDates } from '@/lib/conferenceDates';
 
 // ── Event registry ────────────────────────────────────────────────────────────
 // Single source of truth for platform email events, shared by this lib
@@ -324,19 +325,8 @@ function paymentStatusLabel(status: string | null): string | null {
   return map[status] ?? status;
 }
 
-function formatDate(d: string | null): string {
-  if (!d) return 'TBD';
-  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
 function formatDateRange(start: string | null, end: string | null): string {
-  if (!start || !end) return 'TBD';
-  if (start === end) return formatDate(start);
-  const s = new Date(start);
-  const e = new Date(end);
-  const sameMonth = s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear();
-  if (sameMonth) return `${s.toLocaleDateString('en-GB', { day: 'numeric' })}–${formatDate(end)}`;
-  return `${formatDate(start)} – ${formatDate(end)}`;
+  return formatConferenceDates(start, end, { fallback: 'TBD' });
 }
 
 interface TemplateRow {

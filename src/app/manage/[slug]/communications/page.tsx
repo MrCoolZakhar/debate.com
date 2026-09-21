@@ -48,6 +48,7 @@ import GuidedWalkthrough, {
 import ProfileLink from '@/components/ProfileLink';
 import Portal from '@/components/Portal';
 import { friendlyError, UserFacingError } from '@/lib/friendlyError';
+import { formatConferenceDates } from '@/lib/conferenceDates';
 
 /** THE GOLD THAT CAN CARRY TEXT — and this page's replacement for `AMBER_INK`.
  *
@@ -687,15 +688,7 @@ function formatSentAt(iso: string | null): string | null {
 }
 
 function formatDateRange(start: string, end: string): string {
-  if (!start || !end) return '';
-  if (start === end) return formatDate(start);
-  const s = new Date(start);
-  const e = new Date(end);
-  const sameMonth = s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear();
-  if (sameMonth) {
-    return `${s.toLocaleDateString('en-GB', { day: 'numeric' })}–${formatDate(end)}`;
-  }
-  return `${formatDate(start)} – ${formatDate(end)}`;
+  return formatConferenceDates(start, end, { fallback: '' });
 }
 
 function roleLabel(role: string) {
@@ -3199,7 +3192,7 @@ function CommunicationsPageInner() {
     .sort((a, b) => a.study_guides_publish_at!.localeCompare(b.study_guides_publish_at!));
 
   const daysToStart = conference.start_date
-    ? Math.ceil((new Date(conference.start_date).getTime() - Date.now()) / 86400e3)
+    ? Math.ceil((new Date(conference.start_date + 'T00:00:00').getTime() - Date.now()) / 86400e3)
     : null;
   const hasAllocations = applications.some(a => a.assigned_committee_id);
   const joinInvitesSent = outboxFeed.some(
