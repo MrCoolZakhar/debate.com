@@ -608,7 +608,7 @@ export const articles: BlogPost[] = [
   },
   {
     slug: 'mun-for-beginners',
-    photo: 'mun-beijing-disec',
+    photo: 'mun-athens-delegation',
     title: 'Model UN for Beginners: Your First Conference, Hour by Hour',
     description:
       'A walkthrough of your first Model UN conference from the registration desk to the closing ceremony, with the one thing to do in each hour',

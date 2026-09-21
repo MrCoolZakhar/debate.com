@@ -511,3 +511,32 @@
     transform: none !important;
   }
 }
+
+/* "Start here" at the top of /blog: compact cards, three columns on a wide
+   screen, two on a tablet, and on a phone two rows that swipe sideways so the
+   six picks cost about two cards of height instead of six. */
+.gv-start-here {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 900px) {
+  .gv-start-here { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .gv-start-here {
+    grid-template-columns: none;
+    grid-template-rows: repeat(2, auto);
+    grid-auto-flow: column;
+    grid-auto-columns: 80%;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    margin-inline: -16px;
+    padding-inline: 16px;
+    scroll-padding-inline: 16px;
+    padding-bottom: 4px;
+  }
+  .gv-start-here::-webkit-scrollbar { display: none; }
+  .gv-start-here > * { scroll-snap-align: start; }
+}

@@ -42,6 +42,18 @@ const breadcrumbSchema = {
 
 export default function BlogIndexPage() {
   const lead = articles.find((a) => a.featured) ?? byNewest(articles)[0];
+  // "Start here": the lead guide, then the guides a first-time reader of each
+  // kind needs most. Unknown slugs drop out, so a rename costs a card, not the page.
+  const startHere = [
+    lead.slug,
+    'what-is-model-un',
+    'mun-for-beginners',
+    'mun-position-paper-guide',
+    'how-to-chair-first-mun',
+    'start-a-mun-conference',
+  ]
+    .map((slug) => articles.find((a) => a.slug === slug))
+    .filter((a, i, all): a is (typeof articles)[number] => !!a && all.indexOf(a) === i);
   const counts = SHELF_ORDER.reduce(
     (acc, key) => ({ ...acc, [key]: articles.filter((a) => a.category === key).length }),
     {} as Record<BlogCategory, number>,
@@ -84,7 +96,20 @@ export default function BlogIndexPage() {
               are shelved below it (rulebook §2: every viewport has one obvious
               protagonist). Which post it is comes from `featured` in the
               manifest, so it is an editorial decision, not a date accident. */}
-          <BlogCard post={lead} lead />
+          <section aria-labelledby="start-here" className="pb-2">
+            <h2
+              id="start-here"
+              className="m-0 mb-3 text-[13px] font-bold uppercase"
+              style={{ color: '#6A5A4A', letterSpacing: '0.08em' }}
+            >
+              Start here
+            </h2>
+            <div className="gv-start-here">
+              {startHere.map((post) => (
+                <BlogCard key={post.slug} post={post} compact />
+              ))}
+            </div>
+          </section>
 
           {/* Not wrapped in a spacing div: a sticky element travels only inside
               its own parent's box, and a wrapper sized to the rail would let it

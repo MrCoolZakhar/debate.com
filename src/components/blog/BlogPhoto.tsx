@@ -60,7 +60,7 @@ export function HeroPhoto({ id }: { id: PhotoId }) {
 }
 
 /** The picture on an index or "keep reading" card, with a plain-text credit. */
-export function CardPhoto({ id, lead = false }: { id: PhotoId; lead?: boolean }) {
+export function CardPhoto({ id, lead = false, thumb = false }: { id: PhotoId; lead?: boolean; thumb?: boolean }) {
   const p = PHOTOS[id];
   return (
     <div className="relative h-full w-full overflow-hidden">
@@ -69,17 +69,17 @@ export function CardPhoto({ id, lead = false }: { id: PhotoId; lead?: boolean })
         alt={p.alt}
         width={PHOTO_WIDTH}
         height={PHOTO_HEIGHT}
-        sizes={lead ? '(min-width: 768px) 500px, 100vw' : '(min-width: 1024px) 330px, (min-width: 640px) 50vw, 100vw'}
+        sizes={thumb ? '104px' : lead ? '(min-width: 768px) 500px, 100vw' : '(min-width: 1024px) 330px, (min-width: 640px) 50vw, 100vw'}
         loading={lead ? 'eager' : 'lazy'}
         {...(lead ? { fetchPriority: 'high' as const } : {})}
         className="gv-card-photo block h-full w-full object-cover"
       />
-      <span
+      {!thumb && <span
         className="pointer-events-none absolute inset-x-0 bottom-0 truncate px-3 pb-1.5 pt-5 text-right text-[10.5px]"
         style={{ color: 'rgba(255,255,255,0.86)', background: 'linear-gradient(to top, rgba(12,24,17,0.55), transparent)' }}
       >
         Photo: {p.author}, {licenceLabel(p)}
-      </span>
+      </span>}
     </div>
   );
 }
