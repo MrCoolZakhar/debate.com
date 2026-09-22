@@ -540,6 +540,7 @@ export async function queueEventEmail(
         media: {
           countryCode: app.assigned_country_code ?? null,
           committeeEmblem: app.assigned_committee?.logo_url ?? null,
+          committeeName: app.assigned_committee?.name ?? null,
           seatLogo: seatLogoFor(app),
         },
       }),

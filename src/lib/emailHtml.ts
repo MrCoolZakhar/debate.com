@@ -146,7 +146,7 @@ export interface RenderEmailHtmlArgs {
    */
   /** `seatLogo` is a seat's own or group crest (already a PNG/WebP URL); when
    *  present it replaces the twemoji flag for the `country` icon. */
-  media?: { countryCode?: string | null; committeeEmblem?: string | null; seatLogo?: string | null };
+  media?: { countryCode?: string | null; committeeEmblem?: string | null; seatLogo?: string | null; committeeName?: string | null };
   /** EVENT_REGISTRY key, when this is an event email. Only the card design
    *  reads it (the status pill, and a product snapshot on our own default
    *  copy); the classic renderer ignores it. */
