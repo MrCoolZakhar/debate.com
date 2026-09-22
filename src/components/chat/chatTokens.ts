@@ -109,7 +109,16 @@ export interface ChatGroup {
 export type ChatRow =
   | { kind: 'day'; key: string; label: string }
   | { kind: 'unread'; key: string }
-  | { kind: 'group'; key: string; group: ChatGroup };
+  | { kind: 'group'; key: string; group: ChatGroup }
+  /** A system line in the thread (a group renamed, members added). */
+  | { kind: 'event'; key: string; label: string };
+
+/** A system line to place among a thread's messages by time. */
+export interface ChatThreadEvent {
+  id: string;
+  at: Date;
+  label: string;
+}
 
 /**
  * Fold a thread's confirmed messages plus its outbox into day separators, an optional
@@ -125,8 +134,10 @@ export function buildChatRows(
   unreadAnchor: number,
   t: TFn,
   locale: string,
+  events: ChatThreadEvent[] = [],
 ): ChatRow[] {
-  const items: (ChatItem & { sender: string })[] = messages.map((m) => ({
+  type Item = ChatItem & { sender: string; eventLabel?: string };
+  const items: Item[] = messages.map((m) => ({
     id: m.id,
     sender: m.sender,
     content: displayContent(m.content),
@@ -134,6 +145,19 @@ export function buildChatRows(
     delivery: 'sent' as DeliveryState,
     attachment: parseAttachment(m.content),
   }));
+  // System lines go among the confirmed messages by time (stable, so equal times keep the
+  // message first), always before the outbox, which has not landed yet.
+  if (events.length) {
+    for (const e of events) {
+      const at = e.at.getTime();
+      let i = items.length;
+      while (i > 0 && items[i - 1].timestamp.getTime() > at) i -= 1;
+      items.splice(i, 0, {
+        id: `event-${e.id}`, sender: '', content: '', timestamp: e.at,
+        delivery: 'sent', attachment: null, eventLabel: e.label,
+      });
+    }
+  }
 
   // Outbox entries are always the newest thing in the thread — they have not landed yet.
   for (const o of outbox) {
@@ -171,6 +195,12 @@ export function buildChatRows(
       rows.push({ kind: 'day', key: `day-${d}`, label: dayLabel(it.timestamp, t, locale) });
       lastDay = d;
       lastTs = 0;
+    }
+    if (it.eventLabel != null) {
+      flush();
+      rows.push({ kind: 'event', key: it.id, label: it.eventLabel });
+      lastTs = 0;
+      continue;
     }
     if (firstUnreadId && it.id === firstUnreadId) {
       flush();

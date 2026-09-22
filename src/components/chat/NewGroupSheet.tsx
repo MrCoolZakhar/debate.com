@@ -20,6 +20,10 @@ export interface GroupCandidate {
  * "New group": a name and a member picker, drawn as a layer over the chat itself (it fills
  * the panel, so no ancestor can clip it). Candidates follow the DM rules: a chair can add
  * delegations and the other chairs, a delegation can add other delegations.
+ *
+ * `mode="edit"` is the same sheet for an existing group: the name comes prefilled, the
+ * candidates are the caller's minus the current members, and Save is on as soon as the name
+ * changed or someone is picked. Members can only be added.
  */
 export default function NewGroupSheet({
   candidates,
@@ -27,6 +31,10 @@ export default function NewGroupSheet({
   onCreate,
   busy,
   error,
+  mode = 'create',
+  initialName = '',
+  currentName,
+  initialPicked = [],
   t,
 }: {
   candidates: GroupCandidate[];
@@ -34,11 +42,19 @@ export default function NewGroupSheet({
   onCreate: (name: string, members: string[]) => void;
   busy: boolean;
   error: boolean;
+  mode?: 'create' | 'edit';
+  /** Edit: the group's current name. */
+  initialName?: string;
+  /** Edit: the name stored now, when the field starts from something else (a refused rename). */
+  currentName?: string;
+  /** Edit: a failed save's picks, so nothing chosen is lost. */
+  initialPicked?: string[];
   t: TFn;
 }) {
-  const [name, setName] = useState('');
+  const editing = mode === 'edit';
+  const [name, setName] = useState(initialName);
   const [query, setQuery] = useState('');
-  const [picked, setPicked] = useState<string[]>([]);
+  const [picked, setPicked] = useState<string[]>(() => initialPicked.filter((k) => candidates.some((c) => c.key === k)));
   const nameRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -64,7 +80,8 @@ export default function NewGroupSheet({
     [candidates, q],
   );
   const toggle = (key: string) => setPicked((p) => (p.includes(key) ? p.filter((k) => k !== key) : [...p, key]));
-  const canCreate = name.trim().length > 0 && picked.length > 0 && !busy;
+  const nameChanged = name.trim().slice(0, GROUP_NAME_MAX) !== (currentName ?? initialName).trim();
+  const canCreate = name.trim().length > 0 && !busy && (editing ? (nameChanged || picked.length > 0) : picked.length > 0);
   const submit = () => { if (canCreate) onCreate(name.trim().slice(0, GROUP_NAME_MAX), picked); };
 
   return (
@@ -72,7 +89,7 @@ export default function NewGroupSheet({
       ref={rootRef}
       role="dialog"
       aria-modal="true"
-      aria-label={t('chat_new_group')}
+      aria-label={t(editing ? 'chat_group_edit' : 'chat_new_group')}
       className="chat-sheet-in absolute inset-0 z-30 flex flex-col"
       style={{ backgroundColor: 'var(--gv-surface, #FAF8F3)' }}
     >
@@ -87,7 +104,7 @@ export default function NewGroupSheet({
         >
           <ChevronLeft size={26} strokeWidth={2.4} aria-hidden className="rtl:-scale-x-100" />
         </button>
-        <h3 className="flex-1 min-w-0 truncate" style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 750, color: NEU.ink }}>{t('chat_new_group')}</h3>
+        <h3 className="flex-1 min-w-0 truncate" style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 750, color: NEU.ink }}>{t(editing ? 'chat_group_edit' : 'chat_new_group')}</h3>
         <button
           type="button"
           onClick={submit}
@@ -101,7 +118,7 @@ export default function NewGroupSheet({
             transitionProperty: 'background-color, color, transform', transitionDuration: '150ms',
           }}
         >
-          {t('chat_group_create')}
+          {t(editing ? 'chat_group_save' : 'chat_group_create')}
         </button>
       </div>
 
@@ -126,7 +143,7 @@ export default function NewGroupSheet({
         <div className="mt-3 flex items-center justify-between gap-2">
           <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.inkSoft }}>{t('chat_group_members')}</span>
           <span style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
-            {picked.length > 0 ? t('chat_group_selected', { n: picked.length }) : t('chat_group_hint')}
+            {picked.length > 0 ? t('chat_group_selected', { n: picked.length }) : t(editing ? 'chat_group_edit_hint' : 'chat_group_hint')}
           </span>
         </div>
         <label className="mt-1.5 flex items-center gap-2 px-3" style={{ height: 38, borderRadius: 12, backgroundColor: 'rgba(28,20,16,0.06)' }}>
@@ -142,14 +159,14 @@ export default function NewGroupSheet({
           />
         </label>
         {error && (
-          <p role="alert" className="mt-2" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: CHAT.danger }}>{t('chat_group_failed')}</p>
+          <p role="alert" className="mt-2" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: CHAT.danger }}>{t(editing ? 'chat_group_edit_failed' : 'chat_group_failed')}</p>
         )}
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-3" style={{ overscrollBehavior: 'contain' }}>
         <div className="w-full max-w-[640px] mx-auto">
         {visible.length === 0 && (
-          <p className="px-3 py-6 text-center" style={{ fontFamily: OUTFIT, fontSize: 14, color: NEU.inkSoft }}>{t('chat_no_results')}</p>
+          <p className="px-3 py-6 text-center" style={{ fontFamily: OUTFIT, fontSize: 14, color: NEU.inkSoft }}>{t(editing && candidates.length === 0 ? 'chat_group_all_in' : 'chat_no_results')}</p>
         )}
         {visible.map((c) => {
           const on = picked.includes(c.key);

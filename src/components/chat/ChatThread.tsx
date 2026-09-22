@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ChevronLeft } from 'lucide-react';
+import { ArrowDown, ChevronLeft, Pencil } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { NEU, OUTFIT } from '@/components/neu';
 import type { ChatMessage } from '@/lib/types';
@@ -10,7 +10,7 @@ import type { ChatEntryKind } from '@/lib/chatConversations';
 import ChatMessageGroup from './ChatMessageGroup';
 import { ChatAvatar } from './ChatAvatar';
 import ChatLightbox, { type LightboxItem } from './ChatLightbox';
-import { buildChatRows, formatTime, portalFrame, type TFn } from './chatTokens';
+import { buildChatRows, formatTime, portalFrame, type ChatThreadEvent, type TFn } from './chatTokens';
 
 /** Day separators and the "New messages" divider: a small frosted-look pill, centred. */
 function Separator({ label, tone = 'muted' }: { label: string; tone?: 'muted' | 'unread' }) {
@@ -24,7 +24,7 @@ function Separator({ label, tone = 'muted' }: { label: string; tone?: 'muted' | 
           boxShadow: unread ? '0 1px 2px rgba(182,135,31,0.25)' : '0 1px 1px rgba(28,20,16,0.08), 0 0 0 0.5px rgba(28,20,16,0.06)',
           color: unread ? NEU.forest : NEU.inkSoft,
           fontFamily: OUTFIT, fontSize: 12, fontWeight: 600,
-          fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+          fontVariantNumeric: 'tabular-nums', maxWidth: '100%', textAlign: 'center', textWrap: 'balance', overflowWrap: 'anywhere',
         }}
       >
         {label}
@@ -159,6 +159,8 @@ export default function ChatThread({
   onRetry,
   onBack,
   intro,
+  events,
+  onEditGroup,
   t,
   locale,
 }: {
@@ -180,6 +182,10 @@ export default function ChatThread({
   onBack?: () => void;
   /** A line shown above the first message (a group's "X created this group"). */
   intro?: string;
+  /** System lines among the messages (a group renamed, members added). */
+  events?: ChatThreadEvent[];
+  /** A group member's "Edit group" (rename, add members). Absent = no button. */
+  onEditGroup?: () => void;
   t: TFn;
   locale: string;
 }) {
@@ -188,8 +194,8 @@ export default function ChatThread({
   const [newPill, setNewPill] = useState(false);
 
   const rows = useMemo(
-    () => buildChatRows(messages, outbox, senderName, unreadAnchor, t, locale),
-    [messages, outbox, senderName, unreadAnchor, t, locale],
+    () => buildChatRows(messages, outbox, senderName, unreadAnchor, t, locale, events),
+    [messages, outbox, senderName, unreadAnchor, t, locale, events],
   );
 
   const total = messages.length + outbox.length;
@@ -255,7 +261,7 @@ export default function ChatThread({
     if (near) setNewPill(false);
   };
 
-  const empty = messages.length === 0 && outbox.length === 0;
+  const empty = messages.length === 0 && outbox.length === 0 && !(events && events.length);
 
   return (
     <div className="relative flex flex-col flex-1 min-h-0 min-w-0">
@@ -283,6 +289,18 @@ export default function ChatThread({
             </p>
           )}
         </div>
+        {onEditGroup && (
+          <button
+            type="button"
+            onClick={onEditGroup}
+            aria-label={t('chat_group_edit')}
+            title={t('chat_group_edit')}
+            className="shrink-0 inline-flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] hover:bg-[rgba(27,56,40,0.07)] active:scale-[0.96]"
+            style={{ width: 36, height: 36, borderRadius: 999, border: 'none', background: 'transparent', color: NEU.forest, cursor: 'pointer', transitionProperty: 'background-color, transform', transitionDuration: '150ms' }}
+          >
+            <Pencil size={18} strokeWidth={2.2} aria-hidden />
+          </button>
+        )}
         <InfoHint text={info} />
       </div>
 
@@ -306,6 +324,7 @@ export default function ChatThread({
         ) : rows.map((row) => {
           if (row.kind === 'day') return <Separator key={row.key} label={row.label} />;
           if (row.kind === 'unread') return <Separator key={row.key} label={t('chat_new_messages')} tone="unread" />;
+          if (row.kind === 'event') return <Separator key={row.key} label={row.label} />;
           const isChairSender = chairNames.includes(row.group.sender);
           return (
             <ChatMessageGroup

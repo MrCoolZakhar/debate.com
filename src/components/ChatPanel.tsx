@@ -10,10 +10,12 @@ import {
   chatConvUnread,
   chatIncomingCount,
   encodeGroupDef,
+  encodeGroupEdit,
   groupConvKey,
   isGroupKey,
   parseChatGroups,
   GROUP_DEF_RECIPIENT,
+  GROUP_NAME_MAX,
   type ChatConvKey,
   type ChatDirectoryEntry,
   type ChatEntryKind,
@@ -34,7 +36,7 @@ import {
 import { useGifsEnabled, type GifItem } from '@/lib/gifClient';
 import { delegationNameLabel, useSessionDelegationNames } from '@/lib/sessionDelegationNames';
 import NewGroupSheet, { type GroupCandidate } from './chat/NewGroupSheet';
-import { CHAT } from './chat/chatTokens';
+import { CHAT, type ChatThreadEvent } from './chat/chatTokens';
 
 const LOCALES: Record<string, string> = { en: 'en-GB', es: 'es-ES', fr: 'fr-FR', ar: 'ar' };
 
@@ -98,6 +100,11 @@ export default function ChatPanel({
   const [groupError, setGroupError] = useState(false);
   // Groups created on this device whose definition row has not come back yet.
   const [pendingGroups, setPendingGroups] = useState<ChatMessage[]>([]);
+  // Group edits (rename, add members) written from this device whose row has not come back
+  // yet. Folded by parseChatGroups like any edit, so the header and member list change at once.
+  const [pendingEdits, setPendingEdits] = useState<ChatMessage[]>([]);
+  // The "Edit group" sheet: which group, and after a refused save what was typed and picked.
+  const [editSheet, setEditSheet] = useState<{ groupId: string; error: boolean; name?: string; picked?: string[] } | null>(null);
 
   // A photo or PDF picked in the composer (src/lib/chatAttachments.ts). One at a time.
   const [draft, setDraft] = useState<AttachmentDraft | null>(null);
@@ -129,9 +136,16 @@ export default function ChatPanel({
 
   // ── Messages, plus this device's not-yet-echoed group definitions ────────
   const messages = useMemo(
-    () => (pendingGroups.length ? [...committee.messages, ...pendingGroups] : committee.messages),
-    [committee.messages, pendingGroups],
+    () => (pendingGroups.length || pendingEdits.length ? [...committee.messages, ...pendingGroups, ...pendingEdits] : committee.messages),
+    [committee.messages, pendingGroups, pendingEdits],
   );
+  // An optimistic edit is retired when its real row (same uuid) arrives.
+  useEffect(() => {
+    if (pendingEdits.length === 0) return;
+    const ids = new Set(committee.messages.map((m) => String(m.id)));
+    const left = pendingEdits.filter((p) => !ids.has(String(p.id).slice('pending-groupedit-'.length)));
+    if (left.length !== pendingEdits.length) setPendingEdits(left);
+  }, [committee.messages, pendingEdits]);
   useEffect(() => {
     if (pendingGroups.length === 0) return;
     const real = parseChatGroups(committee.messages);
@@ -394,6 +408,30 @@ export default function ChatPanel({
     }
   }, [senderName, committee.id, committee.code, chairSuffix]);
 
+  /** Rename and / or add members: one append-only edit row, optimistic, rolled back if refused. */
+  const editGroup = useCallback(async (groupId: string, name: string, picked: string[]) => {
+    const g = groups.get(groupId);
+    if (!g || readOnly || !g.members.includes(senderName)) return;
+    const nextName = name.trim().slice(0, GROUP_NAME_MAX) !== g.name ? name.trim().slice(0, GROUP_NAME_MAX) : undefined;
+    const add = picked.filter((k) => !g.members.includes(k));
+    if (!nextName && add.length === 0) { setEditSheet(null); return; }
+    const rowId = newGroupId();
+    const content = encodeGroupEdit({ group: groupId, name: nextName, add, by: senderName, at: new Date().toISOString() });
+    const pending: ChatMessage = {
+      id: `pending-groupedit-${rowId}`, sender: '__system__', content, timestamp: new Date(),
+      isPrivate: true, recipient: GROUP_DEF_RECIPIENT,
+    };
+    setPendingEdits((p) => [...p, pending]);
+    setEditSheet(null);
+    markDelegateActivity();
+    const ok = await sendMessageToDB(committee.id, '__system__', content, committee.code, chairSuffix, true, GROUP_DEF_RECIPIENT, undefined, rowId);
+    if (!ok) {
+      // Rolled back: the fold no longer sees the edit, so the old name and members return.
+      setPendingEdits((p) => p.filter((x) => x.id !== pending.id));
+      setEditSheet({ groupId, error: true, name: name.trim(), picked: add });
+    }
+  }, [groups, readOnly, senderName, committee.id, committee.code, chairSuffix]);
+
   // ── Rows for the list ─────────────────────────────────────────────────────
   const rows = useMemo<ConvRow[]>(() => directory.map((e) => {
     const last = e.messages[e.messages.length - 1] ?? null;
@@ -442,7 +480,33 @@ export default function ChatPanel({
       : isChair && kind === 'delegate' ? t('chat_dais_shared_info')
       : t('chat_thread_info');
     const intro = g ? t('chat_group_created', { name: g.by === senderName ? t('chat_you_prefix') : senderLabel(g.by) }) : undefined;
-    return { kind, subtitle, info, intro };
+    // One system line per change: "Alice added Brazil, Chile", "Alice renamed the group to …".
+    const events: ChatThreadEvent[] = [];
+    if (g) {
+      for (const e of g.events) {
+        const mine = e.by === senderName;
+        // The reader being added gets their own line ("Alice added you"); anyone added with
+        // them gets the ordinary one, so no locale has to fit "you" into a list.
+        if (e.added?.includes(senderName)) {
+          events.push({ id: `${e.id}-add-me`, at: e.at, label: t('chat_group_event_added_me', { name: senderLabel(e.by) }) });
+        }
+        const others = (e.added ?? []).filter((m) => m !== senderName);
+        if (others.length) {
+          const members = others.map(senderLabel).join(', ');
+          events.push({
+            id: `${e.id}-add`, at: e.at,
+            label: mine ? t('chat_group_event_added_you', { members }) : t('chat_group_event_added', { name: senderLabel(e.by), members }),
+          });
+        }
+        if (e.name) {
+          events.push({
+            id: `${e.id}-name`, at: e.at,
+            label: mine ? t('chat_group_event_renamed_you', { group: e.name }) : t('chat_group_event_renamed', { name: senderLabel(e.by), group: e.name }),
+          });
+        }
+      }
+    }
+    return { kind, subtitle, info, intro, events };
   })() : null;
 
   const onePane = wide === false;
@@ -501,6 +565,12 @@ export default function ChatPanel({
             onRetry={handleRetry}
             onBack={onePane ? () => setShowThread(false) : undefined}
             intro={thread.intro}
+            events={thread.events}
+            onEditGroup={
+              activeEntry.group && !readOnly && activeEntry.group.members.includes(senderName)
+                ? () => { setGroupSheet(false); setEditSheet({ groupId: activeEntry.group!.id, error: false }); }
+                : undefined
+            }
             t={t}
             locale={locale}
           />
@@ -532,6 +602,26 @@ export default function ChatPanel({
           t={t}
         />
       )}
+
+      {editSheet && !readOnly && groups.get(editSheet.groupId) && (() => {
+        const g = groups.get(editSheet.groupId)!;
+        return (
+          <NewGroupSheet
+            key={`edit-${g.id}-${editSheet.error ? 'retry' : 'open'}`}
+            mode="edit"
+            initialName={editSheet.name ?? g.name}
+            currentName={g.name}
+            initialPicked={editSheet.picked}
+            // The DM rules decide who may be added, minus whoever is already in.
+            candidates={groupCandidates.filter((c) => !g.members.includes(c.key))}
+            onCancel={() => setEditSheet(null)}
+            onCreate={(name, picked) => { void editGroup(g.id, name, picked); }}
+            busy={false}
+            error={editSheet.error}
+            t={t}
+          />
+        );
+      })()}
     </div>
   );
 }
