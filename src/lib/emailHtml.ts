@@ -1027,7 +1027,7 @@ export function renderEmailHtml({
     .e-chip { background-color: ${D_CHIP_BG} !important; box-shadow: 0 0 0 1px rgba(255,255,255,0.22) !important; }
     .e-link { color: ${mixHex(theme.accentColor, '#FFFFFF', 0.55)} !important; }
     /* The CTA is now a solid brand colour, and forest on a near-black card is
-       about 1.2:1 — the button would disappear exactly where the old pale gold
+       about 1.2:1, so the button would disappear exactly where the old pale gold
        used to work. Lifted toward the light, with ink to match. Any future
        change to a solid dark button needs this pair or dark mode regresses. */
     .e-btn { background-color: ${mixHex(theme.buttonColor, '#FFFFFF', 0.30)} !important; }

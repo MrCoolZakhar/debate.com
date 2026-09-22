@@ -424,7 +424,7 @@ const AD_HOC_SEEDS: AdHocSeed[] = [
     tokens: ['delegate_name', 'committee', 'session_code'],
     content: {
       name: 'Session codes for delegates',
-      subject: SESSION_JOIN_DEFAULT?.subject ?? 'Join your live committee — {{conference_name}}',
+      subject: SESSION_JOIN_DEFAULT?.subject ?? 'Join your live committee: {{conference_name}}',
       blocks: SESSION_JOIN_DEFAULT?.blocks ?? [],
       audience: { roles: ['delegate'] },
     },
@@ -438,7 +438,7 @@ const AD_HOC_SEEDS: AdHocSeed[] = [
     tokens: ['delegate_name', 'committee', 'conference_name'],
     content: {
       name: 'Session codes for chairs',
-      subject: SESSION_CHAIR_DEFAULT?.subject ?? 'Your session details — {{conference_name}}',
+      subject: SESSION_CHAIR_DEFAULT?.subject ?? 'Your session details: {{conference_name}}',
       blocks: SESSION_CHAIR_DEFAULT?.blocks ?? [],
       audience: { roles: ['chair'] },
     },
@@ -452,9 +452,9 @@ const AD_HOC_SEEDS: AdHocSeed[] = [
     tokens: ['delegate_name', 'role', 'fee'],
     content: {
       name: 'Payment reminder',
-      subject: 'Reminder — your {{conference_name}} fee is still unpaid',
+      subject: 'Reminder: your {{conference_name}} fee is still unpaid',
       blocks: [
-        { type: 'paragraph', content: "Hi {{delegate_name}},\n\nA quick reminder that your {{role}} registration fee of {{fee}} for {{conference_name}} is still outstanding. You can settle it any time from your account — and if you've paid or arranged a waiver in the last day or two, please ignore this." },
+        { type: 'paragraph', content: "Hi {{delegate_name}},\n\nA quick reminder that your {{role}} registration fee of {{fee}} for {{conference_name}} is still outstanding. You can settle it any time from your account, and if you've paid or arranged a waiver in the last day or two, please ignore this." },
         { type: 'button', label: 'VIEW MY CONFERENCE', destination: 'documents' },
         { type: 'paragraph', variant: 'small', content: 'Questions about payment? Reply to this email and the organizing team will help.' },
       ],
@@ -470,7 +470,7 @@ const AD_HOC_SEEDS: AdHocSeed[] = [
     tokens: ['delegate_name', 'conference_name', 'conference_dates'],
     content: {
       name: 'Welcome pack',
-      subject: 'Welcome to {{conference_name}} — everything you need to know',
+      subject: 'Welcome to {{conference_name}}: everything you need to know',
       blocks: [
         { type: 'paragraph', variant: 'heading', content: 'Welcome to {{conference_name}}' },
         { type: 'paragraph', content: 'Hi {{delegate_name}},\n\n{{conference_name}} runs {{conference_dates}}, and everything you need before you arrive is below.' },
@@ -479,7 +479,7 @@ const AD_HOC_SEEDS: AdHocSeed[] = [
         { type: 'paragraph', variant: 'heading', content: 'What to bring' },
         { type: 'paragraph', content: 'Add your dress code, printed materials and anything else to pack here.' },
         { type: 'button', label: 'VIEW MY CONFERENCE', destination: 'documents' },
-        { type: 'paragraph', variant: 'small', content: "If anything changes we'll email again — this is the one to keep." },
+        { type: 'paragraph', variant: 'small', content: "If anything changes we'll email again. This is the one to keep." },
       ],
     },
   },

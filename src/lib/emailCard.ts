@@ -30,16 +30,18 @@
 //     white-disc background IMAGE (Gmail's app recolours colours, never
 //     images), color-scheme:light only on the cell, and .e-tile rules for
 //     prefers-color-scheme, [data-ogsc] and [data-ogsb] (logoDisc below).
-//  6. The conference's own banner is the header image of the pass with no
-//     organiser action; an email-specific image (email_theme.bannerUrl) wins.
-//     Absolute https only, cropped 3:1, on a forest ground so a broken image is
-//     a forest band carrying the name.
+//  6. (Second review) No forest hero. The top of the card is the conference's
+//     own banner, shown WHOLE (presets full aspect, uploads scaled into 3:2),
+//     with the conference logo in its white circle overlapping the banner's
+//     bottom edge by a negative margin; Outlook drops negative margins and
+//     stacks the logo under the banner instead. No banner: a slim row (logo,
+//     name, dates) over a hairline. email_theme.bannerUrl, when set, wins.
 //  7. Countries are round flags (public/email/flags, the circle artwork as
-//     PNG), committees and conferences are logos in a white circle.
-//  8. allocation_assigned leads with the allocation itself: a big round flag
-//     and the country as the headline, then the committee, then the
-//     conference, with the Gavelling mark and gavelling.com, because that email
-//     is shared as a screenshot.
+//     PNG), committees and conferences are logos in a white circle, and an
+//     award is the medallion the website draws (public/email/awards).
+//  8. allocation_assigned leads with the allocation itself on a light ivory
+//     card: a big round flag and the country as the headline, then the
+//     committee, then the Gavelling mark. Green is only the accents.
 //  9. Cards sit on a soft forest-tinted shadow, with a border and a 3px ground
 //     lip where box-shadow is not supported (Outlook).
 //
@@ -135,6 +137,11 @@ export const EMAIL_SNAPSHOTS = {
     caption: 'The organiser dashboard you are being invited to.',
   } as EmailSnapshot | null,
   conferencePage: null as EmailSnapshot | null,
+  /** PLACEHOLDER: the applications page with the check-in buttons, to be
+   *  captured by hand (organiser session) as shots/check-in.jpg, 1200px wide.
+   *  Until it exists nothing renders it. Set it to
+   *  { url: `${EMAIL_ASSET_BASE}shots/check-in.jpg`, width: 528, alt, caption }. */
+  checkIn: null as EmailSnapshot | null,
 };
 
 /** Per event: the status pill on the pass, and the snapshot (default copy only). */
@@ -246,30 +253,46 @@ export function emailLogoUrl(url: string | null | undefined, siteUrl: string): s
 }
 
 /** The header image: the email-specific image when set, else the conference's
- *  own banner. Absolute https only; presets map to their 3:1 email crops and
- *  storage uploads are cropped 1200 x 400. Mirrors gavelling_email_banner_url_v2. */
+ *  own banner, always shown WHOLE. Absolute https only; presets map to their
+ *  full-aspect 1056px renders; storage uploads are scaled to fit 1056 x 704
+ *  (3:2), never cropped. Mirrors gavelling_email_banner_url_v2. */
 export function emailBannerUrl(conference: { banner_url?: string | null; email_theme?: unknown }): string | null {
   const themed = (conference.email_theme as { bannerUrl?: unknown } | null | undefined)?.bannerUrl;
   let v = (typeof themed === 'string' && themed.trim()) || (conference.banner_url ?? '').trim();
   if (!v) return null;
   const preset = /^\/banners\/(preset-[1-9][0-9]?\.jpg)$/.exec(v);
-  if (preset) return `${EMAIL_ASSET_BASE}banners/${preset[1]}`;
+  if (preset) return `${EMAIL_ASSET_BASE}banners-full/${preset[1]}`;
   if (/^\/[A-Za-z0-9]/.test(v)) v = `https://gavelling.com${v}`;
   if (!/^https:\/\/[A-Za-z0-9.-]+\//i.test(v) || /["<>\s]/.test(v)) return null;
   const marker = '/storage/v1/object/public/';
-  if (v.includes(marker)) return `${v.split('?')[0].replace(marker, '/storage/v1/render/image/public/')}?width=1200&height=400&resize=cover`;
+  if (v.includes(marker)) return `${v.split('?')[0].replace(marker, '/storage/v1/render/image/public/')}?width=1056&height=704&resize=contain`;
   return v;
 }
 
-// ── Pieces (mirror scratchpad cardkit.py) ───────────────────────────────────
+/** The award medallion the website draws (AwardArtwork in account/accountUi.tsx),
+ *  as a hosted PNG. Mirrors gavelling_email_award_url_v2. */
+export function awardArtUrl(name: string): string {
+  const n = name.toLowerCase();
+  const kind = /best delegate/.test(n) ? 'best-delegate'
+    : /diplomacy/.test(n) ? 'diplomacy'
+    : /outstanding/.test(n) ? 'outstanding'
+    : /honou?rable mention/.test(n) ? 'honourable-mention'
+    : /verbal commendation/.test(n) ? 'verbal-commendation'
+    : /position paper/.test(n) ? 'position-paper'
+    : /delegation/.test(n) ? 'delegation'
+    : 'special';
+  return `${EMAIL_ASSET_BASE}awards/${kind}.png`;
+}
+
+// ── Pieces ──────────────────────────────────────────────────────────────────
 
 const row = (inner: string, pad: string, align = '') =>
   `<tr><td${align ? ` align="${align}"` : ''} class="e-pad" style="padding:${pad};">${inner}</td></tr>`;
 
-function h1(text: string): string {
+function h1(text: string, align: 'left' | 'center', top: number): string {
   return row(
-    `<h1 class="e-h1 e-accent" style="margin:0;font-family:${SANS};font-size:27px;line-height:1.2;font-weight:700;letter-spacing:-0.015em;color:${FOREST};text-align:center;">${text}</h1>`,
-    '12px 36px 0 36px', 'center');
+    `<h1 class="e-h1 e-accent" style="margin:0;font-family:${SANS};font-size:27px;line-height:1.2;font-weight:700;letter-spacing:-0.015em;color:${FOREST};text-align:${align};">${text}</h1>`,
+    `${top}px 36px 0 36px`, align);
 }
 
 function h2(text: string): string {
@@ -285,106 +308,95 @@ function bodyCell(html: string, variant: 'body' | 'small'): string {
   return `<div class="${variant === 'small' ? 'e-muted' : 'e-ink'}" style="${style}">${html}</div>`;
 }
 
-type RowIcon = { kind: 'flag' | 'logo'; url: string; alt: string };
+type RowIcon = { kind: 'flag' | 'logo' | 'art'; url: string; alt: string };
 
 function rowIcon(i: RowIcon, px: number): string {
-  return i.kind === 'flag' ? roundFlag(i.url, px, i.alt) : logoDisc(i.url, px, i.alt);
+  if (i.kind === 'flag') return roundFlag(i.url, px, i.alt);
+  if (i.kind === 'art') return `<img src="${escapeHtml(i.url)}" width="${px}" height="${px}" alt="${escapeHtml(i.alt)}" style="display:block;width:${px}px;height:${px}px;border:0;" />`;
+  return logoDisc(i.url, px, i.alt);
 }
 
 interface PassRow { label: string; valueHtml: string; icon?: RowIcon | null; from?: 'country' | 'committee' }
 
-function passCard(opts: { top?: number; pill: string | null; pillIcon?: EmailIcon | null; chip: string | null; logo: { url: string; alt: string; baked: boolean } | null; name: string; place: string | null; banner?: string | null; rows: PassRow[] }): string {
-  const { pill, chip, logo, name, place, rows } = opts;
-  const padTop = opts.top ?? 0;
+function pillHtml(pill: string, icon: EmailIcon | null | undefined): string {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td class="e-pill" bgcolor="#F0EBDD" style="background-color:#F0EBDD;border-radius:999px;padding:4px 11px 4px 8px;font-family:${SANS};font-size:12px;line-height:16px;font-weight:700;color:#1C1410;white-space:nowrap;">`
+    + (icon ? `<img src="${EMAIL_ASSET_BASE}icons/${icon}.png" width="16" height="16" alt="" style="display:inline-block;width:16px;height:16px;border:0;vertical-align:-3px;" />` : '<span style="color:#2A5A3C;font-size:12px;">&#9679;</span>')
+    + `&nbsp;${escapeHtml(pill)}</td></tr></table>`;
+}
+
+/** The top of a conference email. With a banner: the banner, whole, edge to
+ *  edge, and the conference logo in its white circle overlapping its bottom
+ *  edge (a negative top margin; clients that drop negative margins, such as
+ *  Outlook, stack the logo under the banner instead, which still reads
+ *  cleanly). Without a banner: one slim row over a hairline. */
+function masthead(o: { banner: string | null; logo: string | null; logoAlt: string; name: string; meta: string | null; pill: string | null; pillIcon: EmailIcon | null }): string {
+  const nameBlock = (size: number) => `<div class="e-accent" style="font-size:${size}px;line-height:1.2;font-weight:800;letter-spacing:-0.01em;color:${FOREST};">${escapeHtml(o.name)}</div>`
+    + (o.meta ? `<div class="e-soft" style="font-size:13px;line-height:1.45;color:${INK_SOFT};padding-top:3px;">${escapeHtml(o.meta)}</div>` : '');
+  if (o.banner) {
+    const logo = o.logo
+      ? `<td valign="top" width="88" style="width:88px;"><div class="e-lift" style="margin-top:-44px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td class="e-ring" bgcolor="#FFFFFF" style="background-color:#FFFFFF;border-radius:50%;padding:4px;">${logoDisc(o.logo, 80, o.logoAlt)}</td></tr></table></div></td>`
+      : '';
+    return `<tr><td align="center" bgcolor="#E4DCC8" style="background-color:#E4DCC8;padding:0;line-height:0;font-size:0;border-radius:17px 17px 0 0;">`
+      + `<img src="${escapeHtml(o.banner)}" width="598" alt="${escapeHtml(o.name)}" style="display:block;width:100%;max-width:598px;height:auto;border:0;border-radius:17px 17px 0 0;font-family:${SANS};font-size:15px;line-height:56px;font-weight:bold;color:${FOREST};text-align:center;" /></td></tr>`
+      + `<tr><td class="e-pad" style="padding:0 36px 4px 30px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>${logo}`
+      + `<td valign="top" style="padding:14px 0 0 ${logo ? 12 : 6}px;font-family:${SANS};">${nameBlock(21)}`
+      + (o.pill ? `<div style="padding-top:8px;">${pillHtml(o.pill, o.pillIcon)}</div>` : '')
+      + `</td></tr></table></td></tr>`;
+  }
+  return `<tr><td class="e-pad" style="padding:24px 36px 0 36px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="e-hair" style="border-bottom:1px solid #E4DCC8;"><tr>`
+    + (o.logo ? `<td valign="middle" width="52" style="width:52px;padding:0 0 16px 0;">${logoDisc(o.logo, 52, o.logoAlt)}</td>` : '')
+    + `<td valign="middle" style="padding:0 0 16px ${o.logo ? 14 : 0}px;font-family:${SANS};">${nameBlock(19)}</td>`
+    + (o.pill ? `<td valign="middle" align="right" style="padding:0 0 16px 8px;">${pillHtml(o.pill, o.pillIcon)}</td>` : '')
+    + `</tr></table></td></tr>`;
+}
+
+/** Facts as labelled rows in a light ivory panel, each with its flag, logo or medallion. */
+function factsPanel(rows: PassRow[], top = 6): string {
   const body = rows.map((r, i) => {
-    const top = i === 0 ? 18 : 8;
-    const bottom = i === rows.length - 1 ? 16 : 8;
-    const img = r.icon ? `<td valign="middle" width="56" style="width:56px;padding:${top}px 0 ${bottom}px 8px;">${rowIcon(r.icon, 56)}</td>` : '';
+    const t = i === 0 ? 14 : 7;
+    const b = i === rows.length - 1 ? 14 : 7;
+    const img = r.icon ? `<td valign="middle" width="52" style="width:52px;padding:${t}px 0 ${b}px 4px;">${rowIcon(r.icon, 52)}</td>` : '';
     return `<tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>${img}`
-      + `<td valign="middle" style="padding:${top}px 8px ${bottom}px ${img ? 16 : 8}px;font-family:${SANS};">`
+      + `<td valign="middle" style="padding:${t}px 6px ${b}px ${img ? 14 : 6}px;font-family:${SANS};">`
       + `<div class="e-label" style="font-size:12.5px;line-height:1.3;font-weight:bold;color:${LABEL};">${escapeHtml(r.label)}</div>`
-      + `<div class="e-ink" style="font-size:19px;line-height:1.3;font-weight:bold;color:#1C1410;padding-top:2px;">${r.valueHtml}</div>`
+      + `<div class="e-ink" style="font-size:18px;line-height:1.3;font-weight:bold;color:#1C1410;padding-top:2px;">${r.valueHtml}</div>`
       + `</td></tr></table></td></tr>`;
   }).join('');
-
-  const logoCell = !logo ? '' : logo.baked
-    ? `<td valign="middle" width="64" style="width:64px;line-height:0;font-size:0;"><img src="${escapeHtml(logo.url)}" width="64" height="64" alt="${escapeHtml(logo.alt)}" style="display:block;width:64px;height:64px;border:0;font-family:${SANS};font-size:10px;line-height:1.2;color:${GOLD};" /></td>`
-    : `<td valign="middle" width="64" style="width:64px;">${logoDisc(logo.url, 64, logo.alt)}</td>`;
-
-  const topRow = pill || chip
-    ? `<tr><td class="e-hero-pad" style="padding:13px 13px 0 13px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`
-      + `<td align="left" valign="top">${pill
-        ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="#F0EBDD" style="background-color:#F0EBDD;border-radius:999px;padding:5px 12px 5px 10px;font-family:${SANS};font-size:12px;line-height:16px;font-weight:700;color:#1C1410;white-space:nowrap;">${opts.pillIcon ? `<img src="${EMAIL_ASSET_BASE}icons/${opts.pillIcon}.png" width="16" height="16" alt="" style="display:inline-block;width:16px;height:16px;border:0;vertical-align:-3px;" />` : '<span style="color:#2A5A3C;font-size:13px;">&#9679;</span>'}&nbsp;${escapeHtml(pill)}</td></tr></table>`
-        : '&nbsp;'}</td>`
-      + `<td align="right" valign="top">${chip
-        ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right"><tr><td style="border:1px solid #58775F;border-radius:999px;padding:4px 10px;font-family:${SANS};font-size:11.5px;line-height:15px;font-weight:600;color:#FAF8F3;white-space:nowrap;">${escapeHtml(chip)}</td></tr></table>`
-        : '&nbsp;'}</td></tr></table></td></tr>`
-    : '';
-
-  return `<tr><td class="e-pad" style="padding:${padTop}px 36px 0 36px;">`
-    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="e-pass" bgcolor="#F0EBDD" style="background-color:#F0EBDD;border-radius:22px;">`
-    + `<tr><td style="padding:12px 12px ${rows.length ? 4 : 12}px 12px;">`
-    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${FOREST}" style="background-color:${FOREST};border-radius:16px;box-shadow:0 12px 24px -14px rgba(10,24,16,0.65);">`
-    + (opts.banner ? bannerRow(opts.banner, name) : '')
-    + topRow
-    + `<tr><td class="e-hero-pad" style="padding:${topRow ? 26 : 20}px 18px 20px 18px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`
-    + logoCell
-    + `<td valign="middle" style="${logoCell ? 'padding-left:16px;' : ''}font-family:${SANS};">`
-    + `<div class="e-hero-name" style="font-size:27px;line-height:1.08;font-weight:800;letter-spacing:-0.02em;color:${GOLD};">${escapeHtml(name)}</div>`
-    + (place ? `<div style="font-size:11px;line-height:1.4;font-weight:600;letter-spacing:0.15em;text-transform:uppercase;color:#D9E0D9;padding-top:7px;">${escapeHtml(place)}</div>` : '')
-    + `</td></tr></table></td></tr></table>`
-    + (body ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${body}</table>` : '')
-    + `</td></tr></table></td></tr>`;
+  return row(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="e-pass" bgcolor="#F6F2E8" style="background-color:#F6F2E8;border-radius:16px;box-shadow:inset 0 0 0 1px #EDE5D2;"><tr><td style="padding:2px 14px;">`
+    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${body}</table></td></tr></table>`, `${top}px 36px 0 36px`);
 }
 
 /** The allocation share card: the seat first (a big round flag and the country
- *  as the headline), then the committee, then the conference, then the
- *  Gavelling mark. Built to be screenshotted: centred, one column, solid forest
- *  ground so light and dark mode render it the same way. */
+ *  as the headline), then the committee, then the Gavelling mark. Light ivory
+ *  ground; forest is only the accents (headline ink, the gold-and-forest rule,
+ *  the committee acronym). Built to be screenshotted at phone width. */
 function sharePanel(o: {
   eyebrow: string; country: string; countryIcon: RowIcon | null;
   committee: string | null; committeeName: string | null; committeeLogo: string | null;
-  confName: string; confLogo: string | null; confMeta: string | null; banner: string | null;
 }): string {
-  const IVORY = '#FAF8F3';
-  const SOFT = '#D9E0D9';
   const flag = o.countryIcon ? rowIcon({ ...o.countryIcon, alt: `Flag of ${o.country}` }, 132) : '';
   const showFull = !!o.committeeName && !!o.committee && o.committeeName.trim().toLowerCase() !== o.committee.trim().toLowerCase();
   const committee = o.committee
-    ? `<tr><td class="e-hero-pad" style="padding:24px 18px 0 18px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#24472F" style="background-color:#24472F;border-radius:16px;"><tr>`
+    ? `<tr><td class="e-share-pad" style="padding:22px 20px 0 20px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="e-band" bgcolor="#FFFFFF" style="background-color:#FFFFFF;border-radius:16px;box-shadow:0 1px 2px rgba(27,56,40,0.08),0 10px 22px -14px rgba(27,56,40,0.35);"><tr>`
       + (o.committeeLogo ? `<td valign="middle" width="60" style="width:60px;padding:14px 0 14px 14px;">${logoDisc(o.committeeLogo, 60, '')}</td>` : '')
       + `<td valign="middle" style="padding:14px 16px 14px ${o.committeeLogo ? 14 : 18}px;font-family:${SANS};">`
-      + `<div style="font-size:11px;line-height:1.4;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:${SOFT};" class="e-share-soft">Committee</div>`
-      + `<div style="font-size:24px;line-height:1.15;font-weight:800;letter-spacing:-0.01em;color:${GOLD};padding-top:2px;">${escapeHtml(o.committee)}</div>`
-      + (showFull ? `<div style="font-size:13px;line-height:1.4;color:${SOFT};padding-top:3px;" class="e-share-soft">${escapeHtml(o.committeeName!)}</div>` : '')
+      + `<div class="e-label" style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:${LABEL};">Committee</div>`
+      + `<div class="e-accent" style="font-size:24px;line-height:1.15;font-weight:800;letter-spacing:-0.01em;color:${FOREST};padding-top:2px;">${escapeHtml(o.committee)}</div>`
+      + (showFull ? `<div class="e-soft" style="font-size:13px;line-height:1.4;color:${INK_SOFT};padding-top:3px;">${escapeHtml(o.committeeName!)}</div>` : '')
       + `</td></tr></table></td></tr>`
     : '';
-  const conf = `<tr><td class="e-hero-pad" style="padding:18px 18px 0 18px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`
-    + (o.confLogo ? `<td valign="middle" width="40" style="width:40px;">${logoDisc(o.confLogo, 40, '')}</td>` : '')
-    + `<td valign="middle" style="padding-left:${o.confLogo ? 12 : 0}px;font-family:${SANS};">`
-    + `<div style="font-size:15px;line-height:1.3;font-weight:800;color:${IVORY};">${escapeHtml(o.confName)}</div>`
-    + (o.confMeta ? `<div style="font-size:12.5px;line-height:1.4;color:${SOFT};padding-top:1px;" class="e-share-soft">${escapeHtml(o.confMeta)}</div>` : '')
-    + `</td></tr></table></td></tr>`;
-  const brand = `<tr><td align="center" style="padding:18px 18px 18px 18px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #36563F;"><tr><td style="padding-top:14px;">`
-    + `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>`
-    + `<td valign="middle" width="24" style="width:24px;line-height:0;font-size:0;"><img src="${LEGACY_ASSETS}tile-gavelling.png" width="24" height="24" alt="" style="display:block;width:24px;height:24px;border:0;" /></td>`
-    + `<td valign="middle" style="padding-left:8px;font-family:${SANS};font-size:12px;line-height:16px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;color:${GOLD};"><a href="https://gavelling.com" target="_blank" style="color:${GOLD};text-decoration:none;">gavelling.com</a></td>`
-    + `</tr></table></td></tr></table></td></tr>`;
-  return `<tr><td class="e-pad" style="padding:20px 36px 0 36px;">`
-    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${FOREST}" style="background-color:${FOREST};border-radius:20px;box-shadow:0 18px 36px -18px rgba(10,24,16,0.7);">`
-    + (o.banner ? bannerRow(o.banner, o.confName).replace(/16px 16px 0 0/g, '20px 20px 0 0') : '')
-    + `<tr><td align="center" style="padding:${o.banner ? 24 : 30}px 20px 0 20px;font-family:${SANS};font-size:11.5px;line-height:1.4;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:${SOFT};" class="e-share-soft">${escapeHtml(o.eyebrow)}</td></tr>`
-    + (flag ? `<tr><td align="center" style="padding:16px 20px 0 20px;">${flag}</td></tr>` : '')
-    + `<tr><td align="center" style="padding:16px 20px 0 20px;font-family:${SANS};"><div class="e-share-title" style="font-size:38px;line-height:1.08;font-weight:800;letter-spacing:-0.02em;color:${IVORY};">${escapeHtml(o.country)}</div></td></tr>`
-    + committee + conf + brand
+  const brand = `<tr><td align="center" style="padding:20px 20px 20px 20px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>`
+    + `<td valign="middle" width="22" style="width:22px;line-height:0;font-size:0;"><img src="${LEGACY_ASSETS}tile-gavelling.png" width="22" height="22" alt="" style="display:block;width:22px;height:22px;border:0;" /></td>`
+    + `<td valign="middle" style="padding-left:8px;font-family:${SANS};font-size:11.5px;line-height:16px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;"><a href="https://gavelling.com" target="_blank" class="e-accent" style="color:${FOREST};text-decoration:none;">gavelling.com</a></td>`
+    + `</tr></table></td></tr>`;
+  return `<tr><td class="e-pad" style="padding:22px 36px 0 36px;">`
+    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="e-pass" bgcolor="#F6F2E8" style="background-color:#F6F2E8;border-radius:20px;box-shadow:inset 0 0 0 1px #E9E1CD,0 18px 36px -24px rgba(27,56,40,0.45);">`
+    + `<tr><td align="center" style="padding:26px 20px 0 20px;font-family:${SANS};font-size:11.5px;line-height:1.4;font-weight:800;letter-spacing:0.18em;text-transform:uppercase;color:${LABEL};" class="e-label">${escapeHtml(o.eyebrow)}</td></tr>`
+    + (flag ? `<tr><td align="center" style="padding:18px 20px 0 20px;">${flag}</td></tr>` : '')
+    + `<tr><td align="center" style="padding:16px 20px 0 20px;font-family:${SANS};"><div class="e-share-title e-accent" style="font-size:38px;line-height:1.08;font-weight:800;letter-spacing:-0.02em;color:${FOREST};">${escapeHtml(o.country)}</div></td></tr>`
+    + `<tr><td align="center" style="padding:14px 20px 0 20px;line-height:0;font-size:0;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr><td width="28" height="3" bgcolor="${FOREST}" class="e-rule" style="width:28px;height:3px;background-color:${FOREST};border-radius:2px;font-size:0;line-height:0;">&nbsp;</td><td width="6" style="width:6px;font-size:0;">&nbsp;</td><td width="14" height="3" bgcolor="#C9A63A" style="width:14px;height:3px;background-color:#C9A63A;border-radius:2px;font-size:0;line-height:0;">&nbsp;</td></tr></table></td></tr>`
+    + committee + brand
     + `</table></td></tr>`;
-}
-
-/** The banner at the top of the forest hero. A fixed forest ground and gold
- *  alt text, so a slow or broken image is a band carrying the name. */
-function bannerRow(url: string, name: string): string {
-  return `<tr><td align="center" bgcolor="${FOREST}" style="background-color:${FOREST};border-radius:16px 16px 0 0;line-height:0;font-size:0;padding:0;">`
-    + `<img src="${escapeHtml(url)}" width="504" alt="${escapeHtml(name)}" style="display:block;width:100%;max-width:504px;height:auto;border:0;border-radius:16px 16px 0 0;font-family:${SANS};font-size:15px;line-height:48px;font-weight:bold;color:${GOLD};text-align:center;" /></td></tr>`;
 }
 
 function primaryButton(label: string, url: string): string {
@@ -416,9 +428,9 @@ const STYLE = `<style>
 body{margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;}
 img{border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;}
 a{text-decoration:none;}
-@media only screen and (max-width:620px){.e-pad{padding-left:20px !important;padding-right:20px !important;}.e-h1{font-size:24px !important;}.e-hero-name{font-size:23px !important;}.e-hero-pad{padding-left:14px !important;padding-right:14px !important;}.e-share-title{font-size:32px !important;}}
-@media (prefers-color-scheme: dark){body,.e-page{background-color:#0E0D0A !important;}.e-card{background-color:#232019 !important;border-color:#3A352A !important;border-bottom-color:#15130F !important;}.e-pass{background-color:#1B1811 !important;box-shadow:none !important;}.e-hair{border-color:#3A352A !important;}.e-ink,.e-ink div,.e-ink span,.e-ink strong,.e-ink em{color:#F3EFE6 !important;}.e-soft{color:#CFC7B8 !important;}.e-muted,.e-muted a,.e-muted div{color:#A79D8D !important;}.e-accent{color:#D9E4DC !important;}.e-label{color:#8FC3A0 !important;}.e-tile{background-color:#FFFFFF !important;}.e-share-soft{color:#D9E0D9 !important;}.e-link{color:#BFD3C6 !important;}.e-btn{background-color:#2F5A40 !important;}}
-[data-ogsc] .e-page{background-color:#0E0D0A !important;}[data-ogsc] .e-card{background-color:#232019 !important;}[data-ogsc] .e-pass{background-color:#1B1811 !important;}[data-ogsc] .e-ink,[data-ogsc] .e-ink div,[data-ogsc] .e-ink span,[data-ogsc] .e-ink strong{color:#F3EFE6 !important;}[data-ogsc] .e-soft{color:#CFC7B8 !important;}[data-ogsc] .e-muted,[data-ogsc] .e-muted a{color:#A79D8D !important;}[data-ogsc] .e-accent{color:#D9E4DC !important;}[data-ogsc] .e-label{color:#8FC3A0 !important;}[data-ogsc] .e-link{color:#BFD3C6 !important;}[data-ogsc] .e-btn{background-color:#2F5A40 !important;}
+@media only screen and (max-width:620px){.e-pad{padding-left:20px !important;padding-right:20px !important;}.e-h1{font-size:24px !important;}.e-share-title{font-size:32px !important;}.e-share-pad{padding-left:14px !important;padding-right:14px !important;}}
+@media (prefers-color-scheme: dark){body,.e-page{background-color:#0E0D0A !important;}.e-card{background-color:#232019 !important;border-color:#3A352A !important;border-bottom-color:#15130F !important;}.e-pass{background-color:#1B1811 !important;box-shadow:none !important;}.e-band{background-color:#2A261D !important;box-shadow:none !important;}.e-rule{background-color:#8FC3A0 !important;}.e-hair{border-color:#3A352A !important;}.e-ink,.e-ink div,.e-ink span,.e-ink strong,.e-ink em{color:#F3EFE6 !important;}.e-soft{color:#CFC7B8 !important;}.e-muted,.e-muted a,.e-muted div{color:#A79D8D !important;}.e-accent{color:#D9E4DC !important;}.e-label{color:#8FC3A0 !important;}.e-pill{background-color:#2B2616 !important;color:#F3EFE6 !important;}.e-ring{background-color:#232019 !important;}.e-tile{background-color:#FFFFFF !important;}.e-link{color:#BFD3C6 !important;}.e-btn{background-color:#2F5A40 !important;}}
+[data-ogsc] .e-page{background-color:#0E0D0A !important;}[data-ogsc] .e-card{background-color:#232019 !important;}[data-ogsc] .e-pass{background-color:#1B1811 !important;}[data-ogsc] .e-band{background-color:#2A261D !important;}[data-ogsc] .e-ink,[data-ogsc] .e-ink div,[data-ogsc] .e-ink span,[data-ogsc] .e-ink strong{color:#F3EFE6 !important;}[data-ogsc] .e-soft{color:#CFC7B8 !important;}[data-ogsc] .e-muted,[data-ogsc] .e-muted a{color:#A79D8D !important;}[data-ogsc] .e-accent{color:#D9E4DC !important;}[data-ogsc] .e-label{color:#8FC3A0 !important;}[data-ogsc] .e-link{color:#BFD3C6 !important;}[data-ogsc] .e-btn{background-color:#2F5A40 !important;}
 [data-ogsc] .e-tile,[data-ogsb] .e-tile{background-color:#FFFFFF !important;}
 </style>`;
 
@@ -442,9 +454,8 @@ export function renderEmailCardHtml({
   const card = emailCardFor(event, isDefault);
   const name = shortName(conference);
 
-  // Hero identity.
+  // Masthead identity.
   const logoAbs = theme.showLogo ? emailLogoUrl(conference.logo_url, siteUrl) : null;
-  const logo = logoAbs ? { url: logoAbs, alt: `${conference.acronym || conference.full_name} logo`, baked: false } : null;
   const place = [conference.city, conference.country].map(s => (s ?? '').trim()).filter(Boolean).join(', ') || null;
   const chip = emailDatesLabel(conference.start_date, conference.end_date, conference.dates_tbd);
 
@@ -462,9 +473,11 @@ export function renderEmailCardHtml({
     const url = emailLogoUrl(media?.committeeEmblem, siteUrl);
     return url ? { kind: 'logo', url, alt: '' } : null;
   };
-  const iconFor = (from: 'country' | 'committee' | undefined, label: string): RowIcon | null => {
+  const iconFor = (from: 'country' | 'committee' | undefined, label: string, value: string): RowIcon | null => {
     if (from === 'country') return countryIcon();
     if (from === 'committee' || /^committee$/i.test(label)) return committeeIcon();
+    // An award is its medallion, the same one the website draws.
+    if (/^award$/i.test(label)) return { kind: 'art', url: awardArtUrl(value), alt: '' };
     return null;
   };
   const resolvedOrNull = (token: string): string | null => {
@@ -476,7 +489,7 @@ export function renderEmailCardHtml({
     const rows = b.items
       .map(i => ({ label: i.label.trim(), value: resolveTokens(i.value, ctx).trim(), from: i.iconFrom }))
       .filter(i => i.label && i.value && i.value.replace(new RegExp(UNRESOLVED_MARKER_PATTERN), '').trim() !== '')
-      .map(i => ({ label: i.label, valueHtml: renderMarkedHtml(i.value, LINK), icon: iconFor(i.from, i.label), from: i.from }));
+      .map(i => ({ label: i.label, valueHtml: renderMarkedHtml(i.value, LINK), icon: iconFor(i.from, i.label, i.value), from: i.from }));
     // Money and seat events name the delegate's country with its flag even when
     // the template has no country row (card design only; the text is the
     // allocation already on the application, never an organiser's words).
@@ -489,19 +502,16 @@ export function renderEmailCardHtml({
 
   const firstFacts = blocks.findIndex(b => b.type === 'facts');
   const firstHeading = blocks.findIndex(b => b.type === 'paragraph' && b.variant === 'heading' && !!b.content.trim());
-  // Where the pass sits: at the first facts block; otherwise after the first
-  // body paragraph (transactional) or straight under the headline (broadcast,
-  // where it plays the masthead).
-  let passAt: number;
-  if (firstFacts >= 0) passAt = firstFacts;
-  else if (transactional) {
-    const firstBody = blocks.findIndex((b, i) => i !== firstHeading && b.type === 'paragraph' && (b.variant ?? 'body') === 'body' && !!b.content.trim());
-    passAt = firstBody >= 0 ? firstBody + 1 : firstHeading + 1;
-  } else passAt = firstHeading + 1;
+  // The facts panel sits where the first facts block is.
+  const passAt = firstFacts;
 
-  // The conference's banner heads the pass on every email, with nothing for an
-  // organiser to set (email_theme.bannerUrl wins when present).
+  // The conference's banner heads every email, with nothing for an organiser to
+  // set (email_theme.bannerUrl wins when present).
   const banner = emailBannerUrl(conference);
+  const head = masthead({
+    banner, logo: logoAbs, logoAlt: `${conference.acronym || conference.full_name} logo`, name,
+    meta: [chip, place].filter(Boolean).join(' · ') || null, pill: card.pill, pillIcon: card.icon,
+  });
   const firstRows = firstFacts >= 0 ? factRows(blocks[firstFacts] as Extract<EmailBlock, { type: 'facts' }>) : [];
 
   // The allocation email is a share card: it leads with the seat itself.
@@ -517,39 +527,19 @@ export function renderEmailCardHtml({
     committee: committeeLabel,
     committeeName: (media?.committeeName ?? '').trim() || null,
     committeeLogo: emailLogoUrl(media?.committeeEmblem, siteUrl),
-    confName: name,
-    confLogo: logoAbs,
-    confMeta: [chip, place].filter(Boolean).join(' · ') || null,
-    banner,
   }) : '';
   // Rows the share card already shows (country, committee) are not repeated.
   const shareRest = firstRows.filter(r => r.from !== 'country' && r.from !== 'committee' && !/^committee$/i.test(r.label));
-
-  const passArgs = {
-    pill: card.pill,
-    pillIcon: card.icon,
-    chip,
-    logo,
-    name,
-    place,
-    banner,
-    rows: firstRows,
-  };
 
   let out = '';
   let buttons = 0;
   let passDone = false;
   // 'heading' | 'body' | 'pass' | 'button' | 'other': what was drawn last, for spacing.
   let last = 'other';
-  const secondaryFacts = (rows: PassRow[]) => row(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="e-pass" bgcolor="#F6F2E8" style="background-color:#F6F2E8;border-radius:16px;"><tr><td style="padding:4px 8px;">`
-    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows.map((r, k) =>
-      `<tr>${r.icon ? `<td valign="middle" width="44" style="width:44px;padding:${k === 0 ? 12 : 6}px 0 ${k === rows.length - 1 ? 12 : 6}px 8px;">${rowIcon(r.icon, 40)}</td>` : ''}<td style="padding:${k === 0 ? 12 : 6}px 8px ${k === rows.length - 1 ? 12 : 6}px ${r.icon ? 12 : 8}px;font-family:${SANS};"><div class="e-label" style="font-size:12.5px;font-weight:bold;color:${LABEL};">${escapeHtml(r.label)}</div><div class="e-ink" style="font-size:17px;line-height:1.3;font-weight:bold;color:#1C1410;padding-top:2px;">${r.valueHtml}</div></td></tr>`).join('')}</table></td></tr></table>`,
-    '18px 36px 0 36px');
   const emitPass = () => {
     if (passDone) return;
-    if (share) {
-      if (shareRest.length) { out += secondaryFacts(shareRest); last = 'other'; }
-    } else { out += passCard({ ...passArgs, top: last === 'heading' ? 22 : 0 }); last = 'pass'; }
+    const rows = share ? shareRest : firstRows;
+    if (rows.length) { out += factsPanel(rows, share ? 18 : 6); last = 'pass'; }
     passDone = true;
   };
   if (share) { out += shareHtml; last = 'pass'; }
@@ -565,6 +555,7 @@ export function renderEmailCardHtml({
     // The share card is already drawn at the top; with nothing left of the
     // facts to show, the greeting and the next paragraph stay one run of text.
     if (i === passAt) { if (!(share && !shareRest.length)) flushBody(passDone); emitPass(); }
+    if (b.type === 'facts' && i === firstFacts) return; // drawn as the facts panel
     if (b.type === 'paragraph') {
       if (!b.content.trim()) return;
       const v = b.variant ?? 'body';
@@ -573,7 +564,7 @@ export function renderEmailCardHtml({
         if (share && i === firstHeading) return; // it is the share card's eyebrow
         flushBody(passDone);
         const html = renderMarkedHtml(resolved.replace(/\s*\n\s*/g, ' '), LINK);
-        out += i === firstHeading ? h1(html) : h2(html);
+        out += i === firstHeading ? h1(html, 'left', 22) : h2(html);
         last = 'heading';
         return;
       }
@@ -582,11 +573,10 @@ export function renderEmailCardHtml({
       return;
     }
     if (b.type === 'facts') {
-      if (i === firstFacts) return; // drawn inside the pass
       const rows = factRows(b);
       if (!rows.length) return;
       flushBody(passDone);
-      out += secondaryFacts(rows);
+      out += factsPanel(rows, 18);
       return;
     }
     if (b.type === 'image') {
@@ -607,7 +597,7 @@ export function renderEmailCardHtml({
     last = 'button';
   });
   flushBody(passDone);
-  if (!passDone) emitPass();
+  if (!passDone && passAt >= 0) emitPass();
   if (buttons === 0 && card.snapshot) out += snapshotRow(card.snapshot);
 
   const footerLine = theme.footerLine.trim();
@@ -648,12 +638,13 @@ ${STYLE}
 <body class="e-page" style="margin:0;padding:0;background-color:#EDE7D8;">
 ${preheader ? `<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">${escapeHtml(preheader)}${'&#8199;&#65279;&#847; '.repeat(6)}</div>` : ''}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="e-page" bgcolor="#EDE7D8" style="background-color:#EDE7D8;">
-<tr><td align="center" style="padding:24px 10px 36px 10px;">
+<tr><td align="center" style="padding:20px 10px 36px 10px;">
 <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" align="center"><tr><td><![endif]-->
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">
+<tr><td align="center" style="padding:0 0 12px 0;"><div class="e-soft" style="font-family:${SANS};font-size:11.5px;line-height:16px;font-weight:800;letter-spacing:0.2em;text-transform:uppercase;color:${FOREST};">Gavelling</div></td></tr>
 <tr><td>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="e-card" bgcolor="#FFFFFF" style="background-color:#FFFFFF;border:1px solid #DDD4C0;border-bottom:3px solid #D2C7AF;border-radius:18px;box-shadow:0 1px 2px rgba(27,56,40,0.06),0 22px 44px -22px rgba(27,56,40,0.35);">
-<tr><td align="center" style="padding:28px 24px 0 24px;"><div class="e-soft" style="font-family:${SANS};font-size:12px;line-height:16px;font-weight:800;letter-spacing:0.18em;text-transform:uppercase;color:${FOREST};">Gavelling</div></td></tr>
+${head}
 ${out}
 ${signoff}
 </table>

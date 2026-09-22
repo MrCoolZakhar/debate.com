@@ -27,6 +27,8 @@ the public storage bucket `email-assets` (same paths); `EMAIL_ASSET_BASE` /
     flags/xx.png        round flags, 240px, rendered from public/flags/1x1 (circle art)
     icons/<name>.png    Lucide glyph, forest on a pale-gold disc, 96px (shown at 16 to 40px)
     emblems/<dir>/x.png PNG renders of the preset SVG emblems in /logos and /committee-emblems
-    banners/preset-N.jpg the preset banners cropped 3:1 (1200 x 400) for the email header
+    banners-full/preset-N.jpg the preset banners, whole, 1056px wide, for the email header
+    awards/<kind>.png   the award medallions the website draws (AwardArtwork), 192px
     shots/live-wall.jpg  the organiser live wall, LIMUN demo data (fictional)
     disc-white.png      the white circle drawn behind uploaded logos (dark-mode safe)
+    shots/check-in.jpg   PLACEHOLDER, not captured yet: applications page with check-in buttons
