@@ -7,6 +7,7 @@ import DemoGate from '@/components/DemoGate';
 import CreditsWelcomeGate from '@/components/CreditsWelcomeGate';
 import SetupReminderGate from '@/components/SetupReminderGate';
 import CompleteBasicsGate from '@/components/CompleteBasicsGate';
+import LiveRoomsGate from '@/components/liveRooms/LiveRoomsGate';
 import AuthModalHost from '@/components/auth/AuthModal';
 
 export const metadata: Metadata = {
@@ -139,6 +140,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <CompleteBasicsGate />
             <CreditsWelcomeGate />
             <SetupReminderGate />
+            {/* Your conference room is live: organiser, chair, delegate, faculty advisor
+                (src/components/liveRooms). Waits for every gate above. */}
+            <LiveRoomsGate />
           </LanguageProvider>
         </AuthProvider>
       </body>

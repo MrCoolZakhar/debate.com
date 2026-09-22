@@ -288,6 +288,24 @@ answer shapes what we lead them with afterwards.
 
 ---
 
+## 5e. "Your room is live" (22 Sep 2026)
+
+The moment a signed-in person lands on the site while one of their conference rooms is live,
+`LiveRoomsGate` (root layout, `src/components/liveRooms/`) sends them straight in: an
+**organiser** to `/manage/[slug]/live` (how many committees are live and in session), a
+**chair** to the verified chair join (`/join?code=CODE&mode=chair`, no chair code), a
+**delegate** to their allocated seat (`/delegate/CODE?country=...&locked=1`, round country
+flag as the headline), and a **faculty advisor** (accepted application; owner: "put in a note
+for faculty advisors to have the pop up as well") to `/advisor/CODE`, every live room of their
+conference listed. One prompt at a time, organiser > chair > delegate > advisor; several
+entries are a compact list. "Not now" lasts for the page visit; it stops by itself when the
+conference ends or the room ends. The same rooms stay under "Live now" in the profile menu.
+Source: `my_live_rooms()` (caller's own rows only, never the chair suffix). It never opens on a
+live session route, /join, auth or apply paths, and never over another gate. On /sessions it
+also carries the standalone rejoin. Rules in AGENTS.md, "Your room is live".
+
+---
+
 ## 6. Where things live
 
 ```

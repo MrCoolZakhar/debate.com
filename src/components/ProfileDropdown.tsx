@@ -42,6 +42,7 @@ import { compareStartDate, hasConcluded } from '@/lib/conferenceDates';
 import { User, FileText, FileClock, CalendarDays, Sparkles, Coins, LogOut, ArrowRight, Ticket, Plus } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useDraftCount, draftResumeHref } from '@/hooks/useDraftCount';
+import LiveNowMenuSection from '@/components/liveRooms/LiveNowMenuSection';
 import { usePendingInvites, inviteAcceptHref } from '@/hooks/usePendingInvites';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { invoiceDueCents, isInvoicePayable, type InvoiceStatus } from '@/lib/invoices';
@@ -427,6 +428,10 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
             </div>
           </div>
           <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
+
+          {/* Live now: this account's conference rooms that are live right now
+              (src/components/liveRooms). Nothing while there is none. */}
+          <LiveNowMenuSection onNavigate={() => setOpen(false)} />
 
           {/* Menu rows */}
           <div className="py-1">

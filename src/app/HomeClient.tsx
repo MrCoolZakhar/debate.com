@@ -8,7 +8,6 @@ import { getFlagUrl, getCountryByName, getCountryDisplayName } from '@/lib/count
 import SiteNav from '@/components/SiteNav';
 import FooterLegal from '@/components/FooterLegal';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
-import SessionsResumePrompt from '@/components/sessions/SessionsResumePrompt';
 
 // ── Individual feature card components ──────────────────────────────────────
 
@@ -803,9 +802,6 @@ export default function HomeClient() {
         </div>
       </div>
 
-      {/* A room waiting for this person: a conference room they chair today, or the
-          standalone session this browser last chaired (src/components/sessions). */}
-      <SessionsResumePrompt />
     </>
   );
 }
