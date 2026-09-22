@@ -31,7 +31,7 @@
 //     images), color-scheme:light only on the cell, and .e-tile rules for
 //     prefers-color-scheme, [data-ogsc] and [data-ogsb] (logoDisc below).
 //  6. (Second review) No forest hero. The top of the card is the conference's
-//     own banner, shown WHOLE (presets full aspect, uploads scaled into 3:2),
+//     own banner as a 4:1 strip (full width, never cut at the sides),
 //     with the conference logo in its white circle overlapping the banner's
 //     bottom edge by a negative margin; Outlook drops negative margins and
 //     stacks the logo under the banner instead. No banner: a slim row (logo,
@@ -252,19 +252,22 @@ export function emailLogoUrl(url: string | null | undefined, siteUrl: string): s
 }
 
 /** The header image: the email-specific image when set, else the conference's
- *  own banner, always shown WHOLE. Absolute https only; presets map to their
- *  full-aspect 1056px renders; storage uploads are scaled to fit 1056 x 704
- *  (3:2), never cropped. Mirrors gavelling_email_banner_url_v2. */
+ *  own banner, as a wide 4:1 strip (598 x 150 in the 600px card) that is never
+ *  cut at the sides. Presets map to their 4:1 renders (full width, top and
+ *  bottom cropped on the focal point); storage uploads go through the image
+ *  renderer at 1200 x 300, resize=cover, which keeps the full width of any
+ *  banner narrower than 4:1. Absolute https only. Mirrors
+ *  gavelling_email_banner_url_v2. */
 export function emailBannerUrl(conference: { banner_url?: string | null; email_theme?: unknown }): string | null {
   const themed = (conference.email_theme as { bannerUrl?: unknown } | null | undefined)?.bannerUrl;
   let v = (typeof themed === 'string' && themed.trim()) || (conference.banner_url ?? '').trim();
   if (!v) return null;
   const preset = /^\/banners\/(preset-[1-9][0-9]?\.jpg)$/.exec(v);
-  if (preset) return `${EMAIL_ASSET_BASE}banners-full/${preset[1]}`;
+  if (preset) return `${EMAIL_ASSET_BASE}banners-wide/${preset[1]}`;
   if (/^\/[A-Za-z0-9]/.test(v)) v = `https://gavelling.com${v}`;
   if (!/^https:\/\/[A-Za-z0-9.-]+\//i.test(v) || /["<>\s]/.test(v)) return null;
   const marker = '/storage/v1/object/public/';
-  if (v.includes(marker)) return `${v.split('?')[0].replace(marker, '/storage/v1/render/image/public/')}?width=1056&height=704&resize=contain`;
+  if (v.includes(marker)) return `${v.split('?')[0].replace(marker, '/storage/v1/render/image/public/')}?width=1200&height=300&resize=cover`;
   return v;
 }
 
