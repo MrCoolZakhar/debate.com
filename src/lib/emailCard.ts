@@ -406,6 +406,24 @@ function seatStatement(o: { country: string; committee: string | null; committee
     + `</td></tr>`;
 }
 
+/** The award, stated plainly: the award name big, then the seat it was won in:
+ *  the round flag and country, the emblem and committee. */
+function awardStatement(o: { award: string; country: string | null; flag: RowIcon | null; committee: string | null; committeeName: string | null; committeeLogo: string | null }): string {
+  const cell = (img: string, top: string, sub: string | null) =>
+    `<td valign="middle" style="padding:0 10px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>`
+    + (img ? `<td valign="middle" style="padding-right:10px;line-height:0;">${img}</td>` : '')
+    + `<td valign="middle" style="font-family:${SANS};text-align:left;"><div class="e-ink" style="font-size:16px;line-height:1.3;font-weight:bold;color:#1C1410;">${escapeHtml(top)}</div>`
+    + (sub ? `<div class="e-soft" style="font-size:12.5px;line-height:1.4;color:${INK_SOFT};">${escapeHtml(sub)}</div>` : '')
+    + `</td></tr></table></td>`;
+  const showFull = !!o.committeeName && !!o.committee && o.committeeName.trim().toLowerCase() !== o.committee.trim().toLowerCase();
+  const seat = (o.country ? cell(o.flag ? rowIcon({ ...o.flag, alt: `Flag of ${o.country}` }, 40) : '', o.country, 'Representing') : '')
+    + (o.committee ? cell(o.committeeLogo ? logoDisc(o.committeeLogo, 40, '') : '', o.committee, showFull ? o.committeeName : 'Committee') : '');
+  return `<tr><td align="center" class="e-pad" style="padding:20px 36px 0 36px;font-family:${SANS};">`
+    + `<div class="e-ink" style="font-size:24px;line-height:1.3;font-weight:700;color:#1C1410;">${escapeHtml(o.award)}</div>`
+    + (seat ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:16px auto 0 auto;"><tr>${seat}</tr></table>` : '')
+    + `</td></tr>`;
+}
+
 function primaryButton(label: string, url: string): string {
   const l = escapeHtml(label);
   const u = escapeHtml(url);
@@ -518,6 +536,7 @@ export function renderEmailCardHtml({
   // The seat emails lead with the seat: a big round flag, then the plain line.
   const seatLed = (event === 'allocation_assigned' || event === 'allocation_changed' || event === 'delegation_swap') && !!countryName;
   const flag = countryIcon();
+  const awardName = event === 'award_received' ? resolvedOrNull('{{award}}') : null;
   let hero = '';
   if (seatLed && flag) hero = rowIcon({ ...flag, alt: `Flag of ${countryName}` }, 140);
   else if (event === 'award_received') {
@@ -530,6 +549,7 @@ export function renderEmailCardHtml({
   let headlineDone = false;
   const emitHeadline = (html: string) => {
     out += headline(html, hero ? 22 : 28) + hairlineRule();
+    if (awardName) out += awardStatement({ award: awardName, country: countryName, flag, committee: committeeLabel, committeeName: (media?.committeeName ?? '').trim() || null, committeeLogo });
     if (seatLed) out += seatStatement({ country: countryName!, committee: committeeLabel, committeeName: (media?.committeeName ?? '').trim() || null, topic: (media?.committeeTopic ?? '').trim() || null, committeeLogo });
     headlineDone = true;
   };
@@ -565,7 +585,8 @@ export function renderEmailCardHtml({
     if (b.type === 'facts') {
       // The seat emails already said the seat; other rows stay, plainly.
       const rows = (i === firstFacts ? firstRows : factRows(b))
-        .filter(r => !(seatLed && (r.from === 'country' || r.from === 'committee' || /^committee$/i.test(r.label))));
+        .filter(r => !((seatLed || awardName) && (r.from === 'country' || r.from === 'committee' || /^committee$/i.test(r.label))))
+        .filter(r => !(awardName && /^award$/i.test(r.label)));
       if (!rows.length) return;
       flushBody();
       out += detailRows(rows);
