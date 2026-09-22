@@ -31,10 +31,12 @@
  * of the card's inline-start edge. Below 900px of window width there is no room beside the
  * card, so the masthead keeps the horizontal QuorumRings there.
  *
- * The card is centred on the screen; the rules sit to its right (owner, 17 Sep 2026). Three
- * icon ribbons (Threshold with quorum, Abstentions, Veto), in the manner of the Settings
- * spine, hang off a drawer that slides out from under the card. Threshold is open on arrival;
- * pressing an open ribbon again (or the drawer's X, or Escape) folds it away. The veto holders
+ * The card is centred on the screen; the rules sit to its right (owner, 17 Sep 2026). Four
+ * icon ribbons (Threshold with quorum, Abstentions, Veto, and Voting: the one "vote on devices"
+ * setting with who has joined, owner 22 Sep 2026), in the manner of the Settings spine, hang
+ * off a drawer that slides out from under the card. Every drawer is closed on arrival (owner,
+ * 22 Sep 2026); pressing an open ribbon again (or the drawer's X, or Escape) folds it away.
+ * Start voting with observers present first asks (`ObserverConfirm`); with none it starts. The veto holders
  * are a vertical list of large rows. From xl the page reserves the drawer + ribbons' width on
  * the card's other side too, so opening or folding the drawer never moves the card. Below xl
  * the ribbons sit in a row above the card and the drawer opens beneath them.
@@ -49,7 +51,7 @@
  */
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { CircleSlash, Megaphone, Scale, ShieldCheck, X, type LucideIcon } from 'lucide-react';
+import { CircleSlash, Megaphone, Scale, ShieldCheck, Smartphone, X, type LucideIcon } from 'lucide-react';
 import Portal from '@/components/Portal';
 import QuorumRings from '@/components/QuorumRings';
 import { SideQuorumTabs } from '@/components/voting/SideQuorumTabs';
@@ -80,8 +82,9 @@ const EASE = 'cubic-bezier(0.32,0.72,0,1)';
 const PRESS = 'transition-[background-color,color,box-shadow,transform] duration-150 active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100';
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
-/** Quorum is part of the Threshold bookmark (owner, 17 Sep 2026). */
-type RuleTab = 'threshold' | 'abstentions' | 'veto';
+/** Quorum is part of the Threshold bookmark (owner, 17 Sep 2026). Voting holds the one
+ *  "vote on devices" setting and who has joined (owner, 22 Sep 2026). */
+type RuleTab = 'threshold' | 'abstentions' | 'veto' | 'voting';
 
 /** The same map the chair page keeps for its masthead read-out. */
 const QUORUM_FRACTION: Record<string, number> = { none: 0, '1-4': 1 / 4, '1-3': 1 / 3, '1-2': 1 / 2 };
@@ -105,8 +108,10 @@ export interface VotingRollCallProps {
   /** The veto seats in force (P5 list or the custom list). */
   vetoEntries: string[];
   readOnly?: boolean;
-  /** Drawn above the primary action: the device-voting switch and join check (DeviceVoteGate). */
-  footerExtra?: ReactNode;
+  /** The Voting bookmark's drawer: the device-voting switch and join check (DeviceVoteGate). */
+  votingPanel?: ReactNode;
+  /** The Voting bookmark carries the red dot (a delegation missing on a device, a failed check). */
+  votingWarn?: boolean;
   /** Start is not allowed yet (a device ballot with delegations not joined on a device). */
   confirmBlocked?: boolean;
 }
@@ -151,7 +156,11 @@ function StatusSlider({ status, isObserver, onPick, label, disabled }: {
           <span key={k} className={`text-[13.5px] font-extrabold text-center relative z-[1] ${i === index ? 'text-white' : 'text-white/40'}`}>{k}</span>
         ))}
       </div>
+      {/* Keyed on the number of segments: the observer toggle turns three segments into two
+          (or back), and a thumb that slid from its old place would sit outside the shrunken
+          track for 200 ms. A new thumb lands on its segment at once; taps still slide. */}
       <div
+        key={values.length}
         className="absolute rounded-full shadow-sm transition-[inset-inline-start,background-color] duration-200 motion-reduce:transition-none"
         style={{ top: (innerH - thumbH) / 2, width: thumbW, height: thumbH, insetInlineStart: index * cellW + (cellW - thumbW) / 2, backgroundColor: thumbColor }}
       />
@@ -240,15 +249,19 @@ function Note({ children, warn = false }: { children: ReactNode; warn?: boolean 
 export function VotingRollCall({
   delegates, rollCallStatuses, isObserverSeat, onToggleObserver, onSetStatus, onBulkStatus, onConfirm, onClose,
   doc = null, settings, onRulesChange, onVetoModeChange, vetoEntries, readOnly = false,
-  footerExtra = null, confirmBlocked = false,
+  votingPanel = null, votingWarn = false, confirmBlocked = false,
 }: VotingRollCallProps) {
   const t = useT();
   const { language } = useLanguage();
   const rtl = language === 'ar';
-  // The pass threshold is open on arrival (owner, 17 Sep 2026).
-  const [tab, setTab] = useState<RuleTab | null>('threshold');
+  // Every bookmark is closed on arrival (owner, 22 Sep 2026: "this page has a lot of info,
+  // have the side tabs closed by default"). The card stays centred: the spacer on its other
+  // side is always there, drawer open or folded.
+  const [tab, setTab] = useState<RuleTab | null>(null);
   // The drawer keeps showing the last tab while it folds away.
   const [shownTab, setShownTab] = useState<RuleTab>('threshold');
+  /** Start voting was pressed with observers in the room: the confirmation is open. */
+  const [askObservers, setAskObservers] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   // Focus lands inside the roll call, so Escape and Tab start here, and goes back to whatever
@@ -269,8 +282,8 @@ export function VotingRollCall({
   // Escape folds the open drawer first, then leaves the roll call. On the window, not the
   // dialog, so it works wherever focus is (a click on a row's background leaves it on the
   // body). The veto picker's list stops its own Escape before it gets here.
-  const escRef = useRef({ drawerOpen: false, onClose });
-  useEffect(() => { escRef.current = { drawerOpen: tab !== null, onClose }; });
+  const escRef = useRef({ drawerOpen: false, asking: false, onClose });
+  useEffect(() => { escRef.current = { drawerOpen: tab !== null, asking: askObservers, onClose }; });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return;
@@ -279,7 +292,7 @@ export function VotingRollCall({
       const root = rootRef.current;
       const other = Array.from(document.querySelectorAll('[role="dialog"], [role="alertdialog"], [aria-modal="true"]'))
         .some((el) => root && el !== root && !root.contains(el));
-      if (other) return;
+      if (other || escRef.current.asking) return;
       e.preventDefault();
       if (escRef.current.drawerOpen) setTab(null); else escRef.current.onClose();
     };
@@ -347,6 +360,7 @@ export function VotingRollCall({
     { key: 'threshold', label: t('voting_rules_threshold_info_title'), value: `${thresholdValue} · ${t('voting_rules_quorum_info_title')} ${quorumValue}`, icon: Scale, warn: quorumFact.warn },
     { key: 'abstentions', label: t('voting_abstain_label'), value: abstValue, icon: CircleSlash },
     { key: 'veto', label: t('voting_rules_veto_info_title'), value: vetoValue, icon: ShieldCheck, warn: vetoFact.warn },
+    { key: 'voting', label: t('voting_rc_tab_voting'), value: settings.votingMethod === 'device' ? t('voting_method_device') : t('voting_method_rollcall'), icon: Smartphone, warn: votingWarn },
   ];
   const openTab = (key: RuleTab) => {
     if (tab === key) { setTab(null); return; }
@@ -369,6 +383,14 @@ export function VotingRollCall({
   };
 
   const canConfirm = presentCount > 0 && !readOnly && !(doc && confirmBlocked);
+  // Observers in the room hold no vote (the ballot drops them). Only when there are any, Start
+  // voting first names them and asks (owner, 22 Sep 2026); with none it starts at once.
+  const observersPresent = seats.filter((d) => isObserverSeat(d) && statusOf(d) !== 'absent');
+  const pressConfirm = () => {
+    if (!canConfirm) return;
+    if (doc && observersPresent.length > 0) { setAskObservers(true); return; }
+    onConfirm();
+  };
   const drawerOpen = tab !== null;
   const active = tabs.find((x) => x.key === shownTab) ?? tabs[0];
 
@@ -512,7 +534,7 @@ export function VotingRollCall({
                       <div className={`shrink-0 flex items-center gap-2.5 ${readOnly ? 'opacity-50' : ''}`}>
                         {/* Fixed width on every row, so the word under an observer's megaphone
                             never shifts the slider column. */}
-                        <span className="shrink-0 flex flex-col items-center" style={{ width: 66 }}>
+                        <span className="shrink-0 relative flex flex-col items-center" style={{ width: 66 }}>
                           <button
                             type="button"
                             onClick={() => onToggleObserver(d)}
@@ -530,8 +552,12 @@ export function VotingRollCall({
                             <Megaphone size={19} strokeWidth={2.4} aria-hidden />
                           </button>
                           {observer && (
-                            <span aria-hidden className="whitespace-nowrap uppercase" style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.03em', lineHeight: 1.1, color: GOLD, marginTop: 2 }}>
-                              {t('rollcall_observer')}
+                            // Absolutely placed under the megaphone, so the word appearing never
+                            // makes the row taller (it used to grow 70 → 73px on every toggle).
+                            <span aria-hidden className="absolute top-full inset-x-0 flex justify-center pointer-events-none" style={{ marginTop: 1 }}>
+                              <span className="whitespace-nowrap uppercase" style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.03em', lineHeight: 1.1, color: GOLD }}>
+                                {t('rollcall_observer')}
+                              </span>
                             </span>
                           )}
                         </span>
@@ -550,17 +576,11 @@ export function VotingRollCall({
                 })}
               </div>
 
-              {footerExtra}
               {/* The one primary action, where Begin Session sits on the session's roll call */}
               <div className="relative z-[2] shrink-0 px-4 py-3.5 flex items-center gap-4" style={{ backgroundColor: 'rgba(0,0,0,0.14)' }}>
-                {doc && presentCount > 0 && (
-                  <p className="hidden sm:block shrink-0 text-[13px] font-semibold tabular-nums" style={{ color: 'rgba(238,217,138,0.85)' }}>
-                    {t('voting_rc_start_sub', { n: presentCount })}
-                  </p>
-                )}
                 <button
                   type="button"
-                  onClick={onConfirm}
+                  onClick={pressConfirm}
                   disabled={!canConfirm}
                   className="flex-1 px-5 py-3.5 text-[15px] leading-tight rounded-xl font-black uppercase tracking-widest gv-lift-dark bg-[#EDE7D8] hover:enabled:bg-[#DDD4C0] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A] disabled:opacity-40 disabled:cursor-not-allowed transition-[background-color,transform] duration-150 active:scale-[0.98] motion-reduce:transition-none"
                   style={{ color: FOREST }}
@@ -703,6 +723,7 @@ export function VotingRollCall({
                       <Note warn={vetoFact.warn}>{vetoFact.text}</Note>
                     </>
                   )}
+                  {shownTab === 'voting' && votingPanel}
                 </div>
               </div>
             </div>
@@ -753,6 +774,113 @@ export function VotingRollCall({
               })}
             </div>
             </div>
+          </div>
+        </div>
+      </div>
+      {askObservers && (
+        <ObserverConfirm
+          observers={observersPresent}
+          rtl={rtl}
+          onCancel={() => setAskObservers(false)}
+          onStart={() => { setAskObservers(false); onConfirm(); }}
+        />
+      )}
+    </Portal>
+  );
+}
+
+/**
+ * Start voting with observers in the room (owner, 22 Sep 2026: "only if there are observers,
+ * when the chair clicks Start voting, show which countries are observers and ask whether to
+ * proceed"). An alertdialog through Portal: Tab stays inside, Escape cancels (captured on the
+ * window and stopped there, so it never also leaves the roll call), focus starts on Start
+ * voting and returns to the button that opened it.
+ */
+function ObserverConfirm({ observers, rtl, onCancel, onStart }: {
+  observers: Delegate[]; rtl: boolean; onCancel: () => void; onStart: () => void;
+}) {
+  const t = useT();
+  const { language } = useLanguage();
+  const boxRef = useRef<HTMLDivElement>(null);
+  // Portal mounts its children a render later, so focus is given by a callback ref when the
+  // Start button exists, not by the effect below (which runs before it does).
+  const focusedRef = useRef(false);
+  const focusStart = (el: HTMLButtonElement | null) => {
+    if (!el || focusedRef.current) return;
+    focusedRef.current = true;
+    el.focus({ preventScroll: true });
+  };
+  const cancelRef = useRef(onCancel);
+  useEffect(() => { cancelRef.current = onCancel; });
+
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancelRef.current(); return; }
+      if (e.key !== 'Tab') return;
+      const box = boxRef.current;
+      if (!box) return;
+      const items = Array.from(box.querySelectorAll<HTMLElement>('button:not([disabled])'));
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (!box.contains(active)) { e.preventDefault(); first.focus(); return; }
+      if (e.shiftKey && active === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      if (opener && opener.isConnected) opener.focus({ preventScroll: true });
+    };
+  }, []);
+
+  const names = observers.map((d) => getCountryDisplayName(d.country, language));
+  let list = names.join(', ');
+  try { list = new Intl.ListFormat(language, { style: 'long', type: 'conjunction' }).format(names); } catch { /* older engines: commas */ }
+
+  return (
+    <Portal>
+      <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" dir={rtl ? 'rtl' : undefined}>
+        <div aria-hidden className="absolute inset-0" style={{ backgroundColor: 'rgba(28,20,16,0.42)' }} onClick={onCancel} />
+        <div
+          ref={boxRef}
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="gv-obs-confirm-title"
+          aria-describedby="gv-obs-confirm-body"
+          className="relative w-full max-w-[440px] rounded-3xl p-6"
+          style={{ backgroundColor: '#FAF7F0', boxShadow: '0 24px 64px rgba(27,56,40,0.35), 0 0 0 1px rgba(27,56,40,0.08)' }}
+        >
+          <div className="flex items-center gap-3 mb-3">
+            <span aria-hidden className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: GOLD, color: FOREST }}>
+              <Megaphone size={19} strokeWidth={2.4} />
+            </span>
+            <h2 id="gv-obs-confirm-title" className="text-[20px] font-bold leading-tight" style={{ color: INK }}>{t('voting_observer_confirm_title')}</h2>
+          </div>
+          <ul className="flex flex-wrap gap-2 mb-3" aria-hidden>
+            {observers.map((d) => (
+              <li key={d.id} className="flex items-center gap-2 h-10 ps-1 pe-3 rounded-full" style={{ backgroundColor: 'rgba(27,56,40,0.06)' }}>
+                <SeatCircleFlag country={d.country} size={32} decorative fallback="initials" />
+                <span className="text-[14.5px] font-semibold" style={{ color: INK }}>{getCountryDisplayName(d.country, language)}</span>
+              </li>
+            ))}
+          </ul>
+          <p id="gv-obs-confirm-body" className="text-[15px] leading-snug [text-wrap:pretty]" style={{ color: INK_SOFT }}>
+            {t(observers.length === 1 ? 'voting_observer_confirm_body_one' : 'voting_observer_confirm_body_many', { list })}
+          </p>
+          <div className="mt-6 flex flex-wrap justify-end gap-2.5">
+            <button type="button" onClick={onCancel}
+              className={`h-12 px-5 rounded-xl text-[15px] font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] hover:bg-[rgba(27,56,40,0.08)] ${PRESS}`}
+              style={{ color: INK }}>
+              {t('voting_cancel')}
+            </button>
+            <button ref={focusStart} type="button" onClick={onStart}
+              className={`h-12 px-6 rounded-xl text-[15px] font-black uppercase tracking-wide focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 ${PRESS}`}
+              style={{ backgroundColor: FOREST, color: GOLD }}>
+              {t('voting_rc_start')}
+            </button>
           </div>
         </div>
       </div>

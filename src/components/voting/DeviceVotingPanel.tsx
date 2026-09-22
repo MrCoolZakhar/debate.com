@@ -3,13 +3,16 @@
 /**
  * Device voting on the chair's voting screen (src/lib/deviceVoting.ts).
  *
- *  • `DeviceVoteGate`: wraps the roll call before a ballot. It renders the "Vote on devices"
- *    switch (settings.votingMethod, a key-level patch through the page's `applyRules`) and,
- *    when device voting is on and a ballot is about to start, checks which of the delegations
- *    that would be frozen into the ballot hold a live seat claim (`session_participants`).
- *    Start is blocked while any of them is not joined: the chair asks them to join or marks
- *    them absent (which takes them out of the ballot). Render prop, so it owns its polling state
- *    and the roll call only receives a node and a flag.
+ *  • `DeviceVoteGate`: wraps the roll call before a ballot and draws its Voting bookmark
+ *    (owner, 22 Sep 2026: "a separate tab that says Voting with a phone icon; simply one
+ *    setting, and it also shows which delegates are still missing to join"): the "Vote on
+ *    devices" switch (settings.votingMethod, a key-level patch through the page's
+ *    `applyRules`) and, while it is on, which delegations the ballot would freeze hold a live
+ *    seat claim (`session_participants`, polled every 5 s), as two lists with round flags.
+ *    When a ballot is about to start, Start is blocked while any of them is not joined: the
+ *    chair asks them to join or marks them absent (which takes them out of the ballot). Render
+ *    prop, so it owns its polling state and the roll call only receives the drawer content and
+ *    two flags (blocked, warn).
  *  • `DeviceVotingPanel`: the ballot in progress. Flags of the frozen order with voted / not
  *    voted / not on a device only, never a direction, a big "N of M voted", and Reveal vote
  *    (a confirmation when not everyone has voted). When every delegation has voted it reveals
@@ -22,7 +25,7 @@
  */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Check, Eye, MonitorSmartphone, WifiOff } from 'lucide-react';
+import { Check, Eye, WifiOff } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
@@ -49,7 +52,17 @@ function usePageVisible(): boolean {
 }
 
 // ── The gate before a device ballot ──────────────────────────────────────────
-type JoinCheck = { state: 'checking' } | { state: 'error' } | { state: 'ready'; missing: Delegate[]; idle: Delegate[] };
+type JoinCheck = { state: 'checking' } | { state: 'error' } | { state: 'ready'; joined: Map<string, { active: boolean }> };
+
+/** What the roll call's Voting bookmark needs from the gate. */
+export interface DeviceVoteGateView {
+  /** The drawer content: the one switch, then (on devices) who has joined and who is missing. */
+  panel: ReactNode;
+  /** Start voting is not allowed yet: a delegation of this ballot is not joined on a device. */
+  blocked: boolean;
+  /** Something needs the chair's eye (the ribbon's red dot): missing delegations or a failed check. */
+  warn: boolean;
+}
 
 export function DeviceVoteGate({ code, chairSuffix, method, onMethodChange, seats, starting, readOnly, children }: {
   code: string;
@@ -58,100 +71,120 @@ export function DeviceVoteGate({ code, chairSuffix, method, onMethodChange, seat
   onMethodChange: (next: VotingMethod) => void;
   /** The delegations the ballot would freeze right now (non-observer, not absent). */
   seats: Delegate[];
-  /** A ballot is about to start (the roll call opened for a paper), not a roll call on its own. */
+  /** A ballot is about to start (the roll call opened for a paper), not a roll call on its own.
+   *  Only then does a missing delegation block; the list is shown either way. */
   starting: boolean;
   readOnly?: boolean;
-  children: (node: ReactNode, blocked: boolean) => ReactNode;
+  children: (view: DeviceVoteGateView) => ReactNode;
 }) {
   const t = useT();
   const { language } = useLanguage();
   const visible = usePageVisible();
   const [check, setCheck] = useState<JoinCheck>({ state: 'checking' });
   const [tick, setTick] = useState(0);
-  const seatsRef = useRef(seats);
-  useEffect(() => { seatsRef.current = seats; }, [seats]);
-  const active = method === 'device' && starting;
+  const device = method === 'device';
 
   useEffect(() => {
-    if (!active || !visible) return;
+    if (!device || !visible) return;
     let cancelled = false;
     const run = async () => {
       const p = await getSessionParticipants(code, chairSuffix);
       if (cancelled) return;
       if (!p) { setCheck((prev) => (prev.state === 'ready' ? prev : { state: 'error' })); return; }
-      const joined = joinedSeatsFrom(p.seats);
-      const list = seatsRef.current;
-      setCheck({
-        state: 'ready',
-        missing: list.filter((d) => !joined.has(d.country.trim().toLowerCase())),
-        idle: list.filter((d) => joined.get(d.country.trim().toLowerCase())?.active === false),
-      });
+      setCheck({ state: 'ready', joined: joinedSeatsFrom(p.seats) });
     };
     void run();
     const timer = setInterval(run, 5000);
     return () => { cancelled = true; clearInterval(timer); };
-  }, [active, visible, code, chairSuffix, tick]);
+  }, [device, visible, code, chairSuffix, tick]);
 
-  // Re-derive against the CURRENT seats when the roll call changes (a delegation marked absent
-  // leaves the list at once, without waiting for the next poll).
-  const seatKeys = new Set(seats.map((d) => d.id));
-  const shown: JoinCheck = check.state === 'ready'
-    ? { state: 'ready', missing: check.missing.filter((d) => seatKeys.has(d.id)), idle: check.idle.filter((d) => seatKeys.has(d.id)) }
-    : check;
-  const blocked = active && (shown.state !== 'ready' || shown.missing.length > 0);
-  const names = (list: Delegate[]) => list.map((d) => getCountryDisplayName(d.country, language)).join(', ');
+  // Derived against the CURRENT seats on every render: a delegation marked absent (or made an
+  // observer) leaves the list at once, and one marked present or no longer an observer is
+  // checked against the last poll at once, never waved through until the next one.
+  const keyOf = (d: Delegate) => d.country.trim().toLowerCase();
+  const joinedSeats = check.state === 'ready' ? seats.filter((d) => check.joined.has(keyOf(d))) : [];
+  const missing = check.state === 'ready' ? seats.filter((d) => !check.joined.has(keyOf(d))) : [];
+  const idle = check.state === 'ready' ? seats.filter((d) => check.joined.get(keyOf(d))?.active === false) : [];
+  const blocked = device && starting && (check.state !== 'ready' || missing.length > 0);
+  const warn = device && (check.state === 'error' || missing.length > 0);
+  const names = (list: Delegate[]) => list.map((d) => getCountryDisplayName(d.country, language)).join(language === 'ar' ? '، ' : ', ');
 
-  const node = (
-    <div className="relative z-[2] shrink-0 px-4 pt-3 pb-1 flex flex-col gap-2" style={{ backgroundColor: 'rgba(0,0,0,0.10)' }}>
-      <div className="flex items-center gap-3">
-        <MonitorSmartphone size={20} strokeWidth={2.25} aria-hidden style={{ color: GOLD }} />
-        <span id="gv-device-vote-label" className="flex-1 min-w-0 text-[14.5px] font-semibold leading-snug" style={{ color: '#EDE7D8' }}>
+  const seatRow = (d: Delegate, state: 'joined' | 'idle' | 'missing') => (
+    <li key={d.id} className="flex items-center gap-3 min-h-12 rounded-2xl ps-2 pe-3"
+      style={{ backgroundColor: state === 'missing' ? 'rgba(139,32,32,0.07)' : 'rgba(27,56,40,0.05)' }}>
+      <SeatCircleFlag country={d.country} size={34} decorative fallback="initials" />
+      <span className="flex-1 min-w-0 truncate text-[15px] font-semibold" style={{ color: INK }}>{getCountryDisplayName(d.country, language)}</span>
+      {state === 'missing'
+        ? <WifiOff size={17} strokeWidth={2.3} aria-hidden style={{ color: RED }} />
+        : <Check size={17} strokeWidth={2.6} aria-hidden style={{ color: state === 'idle' ? '#8A6A10' : '#2A5A3C' }} />}
+    </li>
+  );
+
+  const panel = (
+    <div>
+      <div className="flex items-center gap-3 min-h-14">
+        <span id="gv-device-vote-label" className="flex-1 min-w-0 text-[15px] font-semibold leading-snug" style={{ color: INK }}>
           {t('voting_method_label')}
-          <span className="block text-[12.5px] font-medium [text-wrap:pretty]" style={{ color: 'rgba(237,231,216,0.72)' }}>{t('voting_method_hint')}</span>
         </span>
         <button
           type="button"
           role="switch"
-          aria-checked={method === 'device'}
+          aria-checked={device}
           aria-labelledby="gv-device-vote-label"
+          aria-describedby="gv-device-vote-hint"
           disabled={readOnly}
-          onClick={() => onMethodChange(method === 'device' ? 'rollcall' : 'device')}
-          className="relative shrink-0 w-12 h-7 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A] transition-[background-color] duration-200 motion-reduce:transition-none disabled:opacity-45 disabled:cursor-not-allowed"
-          style={{ backgroundColor: method === 'device' ? '#B6871F' : 'rgba(237,231,216,0.22)' }}
+          onClick={() => onMethodChange(device ? 'rollcall' : 'device')}
+          className="relative shrink-0 w-12 h-7 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color] duration-200 motion-reduce:transition-none disabled:opacity-45 disabled:cursor-not-allowed"
+          style={{ backgroundColor: device ? '#3D7A52' : 'rgba(27,56,40,0.18)' }}
         >
           <span
             className="absolute top-1 start-1 w-5 h-5 rounded-full bg-white transition-transform duration-200 motion-reduce:transition-none"
-            style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.3)', transform: method === 'device' ? `translateX(${language === 'ar' ? -20 : 20}px)` : 'translateX(0)' }}
+            style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.3)', transform: device ? `translateX(${language === 'ar' ? -20 : 20}px)` : 'translateX(0)' }}
           />
         </button>
       </div>
-      {active && (
-        <div role="status" aria-live="polite" className="text-[13px] font-semibold leading-snug rounded-xl px-3 py-2 flex items-start gap-2"
-          style={{
-            backgroundColor: shown.state === 'ready' && shown.missing.length === 0 ? 'rgba(61,122,82,0.35)' : shown.state === 'checking' ? 'rgba(237,231,216,0.10)' : 'rgba(139,32,32,0.35)',
-            color: shown.state === 'ready' && shown.missing.length === 0 ? '#DDEFD9' : shown.state === 'checking' ? 'rgba(237,231,216,0.8)' : '#F6CFCF',
-          }}>
-          <span className="flex-1 min-w-0 [text-wrap:pretty]">
-            {shown.state === 'checking' && t('device_join_checking')}
-            {shown.state === 'error' && t('device_join_error')}
-            {shown.state === 'ready' && (shown.missing.length === 0
+      <p id="gv-device-vote-hint" className="text-[13px] leading-snug [text-wrap:pretty]" style={{ color: INK_SOFT }}>{t('voting_method_hint')}</p>
+
+      {device && (
+        <div className="mt-5 pt-5" style={{ boxShadow: 'inset 0 1px 0 rgba(27,56,40,0.10)' }}>
+          <div role="status" aria-live="polite"
+            className="text-[14px] font-medium leading-snug rounded-2xl px-4 py-3 [text-wrap:pretty]"
+            style={{
+              backgroundColor: check.state === 'ready' && missing.length === 0 ? 'rgba(27,56,40,0.06)' : check.state === 'checking' ? 'rgba(27,56,40,0.04)' : 'rgba(139,32,32,0.08)',
+              color: check.state === 'ready' && missing.length === 0 ? INK_SOFT : check.state === 'checking' ? INK_SOFT : RED,
+            }}>
+            {check.state === 'checking' && t('device_join_checking')}
+            {check.state === 'error' && t('device_join_error')}
+            {check.state === 'ready' && (missing.length === 0
               ? t('device_join_all', { n: seats.length })
-              : t('device_join_missing', { names: names(shown.missing) }))}
-            {shown.state === 'ready' && shown.idle.length > 0 && (
-              <span className="block font-medium mt-0.5" style={{ color: 'rgba(238,217,138,0.9)' }}>{t('device_join_idle', { names: names(shown.idle) })}</span>
+              : t('device_join_missing', { names: names(missing) }))}
+            {check.state === 'ready' && idle.length > 0 && (
+              <span className="block mt-1" style={{ color: '#8A6A10' }}>{t('device_join_idle', { names: names(idle) })}</span>
             )}
-          </span>
-          {shown.state !== 'checking' && (shown.state === 'error' || shown.missing.length > 0) && (
-            <button type="button" onClick={() => { setCheck({ state: 'checking' }); setTick((n) => n + 1); }}
-              className="shrink-0 text-[12.5px] font-bold underline underline-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A] rounded">
-              {t('device_join_retry')}
-            </button>
+            {check.state !== 'checking' && (check.state === 'error' || missing.length > 0) && (
+              <button type="button" onClick={() => { setCheck({ state: 'checking' }); setTick((n) => n + 1); }}
+                className="block mt-1.5 text-[13px] font-bold underline underline-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] rounded">
+                {t('device_join_retry')}
+              </button>
+            )}
+          </div>
+          {check.state === 'ready' && missing.length > 0 && (
+            <>
+              <h3 className="mt-5 mb-2 text-[13px] font-bold" style={{ color: RED }}>{t('device_join_missing_heading', { n: missing.length })}</h3>
+              <ul className="grid gap-1.5">{missing.map((d) => seatRow(d, 'missing'))}</ul>
+            </>
+          )}
+          {check.state === 'ready' && joinedSeats.length > 0 && (
+            <>
+              <h3 className="mt-5 mb-2 text-[13px] font-bold" style={{ color: INK_SOFT }}>{t('device_join_joined_heading', { n: joinedSeats.length })}</h3>
+              <ul className="grid gap-1.5">{joinedSeats.map((d) => seatRow(d, idle.includes(d) ? 'idle' : 'joined'))}</ul>
+            </>
           )}
         </div>
       )}
     </div>
   );
-  return <>{children(node, blocked)}</>;
+  return <>{children({ panel, blocked, warn })}</>;
 }
 
 // ── The ballot in progress ───────────────────────────────────────────────────

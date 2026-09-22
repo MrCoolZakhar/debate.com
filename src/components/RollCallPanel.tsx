@@ -81,7 +81,7 @@ function StatusSlider({ status, onCycle, isObserver = false, large = false }: { 
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); onCycle(); }}
-      className="relative rounded-full cursor-pointer shrink-0 select-none transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/80"
+      className="relative rounded-full cursor-pointer shrink-0 select-none transition-[background-color,border-color] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/80"
       style={{ width: seg * segments.length, height: h, backgroundColor: 'rgba(255,255,255,0.10)', border: '1.5px solid rgba(255,255,255,0.22)' }}
       title={isObserver ? t('rollcall_slider_hint_observer') : t('rollcall_slider_hint')}
     >
@@ -90,8 +90,13 @@ function StatusSlider({ status, onCycle, isObserver = false, large = false }: { 
           <span key={s.key} className={`${labelCls} text-center relative z-[1] ${s.on ? 'text-white' : 'text-white/40'}`}>{s.key}</span>
         ))}
       </div>
+      {/* Keyed on the number of segments, and the track's width is never animated: the observer
+          toggle turns three segments into two (or back), and a track shrinking over 150 ms under
+          a thumb sliding from its old place read as the control glitching. A new thumb lands on
+          its segment at once; a tap within the same segments still slides. */}
       <div
-        className={`absolute rounded-full transition-all duration-200 shadow-sm ${thumbColor}`}
+        key={segments.length}
+        className={`absolute rounded-full transition-[inset-inline-start,background-color] duration-200 motion-reduce:transition-none shadow-sm ${thumbColor}`}
         style={{ top: (innerH - thumbH) / 2, width: thumbW, height: thumbH, insetInlineStart: index * cellW + (cellW - thumbW) / 2 }}
       />
     </button>
@@ -212,6 +217,11 @@ export function MajorityPie({ arcFill, color, label }: {
 // confirming it. Long enough to cover a slow write, short enough that a failed
 // write cannot mask another chair's change for the rest of the session.
 const OPTIMISTIC_TTL_MS = 8000;
+/** When a tap happened. Only ever called from click handlers (receipts for optimistic writes),
+ *  never during render; a module function so the purity lint sees no render-time Date.now. */
+function tapTime(): number {
+  return Date.now();
+}
 
 // ── Roll Call Panel ───────────────────────────────────────────────────────────
 function RollCallPanelInner({
@@ -323,6 +333,12 @@ function RollCallPanelInner({
   const [showFullList, setShowFullList] = useState(false);
   const [localStatuses, setLocalStatuses] = useState<Record<string, DelegateStatus>>({});
   const [localObservers, setLocalObservers] = useState<Record<string, boolean>>({});
+  // Every optimistic observer placard: the value, the tap that set it (a newer tap on the same
+  // row supersedes an older write's result) and whether THAT write landed. The placard stays
+  // exactly as tapped until its write landed AND the row agrees; a refused write rolls it back.
+  const pendingObserverRef = useRef<Record<string, { value: boolean; seq: number; landed: boolean; at: number }>>({});
+  const observerSeqRef = useRef(0);
+  const [observerTick, setObserverTick] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
   // ── Queue reorder (pointer drag on the grip, or arrow keys on it) ──────────
   // `drag` renders the lifted row and the drop line; it changes only when the drag starts,
@@ -345,9 +361,46 @@ function RollCallPanelInner({
 
   useEffect(() => {
     pendingStatusRef.current = {};
+    pendingObserverRef.current = {};
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- a different committee: every optimistic override belongs to the old one.
     setLocalStatuses({});
     setLocalObservers({});
   }, [committee.id]);
+
+  // ── Observer placard reconciliation ─────────────────────────────────────────
+  // The override used to live until the committee changed: a second chair's placard change
+  // never showed on this device. Now it ends when its write landed and the row agrees (or,
+  // landed with no echo, after the TTL). It never ends merely because the row still carries
+  // the old value, which is what a quick on-off shows before any echo arrives.
+  useEffect(() => {
+    const pending = pendingObserverRef.current;
+    const ids = Object.keys(pending);
+    if (ids.length === 0) return;
+    const now = Date.now();
+    const flagById = new Map(committee.delegates.map((d) => [d.id, d.isObserver === true]));
+    let changed = false;
+    let nextCheckIn = Infinity;
+    for (const id of ids) {
+      const entry = pending[id];
+      const dbFlag = flagById.get(id);
+      if (dbFlag === undefined || (entry.landed && (dbFlag === entry.value || now - entry.at >= OPTIMISTIC_TTL_MS))) {
+        delete pending[id];
+        changed = true;
+      } else if (entry.landed) {
+        nextCheckIn = Math.min(nextCheckIn, OPTIMISTIC_TTL_MS - (now - entry.at));
+      }
+    }
+    if (changed) {
+      const rebuilt: Record<string, boolean> = {};
+      for (const [id, entry] of Object.entries(pending)) rebuilt[id] = entry.value;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- the row is the external system: the override may end only once it agrees with a write that landed.
+      setLocalObservers(rebuilt);
+    }
+    if (nextCheckIn !== Infinity) {
+      const timer = setTimeout(() => setObserverTick((n) => n + 1), nextCheckIn + 50);
+      return () => clearTimeout(timer);
+    }
+  }, [committee.delegates, observerTick]);
 
   // ── Optimistic status reconciliation ────────────────────────────────────────
   // `localStatuses` exists only so the slider moves the instant it is tapped. It
@@ -380,6 +433,7 @@ function RollCallPanelInner({
     if (changed) {
       const rebuilt: Record<string, DelegateStatus> = {};
       for (const [id, entry] of Object.entries(pending)) rebuilt[id] = entry.value;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- the row is the external system: an override ends once the row agrees or its TTL passes.
       setLocalStatuses(rebuilt);
     }
     // No committee update will arrive if the write failed — self-schedule the backstop.
@@ -418,7 +472,7 @@ function RollCallPanelInner({
   // when a delegate goes absent mid-session). Writing here too doubled every
   // request: ~380 on "All Present" for a 190-seat GA.
   const applyStatus = (id: string, next: DelegateStatus) => {
-    pendingStatusRef.current[id] = { value: next, at: Date.now() };
+    pendingStatusRef.current[id] = { value: next, at: tapTime() };
     setLocalStatuses((prev) => ({ ...prev, [id]: next }));
     onStatusChange?.(id, next);
   };
@@ -438,8 +492,18 @@ function RollCallPanelInner({
 
   const toggleObserver = (id: string, current: boolean) => {
     const next = !current;
+    const seq = ++observerSeqRef.current;
+    pendingObserverRef.current[id] = { value: next, seq, landed: false, at: tapTime() };
     setLocalObservers((prev) => ({ ...prev, [id]: next }));   // instant visual
-    setDelegateObserverInDB(id, next, committee.code, committee.dbChairJoinSuffix ?? undefined); // fire-and-forget
+    // Fire-and-forget (RULE 5); the result only ends or rolls back the override. A refusal is
+    // also reported by the chair page's SaveStatusToast (runWrite).
+    void setDelegateObserverInDB(id, next, committee.code, committee.dbChairJoinSuffix ?? undefined).then((ok) => {
+      const entry = pendingObserverRef.current[id];
+      if (!entry || entry.seq !== seq) return;
+      if (ok) { entry.landed = true; entry.at = Date.now(); setObserverTick((n) => n + 1); return; }
+      delete pendingObserverRef.current[id];
+      setLocalObservers((prev) => { const rest = { ...prev }; delete rest[id]; return rest; });
+    });
     // Becoming an observer downgrades present-voting → present.
     if (next) {
       const delegate = committee.delegates.find((d) => d.id === id);
@@ -1072,7 +1136,7 @@ function RollCallPanelInner({
                         P (toggleObserver). Read-only / Commenter: inert, like the slider. */}
                     {/* Fixed width on EVERY row, observer or not, so the word appearing under one
                         megaphone never shifts the slider column out of line with its neighbours. */}
-                    <span className="shrink-0 flex flex-col items-center" style={{ width: bigRoll ? 66 : 50 }}>
+                    <span className="shrink-0 relative flex flex-col items-center" style={{ width: bigRoll ? 66 : 50 }}>
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); toggleObserver(d.id, isObserver); }}
@@ -1093,15 +1157,18 @@ function RollCallPanelInner({
                       <Megaphone size={bigRoll ? 19 : 13} strokeWidth={2.4} aria-hidden />
                     </button>
                     {isObserver && (
-                      <span
-                        aria-hidden
-                        // No truncation: the whole word must read ("OBSER..." does not). It is
-                        // centred under the megaphone and sized so the longest locale (fr
-                        // OBSERVATEUR) fits the fixed column.
-                        className="whitespace-nowrap uppercase"
-                        style={{ fontSize: bigRoll ? 10 : 7.5, fontWeight: 800, letterSpacing: bigRoll ? '0.03em' : 0, lineHeight: 1.1, color: '#EED98A', marginTop: 2 }}
-                      >
-                        {t('rollcall_observer')}
+                      // Absolutely placed under the megaphone, so the word appearing never makes
+                      // the row taller: a toggle used to grow the row and shift every row below.
+                      <span aria-hidden className="absolute top-full inset-x-0 flex justify-center pointer-events-none" style={{ marginTop: 1 }}>
+                        <span
+                          // No truncation: the whole word must read ("OBSER..." does not). It is
+                          // centred under the megaphone and sized so the longest locale (fr
+                          // OBSERVATEUR) fits the fixed column.
+                          className="whitespace-nowrap uppercase"
+                          style={{ fontSize: bigRoll ? 10 : 7.5, fontWeight: 800, letterSpacing: bigRoll ? '0.03em' : 0, lineHeight: 1.1, color: '#EED98A' }}
+                        >
+                          {t('rollcall_observer')}
+                        </span>
                       </span>
                     )}
                     </span>

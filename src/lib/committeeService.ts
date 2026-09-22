@@ -637,18 +637,36 @@ export async function beginSessionAfterRollCall(
 export async function setDelegateStatus(delegateId: string, status: DelegateStatus, code: string, chairSuffix?: string): Promise<boolean> {
   // Zero rows is a rejection here (the id exists), not a no-op. Not auto-retried: a status
   // tap is superseded by the next tap within seconds, and the delegate page rolls back.
-  const r = await runWrite(`delegate:${delegateId}:status`, async () => {
+  // Chained per delegate (the same chain as the observer placard): rapid taps A → P → PV
+  // are three writes, and unordered they could land P last, leaving the database on a value
+  // the chair's screen no longer shows.
+  const r = await chained(delegateWriteChain(delegateId), () => runWrite(`delegate:${delegateId}:status`, async () => {
     const { data, error } = await sessionClient(code, chairSuffix).from('delegates')
       .update({ status }).eq('id', delegateId).select('id');
     if (error) { console.error('Error setting delegate status:', error); return 'failed'; }
     return rowsOf(data) > 0 ? 'ok' : 'failed';
-  }, { retry: false });
+  }, { retry: false }), 'failed' as WriteResult);
   return r !== 'failed';
 }
 
-export async function setDelegateObserver(delegateId: string, isObserver: boolean, code: string, chairSuffix?: string): Promise<void> {
-  const { error } = await sessionClient(code, chairSuffix).from('delegates').update({ is_observer: isObserver }).eq('id', delegateId);
-  if (error) console.error('Error setting delegate observer:', error);
+/** One write chain per delegate row, shared by its status and observer writes, so a toggle
+ *  and the Present-and-Voting → Present drop it causes (or two quick toggles) reach the
+ *  server in the order they were issued. */
+function delegateWriteChain(delegateId: string): string {
+  return `delegate-row:${delegateId}`;
+}
+
+/** Hand out or take back an observer placard. Resolves whether it LANDED (RULE 5: supabase-js
+ *  resolves with `error: null` on an RLS refusal and on a zero-row update, so the rows are
+ *  counted). Not auto-retried: the next tap supersedes it, and callers roll back on false. */
+export async function setDelegateObserver(delegateId: string, isObserver: boolean, code: string, chairSuffix?: string): Promise<boolean> {
+  const r = await chained(delegateWriteChain(delegateId), () => runWrite(`delegate:${delegateId}:observer`, async () => {
+    const { data, error } = await sessionClient(code, chairSuffix).from('delegates')
+      .update({ is_observer: isObserver }).eq('id', delegateId).select('id');
+    if (error) { console.error('Error setting delegate observer:', error); return 'failed'; }
+    return rowsOf(data) > 0 ? 'ok' : 'failed';
+  }, { retry: false }), 'failed' as WriteResult);
+  return r !== 'failed';
 }
 
 export async function batchSetDelegateStatuses(
