@@ -91,7 +91,6 @@ const GOLD = '#EED98A';
 const INK = '#241E17';
 const INK_SOFT = '#574B40';
 const MUTED = '#6E6456';
-const LABEL = '#226B49';
 const LINK = '#1B3828';
 
 /** Where the email images live (round flags, icon discs, the white logo disc,
@@ -289,18 +288,6 @@ export function awardArtUrl(name: string): string {
 const row = (inner: string, pad: string, align = '') =>
   `<tr><td${align ? ` align="${align}"` : ''} class="e-pad" style="padding:${pad};">${inner}</td></tr>`;
 
-function h1(text: string, align: 'left' | 'center', top: number): string {
-  return row(
-    `<h1 class="e-h1 e-accent" style="margin:0;font-family:${SANS};font-size:27px;line-height:1.2;font-weight:700;letter-spacing:-0.015em;color:${FOREST};text-align:${align};">${text}</h1>`,
-    `${top}px 36px 0 36px`, align);
-}
-
-function h2(text: string): string {
-  return row(
-    `<div class="e-accent" style="font-family:${SANS};font-size:20px;line-height:1.25;font-weight:800;letter-spacing:-0.01em;color:${FOREST};">${text}</div>`,
-    '18px 36px 0 36px');
-}
-
 function bodyCell(html: string, variant: 'body' | 'small'): string {
   const style = variant === 'small'
     ? `font-family:${SANS};font-size:13px;line-height:1.65;color:${MUTED};`
@@ -318,91 +305,108 @@ function rowIcon(i: RowIcon, px: number): string {
 
 interface PassRow { label: string; valueHtml: string; icon?: RowIcon | null; from?: 'country' | 'committee' }
 
-function pillHtml(pill: string, icon: EmailIcon | null | undefined): string {
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td class="e-pill" bgcolor="#F0EBDD" style="background-color:#F0EBDD;border-radius:999px;padding:4px 11px 4px 8px;font-family:${SANS};font-size:12px;line-height:16px;font-weight:700;color:#1C1410;white-space:nowrap;">`
-    + (icon ? `<img src="${EMAIL_ASSET_BASE}icons/${icon}.png" width="16" height="16" alt="" style="display:inline-block;width:16px;height:16px;border:0;vertical-align:-3px;" />` : '<span style="color:#2A5A3C;font-size:12px;">&#9679;</span>')
-    + `&nbsp;${escapeHtml(pill)}</td></tr></table>`;
+// ── The calm layout (third review, after the mymun allocation email) ────────
+// One centred column, lots of white space, no boxes inside boxes. From the top:
+// the conference banner with its logo overlapping the bottom edge (or a small
+// centred logo), one big centred hero (the round flag for a seat, otherwise the
+// event's icon), one large light headline sentence, a short rule, the plain
+// statement or a few plain detail rows, the body, one button, a sign-off by the
+// named secretariat, the conference's own social icons, and a small Gavelling
+// footer line.
+
+/** "[LIMUN 2027] Payment received". Card design only (the classic design keeps
+ *  its subjects). Our default subjects end with ": {conference}", " for
+ *  {conference}" or " at {conference}"; with the prefix that tail is noise and
+ *  is dropped. Organiser-written subjects are only prefixed, never cut. */
+export function emailCardSubject(subject: string, conference: { acronym: string; full_name: string; start_date?: string | null }, isDefault: boolean): string {
+  if (!emailCardDesignEnabled()) return subject;
+  const label = shortName(conference as Parameters<typeof shortName>[0]);
+  const s = subject.trim();
+  if (!label || s.startsWith('[')) return s;
+  let body = s;
+  if (isDefault) {
+    const full = (conference.full_name ?? '').trim();
+    for (const name of [full, label].filter(Boolean)) {
+      const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      body = body.replace(new RegExp(`(?:\\s*[:,]\\s*|\\s+(?:for|at|to)\\s+)${esc}$`), '');
+    }
+    for (const name of [full, label].filter(Boolean)) {
+      const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      body = body.replace(new RegExp(`\\bYour ${esc} `), 'Your ');
+    }
+  }
+  return `[${label}] ${body || s}`;
 }
 
-/** The top of a conference email. With a banner: the banner, whole, edge to
- *  edge, and the conference logo in its white circle overlapping its bottom
- *  edge (a negative top margin; clients that drop negative margins, such as
- *  Outlook, stack the logo under the banner instead, which still reads
- *  cleanly). Without a banner: one slim row over a hairline. */
-function masthead(o: { banner: string | null; logo: string | null; logoAlt: string; name: string; meta: string | null; pill: string | null; pillIcon: EmailIcon | null }): string {
-  const nameBlock = (size: number) => `<div class="e-accent" style="font-size:${size}px;line-height:1.2;font-weight:800;letter-spacing:-0.01em;color:${FOREST};">${escapeHtml(o.name)}</div>`
-    + (o.meta ? `<div class="e-soft" style="font-size:13px;line-height:1.45;color:${INK_SOFT};padding-top:3px;">${escapeHtml(o.meta)}</div>` : '');
+function hairlineRule(): string {
+  return `<tr><td align="center" style="padding:18px 36px 0 36px;line-height:0;font-size:0;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>`
+    + `<td width="44" height="2" bgcolor="#C9A63A" class="e-rule" style="width:44px;height:2px;background-color:#C9A63A;border-radius:1px;font-size:0;line-height:0;">&nbsp;</td></tr></table></td></tr>`;
+}
+
+/** The top of a conference email, centred. With a banner: the banner, whole,
+ *  edge to edge, and the conference logo in its white circle overlapping the
+ *  bottom edge by a negative margin (Outlook drops negative margins and stacks
+ *  the logo under the banner, which still reads cleanly). Without: a small
+ *  centred logo. The conference name and dates sit quietly beneath. */
+function masthead(o: { banner: string | null; logo: string | null; logoAlt: string; name: string; meta: string | null }): string {
+  const nameRow = `<tr><td align="center" class="e-pad" style="padding:${o.banner && o.logo ? 10 : 12}px 36px 0 36px;font-family:${SANS};">`
+    + `<div class="e-accent" style="font-size:15px;line-height:1.3;font-weight:800;letter-spacing:0.02em;color:${FOREST};">${escapeHtml(o.name)}</div>`
+    + (o.meta ? `<div class="e-soft" style="font-size:12.5px;line-height:1.45;color:${INK_SOFT};padding-top:2px;">${escapeHtml(o.meta)}</div>` : '')
+    + `</td></tr>`;
   if (o.banner) {
-    const logo = o.logo
-      ? `<td valign="top" width="88" style="width:88px;"><div class="e-lift" style="margin-top:-44px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td class="e-ring" bgcolor="#FFFFFF" style="background-color:#FFFFFF;border-radius:50%;padding:4px;">${logoDisc(o.logo, 80, o.logoAlt)}</td></tr></table></div></td>`
-      : '';
     return `<tr><td align="center" bgcolor="#E4DCC8" style="background-color:#E4DCC8;padding:0;line-height:0;font-size:0;border-radius:17px 17px 0 0;">`
       + `<img src="${escapeHtml(o.banner)}" width="598" alt="${escapeHtml(o.name)}" style="display:block;width:100%;max-width:598px;height:auto;border:0;border-radius:17px 17px 0 0;font-family:${SANS};font-size:15px;line-height:56px;font-weight:bold;color:${FOREST};text-align:center;" /></td></tr>`
-      + `<tr><td class="e-pad" style="padding:0 36px 4px 30px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>${logo}`
-      + `<td valign="top" style="padding:14px 0 0 ${logo ? 12 : 6}px;font-family:${SANS};">${nameBlock(21)}`
-      + (o.pill ? `<div style="padding-top:8px;">${pillHtml(o.pill, o.pillIcon)}</div>` : '')
-      + `</td></tr></table></td></tr>`;
+      + (o.logo ? `<tr><td align="center" style="padding:0;"><div class="e-lift" style="margin-top:-40px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr><td class="e-ring" bgcolor="#FFFFFF" style="background-color:#FFFFFF;border-radius:50%;padding:4px;">${logoDisc(o.logo, 76, o.logoAlt)}</td></tr></table></div></td></tr>` : '')
+      + nameRow;
   }
-  return `<tr><td class="e-pad" style="padding:24px 36px 0 36px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="e-hair" style="border-bottom:1px solid #E4DCC8;"><tr>`
-    + (o.logo ? `<td valign="middle" width="52" style="width:52px;padding:0 0 16px 0;">${logoDisc(o.logo, 52, o.logoAlt)}</td>` : '')
-    + `<td valign="middle" style="padding:0 0 16px ${o.logo ? 14 : 0}px;font-family:${SANS};">${nameBlock(19)}</td>`
-    + (o.pill ? `<td valign="middle" align="right" style="padding:0 0 16px 8px;">${pillHtml(o.pill, o.pillIcon)}</td>` : '')
-    + `</tr></table></td></tr>`;
+  return (o.logo ? `<tr><td align="center" style="padding:30px 36px 0 36px;">${logoDisc(o.logo, 56, o.logoAlt)}</td></tr>` : '<tr><td style="height:18px;line-height:18px;font-size:0;">&nbsp;</td></tr>')
+    + nameRow;
 }
 
-/** Facts as labelled rows in a light ivory panel, each with its flag, logo or medallion. */
-function factsPanel(rows: PassRow[], top = 6): string {
+/** The one big centred hero under the masthead. */
+function heroRow(html: string): string {
+  return `<tr><td align="center" class="e-pad" style="padding:30px 36px 0 36px;">${html}</td></tr>`;
+}
+
+/** The headline: one large, light sentence, centred. */
+function headline(html: string, top: number): string {
+  return `<tr><td align="center" class="e-pad" style="padding:${top}px 36px 0 36px;"><h1 class="e-h1 e-accent" style="margin:0;font-family:${SANS};font-size:29px;line-height:1.25;font-weight:300;letter-spacing:-0.01em;color:${FOREST};text-align:center;">${html}</h1></td></tr>`;
+}
+
+/** Detail rows: plain, no panel. Label in grey on the left, the value on the
+ *  right with its small flag, emblem or medallion. Hairlines between. */
+function detailRows(rows: PassRow[], top = 22): string {
   const body = rows.map((r, i) => {
-    const t = i === 0 ? 14 : 7;
-    const b = i === rows.length - 1 ? 14 : 7;
-    const img = r.icon ? `<td valign="middle" width="52" style="width:52px;padding:${t}px 0 ${b}px 4px;">${rowIcon(r.icon, 52)}</td>` : '';
-    return `<tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>${img}`
-      + `<td valign="middle" style="padding:${t}px 6px ${b}px ${img ? 14 : 6}px;font-family:${SANS};">`
-      + `<div class="e-label" style="font-size:12.5px;line-height:1.3;font-weight:bold;color:${LABEL};">${escapeHtml(r.label)}</div>`
-      + `<div class="e-ink" style="font-size:18px;line-height:1.3;font-weight:bold;color:#1C1410;padding-top:2px;">${r.valueHtml}</div>`
-      + `</td></tr></table></td></tr>`;
+    const hair = i === 0 ? '' : 'border-top:1px solid #EDE6D6;';
+    return `<tr><td valign="middle" class="e-hair e-soft" style="${hair}padding:12px 12px 12px 0;font-family:${SANS};font-size:14px;line-height:1.4;color:${INK_SOFT};">${escapeHtml(r.label)}</td>`
+      + `<td valign="middle" align="right" class="e-hair" style="${hair}padding:12px 0 12px 0;font-family:${SANS};">`
+      + `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right"><tr>`
+      + (r.icon ? `<td valign="middle" style="padding-right:10px;line-height:0;">${rowIcon(r.icon, 28)}</td>` : '')
+      + `<td valign="middle" class="e-ink" style="font-size:16px;line-height:1.35;font-weight:bold;color:#1C1410;text-align:right;">${r.valueHtml}</td></tr></table></td></tr>`;
   }).join('');
-  return row(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="e-pass" bgcolor="#F6F2E8" style="background-color:#F6F2E8;border-radius:16px;box-shadow:inset 0 0 0 1px #EDE5D2;"><tr><td style="padding:2px 14px;">`
-    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${body}</table></td></tr></table>`, `${top}px 36px 0 36px`);
+  return row(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="e-hair" style="border-top:1px solid #EDE6D6;border-bottom:1px solid #EDE6D6;">${body}</table>`, `${top}px 36px 0 36px`);
 }
 
-/** The allocation share card: the seat first (a big round flag and the country
- *  as the headline), then the committee, then the Gavelling mark. Light ivory
- *  ground; forest is only the accents (headline ink, the gold-and-forest rule,
- *  the committee acronym). Built to be screenshotted at phone width. */
-function sharePanel(o: {
-  eyebrow: string; country: string; countryIcon: RowIcon | null;
-  committee: string | null; committeeName: string | null; committeeLogo: string | null;
-}): string {
-  const flag = o.countryIcon ? rowIcon({ ...o.countryIcon, alt: `Flag of ${o.country}` }, 132) : '';
+/** The seat, stated plainly: "France, DISEC", then the committee's full name
+ *  and topic small beneath, beside its emblem. */
+function seatStatement(o: { country: string; committee: string | null; committeeName: string | null; topic: string | null; committeeLogo: string | null }): string {
   const showFull = !!o.committeeName && !!o.committee && o.committeeName.trim().toLowerCase() !== o.committee.trim().toLowerCase();
-  const committee = o.committee
-    ? `<tr><td class="e-share-pad" style="padding:22px 20px 0 20px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="e-band" bgcolor="#FFFFFF" style="background-color:#FFFFFF;border-radius:16px;box-shadow:0 1px 2px rgba(27,56,40,0.08),0 10px 22px -14px rgba(27,56,40,0.35);"><tr>`
-      + (o.committeeLogo ? `<td valign="middle" width="60" style="width:60px;padding:14px 0 14px 14px;">${logoDisc(o.committeeLogo, 60, '')}</td>` : '')
-      + `<td valign="middle" style="padding:14px 16px 14px ${o.committeeLogo ? 14 : 18}px;font-family:${SANS};">`
-      + `<div class="e-label" style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:${LABEL};">Committee</div>`
-      + `<div class="e-accent" style="font-size:24px;line-height:1.15;font-weight:800;letter-spacing:-0.01em;color:${FOREST};padding-top:2px;">${escapeHtml(o.committee)}</div>`
-      + (showFull ? `<div class="e-soft" style="font-size:13px;line-height:1.4;color:${INK_SOFT};padding-top:3px;">${escapeHtml(o.committeeName!)}</div>` : '')
-      + `</td></tr></table></td></tr>`
-    : '';
-  const brand = `<tr><td align="center" style="padding:20px 20px 20px 20px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>`
-    + `<td valign="middle" width="22" style="width:22px;line-height:0;font-size:0;"><img src="${LEGACY_ASSETS}tile-gavelling.png" width="22" height="22" alt="" style="display:block;width:22px;height:22px;border:0;" /></td>`
-    + `<td valign="middle" style="padding-left:8px;font-family:${SANS};font-size:11.5px;line-height:16px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;"><a href="https://gavelling.com" target="_blank" class="e-accent" style="color:${FOREST};text-decoration:none;">gavelling.com</a></td>`
-    + `</tr></table></td></tr>`;
-  return `<tr><td class="e-pad" style="padding:22px 36px 0 36px;">`
-    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="e-pass" bgcolor="#F6F2E8" style="background-color:#F6F2E8;border-radius:20px;box-shadow:inset 0 0 0 1px #E9E1CD,0 18px 36px -24px rgba(27,56,40,0.45);">`
-    + `<tr><td align="center" style="padding:26px 20px 0 20px;font-family:${SANS};font-size:11.5px;line-height:1.4;font-weight:800;letter-spacing:0.18em;text-transform:uppercase;color:${LABEL};" class="e-label">${escapeHtml(o.eyebrow)}</td></tr>`
-    + (flag ? `<tr><td align="center" style="padding:18px 20px 0 20px;">${flag}</td></tr>` : '')
-    + `<tr><td align="center" style="padding:16px 20px 0 20px;font-family:${SANS};"><div class="e-share-title e-accent" style="font-size:38px;line-height:1.08;font-weight:800;letter-spacing:-0.02em;color:${FOREST};">${escapeHtml(o.country)}</div></td></tr>`
-    + `<tr><td align="center" style="padding:14px 20px 0 20px;line-height:0;font-size:0;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr><td width="28" height="3" bgcolor="${FOREST}" class="e-rule" style="width:28px;height:3px;background-color:${FOREST};border-radius:2px;font-size:0;line-height:0;">&nbsp;</td><td width="6" style="width:6px;font-size:0;">&nbsp;</td><td width="14" height="3" bgcolor="#C9A63A" style="width:14px;height:3px;background-color:#C9A63A;border-radius:2px;font-size:0;line-height:0;">&nbsp;</td></tr></table></td></tr>`
-    + committee + brand
-    + `</table></td></tr>`;
+  const sub = [showFull ? escapeHtml(o.committeeName!) : '', o.topic ? `Topic: ${escapeHtml(o.topic)}` : ''].filter(Boolean);
+  return `<tr><td align="center" class="e-pad" style="padding:20px 36px 0 36px;font-family:${SANS};">`
+    + `<div class="e-ink" style="font-size:22px;line-height:1.35;font-weight:700;color:#1C1410;">${escapeHtml(o.country)}${o.committee ? `, ${escapeHtml(o.committee)}` : ''}</div>`
+    + (sub.length || o.committeeLogo
+      ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:12px auto 0 auto;"><tr>`
+        + (o.committeeLogo ? `<td valign="middle" style="padding-right:12px;">${logoDisc(o.committeeLogo, 40, '')}</td>` : '')
+        + (sub.length ? `<td valign="middle" class="e-soft" style="font-size:13.5px;line-height:1.5;color:${INK_SOFT};text-align:left;">${sub.join('<br>')}</td>` : '')
+        + `</tr></table>`
+      : '')
+    + `</td></tr>`;
 }
 
 function primaryButton(label: string, url: string): string {
   const l = escapeHtml(label);
   const u = escapeHtml(url);
-  return `<tr><td align="center" class="e-pad" style="padding:26px 36px 26px 36px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>`
+  return `<tr><td align="center" class="e-pad" style="padding:30px 36px 8px 36px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>`
     + `<td align="center" bgcolor="${FOREST}" class="e-btn" style="background-color:${FOREST};border-radius:999px;box-shadow:0 8px 18px -8px rgba(27,56,40,0.6);">`
     + `<!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${u}" style="height:50px;v-text-anchor:middle;width:300px;" arcsize="50%" stroke="f" fillcolor="${FOREST}"><center style="color:${GOLD};font-family:Helvetica,Arial,sans-serif;font-size:15px;font-weight:bold;">${l}</center></v:roundrect><![endif]-->`
     + `<!--[if !mso]><!--><a href="${u}" target="_blank" style="display:inline-block;padding:15px 40px;font-family:${SANS};font-size:16px;line-height:20px;font-weight:bold;color:${GOLD};text-decoration:none;border-radius:999px;">${l}</a><!--<![endif]-->`
@@ -412,7 +416,7 @@ function primaryButton(label: string, url: string): string {
 function secondaryLink(label: string, url: string): string {
   return row(
     `<a href="${escapeHtml(url)}" target="_blank" class="e-accent" style="font-family:${SANS};font-size:15px;line-height:1.5;font-weight:bold;color:${FOREST};text-decoration:underline;">${escapeHtml(label)}</a>`,
-    '0 36px 22px 36px', 'center');
+    '14px 36px 0 36px', 'center');
 }
 
 function snapshotRow(s: EmailSnapshot): string {
@@ -422,15 +426,25 @@ function snapshotRow(s: EmailSnapshot): string {
     '26px 36px 0 36px', 'center');
 }
 
+/** Who signs: the named secretariat (Secretary-General first, then up to two
+ *  more), each with their title, then the conference. Falls back to the team. */
+export function secretariatSignature(list: { name?: string | null; title?: string | null }[] | null | undefined): { name: string; title: string | null }[] {
+  const people = (list ?? [])
+    .map(p => ({ name: (p?.name ?? '').trim(), title: (p?.title ?? '').trim() || null }))
+    .filter(p => p.name);
+  const rank = (t: string | null) => (/secretary[- ]general/i.test(t ?? '') ? 0 : /deputy/i.test(t ?? '') ? 1 : 2);
+  return people.map((p, i) => ({ p, i })).sort((a, b) => rank(a.p.title) - rank(b.p.title) || a.i - b.i).slice(0, 3).map(x => x.p);
+}
+
 const STYLE = `<style>
 :root{color-scheme:light dark;supported-color-schemes:light dark;}
 .e-tile{background-color:#FFFFFF !important;color-scheme:light only;}
 body{margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;}
 img{border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;}
 a{text-decoration:none;}
-@media only screen and (max-width:620px){.e-pad{padding-left:20px !important;padding-right:20px !important;}.e-h1{font-size:24px !important;}.e-share-title{font-size:32px !important;}.e-share-pad{padding-left:14px !important;padding-right:14px !important;}}
-@media (prefers-color-scheme: dark){body,.e-page{background-color:#0E0D0A !important;}.e-card{background-color:#232019 !important;border-color:#3A352A !important;border-bottom-color:#15130F !important;}.e-pass{background-color:#1B1811 !important;box-shadow:none !important;}.e-band{background-color:#2A261D !important;box-shadow:none !important;}.e-rule{background-color:#8FC3A0 !important;}.e-hair{border-color:#3A352A !important;}.e-ink,.e-ink div,.e-ink span,.e-ink strong,.e-ink em{color:#F3EFE6 !important;}.e-soft{color:#CFC7B8 !important;}.e-muted,.e-muted a,.e-muted div{color:#A79D8D !important;}.e-accent{color:#D9E4DC !important;}.e-label{color:#8FC3A0 !important;}.e-pill{background-color:#2B2616 !important;color:#F3EFE6 !important;}.e-ring{background-color:#232019 !important;}.e-tile{background-color:#FFFFFF !important;}.e-link{color:#BFD3C6 !important;}.e-btn{background-color:#2F5A40 !important;}}
-[data-ogsc] .e-page{background-color:#0E0D0A !important;}[data-ogsc] .e-card{background-color:#232019 !important;}[data-ogsc] .e-pass{background-color:#1B1811 !important;}[data-ogsc] .e-band{background-color:#2A261D !important;}[data-ogsc] .e-ink,[data-ogsc] .e-ink div,[data-ogsc] .e-ink span,[data-ogsc] .e-ink strong{color:#F3EFE6 !important;}[data-ogsc] .e-soft{color:#CFC7B8 !important;}[data-ogsc] .e-muted,[data-ogsc] .e-muted a{color:#A79D8D !important;}[data-ogsc] .e-accent{color:#D9E4DC !important;}[data-ogsc] .e-label{color:#8FC3A0 !important;}[data-ogsc] .e-link{color:#BFD3C6 !important;}[data-ogsc] .e-btn{background-color:#2F5A40 !important;}
+@media only screen and (max-width:620px){.e-pad{padding-left:22px !important;padding-right:22px !important;}.e-h1{font-size:25px !important;}}
+@media (prefers-color-scheme: dark){body,.e-page{background-color:#0E0D0A !important;}.e-card{background-color:#232019 !important;border-color:#3A352A !important;}.e-hair{border-color:#3A352A !important;}.e-ink,.e-ink div,.e-ink span,.e-ink strong,.e-ink em{color:#F3EFE6 !important;}.e-soft{color:#CFC7B8 !important;}.e-muted,.e-muted a,.e-muted div{color:#A79D8D !important;}.e-accent{color:#D9E4DC !important;}.e-label{color:#8FC3A0 !important;}.e-ring{background-color:#232019 !important;}.e-tile{background-color:#FFFFFF !important;}.e-link{color:#BFD3C6 !important;}.e-btn{background-color:#2F5A40 !important;}}
+[data-ogsc] .e-page{background-color:#0E0D0A !important;}[data-ogsc] .e-card{background-color:#232019 !important;}[data-ogsc] .e-ink,[data-ogsc] .e-ink div,[data-ogsc] .e-ink span,[data-ogsc] .e-ink strong{color:#F3EFE6 !important;}[data-ogsc] .e-soft{color:#CFC7B8 !important;}[data-ogsc] .e-muted,[data-ogsc] .e-muted a{color:#A79D8D !important;}[data-ogsc] .e-accent{color:#D9E4DC !important;}[data-ogsc] .e-label{color:#8FC3A0 !important;}[data-ogsc] .e-link{color:#BFD3C6 !important;}[data-ogsc] .e-btn{background-color:#2F5A40 !important;}
 [data-ogsc] .e-tile,[data-ogsb] .e-tile{background-color:#FFFFFF !important;}
 </style>`;
 
@@ -453,118 +467,91 @@ export function renderEmailCardHtml({
   const theme = resolveEmailTheme(conference.email_theme);
   const card = emailCardFor(event, isDefault);
   const name = shortName(conference);
+  const marker = new RegExp(UNRESOLVED_MARKER_PATTERN);
 
-  // Masthead identity.
   const logoAbs = theme.showLogo ? emailLogoUrl(conference.logo_url, siteUrl) : null;
   const place = [conference.city, conference.country].map(s => (s ?? '').trim()).filter(Boolean).join(', ') || null;
   const chip = emailDatesLabel(conference.start_date, conference.end_date, conference.dates_tbd);
 
-  // Pass rows come from the FIRST facts block (the same rows, the same drop
-  // rule for all-marker values as the classic renderer).
-  // A country is its round flag (or the seat's own crest in a white circle); a
-  // committee is its emblem in a white circle.
   const countryIcon = (): RowIcon | null => {
     const crest = emailLogoUrl(media?.seatLogo, siteUrl);
     if (crest) return { kind: 'logo', url: crest, alt: '' };
     const flag = flagUrl(media?.countryCode);
     return flag ? { kind: 'flag', url: flag, alt: '' } : null;
   };
-  const committeeIcon = (): RowIcon | null => {
-    const url = emailLogoUrl(media?.committeeEmblem, siteUrl);
-    return url ? { kind: 'logo', url, alt: '' } : null;
-  };
+  const committeeLogo = emailLogoUrl(media?.committeeEmblem, siteUrl);
   const iconFor = (from: 'country' | 'committee' | undefined, label: string, value: string): RowIcon | null => {
     if (from === 'country') return countryIcon();
-    if (from === 'committee' || /^committee$/i.test(label)) return committeeIcon();
-    // An award is its medallion, the same one the website draws.
+    if (from === 'committee' || /^committee$/i.test(label)) return committeeLogo ? { kind: 'logo', url: committeeLogo, alt: '' } : null;
     if (/^award$/i.test(label)) return { kind: 'art', url: awardArtUrl(value), alt: '' };
     return null;
   };
   const resolvedOrNull = (token: string): string | null => {
     const v = resolveTokens(token, ctx).trim();
-    return v && v.replace(new RegExp(UNRESOLVED_MARKER_PATTERN), '').trim() !== '' && !new RegExp(UNRESOLVED_MARKER_PATTERN).test(v) ? v : null;
+    return v && !marker.test(v) ? v : null;
   };
   const countryName = resolvedOrNull('{{country}}');
+  const committeeLabel = resolvedOrNull('{{committee}}');
   const factRows = (b: Extract<EmailBlock, { type: 'facts' }>): PassRow[] => {
     const rows = b.items
       .map(i => ({ label: i.label.trim(), value: resolveTokens(i.value, ctx).trim(), from: i.iconFrom }))
-      .filter(i => i.label && i.value && i.value.replace(new RegExp(UNRESOLVED_MARKER_PATTERN), '').trim() !== '')
+      .filter(i => i.label && i.value && i.value.replace(marker, '').trim() !== '')
       .map(i => ({ label: i.label, valueHtml: renderMarkedHtml(i.value, LINK), icon: iconFor(i.from, i.label, i.value), from: i.from }));
     // Money and seat events name the delegate's country with its flag even when
-    // the template has no country row (card design only; the text is the
-    // allocation already on the application, never an organiser's words).
+    // the template has no country row (the allocation already on the application).
     if (card.seat && countryName && !rows.some(r => r.from === 'country')) {
       const at = rows.findIndex(r => /^committee$/i.test(r.label));
       rows.splice(at >= 0 ? at + 1 : 0, 0, { label: 'Representing', valueHtml: escapeHtml(countryName), icon: countryIcon(), from: 'country' });
     }
-    return rows;
+    // Only the essentials: the dates are in the masthead already.
+    return rows.filter(r => !/^dates?$/i.test(r.label));
   };
 
   const firstFacts = blocks.findIndex(b => b.type === 'facts');
   const firstHeading = blocks.findIndex(b => b.type === 'paragraph' && b.variant === 'heading' && !!b.content.trim());
-  // The facts panel sits where the first facts block is.
-  const passAt = firstFacts;
-
-  // The conference's banner heads every email, with nothing for an organiser to
-  // set (email_theme.bannerUrl wins when present).
   const banner = emailBannerUrl(conference);
-  const head = masthead({
-    banner, logo: logoAbs, logoAlt: `${conference.acronym || conference.full_name} logo`, name,
-    meta: [chip, place].filter(Boolean).join(' · ') || null, pill: card.pill, pillIcon: card.icon,
-  });
   const firstRows = firstFacts >= 0 ? factRows(blocks[firstFacts] as Extract<EmailBlock, { type: 'facts' }>) : [];
 
-  // The allocation email is a share card: it leads with the seat itself.
-  const share = event === 'allocation_assigned' && !!countryName;
-  const committeeLabel = resolvedOrNull('{{committee}}');
-  const shareHtml = share ? sharePanel({
-    eyebrow: (() => {
-      const h = firstHeading >= 0 ? resolveTokens((blocks[firstHeading] as Extract<EmailBlock, { type: 'paragraph' }>).content, ctx).trim() : '';
-      return h && h.length <= 40 && !new RegExp(UNRESOLVED_MARKER_PATTERN).test(h) ? h : 'Your allocation';
-    })(),
-    country: countryName!,
-    countryIcon: countryIcon(),
-    committee: committeeLabel,
-    committeeName: (media?.committeeName ?? '').trim() || null,
-    committeeLogo: emailLogoUrl(media?.committeeEmblem, siteUrl),
-  }) : '';
-  // Rows the share card already shows (country, committee) are not repeated.
-  const shareRest = firstRows.filter(r => r.from !== 'country' && r.from !== 'committee' && !/^committee$/i.test(r.label));
+  // The seat emails lead with the seat: a big round flag, then the plain line.
+  const seatLed = (event === 'allocation_assigned' || event === 'allocation_changed' || event === 'delegation_swap') && !!countryName;
+  const flag = countryIcon();
+  let hero = '';
+  if (seatLed && flag) hero = rowIcon({ ...flag, alt: `Flag of ${countryName}` }, 140);
+  else if (event === 'award_received') {
+    const award = resolvedOrNull('{{award}}');
+    if (award) hero = `<img src="${escapeHtml(awardArtUrl(award))}" width="112" height="112" alt="" style="display:block;width:112px;height:112px;border:0;margin:0 auto;" />`;
+  } else if (card.icon) hero = `<img src="${EMAIL_ASSET_BASE}icons/${card.icon}.png" width="64" height="64" alt="" style="display:block;width:64px;height:64px;border:0;margin:0 auto;" />`;
 
-  let out = '';
-  let buttons = 0;
-  let passDone = false;
-  // 'heading' | 'body' | 'pass' | 'button' | 'other': what was drawn last, for spacing.
-  let last = 'other';
-  const emitPass = () => {
-    if (passDone) return;
-    const rows = share ? shareRest : firstRows;
-    if (rows.length) { out += factsPanel(rows, share ? 18 : 6); last = 'pass'; }
-    passDone = true;
+  let out = masthead({ banner, logo: logoAbs, logoAlt: `${conference.acronym || conference.full_name} logo`, name, meta: [chip, place].filter(Boolean).join(' · ') || null });
+  if (hero) out += heroRow(hero);
+  let headlineDone = false;
+  const emitHeadline = (html: string) => {
+    out += headline(html, hero ? 22 : 28) + hairlineRule();
+    if (seatLed) out += seatStatement({ country: countryName!, committee: committeeLabel, committeeName: (media?.committeeName ?? '').trim() || null, topic: (media?.committeeTopic ?? '').trim() || null, committeeLogo });
+    headlineDone = true;
   };
-  if (share) { out += shareHtml; last = 'pass'; }
+  if (firstHeading < 0) emitHeadline(escapeHtml(name));
+
+  let buttons = 0;
+  let last = 'head';
   let bodyRun = '';
-  const flushBody = (afterPass: boolean) => {
+  const flushBody = () => {
     if (!bodyRun) return;
-    out += row(bodyRun, `${afterPass ? 24 : 22}px 36px ${afterPass ? 0 : 20}px 36px`);
+    out += row(bodyRun, '24px 36px 0 36px');
     bodyRun = '';
     last = 'body';
   };
 
   blocks.forEach((b, i) => {
-    // The share card is already drawn at the top; with nothing left of the
-    // facts to show, the greeting and the next paragraph stay one run of text.
-    if (i === passAt) { if (!(share && !shareRest.length)) flushBody(passDone); emitPass(); }
-    if (b.type === 'facts' && i === firstFacts) return; // drawn as the facts panel
     if (b.type === 'paragraph') {
       if (!b.content.trim()) return;
       const v = b.variant ?? 'body';
       const resolved = resolveTokens(b.content, ctx);
       if (v === 'heading') {
-        if (share && i === firstHeading) return; // it is the share card's eyebrow
-        flushBody(passDone);
+        flushBody();
         const html = renderMarkedHtml(resolved.replace(/\s*\n\s*/g, ' '), LINK);
-        out += i === firstHeading ? h1(html, 'left', 22) : h2(html);
+        if (i === firstHeading && !headlineDone) emitHeadline(html);
+        else out += row(`<div class="e-accent" style="font-family:${SANS};font-size:19px;line-height:1.3;font-weight:700;color:${FOREST};">${html}</div>`, '24px 36px 0 36px');
         last = 'heading';
         return;
       }
@@ -573,53 +560,65 @@ export function renderEmailCardHtml({
       return;
     }
     if (b.type === 'facts') {
-      const rows = factRows(b);
+      // The seat emails already said the seat; other rows stay, plainly.
+      const rows = (i === firstFacts ? firstRows : factRows(b))
+        .filter(r => !(seatLed && (r.from === 'country' || r.from === 'committee' || /^committee$/i.test(r.label))));
       if (!rows.length) return;
-      flushBody(passDone);
-      out += factsPanel(rows, 18);
+      flushBody();
+      out += detailRows(rows);
+      last = 'facts';
       return;
     }
     if (b.type === 'image') {
       const abs = absolutizeUrl(b.url, siteUrl);
       if (!abs || /^data:/i.test(abs)) return;
-      flushBody(passDone);
-      out += row(`<img src="${escapeHtml(abs)}" width="528" alt="${escapeHtml(b.alt)}" style="display:block;width:100%;max-width:528px;height:auto;border-radius:12px;border:0;margin:0 auto;" />`, '20px 36px 0 36px', 'center');
+      flushBody();
+      out += row(`<img src="${escapeHtml(abs)}" width="528" alt="${escapeHtml(b.alt)}" style="display:block;width:100%;max-width:528px;height:auto;border-radius:12px;border:0;margin:0 auto;" />`, '22px 36px 0 36px', 'center');
       return;
     }
     // button
     const url = resolveButtonUrl(b, conference, { chairInviteToken, organizerInviteToken, importClaimToken });
     if (!url) return;
     const label = b.label?.trim() || BUTTON_FALLBACK_LABEL[b.destination] || 'Open link';
-    flushBody(passDone);
+    flushBody();
     if (buttons === 0 && card.snapshot) out += snapshotRow(card.snapshot);
     out += buttons === 0 ? primaryButton(resolveTokens(label, ctx), url) : secondaryLink(resolveTokens(label, ctx), url);
     buttons++;
     last = 'button';
   });
-  flushBody(passDone);
-  if (!passDone && passAt >= 0) emitPass();
+  flushBody();
   if (buttons === 0 && card.snapshot) out += snapshotRow(card.snapshot);
 
   const footerLine = theme.footerLine.trim();
-  if (footerLine) { out += row(bodyCell(escapeHtml(footerLine).replace(/\n/g, '<br>'), 'small'), `${last === 'button' ? 0 : 24}px 36px 8px 36px`); last = 'body'; }
+  if (footerLine) out += row(bodyCell(escapeHtml(footerLine).replace(/\n/g, '<br>'), 'small'), '22px 36px 0 36px');
 
-  // Sign-off. True, not decoration: send-emails sets reply_to from the
-  // conference's contact address, so a reply reaches the organisers.
-  const signoff = transactional
-    ? row(`<p class="e-soft" style="margin:0;font-family:${SANS};font-size:15px;line-height:1.6;color:${INK_SOFT};">Questions? Reply to this email and it reaches the ${escapeHtml(conference.acronym || name)} team.<br><strong class="e-ink" style="color:#1C1410;">${escapeHtml(name)} via Gavelling</strong></p>`,
-      `${last === 'button' ? 0 : 24}px 36px 32px 36px`)
-    : `<tr><td style="height:28px;line-height:28px;font-size:0;">&nbsp;</td></tr>`;
+  // Sign-off: named people, like a letter from the secretariat. The reply line
+  // is true: send-emails sets reply_to to the conference's contact address.
+  const signers = secretariatSignature(conference.display_secretariat);
+  const canReply = !!(conference.contact_email ?? '').trim();
+  const signoff = transactional || signers.length
+    ? row(`<div class="e-hair" style="border-top:1px solid #EDE6D6;padding-top:22px;font-family:${SANS};">`
+      + (canReply ? `<p class="e-soft" style="margin:0 0 14px 0;font-size:15px;line-height:1.6;color:${INK_SOFT};">Reply to this email to reach the organisers.</p>` : '')
+      + `<p class="e-soft" style="margin:0;font-size:15px;line-height:1.6;color:${INK_SOFT};">Warm regards,</p>`
+      + (signers.length
+        ? signers.map(p => `<p class="e-ink" style="margin:6px 0 0 0;font-size:15px;line-height:1.45;color:#1C1410;"><strong>${escapeHtml(p.name)}</strong>${p.title ? `<span class="e-soft" style="color:${INK_SOFT};">, ${escapeHtml(p.title)}</span>` : ''}</p>`).join('')
+          + `<p class="e-soft" style="margin:6px 0 0 0;font-size:15px;line-height:1.45;color:${INK_SOFT};">${escapeHtml(name)}</p>`
+        : `<p class="e-ink" style="margin:6px 0 0 0;font-size:15px;line-height:1.45;color:#1C1410;"><strong>The ${escapeHtml(name)} team</strong></p>`)
+      + `</div>`, `${last === 'button' ? 22 : 30}px 36px 32px 36px`)
+    : `<tr><td style="height:32px;line-height:32px;font-size:0;">&nbsp;</td></tr>`;
 
-  const preheader = buildPreheader(blocks, ctx);
+  // The conference's own social icons, in one row near the end.
   const socials = socialLinks(conference);
   const socialRow = socials.length
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 12px auto;"><tr>${socials
-      .map(x => `<td style="padding:0 7px;"><a href="${escapeHtml(x.url)}" target="_blank" style="text-decoration:none;"><img src="${escapeHtml(siteUrl)}/email/${x.icon}.png" width="22" height="22" alt="${escapeHtml(x.label)}" style="display:block;width:22px;height:22px;border:0;" /></a></td>`)
-      .join('')}</tr></table>`
+    ? row(`<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>${socials
+      .map(x => `<td style="padding:0 6px;"><a href="${escapeHtml(x.url)}" target="_blank" style="text-decoration:none;"><img src="${EMAIL_ASSET_BASE}social/${x.icon}.png" width="32" height="32" alt="${escapeHtml(x.label)}" style="display:block;width:32px;height:32px;border:0;" /></a></td>`)
+      .join('')}</tr></table>`, '0 36px 30px 36px', 'center')
     : '';
-  const contact = conference.contact_email
-    ? `<div class="e-muted" style="font-family:${SANS};font-size:12.5px;line-height:1.6;color:${MUTED};padding-bottom:10px;"><strong>${escapeHtml(conference.full_name)}</strong> &middot; <a href="mailto:${escapeHtml(conference.contact_email.split(/[|,;\s]+/)[0])}" style="color:${MUTED};text-decoration:underline;">${escapeHtml(conference.contact_email)}</a></div>`
-    : '';
+
+  // Preheader: the seat when there is one, otherwise the first real paragraph.
+  const preheader = seatLed
+    ? `${countryName}${committeeLabel ? `, ${committeeLabel}` : ''} at ${name}. ${buildPreheader(blocks, ctx)}`.slice(0, 140)
+    : buildPreheader(blocks, ctx);
   const legal = companyLegalLines();
 
   return `<!doctype html>
@@ -638,21 +637,23 @@ ${STYLE}
 <body class="e-page" style="margin:0;padding:0;background-color:#EDE7D8;">
 ${preheader ? `<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">${escapeHtml(preheader)}${'&#8199;&#65279;&#847; '.repeat(6)}</div>` : ''}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="e-page" bgcolor="#EDE7D8" style="background-color:#EDE7D8;">
-<tr><td align="center" style="padding:20px 10px 36px 10px;">
+<tr><td align="center" style="padding:24px 10px 36px 10px;">
 <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" align="center"><tr><td><![endif]-->
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">
-<tr><td align="center" style="padding:0 0 12px 0;"><div class="e-soft" style="font-family:${SANS};font-size:11.5px;line-height:16px;font-weight:800;letter-spacing:0.2em;text-transform:uppercase;color:${FOREST};">Gavelling</div></td></tr>
 <tr><td>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="e-card" bgcolor="#FFFFFF" style="background-color:#FFFFFF;border:1px solid #DDD4C0;border-bottom:3px solid #D2C7AF;border-radius:18px;box-shadow:0 1px 2px rgba(27,56,40,0.06),0 22px 44px -22px rgba(27,56,40,0.35);">
-${head}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="e-card" bgcolor="#FFFFFF" style="background-color:#FFFFFF;border:1px solid #E4DCC8;border-radius:18px;box-shadow:0 1px 2px rgba(27,56,40,0.05),0 18px 40px -24px rgba(27,56,40,0.3);">
 ${out}
 ${signoff}
+${socialRow}
 </table>
 </td></tr>
-<tr><td align="center" style="padding:22px 20px 0 20px;">
-${socialRow}${contact}
-<div class="e-muted" style="font-family:${SANS};font-size:12px;line-height:1.7;color:${MUTED};">Sent by Gavelling on behalf of ${escapeHtml(name)}.<br><a href="${escapeHtml(siteUrl)}/account/profile" target="_blank" style="color:${MUTED};text-decoration:underline;">Email preferences</a> &middot; <a href="${UNSUBSCRIBE_MARK}" target="_blank" style="color:${MUTED};text-decoration:underline;">Unsubscribe</a> &middot; <a href="${escapeHtml(siteUrl)}" target="_blank" style="color:${MUTED};text-decoration:underline;">gavelling.com</a></div>
-${legal.length ? `<div class="e-muted" style="font-family:${SANS};font-size:11px;line-height:1.65;color:${MUTED};padding-top:12px;">${legal.map(l => escapeHtml(l)).join('<br>')}</div>` : ''}
+<tr><td align="center" style="padding:20px 20px 0 20px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>
+<td valign="middle" style="line-height:0;font-size:0;padding-right:7px;"><img src="${LEGACY_ASSETS}tile-gavelling.png" width="18" height="18" alt="" style="display:block;width:18px;height:18px;border:0;" /></td>
+<td valign="middle" class="e-muted" style="font-family:${SANS};font-size:12px;line-height:18px;color:${MUTED};">Made with <a href="${escapeHtml(siteUrl)}" target="_blank" style="color:${MUTED};text-decoration:underline;">Gavelling</a> for ${escapeHtml(name)}</td>
+</tr></table>
+<div class="e-muted" style="font-family:${SANS};font-size:11.5px;line-height:1.7;color:${MUTED};padding-top:8px;"><a href="${escapeHtml(siteUrl)}/account/profile" target="_blank" style="color:${MUTED};text-decoration:underline;">Email preferences</a> &middot; <a href="${UNSUBSCRIBE_MARK}" target="_blank" style="color:${MUTED};text-decoration:underline;">Unsubscribe</a></div>
+${legal.length ? `<div class="e-muted" style="font-family:${SANS};font-size:10.5px;line-height:1.6;color:${MUTED};padding-top:8px;">${legal.map(l => escapeHtml(l)).join('<br>')}</div>` : ''}
 </td></tr>
 </table>
 <!--[if mso]></td></tr></table><![endif]-->

@@ -32,3 +32,4 @@ the public storage bucket `email-assets` (same paths); `EMAIL_ASSET_BASE` /
     shots/live-wall.jpg  the organiser live wall, LIMUN demo data (fictional)
     disc-white.png      the white circle drawn behind uploaded logos (dark-mode safe)
     shots/check-in.jpg   PLACEHOLDER, not captured yet: applications page with check-in buttons
+    social/<name>.png   conference social icons, forest glyph on pale gold, 64px (shown at 32)

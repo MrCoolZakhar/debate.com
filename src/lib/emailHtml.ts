@@ -109,6 +109,9 @@ export interface EmailRenderConference extends ButtonUrlConference {
   tiktok_url?: string | null;
   facebook_url?: string | null;
   whatsapp_url?: string | null;
+  /** Card design only: the named secretariat (conferences.display_secretariat)
+   *  that signs the email. Optional; without it the sign-off is the team. */
+  display_secretariat?: { name?: string | null; title?: string | null }[] | null;
 }
 
 export interface RenderEmailHtmlArgs {
@@ -146,7 +149,7 @@ export interface RenderEmailHtmlArgs {
    */
   /** `seatLogo` is a seat's own or group crest (already a PNG/WebP URL); when
    *  present it replaces the twemoji flag for the `country` icon. */
-  media?: { countryCode?: string | null; committeeEmblem?: string | null; seatLogo?: string | null; committeeName?: string | null };
+  media?: { countryCode?: string | null; committeeEmblem?: string | null; seatLogo?: string | null; committeeName?: string | null; committeeTopic?: string | null };
   /** EVENT_REGISTRY key, when this is an event email. Only the card design
    *  reads it (the status pill, and a product snapshot on our own default
    *  copy); the classic renderer ignores it. */
