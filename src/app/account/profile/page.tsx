@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { Star, X, Megaphone, MessageSquare, ClipboardCheck, FileText, CreditCard, TrendingUp, ArrowRight, Camera, Globe2, Sparkles, Cake, Mail, User, Bell, ShieldAlert, MapPin, GraduationCap, School } from 'lucide-react';
+import { Star, X, Megaphone, MessageSquare, ClipboardCheck, FileText, CreditCard, TrendingUp, ArrowRight, Camera, Globe2, Sparkles, Cake, Mail, User, Bell, ShieldAlert, MapPin, GraduationCap, School, Layers } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { UN_COUNTRIES, getCountryByName, getFlagUrl, countryMatchRank } from '@/lib/countries';
@@ -398,8 +398,8 @@ export default function ProfilePage() {
   // Education level — where the delegate does MUN. Meaningful downstream: it is
   // surfaced as their level when they apply to conferences. Persist immediately
   // with an optimistic update, matching the notification-toggle pattern. Values
-  // must match what onboarding writes: 'high_school' | 'university'.
-  function handleEducationChange(value: 'high_school' | 'university') {
+  // must match what onboarding writes: 'high_school' | 'university' | 'both'.
+  function handleEducationChange(value: 'high_school' | 'university' | 'both') {
     if (value === educationLevel) return;
     const prev = educationLevel;
     setEducationLevel(value);
@@ -1055,6 +1055,7 @@ export default function ProfilePage() {
               const OPTIONS = [
                 { key: 'high_school' as const, label: 'High School', Icon: School },
                 { key: 'university'  as const, label: 'University',  Icon: GraduationCap },
+                { key: 'both'        as const, label: 'Both',        Icon: Layers },
               ];
               const selectedIdx = OPTIONS.findIndex((o) => o.key === educationLevel);
               return (
@@ -1063,7 +1064,7 @@ export default function ProfilePage() {
                   aria-label="Education level"
                   className="gv-edu-seg relative grid gap-1 rounded-full p-1 select-none"
                   style={{
-                    maxWidth: '340px',
+                    maxWidth: '460px',
                     backgroundColor: 'rgba(27,56,40,0.06)',
                     boxShadow: NEU.inSm,
                   }}
@@ -1071,19 +1072,21 @@ export default function ProfilePage() {
                   {/* Two blocks side by side is a desktop shape. On a phone the
                       pair squeezed to about 150px each and "High School" broke
                       over two lines inside a pill sized for one (owner, 18 Sep
-                      2026). Under 430px they stack, and the thumb slides down
+                      2026). Three options since 23 Sep 2026 (Both); under 520px they stack, and the thumb slides down
                       instead of across. Position lives in CSS so one media
                       query moves both the buttons and the thumb; the paint
                       (gradient, ring, shadow) stays inline. */}
                   <style>{`
-.gv-edu-seg{grid-template-columns:repeat(2,minmax(0,1fr))}
-.gv-edu-thumb{top:4px;bottom:4px;left:4px;width:calc(50% - 6px)}
-.gv-edu-thumb[data-idx="1"]{left:calc(50% + 2px)}
-@media (max-width:430px){
+.gv-edu-seg{grid-template-columns:repeat(3,minmax(0,1fr))}
+.gv-edu-thumb{top:4px;bottom:4px;left:4px;width:calc((100% - 16px) / 3)}
+.gv-edu-thumb[data-idx="1"]{left:calc((100% - 16px) / 3 + 8px)}
+.gv-edu-thumb[data-idx="2"]{left:calc((100% - 16px) * 2 / 3 + 12px)}
+@media (max-width:520px){
   .gv-edu-seg{grid-template-columns:1fr;max-width:none}
   .gv-edu-seg>button{min-height:48px}
-  .gv-edu-thumb{left:4px;right:4px;width:auto;top:4px;bottom:auto;height:calc(50% - 6px)}
-  .gv-edu-thumb[data-idx="1"]{left:4px;top:calc(50% + 2px)}
+  .gv-edu-thumb{left:4px;right:4px;width:auto;top:4px;bottom:auto;height:calc((100% - 16px) / 3)}
+  .gv-edu-thumb[data-idx="1"]{left:4px;top:calc((100% - 16px) / 3 + 8px)}
+  .gv-edu-thumb[data-idx="2"]{left:4px;top:calc((100% - 16px) * 2 / 3 + 12px)}
 }
 @media (prefers-reduced-motion:reduce){.gv-edu-thumb{transition:none}}
                   `}</style>

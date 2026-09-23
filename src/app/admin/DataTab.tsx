@@ -158,6 +158,7 @@ function ago(iso: string): string {
 const EDUCATION_LABELS: Record<string, string> = {
   high_school: 'High school',
   university: 'University',
+  both: 'Both',
   unknown: 'Not stated',
 };
 
@@ -696,7 +697,7 @@ export default function DataTab() {
                 title={`${EDUCATION_LABELS[e.level] ?? e.level}: ${int(e.n)}`}
                 style={{
                   width: `${(e.n / eduTotal) * 100}%`,
-                  background: e.level === 'unknown' ? 'rgba(27,56,40,0.13)' : FUNNEL_RAMP[Math.min(i, 2)],
+                  background: e.level === 'unknown' ? 'rgba(27,56,40,0.13)' : FUNNEL_RAMP[Math.min(i, 3)],
                 }}
               />
             ))}
@@ -704,7 +705,7 @@ export default function DataTab() {
           <div className="flex flex-wrap gap-x-4 gap-y-1" style={{ marginTop: 7 }}>
             {m.users.education.map((e, i) => (
               <span key={e.level} className="inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.inkSoft }}>
-                <span style={{ width: 9, height: 9, borderRadius: 2, background: e.level === 'unknown' ? 'rgba(27,56,40,0.22)' : FUNNEL_RAMP[Math.min(i, 2)] }} />
+                <span style={{ width: 9, height: 9, borderRadius: 2, background: e.level === 'unknown' ? 'rgba(27,56,40,0.22)' : FUNNEL_RAMP[Math.min(i, 3)] }} />
                 {EDUCATION_LABELS[e.level] ?? e.level}{' '}
                 <strong style={{ color: NEU.ink, ...NUM }}>{int(e.n)}</strong>
                 <span style={NUM}>({Math.round((e.n / eduTotal) * 100)}%)</span>

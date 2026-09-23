@@ -193,6 +193,7 @@ export const KIT_CSS = `
 .gv-green{position:relative;overflow:hidden;width:100%;height:52px;padding:0 20px;border:none;border-radius:10px;cursor:pointer;color:#FFFFFF;font-family:${OUTFIT};font-size:16px;font-weight:600;background:linear-gradient(90deg,${FOREST} 0%,#24593A 45%,#2F7A4C 100%);transition:transform 120ms ease,opacity 160ms ease}
 .gv-green:active{transform:scale(0.985)}
 .gv-green:disabled{cursor:default;opacity:0.7}
+.gv-green:disabled:not([aria-busy]){opacity:0.45}
 .gv-green-shine{position:absolute;inset:0;background:radial-gradient(circle at var(--spot-x,50%) var(--spot-y,50%),rgba(120,210,150,0.45) 0%,rgba(120,210,150,0) 60%);transition:opacity 200ms ease;pointer-events:none}
 .gv-or{display:flex;align-items:center;gap:10px;margin:14px 0}
 .gv-or span{flex:1;height:1px;background:${HAIR}}

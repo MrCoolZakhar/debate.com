@@ -438,7 +438,7 @@ export default function UserDetailDialog({ userId, onClose }: { userId: string; 
                       <span className="inline-flex items-center gap-1.5"><History size={14} aria-hidden style={{ color: C.gold }} />Joined {fmtDate(p.created_at)}</span>
                       <span className="inline-flex items-center gap-1.5"><Clock size={14} aria-hidden style={{ color: C.gold }} />Seen {timeAgo(p.last_sign_in_at)}</span>
                       {p.mun_experience_level && <span>{roleLabel(p.mun_experience_level)}</span>}
-                      {p.education_level && <span>{roleLabel(p.education_level)}</span>}
+                      {p.education_level && <span>{p.education_level === 'both' ? 'High school and university' : roleLabel(p.education_level)}</span>}
                     </div>
                   </div>
 

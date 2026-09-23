@@ -4,8 +4,9 @@
  * /auth/onboarding — post-signup questionnaire, one question per screen.
  * Built on the shared wizard kit (WizardShell / TwoTabPick / CardSelect).
  *
- * Entirely skippable: "I'll do this later" is always visible, every answer
- * is optional, and nothing here ever blocks entry into the app. Answers
+ * Questions 1 to 3 (where, which countries, how experienced) are required:
+ * Continue stays disabled until each is answered (owner, 23 Sep 2026). Only
+ * step 4, the MUN CV, can be skipped ("Skip & finish"). Answers
  * persist to profiles (education_level, mun_countries jsonb, and — for the
  * self-reported starting point — mun_experience_level).
  */
@@ -40,6 +41,12 @@ const EDUCATION_OPTIONS: WizardOption[] = [
     label: 'University',
     sub: 'Collegiate circuits, societies, and international conferences.',
     image: '/onboarding/campus-01.jpg',
+  },
+  {
+    key: 'both',
+    label: 'Both',
+    sub: 'School and university conferences alike.',
+    image: '/onboarding/hall-01.jpg',
   },
 ];
 
@@ -268,12 +275,6 @@ export default function OnboardingPage() {
     }
   }
 
-  function skipAll() {
-    // Save any partial answers, but leave immediately either way.
-    void persist();
-    router.push(postOnboardingDest());
-  }
-
   function pickEducation(key: string) {
     setEducation(key);
     // Binary pick — advance automatically after the check animates in.
@@ -385,34 +386,12 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-[100dvh] w-full" style={{ backgroundColor: NEU.base ?? '#EDE7D8' }}>
-      {/* Top bar: mark on the left, escape hatch on the right */}
-      <div className="flex items-center justify-between" style={{ padding: '18px 22px' }}>
+      {/* Top bar: the mark. There is no "I'll do this later" any more (owner,
+          23 Sep 2026): questions 1 to 3 are required and only the MUN CV step
+          can be skipped. */}
+      <div className="flex items-center" style={{ padding: '18px 22px' }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/gavel-mark.png" alt="Gavelling" className="h-9 w-9 object-contain" />
-        <button
-          type="button"
-          onClick={skipAll}
-          className="inline-flex items-center text-sm font-semibold focus:outline-none"
-          style={{
-            // The only way out of onboarding was a 20px-tall line of text.
-            // 44px tall with its own padding, so a thumb can reach it.
-            minHeight: 44,
-            padding: '0 4px',
-            fontFamily: OUTFIT,
-            // The escape hatch is a sentence the new user has to read to know
-            // they can leave. NEU.muted is 2.71:1 on the ivory page and fails
-            // AA; inkSoft is 6.44:1.
-            color: NEU.inkSoft,
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            transition: `color 180ms ${EASE}`,
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.forest; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.inkSoft; }}
-        >
-          I&apos;ll do this later →
-        </button>
       </div>
 
       <div style={{ padding: '12px 20px 40px' }}>
@@ -425,9 +404,10 @@ export default function OnboardingPage() {
           >
             <TwoTabPick options={EDUCATION_OPTIONS} value={education} onChange={pickEducation} />
             <StepFooter
-              onNext={() => setStep(2)}
-              nextLabel={education ? 'Continue' : 'Skip this question'}
+              onNext={() => { if (education) setStep(2); }}
+              nextLabel="Continue"
               primary={!!education}
+              disabled={!education}
             />
           </WizardShell>
         )}
@@ -437,7 +417,7 @@ export default function OnboardingPage() {
             step={2}
             total={TOTAL_STEPS}
             title="Which countries do you usually do MUN in?"
-            sub="Search and pick as many as you like, and we'll surface conferences in your region."
+            sub="Search and pick at least one, and we'll surface conferences in your region."
             onBack={() => setStep(1)}
           >
             {/* `minColumnWidth` so the grid DROPS to two columns on a phone
@@ -454,9 +434,10 @@ export default function OnboardingPage() {
               wrapText
             />
             <StepFooter
-              onNext={() => setStep(3)}
-              nextLabel={countries.length > 0 ? 'Continue' : 'Skip this question'}
+              onNext={() => { if (countries.length > 0) setStep(3); }}
+              nextLabel="Continue"
               primary={countries.length > 0}
+              disabled={countries.length === 0}
             />
           </WizardShell>
         )}
@@ -485,9 +466,10 @@ export default function OnboardingPage() {
               minColumnWidth={158}
             />
             <StepFooter
-              onNext={() => setStep(4)}
-              nextLabel={level ? 'Continue' : 'Skip this question'}
+              onNext={() => { if (level) setStep(4); }}
+              nextLabel="Continue"
               primary={!!level}
+              disabled={!level}
             />
           </WizardShell>
         )}

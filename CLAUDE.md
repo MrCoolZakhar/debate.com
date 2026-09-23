@@ -215,8 +215,10 @@ one Email field, Continue, "or", a square Google tile (no Apple). Continue asks 
 account, a trade-off the owner approved) and the dialog moves to the password step, a "signs in with Google"
 step, or "Finish signing up" (name, date of birth, nationality, password) then the 6-digit code. A new
 account (made here, or under a day old with no `education_level`) then gets the /auth/onboarding
-questionnaire as four skippable steps in the same pop-up (same writes: `education_level`, `mun_countries`,
-`mun_experience_level`, `mun_cv_entries` via CVEntryModal). Google and email links return through
+questionnaire as four steps in the same pop-up (same writes: `education_level` (`high_school` | `university` | `both`,
+plain text, no CHECK), `mun_countries`, `mun_experience_level`, `mun_cv_entries` via CVEntryModal). Since 23 Sep 2026
+the first three are REQUIRED (Continue disabled until answered; no X, Escape or backdrop until the MUN CV step, with
+Sign out in the header as the only exit) and only the MUN CV step can be skipped; /auth/onboarding follows the same rule. Google and email links return through
 `/auth/callback?via=modal` to the page the visitor was on (never `/auth/onboarding`), with `?auth=finish` when
 basics are missing or the account is new; the basics step is non-dismissable (Sign out is the only exit).
 `/auth/signin`, `/auth/signup` and `/auth/forgot` only redirect to `/?auth=...&next=...`; redirect guards

@@ -426,7 +426,8 @@ function cardBaseStyle(selected: boolean, hovered: boolean, pressed = false): Re
  * is the same `repeat(2, minmax(0, 1fr))` and every inline style stands.
  */
 const TWO_TAB_CSS = `
-.gv-twotab{display:grid;gap:24px;padding:4px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.gv-twotab{display:grid;gap:24px;padding:4px;grid-template-columns:repeat(var(--gv-twotab-n,2),minmax(0,1fr))}
+.gv-twotab[data-n="3"]{gap:18px}
 @media (max-width:559px){
   .gv-twotab{grid-template-columns:1fr;gap:14px}
   .gv-twotab>button{min-height:0!important}
@@ -440,7 +441,7 @@ export function TwoTabPick({
   value,
   onChange,
 }: {
-  /** Expect exactly 2 options. */
+  /** Two options side by side; a third (e.g. "Both") makes three columns. */
   options: WizardOption[];
   value: string | null;
   onChange: (key: string) => void;
@@ -463,7 +464,7 @@ export function TwoTabPick({
   }
 
   return (
-    <div role="radiogroup" className="gv-twotab">
+    <div role="radiogroup" className="gv-twotab" data-n={options.length} style={{ ['--gv-twotab-n' as string]: options.length } as React.CSSProperties}>
       <style>{TWO_TAB_CSS}</style>
       {options.map((opt, idx) => {
         const selected = value === opt.key;

@@ -138,13 +138,20 @@ export default function CreditsWelcomeModal({
             <X size={15} strokeWidth={2.4} />
           </button>
 
-          {/* Gavin, arms wide open — overlapping the top edge for delight */}
+          {/* Gavin, arms wide open. He used to overlap the card's top edge
+              (margin-top -46px), but the card scrolls (overflowY auto, for
+              short phones), and a scroll container clips its content, so the
+              top of his head was cut off at every size (owner, 23 Sep 2026).
+              He now sits wholly inside the card: the PNG has ~10% clear space
+              above the ears, so the head starts ~27px below the card's edge. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/Otter.Tutorial.Intro.png"
             alt=""
             aria-hidden
-            style={{ width: 190, height: 'auto', display: 'block', margin: '-46px auto -4px', filter: 'drop-shadow(0 10px 22px rgba(27,56,40,0.24))' }}
+            width={176}
+            height={176}
+            style={{ width: 176, height: 176, display: 'block', margin: '8px auto -2px', filter: 'drop-shadow(0 10px 22px rgba(27,56,40,0.24))' }}
           />
 
           <h2 style={{ margin: '0 0 12px', lineHeight: 1.12, letterSpacing: '-0.01em' }}>

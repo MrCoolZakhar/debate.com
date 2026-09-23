@@ -8,8 +8,11 @@
 //   3. How experienced?           → profiles.mun_experience_level
 //   4. Past conferences           → mun_cv_entries, through the shared
 //                                   CVEntryModal (saved as they are added)
-// Every question is optional and "Skip for now" (the header) ends it at once,
-// still saving whatever was already picked, exactly like "I'll do this later".
+// Owner, 23 Sep 2026: questions 1 to 3 are REQUIRED (Continue stays disabled
+// until each is answered, and the pop-up has no close, Escape or backdrop exit
+// until then; Sign out in the header is the one way out, like the basics step).
+// Only question 4, the MUN CV, can be skipped, and from there the pop-up may
+// be closed as well (it saves the three answers and lands).
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -22,10 +25,13 @@ import { UN_COUNTRIES } from '@/lib/countries';
 import { FloatInput, GreenButton, OptionRow } from './authModalKit';
 
 export const QUESTION_COUNT = 4;
+/** The last question (the MUN CV) is the only one that can be skipped. */
+export const CV_QUESTION = 3;
 
 const EDUCATION = [
   { key: 'high_school', label: 'High School', sub: 'MUN clubs, school delegations, and student conferences.', image: '/onboarding/classroom-01.jpg' },
   { key: 'university', label: 'University', sub: 'Collegiate circuits, societies, and international conferences.', image: '/onboarding/campus-01.jpg' },
+  { key: 'both', label: 'Both', sub: 'School and university conferences alike.', image: '/onboarding/hall-01.jpg' },
 ];
 
 const LEVELS = [
@@ -115,8 +121,6 @@ export default function AuthQuestionnaire({
     try { await persist(); } finally { setSaving(false); onDone(); }
   }
 
-  const label = (answered: boolean) => (answered ? 'Continue' : 'Skip this question');
-
   return (
     <div className="gv-auth-screen">
       <p className="gv-auth-count">{q + 1} of {QUESTION_COUNT}</p>
@@ -141,13 +145,13 @@ export default function AuthQuestionnaire({
               </OptionRow>
             ))}
           </div>
-          <GreenButton type="button" onClick={() => setQ(1)}>{label(!!education)}</GreenButton>
+          <GreenButton type="button" disabled={!education} onClick={() => { if (education) setQ(1); }}>Continue</GreenButton>
         </>
       )}
 
       {q === 1 && (
         <>
-          <p className="gv-auth-sub" style={{ margin: '0 0 6px' }}>Pick as many as you like, and we will surface conferences in your region.</p>
+          <p className="gv-auth-sub" style={{ margin: '0 0 6px' }}>Pick at least one, and we will surface conferences in your region.</p>
           <FloatInput id="gv-q-country" label="Search countries" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" />
           {countries.length > 0 && (
             <div className="gv-pills" aria-label="Chosen countries">
@@ -189,7 +193,7 @@ export default function AuthQuestionnaire({
             })}
             {shownCountries.length === 0 && <p className="gv-hint" style={{ padding: 14 }}>No country matches that.</p>}
           </div>
-          <GreenButton type="button" onClick={() => setQ(2)}>{label(countries.length > 0)}</GreenButton>
+          <GreenButton type="button" disabled={countries.length === 0} onClick={() => { if (countries.length > 0) setQ(2); }}>Continue</GreenButton>
         </>
       )}
 
@@ -207,7 +211,7 @@ export default function AuthQuestionnaire({
               </OptionRow>
             ))}
           </div>
-          <GreenButton type="button" onClick={() => setQ(3)}>{label(!!level)}</GreenButton>
+          <GreenButton type="button" disabled={!level} onClick={() => { if (level) setQ(3); }}>Continue</GreenButton>
         </>
       )}
 

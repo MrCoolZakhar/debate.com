@@ -14,7 +14,8 @@
 //   Google (any time) ── /auth/callback?via=modal ── back on the same page;
 //          a missing nationality / date of birth, or a brand-new account,
 //          comes back with `?auth=finish` → the finish step
-//   new accounts, after the basics ── the questionnaire (4 steps, skippable)
+//   new accounts, after the basics ── the questionnaire (4 steps; the first
+//          three are required, only the MUN CV step can be skipped)
 //
 // `afterSignedIn` is the one exit: missing basics → finish (no X, no Escape,
 // no backdrop; Sign out is the only other way out, the CompleteBasicsGate
@@ -47,7 +48,7 @@ import {
   AuthSideImage, BORDER, ErrorLine, FOCUS, FloatInput, FloatPassword, GreenButton, Hint, INK, INK_SOFT,
   KIT_CSS, OUTFIT, TermsLine, TextButton,
 } from './authModalKit';
-import AuthQuestionnaire from './AuthQuestionnaire';
+import AuthQuestionnaire, { CV_QUESTION } from './AuthQuestionnaire';
 import { friendlyError } from '@/lib/friendlyError';
 
 type Step =
@@ -187,8 +188,12 @@ function AuthModal({ request }: { request: AuthRequest }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const next = useMemo(() => targetOf(request), [request]);
 
-  const locked = step === 'finish';
   const inQuestions = step === 'questions';
+  // Owner, 23 Sep 2026: the required questions (1 to 3) cannot be left either.
+  // Same rule as the basics step: no X, no Escape, no backdrop; Sign out (in
+  // the header) is the only other way out. The MUN CV step may be closed.
+  const requiredQuestions = inQuestions && q < CV_QUESTION;
+  const locked = step === 'finish' || requiredQuestions;
 
   /** Close and land. Staying on this page = refresh its server data. */
   const land = useCallback(() => {
@@ -199,10 +204,19 @@ function AuthModal({ request }: { request: AuthRequest }) {
     else router.refresh();
   }, [request.next, router]);
 
+  /** Leave from the MUN CV step (X, Escape): the three answers are saved. */
   const skipQuestions = useCallback(async () => {
     try { await saveQuestionsRef.current(); } catch { /* optional */ }
     land();
   }, [land]);
+  const [signingOut, setSigningOut] = useState(false);
+  const signOutFromQuestions = useCallback(async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    await signOut();
+    closeAuth();
+    window.location.href = '/';
+  }, [signingOut, signOut]);
 
   const close = useCallback(() => {
     if (locked) return;
@@ -368,7 +382,7 @@ function AuthModal({ request }: { request: AuthRequest }) {
     : step === 'forgot' || step === 'forgotSent' ? 'Reset your password'
     : null; // the questionnaire titles itself, large, in the body
 
-  const showBack = !locked && (inQuestions ? q > 0 : history.length > 0);
+  const showBack = inQuestions ? q > 0 : !locked && history.length > 0;
 
   // Phone sheet (the CSS at ≤743px reads both): the hero band only on the
   // short steps, and the sticky primary button on the long ones, where the
@@ -410,8 +424,10 @@ function AuthModal({ request }: { request: AuthRequest }) {
           </div>
           {headTitle ? <h2 id="gv-auth-title" className="gv-auth-head-title">{headTitle}</h2> : <span />}
           <div className="gv-auth-head-r">
-            {inQuestions ? (
-              <button type="button" onClick={() => void skipQuestions()} className={`gv-auth-skip ${FOCUS}`}>Skip for now</button>
+            {requiredQuestions ? (
+              <button type="button" onClick={() => void signOutFromQuestions()} className={`gv-auth-skip ${FOCUS}`}>
+                {signingOut ? 'Signing out…' : 'Sign out'}
+              </button>
             ) : !locked ? (
               <button type="button" onClick={close} aria-label="Close" className={`gv-auth-icon ${FOCUS}`}>
                 <X size={18} strokeWidth={2.2} aria-hidden />
