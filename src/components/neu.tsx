@@ -5,7 +5,8 @@
  *
  * Pilot design system for the organiser dashboard: one continuous ivory
  * surface (#EDE7D8 page, #F0EBDD cards). Cards read as extruded via a
- * forest-tinted dual-shadow pair (a tight, faint light highlight top-left);
+ * crisp 1px forest hairline, a bright 1px top edge and a forest drop shadow
+ * (NO outer white highlight anywhere: it read as a white shadow behind cards);
  * small pills and buttons are raised by an inner top highlight and a compact
  * forest drop with NO outer white halo; wells are pressed in (the dent).
  * Never neutral black, never white cards. Vibrancy lives ONLY in small gradient icon
@@ -54,11 +55,12 @@ export const NEU = {
   // its charge": cards should be 3D, with the occasional neumorphic dent.
   // So the rule is now split by SIZE:
   //
-  //   out / outHover      CARDS and large panels: the genuine dual shadow, a
-  //                       light top-left highlight and a forest-tinted
-  //                       bottom-right shadow, but the highlight is tighter and
-  //                       fainter than the original (0.55 / 10px, was 0.85 /
-  //                       14px) so it reads as a lift, never a white fog.
+  //   out / outHover      CARDS and large panels: a SOLID edge (1px forest
+  //                       hairline + 1px bright inner top edge) and the forest
+  //                       bottom-right drop, so they stay 3D. The outer white
+  //                       top-left highlight was removed a third time (owner,
+  //                       23 Sep: "the weird shadow behind the cards"); do not
+  //                       add any outer white shadow back.
   //   outSm / outSmHover  SMALL things (pills, chips, small buttons, discs):
   //                       NO outer white highlight at all. A 1px inner top
   //                       highlight plus a compact forest drop, so they still
@@ -79,8 +81,8 @@ export const NEU = {
   //   wash / goldWash    FILLS for a quiet / highlighted section on a card
   //   goldRing           boxShadow ring for a gold-highlighted tile or pill
   //   accentBar          `borderInlineStart` value (3px forest), so RTL mirrors
-  out: '-4px -4px 10px rgba(255,255,255,0.55), 6px 7px 18px color-mix(in srgb, var(--gv-main) 17%, transparent), 0 1px 2px color-mix(in srgb, var(--gv-main) 6%, transparent)',
-  outHover: '-5px -5px 12px rgba(255,255,255,0.62), 9px 11px 26px color-mix(in srgb, var(--gv-main) 22%, transparent), 0 2px 4px color-mix(in srgb, var(--gv-main) 7%, transparent)',
+  out: 'inset 0 1px 0 rgba(255,255,255,0.75), 0 0 0 1px rgba(27,56,40,0.07), 6px 7px 18px color-mix(in srgb, var(--gv-main) 17%, transparent), 0 1px 2px color-mix(in srgb, var(--gv-main) 6%, transparent)',
+  outHover: 'inset 0 1px 0 rgba(255,255,255,0.75), 0 0 0 1px rgba(27,56,40,0.07), 9px 11px 26px color-mix(in srgb, var(--gv-main) 22%, transparent), 0 2px 4px color-mix(in srgb, var(--gv-main) 7%, transparent)',
   outSm: 'inset 0 1px 0 rgba(255,255,255,0.5), 0 1px 2px color-mix(in srgb, var(--gv-main) 12%, transparent), 0 3px 7px -2px color-mix(in srgb, var(--gv-main) 17%, transparent)',
   outSmHover: 'inset 0 1px 0 rgba(255,255,255,0.6), 0 2px 3px color-mix(in srgb, var(--gv-main) 12%, transparent), 0 7px 14px -4px color-mix(in srgb, var(--gv-main) 22%, transparent)',
   in: 'inset 3px 3px 8px color-mix(in srgb, var(--gv-main) 14%, transparent), inset -3px -3px 8px rgba(255,255,255,0.7)',

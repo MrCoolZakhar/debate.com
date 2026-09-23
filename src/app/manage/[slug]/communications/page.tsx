@@ -1094,7 +1094,7 @@ function NewEmailModal({
           style={{
             ...PANEL,
             maxWidth: 760,
-            boxShadow: '-8px -8px 20px rgba(255,255,255,0.45), 16px 18px 46px rgba(27,56,40,0.34)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.75), 0 0 0 1px rgba(27,56,40,0.07), 16px 18px 46px rgba(27,56,40,0.34)',
             animation: `commsPop 220ms ${EASE} both`,
           }}
         >
@@ -1147,7 +1147,7 @@ function NewEmailModal({
                 }}
                 onMouseEnter={e => {
                   (e.currentTarget as HTMLElement).style.boxShadow =
-                    'inset 3px 3px 9px rgba(27,56,40,0.18), inset -3px -3px 9px rgba(255,255,255,0.75)';
+                    'inset 3px 3px 9px rgba(27,56,40,0.18), inset -3px -3px 9px rgba(255,255,255,0.7)';
                 }}
                 onMouseLeave={e => {
                   (e.currentTarget as HTMLElement).style.boxShadow = WELL.boxShadow as string;
@@ -1563,7 +1563,7 @@ function StatWell({
       }}
       onMouseEnter={interactive ? e => {
         (e.currentTarget as HTMLElement).style.boxShadow =
-          'inset 3px 3px 8px rgba(27,56,40,0.17), inset -3px -3px 8px rgba(255,255,255,0.72)';
+          'inset 3px 3px 8px rgba(27,56,40,0.17), inset -3px -3px 8px rgba(255,255,255,0.7)';
       } : undefined}
       onMouseLeave={interactive ? e => {
         (e.currentTarget as HTMLElement).style.boxShadow = WELL.boxShadow as string;

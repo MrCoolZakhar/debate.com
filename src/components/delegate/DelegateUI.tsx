@@ -61,7 +61,7 @@ export const DG = {
 /** Raised/pressed pair, forest-tinted like the rest of the app. */
 export const LIFT = {
   sm: 'inset 0 1px 0 rgba(255,255,255,0.5), 0 1px 2px rgba(27,56,40,0.12), 0 3px 7px -2px rgba(27,56,40,0.17)',
-  md: '-4px -4px 10px rgba(255,255,255,0.55), 6px 7px 18px rgba(27,56,40,0.17), 0 1px 2px rgba(27,56,40,0.06)',
+  md: 'inset 0 1px 0 rgba(255,255,255,0.75), 0 0 0 1px rgba(27,56,40,0.07), 6px 7px 18px rgba(27,56,40,0.17), 0 1px 2px rgba(27,56,40,0.06)',
   inSm: 'inset 2px 2px 5px rgba(27,56,40,0.13), inset -2px -2px 5px rgba(255,255,255,0.7)',
   in: 'inset 3px 3px 8px rgba(27,56,40,0.14), inset -3px -3px 8px rgba(255,255,255,0.7)',
 } as const;
