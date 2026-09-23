@@ -14,26 +14,26 @@
 // (the page's effect works on `cardRef`), and closing (setReviewId(null)).
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { LayoutDashboard, ListOrdered, MessageSquareText, Trophy, Wallet, X, Users, Cake } from 'lucide-react';
+import { LayoutDashboard, ListOrdered, Trophy, Wallet, X, Cake } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import Portal from '@/components/Portal';
 import ProfileLink from '@/components/ProfileLink';
-import { CircleFlag } from '@/components/CircleFlag';
 import { useApplicantCv, useApplicantLedger, ledgerTotals, type ApplicantApp } from './data';
-import { OverviewTab, PreferencesTab, ExperienceTab, AnswersTab, type AnswerItem } from './tabs';
+import { OverviewTab, PreferencesTab, ExperienceTab, type AnswerItem, type OverviewDelegation } from './tabs';
 import PaymentTab, { type AidInfo } from './PaymentTab';
-import { C, OUTFIT, realCode, roleName } from './kit';
+import { C, OUTFIT, SeatFlag, fmtDay } from './kit';
 import { type ApplicantTab, initialApplicantTab, writeApplicantTab } from './url';
 
-export type { AnswerItem } from './tabs';
+export type { AnswerItem, OverviewDelegation } from './tabs';
 export type { AidInfo } from './PaymentTab';
 export { useApplicantUrlSync } from './url';
 
-const TAB_META: Record<ApplicantTab, { label: string; icon: LucideIcon }> = {
+// Answers live in Overview now (owner, 23 Sep 2026), so there is no Answers
+// tab; an old ?tab=answers link simply opens Overview.
+const TAB_META: Record<Exclude<ApplicantTab, 'answers'>, { label: string; icon: LucideIcon }> = {
   overview: { label: 'Overview', icon: LayoutDashboard },
   preferences: { label: 'Preferences', icon: ListOrdered },
   experience: { label: 'Experience', icon: Trophy },
-  answers: { label: 'Answers', icon: MessageSquareText },
   payment: { label: 'Payment', icon: Wallet },
 };
 
@@ -90,6 +90,7 @@ export default function ApplicantDetailDialog({
   app, name, email, age, cardRef, onClose, conferenceSlug, accessToken,
   chips, actions, actionsWithoutPayment, paymentControls, isDelegate, showsPreferences, feeCharged,
   experienceLevel, answerItems, orphanAnswers, listedExperience, showListedExperience, aid, onOpenDelegation,
+  dob, delegation,
 }: {
   app: ApplicantApp;
   name: string;
@@ -116,16 +117,22 @@ export default function ApplicantDetailDialog({
   showListedExperience: boolean;
   aid: AidInfo | null;
   onOpenDelegation?: () => void;
+  /** profiles.date_of_birth ('YYYY-MM-DD'), readable by every organiser of the conference. */
+  dob: string | null;
+  delegation: OverviewDelegation | null;
 }) {
-  const tabs = useMemo<ApplicantTab[]>(
-    () => (['overview', ...(showsPreferences ? ['preferences' as const] : []), 'experience', 'answers', 'payment'] as ApplicantTab[]),
+  const tabs = useMemo<Exclude<ApplicantTab, 'answers'>[]>(
+    () => (['overview', ...(showsPreferences ? ['preferences' as const] : []), 'experience', 'payment'] as Exclude<ApplicantTab, 'answers'>[]),
     [showsPreferences],
   );
-  const [tab, setTabState] = useState<ApplicantTab>(() => {
+  const [tab, setTabState] = useState<Exclude<ApplicantTab, 'answers'>>(() => {
     const t = initialApplicantTab();
-    return t && tabs.includes(t) ? t : 'overview';
+    return t && t !== 'answers' && tabs.includes(t) ? t : 'overview';
   });
-  const setTab = useCallback((t: ApplicantTab) => { setTabState(t); writeApplicantTab(t); }, []);
+  const setTab = useCallback((t: ApplicantTab) => {
+    const next = t === 'answers' ? 'overview' : t;
+    setTabState(next); writeApplicantTab(next);
+  }, []);
   const tabRefs = useRef<Partial<Record<ApplicantTab, HTMLButtonElement | null>>>({});
   const bodyRef = useRef<HTMLDivElement | null>(null);
 
@@ -153,25 +160,17 @@ export default function ApplicantDetailDialog({
     tabRefs.current[t]?.focus();
   };
 
+  // One line of who they are. Role and status are the pills beneath it and
+  // the delegation is its own card in Overview, so neither is repeated here.
   const nationality = app.profiles?.nationality ?? null;
-  const natCode = realCode(nationality);
   const meta: ReactNode[] = [];
-  meta.push(<span key="role">{roleName(app.role)}{app.is_head_delegate && app.role !== 'head-delegate' ? ', head delegate' : ''}</span>);
-  if (age !== null) meta.push(<span key="age" className="inline-flex items-center gap-1"><Cake size={13} aria-hidden style={{ color: C.gold }} />{age}</span>);
-  if (nationality) meta.push(<span key="nat" className="inline-flex items-center gap-1.5">{natCode && <CircleFlag code={natCode} size={16} decorative ring={false} />}{nationality}</span>);
-  if (app.societies?.name) {
-    meta.push(onOpenDelegation && app.society_id ? (
-      <button
-        key="soc"
-        type="button"
-        onClick={onOpenDelegation}
-        title="Open this delegation"
-        className="inline-flex items-center gap-1.5 focus:outline-none"
-        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: C.gold, fontFamily: OUTFIT, fontSize: 'inherit', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3, textDecorationColor: 'rgba(238,217,138,0.5)' }}
-      >
-        <Users size={13} aria-hidden />{app.societies.name}
-      </button>
-    ) : <span key="soc" className="inline-flex items-center gap-1.5"><Users size={13} aria-hidden style={{ color: C.gold }} />{app.societies.name}</span>);
+  if (nationality) {
+    meta.push(<span key="nat" className="inline-flex items-center gap-2"><SeatFlag name={nationality} size={18} />{nationality}</span>);
+  }
+  if (dob) {
+    meta.push(<span key="dob" className="inline-flex items-center gap-1.5"><Cake size={14} aria-hidden style={{ color: C.gold }} />Born {fmtDay(dob)}{age !== null ? `, ${age}` : ''}</span>);
+  } else if (age !== null) {
+    meta.push(<span key="age" className="inline-flex items-center gap-1.5"><Cake size={14} aria-hidden style={{ color: C.gold }} />{age} years old</span>);
   }
 
   return (
@@ -206,11 +205,6 @@ export default function ApplicantDetailDialog({
                     <span style={{ fontFamily: OUTFIT, fontSize: 30, fontWeight: 900, color: C.gold }}>{name.trim().charAt(0).toUpperCase() || '?'}</span>
                   </span>
                 )}
-                {natCode && (
-                  <span className="absolute" style={{ right: -4, bottom: -2, borderRadius: 999, border: `2.5px solid ${C.forest}`, lineHeight: 0 }}>
-                    <CircleFlag code={natCode} size={28} label={nationality ?? undefined} title={nationality ?? undefined} ring={false} />
-                  </span>
-                )}
               </span>
             </ProfileLink>
 
@@ -230,14 +224,14 @@ export default function ApplicantDetailDialog({
               {email && (
                 <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 500, color: 'rgba(237,231,216,0.78)', marginTop: 2, overflowWrap: 'anywhere' }}>{email}</p>
               )}
-              <div className="flex items-center flex-wrap gap-x-3.5 gap-y-1 mt-2" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: 'rgba(237,231,216,0.92)' }}>
+              {meta.length > 0 && <div className="flex items-center flex-wrap gap-x-3.5 gap-y-1 mt-2" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: 'rgba(237,231,216,0.92)' }}>
                 {meta.map((m, i) => (
                   <span key={i} className="inline-flex items-center gap-3.5">
-                    {i > 0 && <span aria-hidden style={{ color: C.goldDeep, fontSize: 9 }}>◆</span>}
+                    {i > 0 && <span aria-hidden style={{ color: 'rgba(237,231,216,0.45)' }}>·</span>}
                     {m}
                   </span>
                 ))}
-              </div>
+              </div>}
               <div className="flex flex-wrap items-center gap-2 mt-2.5">{chips}</div>
             </div>
 
@@ -271,8 +265,7 @@ export default function ApplicantDetailDialog({
             {tabs.map(t => {
               const on = t === tab;
               const Icon = TAB_META[t].icon;
-              const badge = t === 'answers' ? answerItems.length + orphanAnswers.length
-                : t === 'preferences' ? (app.application_preferences?.length ?? 0)
+              const badge = t === 'preferences' ? (app.application_preferences?.length ?? 0)
                 : t === 'experience' ? (cv.data?.length ?? null)
                 : null;
               return (
@@ -315,8 +308,13 @@ export default function ApplicantDetailDialog({
                 totals={totals}
                 ledgerLoading={ledger.loading}
                 feeCharged={feeCharged}
-                age={age}
                 onTab={setTab}
+                answerItems={answerItems}
+                orphanAnswers={orphanAnswers}
+                delegation={delegation}
+                onOpenDelegation={onOpenDelegation}
+                dob={dob}
+                age={age}
               />
             )}
             {tab === 'preferences' && <PreferencesTab app={app} />}
@@ -332,7 +330,6 @@ export default function ApplicantDetailDialog({
                 showListed={showListedExperience}
               />
             )}
-            {tab === 'answers' && <AnswersTab items={answerItems} orphans={orphanAnswers} />}
             {tab === 'payment' && (
               <PaymentTab
                 app={app}

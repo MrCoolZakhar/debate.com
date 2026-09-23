@@ -362,11 +362,11 @@ function GoldCheck({ visible }: { visible: boolean }) {
 // the ivory page; hover grows the card and deepens the shadow so it reads as
 // picked-up. Selected stays clearly distinct (forest border + gold check
 // overlay). Motion rides the house cubic-bezier easing.
-const CARD_FLOAT = '-4px -5px 12px rgba(255,255,255,0.6), 6px 10px 24px color-mix(in srgb, var(--gv-main) 14%, transparent)';
+const CARD_FLOAT = '0 0 0 1px color-mix(in srgb, var(--gv-main) 9%, transparent), 0 1px 2px color-mix(in srgb, var(--gv-main) 6%, transparent), 0 10px 24px -10px color-mix(in srgb, var(--gv-main) 20%, transparent)';
 // Hovered: a larger, softer drop shadow that also blooms a gold-tinted glow, so
 // the lifted card glints warm against the ivory page.
 const CARD_LIFT_GLASS =
-  '-6px -7px 20px rgba(255,255,255,0.9), 12px 20px 46px color-mix(in srgb, var(--gv-main) 22%, transparent), 0 12px 44px color-mix(in srgb, var(--gv-accent) 24%, transparent)';
+  '0 0 0 1px color-mix(in srgb, var(--gv-main) 14%, transparent), 0 20px 46px -14px color-mix(in srgb, var(--gv-main) 26%, transparent), 0 12px 44px -8px color-mix(in srgb, var(--gv-accent) 24%, transparent)';
 
 function cardBaseStyle(selected: boolean, hovered: boolean, pressed = false): React.CSSProperties {
   return {

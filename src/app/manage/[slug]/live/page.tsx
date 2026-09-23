@@ -425,6 +425,9 @@ export default function LiveStatusPage() {
                 phase: sRow.phase as string,
                 caucus: (sRow.caucus as CaucusJson | null) ?? null,
                 chairNames: (sRow.chair_names as string[] | null) ?? [],
+                headChair: (((sRow.settings as { headChair?: unknown } | null)?.headChair) as string | undefined)
+                  || ((sRow.chair_names as string[] | null) ?? [])[0]
+                  || null,
                 suspendedAt: (sRow.suspended_at as string | null) ?? null,
                 endedAt: (sRow.ended_at as string | null) ?? null,
                 updatedAt: (sRow.updated_at as string | null) ?? null,

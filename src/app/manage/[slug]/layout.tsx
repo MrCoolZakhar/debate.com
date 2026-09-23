@@ -20,6 +20,7 @@ import { useScrollLock } from '@/hooks/useScrollLock';
 import NotificationStack from '@/components/notifications/NotificationStack';
 import VerifiedCheck, { minutesToCheckmarkLabel } from '@/components/VerifiedCheck';
 import { formatConferenceDates } from '@/lib/conferenceDates';
+import { NEU } from '@/components/neu';
 
 // ── Conference type ────────────────────────────────────────────────────────
 
@@ -281,11 +282,11 @@ function SideRail({
         left: '14px', top: '70px', bottom: '14px',
         width: expanded ? '256px' : '68px',
         zIndex: 25,
-        // Neumorphic: same ivory family as the page (#EDE7D8), extruded via the
-        // NEU dual-shadow pair (src/components/neu.tsx), no glass, no hard border.
+        // Same ivory family as the page (#EDE7D8), raised by the NEU elevation
+        // token (src/components/neu.tsx): hairline ring + soft forest drop.
         backgroundColor: '#F0EBDD',
         borderRadius: '26px',
-        boxShadow: '-6px -6px 14px rgba(255,255,255,0.85), 8px 8px 20px rgba(27,56,40,0.16)',
+        boxShadow: NEU.out,
         transition: 'width 280ms cubic-bezier(0.22,1,0.36,1)',
         overflow: 'hidden',
       }}

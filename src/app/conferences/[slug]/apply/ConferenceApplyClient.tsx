@@ -50,8 +50,14 @@ import ApplyCommitteeCard from './ApplyCommitteeCard';
 import { rankSocieties, isSameSocietyName, societyDedupeKey, MAX_SOCIETY_NAME_CHARS } from './societyMatch';
 import {
   NoDelegationMatch, CreateDelegationButton, CreateDelegationRow, CreateDelegationDialog, RoleSwitchedNotice,
-  type DelegationSwitchRole,
+  type DelegationSwitchRole, useHeadDelegateAvailability,
 } from './CreateDelegationPrompt';
+import { NewDelegationCard } from './NewDelegationCard';
+import {
+  EMPTY_NEW_DELEGATION, hasNewDelegationProblems, newDelegationProblems, normalizeNewDelegation, societyInsertRow,
+  type NewDelegationDetails,
+} from '@/lib/delegationCreate';
+import { validateBasics } from '@/lib/pendingBasics';
 import { type CustomAnswers, normalizeBlocks, questionsOf, validateAnswers, answerIsEmpty, displayAnswer } from '@/lib/customQuestions';
 import { readFirstTouch } from '@/lib/trafficSource';
 import {
@@ -869,6 +875,11 @@ function ConferenceApplyInner() {
   // pre-select the invited delegation (the invite creation + landing route +
   // RPCs are built elsewhere).
   const delegationInviteToken = searchParams.get('delegationInvite');
+  // Prefill (?role=delegate&delegation=<society id>), e.g. the delegation
+  // portal's invite link. Only honoured when the id is a delegation of THIS
+  // conference (checked against the loaded list in fetchAll), never in edit
+  // mode, and never over a delegation invite token, which wins.
+  const delegationParam = searchParams.get('delegation');
   // Edit-and-resubmit: opens the same stepper prefilled from the applicant's
   // own existing application for this role, instead of the fresh-apply flow.
   // Only takes effect once fetchAll confirms the application is actually in
@@ -978,6 +989,23 @@ function ConferenceApplyInner() {
   // can switch to Head Delegate / Faculty Advisor, the roles that create one.
   // See switchToDelegationRole and ./CreateDelegationPrompt.tsx.
   const [createDelegationOpen, setCreateDelegationOpen] = useState(false);
+  // Where a delegation this applicant CREATES is based, and its picture
+  // (./NewDelegationCard.tsx, src/lib/delegationCreate.ts). Only used when the
+  // typed name matches no delegation here (creatingDelegation below).
+  const [newDelegation, setNewDelegation] = useState<NewDelegationDetails>(EMPTY_NEW_DELEGATION);
+  const [newDelegationChecked, setNewDelegationChecked] = useState(false);
+  /** The ?delegation= society, once fetchAll confirmed it belongs here. A
+   *  draft restored afterwards must not replace it. */
+  const delegationParamRef = useRef<{ id: string; name: string } | null>(null);
+  /** Put the ?delegation= pick back after a draft restore overwrote it. Refs
+   *  and setters only, so it is safe inside the restore callbacks. */
+  function reapplyDelegationParam() {
+    const hit = delegationParamRef.current;
+    if (!hit) return;
+    setIsIndependent(false);
+    setSelectedSocietyId(hit.id);
+    setSocietyInput(hit.name);
+  }
   /** `focus`: move focus to the notice once, right after the switch. */
   const [roleSwitchNotice, setRoleSwitchNotice] = useState<{ role: DelegationSwitchRole; name: string; focus: boolean } | null>(null);
   /** Set by switchToDelegationRole until the new role's config has loaded;
@@ -1376,6 +1404,7 @@ function ConferenceApplyInner() {
     customAnswers,
     questionPage,
     voucherCode,
+    newDelegation,
   };
   const draftFingerprint = fingerprintDraft(draftAnswers, step);
 
@@ -1585,6 +1614,8 @@ function ConferenceApplyInner() {
         setIsIndependent(a.isIndependent);
         setSocietyInput(a.societyInput);
         setSelectedSocietyId(a.selectedSocietyId);
+        setNewDelegation(normalizeNewDelegation(a.newDelegation));
+        reapplyDelegationParam();
         if (a.invitedSocietyId) setInvitedSocietyId(a.invitedSocietyId);
         if (a.inviteSocietyName) setInviteSocietyName(a.inviteSocietyName);
         if (a.delegationInviteToken) draftInviteTokenRef.current = a.delegationInviteToken;
@@ -1713,6 +1744,7 @@ function ConferenceApplyInner() {
     customAnswers,
     questionPage,
     voucherCode,
+    newDelegation,
   };
   const guestDraftFingerprint = JSON.stringify({ answers: guestDraftAnswers, step });
 
@@ -1754,6 +1786,8 @@ function ConferenceApplyInner() {
     setIsIndependent(a.isIndependent);
     setSocietyInput(a.societyInput);
     setSelectedSocietyId(a.selectedSocietyId);
+    setNewDelegation(normalizeNewDelegation(a.newDelegation));
+    reapplyDelegationParam();
     if (a.invitedSocietyId) setInvitedSocietyId(a.invitedSocietyId);
     if (a.inviteSocietyName) setInviteSocietyName(a.inviteSocietyName);
     setWillPledgeSpots(a.willPledgeSpots);
@@ -2178,6 +2212,19 @@ function ConferenceApplyInner() {
       }
     }
 
+    // ?delegation=<id>: preselect that delegation when it is one of this
+    // conference's (a stale or foreign id is ignored). An invite token wins.
+    delegationParamRef.current = null;
+    if (delegationParam && !delegationInviteToken && !isEditMode && !appData) {
+      const hit = societiesData.find(s => s.id === delegationParam);
+      if (hit) {
+        delegationParamRef.current = { id: hit.id, name: hit.name };
+        setIsIndependent(false);
+        setSelectedSocietyId(hit.id);
+        setSocietyInput(hit.name);
+      }
+    }
+
     setLoading(false);
   }
 
@@ -2233,6 +2280,22 @@ function ConferenceApplyInner() {
   // the name IS one that exists (or two): creating it would be a duplicate.
   const canOfferCreate = role === 'delegate' && !isEditMode && !invitedSocietyId && !selectedSocietyId
     && typedSocietyName.length >= 3 && strictSocietyMatches.length === 0;
+  // Whether this conference takes Head Delegate applications right now (and
+  // this applicant does not already hold one). Only a Head Delegate creates a
+  // delegation, so creation is not offered when this is not 'open'.
+  const headDelegateAvailability = useHeadDelegateAvailability(
+    role === 'delegate' && !isEditMode ? conference?.id ?? null : null,
+    session?.access_token ?? null,
+    previewing ? null : user?.id ?? null,
+  );
+  // Submitting will CREATE a delegation: a Head Delegate / Faculty Advisor
+  // whose typed name is no delegation here. NewDelegationCard then asks where
+  // it is based (required) and for its picture (optional).
+  const creatingDelegation = isInvoicingRole && !isObserver && !isIndependent && !isEditMode
+    && !invitedSocietyId && !selectedSocietyId && !adoptableSociety && typedSocietyName.length > 0;
+  const newDelegationShownProblems = creatingDelegation && newDelegationChecked
+    ? newDelegationProblems(newDelegation)
+    : {};
 
   /**
    * Delegate → Head Delegate / Faculty Advisor, from "Create this delegation"
@@ -2314,6 +2377,7 @@ function ConferenceApplyInner() {
     const params = new URLSearchParams(searchParams.toString());
     params.set('role', next);
     params.delete('delegationInvite');
+    params.delete('delegation');
     params.delete('edit');
     router.replace(`/conferences/${slug}/apply?${params.toString()}`, { scroll: false });
     return null;
@@ -2435,15 +2499,10 @@ function ConferenceApplyInner() {
     setBasicsError('');
     // Same validation as the onboarding basics screen, deliberately: a typed
     // country that is not a real country is refused rather than stored.
-    const country = getCountryByName(natInput);
-    if (!country) { setBasicsError('Please choose your nationality from the list.'); return; }
-    if (!dobInput) { setBasicsError('Please enter your date of birth.'); return; }
-    const age = ageAt(dobInput);
-    if (age === null || age < 0 || age > 120) {
-      setBasicsError('That date of birth doesn’t look right. Please double-check it.');
-      return;
-    }
-    if (age < 13) { setBasicsError('You need to be at least 13 to use Gavelling.'); return; }
+    // The same rules as sign-up and onboarding (src/lib/pendingBasics.ts).
+    const checked = validateBasics(natInput, dobInput);
+    if (!checked.ok) { setBasicsError(checked.error); return; }
+    const country = { name: checked.value.nationality };
     setBasicsSaving(true);
     const supabase = getAuthedClient(session.access_token);
     // Both fields in one update, and `.select('id')` is load-bearing: an
@@ -2614,6 +2673,10 @@ function ConferenceApplyInner() {
           return;
         }
       }
+      if (creatingDelegation && hasNewDelegationProblems(newDelegation)) {
+        setNewDelegationChecked(true);
+        return;
+      }
       if (adopted) {
         setSelectedSocietyId(adopted.id);
         setSocietyInput(adopted.name);
@@ -2682,6 +2745,13 @@ function ConferenceApplyInner() {
       setSubmitError('Please add your nationality and date of birth before you submit.');
       return;
     }
+    if (creatingDelegation && hasNewDelegationProblems(newDelegation)) {
+      // Normally caught on the delegation step; a restored draft can skip it.
+      setNewDelegationChecked(true);
+      const at = stepSequence.indexOf('society');
+      if (at >= 0) setStep(at + 1);
+      return;
+    }
     if (underAge || overAge) {
       setSubmitError(
         hasAgeGate
@@ -2743,7 +2813,7 @@ function ConferenceApplyInner() {
           } else {
             const { data: newSoc, error: socInsertError } = await supabase
               .from('societies')
-              .insert({ conference_id: conference!.id, name: societyInput.trim(), name_normalized: normalized })
+              .insert(societyInsertRow(conference!.id, societyInput, newDelegation))
               .select('id')
               .single();
             if (socInsertError) {
@@ -2869,7 +2939,14 @@ function ConferenceApplyInner() {
         // A refusal because the role's window closed (or has not opened) is
         // a business rule, not a crash: no alert, and a plain sentence below.
         if (appError) {
-          if (!isApplicationWindowRefusal(appError)) reportBlocked('submit application', appError, { conferenceSlug: slug, role });
+          // guard_application_write refuses a self-submitted application from
+          // a profile with no nationality or date of birth: show the wall.
+          if ((appError as { hint?: string }).hint === 'basics_required') {
+            setMyNationality(null);
+            setMyDob(null);
+          } else if (!isApplicationWindowRefusal(appError)) {
+            reportBlocked('submit application', appError, { conferenceSlug: slug, role });
+          }
           throw appError;
         }
         newAppId = (app as { id: string }).id;
@@ -3015,7 +3092,7 @@ function ConferenceApplyInner() {
           } else {
             const { data: newSoc, error: socInsertError } = await supabase
               .from('societies')
-              .insert({ conference_id: conference!.id, name: societyInput.trim(), name_normalized: normalized })
+              .insert(societyInsertRow(conference!.id, societyInput, newDelegation))
               .select('id')
               .single();
             if (socInsertError) {
@@ -3400,6 +3477,10 @@ function ConferenceApplyInner() {
     const typedName = typedSocietyName;
     const createBlocked = submittedAppIdRef.current
       ? 'You already sent this application as a delegate, so you cannot switch roles now.'
+      : headDelegateAvailability === 'closed'
+      ? 'Only a Head Delegate can create a delegation, and this conference is not taking Head Delegate applications right now. Ask your school or society to create it, or apply independently.'
+      : headDelegateAvailability === 'held'
+      ? 'Only a Head Delegate can create a delegation, and you already have a Head Delegate application here.'
       : null;
     const openCreate = () => { setSocietyDropdownOpen(false); setCreateDelegationOpen(true); };
     // The existing delegation Continue will attach this application to, shown
@@ -3640,6 +3721,18 @@ function ConferenceApplyInner() {
                   societySuggestions.length === 0
                     ? <NoDelegationMatch name={typedName} onCreate={openCreate} blockedReason={createBlocked} />
                     : <CreateDelegationButton name={typedName} onCreate={openCreate} blockedReason={createBlocked} />
+                )}
+                {creatingDelegation && conference && (
+                  <NewDelegationCard
+                    name={typedName}
+                    details={newDelegation}
+                    onChange={setNewDelegation}
+                    problems={newDelegationShownProblems}
+                    conferenceId={conference.id}
+                    userId={user?.id ?? null}
+                    accessToken={session?.access_token ?? null}
+                    previewing={previewing}
+                  />
                 )}
               </>
             )}

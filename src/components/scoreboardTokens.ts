@@ -91,6 +91,6 @@ export const HAIRLINE = 'rgba(27,56,40,0.18)';
 export const CARD_BORDER_COLOR = 'rgba(27,56,40,0.14)';
 export const CARD_BORDER = `1px solid ${CARD_BORDER_COLOR}`;
 export const CARD_SHADOW =
-  '-6px -6px 14px rgba(255,255,255,0.85), 8px 8px 20px rgba(27,56,40,0.22)';
+  '0 1px 2px rgba(27,56,40,0.07), 0 8px 20px -8px rgba(27,56,40,0.22)';
 export const CARD_SHADOW_HOVER =
-  '-8px -8px 18px rgba(255,255,255,0.92), 10px 10px 26px rgba(27,56,40,0.27)';
+  '0 2px 4px rgba(27,56,40,0.09), 0 14px 30px -10px rgba(27,56,40,0.28)';

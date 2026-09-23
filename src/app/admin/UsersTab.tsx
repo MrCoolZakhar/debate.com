@@ -25,27 +25,24 @@
 // than two. No local colour constants live here any more.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
 import {
-  Search, X, Mail, ArrowUpRight, Copy, Check, ExternalLink, Info,
+  Search, X, Info,
   Users, Building2, FileText, BadgeCheck, Globe2, UserSearch,
 } from 'lucide-react';
 import Portal from '@/components/Portal';
-import ProfileLink from '@/components/ProfileLink';
 import Avatar from '@/components/Avatar';
-import { FlagImg } from '@/components/FlagImg';
-import { cvHref } from '@/lib/cvLink';
+import { CircleFlag } from '@/components/CircleFlag';
 import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { getCountryByName } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
-import { useScrollLock } from '@/hooks/useScrollLock';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuCard, NeuInset, NeuStatTile,
 } from '@/components/neu';
-import { Chip, Eyebrow, MONO, NUM, RED, fmtDate, int, timeAgo } from './staffBits';
+import { Chip, MONO, NUM, RED, fmtDate, int, timeAgo } from './staffBits';
 import PendingTab from './PendingTab';
+import UserDetailDialog from './UserDetailDialog';
 
 const PAGE_SIZE = 50;
 
@@ -84,38 +81,6 @@ interface UserRow {
   date_of_birth: string | null;
 }
 
-interface DetailApplication {
-  id: string; conference: string; slug: string; role: string; status: string;
-  payment_status: string; amount_paid: number; submitted_at: string;
-  committee: string | null; country: string | null;
-}
-interface DetailConference {
-  id: string; slug: string; name: string; role: string; is_public: boolean;
-  created_at: string; applications: number;
-}
-interface DetailCvEntry {
-  id: string; entry_type: string; conference_name: string; committee: string;
-  allocation: string; awards: string[]; event_date: string | null; created_at: string;
-}
-interface DetailEmail {
-  id: string; subject: string; status: string; created_at: string; sent_at: string | null;
-}
-interface UserDetail {
-  profile: {
-    id: string; display_name: string; email: string; avatar_url: string | null;
-    bio: string | null; nationality: string | null; education_level: string | null;
-    mun_experience_level: string | null; created_at: string; last_sign_in_at: string | null;
-    is_demo: boolean; is_ambassador: boolean; is_admin: boolean;
-    points_balance: number; credits_remaining: number;
-    /** The personal Unlimited subscription in force now (trial or paid), or null. */
-    unlimited?: { plan: string; status: string; current_period_end: string | null } | null;
-  };
-  applications: DetailApplication[];
-  conferences: DetailConference[];
-  cv_entries: DetailCvEntry[];
-  emails: DetailEmail[];
-}
-
 type Sort = 'newest' | 'oldest' | 'name' | 'applications' | 'active';
 
 const SORTS: { key: Sort; label: string }[] = [
@@ -138,7 +103,7 @@ function nationalityFlag(nationality: string | null, size = 14) {
   if (!nationality) return null;
   const code = getCountryByName(nationality)?.code;
   if (!code) return null;
-  return <FlagImg code={code} size={size} style={{ borderRadius: 3, flexShrink: 0 }} />;
+  return <CircleFlag code={code} size={size} label={nationality} style={{ flexShrink: 0 }} />;
 }
 
 // ── Small shared bits ───────────────────────────────────────────────────────
@@ -215,404 +180,13 @@ function HoverHint({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-// ── Email pane ──────────────────────────────────────────────────────────────
+// ── The account pop-up ──────────────────────────────────────────────────────
 
-/**
- * DRAFT ONLY — this pane deliberately does not send.
- *
- * The existing EmailComposer (src/components/EmailComposer.tsx) cannot be
- * reused here: it requires `conference` + `conferenceId` and resolves {{tokens}}
- * against an applicant of that conference. A platform user has no conference,
- * so there is nothing honest to bind it to.
- *
- * So this composes the message and hands it to the operator's own mail client
- * (mailto:) or clipboard. Nothing is queued, nothing is sent from the app.
- *
- * email_outbox.conference_id is now nullable (NULL = a platform-level email),
- * so the real fix is a staff-send DB function queueing a conference_id = NULL
- * outbox row — the same shape as queue_gavelling_enquiry_notification, which
- * already does exactly this for the contact and ambassador forms. That is a
- * decision for Peter, not a side effect of this tab.
- */
-function EmailDraft({ to, name }: { to: string; name: string }) {
-  const [subject, setSubject] = useState('');
-  const [body, setBody] = useState('');
-  const [copied, setCopied] = useState<'subject' | 'body' | null>(null);
-
-  const mailto = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-
-  async function copy(what: 'subject' | 'body') {
-    try {
-      await navigator.clipboard.writeText(what === 'subject' ? subject : body);
-      setCopied(what);
-      setTimeout(() => setCopied(c => (c === what ? null : c)), 1600);
-    } catch { /* clipboard blocked — the fields are selectable anyway */ }
-  }
-
-  const ready = !!(subject || body);
-
-  return (
-    <NeuInset style={{ padding: 15 }}>
-      <div className="flex items-center gap-2 mb-2.5">
-        <Mail size={13} style={{ color: NEU.deepGold }} />
-        <p style={{ fontFamily: MONO, fontSize: 10, letterSpacing: '0.14em', fontWeight: 700, color: NEU.deepGold }}>
-          EMAIL {name.split(' ')[0]?.toUpperCase() || 'USER'}
-        </p>
-        <HoverHint label="Why this does not send from here">
-          <strong>This drafts, it does not send.</strong> The app&apos;s email pipeline
-          (<code>email_outbox</code>) requires a <code>conference_id</code>, and there is no
-          conference behind a platform-level message, so a user email has no honest row to
-          write. Opening it in your mail client also means the reply lands in your inbox.
-        </HoverHint>
-      </div>
-
-      <p className="mb-2.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.inkSoft }}>
-        To <span style={{ color: NEU.ink, fontWeight: 700 }}>{to}</span>
-      </p>
-
-      <input
-        value={subject}
-        onChange={e => setSubject(e.target.value)}
-        placeholder="Subject"
-        className="w-full rounded-xl px-3 py-2 mb-2 focus:outline-none"
-        style={{
-          border: 'none', backgroundColor: NEU.surface, boxShadow: NEU.inSm,
-          color: NEU.ink, fontFamily: OUTFIT, fontSize: 13,
-        }}
-      />
-      <textarea
-        value={body}
-        onChange={e => setBody(e.target.value)}
-        placeholder={`Hi ${name.split(' ')[0] || 'there'},`}
-        rows={6}
-        className="w-full rounded-xl px-3 py-2 focus:outline-none"
-        style={{
-          border: 'none', backgroundColor: NEU.surface, boxShadow: NEU.inSm,
-          color: NEU.ink, fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.6, resize: 'vertical',
-        }}
-      />
-
-      <div className="flex items-center gap-2 mt-2.5 flex-wrap">
-        <a
-          href={mailto}
-          className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-2"
-          style={{
-            background: ready
-              ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`
-              : NEU.base,
-            boxShadow: ready ? NEU.outSm : NEU.inSm,
-            color: ready ? NEU.gold : NEU.muted,
-            fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, textDecoration: 'none',
-            letterSpacing: '0.04em',
-            pointerEvents: ready ? 'auto' : 'none',
-          }}
-        >
-          <ExternalLink size={12} /> OPEN IN MAIL APP
-        </a>
-        {(['subject', 'body'] as const).map(what => (
-          <button
-            key={what}
-            type="button"
-            onClick={() => void copy(what)}
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 focus:outline-none"
-            style={{
-              border: 'none', backgroundColor: NEU.surface, boxShadow: NEU.outSm,
-              color: NEU.ink, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
-            }}
-          >
-            {copied === what ? <Check size={12} style={{ color: NEU.green }} /> : <Copy size={12} />}
-            {what === 'subject' ? 'Subject' : 'Body'}
-          </button>
-        ))}
-      </div>
-    </NeuInset>
-  );
-}
-
-// ── Detail drawer ───────────────────────────────────────────────────────────
-
-function DrawerSection({ title, count, children }: { title: string; count?: number; children: React.ReactNode }) {
-  return (
-    <div className="mb-5">
-      <div className="flex items-baseline gap-2 mb-2">
-        <Eyebrow>{title}</Eyebrow>
-        {count !== undefined && (
-          <span style={{ fontFamily: MONO, fontSize: 10, color: NEU.muted, ...NUM }}>{count}</span>
-        )}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function MiniRow({ children }: { children: React.ReactNode }) {
-  return (
-    <NeuInset small style={{ padding: '8px 12px', marginBottom: 6, borderRadius: 13 }}>
-      {children}
-    </NeuInset>
-  );
-}
-
-/** The staff record for one account. Exported so every place the console lists
- *  a person (conference organisers, newest accounts, the activity feed) opens
- *  the same pop-up rather than a second copy of it. */
+/** The staff record for one account. Every place the console lists a person
+ *  (this directory, conference organisers, newest accounts, the activity feed)
+ *  opens this same pop-up. The dialog itself lives in UserDetailDialog.tsx. */
 export function UserDrawer({ userId, onClose }: { userId: string; onClose: () => void }) {
-  const { session } = useAuth();
-  const [detail, setDetail] = useState<UserDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!session) { setError('Not signed in.'); return; }
-      const supabase = getAuthedClient(session.access_token);
-      const { data, error: e } = await supabase.rpc('admin_user_detail', { p_user_id: userId });
-      if (cancelled) return;
-      if (e) { setError(e.message); return; }
-      if (!data) { setError('No account found for this person.'); return; }
-      setDetail(data as UserDetail);
-    })();
-    return () => { cancelled = true; };
-  }, [session, userId]);
-
-  // Capture phase, and the key is consumed here: this drawer can open on top of
-  // another dialog (the conference pop-up), and Escape must close only the top
-  // layer. GrowDialog's own Escape handler skips an event already prevented.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      e.preventDefault();
-      e.stopPropagation();
-      onClose();
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [onClose]);
-
-  // Modal: freeze the user list behind the detail drawer.
-  useScrollLock(true);
-
-  const p = detail?.profile;
-
-  return (
-    <Portal>
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8"
-        style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-        onClick={onClose}
-      >
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Account"
-          className="w-full max-w-3xl overflow-y-auto"
-          style={{
-            maxHeight: '88vh', backgroundColor: NEU.surface, borderRadius: 24,
-            boxShadow: '0 24px 60px rgba(27,56,40,0.30)', padding: 24,
-          }}
-          onClick={e => e.stopPropagation()}
-        >
-          {!detail && !error && (
-            <div className="flex items-center justify-center py-16"><Loader /></div>
-          )}
-
-          {error && (
-            <div className="py-10 text-center">
-              <p style={{ fontFamily: OUTFIT, fontSize: 13, color: RED }}>{error}</p>
-              <button
-                type="button"
-                onClick={onClose}
-                className="mt-4 rounded-full px-4 py-2 focus:outline-none"
-                style={{
-                  border: 'none', backgroundColor: NEU.surface, boxShadow: NEU.outSm,
-                  color: NEU.ink, fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                }}
-              >
-                Close
-              </button>
-            </div>
-          )}
-
-          {p && detail && (
-            <>
-              <div className="flex items-start gap-3.5 mb-5">
-                {/* Avatar + name open the public CV, matching the rest of the
-                    product. Opens in a new tab so an admin mid-triage does not
-                    lose the drawer they are reading. */}
-                <ProfileLink userId={p.id} name={p.display_name} newTab className="flex-shrink-0">
-                  <Avatar url={p.avatar_url} name={p.display_name} size={56} />
-                </ProfileLink>
-                <div className="flex-1 min-w-0">
-                  <h2 className="truncate flex items-center gap-2" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 20, fontWeight: 900, letterSpacing: '-0.01em' }}>
-                    <ProfileLink userId={p.id} name={p.display_name} newTab>
-                      {p.display_name}
-                    </ProfileLink>
-                    {nationalityFlag(p.nationality, 18)}
-                  </h2>
-                  <p className="truncate" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontSize: 12.5 }}>{p.email}</p>
-                  <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-                    {p.is_admin && <Chip text="STAFF" bg={TINT.gold} fg={NEU.deepGold} />}
-                    {p.is_ambassador && <Chip text="AMBASSADOR" bg={TINT.green} fg={NEU.green} />}
-                    {p.is_demo && <Chip text="DEMO" bg={TINT.grey} fg={NEU.inkSoft} />}
-                    {p.nationality && <Chip text={p.nationality.toUpperCase()} bg={TINT.forest} fg={NEU.forest} />}
-                    {p.mun_experience_level && <Chip text={p.mun_experience_level.toUpperCase()} bg={TINT.forest} fg={NEU.forest} />}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <Link
-                    href={cvHref(p.id, p.display_name) ?? `/cv/${p.id}`}
-                    target="_blank"
-                    className="inline-flex items-center gap-1 rounded-full px-3 py-1.5"
-                    style={{
-                      backgroundColor: NEU.surface, boxShadow: NEU.outSm, color: NEU.forest,
-                      fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, textDecoration: 'none',
-                    }}
-                  >
-                    Public CV <ArrowUpRight size={12} />
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    aria-label="Close"
-                    className="flex items-center justify-center rounded-lg focus:outline-none"
-                    style={{
-                      width: 30, height: 30, border: 'none', borderRadius: 11,
-                      backgroundColor: NEU.surface, boxShadow: NEU.outSm,
-                      color: NEU.inkSoft, cursor: 'pointer',
-                    }}
-                  >
-                    <X size={15} />
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-5">
-                {[
-                  { l: 'Joined', v: fmtDate(p.created_at) },
-                  { l: 'Last seen', v: timeAgo(p.last_sign_in_at) },
-                  {
-                    l: 'Credits left',
-                    v: p.unlimited
-                      ? `Unlimited${p.unlimited.status === 'trialing' ? ' (trial)' : ''}`
-                      : String(p.credits_remaining ?? 0),
-                  },
-                  { l: 'Points', v: String(p.points_balance ?? 0) },
-                ].map(s => (
-                  <NeuInset key={s.l} small style={{ padding: '9px 12px', borderRadius: 13 }}>
-                    <p style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 800, color: NEU.ink, ...NUM }}>{s.v}</p>
-                    <p style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.inkSoft }}>{s.l}</p>
-                  </NeuInset>
-                ))}
-              </div>
-
-              {p.bio && (
-                <DrawerSection title="Bio">
-                  <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.ink, lineHeight: 1.6 }}>{p.bio}</p>
-                </DrawerSection>
-              )}
-
-              <DrawerSection title="Applications" count={detail.applications.length}>
-                {detail.applications.length === 0
-                  ? <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.inkSoft }}>None.</p>
-                  : detail.applications.map(a => (
-                    <MiniRow key={a.id}>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Link href={`/manage/${a.slug}/applications`} style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: NEU.ink, textDecoration: 'none' }}>
-                          {a.conference}
-                        </Link>
-                        <Chip text={a.role.toUpperCase()} bg={TINT.forest} fg={NEU.forest} />
-                        <Chip
-                          text={a.status.toUpperCase()}
-                          bg={a.status === 'rejected' ? TINT.red : TINT.green}
-                          fg={a.status === 'rejected' ? RED : NEU.green}
-                        />
-                        <Chip
-                          text={a.payment_status.toUpperCase()}
-                          bg={a.payment_status === 'paid' ? TINT.green : TINT.grey}
-                          fg={a.payment_status === 'paid' ? NEU.green : NEU.inkSoft}
-                        />
-                        <span className="ml-auto" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.inkSoft, ...NUM }}>
-                          {fmtDate(a.submitted_at)}
-                        </span>
-                      </div>
-                      {(a.committee || a.country) && (
-                        <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.inkSoft }}>
-                          {[a.committee, a.country].filter(Boolean).join(' · ')}
-                        </p>
-                      )}
-                    </MiniRow>
-                  ))}
-              </DrawerSection>
-
-              <DrawerSection title="Conferences organised" count={detail.conferences.length}>
-                {detail.conferences.length === 0
-                  ? <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.inkSoft }}>None.</p>
-                  : detail.conferences.map(c => (
-                    <MiniRow key={c.id}>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Link href={`/manage/${c.slug}`} style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: NEU.ink, textDecoration: 'none' }}>
-                          {c.name}
-                        </Link>
-                        <Chip text={c.role.toUpperCase()} bg={TINT.gold} fg={NEU.deepGold} />
-                        {c.is_public
-                          ? <Chip text="PUBLISHED" bg={TINT.green} fg={NEU.green} />
-                          : <Chip text="DRAFT" bg={TINT.grey} fg={NEU.inkSoft} />}
-                        <span className="ml-auto" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.inkSoft, ...NUM }}>
-                          {c.applications} apps · {fmtDate(c.created_at)}
-                        </span>
-                      </div>
-                    </MiniRow>
-                  ))}
-              </DrawerSection>
-
-              <DrawerSection title="MUN CV" count={detail.cv_entries.length}>
-                {detail.cv_entries.length === 0
-                  ? <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.inkSoft }}>No experience recorded.</p>
-                  : detail.cv_entries.map(e => (
-                    <MiniRow key={e.id}>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>{e.conference_name}</span>
-                        <span style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.inkSoft }}>
-                          {[e.committee, e.allocation].filter(Boolean).join(' · ')}
-                        </span>
-                        {(e.awards ?? []).filter(a => a && a !== 'None').map(a => (
-                          <Chip key={a} text={a.toUpperCase()} bg={TINT.gold} fg={NEU.deepGold} />
-                        ))}
-                        <span className="ml-auto" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.inkSoft, ...NUM }}>
-                          {e.event_date ? fmtDate(`${e.event_date}T00:00:00`) : fmtDate(e.created_at)}
-                        </span>
-                      </div>
-                    </MiniRow>
-                  ))}
-              </DrawerSection>
-
-              <DrawerSection title="Emails we sent" count={detail.emails.length}>
-                {detail.emails.length === 0
-                  ? <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.inkSoft }}>Nothing on record.</p>
-                  : detail.emails.map(m => (
-                    <MiniRow key={m.id}>
-                      <div className="flex items-center gap-2">
-                        <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.ink, flex: 1 }}>{m.subject}</span>
-                        <Chip
-                          text={m.status.toUpperCase()}
-                          bg={m.status === 'sent' ? TINT.green : m.status === 'failed' ? TINT.red : TINT.grey}
-                          fg={m.status === 'sent' ? NEU.green : m.status === 'failed' ? RED : NEU.inkSoft}
-                        />
-                        <span style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.inkSoft, ...NUM }}>
-                          {fmtDate(m.sent_at ?? m.created_at)}
-                        </span>
-                      </div>
-                    </MiniRow>
-                  ))}
-              </DrawerSection>
-
-              <EmailDraft to={p.email} name={p.display_name} />
-            </>
-          )}
-        </div>
-      </div>
-    </Portal>
-  );
+  return <UserDetailDialog userId={userId} onClose={onClose} />;
 }
 
 // ── One row of the directory ────────────────────────────────────────────────

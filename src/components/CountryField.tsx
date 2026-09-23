@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Globe2 } from 'lucide-react';
 import Portal from '@/components/Portal';
+import { CircleFlag } from '@/components/CircleFlag';
 import { UN_COUNTRIES, getCountryByName, getFlagUrl, countryMatchRank } from '@/lib/countries';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -29,6 +30,8 @@ export interface CountryFieldProps {
   id?: string;
   invalid?: boolean;
   describedBy?: string;
+  /** Draw the picked country's flag as a round flag instead of the rectangle. */
+  circleFlag?: boolean;
 }
 
 export function CountryField({
@@ -40,6 +43,7 @@ export function CountryField({
   id,
   invalid,
   describedBy,
+  circleFlag = false,
 }: CountryFieldProps) {
   const listId = `${id ?? 'country'}-listbox`;
   const { language } = useLanguage();
@@ -109,7 +113,11 @@ export function CountryField({
   return (
     <div ref={wrapRef} className="relative">
       <div className="relative">
-        {flag ? (
+        {country && circleFlag ? (
+          <span className="absolute pointer-events-none flex" style={{ left: '12px', top: '50%', transform: 'translateY(-50%)' }}>
+            <CircleFlag code={country.code} size={22} decorative />
+          </span>
+        ) : flag ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
             src={flag}

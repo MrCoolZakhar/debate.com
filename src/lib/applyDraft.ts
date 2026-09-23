@@ -39,6 +39,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CustomAnswers } from '@/lib/customQuestions';
 import type { ExperienceEntry } from '@/components/CVEntryModal';
+import { normalizeNewDelegation, type NewDelegationDetails } from '@/lib/delegationCreate';
 
 /** Mirrors the apply flow's own `Preference` (structurally identical). */
 export interface DraftPreference {
@@ -81,6 +82,9 @@ export interface ApplyDraftAnswers {
   questionPage: number;
   /** Raw code only — never the resolved discount (see file header). */
   voucherCode: string;
+  /** Where a delegation this applicant creates is based, and its picture
+   *  (src/lib/delegationCreate.ts). Optional: drafts from before 23 Sep 2026. */
+  newDelegation?: NewDelegationDetails;
 }
 
 export interface ApplyDraftRow {
@@ -237,6 +241,7 @@ export function normalizeAnswers(raw: Partial<ApplyDraftAnswers>): ApplyDraftAns
     customAnswers: (raw.customAnswers ?? {}) as CustomAnswers,
     questionPage: typeof raw.questionPage === 'number' ? raw.questionPage : 0,
     voucherCode: raw.voucherCode ?? '',
+    newDelegation: normalizeNewDelegation(raw.newDelegation),
   };
 }
 

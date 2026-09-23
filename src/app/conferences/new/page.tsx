@@ -61,6 +61,7 @@ import {
   type CommitteeSetupDraft,
   type Difficulty,
 } from '@/components/committeeSetupKit';
+import { normaliseCommitteeLanguage } from '@/lib/committeeLanguage';
 
 
 // Mirrors settings' ensureRoleConfigs default set (source of truth there) —
@@ -591,6 +592,7 @@ function CommitteeEditor({
         emblemUploading={emblemUploading}
         onUploadFlag={onUploadFlag}
         selectedInline
+        showLanguage
         onSubmit={onSave}
       />
 
@@ -659,10 +661,10 @@ function BannerPreset({ src, selected, onClick }: { src: string; selected: boole
             : '2px solid rgba(27,56,40,0.10)',
         backgroundImage: `url(${src})`, backgroundSize: 'cover', backgroundPosition: 'center',
         boxShadow: hovered
-          ? '-5px -6px 16px rgba(255,255,255,0.85), 9px 15px 34px rgba(27,56,40,0.20), 0 9px 28px rgba(182,135,31,0.22)'
+          ? `${NEU.outHover}, 0 9px 28px rgba(182,135,31,0.22)`
           : selected
             ? NEU.outSm
-            : '-3px -3px 8px rgba(255,255,255,0.5), 5px 8px 16px rgba(27,56,40,0.12)',
+            : NEU.outSm,
         transform: hovered
           ? 'translateY(-5px) scale(1.05)'
           : selected
@@ -1150,6 +1152,7 @@ export default function NewConferencePage() {
             delegation_size: c.doubleDelegation ? 2 : 1,
             groups: c.type === 'custom' ? c.groups : [],
             logo_url: effectiveEmblem(c),
+            working_language: normaliseCommitteeLanguage(c.workingLanguage),
           }))
         )
         .select('id, name');

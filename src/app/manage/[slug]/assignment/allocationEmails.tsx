@@ -19,7 +19,7 @@ import {
   Mail, Info, Send, Repeat, ListChecks, Check, Search, X, ChevronDown, CircleSlash,
 } from 'lucide-react';
 import { type QueueEventEmailResult } from '@/lib/emailEvents';
-import { getFlagUrl } from '@/lib/countries';
+import { CircleFlag } from '@/components/CircleFlag';
 import { NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuButton, NeuInset } from '@/components/neu';
 import Portal from '@/components/Portal';
 import { ModalOverlay } from '@/components/ModalOverlay';
@@ -295,6 +295,7 @@ function SendMenu({
 
 export function AllocationEmailBar({
   autoSend, onToggleAuto, togglePending, targets, busy, onSend,
+  templateOff = false, onTurnOnTemplate, turningOnTemplate = false,
 }: {
   autoSend: boolean;
   onToggleAuto: (next: boolean) => void;
@@ -302,6 +303,13 @@ export function AllocationEmailBar({
   targets: AllocationTarget[];
   busy: boolean;
   onSend: (applicationIds: string[], scope: 'new' | 'all' | 'custom') => void;
+  /** The Allocation Assigned template is switched OFF under Communications.
+   *  That off wins over `autoSend`: nothing is queued, automatically or by
+   *  hand, so the bar must never read "Sending automatically" while it holds. */
+  templateOff?: boolean;
+  /** Re-enables the template. Queues nothing for delegates already seated. */
+  onTurnOnTemplate?: () => void;
+  turningOnTemplate?: boolean;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const unsent = targets.filter(t => !t.sent);
@@ -346,7 +354,11 @@ export function AllocationEmailBar({
             />
           </div>
           <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.inkSoft, marginTop: 1 }}>
-            {targets.length === 0 ? (
+            {templateOff ? (
+              <span style={{ fontWeight: 700, color: NEU.amber }}>
+                Off in Communications. Nobody is emailed when you seat them{unsent.length > 0 ? ` (${unsent.length} waiting)` : ''}.
+              </span>
+            ) : targets.length === 0 ? (
               'No delegates seated yet'
             ) : (
               <>
@@ -386,9 +398,27 @@ export function AllocationEmailBar({
                 cursor: togglePending ? 'wait' : 'pointer', userSelect: 'none',
               }}
             >
-              {autoSend ? 'Sending automatically' : 'Manual release'}
+              {templateOff ? 'Switched off' : autoSend ? 'Sending automatically' : 'Manual release'}
             </span>
           </span>
+
+          {templateOff && onTurnOnTemplate && (
+            <button
+              type="button"
+              onClick={onTurnOnTemplate}
+              disabled={turningOnTemplate}
+              title="Allocation emails are switched off under Communications, so nobody is emailed when you seat them. Turning them on emails the delegates you seat from now on. Anyone already waiting is sent only when you press SEND."
+              className="focus:outline-none"
+              style={{
+                fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, whiteSpace: 'nowrap',
+                color: NEU.forest, backgroundColor: 'rgba(238,217,138,0.55)',
+                borderRadius: 999, padding: '6px 12px', boxShadow: NEU.outSm,
+                cursor: turningOnTemplate ? 'wait' : 'pointer', opacity: turningOnTemplate ? 0.6 : 1,
+              }}
+            >
+              Turn on
+            </button>
+          )}
 
           <SendMenu
             unsentCount={unsent.length}
@@ -583,20 +613,8 @@ function AllocationPicker({
 }
 
 function FlagChip({ code, name }: { code: string; name: string }) {
-  const [failed, setFailed] = useState(false);
-  const url = getFlagUrl(code);
-  if (!url || failed) {
-    return <span aria-hidden style={{ width: 20, height: 14, borderRadius: 2, backgroundColor: NEU.base, boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.14)', flexShrink: 0 }} />;
-  }
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={url}
-      alt={name}
-      onError={() => setFailed(true)}
-      style={{ width: 20, height: 14, borderRadius: 2, objectFit: 'cover', flexShrink: 0, boxShadow: '0 0 0 1px rgba(27,56,40,0.10)' }}
-    />
-  );
+  // Round, like every flag on the allocation portal (owner, 23 Sep 2026).
+  return <CircleFlag code={/^[A-Za-z]{2}$/.test(code.trim()) ? code.trim() : null} size={18} label={name} title={name} />;
 }
 
 function SentPill({ sent, sentAt }: { sent: boolean; sentAt: string | null }) {

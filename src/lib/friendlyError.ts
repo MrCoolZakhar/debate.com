@@ -48,6 +48,13 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   arc_timeline_open_after_first_price: "Applications would open after your first price has ended. Pick an earlier opening date, or remove that price.",
   arc_timeline_close_before_last_price: "Applications would close before your last price starts. Pick a later closing date, or remove that price.",
   arc_timeline_open_before_close: "Applications must open before they close. Move one of the two dates.",
+  // guard_application_write(): a self-submitted application needs the
+  // applicant's nationality and date of birth on their profile.
+  applications_applicant_basics_required: "Add your nationality and date of birth to your profile before you apply. Your answers are saved.",
+  // societies: where a delegation is based, and its picture.
+  societies_city_len: "The city must be between 1 and 80 characters.",
+  societies_country_code_format: "Pick the delegation's country from the list.",
+  societies_logo_url_https: "That picture could not be used. Upload it again.",
   arc_timeline_after_conference: "Applications can't close after the conference ends. Move the closing date, or the last price's end date, to the conference's last day or earlier.",
 };
 
@@ -85,6 +92,7 @@ const CODE_MESSAGES: Record<string, string> = {
 const HINT_MESSAGES: Record<string, string> = {
   // guard_application_write(): the role's application window.
   role_closed: "Applications for this role have closed, so this application can't be sent. Your answers are saved. Contact the organising team if you think this is a mistake.",
+  basics_required: "Add your nationality and date of birth to your profile before you apply. Your answers are saved.",
   role_not_open: "Applications for this role haven't opened yet. Your answers are saved, so you can send them once applications open.",
 };
 

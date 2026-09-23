@@ -4,9 +4,10 @@
  * neu.tsx, Gavelling neumorphic primitives.
  *
  * Pilot design system for the organiser dashboard: one continuous ivory
- * surface (#EDE7D8 page, #F0EBDD cards), elements read as extruded or
- * pressed-in purely via a forest-tinted dual-shadow pair, never neutral
- * black, never white cards. Vibrancy lives ONLY in small gradient icon
+ * surface (#EDE7D8 page, #F0EBDD cards). Elements are raised by a crisp
+ * forest-tinted hairline ring and a soft forest-tinted drop shadow, and
+ * pressed in by a tinted fill with an inner hairline: never neutral black,
+ * never a white highlight halo, never white cards. Vibrancy lives ONLY in small gradient icon
  * discs and the single accent gradient; everything else stays calm.
  *
  * Dependency-free (inline styles + lucide icons already in the app).
@@ -45,15 +46,48 @@ export const NEU = {
   // `surface`): use it for emails, meta values, captions, any real sentence
   // that is not primary.
   inkSoft: 'color-mix(in srgb, var(--gv-on-surface) 72%, var(--gv-surface))',
-  // Extruded pair, light top-left, forest-tinted dark bottom-right.
-  out: '-6px -6px 14px rgba(255,255,255,0.85), 8px 8px 20px color-mix(in srgb, var(--gv-main) 16%, transparent)',
-  outHover: '-8px -8px 18px rgba(255,255,255,0.92), 10px 10px 26px color-mix(in srgb, var(--gv-main) 21%, transparent)',
-  // Tighter, crisper pair for small chips/discs/buttons.
-  outSm: '-3px -3px 7px rgba(255,255,255,0.9), 4px 4px 9px color-mix(in srgb, var(--gv-main) 15%, transparent)',
-  outSmHover: '-4px -4px 9px rgba(255,255,255,0.95), 5px 5px 12px color-mix(in srgb, var(--gv-main) 20%, transparent)',
-  // Pressed-in pair, wells, tracks, done rows.
-  in: 'inset 4px 4px 10px color-mix(in srgb, var(--gv-main) 14%, transparent), inset -4px -4px 10px rgba(255,255,255,0.8)',
-  inSm: 'inset 2px 2px 6px color-mix(in srgb, var(--gv-main) 13%, transparent), inset -2px -2px 6px rgba(255,255,255,0.8)',
+  // ── Elevation (23 Sep 2026: the white top-left highlight is GONE) ──────
+  // The old dual-shadow pair painted a blurry white halo up and to the left
+  // of every card, pill and button. On ivory it read as a smudge, not depth
+  // (owner: "that weird white shadowy backdrop ... looks sloppy"). Elevation
+  // is now a crisp forest-tinted hairline ring plus a soft forest-tinted drop
+  // shadow falling DOWN (never neutral grey, never white). Token names are
+  // unchanged, so every caller repaints without an edit.
+  //
+  //   out / outHover      raised cards and panels (ring + soft drop)
+  //   outSm / outSmHover  chips, pills, small buttons, discs (ring + 1-2px drop)
+  //   in / inSm           wells, tracks, done rows: an inner hairline + a faint
+  //                       top inner shade. Pair with `well` as the FILL, never
+  //                       with a white inner glow.
+  //
+  // Backdrops and accents for page agents (use these instead of shadows to
+  // make a region stand out; colour and borders do the grouping now):
+  //   ring        a bare 1px forest hairline (boxShadow), e.g. a flat tile
+  //   ringStrong  the same at a firmer 18%, e.g. a focused / selected tile
+  //   hairline    a CSS `border` value, 1px forest 12%, for cards and dividers
+  //   well        FILL for a pressed-in area (4% forest over the page ground)
+  //   wash        FILL for a quiet tinted section on a card (4% forest over
+  //               the surface), e.g. a group of meta fields, a sidebar block
+  //   goldWash    FILL for an accent / highlighted section (pale gold over
+  //               the surface), e.g. "needs attention", a featured summary
+  //   goldRing    boxShadow ring for a gold-highlighted tile or pill
+  //   accentBar   a CSS border value for `borderInlineStart` (3px forest),
+  //               marking a callout or the active item in a list. Use
+  //               borderInlineStart, never borderLeft, so Arabic mirrors.
+  out: '0 0 0 1px color-mix(in srgb, var(--gv-main) 9%, transparent), 0 1px 2px color-mix(in srgb, var(--gv-main) 6%, transparent), 0 8px 20px -8px color-mix(in srgb, var(--gv-main) 18%, transparent)',
+  outHover: '0 0 0 1px color-mix(in srgb, var(--gv-main) 14%, transparent), 0 2px 4px color-mix(in srgb, var(--gv-main) 8%, transparent), 0 14px 30px -10px color-mix(in srgb, var(--gv-main) 24%, transparent)',
+  outSm: '0 0 0 1px color-mix(in srgb, var(--gv-main) 10%, transparent), 0 1px 2px color-mix(in srgb, var(--gv-main) 8%, transparent)',
+  outSmHover: '0 0 0 1px color-mix(in srgb, var(--gv-main) 16%, transparent), 0 4px 10px -3px color-mix(in srgb, var(--gv-main) 18%, transparent)',
+  in: 'inset 0 0 0 1px color-mix(in srgb, var(--gv-main) 10%, transparent), inset 0 1px 2px color-mix(in srgb, var(--gv-main) 7%, transparent)',
+  inSm: 'inset 0 0 0 1px color-mix(in srgb, var(--gv-main) 9%, transparent), inset 0 1px 1.5px color-mix(in srgb, var(--gv-main) 6%, transparent)',
+  ring: '0 0 0 1px color-mix(in srgb, var(--gv-main) 10%, transparent)',
+  ringStrong: '0 0 0 1px color-mix(in srgb, var(--gv-main) 18%, transparent)',
+  hairline: '1px solid color-mix(in srgb, var(--gv-main) 12%, transparent)',
+  well: 'color-mix(in srgb, var(--gv-main) 4%, var(--gv-bg))',
+  wash: 'color-mix(in srgb, var(--gv-main) 4%, var(--gv-surface))',
+  goldWash: 'color-mix(in srgb, var(--gv-accent-light) 24%, var(--gv-surface))',
+  goldRing: '0 0 0 1px color-mix(in srgb, var(--gv-accent) 40%, transparent)',
+  accentBar: '3px solid var(--gv-main)',
 } as const;
 
 /** Saturated two-stop gradients, the only place "vibrant" is allowed. */
@@ -229,7 +263,7 @@ export function NeuInset({
     <div
       className={className}
       style={{
-        backgroundColor: NEU.base,
+        backgroundColor: NEU.well,
         borderRadius: 16,
         boxShadow: small ? NEU.inSm : NEU.in,
         ...style,
@@ -379,7 +413,7 @@ export function NeuStatTile({
         // sink to the bottom, no floating void when the row is tall.
         display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
         // Gold ring + pressed-in seat when this tile's filter is applied.
-        ...(active ? { boxShadow: `0 0 0 2px ${NEU.deepGold}, ${NEU.in}`, backgroundColor: NEU.base } : null),
+        ...(active ? { boxShadow: `0 0 0 2px ${NEU.deepGold}, ${NEU.in}`, backgroundColor: NEU.goldWash } : null),
         ...style,
       }}
     >
@@ -443,7 +477,7 @@ export function NeuProgress({
         position: 'relative',
         height,
         borderRadius: 999,
-        backgroundColor: NEU.base,
+        backgroundColor: NEU.well,
         boxShadow: NEU.inSm,
         ...style,
       }}
@@ -685,7 +719,7 @@ export function NeuChecklistRow({
       style={{
         padding: dense ? '4px 10px' : '11px 14px',
         borderRadius: dense ? 12 : 16,
-        backgroundColor: done ? NEU.base : NEU.surface,
+        backgroundColor: done ? NEU.well : NEU.surface,
         boxShadow: done ? NEU.inSm : clickable && hovered ? NEU.outSmHover : NEU.outSm,
         transform: clickable && hovered ? 'translateY(-2px)' : 'translateY(0)',
         transition: `box-shadow 260ms ${EASE}, transform 260ms ${EASE}`,

@@ -4,9 +4,11 @@
  * CreateDelegationPrompt: what a DELEGATE sees when the delegation they typed
  * does not exist yet at this conference.
  *
- * Delegates cannot create a delegation. Only a Head Delegate or a Faculty
- * Advisor can, because the delegation is billed through them (the invoicing
- * step, and societies.spots_purchased). The apply flow used to stop a delegate
+ * Delegates cannot create a delegation. Only a Head Delegate can (owner,
+ * 23 Sep 2026; Faculty Advisors used to be offered too), because the
+ * delegation is billed through them (the invoicing step, and
+ * societies.spots_purchased). After the switch the society step shows
+ * NewDelegationCard, which asks where the delegation is based. The apply flow used to stop a delegate
  * dead here with "ask your Head Delegate or Faculty Advisor to create it".
  * Often that person IS the applicant, so this offers the switch instead:
  *
@@ -40,10 +42,15 @@ import { Check, Info, Plus, X, Loader2 } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { NEU, OUTFIT, EASE } from '@/components/neu';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import { supabase as anonSupabase } from '@/lib/supabase';
 
 export type DelegationSwitchRole = 'head-delegate' | 'faculty-advisor';
 
-const SWITCH_ROLES: DelegationSwitchRole[] = ['head-delegate', 'faculty-advisor'];
+// Owner, 23 Sep 2026: only a Head Delegate creates a delegation from here, and
+// an applicant who creates one is made its Head Delegate. The Faculty Advisor
+// label and copy stay (the type is shared with the role-switched notice), but
+// it is no longer offered.
+const SWITCH_ROLES: DelegationSwitchRole[] = ['head-delegate'];
 
 export const SWITCH_ROLE_LABEL: Record<DelegationSwitchRole, string> = {
   'head-delegate': 'Head Delegate',
@@ -81,6 +88,59 @@ function roleIsOpen(r: RoleWindow, now = new Date()): boolean {
   return true;
 }
 
+// ── Can this applicant become a Head Delegate here? ─────────────────────────
+
+export type HeadDelegateAvailability = 'open' | 'closed' | 'held' | null;
+
+/**
+ * Whether "Create this delegation" may be offered at all: 'open' when the
+ * conference takes Head Delegate applications right now and this applicant
+ * holds none, 'closed' when it does not take them, 'held' when they already
+ * have one, null while loading, on a read error, or with no conference.
+ * Read-only; one read per conference and user.
+ */
+export function useHeadDelegateAvailability(
+  conferenceId: string | null,
+  accessToken: string | null,
+  userId: string | null,
+): HeadDelegateAvailability {
+  const [state, setState] = useState<{ key: string; value: HeadDelegateAvailability } | null>(null);
+  const key = conferenceId ? `${conferenceId}|${userId ?? ''}` : '';
+  // The token is read through a ref so a refresh does not re-run the read.
+  const tokenRef = useRef(accessToken);
+  useEffect(() => { tokenRef.current = accessToken; });
+  useEffect(() => {
+    if (!conferenceId) return;
+    let cancelled = false;
+    (async () => {
+      const client = tokenRef.current ? getAuthedClient(tokenRef.current) : anonSupabase;
+      const { data: cfg, error } = await client
+        .from('application_role_configs')
+        .select('role, is_enabled, applications_open_at, applications_close_at')
+        .eq('conference_id', conferenceId)
+        .eq('role', 'head-delegate')
+        .maybeSingle();
+      if (cancelled) return;
+      if (error) { setState({ key, value: null }); return; }
+      if (!cfg || !roleIsOpen(cfg as RoleWindow)) { setState({ key, value: 'closed' }); return; }
+      if (userId && tokenRef.current) {
+        const res = await client
+          .from('applications')
+          .select('id')
+          .eq('conference_id', conferenceId)
+          .eq('user_id', userId)
+          .eq('role', 'head-delegate')
+          .limit(1);
+        if (cancelled) return;
+        if (!res.error && (res.data ?? []).length > 0) { setState({ key, value: 'held' }); return; }
+      }
+      setState({ key, value: 'open' });
+    })();
+    return () => { cancelled = true; };
+  }, [conferenceId, userId, key]);
+  return state && state.key === key ? state.value : null;
+}
+
 // ── Inline card, under the name field ────────────────────────────────────────
 
 export function NoDelegationMatch({
@@ -104,8 +164,8 @@ export function NoDelegationMatch({
         No delegation called &quot;{name}&quot; yet.
       </p>
       <p style={{ fontFamily: OUTFIT, fontWeight: 500, fontSize: 12.5, lineHeight: 1.5, color: NEU.inkSoft, marginTop: 3 }}>
-        Check the spelling, or ask your Head Delegate or Faculty Advisor for their invite link.
-        If nobody has created it, you can.
+        Check the spelling, or ask your Head Delegate for their invite link.
+        If nobody has created it yet, you can create it and apply as its Head Delegate.
       </p>
       {blockedReason ? (
         <p style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 12, lineHeight: 1.45, color: DANGER, marginTop: 8 }}>
@@ -420,7 +480,7 @@ function CreateDelegationDialogBody({
   const noneOpen = load.status === 'ready' && usable.length === 0;
   const roleWords = usable.length === 1
     ? `its ${SWITCH_ROLE_LABEL[usable[0].role]}`
-    : 'its Head Delegate or Faculty Advisor';
+    : 'its Head Delegate';
 
   return (
     <Portal>
@@ -478,7 +538,7 @@ function CreateDelegationDialogBody({
           </div>
 
           <p id={descId} style={{ fontWeight: 500, fontSize: 13.5, lineHeight: 1.55, color: NEU.inkSoft, marginTop: 8 }}>
-            Delegates join a delegation that already exists. To create one, you apply as {roleWords} instead.
+            Only a Head Delegate can create a delegation. If you create &quot;{name}&quot;, you apply as {roleWords} instead of as a delegate.
           </p>
 
           {/* The reminder. Two delegations for one school is the failure this
@@ -525,7 +585,7 @@ function CreateDelegationDialogBody({
           {noneOpen && (
             <p style={{ marginTop: 16, fontWeight: 600, fontSize: 13, lineHeight: 1.5, color: NEU.ink }}>
               {options.length === 0
-                ? 'This conference is not taking Head Delegate or Faculty Advisor applications right now. '
+                ? 'This conference is not taking Head Delegate applications right now. '
                 : ''}
               {options.map(o => o.blocked).filter(Boolean).join(' ')}
               {options.length === 0 ? '' : ' '}
@@ -587,8 +647,8 @@ function CreateDelegationDialogBody({
               <ul className="flex flex-col gap-1.5" style={{ marginTop: 14, padding: 0, listStyle: 'none' }}>
                 {[
                   'Your answers that apply to the new role come with you.',
-                  'Switching costs nothing. You still send one application.',
-                  `"${name}" is created when you submit, not before.`,
+                  'It costs the same as a delegate application: one application, one credit.',
+                  `Next you add where "${name}" is based. It is created when you submit, not before.`,
                 ].map(line => (
                   <li key={line} className="flex items-start gap-2" style={{ fontWeight: 500, fontSize: 12.5, lineHeight: 1.45, color: NEU.inkSoft, overflowWrap: 'anywhere' }}>
                     <Check size={14} strokeWidth={2.8} style={{ color: NEU.green, flexShrink: 0, marginTop: 2 }} />

@@ -6,9 +6,10 @@
 
 import Link from 'next/link';
 import {
-  ArrowRight, ArrowUpRight, Award, BadgeCheck, CalendarDays, CircleDashed, FileQuestion, Flag, Globe,
-  GraduationCap, Landmark, ListOrdered, Mail, MessageSquareText, Receipt, RotateCcw, Trophy, UserRoundCheck, Users, Wallet,
+  ArrowRight, ArrowUpRight, Award, BadgeCheck, Cake, CircleDashed, FileQuestion, Flag,
+  GraduationCap, Landmark, ListOrdered, MessageSquareText, Receipt, Trophy, UserRoundCheck, Wallet,
 } from 'lucide-react';
+import { DelegationIdentity } from '../DelegationAvatar';
 import { LogoDisc } from '@/components/LogoDisc';
 import VerifiedCheck, { VERIFIED_BLUE } from '@/components/VerifiedCheck';
 import { committeeDisplayName } from '@/lib/presetNames';
@@ -53,9 +54,27 @@ function levelLabel(level: string) {
 }
 
 // ── Overview ────────────────────────────────────────────────────────────────
+//
+// Everything an organiser decides on, on one page (owner, 23 Sep 2026: "the
+// answers are quite important so they should be in the main overview"). The
+// hero above already says who they are (name, email, nationality, date of
+// birth, role, status), so nothing here repeats it.
+
+export interface OverviewDelegation {
+  name: string;
+  members: number;
+  country: string | null;
+  lead: string | null;
+  leadRole: string | null;
+  isHead: boolean;
+  logoUrl?: string | null;
+  city?: string | null;
+  countryCode?: string | null;
+}
 
 export function OverviewTab({
-  app, isDelegate, conferenceSlug, experienceLevel, cvCount, totals, ledgerLoading, feeCharged, age, onTab,
+  app, isDelegate, conferenceSlug, experienceLevel, cvCount, totals, ledgerLoading, feeCharged, onTab,
+  answerItems, orphanAnswers, delegation, onOpenDelegation, dob, age,
 }: {
   app: ApplicantApp;
   isDelegate: boolean;
@@ -65,14 +84,22 @@ export function OverviewTab({
   totals: LedgerTotals | null;
   ledgerLoading: boolean;
   feeCharged: boolean;
-  age: number | null;
   onTab: (t: ApplicantTab) => void;
+  answerItems: AnswerItem[];
+  orphanAnswers: AnswerItem[];
+  delegation: OverviewDelegation | null;
+  onOpenDelegation?: () => void;
+  dob: string | null;
+  age: number | null;
 }) {
   const allocated = !!app.assigned_committee && (app.status === 'assigned' || app.status === 'checked-in' || !!app.assigned_country_name);
   const pref = matchedPreference(app);
   const committee = committeeLabel(app.assigned_committee);
   const accent = LEVEL_ACCENT[experienceLevel.toLowerCase()] ?? '#9A8A78';
   const accepted = app.status === 'accepted' || app.status === 'assigned' || app.status === 'checked-in';
+  const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
+  const answered = answerItems.filter(i => i.answer).length;
+  const showsSeat = isDelegate || app.role === 'chair';
 
   return (
     <div className="apdTwo">
@@ -86,88 +113,160 @@ export function OverviewTab({
           </section>
         )}
 
-        {/* The allocation is the protagonist. */}
-        {(isDelegate || app.role === 'chair') && (
+        {/* The seat, once there is one. */}
+        {showsSeat && allocated && (
           <section aria-labelledby="apd-alloc">
             <SectionTitle icon={Flag}><span id="apd-alloc">Allocation</span></SectionTitle>
-            {allocated ? (
-              <div
-                className="flex items-center gap-4"
-                style={{
-                  padding: 18, borderRadius: 20,
-                  background: `radial-gradient(120% 160% at 0% 0%, ${C.forestMid} 0%, ${C.forest} 70%)`,
-                  color: C.ivory, boxShadow: '0 14px 30px -18px rgba(27,56,40,0.7)',
-                }}
-              >
-                {app.role === 'chair' || !app.assigned_country_name ? (
-                  <LogoDisc src={app.assigned_committee?.logo_url ?? null} size={68} alt={committee.primary} fallbackText={monogramFor(app.assigned_committee?.name ?? '')} />
-                ) : (
-                  <SeatFlag name={app.assigned_country_name} code={app.assigned_country_code} size={72} ring={C.gold} />
-                )}
-                <div className="min-w-0 flex-1">
-                  <p style={{ fontFamily: OUTFIT, fontSize: 24, fontWeight: 900, lineHeight: 1.1, color: '#FFFFFF', overflowWrap: 'anywhere' }}>
-                    {app.role === 'chair' ? 'Chair' : (app.assigned_country_name ?? 'Seat to be named')}
+            <div
+              className="flex items-center gap-4"
+              style={{ padding: 18, borderRadius: 20, background: `radial-gradient(120% 160% at 0% 0%, ${C.forestMid} 0%, ${C.forest} 70%)`, color: C.ivory }}
+            >
+              {app.role === 'chair' || !app.assigned_country_name ? (
+                <LogoDisc src={app.assigned_committee?.logo_url ?? null} size={68} alt={committee.primary} fallbackText={monogramFor(app.assigned_committee?.name ?? '')} />
+              ) : (
+                <SeatFlag name={app.assigned_country_name} code={app.assigned_country_code} size={72} />
+              )}
+              <div className="min-w-0 flex-1">
+                <p style={{ fontFamily: OUTFIT, fontSize: 24, fontWeight: 900, lineHeight: 1.1, color: '#FFFFFF', overflowWrap: 'anywhere' }}>
+                  {app.role === 'chair' ? 'Chair' : (app.assigned_country_name ?? 'Seat to be named')}
+                </p>
+                <p className="mt-1.5 min-w-0" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: C.gold }}>
+                  {committee.primary}
+                  {committee.secondary && (
+                    <span className="block" style={{ fontSize: 11.5, fontWeight: 600, color: 'rgba(237,231,216,0.8)' }}>{committee.secondary}</span>
+                  )}
+                </p>
+                {pref ? (
+                  <p className="mt-2 inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#CDE9D5' }}>
+                    <BadgeCheck size={14} aria-hidden /> Their {ordinal(pref.preference_order)} preference
                   </p>
-                  <p className="mt-1.5 flex items-center gap-2 min-w-0" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: C.gold }}>
-                    {app.role !== 'chair' && app.assigned_committee?.logo_url && (
-                      <LogoDisc src={app.assigned_committee.logo_url} size={22} alt="" fallbackText="" />
-                    )}
-                    <span className="min-w-0">
-                      {committee.primary}
-                      {committee.secondary && (
-                        <span className="block" style={{ fontSize: 11.5, fontWeight: 600, color: 'rgba(237,231,216,0.8)' }}>{committee.secondary}</span>
-                      )}
-                    </span>
+                ) : prefs.length > 0 ? (
+                  <p className="mt-2 inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: 'rgba(237,231,216,0.8)' }}>
+                    <CircleDashed size={14} aria-hidden /> Outside their preferences
                   </p>
-                  {pref ? (
-                    <p className="mt-2 inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#CDE9D5' }}>
-                      <BadgeCheck size={14} aria-hidden /> Their {ordinal(pref.preference_order)} preference
-                    </p>
-                  ) : (app.application_preferences?.length ?? 0) > 0 ? (
-                    <p className="mt-2 inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: 'rgba(237,231,216,0.8)' }}>
-                      <CircleDashed size={14} aria-hidden /> Outside their preferences
-                    </p>
-                  ) : null}
-                </div>
+                ) : null}
               </div>
+            </div>
+          </section>
+        )}
+
+        {/* What they asked for, before a seat exists. */}
+        {showsSeat && !allocated && (
+          <section aria-labelledby="apd-prefs">
+            <SectionTitle
+              icon={ListOrdered}
+              aside={accepted && isDelegate ? (
+                <Link href={`/manage/${conferenceSlug}/assignment`} className="inline-flex items-center gap-1 focus:outline-none" style={{ color: C.forest, fontWeight: 800, textDecoration: 'none' }}>
+                  Allocate <ArrowRight size={13} aria-hidden />
+                </Link>
+              ) : 'Not allocated yet'}
+            >
+              <span id="apd-prefs">Preferences</span>
+            </SectionTitle>
+            {prefs.length === 0 ? (
+              <p style={{ fontFamily: OUTFIT, fontSize: 13.5, color: C.inkSoft }}>They did not rank anything.</p>
             ) : (
-              <div className="flex items-center gap-3 flex-wrap" style={{ padding: '16px 18px', borderRadius: 18, border: `1.5px dashed ${C.parchment}`, background: C.cream }}>
-                <CircleDashed size={22} style={{ color: C.inkSoft }} aria-hidden />
-                <div className="min-w-0 flex-1">
-                  <p style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 800, color: C.ink }}>Not allocated yet</p>
-                  <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: C.inkSoft }}>
-                    {accepted ? 'Give them a seat on the assignment board.' : 'Allocation comes after acceptance.'}
-                  </p>
-                </div>
-                {accepted && isDelegate && (
-                  <Link
-                    href={`/manage/${conferenceSlug}/assignment`}
-                    className="inline-flex items-center gap-1.5 focus:outline-none"
-                    style={{ padding: '8px 14px', borderRadius: 999, background: C.forest, color: C.gold, fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, textDecoration: 'none' }}
-                  >
-                    Assignment <ArrowRight size={14} aria-hidden />
-                  </Link>
-                )}
-              </div>
+              <ol>
+                {prefs.slice(0, 5).map((p, i) => {
+                  const c = committeeLabel(p.conference_committees);
+                  const committeeOnly = app.role === 'chair' || !p.country_name;
+                  return (
+                    <li key={p.preference_order} className="flex items-center gap-3 min-w-0" style={{ padding: '8px 0', borderTop: i ? `1px solid ${C.parchment}` : 'none' }}>
+                      <span style={{ width: 22, fontFamily: OUTFIT, fontSize: 14, fontWeight: 900, color: C.goldDeep, ...NUM }} aria-label={`${ordinal(p.preference_order)} choice`}>{p.preference_order}</span>
+                      {committeeOnly
+                        ? <LogoDisc src={p.conference_committees?.logo_url ?? null} size={26} alt="" fallbackText={monogramFor(p.conference_committees?.name ?? '')} />
+                        : <SeatFlag name={p.country_name} code={p.country_code} size={26} />}
+                      <span className="min-w-0 flex-1" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: C.ink, overflowWrap: 'anywhere' }}>
+                        {committeeOnly ? c.primary : p.country_name}
+                        {!committeeOnly && <span style={{ fontWeight: 600, color: C.inkSoft }}>{`  ${c.primary}`}</span>}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
             )}
-            {(app.application_preferences?.length ?? 0) > 0 && (
+            {prefs.length > 5 && (
               <button
                 type="button"
                 onClick={() => onTab('preferences')}
-                className="mt-2.5 inline-flex items-center gap-1 focus:outline-none"
+                className="mt-1.5 inline-flex items-center gap-1 focus:outline-none"
                 style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: C.forest }}
               >
-                See all {app.application_preferences.length} preferences <ArrowRight size={13} aria-hidden />
+                All {prefs.length} preferences <ArrowRight size={13} aria-hidden />
               </button>
             )}
           </section>
         )}
 
-        {/* Money, from the ledger. */}
+        {/* Their answers: the application itself. */}
+        {(answerItems.length > 0 || orphanAnswers.length > 0) && (
+          <section aria-labelledby="apd-answers">
+            <SectionTitle icon={MessageSquareText} aside={answerItems.length > 0 ? <span style={NUM}>{answered} of {answerItems.length} answered</span> : undefined}>
+              <span id="apd-answers">Application</span>
+            </SectionTitle>
+            {answerItems.length > 0 && <ol>{answerItems.map((it, i) => <AnswerBlock key={it.key} item={it} index={i} />)}</ol>}
+            {orphanAnswers.length > 0 && (
+              <div className="mt-3">
+                <p style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: C.inkSoft }}>Answers to questions no longer on the form</p>
+                <ol>{orphanAnswers.map((it, i) => <AnswerBlock key={it.key} item={it} index={i} />)}</ol>
+              </div>
+            )}
+          </section>
+        )}
+      </div>
+
+      <div className="min-w-0 flex flex-col" style={{ gap: 22 }}>
+        {delegation && (
+          <section aria-label="Delegation">
+            <div style={{ padding: 14, borderRadius: 18, border: `1px solid ${C.parchment}`, background: 'rgba(27,56,40,0.035)' }}>
+              <DelegationIdentity
+                name={delegation.name}
+                size={56}
+                nameSize={16.5}
+                logoUrl={delegation.logoUrl}
+                city={delegation.city}
+                countryCode={delegation.countryCode}
+                members={delegation.members}
+                country={delegation.country}
+                lead={delegation.isHead ? 'this applicant' : delegation.lead}
+                leadRole={delegation.leadRole}
+              />
+              {onOpenDelegation && (
+                <button
+                  type="button"
+                  onClick={onOpenDelegation}
+                  className="mt-3 inline-flex items-center gap-1 focus:outline-none"
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: C.forest }}
+                >
+                  Open delegation <ArrowRight size={13} aria-hidden />
+                </button>
+              )}
+            </div>
+          </section>
+        )}
+
+        <section aria-labelledby="apd-exp" className="flex items-center gap-3.5">
+          <span className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 50, height: 50, borderRadius: 999, background: `${accent}1F`, border: `1.5px solid ${accent}66` }}>
+            <LevelInsignia level={experienceLevel} size={28} />
+          </span>
+          <div className="min-w-0">
+            <p id="apd-exp" style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 900, color: C.ink, lineHeight: 1.15 }}>{levelLabel(experienceLevel)}</p>
+            <button
+              type="button"
+              onClick={() => onTab('experience')}
+              className="inline-flex items-center gap-1 focus:outline-none"
+              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: C.forest, ...NUM }}
+            >
+              {cvCount === null ? 'MUN record' : `${cvCount} ${cvCount === 1 ? 'conference' : 'conferences'} on their CV`}
+              <ArrowRight size={12} aria-hidden />
+            </button>
+          </div>
+        </section>
+
         <section aria-labelledby="apd-money">
           <SectionTitle icon={Wallet} tint={C.goldDeep}><span id="apd-money">Payment</span></SectionTitle>
           {!feeCharged && !totals ? (
-            <p style={{ fontFamily: OUTFIT, fontSize: 13.5, color: C.inkSoft }}>This role is free. There is nothing to pay.</p>
+            <p style={{ fontFamily: OUTFIT, fontSize: 13.5, color: C.inkSoft }}>This role is free.</p>
           ) : ledgerLoading ? (
             <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: C.inkSoft }}>Reading the ledger</p>
           ) : !totals ? (
@@ -178,56 +277,25 @@ export function OverviewTab({
           <button
             type="button"
             onClick={() => onTab('payment')}
-            className="mt-2.5 inline-flex items-center gap-1 focus:outline-none"
+            className="mt-2 inline-flex items-center gap-1 focus:outline-none"
             style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: C.forest }}
           >
             Open payment <ArrowRight size={13} aria-hidden />
           </button>
         </section>
-      </div>
-
-      <div className="min-w-0">
-        <section aria-labelledby="apd-exp" className="flex items-center gap-3.5" style={{ marginBottom: 14 }}>
-          <span className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 54, height: 54, borderRadius: 999, background: `${accent}1F`, border: `2px solid ${accent}66` }}>
-            <LevelInsignia level={experienceLevel} size={30} />
-          </span>
-          <div className="min-w-0">
-            <p id="apd-exp" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: C.inkSoft }}>Experience</p>
-            <p style={{ fontFamily: OUTFIT, fontSize: 18, fontWeight: 900, color: C.ink, lineHeight: 1.15 }}>{levelLabel(experienceLevel)}</p>
-            <button
-              type="button"
-              onClick={() => onTab('experience')}
-              className="inline-flex items-center gap-1 focus:outline-none"
-              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: C.forest, ...NUM }}
-            >
-              {cvCount === null ? 'MUN record' : `${cvCount} ${cvCount === 1 ? 'conference' : 'conferences'} on their CV`}
-              <ArrowRight size={12} aria-hidden />
-            </button>
-          </div>
-        </section>
 
         <section aria-label="Details">
-          {app.profiles?.nationality && (
-            <FactRow icon={Globe} tint={C.sky} label="Nationality">
-              <span className="inline-flex items-center gap-2">
-                <SeatFlag name={app.profiles.nationality} size={18} />
-                {app.profiles.nationality}
-              </span>
+          {dob ? (
+            <FactRow icon={Cake} tint={C.plum} label="Date of birth">
+              {fmtDay(dob)}{age !== null ? <span style={{ fontWeight: 600, color: C.inkSoft }}>{`, ${age}`}</span> : null}
             </FactRow>
-          )}
-          {age !== null && <FactRow icon={CalendarDays} tint={C.plum} label="Age">{age}</FactRow>}
-          {app.profiles?.email && (
-            <FactRow icon={Mail} tint={C.sky} label="Email">
-              <a href={`mailto:${app.profiles.email}`} style={{ color: C.forest }}>{app.profiles.email}</a>
-            </FactRow>
-          )}
-          {app.societies?.name && (
-            <FactRow icon={Users} tint={C.forestLight} label={app.is_head_delegate ? 'Delegation (head delegate)' : 'Delegation'}>
-              {app.societies.name}
-            </FactRow>
-          )}
-          <FactRow icon={Receipt} tint={C.goldDeep} label="Applied">{fmtDay(app.submitted_at)}</FactRow>
-          {app.resubmitted_at && <FactRow icon={RotateCcw} tint={C.amber} label="Resubmitted">{fmtDay(app.resubmitted_at)}</FactRow>}
+          ) : age !== null ? (
+            <FactRow icon={Cake} tint={C.plum} label="Age">{age}</FactRow>
+          ) : null}
+          <FactRow icon={Receipt} tint={C.goldDeep} label="Applied">
+            {fmtDay(app.submitted_at)}
+            {app.resubmitted_at && <span style={{ fontWeight: 600, color: C.inkSoft }}>{`, resubmitted ${fmtDay(app.resubmitted_at)}`}</span>}
+          </FactRow>
           {app.checked_in_at && app.status === 'checked-in' && (
             <FactRow icon={UserRoundCheck} tint={C.forestLight} label="Checked in">{fmtDateTime(app.checked_in_at)}</FactRow>
           )}

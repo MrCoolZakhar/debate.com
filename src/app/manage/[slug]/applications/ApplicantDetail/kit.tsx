@@ -8,6 +8,7 @@
 import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
+import { FlagImg } from '@/components/FlagImg';
 import { UN_COUNTRIES, getCountryByName } from '@/lib/countries';
 
 export const OUTFIT = "'Outfit', sans-serif";
@@ -31,16 +32,26 @@ export function realCode(name: string | null | undefined, code?: string | null):
   return c?.code ?? null;
 }
 
-export function SeatFlag({ name, code, size, ring }: { name: string | null | undefined; code?: string | null; size: number; ring?: string | boolean }) {
+/** A seat or nationality as its REAL rectangular flag (Applications keeps
+ *  real flags, never circles side by side, owner 23 Sep 2026). A crisis
+ *  character or custom seat has no flag, so it gets its monogram disc. */
+export function SeatFlag({ name, code, size }: { name: string | null | undefined; code?: string | null; size: number; ring?: string | boolean }) {
   const real = realCode(name, code);
+  if (real) {
+    return (
+      <span title={name ?? real} className="inline-flex items-center flex-shrink-0" style={{ lineHeight: 0 }}>
+        <FlagImg code={real} size={size} />
+      </span>
+    );
+  }
   return (
     <CircleFlag
-      code={real}
-      country={real ? null : name}
-      size={size}
+      code={null}
+      country={name}
+      size={Math.round(size * 0.8)}
       label={name ?? undefined}
-      ring={ring ?? true}
-      style={{ boxShadow: '0 3px 10px rgba(27,56,40,0.22)', borderRadius: 999, flexShrink: 0 }}
+      ring={false}
+      style={{ borderRadius: 999, flexShrink: 0 }}
     />
   );
 }

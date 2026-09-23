@@ -506,7 +506,7 @@ export default function ProfilePage() {
       style={{
         backgroundColor: NEU.surface,
         borderRadius: 24,
-        boxShadow: '-6px -6px 16px rgba(255,255,255,0.8), 8px 8px 24px rgba(27,56,40,0.14)',
+        boxShadow: NEU.out,
       }}
     >
       {/* iOS Safari zooms the whole page when a focused field is under 16px,

@@ -253,8 +253,8 @@ export function DatePicker({
             height: 52, padding: '0 16px', borderRadius: 14,
             // NEU.in, plus the same 3px focus ring the other wells use.
             boxShadow: open
-              ? 'inset 4px 4px 10px rgba(27,56,40,0.14), inset -4px -4px 10px rgba(255,255,255,0.8), 0 0 0 3px rgba(27,56,40,0.13)'
-              : 'inset 4px 4px 10px rgba(27,56,40,0.14), inset -4px -4px 10px rgba(255,255,255,0.8)',
+              ? 'inset 0 1px 2px rgba(27,56,40,0.07), 0 0 0 3px rgba(27,56,40,0.13)'
+              : 'inset 0 0 0 1px rgba(27,56,40,0.10), inset 0 1px 2px rgba(27,56,40,0.07)',
           } : null),
         }}
       >

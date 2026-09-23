@@ -710,7 +710,8 @@ export default function ConferenceDetailDialog({
 
           {detail && c && (
             <>
-              {/* ── Hero: the flag is the protagonist ── */}
+              {/* ── Hero: the conference logo is the protagonist, the host
+                     country a small round flag on its corner ── */}
               <header
                 className="relative flex items-center gap-5 flex-wrap"
                 style={{
@@ -720,18 +721,25 @@ export default function ConferenceDetailDialog({
                 }}
               >
                 <div className="relative flex-shrink-0" style={{ width: 104, height: 104 }}>
-                  <CircleFlag
-                    country={c.country}
+                  <LogoDisc
+                    src={c.logo_url}
+                    alt={title}
                     size={104}
-                    loading="eager"
-                    ring={C.gold}
-                    label={c.country || 'No country'}
-                    fallback={<Globe size={40} style={{ color: C.forest }} />}
-                    style={{ boxShadow: '0 10px 26px rgba(0,0,0,0.35)', borderRadius: 999 }}
+                    fallbackText={title.slice(0, 3)}
+                    style={{ boxShadow: '0 10px 26px rgba(8,20,12,0.35)', border: `2px solid ${C.gold}` }}
                   />
-                  <span className="absolute" style={{ right: -8, bottom: -6, borderRadius: 999, boxShadow: '0 4px 12px rgba(0,0,0,0.3)', border: `2.5px solid ${C.forest}` }}>
-                    <LogoDisc src={c.logo_url} alt={title} size={44} fallbackText={title.slice(0, 3)} />
-                  </span>
+                  {c.country && (
+                    <span className="absolute" style={{ right: -6, bottom: -4, borderRadius: 999, boxShadow: '0 4px 12px rgba(8,20,12,0.3)', border: `2.5px solid ${C.forest}` }}>
+                      <CircleFlag
+                        country={c.country}
+                        size={36}
+                        loading="eager"
+                        ring={false}
+                        label={c.country}
+                        fallback={<Globe size={16} style={{ color: C.forest }} />}
+                      />
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex-1 min-w-0" style={{ minWidth: 220 }}>

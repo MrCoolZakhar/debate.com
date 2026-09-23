@@ -18,6 +18,7 @@ import {
 } from '@/app/manage/[slug]/assignment/delegationShared';
 import { PersonAvatar } from '@/app/manage/[slug]/assignment/page';
 import { NEU, NEU_GRADIENTS, NeuCard, NeuInset, NeuButton, NeuIconDisc } from '@/components/neu';
+import { StackedName } from '@/app/manage/[slug]/assignment/displayNames';
 import { Users } from 'lucide-react';
 
 function isHeadDelegate(m: PoolMember): boolean {
@@ -901,8 +902,8 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
                 >
                   {/* Advisor row: plain <div>, TRANSFER/NOT ATTENDING/REMOVE are siblings. */}
                   <PersonAvatar name={name} url={a.profiles?.avatar_url ?? null} userId={a.user_id} />
-                  <span className="flex-1 min-w-0 text-sm font-semibold truncate" style={{ fontFamily: OUTFIT, color: paid ? '#EED98A' : '#1C1410' }}>
-                    {name}
+                  <span className="flex-1 min-w-0" style={{ fontFamily: OUTFIT }}>
+                    <StackedName name={name} size={14} weight={700} color={paid ? '#EED98A' : '#1C1410'} restColor={paid ? 'rgba(238,217,138,0.78)' : '#5A4E42'} />
                   </span>
                   <span style={{ fontSize: 10, fontWeight: 700, color: paid ? '#EED98A' : '#9A6B2F', fontFamily: MONO, letterSpacing: '0.06em', flexShrink: 0, opacity: paid ? 0.9 : 1 }}>
                     {paid ? 'PAID' : 'UNPAID'}
@@ -987,7 +988,7 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
                   {/* Head-delegate card: plain <div>, action buttons are siblings. */}
                   <PersonAvatar name={name} url={m.profiles?.avatar_url ?? null} userId={m.user_id} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate" style={{ color: '#EED98A', fontFamily: OUTFIT }}>{name}</p>
+                    <div style={{ fontFamily: OUTFIT }}><StackedName name={name} size={14} weight={700} color="#EED98A" restColor="rgba(238,217,138,0.78)" /></div>
                     {m.assigned_committee_id && (
                       <p className="text-xs truncate" style={{ color: 'rgba(238,217,138,0.7)', fontFamily: OUTFIT }}>
                         {m.assigned_committee?.abbreviation ?? m.assigned_committee?.name}, {m.assigned_country_name}

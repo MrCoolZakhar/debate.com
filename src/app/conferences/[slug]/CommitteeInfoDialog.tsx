@@ -6,7 +6,7 @@
 // ConferenceDetailClient.tsx so that file only mounts them.
 
 import { useEffect, useRef, type CSSProperties } from 'react';
-import { X } from 'lucide-react';
+import { X, Languages } from 'lucide-react';
 import Portal from '@/components/Portal';
 import ProfileLink from '@/components/ProfileLink';
 import { DifficultyTile } from '@/components/DifficultyTile';
@@ -141,6 +141,8 @@ export interface CommitteeInfo {
   logo_url: string | null;
   display_chairs: DaisChair[] | null;
   chair_user_ids: string[] | null;
+  /** conference_committees.working_language; absent or null = not set, print nothing. */
+  working_language?: string | null;
 }
 
 /**
@@ -240,9 +242,17 @@ export function CommitteeInfoDialog({
                   style={{ width: 88, height: 88, objectFit: 'contain', filter: 'drop-shadow(0 10px 18px color-mix(in srgb, var(--gv-main) 28%, transparent))', marginBottom: 14 }}
                 />
               )}
-              {c.abbreviation && (
-                <p style={{ fontFamily: FONT, fontWeight: 700, fontSize: 12, letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: 0 }}>
+              {/* The acronym, with the working language beside it when set
+                  (owner, 23 Sep 2026: "top left side with the acronym"). */}
+              {(c.abbreviation || c.working_language) && (
+                <p className="flex items-center justify-center gap-2 flex-wrap" style={{ fontFamily: FONT, fontWeight: 700, fontSize: 12, letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: 0 }}>
                   {c.abbreviation}
+                  {c.working_language && (
+                    <span className="inline-flex items-center gap-1" title="Working language" style={{ letterSpacing: '0.04em', fontWeight: 600, color: '#6B5F52' }}>
+                      <Languages size={13} aria-hidden style={{ color: 'var(--gv-accent)' }} />
+                      {c.working_language}
+                    </span>
+                  )}
                 </p>
               )}
               <h2 id={titleId} className="font-bold leading-snug" style={{ fontFamily: FONT, fontSize: 20, color: 'var(--gv-on-surface)', margin: '6px 0 0 0', textWrap: 'balance' }}>

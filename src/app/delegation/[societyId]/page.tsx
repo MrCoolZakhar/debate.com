@@ -1,5 +1,11 @@
+import { Suspense } from 'react';
 import DelegationPortalClient from './DelegationPortalClient';
 
 export default function DelegationPortalPage() {
-  return <DelegationPortalClient />;
+  // The portal reads ?tab= through useSearchParams, which needs a Suspense boundary.
+  return (
+    <Suspense fallback={null}>
+      <DelegationPortalClient />
+    </Suspense>
+  );
 }

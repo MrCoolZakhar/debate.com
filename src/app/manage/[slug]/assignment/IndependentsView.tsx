@@ -26,6 +26,7 @@ import {
 } from '@/app/manage/[slug]/assignment/delegationShared';
 import { PersonAvatar } from '@/app/manage/[slug]/assignment/page';
 import { NEU, NeuCard, NeuInset, NeuButton } from '@/components/neu';
+import { StackedName } from '@/app/manage/[slug]/assignment/displayNames';
 
 // ── Transfer / give-spot picker ─────────────────────────────────────────────
 // Searchable list of the conference's accepted/assigned delegates and head
@@ -140,7 +141,7 @@ function IndependentCard({
         {/* Independent's card header: NeuCard <div>, actions are sibling buttons. */}
         <PersonAvatar name={name} url={app.profiles?.avatar_url ?? null} size={38} userId={app.user_id} />
         <div className="min-w-0 flex-1">
-          <p className="font-black text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{name}</p>
+          <div style={{ fontFamily: OUTFIT }}><StackedName name={name} size={15} weight={900} color={NEU.ink} restColor={NEU.inkSoft} /></div>
           {notAttending && (
             <span style={{ fontSize: 10, fontWeight: 800, color: NEU.muted, fontFamily: MONO, letterSpacing: '0.06em' }}>NOT ATTENDING</span>
           )}

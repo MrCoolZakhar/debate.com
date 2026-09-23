@@ -541,8 +541,8 @@ const RED_PANEL: React.CSSProperties = {
  *  now-playing panel (`live/CommitteeCard.tsx:474-479`) — same base colour,
  *  same inset shadow — so the two surfaces are visibly the same material. */
 const WELL: React.CSSProperties = {
-  backgroundColor: '#EDE7D8',
-  boxShadow: 'inset 2px 2px 6px rgba(27,56,40,0.13), inset -2px -2px 6px rgba(255,255,255,0.8)',
+  backgroundColor: NEU.well,
+  boxShadow: NEU.in,
 };
 
 /** A raised token sitting IN a pressed well — the live card's art disc
@@ -550,7 +550,7 @@ const WELL: React.CSSProperties = {
  *  system read as neumorphic rather than as flat cards with shadows. */
 const RAISED_DISC: React.CSSProperties = {
   backgroundColor: '#F0EBDD',
-  boxShadow: '-3px -3px 7px rgba(255,255,255,0.9), 4px 4px 9px rgba(27,56,40,0.15)',
+  boxShadow: NEU.outSm,
 };
 
 /** Same three-state rule queueEventEmail applies: a stub row created by TURN ON
@@ -930,18 +930,18 @@ function PrimaryBtn({
         background: 'linear-gradient(160deg, #24513A 0%, #1B3828 62%)',
         color: '#EED98A', fontFamily: OUTFIT, letterSpacing: '0.05em',
         border: 'none', cursor: disabled ? 'default' : 'pointer',
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.18), 4px 5px 12px rgba(27,56,40,0.28), -3px -3px 8px rgba(255,255,255,0.7)',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.18), 0 4px 12px -2px rgba(27,56,40,0.28)',
         transitionProperty: 'box-shadow, filter, transform', transitionDuration: '180ms', transitionTimingFunction: EASE,
       }}
       onMouseEnter={e => {
         if (disabled) return;
         const el = e.currentTarget as HTMLElement;
-        el.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.22), 6px 7px 16px rgba(27,56,40,0.34), -4px -4px 10px rgba(255,255,255,0.8)';
+        el.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.22), 0 7px 16px -3px rgba(27,56,40,0.34)';
         el.style.filter = 'brightness(1.06)';
       }}
       onMouseLeave={e => {
         const el = e.currentTarget as HTMLElement;
-        el.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.18), 4px 5px 12px rgba(27,56,40,0.28), -3px -3px 8px rgba(255,255,255,0.7)';
+        el.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.18), 0 4px 12px -2px rgba(27,56,40,0.28)';
         el.style.filter = 'none';
       }}
     >
@@ -1094,7 +1094,7 @@ function NewEmailModal({
           style={{
             ...PANEL,
             maxWidth: 760,
-            boxShadow: '-10px -10px 26px rgba(255,255,255,0.55), 16px 18px 46px rgba(27,56,40,0.36)',
+            boxShadow: `${NEU.ring}, 0 18px 46px -10px rgba(27,56,40,0.36)`,
             animation: `commsPop 220ms ${EASE} both`,
           }}
         >
@@ -1147,7 +1147,7 @@ function NewEmailModal({
                 }}
                 onMouseEnter={e => {
                   (e.currentTarget as HTMLElement).style.boxShadow =
-                    'inset 3px 3px 9px rgba(27,56,40,0.18), inset -3px -3px 9px rgba(255,255,255,0.9)';
+                    `inset ${NEU.ringStrong}, inset 0 2px 4px rgba(27,56,40,0.10)`;
                 }}
                 onMouseLeave={e => {
                   (e.currentTarget as HTMLElement).style.boxShadow = WELL.boxShadow as string;
@@ -1487,13 +1487,13 @@ function Console({
           <div
             className="w-full overflow-hidden"
             style={{
-              height: 6, borderRadius: 6, backgroundColor: '#F0EBDD',
+              height: 6, borderRadius: 6, backgroundColor: NEU.well,
               // The empty track keeps its FULL inset. On the live card the
               // 0.55 dim is fine because that card's track sits on a lighter
               // well; here a dimmed empty track vanished into the well
               // completely, which turns "nothing sent yet" into a missing
               // element rather than a stated one. Only the fill is absent.
-              boxShadow: 'inset 1px 1px 3px rgba(27,56,40,0.18), inset -1px -1px 3px rgba(255,255,255,0.8)',
+              boxShadow: NEU.inSm,
             }}
           >
             <div
@@ -1563,7 +1563,7 @@ function StatWell({
       }}
       onMouseEnter={interactive ? e => {
         (e.currentTarget as HTMLElement).style.boxShadow =
-          'inset 3px 3px 8px rgba(27,56,40,0.17), inset -3px -3px 8px rgba(255,255,255,0.85)';
+          `inset ${NEU.ringStrong}, inset 0 2px 4px rgba(27,56,40,0.10)`;
       } : undefined}
       onMouseLeave={interactive ? e => {
         (e.currentTarget as HTMLElement).style.boxShadow = WELL.boxShadow as string;

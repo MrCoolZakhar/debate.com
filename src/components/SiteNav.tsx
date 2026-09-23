@@ -16,10 +16,18 @@ import { useDraftCount, draftResumeHref } from '@/hooks/useDraftCount';
 
 const NAV_LINKS_CONFIG = [
   { en: 'SESSIONS',    es: 'SESIONES',     fr: 'SESSIONS',        ar: 'الجلسات',    href: '/sessions' },
-  { en: 'CONFERENCES', es: 'CONFERENCIAS', fr: 'CONFÉRENCES',     ar: 'المؤتمرات',  href: '/' },
+  { en: 'CONFERENCES', es: 'CONFERENCIAS', fr: 'CONFÉRENCES',     ar: 'المؤتمرات',  href: '/conferences/explore' },
   { en: 'ABOUT US',    es: 'NOSOTROS',     fr: 'QUI SOMMES-NOUS', ar: 'من نحن',     href: '/about' },
   { en: 'CONTACT',     es: 'CONTÁCTANOS',  fr: 'CONTACT',         ar: 'تواصل معنا', href: '/contact' },
 ];
+
+/** The CONFERENCES link opens the directory; it stays lit on any public
+ *  conferences page (explore, map, roles, a conference page). */
+function isNavLinkActive(pathname: string | null, href: string): boolean {
+  if (!pathname) return false;
+  if (href === '/conferences/explore') return pathname.startsWith('/conferences');
+  return pathname === href;
+}
 
 interface SiteNavProps {
   logoOverride?: { src: string; alt: string };
@@ -188,7 +196,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
           }}
         >
           {navLinks.map((link) => {
-            const active = pathname === link.href;
+            const active = isNavLinkActive(pathname, link.href);
             const hl = hovered === link.label;
             return (
               <Link
@@ -479,7 +487,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
       >
         <div ref={sheetRef} className="flex flex-col px-6 py-4 gap-1">
           {navLinks.map((link) => {
-            const active = pathname === link.href;
+            const active = isNavLinkActive(pathname, link.href);
             return (
               <Link
                 key={link.label}

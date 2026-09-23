@@ -42,7 +42,7 @@ export default function AvatarStack({
   /** Colour of the separating ring drawn around each avatar (the card surface). */
   ringColor = '#F0EBDD',
   /** Shadow applied to each disc, so the stack sits in the host's material. */
-  shadow = '-3px -3px 7px rgba(255,255,255,0.9), 4px 4px 9px rgba(27,56,40,0.15)',
+  shadow = '0 1px 3px rgba(27,56,40,0.16)',
   /** Rendered instead of the stack when `people` is empty. */
   empty = null,
   style,

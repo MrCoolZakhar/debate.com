@@ -49,9 +49,9 @@ export const K = {
   dangerTint: 'rgba(155,44,34,0.08)',
   font: "'Outfit', sans-serif",
   ease: 'cubic-bezier(0.22,1,0.36,1)',
-  out: '-4px -4px 10px rgba(255,255,255,0.9), 6px 6px 16px rgba(27,56,40,0.13)',
-  outSm: '-2px -2px 6px rgba(255,255,255,0.9), 3px 3px 8px rgba(27,56,40,0.14)',
-  inSm: 'inset 2px 2px 5px rgba(27,56,40,0.14), inset -2px -2px 5px rgba(255,255,255,0.85)',
+  out: '0 0 0 1px rgba(27,56,40,0.09), 0 1px 2px rgba(27,56,40,0.06), 0 8px 20px -8px rgba(27,56,40,0.18)',
+  outSm: '0 0 0 1px rgba(27,56,40,0.10), 0 1px 2px rgba(27,56,40,0.08)',
+  inSm: 'inset 0 0 0 1px rgba(27,56,40,0.09), inset 0 1px 1.5px rgba(27,56,40,0.06)',
   card: '0 0 0 1px rgba(27,56,40,0.06), 0 1px 2px rgba(27,56,40,0.06), 0 8px 24px -12px rgba(27,56,40,0.18)',
   ring: '0 0 0 2px #FBF8F1, 0 0 0 4px #B6871F',
 } as const;

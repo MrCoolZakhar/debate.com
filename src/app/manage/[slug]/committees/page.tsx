@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, X, Copy, Check, Building2, CalendarClock, Clock, Trash2, ArrowDown, ArrowUp, ArrowUpDown, Send, LayoutGrid, LayoutList, Settings, UserRound } from 'lucide-react';
+import { Plus, X, Copy, Check, Building2, CalendarClock, Clock, Trash2, ArrowDown, ArrowUp, ArrowUpDown, Send, LayoutGrid, LayoutList, Settings, UserRound, Languages } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
@@ -62,6 +62,8 @@ interface CommitteeRow {
   display_chairs: DisplayChair[] | null;
   released_to_chairs_at: string | null;
   released_to_delegates_at: string | null;
+  /** The working language, a display name; null = not set (src/lib/committeeLanguage.ts). */
+  working_language: string | null;
 }
 
 interface Committee extends CommitteeRow {
@@ -519,9 +521,55 @@ function DaisRow({ members, size, showNames, onAdd, onRemoveChair, onResendInvit
   const open = members.find(m => m.key === openKey) ?? null;
   const placed = pos && pos.key === openKey ? pos : null;
 
+  // AT MOST THREE FACES (owner, 23 Sep 2026: "with more chairs the tab just
+  // gets taller; just have the most important chairs displayed and the rest
+  // as +N"). Three or fewer: all of them. Four or more: the first two (the
+  // seated dais comes first, in chair_user_ids order, then invites) and a
+  // plain "+N" in the third slot, so the row keeps the width and the ONE-line
+  // height it was budgeted for below. Hover or focus on "+N" lists everyone;
+  // a name there opens that person's usual actions, anchored on the "+N".
+  const MAX_FACES = 3;
+  const overflowing = members.length > MAX_FACES;
+  const shown = overflowing ? members.slice(0, MAX_FACES - 1) : members;
+  const hiddenCount = members.length - shown.length;
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreCloseTimer = useRef<number | null>(null);
+  const morePopRef = useRef<HTMLDivElement | null>(null);
+  const [morePos, setMorePos] = useState<{ top: number; left: number } | null>(null);
+  const showMore = () => {
+    if (moreCloseTimer.current) { window.clearTimeout(moreCloseTimer.current); moreCloseTimer.current = null; }
+    const b = btnRefs.current['__more'];
+    if (b) {
+      const r = b.getBoundingClientRect();
+      const W = 220;
+      const H = Math.min(260, 40 + members.length * 32);
+      const below = window.innerHeight - r.bottom - 10;
+      const up = below < H && r.top - 10 > below;
+      setMorePos({
+        top: up ? Math.max(8, r.top - 8 - H) : r.bottom + 8,
+        left: Math.max(8, Math.min(r.left + r.width / 2 - W / 2, window.innerWidth - W - 8)),
+      });
+    }
+    setMoreOpen(true);
+  };
+  const hideMoreSoon = () => {
+    if (moreCloseTimer.current) window.clearTimeout(moreCloseTimer.current);
+    moreCloseTimer.current = window.setTimeout(() => setMoreOpen(false), 160);
+  };
+  useEffect(() => () => { if (moreCloseTimer.current) window.clearTimeout(moreCloseTimer.current); }, []);
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onScroll = () => setMoreOpen(false);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMoreOpen(false); };
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('keydown', onKey);
+    return () => { window.removeEventListener('scroll', onScroll, true); window.removeEventListener('keydown', onKey); };
+  }, [moreOpen]);
+
   const place = useCallback(() => {
     if (!openKey) return;
-    const b = btnRefs.current[openKey];
+    // A hidden member has no face of its own: its popover anchors on "+N".
+    const b = btnRefs.current[openKey] ?? btnRefs.current['__more'];
     if (!b) return;
     const r = b.getBoundingClientRect();
     const W = 216;
@@ -541,7 +589,7 @@ function DaisRow({ members, size, showNames, onAdd, onRemoveChair, onResendInvit
     place();
     const onDoc = (e: MouseEvent) => {
       const t = e.target as Node;
-      if (btnRefs.current[openKey]?.contains(t) || popRef.current?.contains(t)) return;
+      if ((btnRefs.current[openKey] ?? btnRefs.current['__more'])?.contains(t) || popRef.current?.contains(t)) return;
       setOpenKey(null);
     };
     const onScroll = () => setOpenKey(null);
@@ -585,7 +633,7 @@ function DaisRow({ members, size, showNames, onAdd, onRemoveChair, onResendInvit
   return (
     <>
       <div className={`flex flex-wrap items-start ${showNames ? 'justify-center gap-x-1 gap-y-2' : 'gap-1.5'}`}>
-        {members.map(m => {
+        {shown.map(m => {
           const label = m.kind === 'invite'
             ? `${m.name}, invite pending. Open to resend or remove.`
             : `${m.name}, open to view or remove.`;
@@ -624,6 +672,37 @@ function DaisRow({ members, size, showNames, onAdd, onRemoveChair, onResendInvit
             </button>
           );
         })}
+
+        {/* "+N": the rest of the dais, listed on hover or focus. Plain type,
+            no pill (CLAUDE.md §8), in the same slot a face takes. */}
+        {overflowing && (
+          <button
+            ref={el => { btnRefs.current['__more'] = el; }}
+            type="button"
+            aria-haspopup="true"
+            aria-expanded={moreOpen}
+            aria-label={`${hiddenCount} more on this dais. Show everyone.`}
+            onMouseEnter={showMore}
+            onMouseLeave={hideMoreSoon}
+            onFocus={showMore}
+            onBlur={hideMoreSoon}
+            onClick={() => (moreOpen ? setMoreOpen(false) : showMore())}
+            className="flex flex-col items-center focus:outline-none focus-visible:[&>span:first-child]:shadow-[0_0_0_2px_#1B3828]"
+            style={{ width: showNames ? slot : undefined, padding: 0, border: 'none', background: 'none', cursor: 'pointer' }}
+          >
+            <span
+              className="flex items-center justify-center tabular-nums"
+              style={{ width: size, height: size, borderRadius: 9999, fontFamily: OUTFIT, fontSize: Math.round(size * 0.36), fontWeight: 800, color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.06)' }}
+            >
+              +{hiddenCount}
+            </span>
+            {showNames && (
+              <span style={{ marginTop: 4, fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, lineHeight: '12px', minHeight: 24, width: '100%', textAlign: 'center', color: '#4A3F33' }}>
+                more
+              </span>
+            )}
+          </button>
+        )}
 
         {/* Add another chair — the "+" in a circle that closes the row. */}
         <button
@@ -664,6 +743,46 @@ function DaisRow({ members, size, showNames, onAdd, onRemoveChair, onResendInvit
           )}
         </button>
       </div>
+
+      {moreOpen && morePos && (
+        <Portal>
+          <div
+            ref={morePopRef}
+            role="menu"
+            aria-label="Everyone on this dais"
+            onMouseEnter={showMore}
+            onMouseLeave={hideMoreSoon}
+            style={{
+              position: 'fixed', top: morePos.top, left: morePos.left, width: 220, zIndex: 60,
+              maxHeight: 260, overflowY: 'auto',
+              backgroundColor: '#FAF8F3', borderRadius: 14,
+              border: '1px solid rgba(27,56,40,0.12)',
+              boxShadow: '0 12px 30px rgba(27,56,40,0.18)',
+              padding: 6, fontFamily: OUTFIT,
+            }}
+          >
+            <p style={{ margin: 0, padding: '4px 8px 6px', fontSize: 9.5, fontWeight: 800, letterSpacing: '0.12em', color: '#6B5F52' }}>
+              THE DAIS · {members.length}
+            </p>
+            {members.map(m => (
+              <button
+                key={m.key}
+                type="button"
+                role="menuitem"
+                onClick={() => { setMoreOpen(false); setOpenKey(m.key); }}
+                onFocus={showMore}
+                onBlur={hideMoreSoon}
+                className="flex w-full items-center gap-2 rounded-[9px] px-2 py-1 text-left focus:outline-none focus-visible:bg-[#1B3828]/[0.07] hover:bg-[#1B3828]/[0.06]"
+                style={{ border: 'none', background: undefined, cursor: 'pointer' }}
+              >
+                <DaisAvatar member={m} size={22} />
+                <span className="min-w-0 flex-1 truncate" style={{ fontSize: 12, fontWeight: 700, color: m.kind === 'invite' ? '#7A5A10' : '#1C1410' }}>{m.name}</span>
+                {m.kind === 'invite' && <Clock size={11} strokeWidth={2.4} aria-label="Invite pending" style={{ color: '#7A5A10', flexShrink: 0 }} />}
+              </button>
+            ))}
+          </div>
+        </Portal>
+      )}
 
       {open && placed && (
         <Portal>
@@ -1072,7 +1191,7 @@ export default function CommitteesPage() {
     const [{ data }, invites] = await Promise.all([
       supabase
         .from('conference_committees')
-        .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, delegation_size, session_code, session_id, position_paper_deadline, notification_email, pp_submissions_enabled, logo_url, chair_user_ids, display_chairs, released_to_chairs_at, released_to_delegates_at')
+        .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, delegation_size, session_code, session_id, position_paper_deadline, notification_email, pp_submissions_enabled, logo_url, chair_user_ids, display_chairs, released_to_chairs_at, released_to_delegates_at, working_language')
         .eq('conference_id', conference.id)
         .order('name', { ascending: true }),
       fetchPendingChairInvites(supabase, conference.id),
@@ -2217,6 +2336,12 @@ export default function CommitteesPage() {
                             · {topics.length} topic{topics.length === 1 ? '' : 's'}
                           </span>
                         )}
+                        {c.working_language && (
+                          <span className="inline-flex items-center gap-1" title="Working language" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: '#6B5F52' }}>
+                            <Languages size={11} style={{ color: NEU.deepGold, flexShrink: 0 }} aria-hidden />
+                            {c.working_language}
+                          </span>
+                        )}
                         {c.position_paper_deadline && (
                           <span className="inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: NEU.muted }}>
                             <CalendarClock size={11} style={{ color: NEU.deepGold, flexShrink: 0 }} />
@@ -2443,6 +2568,15 @@ export default function CommitteesPage() {
                           <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
                           <span className="text-[9.5px] font-bold" style={{ color: '#7A5416', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em' }}>
                             CUSTOM
+                          </span>
+                        </>
+                      )}
+                      {c.working_language && (
+                        <>
+                          <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold" title="Working language" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif" }}>
+                            <Languages size={11} aria-hidden style={{ color: '#7A5A10' }} />
+                            {c.working_language}
                           </span>
                         </>
                       )}

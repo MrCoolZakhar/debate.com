@@ -4,7 +4,8 @@ import { openAuth } from '@/lib/authModal';
 import { Fragment, useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound, Gavel, Eye, ScrollText, CreditCard } from 'lucide-react';
+import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound, Gavel, Eye, ScrollText, CreditCard, Languages } from 'lucide-react';
+import { committeeLanguageCode } from '@/lib/committeeLanguage';
 import SiteNav from '@/components/SiteNav';
 import FooterLegal from '@/components/FooterLegal';
 import Portal from '@/components/Portal';
@@ -190,6 +191,8 @@ interface Committee {
   display_chairs: DisplayChair[] | null;
   chair_user_ids: string[] | null;
   logo_url: string | null;
+  /** conference_committees.working_language; null = not set (src/lib/committeeLanguage.ts). */
+  working_language?: string | null;
 }
 
 interface CommitteeSlot {
@@ -946,7 +949,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     const [committeesRes, roleConfigsRes] = await Promise.all([
       supabase
         .from('conference_committees')
-        .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, delegation_size, display_chairs, chair_user_ids, logo_url, groups')
+        .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, delegation_size, display_chairs, chair_user_ids, logo_url, groups, working_language')
         .eq('conference_id', conf.id)
         .order('name', { ascending: true }),
       supabase
@@ -2941,6 +2944,34 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                     onClick={() => openCommitteeEditor(c.id)}
                                     style={{ position: 'absolute', top: 12, left: 12, zIndex: 10 }}
                                   />
+                                )}
+                                {/* ACRONYM + WORKING LANGUAGE, TOP-LEFT (owner, 23 Sep
+                                    2026: "make sure the language setting is displayed
+                                    on the conference page as well, top left side with
+                                    the acronym"). Only when a language is set; the
+                                    two-letter tag keeps it inside the 77px beside the
+                                    emblem, the full name is its tooltip. Below the
+                                    organiser's pencil when that is shown. */}
+                                {c.working_language && (
+                                  <div
+                                    className="absolute flex flex-col items-start"
+                                    style={{ top: isOrganizerViewer ? 50 : 16, left: 16, gap: 3, maxWidth: 76 }}
+                                  >
+                                    {c.abbreviation && (
+                                      <span className="truncate" style={{ maxWidth: 76, fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', color: 'var(--gv-accent)' }}>
+                                        {c.abbreviation.toUpperCase()}
+                                      </span>
+                                    )}
+                                    <span
+                                      className="inline-flex items-center gap-1"
+                                      title={`Working language: ${c.working_language}`}
+                                      aria-label={`Working language: ${c.working_language}`}
+                                      style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 700, color: '#6B5F52', letterSpacing: '0.06em' }}
+                                    >
+                                      <Languages size={12} strokeWidth={2.2} aria-hidden style={{ color: 'var(--gv-accent)' }} />
+                                      {committeeLanguageCode(c.working_language)}
+                                    </span>
+                                  </div>
                                 )}
                                 {/* LEVEL MARKER, TOP-RIGHT: the same DifficultyTile
                                     the organiser committees page stamps on its

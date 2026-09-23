@@ -342,6 +342,19 @@ src/components/ neu.tsx (design tokens), DatePicker, Portal, SiteNav, Scoreboard
 
 **Email:** nothing sends inline. Every email is an `email_outbox` row (rendered by a DB trigger, delivered by the `send-emails` edge function via Resend). Add an event to `EVENT_REGISTRY` in `emailEvents.ts` and TypeScript forces a category and a default body.
 
+**Allocation emails have two switches, and the template's OFF wins (23 Sep 2026).**
+`conferences.allocation_email_auto` (Assignment → "Sending automatically" / "Manual
+release") decides WHEN `allocation_assigned` is raised; the `email_templates` row's
+`enabled` (Communications) decides WHETHER it sends at all. An explicit off makes
+`queueEventEmail` answer `'off'` and queue nothing, silently, and `allocation_sent`
+stays false. SISMUN had auto on and the template off, so 138 seated delegates were
+never emailed while the bar said "Sending automatically". The Assignment bar
+(`AllocationEmailBar templateOff`) now reads the template and says "Switched off"
+with a Turn on button (`turnOnDefaultEmail`: future seats only, it queues nothing for
+anyone already waiting; the backlog is SEND → All new, the organiser's call).
+`email_templates.updated_at` has no trigger and the Communications toggle does not
+bump it, so it cannot tell you when a template was switched off.
+
 **Emailing "everyone" reaches people who have never registered, and that is
 deliberate.** A recipient's address is `profiles.email ?? invited_email`, so an
 imported or invited applicant who never made an account still gets the email.

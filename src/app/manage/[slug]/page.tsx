@@ -25,17 +25,16 @@ import {
 import Portal from '@/components/Portal';
 import DecorativeBleed from '@/components/DecorativeBleed';
 import ParticipantsChart, { toCumulativeSeries } from '@/components/conferences/ParticipantsChart';
-import ApplicantsDial from '@/components/conferences/ApplicantsDial';
+import InviteAcceptance, { inviteAcceptanceByRole, type ChairInviteRow } from '@/components/conferences/InviteAcceptance';
 import TrafficSourcesCard from '@/components/conferences/TrafficSourcesCard';
-import { BENTO_BORDER } from '@/components/conferences/bento';
+import { BENTO_BORDER, BENTO_WASH_FOREST, BENTO_WASH_GOLD } from '@/components/conferences/bento';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
 import { hasExploredEmails } from '@/lib/emailsExplored';
 import { getConferenceIntent, intentRank } from '@/lib/conferenceIntent';
-import { outstandingPledgedSpots } from '@/lib/pledgedSpots';
 import { useConferenceMoney } from '@/lib/conferenceMoney';
 import RevenueReadout from '@/components/conferences/RevenueReadout';
 import { ShareLinkRow, ShareHero } from '@/components/conferences/ShareConferenceLink';
-import { DASH_CSS, UnallocatedBadge, useDialSize } from '@/components/conferences/dashboardLayout';
+import { DASH_CSS, UnallocatedBadge } from '@/components/conferences/dashboardLayout';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import VerifiedCheck, { minutesToCheckmarkLabel } from '@/components/VerifiedCheck';
 
@@ -274,7 +273,7 @@ function ShareModal({
             className="rounded-lg p-2.5 mb-2.5"
             style={{
               fontFamily: OUTFIT, fontSize: 12, color: NEU.ink, lineHeight: 1.45,
-              backgroundColor: 'rgba(255,255,255,0.55)', whiteSpace: 'pre-line', wordBreak: 'break-word',
+              backgroundColor: 'color-mix(in srgb, var(--gv-main) 4%, var(--gv-surface))', boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--gv-main) 10%, transparent)', whiteSpace: 'pre-line', wordBreak: 'break-word',
             }}
           >
             {caption}
@@ -330,6 +329,10 @@ interface AppRow {
   pledge_type: string | null;
   spots_pledged: number | null;
   advisors_pledged: number | null;
+  /** Null for an imported / invited applicant who has not claimed the invite
+   *  yet (claim_import_invite writes it). Read only as "is there an account";
+   *  the invite card counts on it (src/components/conferences/InviteAcceptance.tsx). */
+  user_id: string | null;
 }
 
 // ── Unallocated delegates ──────────────────────────────────────────────────
@@ -368,6 +371,9 @@ interface DashData {
   pendingChairInviteCommitteeIds: string[];
   /** Pending co-organizer invites — one is enough to clear the secretariat row. */
   pendingOrganizerInvites: number;
+  /** Pending and accepted chair invites (status + the invitee's account, never
+   *  the email), for the invite-acceptance card. */
+  chairInvites: ChairInviteRow[];
 }
 
 // ── Recent activity feed ───────────────────────────────────────────────────
@@ -961,7 +967,6 @@ export default function DashboardPage() {
   const [publishBlockMsg, setPublishBlockMsg] = useState('');
   const [dash, setDash] = useState<DashData | null>(null);
   // The applicants card's width decides the dial's diameter (one-screen grid).
-  const [dialCardRef, dialSize] = useDialSize();
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   // `now` starts at 0 (same on server + client, no hydration mismatch) and is
   // set on mount, then ticked every minute so relative times stay fresh.
@@ -993,10 +998,10 @@ export default function DashboardPage() {
     const supabase = getAuthedClient(session.access_token);
     const confId = conference.id;
     (async () => {
-      const [appsRes, allocRes, committeesRes, orgRes, emailRes, chairInvRes, orgInvRes] = await Promise.all([
+      const [appsRes, allocRes, committeesRes, orgRes, emailRes, chairInvRes, orgInvRes, chairInvAllRes] = await Promise.all([
         supabase
           .from('applications')
-          .select('id, submitted_at, status, payment_status, role, society_id, pledge_type, spots_pledged, advisors_pledged')
+          .select('id, user_id, submitted_at, status, payment_status, role, society_id, pledge_type, spots_pledged, advisors_pledged')
           .eq('conference_id', confId),
         // created_at, not a head-only count: the Assigned series on
         // ParticipantsChart is plotted from these instants. The count the
@@ -1034,6 +1039,13 @@ export default function DashboardPage() {
           .select('*', { count: 'exact', head: true })
           .eq('conference_id', confId)
           .eq('status', 'pending'),
+        // Chair invites for the invite-acceptance card: who has accepted and
+        // what is still out. Declined and revoked rows are not counted.
+        supabase
+          .from('conference_chair_invites')
+          .select('status, invited_user_id')
+          .eq('conference_id', confId)
+          .in('status', ['pending', 'accepted']),
       ]);
       const allocRows = (allocRes.data ?? []) as { created_at: string | null }[];
       setDash({
@@ -1047,6 +1059,7 @@ export default function DashboardPage() {
           .map(r => r.committee_id)
           .filter((id): id is string => !!id),
         pendingOrganizerInvites: orgInvRes.count ?? 0,
+        chairInvites: (chairInvAllRes.data ?? []) as ChairInviteRow[],
       });
     })();
   }, [conference?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1309,7 +1322,6 @@ export default function DashboardPage() {
   const confYear = conference.start_date ? new Date(conference.start_date + 'T00:00:00').getFullYear() : null;
 
   // ── Derived numbers ──────────────────────────────────────────────────────
-  const totalApps = dash.apps.length;
   // Accepted = accepted-or-beyond. Allocating flips an application's status to
   // 'assigned' (and check-in to 'checked-in'), so a naive status === 'accepted'
   // count would exclude everyone already allocated and read *lower* than the
@@ -1318,14 +1330,8 @@ export default function DashboardPage() {
   const acceptedApps = dash.apps.filter(
     a => a.status === 'accepted' || a.status === 'assigned' || a.status === 'checked-in'
   ).length;
-  const paidApps = dash.apps.filter(a => a.payment_status === 'paid').length;
   const delegateApps = dash.apps.filter(a => a.role === 'delegate' || a.role === 'head-delegate').length;
   const societies = new Set(dash.apps.map(a => a.society_id).filter(Boolean)).size;
-  // People a delegation has pledged to bring who have no application row yet.
-  // Net of anyone already registered under that delegation, so a spot is never
-  // counted as two people (src/lib/pledgedSpots.ts). Sits OUTSIDE the funnel:
-  // the four dial stages stay counts of real rows.
-  const pledgedSpots = outstandingPledgedSpots(dash.apps);
   const committeeCount = dash.committees.length;
   // A dais counts as handled once a chair is ASSIGNED (chair_user_ids) or
   // INVITED (a pending conference_chair_invites row). Chasing an organiser about
@@ -1357,26 +1363,10 @@ export default function DashboardPage() {
   const unallocated = Math.max(0, acceptedApps - allocated);
   const fee = conference.fee_amount ?? 0;
 
-  // Funnel rings, outermost → innermost. Every value is an existing derived
-  // const, so the dial can never contradict the pipeline cells or the stat
-  // tiles beside it. Total ⊇ Accepted ⊇ Assigned holds by construction
-  // (acceptedApps counts accepted/assigned/checked-in, and `allocated` is
-  // already Math.min'd against it). Paid is a subset of Total but NOT of
-  // Assigned — a delegate can pay before a committee seat is picked for them
-  // — which is exactly why it is a separate ring rather than a stacked slice.
-  //
-  // Each key row deep-links into the applications table pre-filtered to the
-  // matching rows. The ?status= words resolve, on that page, to the same
-  // status GROUPS its own stat tiles use (accepted → accepted-or-beyond,
-  // assigned → allocated-or-beyond), so the list a chair lands on always has
-  // exactly the number of rows they just clicked. Paid is a payment state,
-  // not a status, hence ?payment=paid.
-  const dialStages = [
-    { key: 'total', label: 'Applications', value: totalApps, href: `/manage/${slug}/applications` },
-    { key: 'accepted', label: 'Accepted', value: acceptedApps, href: `/manage/${slug}/applications?status=accepted` },
-    { key: 'assigned', label: 'Assigned', value: allocated, href: `/manage/${slug}/applications?status=assigned` },
-    { key: 'paid', label: 'Paid', value: paidApps, href: `/manage/${slug}/applications?payment=paid` },
-  ];
+  // Invite acceptance per role (delegates, faculty advisors, observers,
+  // chairs). The definition of "accepted" is written at the top of
+  // src/components/conferences/InviteAcceptance.tsx.
+  const inviteCounts = inviteAcceptanceByRole(dash.apps, dash.chairInvites);
 
   // ── Set-up priorities: 8 detection checks, in journey order ──────────────
   // Base order = the natural build journey (page → committees → chairs → email →
@@ -1704,11 +1694,11 @@ export default function DashboardPage() {
         />
 
         {allSetAndVerified ? (
-          <NeuCard className="gv-dash-prio flex flex-col" style={{ padding: '14px 15px', border: BENTO_BORDER }}>
+          <NeuCard className="gv-dash-prio flex flex-col" style={{ padding: '14px 15px', border: BENTO_BORDER, backgroundColor: BENTO_WASH_FOREST }}>
             <ShareHero conference={conference} />
           </NeuCard>
         ) : (
-        <NeuCard className="gv-dash-prio flex flex-col" style={{ padding: '13px 15px 11px', border: BENTO_BORDER }}>
+        <NeuCard className="gv-dash-prio flex flex-col" style={{ padding: '13px 15px 11px', border: BENTO_BORDER, backgroundColor: BENTO_WASH_FOREST }}>
           <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginBottom: 7 }}>
             <div className="min-w-0">
               <h2 style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>Set-up priorities</h2>
@@ -1796,38 +1786,34 @@ export default function DashboardPage() {
 
         </div>
 
-        {/* Applicants against target: the dial and its key, the red
-            unassigned badge beside the heading, one quiet footer line. */}
+        {/* Invites accepted, per role: one ring each for delegates, faculty
+            advisors, observers and chairs (owner, 23 Sep 2026: the status
+            dial is gone). The red "to assign" badge stays beside the heading.
+            Gold wash: this is the headline card of the page. */}
         <div className="gv-dash-dial gv-dash-cell">
-        <NeuCard className="flex flex-col" style={{ padding: '13px 16px 12px', border: BENTO_BORDER, height: '100%' }}>
-          <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginBottom: 6, minHeight: 28 }}>
+        <NeuCard className="flex flex-col" style={{ padding: '13px 16px 12px', border: BENTO_BORDER, backgroundColor: BENTO_WASH_GOLD, height: '100%' }}>
+          <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginBottom: 10, minHeight: 28 }}>
             <h2 className="truncate" style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>
-              Applicants against target
+              Invites accepted
             </h2>
             <UnallocatedBadge count={unallocated} href={`/manage/${slug}/assignment`} />
           </div>
-          <div ref={dialCardRef} className="flex items-center" style={{ flex: 1, minHeight: 0 }}>
-            <ApplicantsDial
-              stages={dialStages}
-              expected={expectedDelegates}
-              pledged={pledgedSpots}
-              size={dialSize}
-              onNavigate={(href) => router.push(href)}
-            />
+          <div className="flex items-center" style={{ flex: 1, minHeight: 0 }}>
+            <InviteAcceptance counts={inviteCounts} />
           </div>
-          <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginTop: 6 }}>
-            <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
+          <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginTop: 10 }}>
+            <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
               {societies} delegation{societies === 1 ? '' : 's'} · {committeeCount} committee{committeeCount === 1 ? '' : 's'}
             </span>
             <Link
-              href={expectedDelegates > 0 ? `/manage/${slug}/applications` : `/manage/${slug}/settings?tab=conference`}
-              className="inline-flex items-center gap-1.5 flex-shrink-0 transition-opacity hover:opacity-70"
+              href={`/manage/${slug}/applications`}
+              className="inline-flex items-center gap-1.5 flex-shrink-0 transition-opacity hover:opacity-70 focus:outline-none"
               style={{
                 fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em',
                 color: NEU.deepGold, textDecoration: 'none',
               }}
             >
-              {expectedDelegates > 0 ? 'REVIEW APPLICATIONS' : 'SET AN EXPECTED HEAD COUNT'}
+              REVIEW APPLICATIONS
               <ArrowRight size={12} />
             </Link>
           </div>

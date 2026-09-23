@@ -40,7 +40,7 @@ import {
 import Portal from '@/components/Portal';
 import Loader from '@/components/Loader';
 import Avatar from '@/components/Avatar';
-import { FlagImg } from '@/components/FlagImg';
+import { CircleFlag } from '@/components/CircleFlag';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { getCountryByName, countryToContinent, type Continent } from '@/lib/countries';
@@ -309,7 +309,7 @@ function RankedBars({
           <div key={r.key} className="flex items-center gap-2.5">
             {flags && (
               <span className="flex-shrink-0 inline-flex items-center" style={{ width: 20, lineHeight: 0 }}>
-                {code ? <FlagImg code={code} size={18} /> : <Globe2 size={15} style={{ color: NEU.muted }} />}
+                {code ? <CircleFlag code={code} size={18} decorative /> : <Globe2 size={15} style={{ color: NEU.muted }} />}
               </span>
             )}
             <span
@@ -771,7 +771,7 @@ export default function DataTab() {
                     <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.ink, maxWidth: 150 }}>
                       {s.name || 'No name yet'}
                     </span>
-                    {code && <FlagImg code={code} size={14} />}
+                    {code && <CircleFlag code={code} size={14} decorative />}
                     <span className="truncate flex-1 min-w-0" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.inkSoft }}>
                       {s.email}
                     </span>

@@ -26,13 +26,13 @@ import {
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { useConfirmModal } from '@/components/ConfirmModal';
-import { CircleFlag } from '@/components/CircleFlag';
+import { FlagImg } from '@/components/FlagImg';
 import { NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuIconDisc, NeuInset } from '@/components/neu';
 import { currencySymbol } from '@/lib/currencies';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
-import { getCountryByName, getCountryByCode } from '@/lib/countries';
 import { MemberAvatar, removeFromDelegation, type PoolMember } from '@/app/manage/[slug]/assignment/delegationShared';
+import { DelegationIdentity } from './DelegationAvatar';
 import {
   buildDelegationRows, sortDelegationRows, memberName, ACCEPTED,
   type DelegationMemberLite, type DelegationRow, type SocietyLite, type InvoiceLite, type PaymentLite,
@@ -62,11 +62,6 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
 function money(cents: number, cur: string): string {
   const amount = Math.round(cents) / 100;
   return `${currencySymbol(cur)}${amount.toLocaleString('en', { maximumFractionDigits: Number.isInteger(amount) ? 0 : 2 })}`;
-}
-
-function countryCodeOf(nat: string | null): string | null {
-  if (!nat) return null;
-  return getCountryByName(nat)?.code ?? getCountryByCode(nat.toUpperCase())?.code ?? null;
 }
 
 /** Reads every page of a query (PostgREST caps a response at 1,000 rows), so
@@ -145,7 +140,7 @@ export default function DelegationsBoard<M extends DelegationMemberLite>(props: 
     const supabase = getAuthedClient(accessToken);
     const [socRes, advRes, invRes, payRes] = await Promise.all([
       supabase.from('societies')
-        .select('id, name, spots_purchased, advisor_spots_purchased, created_at')
+        .select('id, name, spots_purchased, advisor_spots_purchased, created_at, city, country_code, logo_url')
         .eq('conference_id', conference.id)
         .order('name', { ascending: true }),
       supabase.from('applications')
@@ -449,7 +444,6 @@ function DelegationRowCard<M extends DelegationMemberLite>({
   onOpenMember: (id: string) => void;
   onRemove: (m: M) => void;
 }) {
-  const code = countryCodeOf(row.country);
   const acceptable = row.pending.filter(canAccept);
   const rejectable = row.pending.filter(canReject);
   const blocked = row.pending.length - acceptable.length;
@@ -477,25 +471,18 @@ function DelegationRowCard<M extends DelegationMemberLite>({
           style={{ background: 'none', border: 'none', padding: 4, margin: -4, borderRadius: 14, cursor: 'pointer' }}
         >
           <ChevronDown size={16} strokeWidth={2.6} style={{ color: NEU.muted, flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 200ms' }} />
-          <span className="relative flex-shrink-0" style={{ width: 46, height: 46 }}>
-            <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={UsersRound} size={46} iconColor="#EED98A" />
-            {code && (
-              <span className="absolute" style={{ right: -4, bottom: -4, borderRadius: 999, boxShadow: '0 0 0 2px var(--gv-surface)' }}>
-                <CircleFlag code={code} size={20} title={`Most members are from ${row.country}`} label={row.country} />
-              </span>
-            )}
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate" title={row.name} style={{ fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 800, color: NEU.ink }}>{row.name}</span>
-            <span className="flex items-center gap-1.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: NEU.inkSoft, marginTop: 1 }}>
-              <Crown size={12} strokeWidth={2.4} style={{ color: head ? NEU.deepGold : NEU.muted, flexShrink: 0 }} aria-hidden />
-              <span className="truncate">
-                {head ? `${headRole}: ${memberName(head)}` : 'No head delegate yet'}
-                {row.heads.length > 1 ? ` and ${row.heads.length - 1} more` : ''}
-                {row.country ? ` · ${row.country}` : ''}
-              </span>
-            </span>
-          </span>
+          <DelegationIdentity
+            name={row.name}
+            size={56}
+            nameSize={17}
+            members={row.registered}
+            country={row.country}
+            city={row.city}
+            countryCode={row.countryCode}
+            logoUrl={row.logoUrl}
+            lead={head ? `${memberName(head)}${row.heads.length > 1 ? ` and ${row.heads.length - 1} more` : ''}` : null}
+            leadRole={headRole}
+          />
         </button>
 
         {/* Members: expected over registered. */}
@@ -689,7 +676,7 @@ function MemberLine<M extends DelegationMemberLite>({ m, owes, removing, disable
               <>
                 <span aria-hidden>·</span>
                 <span className="inline-flex items-center gap-1">
-                  {m.assigned_country_code && <CircleFlag code={m.assigned_country_code} size={14} decorative />}
+                  {m.assigned_country_code && <FlagImg code={m.assigned_country_code} size={15} />}
                   {committee}{m.assigned_country_name ? ` ${m.assigned_country_name}` : ''}
                 </span>
               </>

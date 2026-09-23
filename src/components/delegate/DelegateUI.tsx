@@ -60,10 +60,10 @@ export const DG = {
 
 /** Raised/pressed pair, forest-tinted like the rest of the app. */
 export const LIFT = {
-  sm: '-3px -3px 7px rgba(255,255,255,0.9), 4px 4px 9px rgba(27,56,40,0.15)',
-  md: '-6px -6px 14px rgba(255,255,255,0.85), 8px 8px 20px rgba(27,56,40,0.16)',
-  inSm: 'inset 2px 2px 6px rgba(27,56,40,0.13), inset -2px -2px 6px rgba(255,255,255,0.8)',
-  in: 'inset 4px 4px 10px rgba(27,56,40,0.14), inset -4px -4px 10px rgba(255,255,255,0.8)',
+  sm: '0 0 0 1px rgba(27,56,40,0.10), 0 1px 2px rgba(27,56,40,0.08)',
+  md: '0 0 0 1px rgba(27,56,40,0.09), 0 1px 2px rgba(27,56,40,0.06), 0 8px 20px -8px rgba(27,56,40,0.18)',
+  inSm: 'inset 0 0 0 1px rgba(27,56,40,0.09), inset 0 1px 1.5px rgba(27,56,40,0.06)',
+  in: 'inset 0 0 0 1px rgba(27,56,40,0.10), inset 0 1px 2px rgba(27,56,40,0.07)',
 } as const;
 
 /* Escalation ladder. Position 17 and position 1 are different screens. */

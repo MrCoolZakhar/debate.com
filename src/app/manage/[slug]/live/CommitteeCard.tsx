@@ -31,12 +31,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Users, FileText, ScrollText, Trophy, AlertTriangle, Info,
-  Mic, Timer, Pause, Flag, Moon, Copy, Check, Send, UserRound,
+  Mic, Timer, Pause, Flag, Moon, Copy, Check, Send, UserRound, Gavel, Clock3,
 } from 'lucide-react';
 import { LogoDisc } from '@/components/LogoDisc';
 import { artFromIndex, slotArtKey, type SlotArtIndex } from '@/lib/slotGroups';
 import { type SessionSeat } from '@/lib/sessionFlags';
-import { SeatFlag, SeatArtProvider } from '@/components/SeatFlag';
+import { SeatArtProvider } from '@/components/SeatFlag';
+import { SeatCircleFlag } from '@/components/CircleFlag';
 import { getCountryByCode } from '@/lib/countries';
 import Avatar from '@/components/Avatar';
 import Portal from '@/components/Portal';
@@ -269,24 +270,18 @@ export function mergedSeatRoster(
  *  person, not a country". The replacement is what the assignment page already
  *  draws for a character/custom seat (`manage/[slug]/assignment/page.tsx:741`):
  *  a lucide `UserRound` in a disc. `NEU.forest` on `NEU.surface` is 10.73:1. */
+// ROUND since 23 Sep 2026 (owner: "start using the circle flags literally
+// everywhere, as they fill more space ... in live view"). `SeatCircleFlag` reads
+// the same `SeatArtProvider` the rectangle did, so the crest > flag > person
+// precedence is unchanged; the circle artwork simply fills the disc.
 function DelegationMark({ country, size }: { country: string; size: number }) {
   return (
-    <SeatFlag
+    <SeatCircleFlag
       country={country}
       size={size}
-      fallback={
-        <span
-          className="inline-flex items-center justify-center flex-shrink-0"
-          aria-hidden
-          style={{
-            width: size, height: size, borderRadius: '50%',
-            backgroundColor: NEU.surface, color: NEU.forest,
-            boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.14)',
-          }}
-        >
-          <UserRound size={Math.round(size * 0.62)} strokeWidth={2} />
-        </span>
-      }
+      decorative
+      monogramColors={{ bg: 'rgba(27,56,40,0.07)', fg: NEU.forest }}
+      fallback={<UserRound size={Math.round(size * 0.6)} strokeWidth={2} style={{ color: NEU.forest }} />}
     />
   );
 }
@@ -532,6 +527,191 @@ function QueueOverflow({
   );
 }
 
+/** THE DAIS ON A LIVE CARD: at most two rows, then "+N".
+ *
+ *  Order: the gavel holder (`session.headChair`, matched on the full name or
+ *  its first name, since `chair_names` is a free-text join log), then the rest
+ *  of the seated dais in `chair_user_ids` order, then pending invitees, quieter
+ *  and in gold ink. Every row is ONE line (a name that does not fit is cut with
+ *  an ellipsis and carried whole in its `title`), and the block always reserves
+ *  two rows, so the identity band never grows with the size of the dais.
+ *
+ *  The "+N" is plain type, no pill (CLAUDE.md §8). Hover or focus opens the
+ *  whole dais through `Portal` at fixed coordinates, flipped near the bottom
+ *  edge, per the house popover rule. It is a real button that stops
+ *  propagation, because the whole card is role="button". */
+const DAIS_ROW = 18;
+const DAIS_GAP = 3;
+
+function DaisSummary({ seated, pending, headChair }: {
+  seated: ChairPerson[];
+  pending: { id: string; name: string; avatarUrl: string | null }[];
+  headChair: string | null;
+}) {
+  type Entry = { key: string; name: string; label: string; avatarUrl: string | null; id: string | null; pending: boolean; gavel: boolean };
+  const entries = useMemo<Entry[]>(() => {
+    const h = (headChair ?? '').trim().toLowerCase();
+    const isHead = (n: string) => !!h && (n.trim().toLowerCase() === h || firstName(n).toLowerCase() === firstName(h).toLowerCase());
+    const headIdx = seated.findIndex((c) => isHead(c.name));
+    const ordered = headIdx > 0 ? [seated[headIdx], ...seated.filter((_, i) => i !== headIdx)] : seated;
+    return [
+      ...ordered.map((c, i) => ({
+        key: `c-${c.id ?? c.name}-${i}`, name: c.name, label: firstName(c.name) || c.name,
+        avatarUrl: c.avatarUrl, id: c.id, pending: false, gavel: headIdx >= 0 && i === 0,
+      })),
+      ...pending.map((p) => ({
+        key: `p-${p.id}`, name: p.name, label: firstName(p.name) || p.name,
+        avatarUrl: p.avatarUrl, id: null, pending: true, gavel: false,
+      })),
+    ];
+  }, [seated, pending, headChair]);
+
+  const MAX = 2;
+  const over = entries.length > MAX;
+  const shown = over ? entries.slice(0, MAX) : entries;
+  const hidden = entries.length - shown.length;
+
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const timer = useRef<number | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const openList = () => {
+    if (timer.current) { window.clearTimeout(timer.current); timer.current = null; }
+    const b = btnRef.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const W = 230;
+    const H = Math.min(280, 36 + entries.length * 28);
+    const below = window.innerHeight - r.bottom - 10;
+    const up = below < H && r.top - 10 > below;
+    setPos({
+      top: up ? Math.max(8, r.top - 6 - H) : r.bottom + 6,
+      left: Math.max(8, Math.min(r.right - W, window.innerWidth - W - 8)),
+    });
+  };
+  const closeSoon = () => {
+    if (timer.current) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setPos(null), 150);
+  };
+  useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
+  useEffect(() => {
+    if (!pos) return;
+    const close = () => setPos(null);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [pos]);
+
+  const row = (e: Entry, lead?: React.ReactNode) => {
+    const face = (
+      <span className="inline-flex flex-shrink-0" style={{ borderRadius: '50%', boxShadow: '0 0 0 1px rgba(27,56,40,0.14)', opacity: e.pending ? 0.72 : 1 }}>
+        <Avatar url={e.avatarUrl} name={e.name} size={DAIS_ROW} rounded />
+      </span>
+    );
+    const text = (
+      <span
+        className="font-semibold truncate min-w-0"
+        style={{ color: e.pending ? '#7A5A10' : SOFT, fontFamily: OUTFIT, fontSize: 12, lineHeight: `${DAIS_ROW}px` }}
+      >
+        {e.label}
+      </span>
+    );
+    return (
+      <span
+        key={e.key}
+        className="flex items-center gap-1.5 justify-end"
+        style={{ maxWidth: '100%', height: DAIS_ROW }}
+        title={e.pending ? `${e.name} has been invited to chair and has not accepted yet` : e.gavel ? `${e.name}, holds the gavel` : e.name}
+      >
+        {lead}
+        {e.pending && <Clock3 size={11} strokeWidth={2.4} aria-label="Invite pending" style={{ color: '#7A5A10', flexShrink: 0 }} />}
+        {e.gavel && <Gavel size={11} strokeWidth={2.4} aria-label="Holds the gavel" style={{ color: GREEN_INK, flexShrink: 0 }} />}
+        {e.id ? (
+          // `nested` because the whole card is role="button": the link stops
+          // propagation so opening a chair's CV never also opens the recap.
+          <ProfileLink userId={e.id} name={e.name} nested className="inline-flex items-center gap-1.5 justify-end min-w-0" style={{ minWidth: 0 }}>
+            {text}{face}
+          </ProfileLink>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 justify-end min-w-0">{text}{face}</span>
+        )}
+      </span>
+    );
+  };
+
+  return (
+    <div className="flex flex-col items-end" style={{ marginBlockStart: 5, gap: DAIS_GAP, width: '100%', minHeight: DAIS_ROW * 2 + DAIS_GAP }}>
+      {entries.length === 0 && (
+        <span className="font-semibold text-right" style={{ color: AMBER_INK, fontFamily: OUTFIT, fontSize: 12, lineHeight: `${DAIS_ROW}px` }}>
+          No chair assigned
+        </span>
+      )}
+      {shown.map((e, i) => row(e, over && i === shown.length - 1 ? (
+        <button
+          ref={btnRef}
+          type="button"
+          aria-haspopup="true"
+          aria-expanded={!!pos}
+          aria-label={`${hidden} more on the dais. Show everyone.`}
+          onClick={(ev) => { ev.stopPropagation(); if (pos) setPos(null); else openList(); }}
+          onKeyDown={(ev) => ev.stopPropagation()}
+          onMouseEnter={openList}
+          onMouseLeave={closeSoon}
+          onFocus={openList}
+          onBlur={closeSoon}
+          className="font-extrabold flex-shrink-0 focus:outline-none focus-visible:underline tabular-nums"
+          style={{ color: NEU.forest, fontFamily: OUTFIT, fontSize: 12, lineHeight: `${DAIS_ROW}px`, border: 'none', background: 'none', padding: '0 4px 0 0', cursor: 'pointer' }}
+        >
+          +{hidden}
+        </button>
+      ) : undefined))}
+      {pos && (
+        <Portal>
+          <div
+            role="dialog"
+            aria-label="Everyone on this dais"
+            onMouseEnter={openList}
+            onMouseLeave={closeSoon}
+            onClick={(ev) => ev.stopPropagation()}
+            style={{
+              position: 'fixed', top: pos.top, left: pos.left, width: 230, zIndex: 60,
+              maxHeight: 280, overflowY: 'auto',
+              backgroundColor: NEU.surface, borderRadius: 14,
+              border: `1px solid ${CARD_BORDER_COLOR}`, boxShadow: CARD_SHADOW_HOVER,
+              padding: '9px 10px', fontFamily: OUTFIT,
+            }}
+          >
+            <p className="font-extrabold uppercase" style={{ color: SOFT, fontSize: 9.5, letterSpacing: '0.08em', marginBlockEnd: 6 }}>
+              The dais · {entries.length}
+            </p>
+            <div className="flex flex-col" style={{ gap: 6 }}>
+              {entries.map((e) => (
+                <span key={e.key} className="flex items-center gap-2 min-w-0" style={{ opacity: e.pending ? 0.8 : 1 }}>
+                  <Avatar url={e.avatarUrl} name={e.name} size={22} rounded />
+                  <span className="font-bold min-w-0" style={{ color: e.pending ? '#7A5A10' : NEU.ink, fontSize: 12, lineHeight: 1.25, overflowWrap: 'anywhere' }}>
+                    {e.name}
+                  </span>
+                  {e.gavel && <Gavel size={12} strokeWidth={2.4} aria-label="Holds the gavel" style={{ color: GREEN_INK, flexShrink: 0, marginInlineStart: 'auto' }} />}
+                  {e.pending && (
+                    <span className="inline-flex items-center gap-1 flex-shrink-0" style={{ marginInlineStart: 'auto', color: '#7A5A10', fontSize: 10.5, fontWeight: 700 }}>
+                      <Clock3 size={11} strokeWidth={2.4} aria-hidden /> Invited
+                    </span>
+                  )}
+                </span>
+              ))}
+            </div>
+          </div>
+        </Portal>
+      )}
+    </div>
+  );
+}
+
 function NowPlayingPanel({
   np, onOpenDelegate,
 }: {
@@ -553,8 +733,10 @@ function NowPlayingPanel({
       // spacer at the bottom takes the surplus.
       className="flex flex-col flex-1"
       style={{
-        backgroundColor: NEU.base,
-        boxShadow: NEU.inSm,
+        // A tinted well with a hairline, not a pressed-in neumorphic inset
+        // (the inset's white highlight read as a haze on the card).
+        backgroundColor: 'rgba(27,56,40,0.045)',
+        boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.08)',
         borderRadius: PANEL_RADIUS,
         padding: '12px 13px 11px',
         minHeight: PANEL_MIN_HEIGHT,
@@ -565,13 +747,18 @@ function NowPlayingPanel({
       <div className="flex items-start gap-3 min-w-0">
         <span
           className="flex items-center justify-center rounded-full flex-shrink-0 overflow-hidden"
-          style={{ width: 56, height: 56, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
+          style={{
+            width: 56, height: 56,
+            backgroundColor: np.flag ? 'transparent' : 'rgba(27,56,40,0.06)',
+            boxShadow: '0 1px 2px rgba(27,56,40,0.10), 0 6px 14px -6px rgba(27,56,40,0.30)',
+          }}
           aria-hidden
         >
           {/* `DelegationMark`, not `FlagImg`: a cabinet post or a character seat
-              has no ISO code and must not fall back to a globe. */}
+              has no ISO code and must not fall back to a globe. The round flag
+              fills the whole 56px disc now instead of floating in it. */}
           {np.flag
-            ? <DelegationMark country={np.flag} size={36} />
+            ? <DelegationMark country={np.flag} size={56} />
             : <Glyph size={25} style={{ color: np.tone === 'off' ? SOFT : ink }} />}
         </span>
 
@@ -656,8 +843,8 @@ function NowPlayingPanel({
           className="w-full overflow-hidden"
           style={{
             height: 6, borderRadius: 6,
-            backgroundColor: NEU.surface,
-            boxShadow: 'inset 1px 1px 3px rgba(27,56,40,0.16), inset -1px -1px 3px rgba(255,255,255,0.75)',
+            backgroundColor: 'rgba(27,56,40,0.08)',
+            boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.06)',
             opacity: hasMeter ? 1 : 0.55,
           }}
         >
@@ -1179,116 +1366,18 @@ export function CommitteeCard({
               </span>
             </span>
 
-            {/* ONE ROW PER CHAIR, in reading order, right-aligned under the
-                word. Names are the first names `chairFirstNames` already
-                resolves — not a truncation: it is the card's established chair
-                rule (`display_chairs[].name` title-cased, deduplicated), and the
-                full name rides along in `title` and in the link. A name that is
-                too wide WRAPS; nothing here is ever cut.
-
-                No cap and no "+N": a four-chair dais is uncommon and a hidden
-                chair is exactly the person an organiser walking the floor is
-                trying to find. */}
-            <div className="flex flex-col items-end" style={{ marginBlockStart: 5, gap: 3, width: '100%' }}>
-              {chairPeople.length === 0 && pendingChairs.length === 0 && (
-                <span
-                  className="font-semibold text-right"
-                  style={{ color: AMBER_INK, fontFamily: OUTFIT, fontSize: 12, lineHeight: 1.25 }}
-                >
-                  No chair assigned
-                </span>
-              )}
-              {
-                chairPeople.map((c, i) => {
-                  const label = facts.chairs[i] ?? c.name;
-                  const row = (
-                    <>
-                      <span
-                        className="font-semibold text-right min-w-0"
-                        style={{
-                          color: SOFT, fontFamily: OUTFIT, fontSize: 12,
-                          lineHeight: 1.25, overflowWrap: 'anywhere',
-                        }}
-                      >
-                        {label}
-                      </span>
-                      <span
-                        className="inline-flex rounded-full flex-shrink-0"
-                        style={{ boxShadow: `0 0 0 1.5px ${NEU.surface}, ${NEU.outSm}`, borderRadius: '50%' }}
-                      >
-                        <Avatar url={c.avatarUrl} name={c.name} size={18} rounded />
-                      </span>
-                    </>
-                  );
-                  // `nested` because the whole card is role="button" — the link
-                  // must stop propagation or opening a chair's CV would also
-                  // fire the card's own recap. A chair with no account carries
-                  // `id: null`, and ProfileLink renders those children BARE —
-                  // which is why the flex row is an outer span here rather than
-                  // ProfileLink's own className. Without it, an unlinked chair's
-                  // name and face would fall out of the row and stack.
-                  return (
-                    <span
-                      key={`${c.id ?? c.name}-${i}`}
-                      className="flex items-center gap-1.5 justify-end"
-                      style={{ maxWidth: '100%' }}
-                      title={c.name}
-                    >
-                      <ProfileLink
-                        userId={c.id}
-                        name={c.name}
-                        nested
-                        className="inline-flex items-center gap-1.5 justify-end"
-                        style={{ minWidth: 0 }}
-                      >
-                        {row}
-                      </ProfileLink>
-                    </span>
-                  );
-                })
-              }
-
-              {/* Pending invitees, AFTER the seated dais and visibly quieter:
-                  0.72 opacity, a gold PENDING pill and gold-brown ink, the same
-                  language the committees page and the assignment board already
-                  use for an unaccepted invite. No profile link — an invitee is
-                  not on this dais yet, so nothing here points at a CV as though
-                  they were. */}
-              {pendingChairs.map((p) => (
-                <span
-                  key={p.id}
-                  className="flex items-center gap-1.5 justify-end"
-                  style={{ maxWidth: '100%', opacity: 0.72 }}
-                  title={`${p.name} has been invited to chair and has not accepted yet`}
-                >
-                  <span
-                    className="rounded-full flex-shrink-0"
-                    style={{
-                      fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 800,
-                      letterSpacing: '0.06em', padding: '2px 6px', lineHeight: 1.4,
-                      backgroundColor: 'rgba(238,217,138,0.4)', color: '#8A6614',
-                    }}
-                  >
-                    PENDING
-                  </span>
-                  <span
-                    className="font-semibold text-right min-w-0"
-                    style={{
-                      color: '#7A5A10', fontFamily: OUTFIT, fontSize: 12,
-                      lineHeight: 1.25, overflowWrap: 'anywhere',
-                    }}
-                  >
-                    {firstName(p.name) || p.name}
-                  </span>
-                  <span
-                    className="inline-flex rounded-full flex-shrink-0"
-                    style={{ boxShadow: `0 0 0 1.5px ${NEU.surface}, ${NEU.outSm}`, borderRadius: '50%' }}
-                  >
-                    <Avatar url={p.avatarUrl} name={p.name} size={18} rounded />
-                  </span>
-                </span>
-              ))}
-            </div>
+            {/* THE DAIS, CAPPED AT TWO ROWS (owner, 23 Sep 2026: "with more
+                chairs the tab just gets taller; just have the most important
+                chairs displayed at the top and the rest as +N"). The gavel
+                holder first, then the seated dais, then pending invitees. Two
+                rows at most, the second led by a plain "+N" when more exist;
+                hover or focus on it lists everyone. The block reserves two rows
+                either way, so every card's identity band is the same height. */}
+            <DaisSummary
+              seated={chairPeople}
+              pending={pendingChairs}
+              headChair={data.session?.headChair ?? null}
+            />
           </div>
         </div>
 

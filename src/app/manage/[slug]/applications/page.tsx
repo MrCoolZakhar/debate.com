@@ -20,7 +20,6 @@ import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { notifyErr, notifyOk, clearErr, clearOk } from '@/lib/appNotify';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { FlagImg } from '@/components/FlagImg';
-import { CircleFlag } from '@/components/CircleFlag';
 import { DatePicker } from '@/components/DatePicker';
 import { LogoDisc } from '@/components/LogoDisc';
 import Portal from '@/components/Portal';
@@ -39,6 +38,7 @@ import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { type CustomQuestion, type CustomAnswers, normalizeBlocks, questionsOf, displayAnswer } from '@/lib/customQuestions';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import DelegationsBoard, { PeopleDelegationsSwitch } from './DelegationsBoard';
+import { DelegationIdentity, useDelegationSummaries } from './DelegationAvatar';
 // Same vocabulary the team invite wizard in Settings uses — never a parallel
 // list. Only the library, not the wizard component itself.
 import { ORGANIZER_SECTIONS, bundlePermissions } from '@/lib/organizerPermissions';
@@ -100,7 +100,7 @@ interface Application {
   assigned_country_name: string | null;
   assigned_committee: { name: string; abbreviation: string | null; topics: string[] | null; logo_url: string | null } | null;
   profiles: { display_name: string; email: string; avatar_url: string | null; nationality: string | null; date_of_birth: string | null; mun_experience_level: string | null } | null;
-  societies: { name: string } | null;
+  societies: { name: string; city: string | null; country_code: string | null; logo_url: string | null } | null;
   application_preferences: AppPreference[];
   self_paid: boolean;
   attending: boolean;
@@ -297,7 +297,7 @@ function StatusPill({ status, size = 'md', awaitingResubmission = false }: { sta
         background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[1]})`,
         color: '#FFFFFF',
         fontFamily: OUTFIT, fontSize: size === 'sm' ? 11 : 11.5, fontWeight: 800, letterSpacing: '0.03em',
-        boxShadow: `0 3px 8px ${t.grad[0]}55, ${NEU.outSm}`,
+        boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
         whiteSpace: 'nowrap',
       }}
     >
@@ -323,7 +323,7 @@ function NotAttendingBadge({ size = 'md' }: { size?: 'sm' | 'md' }) {
         background: `linear-gradient(135deg, ${grad[0]}, ${grad[1]})`,
         color: '#FFFFFF',
         fontFamily: OUTFIT, fontSize: size === 'sm' ? 11 : 11.5, fontWeight: 800, letterSpacing: '0.03em',
-        boxShadow: `0 3px 8px ${grad[0]}55, ${NEU.outSm}`,
+        boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
         whiteSpace: 'nowrap',
       }}
     >
@@ -391,38 +391,12 @@ function RolePill({ role, size = 'md' }: { role: string; size?: 'sm' | 'md' }) {
         background: `linear-gradient(135deg, ${spec.grad[0]}, ${spec.grad[1]})`,
         color: spec.ink,
         fontFamily: OUTFIT, fontSize: size === 'sm' ? 11 : 11.5, fontWeight: 800, letterSpacing: '0.03em',
-        boxShadow: `0 3px 8px ${spec.grad[0]}55, ${NEU.outSm}`,
+        boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
         whiteSpace: 'nowrap',
       }}
     >
       <RoleIcon role={role} size={iconSize} />
       {roleLabel(role).toUpperCase()}
-    </span>
-  );
-}
-
-/** Experience level rendered exactly like the delegate profile (LevelInsignia
- *  on a tinted disc + capitalised tier), followed by the count of conferences
- *  on their MUN CV in parentheses, e.g. "Expert (9)". */
-function LevelChip({ level, count }: { level: string; count?: number }) {
-  const key = (level ?? '').toLowerCase();
-  const accent = LEVEL_ACCENT[key] ?? '#9A8A78';
-  const label = key ? key.charAt(0).toUpperCase() + key.slice(1) : 'Unranked';
-  return (
-    <span
-      className="inline-flex items-center"
-      title={count !== undefined ? `${count} conference${count === 1 ? '' : 's'} on their MUN CV` : undefined}
-      style={{ gap: 6, padding: '4px 12px 4px 5px', borderRadius: 999, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
-    >
-      <span
-        className="inline-flex items-center justify-center flex-shrink-0"
-        style={{ width: 22, height: 22, borderRadius: 9999, background: `linear-gradient(150deg, ${accent}26, ${accent}14)`, border: `1px solid ${accent}55` }}
-      >
-        <LevelInsignia level={key} size={15} />
-      </span>
-      <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5, color: NEU.ink, letterSpacing: '0.01em', fontVariantNumeric: 'tabular-nums' }}>
-        {label}{count !== undefined ? ` (${count})` : ''}
-      </span>
     </span>
   );
 }
@@ -1811,6 +1785,8 @@ export default function ApplicationsPage() {
   // Conferences done in any capacity, per user, count of their mun_cv_entries
   // rows (the same source profiles.mun_experience_level is derived from).
   const [cvCounts, setCvCounts] = useState<Record<string, number>>({});
+  // Members, main nationality and lead per delegation, for the rows and the pop-up.
+  const delegationSummaries = useDelegationSummaries(applications);
   /* Action outcomes go to the corner notification stack — the same cards the
      live committee session raises — instead of two thin lines above the stat
      tiles that the organiser had already scrolled past by the time they landed.
@@ -1989,7 +1965,7 @@ export default function ApplicationsPage() {
           aid_requested, aid_statement, aid_status, aid_requested_amount, fee_waiver_source,
           assigned_committee:conference_committees!assigned_committee_id (name, abbreviation, topics, logo_url),
           profiles (display_name, email, avatar_url, nationality, date_of_birth, mun_experience_level),
-          societies (name),
+          societies (name, city, country_code, logo_url),
           application_preferences (
             preference_order, conference_committee_id, country_code, country_name,
             conference_committees (name, abbreviation, logo_url)
@@ -2825,7 +2801,7 @@ export default function ApplicationsPage() {
           minHeight: 44, padding: '13px 10px', borderRadius: 14,
           fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, letterSpacing: '0.05em',
           color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
-          boxShadow: `0 4px 12px ${NEU_GRADIENTS.green[0]}55, ${NEU.outSm}`, border: 'none',
+          boxShadow: '0 2px 6px rgba(27,56,40,0.2)', border: 'none',
           cursor: blocked ? 'not-allowed' : 'pointer',
           opacity: blocked ? 0.5 : 1,
           ...busyStyle,
@@ -3681,10 +3657,11 @@ export default function ApplicationsPage() {
   }
 
   function handleExportCSV() {
-    const headers = ['Name', 'Email', 'Age', 'Nationality', 'Role', 'Status', 'Payment', 'Experience', 'Society', 'Head Delegate', 'Submitted', 'Checked In', 'Assigned Committee', 'Assigned Country'];
+    const headers = ['Name', 'Email', 'Date of birth', 'Age', 'Nationality', 'Role', 'Status', 'Payment', 'Experience', 'Society', 'Head Delegate', 'Submitted', 'Checked In', 'Assigned Committee', 'Assigned Country'];
     const rows = applications.map(a => [
       a.profiles?.display_name ?? a.invited_name ?? '',
       a.profiles?.email ?? a.invited_email ?? '',
+      a.profiles?.date_of_birth ?? '',
       ageAt(a.profiles?.date_of_birth) ?? '',
       a.profiles?.nationality ?? '',
       roleLabel(a.role),
@@ -4171,6 +4148,9 @@ export default function ApplicationsPage() {
             .appRowOpen { cursor: pointer; outline: none; transition: background-color 180ms ${EASE_LOCAL}; }
             .appRowOpen:hover { background-color: rgba(27,56,40,0.022); }
             .appRowOpen:focus-visible { box-shadow: inset 0 0 0 2.5px ${NEU.forest}; background-color: rgba(27,56,40,0.03); }
+            .appDelegTag { transition: background-color 160ms ${EASE_LOCAL}; }
+            .appDelegTag:hover { background-color: rgba(27,56,40,0.05) !important; }
+            .appDelegTag:focus-visible { box-shadow: 0 0 0 2.5px ${NEU.forest}; }
             @keyframes gvSpin { to { transform: rotate(360deg); } }
             @media (prefers-reduced-motion: reduce) { @keyframes gvSpin { to { transform: none; } } }
           `}</style>
@@ -4189,7 +4169,6 @@ export default function ApplicationsPage() {
             const rowQuestions = questionsOf(normalizeBlocks(roleConfigs.find(rc => rc.role === app.role)?.custom_questions ?? []), { includeArchived: true });
             const age = ageForApp(app, rowQuestions);
             const nationality = app.profiles?.nationality ?? null;
-            const natCode = resolveRealCountryCode(nationality);
             const selected = selectedIds.has(app.id);
 
             const pledgeLine = app.pledge_type === 'delegation'
@@ -4222,7 +4201,7 @@ export default function ApplicationsPage() {
             const showPayControl = roleChargesFee(app.role) && (app.status === 'accepted' || app.status === 'assigned' || app.status === 'submitted' || app.status === 'checked-in');
 
             const factStyle: React.CSSProperties = {
-              fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.muted,
+              fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.inkSoft,
               fontVariantNumeric: 'tabular-nums',
             };
             const chip = (bg: string, color: string, border: string): React.CSSProperties => ({
@@ -4266,23 +4245,14 @@ export default function ApplicationsPage() {
                   {/* LEFT · select + identity + facts */}
                   <div className="flex items-start gap-3 p-4 lg:p-5" style={{ flex: '1 1 0', minWidth: 0, ...notAttendingFade }}>
                     <div className="pt-1"><SelectBox checked={selected} onClick={() => toggleSelected(app.id)} title={selected ? 'Deselect' : 'Select'} /></div>
-                    {/* Bigger avatar (#3) with the applicant's nationality flag
-                        tucked into its bottom-right, slightly overlapping (#4). */}
+                    {/* The avatar alone: nationality is the real rectangular
+                        flag in the facts below, never a circle on a circle. */}
                     {/* Avatar → the applicant's public MUN CV. Unregistered
                         invitees (user_id NULL) render bare — ProfileLink owns
                         that case, hence no conditional here. */}
                     <ProfileLink userId={app.user_id} name={name} nested style={{ display: 'block', flexShrink: 0 }}>
                       <div style={{ position: 'relative', flexShrink: 0 }}>
                         <MemberAvatar name={name} url={app.profiles?.avatar_url ?? null} size={62} />
-                        {natCode && (
-                          <CircleFlag
-                            code={natCode}
-                            size={24}
-                            label={nationality ?? ''}
-                            title={nationality ?? ''}
-                            style={{ position: 'absolute', right: -3, bottom: -3, boxShadow: '0 1px 3px rgba(27,56,40,0.25)', border: `2px solid ${NEU.surface}` }}
-                          />
-                        )}
                       </div>
                     </ProfileLink>
                     <div className="min-w-0 flex-1">
@@ -4300,36 +4270,41 @@ export default function ApplicationsPage() {
                           </p>
                         </ProfileLink>
                         {!app.user_id && <NotRegisteredChip />}
-                        {app.is_head_delegate && (
-                          <span className="inline-flex items-center gap-1" style={chip('rgba(27,56,40,0.1)', NEU.forest, 'rgba(27,56,40,0.2)')}>
-                            <Users size={9} strokeWidth={2.5} />
-                            HEAD DEL.
-                          </span>
-                        )}
                       </div>
                       {email && <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.muted, marginTop: 2, fontWeight: 500 }}>{email}</p>}
 
-                      {app.societies?.name && (
-                        // Clicking the delegation/society name opens its members
-                        // in the Delegations list, expanded. stopPropagation so it doesn't also
-                        // fire the row's open-preview click.
-                        app.society_id ? (
+                      {app.societies?.name && (() => {
+                        // The delegation as its own identity: a round initials
+                        // disc, the name bold, members and who leads it beneath.
+                        // A click opens it in the Delegations list, expanded.
+                        const d = app.society_id ? delegationSummaries.get(app.society_id) : undefined;
+                        const leads = !!d?.leadAppIds.includes(app.id);
+                        const body = (
+                          <DelegationIdentity
+                            name={app.societies.name}
+                            size={40}
+                            logoUrl={app.societies.logo_url}
+                            city={app.societies.city}
+                            countryCode={app.societies.country_code}
+                            nameSize={14.5}
+                            members={d?.members ?? null}
+                            lead={leads ? 'this applicant' : (d?.lead ?? null)}
+                            leadRole={d?.leadRole ?? null}
+                          />
+                        );
+                        return app.society_id ? (
                           <button
                             onClick={e => { e.stopPropagation(); clearSelection(); setDelegationFocus(app.society_id); setListView('delegations'); window.scrollTo({ top: 0 }); }}
-                            title={`View ${app.societies.name} delegation`}
-                            className="flex items-center gap-1.5 truncate max-w-full focus:outline-none group"
-                            style={{ marginTop: 5, fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: NEU.ink, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
+                            title={`View the ${app.societies.name} delegation`}
+                            className="appDelegTag block max-w-full focus:outline-none"
+                            style={{ background: 'transparent', border: 'none', padding: '4px 10px 4px 4px', margin: '8px 0 0 -4px', borderRadius: 999, cursor: 'pointer', textAlign: 'left' }}
                           >
-                            <Building2 size={15} strokeWidth={2.4} style={{ color: NEU.deepGold, flexShrink: 0 }} />
-                            <span className="truncate" style={{ textDecoration: 'underline', textDecorationColor: 'rgba(154,138,120,0.4)', textUnderlineOffset: 3 }}>{app.societies.name}</span>
+                            {body}
                           </button>
                         ) : (
-                          <p className="flex items-center gap-1.5 truncate" style={{ marginTop: 5, fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: NEU.ink }} title={app.societies.name}>
-                            <Building2 size={15} strokeWidth={2.4} style={{ color: NEU.deepGold, flexShrink: 0 }} />
-                            <span className="truncate">{app.societies.name}</span>
-                          </p>
-                        )
-                      )}
+                          <div style={{ marginTop: 10 }}>{body}</div>
+                        );
+                      })()}
 
                       {/* Age moved up beside the name (#3), so no separate age
                           fact sits here any more. */}
@@ -5153,7 +5128,6 @@ export default function ApplicationsPage() {
           if (!b.event_date) return -1;
           return b.event_date.localeCompare(a.event_date);
         });
-        const confCount = app.user_id ? cvCounts[app.user_id] : undefined;
         const roleConfig = roleConfigs.find(rc => rc.role === app.role);
         // Includes archived questions so a deleted question's answer stays
         // labeled and readable, never falling through to the orphaned-answer
@@ -5192,7 +5166,7 @@ export default function ApplicationsPage() {
           minHeight: 44, padding: '0 24px', borderRadius: 999, border: 'none',
           fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, letterSpacing: '0.05em',
           color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
-          boxShadow: `0 4px 12px ${NEU_GRADIENTS.green[0]}55, ${NEU.outSm}`,
+          boxShadow: '0 2px 6px rgba(27,56,40,0.2)',
           cursor: 'pointer', textDecoration: 'none', whiteSpace: 'nowrap',
           transition: `box-shadow 220ms ${EASE_LOCAL}, transform 160ms ${EASE_LOCAL}`,
         };
@@ -5200,12 +5174,13 @@ export default function ApplicationsPage() {
         const secondaryBtn: React.CSSProperties = {
           minHeight: 40, padding: '0 18px', borderRadius: 999, border: 'none',
           fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
-          color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm,
+          color: NEU.ink, backgroundColor: '#FFFFFF', boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.16)',
           cursor: 'pointer', whiteSpace: 'nowrap',
           transition: `box-shadow 220ms ${EASE_LOCAL}`,
         };
-        const liftOn = (e: React.MouseEvent<HTMLElement>) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; };
-        const liftOff = (e: React.MouseEvent<HTMLElement>) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; };
+        // Hairline, firmer on hover. No extrusion, no white halo (owner, 23 Sep 2026).
+        const liftOn = (e: React.MouseEvent<HTMLElement>) => { (e.currentTarget as HTMLElement).style.boxShadow = 'inset 0 0 0 1px rgba(27,56,40,0.32)'; };
+        const liftOff = (e: React.MouseEvent<HTMLElement>) => { (e.currentTarget as HTMLElement).style.boxShadow = 'inset 0 0 0 1px rgba(27,56,40,0.16)'; };
 
         // A role this conference charges nothing for gets no payment control:
         // there is no state to mark. Chairs are simply the most common such
@@ -5311,7 +5286,7 @@ export default function ApplicationsPage() {
             {app.status === 'submitted' && isAcceptBlockedByFee(app) && (
               <p
                 className="mb-2.5 rounded-xl px-3.5 py-2.5"
-                style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, lineHeight: 1.5, color: REVIEW_WARN_INK, backgroundColor: 'rgba(184,132,74,0.14)', boxShadow: NEU.inSm }}
+                style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, lineHeight: 1.5, color: REVIEW_WARN_INK, backgroundColor: 'rgba(184,132,74,0.14)', border: '1px solid rgba(184,132,74,0.35)' }}
               >
                 {ACCEPT_BLOCKED_MESSAGE}
               </p>
@@ -5400,7 +5375,6 @@ export default function ApplicationsPage() {
                     Resubmitted {formatDate(app.resubmitted_at)}
                   </span>
                 )}
-                <LevelChip level={expLabel} count={confCount} />
               </>
             )}
             actions={decisionControls(true)}
@@ -5421,6 +5395,22 @@ export default function ApplicationsPage() {
               grantedAmount: previewAid?.status === 'approved' ? (previewAid.granted_amount ?? null) : null,
               currency: aidCurrency,
             } : null}
+            dob={app.profiles?.date_of_birth ?? null}
+            delegation={(() => {
+              const d = app.society_id ? delegationSummaries.get(app.society_id) : undefined;
+              if (!app.societies?.name) return null;
+              return {
+                name: app.societies.name,
+                logoUrl: app.societies.logo_url,
+                city: app.societies.city,
+                countryCode: app.societies.country_code,
+                members: d?.members ?? 1,
+                country: d?.country ?? null,
+                lead: d?.lead ?? null,
+                leadRole: d?.leadRole ?? null,
+                isHead: !!d?.leadAppIds.includes(app.id),
+              };
+            })()}
             onOpenDelegation={app.society_id ? () => {
               closeReview();
               setDelegationFocus(app.society_id);
@@ -5586,7 +5576,7 @@ export default function ApplicationsPage() {
                     minHeight: 44, padding: '0 24px', borderRadius: 999, border: 'none',
                     fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, letterSpacing: '0.05em',
                     color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-                    boxShadow: `0 4px 12px ${NEU_GRADIENTS.forest[0]}55, ${NEU.outSm}`,
+                    boxShadow: '0 2px 6px rgba(27,56,40,0.2)',
                     cursor: bulkEmailBusy ? 'default' : 'pointer', opacity: bulkEmailBusy ? 0.6 : 1,
                   }}
                 >
@@ -5744,7 +5734,7 @@ export default function ApplicationsPage() {
                     minHeight: 44, padding: '0 22px', borderRadius: 999, border: 'none',
                     fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, letterSpacing: '0.05em',
                     color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
-                    boxShadow: `0 4px 12px ${NEU_GRADIENTS.green[0]}55, ${NEU.outSm}`,
+                    boxShadow: '0 2px 6px rgba(27,56,40,0.2)',
                     cursor: secretariatBusy ? 'default' : 'pointer', opacity: secretariatBusy ? 0.75 : 1,
                   }}
                 >

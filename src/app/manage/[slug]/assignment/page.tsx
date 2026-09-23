@@ -10,8 +10,10 @@ import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { reportBlocked } from '@/lib/reportCrash';
 import { useAuth } from '@/components/AuthProvider';
-import { getFlagUrl, getCountryByName } from '@/lib/countries';
+import { getCountryByName } from '@/lib/countries';
 import { CircleFlag } from '@/components/CircleFlag';
+import { FitTip, explainReason, missingSignals, type ReasonContext } from '@/app/manage/[slug]/assignment/fitReasons';
+import { CountryName, StackedName } from '@/app/manage/[slug]/assignment/displayNames';
 import { effectiveSlotArt, parseGroups, type SlotGroup } from '@/lib/slotGroups';
 import { friendlyError } from '@/lib/friendlyError';
 import { ageAt } from '@/lib/age';
@@ -459,7 +461,9 @@ function experienceFitScore(
   if (points > 0) return { points, reasons: [`EXP MATCH +${points}`] };
   // ASCII hyphen on purpose: ReasonChip detects a penalty with
   // reason.includes('-'), which a Unicode minus would not trip.
-  if (points < 0) return { points, reasons: [`EXP GAP ${points}`] };
+  // The tag says WHICH WAY the mismatch goes (owner: "experience unmatched
+  // doesn't say if their experience is too low or too high").
+  if (points < 0) return { points, reasons: [expL < diffL ? `EXP TOO LOW ${points}` : `EXP TOO HIGH ${points}`] };
   return { points: 0, reasons: [] };
 }
 
@@ -614,6 +618,22 @@ function allocationScore(
   };
 }
 
+/** Everything the fit tooltips need, from the same inputs the engine scored. */
+function reasonContext(app: AcceptedApp, committee: CommitteeData, slot: SlotRow): ReasonContext {
+  const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
+  const prefIndex = prefs.findIndex(p => p.conference_committee_id === committee.id);
+  return {
+    committeeName: committeeLabels(committee).big,
+    difficulty: committee.difficulty ?? null,
+    countryName: slot.country_name,
+    importance: slot.importance,
+    experienceLevel: app.experience_level ?? app.profiles?.mun_experience_level ?? null,
+    prefIndex,
+    prefCountryName: prefIndex >= 0 ? prefs[prefIndex].country_name : null,
+    societyName: app.society_id == null ? null : (app.societies?.name ?? null),
+  };
+}
+
 function fitColor(score: number) {
   if (score >= 50) return '#3D7A52';
   if (score >= 20) return '#B6871F';
@@ -747,85 +767,34 @@ function isIsoCode(code: string | null | undefined): boolean {
   return /^[A-Za-z]{2}$/.test((code ?? '').trim());
 }
 function CountryFlag({
-  code, w, h, radius = 2, shadow, dim, style, alt, title, logoUrl,
+  code, w, h, shadow, dim, style, alt, title, logoUrl,
 }: {
   code: string | null | undefined;
-  w: number; h: number; radius?: number;
+  w: number; h: number;
+  /** Ignored: every flag on this page is round (owner, 23 Sep 2026). Kept so
+   *  call sites written for rectangles still compile. */
+  radius?: number;
   shadow?: string; dim?: number;
   style?: React.CSSProperties; alt?: string; title?: string;
-  /** A seat's own or group crest (`slotLogoUrl`). Wins over the flag: drawn
-   *  as a square that fits the same box, never stretched to flag aspect, on
-   *  a faint ivory disc. */
+  /** A seat's own or group crest (`slotLogoUrl`). Wins over the flag. */
   logoUrl?: string | null;
 }) {
-  const [failed, setFailed] = useState(false);
   const clean = (code ?? '').trim();
   const label = alt ?? title ?? '';
-  // A round call site (radius >= half a square box) gets the shared round flag,
-  // square artwork that fills the circle. Character seats keep the person glyph.
-  if (w === h && radius >= w / 2) {
-    return (
-      <CircleFlag
-        code={isIsoCode(clean) ? clean : null}
-        logoUrl={logoUrl}
-        size={w}
-        label={label}
-        title={title}
-        fallback={<UserRound size={Math.round(w * 0.6)} strokeWidth={2} style={{ color: NEU.forest }} />}
-        style={{ boxShadow: shadow, opacity: dim, ...style }}
-      />
-    );
-  }
-  if (logoUrl) {
-    const box = Math.min(w, h);
-    return (
-      <span
-        className="inline-flex items-center justify-center flex-shrink-0"
-        aria-label={label || undefined}
-        title={title}
-        style={{
-          width: box, height: box, borderRadius: Math.min(radius, 5),
-          backgroundColor: 'rgba(250,248,243,0.85)', overflow: 'hidden',
-          boxShadow: shadow, opacity: dim, ...style,
-        }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={logoUrl}
-          alt={label}
-          draggable={false}
-          style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
-        />
-      </span>
-    );
-  }
-  if (!isIsoCode(clean) || failed) {
-    return (
-      <span
-        className="inline-flex items-center justify-center flex-shrink-0"
-        aria-label={label || 'Character'}
-        title={title}
-        style={{
-          width: w, height: h, borderRadius: radius,
-          backgroundColor: NEU.surface, color: NEU.forest,
-          boxShadow: [shadow, 'inset 0 0 0 1px rgba(27,56,40,0.14)'].filter(Boolean).join(', '),
-          opacity: dim, ...style,
-        }}
-      >
-        <UserRound size={Math.round(Math.min(w, h) * 0.6)} strokeWidth={2} />
-      </span>
-    );
-  }
+  // Every flag on the allocation portal is the shared ROUND flag (square
+  // artwork that fills the disc; crest, then flag, then the person glyph for a
+  // character seat). A rectangle-sized call site gets a disc about as tall as
+  // the rectangle was, a touch larger so the flag still reads.
+  const size = w === h ? w : Math.max(16, Math.round(h * 1.2));
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={getFlagUrl(clean)}
-      alt={label}
-      title={title}
-      draggable={false}
-      onError={() => setFailed(true)}
-      className="flex-shrink-0"
-      style={{ width: w, height: h, borderRadius: radius, objectFit: 'cover', boxShadow: shadow, opacity: dim, ...style }}
+    <CircleFlag
+      code={isIsoCode(clean) ? clean : null}
+      logoUrl={logoUrl}
+      size={size}
+      label={label}
+      title={title ?? (label || undefined)}
+      fallback={<UserRound size={Math.round(size * 0.6)} strokeWidth={2} style={{ color: NEU.forest }} />}
+      style={{ boxShadow: shadow, opacity: dim, ...style }}
     />
   );
 }
@@ -941,26 +910,29 @@ function PrefRankBadge({ order, size = 18 }: { order: number; size?: number }) {
  *  penalty (negative point value) reads as a calm red warning; the swap flag
  *  reads as gold, its own distinct tone since it's neither a bonus nor a
  *  penalty; everything else reads as a calm positive (green) neu chip. */
-function ReasonChip({ reason }: { reason: string }) {
+function ReasonChip({ reason, why, more }: { reason: string; why?: string | null; more?: string[] }) {
   const medalFor = reason === '1ST CHOICE' ? 1 : reason === '2ND CHOICE' ? 2 : reason === '3RD CHOICE' ? 3 : 0;
   const m = medalFor ? prefMedal(medalFor) : null;
   const isSwap = reason === SWAP_REASON;
   const isPenalty = reason.includes('-');
   const bg = m ? m.bg : isSwap ? 'rgba(182,135,31,0.16)' : isPenalty ? 'rgba(139,32,32,0.1)' : 'rgba(61,122,82,0.12)';
   const fg = m ? m.fg : isSwap ? '#8A6614' : isPenalty ? '#8B2020' : NEU.green;
-  return (
+  const chip = (
     <span
       className="inline-flex items-center px-2 py-0.5 rounded-full"
       style={{
         fontSize: 9, fontWeight: 800, letterSpacing: '0.05em', fontFamily: MONO,
         backgroundColor: bg,
         color: fg,
-        boxShadow: NEU.outSm,
+        border: `1px solid color-mix(in srgb, ${fg} 22%, transparent)`,
       }}
     >
       {reason}
     </span>
   );
+  // Hover or focus explains the tag at once, with the direction and the
+  // actual values behind it (see fitReasons.tsx).
+  return why || (more && more.length > 0) ? <FitTip text={why ?? null} lines={more}>{chip}</FitTip> : chip;
 }
 
 // ── PointsInfo ───────────────────────────────────────────────────────────────
@@ -1559,8 +1531,8 @@ function DelegateDetail({
       <div key={p.preference_order} className="flex items-center gap-2 min-w-0">
         <PrefRankBadge order={p.preference_order} />
         <CountryFlag code={p.country_code} w={18} h={13} radius={2} alt={p.country_name} />
-        <span className="truncate flex-1 min-w-0" style={{ fontSize: 12, color: NEU.ink, fontFamily: OUTFIT }}>
-          {p.conference_committees?.name ?? 'Unknown'} · {p.country_name}
+        <span className="flex-1 min-w-0" style={{ fontSize: 12, color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.3 }} title={`${p.conference_committees?.name ?? 'Unknown'} · ${p.country_name}`}>
+          <span style={{ fontWeight: 700 }}>{committeeLabels({ name: p.conference_committees?.name ?? 'Unknown', abbreviation: null }).big}</span> · <CountryName name={p.country_name} code={p.country_code} />
         </span>
         {isMatch && (
           <span title="Matches the seat in view" style={{ flexShrink: 0, lineHeight: 0 }}>
@@ -1753,12 +1725,18 @@ function DropAllocateModal({ committee, app, needy = false, pushDraftNotice, onC
                   <CountryFlag code={slot.country_code} w={24} h={17} radius={3} shadow={FLAG_SHADOW} alt={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{slot.country_name}</p>
+                      <p className="text-sm font-semibold" style={{ color: NEU.ink, fontFamily: OUTFIT }}><CountryName name={slot.country_name} code={slot.country_code} /></p>
                       <TierBadge tier={slot.importance} />
                     </div>
                     {reasons.length > 0 && (
                       <div className="flex gap-1 mt-1.5 flex-wrap">
-                        {reasons.slice(0, 3).map(r => <ReasonChip key={r} reason={r} />)}
+                        {(() => {
+                          const ctx = reasonContext(app, committee, slot);
+                          const gaps = missingSignals(ctx, reasons);
+                          return reasons.slice(0, 3).map((r, i) => (
+                            <ReasonChip key={r} reason={r} why={explainReason(r, ctx)} more={i === 0 ? gaps : undefined} />
+                          ));
+                        })()}
                       </div>
                     )}
                   </div>
@@ -1870,7 +1848,7 @@ function SocietyDropAllocateModal({ committee, society, onClose, onAssigned }: S
                   <CountryFlag code={slot.country_code} w={24} h={17} radius={3} shadow={FLAG_SHADOW} alt={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{slot.country_name}</p>
+                      <p className="text-sm font-semibold" style={{ color: NEU.ink, fontFamily: OUTFIT }}><CountryName name={slot.country_name} code={slot.country_code} /></p>
                       <TierBadge tier={slot.importance} />
                     </div>
                   </div>
@@ -2035,7 +2013,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
               {/* Pre-selected applicant: static NeuInset (a div), nothing clickable above it. */}
               <PersonAvatar name={preSelectedApp.profiles?.display_name ?? preSelectedApp.invited_name ?? 'Unknown'} url={preSelectedApp.profiles?.avatar_url ?? null} size={34} userId={preSelectedApp.profiles?.id} />
               <div className="min-w-0">
-                <p className="font-semibold text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{preSelectedApp.profiles?.display_name ?? preSelectedApp.invited_name}</p>
+                <StackedName name={preSelectedApp.profiles?.display_name ?? preSelectedApp.invited_name ?? 'Unknown'} size={14} weight={700} color={NEU.ink} restColor={NEU.inkSoft} />
                 <p className="text-xs mt-0.5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{preSelectedApp.role} · {effectiveLevel(preSelectedApp)}</p>
               </div>
             </NeuInset>
@@ -2060,7 +2038,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
                         applicant still works and only the avatar opens the CV. */}
                     <PersonAvatar name={app.profiles?.display_name ?? app.invited_name ?? 'Unknown'} url={app.profiles?.avatar_url ?? null} size={30} userId={app.profiles?.id} nested />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{app.profiles?.display_name ?? app.invited_name}</p>
+                      <StackedName name={app.profiles?.display_name ?? app.invited_name ?? 'Unknown'} size={14} weight={700} color={NEU.ink} restColor={NEU.inkSoft} />
                       <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{app.role} · {effectiveLevel(app)}</p>
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -2086,8 +2064,8 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
                 return (
                   <div key={p.preference_order} className="flex items-center gap-2">
                     <PrefRankBadge order={p.preference_order} />
-                    <span className="text-xs truncate" style={{ color: here ? NEU.forest : NEU.muted, fontWeight: here ? 700 : 400, fontFamily: OUTFIT }}>
-                      {p.conference_committees?.name ?? 'Unknown'} · {p.country_name}
+                    <span className="text-xs" title={`${p.conference_committees?.name ?? 'Unknown'} · ${p.country_name}`} style={{ color: here ? NEU.forest : NEU.inkSoft, fontWeight: here ? 700 : 400, fontFamily: OUTFIT, lineHeight: 1.3 }}>
+                      {committeeLabels({ name: p.conference_committees?.name ?? 'Unknown', abbreviation: null }).big} · <CountryName name={p.country_name} code={p.country_code} />
                     </span>
                   </div>
                 );
@@ -2107,7 +2085,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
           {preSelectedSlot ? (
             <NeuInset small className="flex items-center gap-3 p-3">
               <CountryFlag code={preSelectedSlot.country_code} w={24} h={17} radius={3} alt={preSelectedSlot.country_name} logoUrl={slotLogoUrl(committee, preSelectedSlot)} />
-              <p className="text-sm font-semibold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{preSelectedSlot.country_name}</p>
+              <p className="text-sm font-semibold" style={{ color: NEU.ink, fontFamily: OUTFIT }}><CountryName name={preSelectedSlot.country_name} code={preSelectedSlot.country_code} /></p>
               <div style={{ marginLeft: 'auto' }}><TierBadge tier={preSelectedSlot.importance} /></div>
             </NeuInset>
           ) : (
@@ -2124,7 +2102,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
                     onClick={() => setSelectedSlot(slot)}
                   >
                     <CountryFlag code={slot.country_code} w={20} h={14} radius={2} alt={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
-                    <p className="text-sm" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{slot.country_name}</p>
+                    <p className="text-sm" style={{ color: NEU.ink, fontFamily: OUTFIT }}><CountryName name={slot.country_name} code={slot.country_code} /></p>
                     <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <TierBadge tier={slot.importance} />
                       {selected && <Check size={13} style={{ color: NEU.green }} />}
@@ -2468,8 +2446,14 @@ function OccupiedSeatChip({ alloc, onRemoveAllocation }: { alloc: AllocationRow;
           The link goes INSIDE the truncating span, not around it, so the
           clipping/max-width geometry is untouched. A delegation-owned seat has
           no user_id, so ProfileLink renders it as bare text. */}
-      <span className="truncate" style={{ fontSize: 12, fontWeight: 700, color: NEU.ink, fontFamily: OUTFIT, maxWidth: 120 }}>
-        <ProfileLink userId={alloc.user_id} name={name} nested>{name}</ProfileLink>
+      <span style={{ fontFamily: OUTFIT, maxWidth: 140, minWidth: 0, paddingBlock: 1 }}>
+        {isSociety ? (
+          <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: NEU.ink, overflowWrap: 'anywhere', lineHeight: 1.15 }} title={name}>{name}</span>
+        ) : (
+          <ProfileLink userId={alloc.user_id} name={name} nested>
+            <StackedName name={name} size={12} weight={700} color={NEU.ink} restColor={NEU.inkSoft} />
+          </ProfileLink>
+        )}
       </span>
       {removable && (
         <button
@@ -2924,7 +2908,7 @@ function CommitteeOverviewModal({
                   >
                     <CountryFlag code={slot.country_code} w={30} h={30} radius={9999} shadow={FLAG_SHADOW} dim={0.5} alt={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
                     <div className="flex-1 min-w-0">
-                      <p className="truncate" style={{ fontSize: 13.5, fontWeight: 700, color: NEU.ink, fontFamily: OUTFIT }}>{slot.country_name}</p>
+                      <p style={{ fontSize: 13.5, fontWeight: 700, color: NEU.ink, fontFamily: OUTFIT }}><CountryName name={slot.country_name} code={slot.country_code} /></p>
                       <p style={{ fontSize: 10.5, color: NEU.muted, fontFamily: MONO, letterSpacing: '0.06em', marginTop: 1 }}>OPEN SEAT{seatLabel(seatNum)}</p>
                     </div>
                     <TierBadge tier={slot.importance} />
@@ -2950,10 +2934,10 @@ function CommitteeOverviewModal({
                     <CountryFlag code={slot.country_code} w={30} h={30} radius={9999} shadow={FLAG_SHADOW} alt={slot.country_name} title={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
                     <DelegationAvatar size={30} />
                     <div className="flex-1 min-w-0">
-                      <p className="truncate" style={{ fontSize: 14, fontWeight: 800, color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.15 }}>
+                      <p style={{ fontSize: 14, fontWeight: 800, color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.15, overflowWrap: 'anywhere' }}>
                         {alloc.delegation?.name ?? 'Delegation'}
                       </p>
-                      <p className="truncate" style={{ fontSize: 11, color: NEU.muted, fontFamily: OUTFIT, marginTop: 1 }}>{slot.country_name}{seatLabel(seatNum)}</p>
+                      <p style={{ fontSize: 11, color: NEU.inkSoft, fontFamily: OUTFIT, marginTop: 1 }}><CountryName name={slot.country_name} code={slot.country_code} suffix={seatLabel(seatNum)} /></p>
                     </div>
                     <span
                       className="inline-flex items-center gap-1 flex-shrink-0"
@@ -2997,11 +2981,13 @@ function CommitteeOverviewModal({
                         link is legal; nested keeps the expand/collapse toggle intact. */}
                     <PersonAvatar name={name} url={alloc.profiles?.avatar_url ?? null} size={30} userId={alloc.user_id} nested />
                     <div className="flex-1 min-w-0">
-                      <p className="truncate" style={{ fontSize: 14, fontWeight: 800, color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.15 }}>
-                        {name}
-                        {age != null && <span style={{ fontWeight: 600, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>, {age}</span>}
-                      </p>
-                      <p className="truncate" style={{ fontSize: 11, color: NEU.muted, fontFamily: OUTFIT, marginTop: 1 }}>{slot.country_name}{seatLabel(seatNum)}</p>
+                      <div style={{ fontFamily: OUTFIT }}>
+                        <StackedName
+                          name={name} size={14} color={NEU.ink} restColor={NEU.inkSoft}
+                          after={age != null ? <span style={{ fontWeight: 600, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>, {age}</span> : undefined}
+                        />
+                      </div>
+                      <p style={{ fontSize: 11, color: NEU.inkSoft, fontFamily: OUTFIT, marginTop: 1 }}><CountryName name={slot.country_name} code={slot.country_code} suffix={seatLabel(seatNum)} /></p>
                     </div>
                     <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0">
                       <DelegationChip app={app} />
@@ -3285,8 +3271,8 @@ function ChairBoardPanel({
                       is a <div> with onClick (not a <button>), hence nested; the X
                       remove button below is a sibling, never inside the link. */}
                   <PersonAvatar name={ch.name} url={ch.avatar_url} size={24} userId={userId} nested />
-                  <span className="truncate flex-1" style={{ fontSize: 12, color: NEU.ink, fontFamily: OUTFIT, fontWeight: 700 }}>
-                    {ch.name}
+                  <span className="flex-1 min-w-0" style={{ fontFamily: OUTFIT }}>
+                    <StackedName name={ch.name} size={12} weight={700} color={NEU.ink} restColor={NEU.inkSoft} />
                   </span>
                   {userId && (
                     <button
@@ -3321,8 +3307,8 @@ function ChairBoardPanel({
                 >
                   PENDING
                 </span>
-                <span className="truncate flex-1" style={{ fontSize: 12, color: '#7A5A10', fontFamily: OUTFIT, fontWeight: 600 }}>
-                  {inv.profiles?.display_name ?? inv.invited_name ?? inv.email}
+                <span className="flex-1 min-w-0" style={{ fontFamily: OUTFIT }}>
+                  <StackedName name={inv.profiles?.display_name ?? inv.invited_name ?? inv.email} size={12} weight={700} color="#7A5A10" />
                 </span>
                 <button
                   onClick={e => { e.stopPropagation(); onRevokeInvite(inv); }}
@@ -4069,6 +4055,53 @@ export default function AssignmentPage() {
   // value takes over, which is also what the assign modals read.
   const autoAllocationEmail = pendingAuto ?? conference?.allocation_email_auto ?? true;
 
+  // The Allocation Assigned TEMPLATE has its own on/off under Communications,
+  // and an explicit off wins over the automatic toggle above: queueEventEmail
+  // answers 'off' and queues nothing, SILENTLY. SISMUN (23 Sep 2026) had the
+  // toggle on "Sending automatically" and the template off, so 138 seated
+  // delegates were never emailed while the bar claimed otherwise. The bar now
+  // reads the template too. null = unknown / no row (a missing row self-heals
+  // on the first send, see queueAllocationEmails), so only a real false warns.
+  const [allocTemplateEnabled, setAllocTemplateEnabled] = useState<boolean | null>(null);
+  const [turningOnAllocTemplate, setTurningOnAllocTemplate] = useState(false);
+  const conferenceIdForTemplate = conference?.id ?? null;
+  const accessTokenRef = useRef<string | null>(null);
+  accessTokenRef.current = session?.access_token ?? null;
+  const signedInUserId = session?.user?.id ?? null;
+  useEffect(() => {
+    const token = accessTokenRef.current;
+    if (!conferenceIdForTemplate || !token) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await getAuthedClient(token)
+        .from('email_templates')
+        .select('enabled')
+        .eq('conference_id', conferenceIdForTemplate)
+        .eq('event_key', 'allocation_assigned')
+        .maybeSingle();
+      if (cancelled || error) return;
+      setAllocTemplateEnabled(data ? (data as { enabled: boolean }).enabled : null);
+    })();
+    return () => { cancelled = true; };
+  }, [conferenceIdForTemplate, signedInUserId]);
+
+  // Turning the template back on only lets FUTURE seats email. It queues
+  // nothing for delegates already seated; those stay "waiting" until the
+  // organiser presses SEND → All new.
+  function handleTurnOnAllocTemplate() {
+    if (!session || !conference || turningOnAllocTemplate) return;
+    setTurningOnAllocTemplate(true);
+    const supabase = getAuthedClient(session.access_token);
+    turnOnDefaultEmail(supabase, conference.id, 'allocation_assigned')
+      .then(({ ok, error }) => {
+        if (!ok) { showFlash('err', error ?? 'Could not turn allocation emails on.'); return; }
+        setAllocTemplateEnabled(true);
+        showFlash('ok', 'Allocation emails are on. Delegates you seat from now on are emailed. Anyone already waiting is sent only when you press SEND.');
+      })
+      .catch(() => showFlash('err', 'Could not turn allocation emails on.'))
+      .finally(() => setTurningOnAllocTemplate(false));
+  }
+
   function handleToggleAutoAllocationEmail(next: boolean) {
     if (!session || !conference || pendingAuto !== null) return;
     setPendingAuto(next);
@@ -4691,6 +4724,9 @@ export default function AssignmentPage() {
             targets={allocationTargets}
             busy={sendingAllocationEmails}
             onSend={handleReleaseAllocationEmails}
+            templateOff={allocTemplateEnabled === false}
+            onTurnOnTemplate={handleTurnOnAllocTemplate}
+            turningOnTemplate={turningOnAllocTemplate}
           />
         )}
       </div>
@@ -4807,12 +4843,12 @@ export default function AssignmentPage() {
                               nested keeps the expand/collapse toggle working. */}
                           <PersonAvatar name={sug.app.profiles?.display_name ?? sug.app.invited_name ?? 'Unknown'} url={sug.app.profiles?.avatar_url ?? null} size={30} userId={sug.app.profiles?.id} nested />
                           <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                            <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-                              {sug.app.profiles?.display_name ?? sug.app.invited_name}
-                            </p>
+                            <span className="min-w-0" style={{ fontFamily: OUTFIT }}>
+                              <StackedName name={sug.app.profiles?.display_name ?? sug.app.invited_name ?? 'Unknown'} size={14} weight={700} color={NEU.ink} restColor={NEU.inkSoft} />
+                            </span>
                             <ArrowRight size={12} style={{ color: NEU.muted, flexShrink: 0 }} />
                             <CountryFlag code={sug.slot.country_code} w={19} h={13} radius={2} alt={sug.slot.country_name} logoUrl={slotLogoUrl(sug.committee, sug.slot)} />
-                            <p className="text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{sug.slot.country_name}</p>
+                            <CountryName name={sug.slot.country_name} code={sug.slot.country_code} style={{ fontSize: 14, color: NEU.ink, fontFamily: OUTFIT, fontWeight: 600 }} />
                           </div>
                           {expanded
                             ? <ChevronUp size={14} style={{ color: NEU.muted, flexShrink: 0 }} />
@@ -4849,11 +4885,18 @@ export default function AssignmentPage() {
                           <span className="truncate">{committeeLabels(sug.committee).big}</span>
                         </span>
                         <span className="flex items-center gap-1.5 flex-shrink-0">
-                          {sug.reasons.slice(0, 3).map(r => <ReasonChip key={r} reason={r} />)}
+                          {(() => {
+                            const ctx = reasonContext(sug.app, sug.committee, sug.slot);
+                            const gaps = missingSignals(ctx, sug.reasons);
+                            return sug.reasons.slice(0, 3).map((r, i) => (
+                              <ReasonChip key={r} reason={r} why={explainReason(r, ctx)} more={i === 0 ? gaps : undefined} />
+                            ));
+                          })()}
                           {sug.swap && (
-                            <span title={`Swapped with ${sug.swap.partnerName}, a net gain of +${sug.swap.netGain} across both delegates.`}>
-                              <ReasonChip reason={SWAP_REASON} />
-                            </span>
+                            <ReasonChip
+                              reason={SWAP_REASON}
+                              why={`Swapped with ${sug.swap.partnerName}: a net gain of +${sug.swap.netGain} across both delegates. Their own best open seat scored ${sug.swap.ownBestScore}.`}
+                            />
                           )}
                         </span>
                       </div>
@@ -5020,12 +5063,12 @@ export default function AssignmentPage() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1.5">
-                                <p className="truncate" style={{ fontSize: 16, fontWeight: 800, color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.15 }}>
-                                  {displayName}
-                                  {age != null && (
-                                    <span style={{ fontWeight: 600, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>, {age}</span>
-                                  )}
-                                </p>
+                                <div className="min-w-0" style={{ fontFamily: OUTFIT }}>
+                                  <StackedName
+                                    name={displayName} size={16} color={NEU.ink} restColor={NEU.inkSoft}
+                                    after={age != null ? <span style={{ fontWeight: 600, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>, {age}</span> : undefined}
+                                  />
+                                </div>
                                 {!app.profiles && <NotRegisteredChip />}
                                 {selected && <Check size={13} style={{ color: NEU.green, flexShrink: 0 }} />}
                               </div>
@@ -5052,8 +5095,8 @@ export default function AssignmentPage() {
                             <div className="flex items-center gap-1.5 mt-2">
                               <PrefRankBadge order={1} size={16} />
                               <CountryFlag code={firstPref.country_code} w={17} h={12} radius={2} alt={firstPref.country_name} logoUrl={(() => { const cc = committees.find(c => c.id === firstPref.conference_committee_id); return cc ? committeeSeatLogo(cc, firstPref.country_code) : null; })()} />
-                              <span className="truncate" style={{ fontSize: 11, color: NEU.muted, fontFamily: OUTFIT }}>
-                                {firstPref.conference_committees?.name ?? 'Unknown'} · {firstPref.country_name}
+                              <span title={`${firstPref.conference_committees?.name ?? 'Unknown'} · ${firstPref.country_name}`} style={{ fontSize: 11, color: NEU.inkSoft, fontFamily: OUTFIT, lineHeight: 1.3 }}>
+                                {committeeLabels({ name: firstPref.conference_committees?.name ?? 'Unknown', abbreviation: null }).big} · <CountryName name={firstPref.country_name} code={firstPref.country_code} />
                               </span>
                             </div>
                           )}

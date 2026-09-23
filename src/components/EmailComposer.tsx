@@ -82,7 +82,7 @@ const INK = '#1C1410';
 /** The desk the paper sits on: one step darker than the page so the sheet
  *  reads as an object ON something rather than a panel cut out of it. */
 const DESK = '#E4DCC8';
-const DESK_WELL = 'inset 5px 5px 12px rgba(27,56,40,0.16), inset -4px -4px 10px rgba(255,255,255,0.55)';
+const DESK_WELL = 'inset 0 0 0 1px rgba(27,56,40,0.11), inset 0 2px 4px rgba(27,56,40,0.08)';
 
 // ── MIRRORED FROM THE RENDERER ───────────────────────────────────────────────
 // Lifted from `@/lib/emailHtml` so the canvas IS the email rather than an

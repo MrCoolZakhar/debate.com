@@ -9,7 +9,6 @@ import {
   type AwardsConfig, type AwardTier, type ConferenceAwardRow, type SlateState,
 } from '@/lib/awards';
 import { loadCommitteeAwards } from '@/lib/awardsService';
-import { FlagImg } from '@/components/FlagImg';
 import { CircleFlag } from '@/components/CircleFlag';
 import { LogoDisc } from '@/components/LogoDisc';
 import { getCountryByName } from '@/lib/countries';
@@ -147,6 +146,11 @@ export interface LiveCommittee {
     phase: string;
     caucus: CaucusJson | null;
     chairNames: string[];
+    /** Who holds the gavel: `settings.headChair`, else `chair_names[0]` (the
+     *  same default the chair page uses). A NAME, never the chair suffix.
+     *  Optional so older fixtures still typecheck; the live card orders its
+     *  dais by it. */
+    headChair?: string | null;
     suspendedAt: string | null;
     endedAt: string | null;
     /** `committees.updated_at`, maintained by `committees_updated_at_trigger`
@@ -524,8 +528,8 @@ export function RailTab({
         backgroundColor: active ? NEU.surface : NEU.base,
         boxShadow: active
           ? (side
-              ? '6px 4px 12px rgba(27,56,40,0.16), -2px -2px 6px rgba(255,255,255,0.7)'
-              : '4px 6px 12px rgba(27,56,40,0.16), -2px -2px 6px rgba(255,255,255,0.7)')
+              ? 'inset 0 0 0 1px rgba(27,56,40,0.12), 4px 3px 12px -4px rgba(27,56,40,0.22)'
+              : 'inset 0 0 0 1px rgba(27,56,40,0.12), 3px 4px 12px -4px rgba(27,56,40,0.22)')
           : NEU.outSm,
         ...(side
           ? {
@@ -615,7 +619,7 @@ function StatTile({ icon: Icon, emoji, gradient, value, label, onClick, title }:
           boxShadow: NEU.inSm, border: 'none', cursor: 'pointer',
           transition: `box-shadow 200ms ${EASE}`,
         }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = `inset 2px 2px 6px rgba(27,56,40,0.18), inset -2px -2px 6px rgba(255,255,255,0.85)`; }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = `inset 0 0 0 1px rgba(27,56,40,0.22)`; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.inSm; }}
         title={title ?? 'Open this section'}
       >
@@ -773,7 +777,7 @@ export function FeedbackRecap({ data }: { data: LiveCommittee }) {
                   className="w-full flex flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-3 text-left focus:outline-none"
                   style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: OUTFIT, minHeight: 48 }}
                 >
-                  <FlagImg code={flagCodeFor(cf.country)} size={20} />
+                  <CircleFlag code={flagCodeFor(cf.country)} label={cf.country} size={24} decorative />
                   {/* THE ROW WRAPS BELOW `sm` INSTEAD OF CRUSHING THE NAME.
                       Flag, rating pill, speech count and chevron are all
                       `flex-shrink-0`, so at 375px the delegation had 101px and
@@ -1368,7 +1372,7 @@ export function RecapModal({
                   <span className="text-[11px] font-bold uppercase flex-shrink-0 basis-full sm:basis-[130px]" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.08em' }}>
                     {entry.label}
                   </span>
-                  <FlagImg code={flagCodeFor(entry.row.country)} size={20} />
+                  <CircleFlag code={flagCodeFor(entry.row.country)} label={entry.row.country} size={24} decorative />
                   <span className="text-sm font-bold flex-1 truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{entry.row.country}</span>
                   <span className="text-sm font-black" style={{ color: NEU.forest, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
                     {entry.row.total} pts
@@ -1865,7 +1869,7 @@ function AwardsRecap({ committeeId, config, publishedAt, conferenceEndDate }: {
             return (
               <NeuInset key={r.id} className="flex items-start gap-3 px-4 py-3" style={{ borderRadius: 14 }}>
                 <span aria-hidden style={{ width: 9, height: 9, borderRadius: 999, backgroundColor: TIER_COLOR[type?.tier ?? 'special'], flexShrink: 0, marginTop: 6 }} />
-                <FlagImg code={code} size={20} />
+                <CircleFlag code={code} label={r.country_name ?? undefined} size={24} decorative />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
                     <span className="font-bold">{r.award_label}</span>

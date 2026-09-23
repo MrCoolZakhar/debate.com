@@ -50,6 +50,9 @@ export interface SocietyLite {
   spots_purchased: number;
   advisor_spots_purchased: number;
   created_at: string;
+  city: string | null;
+  country_code: string | null;
+  logo_url: string | null;
 }
 
 export interface InvoiceLite {
@@ -83,10 +86,14 @@ export interface DelegationRow<M extends DelegationMemberLite = DelegationMember
   /** Every member row, any status: live first, head delegates first, then by name. */
   members: M[];
   heads: M[];
-  /** Most common nationality among live members, as a country name. A
-   *  delegation has no country of its own in the database; this is labelled
-   *  as the members' nationality wherever it is shown. */
+  /** Most common nationality among live members, as a country name. Only a
+   *  fallback for delegations saved before `societies.country_code` existed;
+   *  it is labelled as the members' nationality wherever it is shown. */
   country: string | null;
+  /** Where the delegation is based and its logo (`societies` columns). */
+  city: string | null;
+  countryCode: string | null;
+  logoUrl: string | null;
   /** Pledged delegate spots + advisor tickets on live pledges. */
   pledged: number;
   /** Spots the organiser has confirmed as paid for (societies columns). */
@@ -216,6 +223,9 @@ export function buildDelegationRows<M extends DelegationMemberLite>(input: {
       members,
       heads: live.filter(m => m.is_head_delegate),
       country,
+      city: s.city ?? null,
+      countryCode: s.country_code ?? null,
+      logoUrl: s.logo_url ?? null,
       pledged,
       purchased,
       expected,

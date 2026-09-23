@@ -38,7 +38,7 @@ import { isPastConference } from './conferenceDates';
 import { NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuCard, NeuInset, NeuStatTile, NeuIconDisc, NeuRing } from '@/components/neu';
 import Portal from '@/components/Portal';
 import { LogoDisc } from '@/components/LogoDisc';
-import { FlagImg } from '@/components/FlagImg';
+import { CircleFlag } from '@/components/CircleFlag';
 import { getCountryByName } from '@/lib/countries';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import VerifiedCheck from '@/components/VerifiedCheck';
@@ -1172,7 +1172,7 @@ function ConferenceRow({
               onFilter={() => onFilterCountry(r.country as string)}
             >
               {countryCode
-                ? <FlagImg code={countryCode} size={17} />
+                ? <CircleFlag code={countryCode} size={17} decorative />
                 : <Globe size={12} strokeWidth={2.5} style={{ color: NEU.muted }} />}
             </CornerBadge>
           )}

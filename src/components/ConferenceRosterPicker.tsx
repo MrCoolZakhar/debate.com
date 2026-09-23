@@ -12,11 +12,15 @@
 // Reuses shared logic (findCountryFlexible, UN_COUNTRIES) rather than copying.
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Globe, Users, PenLine, Megaphone, Info, ArrowDownAZ, X, ImagePlus, Replace, FolderInput, Plus, Check, GripVertical } from 'lucide-react';
+import { Globe, Users, PenLine, Megaphone, Info, ArrowDownAZ, X, ImagePlus, Replace, FolderInput, Plus, Check, GripVertical, ClipboardPaste } from 'lucide-react';
 import Portal from '@/components/Portal';
 // One implementation of "where may a fixed layer be drawn" (keyboard-aware).
 import { viewBox, useReposition } from '@/lib/visualViewport';
-import { UN_COUNTRIES, getFlagUrl, getCountryByName, findCountryFlexible, countryMatchRank } from '@/lib/countries';
+import { UN_COUNTRIES, getCountryByName, findCountryFlexible, countryMatchRank } from '@/lib/countries';
+// Round flags everywhere in the roster (owner, 23 Sep 2026: "start using the
+// circle flags literally everywhere, as they fill more space"). CircleFlag keeps
+// the crest > flag > monogram precedence of effectiveSlotArt.
+import { CircleFlag } from '@/components/CircleFlag';
 import {
   UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS,
   ICC_ROLES, ICJ_ROLES, CRISIS_MEMBERS, FIFA_MEMBERS, HOUSE_OF_COMMONS_ROLES,
@@ -262,7 +266,7 @@ function fuzzyMatchCountry(raw: string): string | null {
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 const labelStyle: React.CSSProperties = {
-  display: 'block', fontSize: 11, fontWeight: 700, color: '#9A8A78',
+  display: 'block', fontSize: 10.5, fontWeight: 700, color: '#6E5F4E',
   fontFamily: "'Outfit', sans-serif", textTransform: 'uppercase',
   letterSpacing: '0.12em', marginBottom: 4,
 };
@@ -497,7 +501,7 @@ div:last-child > .gv-rs-row { border-bottom-color:transparent; }
 .gv-rs-ctl.gv-rs-danger:hover { color:#8B2020 !important; }
 .gv-rs-ctl.gv-rs-lit { color:#B6871F; }
 .gv-rs-row:hover .gv-rs-ctl.gv-rs-lit { color:#B6871F; }
-.gv-rs-art { position:relative; width:26px; height:18px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.gv-rs-art { position:relative; width:24px; height:24px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .gv-rs-art-x { outline:none; position:absolute; top:-7px; right:-8px; width:14px; height:14px; border-radius:999px; background:#8B2020; color:#FFFFFF; display:flex; align-items:center; justify-content:center; border:0; padding:0; cursor:pointer; opacity:0; transition:opacity 120ms; }
 .gv-rs-art:hover .gv-rs-art-x, .gv-rs-art-x:focus-visible { opacity:1; }
 .gv-rs-move { position:relative; }
@@ -861,7 +865,8 @@ export function ConferenceRosterSelected({
       <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-1 mb-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <label style={{ ...labelStyle, marginBottom: 0, whiteSpace: 'nowrap' }}>{isCustom ? 'Selected seats' : isCharacter ? 'Selected characters' : 'Selected countries'}</label>
-          <span style={{ fontSize: 9, fontWeight: 700, color: '#1B3828', backgroundColor: 'rgba(238,217,138,0.3)', padding: '1px 6px', borderRadius: 999, fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
+          {/* A count is plain typography, never a pill (CLAUDE.md §8). */}
+          <span style={{ fontSize: 12, fontWeight: 800, color: '#1B3828', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
             {value.length}
           </span>
           <HoverInfo>
@@ -939,7 +944,7 @@ export function ConferenceRosterSelected({
                 style={{ borderColor: groupMenuId === g.id ? '#1B3828' : undefined }}
               >
                 {g.logo_url
-                  ? <img src={g.logo_url} alt="" draggable={false} style={{ width: 14, height: 14, objectFit: 'contain', borderRadius: 3, flexShrink: 0 }} />
+                  ? <CircleFlag logoUrl={g.logo_url} label={g.name} size={16} logoFit="contain" decorative />
                   : <span style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: g.color ?? '#1B3828', flexShrink: 0 }} />}
                 <span className="truncate" style={{ maxWidth: 120 }}>{g.name}</span>
                 <span style={{ fontSize: 9.5, color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}>{groupCounts.get(g.id) ?? 0}</span>
@@ -1043,7 +1048,7 @@ export function ConferenceRosterSelected({
                 {hasGroups && (
                   <div className="flex items-center gap-2" style={{ padding: '5px 4px 4px' }}>
                     <span style={{ width: 3, height: 14, borderRadius: 2, backgroundColor: g ? (g.color ?? '#1B3828') : '#C9BEA2', flexShrink: 0 }} />
-                    {g?.logo_url && <img src={g.logo_url} alt="" draggable={false} style={{ width: 16, height: 16, objectFit: 'contain', borderRadius: 4, flexShrink: 0 }} />}
+                    {g?.logo_url && <CircleFlag logoUrl={g.logo_url} label={g.name} size={18} logoFit="contain" decorative />}
                     <span className="truncate" style={{ fontFamily: "'Outfit', sans-serif", fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: g ? '#1B3828' : '#9A8A78' }}>
                       {g ? g.name : 'Ungrouped'}
                     </span>
@@ -1079,12 +1084,8 @@ export function ConferenceRosterSelected({
                         {dragEnabled && <GripVertical size={12} style={{ color: '#D5CBB6', flexShrink: 0, marginRight: -3 }} aria-hidden />}
                         {/* Art: the seat's own image, its group's, the national flag, or the mode glyph. */}
                         <span className="gv-rs-art">
-                          {art.kind === 'logo' ? (
-                            <span style={{ width: 22, height: 22, borderRadius: 999, backgroundColor: 'rgba(27,56,40,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <img src={art.url} alt={art.label} draggable={false} style={{ width: 22, height: 22, objectFit: 'contain', borderRadius: 5 }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                            </span>
-                          ) : art.kind === 'flag' ? (
-                            <img src={getFlagUrl(art.code)} alt={art.code} draggable={false} style={{ width: 26, height: 18, objectFit: 'cover', borderRadius: 3, boxShadow: '0 0 0 1px rgba(0,0,0,0.08)' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                          {art.kind === 'logo' || art.kind === 'flag' ? (
+                            <CircleFlag art={art} label={row.name} size={24} logoFit="contain" decorative />
                           ) : isCharacter ? (
                             <Users size={17} strokeWidth={1.5} style={{ color: '#B6871F' }} />
                           ) : (
@@ -1268,7 +1269,7 @@ export function ConferenceRosterSelected({
             </div>
             <button type="button" className="gv-rs-menu-btn" onClick={() => pickFile({ kind: 'group', id: menuGroup.id })} disabled={uploading === `group:${menuGroup.id}`}>
               {menuGroup.logo_url
-                ? <img src={menuGroup.logo_url} alt="" draggable={false} style={{ width: 16, height: 16, objectFit: 'contain', borderRadius: 4 }} />
+                ? <CircleFlag logoUrl={menuGroup.logo_url} label={menuGroup.name} size={18} logoFit="contain" decorative />
                 : <ImagePlus size={14} strokeWidth={1.75} style={{ color: '#B6871F' }} />}
               {uploading === `group:${menuGroup.id}` ? 'Uploading…' : menuGroup.logo_url ? 'Replace flag' : 'Set flag'}
             </button>
@@ -1289,10 +1290,14 @@ export function ConferenceRosterSelected({
   );
 }
 
-export function ConferenceRosterPicker({ mode, value, onChange, showSelected = true }: {
+export function ConferenceRosterPicker({ mode, value, onChange, showSelected = true, compact = false }: {
   mode: 'country' | 'character';
   value: RosterEntry[];
   onChange: (roster: RosterEntry[]) => void;
+  /** The committee editor's two-column layout: the paste box folds behind a
+   *  "Paste a list" button and the labels tighten, so the seat list below
+   *  gets the height. */
+  compact?: boolean;
   /** False when the caller renders `ConferenceRosterSelected` itself somewhere
    *  else — the committee editor docks it outside its main panel. */
   showSelected?: boolean;
@@ -1301,6 +1306,7 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
   const [search, setSearch] = useState('');
   const [pasteText, setPasteText] = useState('');
   const [pasteError, setPasteError] = useState('');
+  const [pasteOpen, setPasteOpen] = useState(false);
   const [review, setReview] = useState<ReviewRow[] | null>(null);
   // The paste-review overlay is a modal. Ref-counted, so when it opens on top
   // of the committee editor modal the editor's own lock survives its close.
@@ -1413,7 +1419,7 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
     // scroll for no reason.
     <div className="flex gap-5">
       {/* Left: add controls */}
-      <div className="flex flex-col gap-3 flex-1 min-w-0">
+      <div className={`flex flex-col ${compact ? 'gap-2' : 'gap-3'} flex-1 min-w-0`}>
         {/* Search & Add */}
         <div>
           <label style={labelStyle}>{isCharacter ? 'Add Character' : 'Search & Add'}</label>
@@ -1451,7 +1457,7 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = i === 0 ? 'rgba(27,56,40,0.07)' : 'transparent'; }}
                   >
-                    <img src={getFlagUrl(c.code)} alt={c.code} style={{ width: 20, height: 14, objectFit: 'cover', borderRadius: 2, flexShrink: 0 }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                    <CircleFlag code={c.code} size={22} decorative />
                     <span className="text-sm flex-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{c.name}</span>
                     {i === 0 && <span className="text-xs" style={{ color: '#9A8A78' }}>↵</span>}
                   </button>
@@ -1464,7 +1470,7 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                   >
-                    <span style={{ fontSize: 14, fontWeight: 700, color: '#1B3828', flexShrink: 0, width: 20, textAlign: 'center' }}>+</span>
+                    <span className="flex flex-shrink-0 items-center justify-center" style={{ width: 22, height: 22, color: '#1B3828' }}><Plus size={14} strokeWidth={2.6} /></span>
                     <span className="text-sm flex-1" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{`Add "${search.trim()}"`}</span>
                   </button>
                 )}
@@ -1499,7 +1505,18 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
           </div>
         )}
 
-        {/* Paste list */}
+        {/* Paste list. Compact: folded behind one button until wanted. */}
+        {compact && !pasteOpen ? (
+          <button
+            type="button"
+            onClick={() => setPasteOpen(true)}
+            className="inline-flex items-center gap-1.5 self-start rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828] hover:bg-[#1B3828]/[0.06]"
+            style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.16)' }}
+          >
+            <ClipboardPaste size={13} strokeWidth={2.2} />
+            {isCharacter ? 'Paste a list of characters' : 'Paste a list of countries'}
+          </button>
+        ) : (
         <div className="flex flex-col flex-1">
           <label style={labelStyle}>{isCharacter ? 'Paste Character List' : 'Paste Country List'}</label>
           {isCharacter && (
@@ -1515,9 +1532,10 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
                list back: it scrolls, it is resize-y, and the 8-row default was
                ~90px of the committee editor's height — the single biggest
                reason the main step did not fit a 900px-tall viewport. */
-            rows={4}
+            rows={compact ? 3 : 4}
+            autoFocus={compact}
             className="flex-1 rounded-xl px-3 py-2.5 text-sm resize-y focus:outline-none"
-            style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: "'Outfit', sans-serif", minHeight: 92, lineHeight: 1.55 }}
+            style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: "'Outfit', sans-serif", minHeight: compact ? 70 : 92, lineHeight: 1.55 }}
           />
           <div className="flex items-center gap-2 mt-2">
             <button
@@ -1530,9 +1548,20 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
             >
               {isCharacter ? 'Add All' : 'Auto-Match'}
             </button>
-            {pasteError && <p className="text-xs" style={{ color: '#B6871F', fontFamily: "'Outfit', sans-serif" }}>{pasteError}</p>}
+            {pasteError && <p className="text-xs" style={{ color: '#7A5A10', fontFamily: "'Outfit', sans-serif" }}>{pasteError}</p>}
+            {compact && (
+              <button
+                type="button"
+                onClick={() => { setPasteOpen(false); setPasteError(''); }}
+                className="ms-auto text-[11px] font-bold focus:outline-none focus-visible:underline"
+                style={{ color: '#6E5F4E', fontFamily: "'Outfit', sans-serif" }}
+              >
+                Close
+              </button>
+            )}
           </div>
         </div>
+        )}
       </div>
 
       {/* Right: selected list, unless the caller is placing it itself. */}
@@ -1564,8 +1593,8 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
                 return (
                   <div key={idx} className="flex items-center gap-3 px-5 py-2.5 border-b border-[#DDD4C0]/50 last:border-0">
                     {found
-                      ? <img src={getFlagUrl(found.code)} alt={found.code} width={20} height={14} style={{ objectFit: 'cover', borderRadius: 2, flexShrink: 0 }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }} />
-                      : <Globe size={16} strokeWidth={1.5} style={{ color: '#9A8A78', flexShrink: 0 }} />}
+                      ? <CircleFlag code={found.code} size={24} decorative />
+                      : <Globe size={18} strokeWidth={1.5} style={{ color: '#6E5F4E', flexShrink: 0 }} />}
                     {found ? (
                       <span className="text-sm flex-1 truncate font-medium" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{r.name}</span>
                     ) : (
@@ -1576,7 +1605,7 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
                         style={{ border: '1px solid #C8BAA8', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
                       />
                     )}
-                    <span className="text-[10px] font-bold uppercase tracking-wide shrink-0 px-2 py-0.5 rounded-full" style={found ? { color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.1)' } : { color: '#B6871F', backgroundColor: 'rgba(182,135,31,0.12)' }}>
+                    <span className="text-[10.5px] font-bold shrink-0" style={{ color: found ? '#1B3828' : '#7A5A10', fontFamily: "'Outfit', sans-serif" }}>
                       {found ? 'Country' : 'Custom'}
                     </span>
                     <button onClick={() => setReview((prev) => prev ? prev.filter((_, i) => i !== idx) : prev)} className="text-sm shrink-0 focus:outline-none" style={{ color: '#9A8A78' }}>✕</button>
