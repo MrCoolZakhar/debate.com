@@ -2266,18 +2266,14 @@ export default function CommitteesPage() {
                     )}
                     <ChairCodeChip layout="row" code={chairCodeFor(c)} copiedCode={copiedCode} onCopy={handleCopyCode} />
 
-                    {/* Release actions. DELEGATES was removed here too (see the
-                        card above): the list is the same grid in another shape,
-                        and leaving the send on one view only would be worse
-                        than leaving it on both. Settings keeps it. */}
-                    {(c.chair_user_ids?.length ?? 0) > 0 && (
-                      <div className="flex items-center gap-2.5 flex-shrink-0">
-                        <div className="flex items-center gap-1.5">
-                          <span style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted }}>CHAIRS</span>
-                          <CompactSendButton releasedAt={c.released_to_chairs_at} busy={sendingToChairs === c.id} onSend={() => handleSendToChairs(c)} />
-                        </div>
-                      </div>
-                    )}
+                    {/* No send here (owner, 23 Sep 2026: "remove that from the
+                        page"). Delegates went first, chairs followed: a grid of
+                        committees is for reading the room, not for a press that
+                        writes to people. Both sends live in Settings (the
+                        per-committee release list and SEND ALL TO PARTICIPANTS)
+                        and in the email builder, and chairs now ride out with
+                        the delegates when session release is set to the same
+                        time. */}
 
                     {/* Edit / delete */}
                     <div className="flex items-center gap-2 flex-shrink-0">
@@ -2494,13 +2490,10 @@ export default function CommitteesPage() {
                           It carried a full-width code button, then a labelled
                           row per audience with a SEND/SENT+RESEND control, then
                           a position-paper line — four stacked bands inside a
-                          padded inset. The code is still the card's most-copied
-                          thing so it stays a full-width control; the two
-                          release rows now share ONE row, because CHAIRS and
-                          DELEGATES are the same question asked twice and
-                          `CompactSendButton` already reads as a state chip.
-                          Nothing was removed: the same three-state control is
-                          still here, just side by side. */}
+                          padded inset. The sends are gone from the card
+                          entirely now (owner, 23 Sep 2026); the code is the
+                          card's most-copied thing, so it stays a full-width
+                          control and the card is that plus the chair code. */}
                       <div className="w-full mt-2">
                         <NeuInset small style={{ padding: 9 }}>
                           {/* Session code */}
@@ -2549,14 +2542,6 @@ export default function CommitteesPage() {
                               and in the email builder's Session Join Invite.
                               Chairs stay: that send reaches at most two people
                               and is the one the dais waits on. */}
-                          {(c.chair_user_ids?.length ?? 0) > 0 && (
-                            <div className="mt-2 pt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
-                              <div className="flex items-center gap-1.5">
-                                <span style={{ fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.1em', color: '#6B5F52' }}>CHAIRS</span>
-                                <CompactSendButton releasedAt={c.released_to_chairs_at} busy={sendingToChairs === c.id} onSend={() => handleSendToChairs(c)} />
-                              </div>
-                            </div>
-                          )}
 
                           {/* The position-paper deadline used to print a third
                               band here ("Papers due 4 Mar"). Removed: it is a
