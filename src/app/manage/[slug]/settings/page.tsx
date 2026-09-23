@@ -3052,8 +3052,8 @@ export default function SettingsPage() {
         {/* ── Section rail (desktop: vertical glass rail; mobile: horizontal scroller) ── */}
         <nav
           aria-label="Settings sections"
-          className="md:flex-shrink-0 md:sticky"
-          style={{ width: '100%', maxWidth: '220px', top: '24px' }}
+          className="md:flex-shrink-0 md:sticky min-w-0 w-full md:w-[220px]"
+          style={{ top: '24px' }}
         >
           <div
             className="flex md:flex-col overflow-x-auto md:overflow-visible"
@@ -3248,7 +3248,7 @@ export default function SettingsPage() {
                     {status}
                   </span>
 
-                  <div className="flex items-center gap-3 ml-auto">
+                  <div className="flex items-center gap-3 flex-wrap w-full sm:w-auto sm:ml-auto">
                     <button
                       type="button"
                       onClick={handleCopyApplicationLink}
