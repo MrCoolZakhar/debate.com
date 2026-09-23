@@ -4845,12 +4845,15 @@ export default function AssignmentPage() {
                               nested keeps the expand/collapse toggle working. */}
                           <PersonAvatar name={sug.app.profiles?.display_name ?? sug.app.invited_name ?? 'Unknown'} url={sug.app.profiles?.avatar_url ?? null} size={30} userId={sug.app.profiles?.id} nested />
                           <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                            <span className="min-w-0" style={{ fontFamily: OUTFIT }}>
+                            {/* The person keeps up to half the row and the seat name
+                                wraps: a long custom seat ("Curtis LeMay") used to
+                                squeeze the name column to one letter per line. */}
+                            <span className="min-w-0 flex-shrink-0" style={{ fontFamily: OUTFIT, maxWidth: '50%' }}>
                               <StackedName name={sug.app.profiles?.display_name ?? sug.app.invited_name ?? 'Unknown'} size={14} weight={700} color={NEU.ink} restColor={NEU.inkSoft} />
                             </span>
                             <ArrowRight size={12} style={{ color: NEU.muted, flexShrink: 0 }} />
                             <CountryFlag code={sug.slot.country_code} w={19} h={13} radius={2} alt={sug.slot.country_name} logoUrl={slotLogoUrl(sug.committee, sug.slot)} />
-                            <CountryName name={sug.slot.country_name} code={sug.slot.country_code} style={{ fontSize: 14, color: NEU.ink, fontFamily: OUTFIT, fontWeight: 600 }} />
+                            <CountryName name={sug.slot.country_name} code={sug.slot.country_code} className="min-w-0" style={{ fontSize: 14, color: NEU.ink, fontFamily: OUTFIT, fontWeight: 600, whiteSpace: 'normal', lineHeight: 1.15, overflowWrap: 'anywhere' }} />
                           </div>
                           {expanded
                             ? <ChevronUp size={14} style={{ color: NEU.muted, flexShrink: 0 }} />

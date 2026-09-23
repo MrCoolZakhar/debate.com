@@ -816,7 +816,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     if (!owner) {
       const { data: orgRow } = await supabase
         .from('conference_organizers')
-        .select('user_id, permissions')
+        .select('user_id, role, permissions')
         .eq('user_id', user!.id)
         .eq('conference_id', (confData as any).id)
         .maybeSingle();
@@ -835,6 +835,11 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
         // from — reading one here is what previously threw and blanked the page.
         setIsOwner(true);
       } else {
+        // A co-owner row (role 'owner') is an owner, exactly as
+        // is_conference_owner() says in the database. Its permissions are
+        // usually '{}', so reading them as a section list locked a co-owner
+        // out of every section but the dashboard.
+        if ((orgRow as any).role === 'owner') setIsOwner(true);
         setPermissions((orgRow.permissions ?? {}) as Record<string, boolean>);
       }
     }
@@ -1166,10 +1171,13 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
         </div>
       )}
 
-      {/* Main content, rail is 68px + 14px inset, so content reclaims the old sidebar width */}
+      {/* Main content, rail is 68px + 14px inset, so content reclaims the old sidebar width.
+          The header offset is PADDING, not margin: a 56px top margin here collapsed
+          through <body> (no border / padding), so body (min-height 100%) started at
+          56px and every manage page scrolled by 56px, dashboard included. */}
       <div
         className="relative z-10 md:ml-[96px]"
-        style={{ marginTop: '56px', minHeight: 'calc(100vh - 56px)', backgroundColor: '#EDE7D8' }}
+        style={{ paddingTop: '56px', minHeight: '100vh', backgroundColor: '#EDE7D8' }}
       >
         {/* Read-only money banner. The ADMIN bundle opens every financial page
             in full and can change none of it; saying that up front beats a

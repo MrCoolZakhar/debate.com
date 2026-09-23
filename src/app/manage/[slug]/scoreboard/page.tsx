@@ -231,7 +231,7 @@ export default function ScoreboardPage() {
         </div>
       </div>
       <p style={{ fontFamily: OUTFIT, fontSize: 13, color: SOFT, marginBlockEnd: 12, maxWidth: 660 }}>
-        Every delegation across your committees, as scored by the chairs in their live sessions —
+        Every delegation across your committees, as scored by the chairs in their live sessions:
         points, speeches, factor ratings and written comments. Read-only: only chairs can award points.
       </p>
       {/* This page is no longer in the sidebar; say where it came from and how

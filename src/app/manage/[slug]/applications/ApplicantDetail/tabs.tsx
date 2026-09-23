@@ -592,7 +592,8 @@ function AnswerBlock({ item, index }: { item: AnswerItem; index: number }) {
   return (
     <li style={{ padding: '14px 0', borderTop: index ? `1px solid ${C.parchment}` : 'none' }}>
       <p className="flex items-baseline gap-2" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: C.forest, lineHeight: 1.45, overflowWrap: 'anywhere' }}>
-        <span>{item.label}</span>
+        {/* A question saved with no label rendered as a blank heading over its answer. */}
+        <span>{item.label?.trim() || 'Untitled question'}</span>
         {item.archived && <span style={{ fontSize: 11.5, fontWeight: 600, color: C.inkSoft }}>(no longer on the form)</span>}
       </p>
       {item.answer ? (
