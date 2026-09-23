@@ -34,11 +34,26 @@
 // from joinUi so /join, /create and the organiser editor stay one family.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useId, useRef, type ReactNode } from 'react';
-import { ImagePlus, RotateCcw, Loader2, Lock, X } from 'lucide-react';
+import { useId, useRef, useState, type ReactNode } from 'react';
+import { ImagePlus, RotateCcw, Loader2, Lock, X, User, Users, Users2, Landmark, Scale, Zap } from 'lucide-react';
 import { C, OUTFIT, SHADOW } from '@/app/join/joinUi';
-import { EMBLEM_PICKS } from '@/lib/presetNames';
-import { MonogramMedallion, type MedallionTone } from '@/components/MonogramMedallion';
+import {
+  EMBLEM_PICKS,
+  matchPresetEmblem,
+  deriveCommitteeAcronym,
+  committeeDisplayName,
+} from '@/lib/presetNames';
+import { MonogramMedallion, medallionTone, type MedallionTone } from '@/components/MonogramMedallion';
+import {
+  ConferenceRosterPicker,
+  ConferenceRosterSelected,
+  ConferenceCommitteeNameInput,
+  entry,
+  type RosterEntry,
+} from '@/components/ConferenceRosterPicker';
+import { effectiveSlotArt, type SlotGroup } from '@/lib/slotGroups';
+import { getCountryByName } from '@/lib/countries';
+import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 
 export { C, OUTFIT, SHADOW };
 
@@ -164,11 +179,13 @@ export function CommitteeIdentityPreview({ src, primary, secondary, placeholder,
 //     with no extra state and nothing stored;
 //   • `suggestion` is that automatic answer (`deriveCommitteeAcronym(name)`),
 //     drawn as the placeholder. It is a suggestion, never a silent write.
-export function AcronymField({ value, suggestion, onChange, disabled }: {
+export function AcronymField({ value, suggestion, onChange, disabled, onSubmit }: {
   value: string;
   suggestion: string;
   onChange: (v: string) => void;
   disabled?: boolean;
+  /** Enter in the chip. The wizard saves the draft with it. */
+  onSubmit?: () => void;
 }) {
   const id = useId();
   const ref = useRef<HTMLInputElement>(null);
@@ -193,6 +210,7 @@ export function AcronymField({ value, suggestion, onChange, disabled }: {
           autoComplete="off"
           spellCheck={false}
           onChange={(e) => onChange(e.target.value.replace(/\s{2,}/g, ' ').trimStart())}
+          onKeyDown={(e) => { if (e.key === 'Enter' && onSubmit) { e.preventDefault(); onSubmit(); } }}
           placeholder={suggestion || 'Add one'}
           title="The acronym shown wherever the full name is too long. Leave it empty to use the suggestion."
           className="rounded-[10px] bg-white/80 px-2.5 py-1 text-center focus:outline-none focus:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_3px_rgba(27,56,40,0.08)] transition-[box-shadow] duration-150 disabled:opacity-55"
@@ -238,7 +256,8 @@ export function AcronymField({ value, suggestion, onChange, disabled }: {
 export function EmblemPicker({ value, onPick, onUpload, onReset, uploading, canReset, tone, monogramText }: {
   value: string | null;
   onPick: (logo: string) => void;
-  onUpload: () => void;
+  /** Omitted → no Upload tile (a caller with nowhere to put the file). */
+  onUpload?: () => void;
   onReset: () => void;
   uploading: boolean;
   canReset: boolean;
@@ -280,6 +299,7 @@ export function EmblemPicker({ value, onPick, onUpload, onReset, uploading, canR
       })}
 
       {/* Upload your own. Same footprint as a swatch, so the row reads as one set. */}
+      {onUpload && (
       <button
         type="button"
         onClick={() => { if (!uploading) onUpload(); }}
@@ -299,6 +319,7 @@ export function EmblemPicker({ value, onPick, onUpload, onReset, uploading, canR
           {uploading ? 'Wait' : 'Upload'}
         </span>
       </button>
+      )}
 
       {/* The current emblem, and the way back to the automatic one. */}
       {canReset && (
@@ -393,4 +414,443 @@ export function SetupGhostButton({ label, onClick }: { label: string; onClick: (
       {label}
     </button>
   );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// THE SHARED COMMITTEE SET-UP SURFACE
+// ═════════════════════════════════════════════════════════════════════════════
+// (23 Sep 2026, owner: "In the actual initial conference set-up flow, literally
+// add the exact same committee set-up. It should always match.")
+//
+// ONE implementation of the set-up body, used by BOTH:
+//   • CommitteeEditorModal — /manage/[slug]/committees, writes straight to the
+//     database;
+//   • the creation wizard's step 7 — /conferences/new, which has no conference
+//     row yet and collects drafts that `handleCreate` writes after the review
+//     screen.
+//
+// The two callers differ ONLY in the shell around it (a modal with a docked
+// rail vs an inline panel in the wizard) and in what they do with the answer.
+// Everything an organiser sees and touches is here, so the two can never drift.
+//
+// WHAT IS DELIBERATELY *NOT* IN HERE: chair assignment. `ChairsDock` needs a
+// committee id to seat or invite anyone against, and in the wizard the
+// committee does not exist yet, so it stays in the editor's rail and the wizard
+// step keeps saying chairs come later. That is unchanged from today.
+
+/** The committee type. Governs rostering: GA + Specialised roster by country
+ *  slots; Crisis rosters free-text character names; Custom is the parliamentary
+ *  type (free-text seats plus seat GROUPS with their own crests). */
+export type CommitteeType = 'general-assembly' | 'specialised' | 'crisis' | 'custom';
+
+export const COMMITTEE_TYPE_LABEL: Record<string, string> = {
+  'general-assembly': 'General Assembly',
+  specialised: 'Specialised',
+  crisis: 'Crisis',
+  custom: 'Custom',
+};
+
+/** Declared in the order the editor's type picker offers them, rather than read
+ *  off COMMITTEE_TYPE_LABEL's key order, so nothing can silently reshuffle. */
+export const COMMITTEE_TYPES: CommitteeType[] = ['general-assembly', 'specialised', 'crisis', 'custom'];
+
+export const DIFFICULTIES = ['beginner', 'intermediate', 'advanced', 'expert'] as const;
+export type Difficulty = (typeof DIFFICULTIES)[number];
+
+/** Everything the set-up surface collects. The editor keeps these as its own
+ *  useStates and assembles this view of them; the wizard stores one per draft
+ *  committee. Every field maps onto a `conference_committees` column or onto
+ *  `committee_country_slots`. */
+export interface CommitteeSetupDraft {
+  name: string;
+  /** `conference_committees.abbreviation`. '' means "none": saved as NULL, and
+   *  every reader derives the suggestion again. */
+  abbreviation: string;
+  topics: string[];
+  difficulty: string;
+  roster: RosterEntry[];
+  /** `conference_committees.groups`, custom (parliamentary) committees only. */
+  groups: SlotGroup[];
+  /** delegation_size 2 when on. */
+  doubleDelegation: boolean;
+  /** The organiser's OWN emblem, or null. Never the derived one — see
+   *  `effectiveEmblem`. */
+  logoUrl: string | null;
+  /** True once they picked, uploaded or kept an emblem of their own. False puts
+   *  the emblem back under `matchPresetEmblem`. */
+  emblemManuallySet: boolean;
+  /** A selected preset can force the roster path (ICC/ICJ/Crisis/HoC/Senate/
+   *  Press roster free-text seats even under a non-crisis type). Null → the
+   *  committee type's own default. */
+  presetRosterMode: 'country' | 'character' | null;
+}
+
+export function emptyCommitteeSetupDraft(): CommitteeSetupDraft {
+  return {
+    name: '', abbreviation: '', topics: [], difficulty: 'intermediate',
+    roster: [], groups: [], doubleDelegation: false,
+    logoUrl: null, emblemManuallySet: false, presetRosterMode: null,
+  };
+}
+
+/** THE emblem a committee ships with, DERIVED, never stored in two places:
+ *  the organiser's own choice when they made one, otherwise whatever the name
+ *  and acronym resolve to. Both callers write exactly this to `logo_url`.
+ *
+ *  It is a pure derivation on purpose. It used to be an effect in the editor
+ *  that wrote `logoUrl` on every name keystroke, which is a cascading-render
+ *  setState-in-effect and could disagree with what was about to be saved. */
+export function effectiveEmblem(draft: CommitteeSetupDraft): string | null {
+  return draft.emblemManuallySet ? draft.logoUrl : matchPresetEmblem(draft.name, draft.abbreviation);
+}
+
+/** Which roster a draft is building: countries, or free-text characters/members. */
+export function rosterModeOf(draft: CommitteeSetupDraft, type: CommitteeType): 'country' | 'character' {
+  return draft.presetRosterMode ?? ((type === 'crisis' || type === 'custom') ? 'character' : 'country');
+}
+
+/** What one row of the roster is called in copy. */
+export function seatNounsOf(type: CommitteeType, isCharacterRoster: boolean): { noun: string; plural: string } {
+  if (type === 'custom') return { noun: 'member', plural: 'members' };
+  return isCharacterRoster ? { noun: 'character', plural: 'characters' } : { noun: 'country', plural: 'countries' };
+}
+
+/** The type as an icon and an ink colour — an icon beside a plain word, never a
+ *  status pill (CLAUDE.md §8). Written as four literal elements rather than a
+ *  returned component type, so nothing creates a component during render. */
+export function CommitteeTypeGlyph({ type, size = 14 }: { type: CommitteeType; size?: number }) {
+  if (type === 'crisis') return <Zap size={size} strokeWidth={2.2} />;
+  if (type === 'custom') return <Users2 size={size} strokeWidth={2.2} />;
+  if (type === 'specialised') return <Scale size={size} strokeWidth={2.2} />;
+  return <Landmark size={size} strokeWidth={2.2} />;
+}
+export function committeeTypeAccent(type: CommitteeType): string {
+  return type === 'crisis' ? '#8B2020' : type === 'custom' ? '#7A5416' : '#1B3828';
+}
+
+/** Exactly what the chair masthead and every conference card will show for this
+ *  draft (the AGENTS.md UI RULE: acronym big, full name small beneath), plus the
+ *  emblem and the acronym suggestion behind the SHORT NAME chip. ONE derivation,
+ *  so the editor, the wizard and the saved row cannot disagree. */
+export function committeeSetupPreview(draft: CommitteeSetupDraft) {
+  const trimmedName = draft.name.trim();
+  // The AUTOMATIC answer only: `deriveCommitteeAcronym` is called WITHOUT the
+  // abbreviation on purpose, because passing it would just hand back what the
+  // organiser already typed and the chip would have nothing to suggest.
+  const suggestion = deriveCommitteeAcronym(trimmedName);
+  const acronym = draft.abbreviation.trim() || suggestion;
+  const primary = trimmedName ? committeeDisplayName(trimmedName, acronym) : '';
+  return {
+    trimmedName,
+    suggestion,
+    acronym,
+    primary,
+    secondary: primary && primary !== trimmedName ? trimmedName : null,
+    emblem: effectiveEmblem(draft),
+  };
+}
+
+// ── The set-up fields: step 1 (Committee) and step 2 (the seats) ─────────────
+export function CommitteeSetupFields({
+  draft, onChange, committeeType, isEdit = false,
+  nameInputId = 'committee-setup-name',
+  onUploadEmblem, emblemUploading = false,
+  onUploadFlag, selectedInline = false,
+  onSubmit,
+}: {
+  draft: CommitteeSetupDraft;
+  /** A PARTIAL patch, so a caller holding separate useStates can fan it out. */
+  onChange: (patch: Partial<CommitteeSetupDraft>) => void;
+  committeeType: CommitteeType;
+  /** Editing a committee that already exists: a preset pick must not replace
+   *  a roster somebody has already allocated against. */
+  isEdit?: boolean;
+  nameInputId?: string;
+  /** Opens the caller's own file picker. Omitted → no Upload tile. */
+  onUploadEmblem?: () => void;
+  emblemUploading?: boolean;
+  /** Uploads a seat or group crest. Omitted → the per-row flag control is off. */
+  onUploadFlag?: (file: File, kind: 'seat' | 'group') => Promise<string | null>;
+  /** True renders the selected roster directly under the add controls (the
+   *  wizard). False leaves it to the caller, which is what the editor's docked
+   *  rail does. */
+  selectedInline?: boolean;
+  /** Enter in the name or acronym field. The wizard saves the draft with it. */
+  onSubmit?: () => void;
+}) {
+  const [topicInput, setTopicInput] = useState('');
+  const [topicError, setTopicError] = useState('');
+  const isCrisis = committeeType === 'crisis';
+  const isCustom = committeeType === 'custom';
+  const mode = rosterModeOf(draft, committeeType);
+  const isCharacterRoster = mode === 'character';
+  const { noun: seatNoun } = seatNounsOf(committeeType, isCharacterRoster);
+  const { suggestion, emblem } = committeeSetupPreview(draft);
+
+  function addTopic() {
+    const t = topicInput.trim();
+    if (!t || draft.topics.length >= 3) return;
+    if (draft.topics.includes(t)) { setTopicError('That topic is already on the list.'); return; }
+    onChange({ topics: [...draft.topics, t] });
+    setTopicInput('');
+    setTopicError('');
+  }
+
+  return (
+    <>
+      {/* ── 1. Committee ──────────────────────────────────────────────── */}
+      <section aria-labelledby={`${nameInputId}-step-committee`} className="mt-3.5 pt-3" style={{ boxShadow: 'inset 0 1px 0 rgba(27,56,40,0.08)' }}>
+        <SetupStep step={1} id={`${nameInputId}-step-committee`} title="Committee" />
+        <div className="flex flex-col gap-3.5">
+          <div>
+            <SetupLabel htmlFor={nameInputId}>Name</SetupLabel>
+            {!isCrisis && !isCustom ? (
+              <ConferenceCommitteeNameInput
+                id={nameInputId}
+                className={SETUP_INPUT_CLS}
+                value={draft.name}
+                onChange={(v) => onChange({ name: v })}
+                onPresetSelect={(p) => {
+                  // Store the CANONICAL FULL NAME, always — the acronym goes in
+                  // its own column and the display layer collapses the two
+                  // (committeeDisplayName). This used to store the collapsed
+                  // label as the name, which is why production has rows whose
+                  // name and abbreviation are both literally "DISEC": the full
+                  // name was thrown away at creation and no surface could ever
+                  // show it beneath the acronym again.
+                  onChange({
+                    name: p.name,
+                    abbreviation: p.acronym,
+                    presetRosterMode: p.rosterMode ?? 'country',
+                    ...(isEdit ? {} : { roster: p.members.map((m) => entry(m)) }),
+                  });
+                }}
+              />
+            ) : (
+              <input
+                id={nameInputId}
+                value={draft.name}
+                onChange={(e) => onChange({ name: e.target.value })}
+                onKeyDown={(e) => { if (e.key === 'Enter' && onSubmit) { e.preventDefault(); onSubmit(); } }}
+                placeholder={isCustom ? 'e.g. Model European Parliament, Youth Lok Sabha' : 'e.g. The Cuban Missile Crisis, 1962'}
+                className={SETUP_INPUT_CLS}
+              />
+            )}
+            {/* The acronym, ON the name field rather than in a row of its own. */}
+            <AcronymField
+              value={draft.abbreviation}
+              suggestion={suggestion}
+              onChange={(v) => onChange({ abbreviation: v })}
+              onSubmit={onSubmit}
+            />
+          </div>
+
+          <div>
+            <SetupLabel aside="up to 3">Topics</SetupLabel>
+            <div className="flex items-start gap-2">
+              <textarea
+                value={topicInput}
+                onChange={(e) => { setTopicInput(e.target.value); if (topicError) setTopicError(''); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addTopic(); } }}
+                placeholder={draft.topics.length >= 3 ? 'Three topics is the maximum' : 'Type a topic, then press Enter'}
+                rows={2}
+                disabled={draft.topics.length >= 3}
+                className={SETUP_INPUT_CLS}
+                style={{ flex: 1, resize: 'vertical', lineHeight: 1.5, minHeight: 52 }}
+              />
+              <button
+                type="button"
+                onClick={addTopic}
+                disabled={draft.topics.length >= 3 || !topicInput.trim()}
+                className="flex-shrink-0 rounded-[14px] px-4 transition-[background-color,transform,opacity] duration-150 enabled:hover:bg-[#2A5A3C] enabled:active:scale-[0.97] disabled:opacity-40 focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
+                style={{ minHeight: 44, backgroundColor: C.forest, color: C.gold, fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 800, whiteSpace: 'nowrap' }}
+              >
+                Add topic
+              </button>
+            </div>
+            {topicError ? (
+              <p role="alert" className="mt-1.5" style={{ color: C.danger, fontFamily: OUTFIT, fontSize: 12 }}>{topicError}</p>
+            ) : null}
+            {draft.topics.length > 0 && (
+              <div className="mt-2 flex flex-col gap-1.5">
+                {draft.topics.map((t, i) => (
+                  <div
+                    key={i}
+                    className="flex items-start gap-2 rounded-[12px] px-3 py-1.5"
+                    style={{ backgroundColor: 'rgba(27,56,40,0.06)', fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.45, color: C.ink }}
+                  >
+                    <span aria-hidden className="flex-shrink-0 tabular-nums" style={{ fontWeight: 800, color: C.goldDeep }}>{i + 1}</span>
+                    <span className="min-w-0 flex-1" style={{ wordBreak: 'break-word' }}>{t}</span>
+                    <button
+                      type="button"
+                      onClick={() => onChange({ topics: draft.topics.filter((_, j) => j !== i) })}
+                      aria-label={`Remove topic ${i + 1}`}
+                      title="Remove this topic"
+                      className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full transition-[background-color,color,transform] duration-150 hover:bg-[#8B2020]/[0.10] hover:text-[#8B2020] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
+                      style={{ color: C.muted }}
+                    >
+                      <X size={12} strokeWidth={2.4} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <SetupLabel>Difficulty</SetupLabel>
+            {/* Same MUN-level insignia the applications/account pages use to rank
+                delegates (beginner chevron → crowned-star expert), for consistency. */}
+            <div className="flex gap-2">
+              {DIFFICULTIES.map((lvl) => {
+                const active = draft.difficulty === lvl;
+                const accent = LEVEL_ACCENT[lvl] ?? C.muted;
+                const lbl = lvl.charAt(0).toUpperCase() + lvl.slice(1);
+                return (
+                  <button
+                    key={lvl}
+                    type="button"
+                    onClick={() => onChange({ difficulty: lvl })}
+                    aria-pressed={active}
+                    className="flex flex-1 flex-col items-center gap-1 rounded-[14px] py-2 transition-[background-color,box-shadow] duration-150 focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
+                    style={{
+                      boxShadow: active ? `inset 0 0 0 1.5px ${accent}` : 'inset 0 0 0 1px rgba(27,56,40,0.14)',
+                      backgroundColor: active ? `${accent}14` : 'rgba(255,255,255,0.55)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <span
+                      className="flex items-center justify-center"
+                      style={{ width: 26, height: 26, borderRadius: '9999px', background: `linear-gradient(150deg, ${accent}22, ${accent}12)`, border: `1px solid ${accent}55` }}
+                    >
+                      <LevelInsignia level={lvl} size={16} />
+                    </span>
+                    <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: active ? accent : C.inkSoft, letterSpacing: '0.01em' }}>{lbl}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <SetupLabel aside={onUploadEmblem ? 'or upload your own' : undefined}>Emblem</SetupLabel>
+            <EmblemPicker
+              value={emblem}
+              onPick={(logo) => onChange({ logoUrl: logo, emblemManuallySet: true })}
+              onUpload={onUploadEmblem}
+              onReset={() => onChange({ emblemManuallySet: false })}
+              uploading={emblemUploading}
+              canReset={draft.emblemManuallySet && !emblemUploading}
+              tone={medallionTone(committeeType)}
+              monogramText={draft.abbreviation || draft.name}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ── 2. Seats ───────────────────────────────────────────────────────
+          DELEGATION SIZE sits on the step heading's own line, which is where it
+          belongs semantically: it describes the list about to be built. The
+          labels say the answer outright ("1 per country" / "2 per country"). */}
+      <section aria-labelledby={`${nameInputId}-step-seats`} className="mt-4 pt-3.5" style={{ boxShadow: 'inset 0 1px 0 rgba(27,56,40,0.08)' }}>
+        <SetupStep
+          step={2}
+          id={`${nameInputId}-step-seats`}
+          title={isCustom ? 'Members' : isCharacterRoster ? 'Characters' : 'Countries'}
+          aside={
+            <div
+              role="group"
+              aria-label="Delegation size"
+              className="inline-flex flex-shrink-0 items-center gap-0.5"
+              style={{ padding: 3, borderRadius: 9999, backgroundColor: '#EFE9DB', boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.10)' }}
+            >
+              {([
+                { val: false, Icon: User, label: `1 per ${seatNoun}`, hint: `Single delegation: one delegate per ${seatNoun}.` },
+                { val: true, Icon: Users, label: `2 per ${seatNoun}`, hint: `Double delegation: two delegates share each ${seatNoun}.` },
+              ] as const).map(({ val, Icon, label, hint }) => {
+                const active = draft.doubleDelegation === val;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => onChange({ doubleDelegation: val })}
+                    aria-pressed={active}
+                    title={hint}
+                    className="inline-flex items-center gap-1.5 transition-[background-color,color] duration-150 focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
+                    style={{
+                      padding: '5px 11px', borderRadius: 9999, border: 'none',
+                      fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.02em',
+                      color: active ? C.gold : C.inkSoft,
+                      backgroundColor: active ? C.forest : 'transparent',
+                      boxShadow: active ? '0 1px 3px rgba(27,56,40,0.22)' : undefined,
+                      cursor: 'pointer', whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <Icon size={13} strokeWidth={2.2} />
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          }
+        />
+        {/* Add controls only. The editor docks the selected list in its rail;
+            the wizard has no rail, so it renders inline right below. */}
+        <ConferenceRosterPicker
+          mode={mode}
+          value={draft.roster}
+          onChange={(roster) => onChange({ roster })}
+          showSelected={false}
+        />
+        {selectedInline && (
+          <ConferenceRosterSelected
+            mode={mode}
+            value={draft.roster}
+            onChange={(roster) => onChange({ roster })}
+            committeeType={committeeType}
+            groups={draft.groups}
+            onGroupsChange={isCustom ? (groups) => onChange({ groups }) : undefined}
+            onUploadLogo={onUploadFlag}
+            className="mt-3 rounded-2xl"
+            style={{
+              maxHeight: 340, padding: '14px 14px 12px',
+              backgroundColor: 'rgba(255,255,255,0.55)',
+              boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.12)',
+            }}
+          />
+        )}
+      </section>
+    </>
+  );
+}
+
+// ── What a seat actually draws ───────────────────────────────────────────────
+// Its own crest, else its group's crest, else nothing (the session falls back to
+// the country flag on its own).
+//
+// ART IS RESOLVED AT WRITE TIME and copied onto `delegates.logo_url`. It cannot
+// be resolved when the session renders: the session client is anonymous, and
+// committee_country_slots / conference_committees.groups are not readable by it
+// for a private conference, so a seat that inherits its party's crest would
+// render nothing on the floor. Whoever holds both does the resolving and stores
+// the answer — the committee editor on save, and the creation wizard when it
+// writes its slots.
+//
+// `gs` is passed in rather than read from a draft so the same rule can be run
+// against the BASELINE groups to work out what a seat used to show.
+export function resolveSeatArt(
+  r: { name: string; logoUrl?: string | null; groupId?: string | null },
+  gs: SlotGroup[],
+  isCustom: boolean,
+): string | null {
+  const groupId = isCustom && r.groupId && gs.some((g) => g.id === r.groupId) ? r.groupId : null;
+  const art = effectiveSlotArt(
+    {
+      country_code: getCountryByName(r.name)?.code ?? r.name,
+      logo_url: r.logoUrl ?? null,
+      group_id: groupId,
+    },
+    gs,
+  );
+  return art.kind === 'logo' ? art.url : null;
 }
