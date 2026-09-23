@@ -44,8 +44,13 @@ import {
   type ScoreboardDelegateRow,
 } from '@/lib/conferenceScoreboard';
 import {
-  ScoreboardTable, SORTS, sortScoreboardRows, displayCountry, type SortKey,
+  ScoreboardTable, sortScoreboardRows, naturalSortDir, displayCountry, type SortKey, type SortDir,
 } from '@/components/ScoreboardTable';
+import { IconStat, STAT_ICONS, TINT } from '@/components/scoreboard/SessionScoreboardParts';
+import {
+  ChairScoreCell, ConferenceRowProfile, SessionBoardStyles, rankByHeadline, useChairScoreboardLabels,
+} from '@/app/manage/[slug]/live/SessionBoard';
+import { Layers } from 'lucide-react';
 // This page used to hardcode `#FAF8F3`, `#D8CDB6` and `#9A8A78`. The last of
 // those measures 2.71:1 on this background and was carrying every column
 // header, every secondary fact and the whole "not yet scored" footer. The
@@ -61,19 +66,6 @@ function csvEscape(v: string | number): string {
 
 // ── Small presentational pieces ──────────────────────────────────────────────
 
-function StatTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <NeuCard style={{ padding: '14px 18px', flex: '1 1 150px', minWidth: 0 }}>
-      <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 10, letterSpacing: '0.12em', color: SOFT }}>
-        {label}
-      </p>
-      <p style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 22, color: NEU.ink, fontVariantNumeric: 'tabular-nums', marginBlockStart: 4 }}>
-        {value}
-      </p>
-      {hint && <p style={{ fontFamily: OUTFIT, fontSize: 11, color: SOFT, marginBlockStart: 2 }}>{hint}</p>}
-    </NeuCard>
-  );
-}
 
 // `FactorBar` and `DelegateDetail` are gone from this file — they now live in
 // `@/components/ScoreboardTable` alongside the table itself, so the per-committee
@@ -97,6 +89,8 @@ export default function ScoreboardPage() {
     () => searchParams.get('committee') || 'ALL',
   );
   const [sortKey, setSortKey] = useState<SortKey>('score');
+  const [sortDir, setSortDir] = useState<SortDir>(naturalSortDir('score'));
+  const labels = useChairScoreboardLabels();
   const [query, setQuery] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -141,8 +135,13 @@ export default function ScoreboardPage() {
     });
     // Sorting lives with the table, so this page and the per-committee modal
     // cannot rank the same delegations differently.
-    return sortScoreboardRows(filtered, sortKey);
-  }, [allRows, committeeFilter, query, sortKey]);
+    return sortScoreboardRows(filtered, sortKey, 'en', sortDir);
+  }, [allRows, committeeFilter, query, sortKey, sortDir]);
+
+  // The chair's score cell: bar against the best score on screen, gold for the
+  // leader of the delegations shown.
+  const rankShown = useMemo(() => rankByHeadline(rows), [rows]);
+  const maxShown = useMemo(() => Math.max(0, ...rows.map((r) => r.headline)), [rows]);
 
   const totals = useMemo(() => {
     const scope = committeeFilter === 'ALL'
@@ -152,7 +151,6 @@ export default function ScoreboardPage() {
       delegations: scope.length,
       speeches: scope.reduce((s, r) => s + r.gslSpeeches + r.caucusSpeeches, 0),
       seconds: scope.reduce((s, r) => s + r.speakingSeconds, 0),
-      comments: scope.reduce((s, r) => s + r.comments.filter((c) => c.content.trim()).length, 0),
     };
   }, [allRows, committeeFilter]);
 
@@ -284,12 +282,13 @@ export default function ScoreboardPage() {
       {!loading && committees.length > 0 && (
         <>
           {/* Summary */}
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBlockEnd: 20 }}>
-            <StatTile label="COMMITTEES" value={String(committeeFilter === 'ALL' ? committees.length : 1)} />
-            <StatTile label="DELEGATIONS" value={String(totals.delegations)} />
-            <StatTile label="SPEECHES" value={String(totals.speeches)} />
-            <StatTile label="SPEAKING TIME" value={formatSpeakingTime(totals.seconds)} />
-            <StatTile label="CHAIR COMMENTS" value={String(totals.comments)} />
+          {/* The chair's figure chips, one more for the committees in scope. */}
+          <SessionBoardStyles />
+          <div className="flex gap-2 flex-wrap" style={{ marginBlockEnd: 20 }}>
+            <IconStat compact icon={Layers} label="Committees" value={String(committeeFilter === 'ALL' ? committees.length : 1)} />
+            <IconStat compact icon={STAT_ICONS.delegations} label="Delegations" value={String(totals.delegations)} />
+            <IconStat compact icon={STAT_ICONS.speeches} label="Speeches" value={String(totals.speeches)} />
+            <IconStat compact icon={STAT_ICONS.time} label="Speaking time" value={formatSpeakingTime(totals.seconds)} tint={TINT.sage} />
           </div>
 
           {/* Committee filter */}
@@ -308,16 +307,9 @@ export default function ScoreboardPage() {
             ))}
           </div>
 
-          {/* Sort + search */}
+          {/* Search. There is no SORT BY row any more: like the chair's board,
+              the column headers sort (press again to reverse). */}
           <div className="flex items-center gap-2 mb-4 flex-wrap">
-            <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.12em', color: SOFT }}>
-              SORT BY
-            </span>
-            {SORTS.map((s) => (
-              <NeuPill key={s.key} active={sortKey === s.key} onClick={() => setSortKey(s.key)}>
-                {s.label}
-              </NeuPill>
-            ))}
             <div
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 7, marginInlineStart: 'auto',
@@ -344,9 +336,20 @@ export default function ScoreboardPage() {
           <ScoreboardTable
             rows={rows}
             sortKey={sortKey}
+            sortDir={sortDir}
+            onSortChange={(key, dir) => { setSortKey(key); setSortDir(dir); }}
             showCommitteeColumn={committeeFilter === 'ALL'}
             expanded={expanded}
             onExpand={setExpanded}
+            locale="en"
+            circleFlags
+            flagSize={34}
+            hideNotesColumn
+            wrapHeaders
+            columnWidths={{ speeches: 92, time: 84, score: 96 }}
+            renderScore={(row) => <ChairScoreCell row={row} max={maxShown} leader={rankShown.get(row.key) === 1} />}
+            renderDetail={(row) => (data ? <ConferenceRowProfile row={row} scoreboard={data} /> : null)}
+            labels={labels}
           />
 
           {/* Committees with no live session yet */}

@@ -76,7 +76,6 @@ export default function LiveStatusPage() {
   const [scoreboardFor, setScoreboardFor] = useState<string | null>(null);
   /** Set the first time a reader opens the recap's Scoreboard side-tab, which
    *  shares the conference-wide payload with the standalone Points view. */
-  const [recapWantsScoreboard, setRecapWantsScoreboard] = useState(false);
   /** The committee a SCOPED broadcast is being written to, or null for the
    *  floor-wide composer. Same component either way — see `composerTargets`. */
   const [broadcastFor, setBroadcastFor] = useState<string | null>(null);
@@ -570,11 +569,11 @@ export default function LiveStatusPage() {
   // is opened first pays for the load and the other is instant. The allocation
   // index rides along on the same latch for the same reason — the delegate card
   // needs both halves, and two latches would mean two ways to be half-loaded.
-  // THREE doors now, not two: the recap modal's Scoreboard side-tab is the
-  // third, and it opens the same payload rather than a thinner copy of it. It is
-  // a separate latch from `recapFor` on purpose — opening a recap must NOT drag
-  // a whole-conference scoreboard read in behind it; only pressing the tab does.
-  const wantsScoreboard = !!scoreboardFor || !!delegateFor || recapWantsScoreboard;
+  // ONE door now (23 Sep 2026): the committee scoreboard and the recap's
+  // Scoreboard / History / Documents tabs read the session itself through
+  // `useSessionCommittee`, like the chair's console. Only the delegate card still
+  // needs the whole-conference payload (it resolves the people behind a seat).
+  const wantsScoreboard = !!delegateFor;
   useEffect(() => {
     if (scoreboardReq.current || !wantsScoreboard || !conferenceId || !accessToken) return;
     scoreboardReq.current = true;
@@ -930,12 +929,8 @@ export default function LiveStatusPage() {
           awardsConfig={getAwardsConfig(conference.awards_config)}
           awardsPublishedAt={conference.awards_published_at}
           conferenceEndDate={conference.end_date}
-          // The recap's Scoreboard tab renders the SAME body the standalone
-          // Points modal does, off the same lazily-loaded conference payload.
-          scoreboard={scoreboard}
-          scoreboardLoading={scoreboardLoading}
-          scoreboardError={scoreboardError}
-          onWantScoreboard={() => setRecapWantsScoreboard(true)}
+          // The recap's Scoreboard, History and Documents tabs read the session
+          // itself (useSessionCommittee), exactly the way the chair's console does.
           onClose={() => setRecapFor(null)}
           // The caucus clock, ballot breakdown and unmod countdown moved OFF the
           // card (four card shapes were the cause of the height chaos) and into
@@ -958,10 +953,6 @@ export default function LiveStatusPage() {
         <SeatArtProvider delegates={mergedSeatRoster(scoreboardData.delegates, seatArt, scoreboardData.conf.id)}>
           <CommitteeScoreboardModal
             data={scoreboardData}
-            scoreboard={scoreboard}
-            loading={scoreboardLoading}
-            error={scoreboardError}
-            conferenceSlug={conference.slug}
             onClose={() => setScoreboardFor(null)}
           />
         </SeatArtProvider>

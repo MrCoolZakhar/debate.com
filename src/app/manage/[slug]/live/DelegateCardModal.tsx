@@ -12,7 +12,7 @@
 //
 //   • PERFORMANCE — one `ScoreboardDelegateRow` out of the conference scoreboard
 //     that `CommitteeScoreboardModal` already renders. Same loader
-//     (`loadConferenceScoreboard`), same row, same `DelegateDetail` drill-in, so
+//     (`loadConferenceScoreboard`), same row, and (23 Sep 2026) the chair's own `DelegateProfile` drill-in, so
 //     the number here and the number in the committee scoreboard and the number
 //     on the chair's own ScoreboardPanel cannot drift. Nothing is re-derived.
 //   • THE PEOPLE — the seats of `conference_allocations` for this committee and
@@ -25,37 +25,20 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useMemo } from 'react';
-import { UserRound, Users2 } from 'lucide-react';
+import { UserRound } from 'lucide-react';
 import { NEU, NeuInset, OUTFIT } from '@/components/neu';
 import { CircleFlag } from '@/components/CircleFlag';
 import Avatar from '@/components/Avatar';
 import {
-  formatSpeakingTime,
   type ConferenceScoreboard, type ScoreboardDelegateRow,
 } from '@/lib/conferenceScoreboard';
 import { type LiveCommittee, ModalShell, flagCodeFor } from './LiveModals';
-import { DelegateDetail, displayCountry } from '@/components/ScoreboardTable';
+import { displayCountry } from '@/components/ScoreboardTable';
+import { ConferenceRowProfile } from './SessionBoard';
 import { committeeIdentity } from './cardModel';
 import { allocationKey, type AllocationIndex, type AllocatedPerson } from './allocations';
-import { SOFT, RED, GREEN_INK, AMBER_INK, CARD_BORDER_COLOR } from './tokens';
+import { SOFT, RED, AMBER_INK, CARD_BORDER_COLOR } from './tokens';
 
-function Stat({ label, value, title }: { label: string; value: string; title?: string }) {
-  // `NeuInset` takes no `title`, so the tooltip goes on a wrapper rather than
-  // being dropped — the breakdown behind SCORE and SPEECHES is the whole reason
-  // those two tiles are readable at a glance.
-  return (
-    <div style={{ flex: '1 1 88px', minWidth: 0 }} title={title}>
-      <NeuInset className="text-center" style={{ padding: '10px 14px', borderRadius: 12 }}>
-        <p style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 19, color: NEU.ink, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
-          {value}
-        </p>
-        <p style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.11em', color: SOFT, marginBlockStart: 5 }}>
-          {label}
-        </p>
-      </NeuInset>
-    </div>
-  );
-}
 
 /** One seat of the delegation, and whoever holds it. */
 function SeatRow({ person, showSeat }: { person: AllocatedPerson; showSeat: boolean }) {
@@ -247,46 +230,13 @@ export function DelegateCardModal({
         </NeuInset>
       )}
 
-      {!loading && !error && row && (
-        <>
-          <div className="flex gap-2.5 flex-wrap mb-3">
-            <Stat
-              label="SCORE"
-              value={String(row.headline)}
-              title={row.quality != null
-                ? `${row.objective} objective points · quality ${row.quality}/100`
-                : `${row.objective} objective points`}
-            />
-            <Stat
-              label="SPEECHES"
-              value={String(row.gslSpeeches + row.caucusSpeeches)}
-              title={`${row.gslSpeeches} on the speakers' list · ${row.caucusSpeeches} in caucus`}
-            />
-            <Stat label="SPEAKING TIME" value={formatSpeakingTime(row.speakingSeconds)} />
-            <Stat label="MOTIONS" value={String(row.motions)} />
-            <Stat
-              label="NOTES"
-              value={String(row.comments.filter((c) => c.content.trim()).length)}
-            />
-          </div>
-
-          {(row.workingPapers > 0 || row.draftResolutions > 0 || row.rightsOfReply > 0) && (
-            <p className="text-[11.5px] mb-3 flex items-center gap-1.5" style={{ color: GREEN_INK, fontFamily: OUTFIT }}>
-              <Users2 size={12} style={{ flexShrink: 0 }} />
-              <span>
-                Sponsored {row.workingPapers} working paper{row.workingPapers === 1 ? '' : 's'}
-                {' · '}{row.draftResolutions} draft resolution{row.draftResolutions === 1 ? '' : 's'}
-                {row.rightsOfReply > 0 && ` · ${row.rightsOfReply} right${row.rightsOfReply === 1 ? '' : 's'} of reply`}
-              </span>
-            </p>
-          )}
-
-          {/* The SAME drill-in the committee scoreboard opens — points ledger,
-              chair factor ratings and chair comments. Imported, not rebuilt. */}
-          <div style={{ border: `1px solid ${CARD_BORDER_COLOR}`, borderRadius: 14, overflow: 'hidden' }}>
-            <DelegateDetail row={row} />
-          </div>
-        </>
+      {!loading && !error && row && scoreboard && (
+        // The chair's own drill-in (23 Sep 2026): one line of figures, where the
+        // points came from, ratings, and every speech with the chairs' comments.
+        // Read only: no manual points, no note editing.
+        <div style={{ border: `1px solid ${CARD_BORDER_COLOR}`, borderRadius: 14, overflow: 'hidden' }}>
+          <ConferenceRowProfile row={row} scoreboard={scoreboard} />
+        </div>
       )}
     </ModalShell>
   );

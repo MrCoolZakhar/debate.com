@@ -131,6 +131,12 @@ export interface ScoreboardCommitteeSummary {
 export interface ConferenceScoreboard {
   committees: ScoreboardCommitteeSummary[];
   rows: ScoreboardDelegateRow[];
+  /** The assembled session and its feedback, keyed by session committee id (the
+   *  part of `ScoreboardDelegateRow.key` before the `|`). The organiser board
+   *  hands these to the chair's `DelegateProfile` (point slices + speech history),
+   *  so an opened delegation reads exactly as it does on the dais. Log-only
+   *  messages and no live-floor state: enough for scoring and History. */
+  sessions: Record<string, { committee: Committee; feedback: FeedbackEntry[] }>;
   /** Conference committees with no linked live session yet — nothing to score. */
   unlinked: { id: string; name: string; abbreviation: string | null }[];
 }
@@ -241,9 +247,13 @@ function assembleScoringCommittee(
     pendingMotions: [],
     resolutions: [],
     documents,
-    caucus: null,
+    // Read when the loader selected it (the History tab's live segment); the
+    // live wall's `sessionHeadlineScores` passes rows without it and gets null.
+    caucus: (row.caucus as Committee['caucus']) ?? null,
     messages,
     createdAt: new Date(row.created_at as string),
+    suspendedAt: (row.suspended_at as string | null | undefined) ?? null,
+    endedAt: (row.ended_at as string | null | undefined) ?? null,
     dbSettings: settings,
     dbScoring: (settings?.scoring as ScoringConfig | undefined) ?? null,
   };
@@ -357,7 +367,7 @@ export async function loadConferenceScoreboard(
 
   if (ccError) {
     console.error('[conferenceScoreboard] conference_committees load failed:', ccError);
-    return { committees: [], rows: [], unlinked: [] };
+    return { committees: [], rows: [], unlinked: [], sessions: {} };
   }
 
   const confCommittees = (ccData ?? []) as unknown as {
@@ -371,14 +381,14 @@ export async function loadConferenceScoreboard(
     .map((c) => ({ id: c.id, name: c.name, abbreviation: c.abbreviation }));
 
   const sessionIds = linked.map((c) => c.session_id as string);
-  if (sessionIds.length === 0) return { committees: [], rows: [], unlinked };
+  if (sessionIds.length === 0) return { committees: [], rows: [], unlinked, sessions: {} };
 
   // The session committee rows themselves (id is the PK here, not committee_id).
   const sessionRows: DbRow[] = [];
   for (let i = 0; i < sessionIds.length; i += 40) {
     const { data, error } = await supabase
       .from('committees')
-      .select('id, code, name, topic, chair_names, phase, speaker_time_limit, settings, created_at')
+      .select('id, code, name, topic, chair_names, phase, caucus, suspended_at, ended_at, speaker_time_limit, settings, created_at')
       .in('id', sessionIds.slice(i, i + 40));
     if (error) {
       console.error('[conferenceScoreboard] committees load failed:', error);
@@ -412,6 +422,7 @@ export async function loadConferenceScoreboard(
 
   const committees: ScoreboardCommitteeSummary[] = [];
   const rows: ScoreboardDelegateRow[] = [];
+  const sessions: ConferenceScoreboard['sessions'] = {};
 
   for (const cc of linked) {
     const sessionId = cc.session_id as string;
@@ -440,6 +451,7 @@ export async function loadConferenceScoreboard(
     }));
 
     const cfg = getScoringConfig(committee);
+    sessions[sessionId] = { committee, feedback };
 
     let speeches = 0;
     let seconds = 0;
@@ -513,7 +525,7 @@ export async function loadConferenceScoreboard(
     });
   }
 
-  return { committees, rows, unlinked };
+  return { committees, rows, unlinked, sessions };
 }
 
 // ── Presentation helpers (shared by the page and its CSV export) ─────────────

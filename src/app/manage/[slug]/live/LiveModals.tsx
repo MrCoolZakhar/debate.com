@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Mic, FileText, ScrollText, Users, Gavel, Trophy, MessageSquareText, ExternalLink, ChevronDown, Timer, Clock, CheckCircle2, Megaphone, FileCheck, Radio, Medal } from 'lucide-react';
+import { X, Mic, FileText, ScrollText, Users, Gavel, Trophy, History as HistoryIcon, ExternalLink, Clock, Megaphone, Radio, Medal } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import {
@@ -26,8 +26,10 @@ import {
 // `NEU.green` is 4.30:1 and drops to 3.86:1 inside the adopted-resolution tint,
 // so GREEN_INK carries the words and `NEU.green` survives on dots and fills
 // only, where the 3:1 non-text bar applies. See ./tokens for the full sweep.
-import { type ConferenceScoreboard } from '@/lib/conferenceScoreboard';
-import { CommitteeScoreboardBody } from '@/components/ScoreboardTable';
+import { SessionScoreboardBoard, SessionLoadState } from './SessionBoard';
+import { SessionDocuments } from './SessionDocuments';
+import { SessionAttendance } from './SessionAttendance';
+import { useSessionCommittee } from './useSessionCommittee';
 import { SOFT, GREEN_INK, AMBER_INK, RED } from './tokens';
 import { committeeIdentity } from './identity';
 
@@ -637,467 +639,11 @@ function StatTile({ icon: Icon, emoji, gradient, value, label, onClick, title }:
   );
 }
 
-// ── Chair feedback ──────────────────────────────────────────────────────────
-
-/** Short relative age, e.g. "just now", "12m ago", "2h ago", "3 Sep". */
-function timeAgo(iso: string): string {
-  const ms = Date.parse(iso);
-  if (!Number.isFinite(ms)) return '';
-  const mins = Math.floor((Date.now() - ms) / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-}
-
-/** The label a chair's own console shows for the speech a note hangs off. */
-function contextLabel(context: string | null): string | null {
-  if (!context) return null;
-  if (context === 'speakers-list') return 'GSL';
-  if (context === 'unmoderated-caucus') return 'UNMOD';
-  if (context === 'moderated-caucus') return 'CAUCUS';
-  if (context === 'tour-de-table') return 'TOUR';
-  return context.toUpperCase();
-}
-
-interface CountryFeedback {
-  country: string;
-  entries: FeedbackEntry[];
-  notes: FeedbackEntry[];
-  /** Mean rating per factor id — only over rows that actually carry that factor. */
-  factorAvg: Record<string, number>;
-  /** Mean across every rating this delegation has received, or null if unrated. */
-  headline: number | null;
-  latest: number;
-}
-
-/** Fold the raw `feedback` rows into one block per delegation. A chair rates a
- *  speech factor-by-factor and may leave the note empty (in practice most rows
- *  are ratings with no prose), so ratings and notes are surfaced separately
- *  instead of a note list that would render mostly blank. */
-export function foldFeedback(rows: FeedbackEntry[]): CountryFeedback[] {
-  const byCountry = new Map<string, FeedbackEntry[]>();
-  for (const f of rows) {
-    const list = byCountry.get(f.country);
-    if (list) list.push(f);
-    else byCountry.set(f.country, [f]);
-  }
-  const out: CountryFeedback[] = [];
-  for (const [country, entries] of byCountry) {
-    const sums: Record<string, { total: number; n: number }> = {};
-    let all = 0;
-    let allN = 0;
-    for (const e of entries) {
-      for (const [fid, raw] of Object.entries(e.factorScores ?? {})) {
-        const v = Number(raw);
-        if (!Number.isFinite(v)) continue;
-        const cur = sums[fid] ?? { total: 0, n: 0 };
-        cur.total += v;
-        cur.n += 1;
-        sums[fid] = cur;
-        all += v;
-        allN += 1;
-      }
-    }
-    const factorAvg: Record<string, number> = {};
-    for (const [fid, s] of Object.entries(sums)) factorAvg[fid] = s.total / s.n;
-    out.push({
-      country,
-      entries,
-      notes: entries.filter((e) => e.content.trim().length > 0).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
-      factorAvg,
-      headline: allN > 0 ? all / allN : null,
-      latest: entries.reduce((max, e) => Math.max(max, Date.parse(e.createdAt) || 0), 0),
-    });
-  }
-  // Most recently touched delegation first — an organiser scanning mid-session
-  // wants what the dais just wrote, not the alphabet.
-  return out.sort((a, b) => b.latest - a.latest || a.country.localeCompare(b.country));
-}
-
-function FeedbackEmpty({ committeeLabel }: { committeeLabel: string }) {
-  return (
-    <NeuInset className="flex items-start gap-3.5 mt-2" style={{ padding: '18px 18px', borderRadius: 16 }}>
-      <NeuIconDisc gradient={NEU_GRADIENTS.sage} emoji="Memo" icon={MessageSquareText} size={40} />
-      <div className="min-w-0">
-        <p className="text-sm font-bold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-          Nothing written on {committeeLabel} yet
-        </p>
-        <p className="text-xs mt-1" style={{ color: SOFT, fontFamily: OUTFIT, lineHeight: 1.5 }}>
-          Commenters rate each speech and leave private notes from the feedback dock in their console.
-          Ratings and notes land here the moment they are saved. No action needed from you.
-        </p>
-      </div>
-    </NeuInset>
-  );
-}
-
-/** Live chair feedback for one committee. Replaces the "format changes on the
- *  production branch" placeholder that used to sit in the recap. */
-export function FeedbackRecap({ data }: { data: LiveCommittee }) {
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const folded = foldFeedback(data.feedback);
-  const factors = data.session?.scoringFactors ?? [];
-  const scaleMax = Math.max(1, data.session?.factorScaleMax ?? 100);
-  const factorName = (id: string) => factors.find((f) => f.id === id)?.name ?? id;
-  const totalNotes = data.feedback.filter((f) => f.content.trim().length > 0).length;
-  const totalRated = data.feedback.filter((f) => Object.keys(f.factorScores ?? {}).length > 0).length;
-  const label = committeeIdentity(data.conf).title;
-
-  return (
-    <div className="mb-6">
-      <div className="flex items-center gap-2 flex-wrap">
-        <Eyebrow>Chair feedback</Eyebrow>
-        {data.feedback.length > 0 && (
-          <span
-            className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-            style={{ backgroundColor: NEU.surface, color: NEU.forest, boxShadow: NEU.outSm, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}
-          >
-            {totalRated} rated · {totalNotes} note{totalNotes === 1 ? '' : 's'} · {folded.length} delegation{folded.length === 1 ? '' : 's'}
-          </span>
-        )}
-      </div>
-
-      {folded.length === 0 ? (
-        <FeedbackEmpty committeeLabel={label} />
-      ) : (
-        <div className="mt-2 flex flex-col gap-2">
-          {folded.map((cf) => {
-            const isOpen = expanded === cf.country;
-            const ratedFactors = factors.filter((f) => cf.factorAvg[f.id] !== undefined);
-            // A factor the chair renamed away, or a custom one not in the
-            // current config, still has stored ratings — show it rather than
-            // silently dropping the chair's work.
-            const orphanIds = Object.keys(cf.factorAvg).filter((id) => !factors.some((f) => f.id === id));
-            return (
-              <NeuInset key={cf.country} style={{ borderRadius: 14, overflow: 'hidden' }}>
-                <button
-                  onClick={() => setExpanded(isOpen ? null : cf.country)}
-                  className="w-full flex flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-3 text-left focus:outline-none"
-                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: OUTFIT, minHeight: 48 }}
-                >
-                  <CircleFlag code={flagCodeFor(cf.country)} label={cf.country} size={24} decorative />
-                  {/* THE ROW WRAPS BELOW `sm` INSTEAD OF CRUSHING THE NAME.
-                      Flag, rating pill, speech count and chevron are all
-                      `flex-shrink-0`, so at 375px the delegation had 101px and
-                      "United Kingdom" truncated. A 140px basis makes the trailing
-                      controls drop to a second line — right-aligned by the pill's
-                      own auto margin — rather than eating the one thing the row
-                      exists to name. */}
-                  <span className="text-sm font-bold flex-1 basis-[140px] truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{cf.country}</span>
-                  {cf.headline !== null && (
-                    <span
-                      className="text-[11px] font-extrabold px-2.5 py-1 rounded-full flex-shrink-0 ms-auto"
-                      style={{ color: NEU.forest, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}
-                      title={`Mean of every factor rating this delegation has received, out of ${scaleMax}`}
-                    >
-                      {Math.round(cf.headline)}/{scaleMax}
-                    </span>
-                  )}
-                  <span className="text-[11px] flex-shrink-0" style={{ color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
-                    {cf.entries.length} {cf.entries.length === 1 ? 'speech' : 'speeches'}
-                  </span>
-                  <ChevronDown
-                    size={16}
-                    style={{ color: SOFT, flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: `transform 200ms ${EASE}` }}
-                  />
-                </button>
-
-                {isOpen && (
-                  <div className="px-3.5 pb-3.5 pt-3" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
-                    {/* Per-factor means, using the chair's own factor names. */}
-                    {(ratedFactors.length > 0 || orphanIds.length > 0) && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
-                        {[...ratedFactors.map((f) => ({ id: f.id, name: f.name })), ...orphanIds.map((id) => ({ id, name: factorName(id) }))].map((f) => {
-                          const v = cf.factorAvg[f.id];
-                          const pct = Math.max(0, Math.min(100, (v / scaleMax) * 100));
-                          return (
-                            <div key={f.id}>
-                              <div className="flex items-baseline justify-between gap-2">
-                                <span className="text-[10px] font-bold uppercase truncate" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>{f.name}</span>
-                                <span className="text-xs font-black flex-shrink-0" style={{ color: NEU.ink, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>{Math.round(v)}</span>
-                              </div>
-                              <div className="w-full overflow-hidden mt-1" style={{ height: 6, borderRadius: 6, backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
-                                <div style={{ inlineSize: `${pct}%`, height: '100%', borderRadius: 6, background: `linear-gradient(90deg, ${NEU_GRADIENTS.sage[1]}, ${NEU_GRADIENTS.forest[0]})` }} />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {/* Written notes. Most rows are ratings only, so say so. */}
-                    <div className="mt-3">
-                      {cf.notes.length === 0 ? (
-                        <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT }}>
-                          Rated, but the dais left no written note for this delegation yet.
-                        </p>
-                      ) : (
-                        <div className="flex flex-col gap-2">
-                          {cf.notes.map((n, i) => {
-                            const ctx = contextLabel(n.speechContext);
-                            return (
-                              <div
-                                key={`${n.createdAt}-${i}`}
-                                className="flex items-start gap-2 rounded-xl px-3 py-2"
-                                style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
-                              >
-                                <MessageSquareText size={12} style={{ flexShrink: 0, marginBlockStart: 3, color: SOFT }} />
-                                <div className="min-w-0">
-                                  <p className="text-xs" style={{ color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.5 }}>{n.content}</p>
-                                  <p className="text-[10px] mt-1 flex items-center gap-1.5 flex-wrap" style={{ color: SOFT, fontFamily: OUTFIT }}>
-                                    <span className="font-bold">{n.chairName || 'Chair'}</span>
-                                    {/* The speech's own time when the chair's console
-                                        recorded one, falling back to when the note was
-                                        typed. Those are not the same moment. */}
-                                    <span>· {timeAgo(n.spokenAt || n.createdAt)}</span>
-                                    {ctx && <span>· {ctx}</span>}
-                                    {/* What the speech was about. Same vocabulary as the
-                                        chair's own scoreboard: context first, topic
-                                        second. */}
-                                    {n.speechTopic?.trim() && (
-                                      <span className="truncate max-w-[220px]" title={n.speechTopic}>· {n.speechTopic.trim()}</span>
-                                    )}
-                                    {typeof n.speechSeconds === 'number' && n.speechSeconds > 0 && (
-                                      <span style={{ fontVariantNumeric: 'tabular-nums' }}>· {fmtClock(n.speechSeconds)}</span>
-                                    )}
-                                  </p>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </NeuInset>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Documents recap ─────────────────────────────────────────────────────────
-
-/** Pipeline order, matching DocumentsModal: submitted → on-floor → introduced →
- *  passed/failed. Anything unrecognised falls to the end under its own name. */
-const DOC_STATUS_ORDER = ['introduced', 'on-floor', 'submitted', 'passed', 'failed'];
-const DOC_STATUS_LABELS: Record<string, string> = {
-  'submitted': 'Submitted',
-  'on-floor': 'On the floor',
-  'introduced': 'Introduced',
-  'passed': 'Passed',
-  'failed': 'Failed',
-};
-
 export type DocFilter = 'all' | 'working-paper' | 'draft-resolution';
-
-/** Working papers and draft resolutions the room has produced.
- *
- *  MOST DOCUMENTS HAVE NO BODY TO SHOW. Measured in production: of 23 documents,
- *  17 (74%) have a null `file_url`, 22 have blank `content`, and 16 have NEITHER
- *  — a chair typically tables a paper by title and sponsors alone. So "nothing
- *  attached" is the ordinary case here, not a failure, and it is worded as a
- *  plain statement rather than an error. */
-function DocumentsRecap({
-  data, filter = 'all', onFilter,
-}: {
-  data: LiveCommittee;
-  /** Set by the WP / DR stat tiles above (and by the WP / DR chips on the
-   *  card), which scroll here and narrow to one type rather than dropping the
-   *  reader at the top of a mixed list. */
-  filter?: DocFilter;
-  onFilter?: (f: DocFilter) => void;
-}) {
-  const all = data.documents;
-  if (all.length === 0) {
-    return (
-      <div className="mb-6">
-        <Eyebrow>Documents</Eyebrow>
-        <p className="text-sm mt-2" style={{ color: SOFT, fontFamily: OUTFIT }}>
-          No working papers or draft resolutions submitted yet.
-        </p>
-      </div>
-    );
-  }
-
-  const docs = filter === 'all' ? all : all.filter((d) => d.type === filter);
-
-  // A PASSED DRAFT RESOLUTION IS THE OUTCOME OF THE WHOLE COMMITTEE. It is
-  // lifted out of the pipeline list and given the top of the section, with its
-  // file openable, rather than sitting as one more row under a "Passed" heading.
-  const passedDrs = all.filter((d) => d.type === 'draft-resolution' && d.status === 'passed');
-
-  const wpCount = all.filter((d) => d.type === 'working-paper').length;
-  const drCount = all.length - wpCount;
-  const TABS: { key: DocFilter; label: string; n: number }[] = [
-    { key: 'all', label: 'All', n: all.length },
-    { key: 'working-paper', label: 'Working papers', n: wpCount },
-    { key: 'draft-resolution', label: 'Draft resolutions', n: drCount },
-  ];
-
-  const statuses = Array.from(new Set(docs.map((d) => d.status)))
-    .sort((a, b) => {
-      const ai = DOC_STATUS_ORDER.indexOf(a); const bi = DOC_STATUS_ORDER.indexOf(b);
-      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
-    });
-
-  return (
-    <div className="mb-6">
-      <Eyebrow>Documents</Eyebrow>
-
-      {/* The verdict first. */}
-      {passedDrs.length > 0 && (
-        <div className="mt-2 mb-3 flex flex-col gap-2">
-          {passedDrs.map((d, i) => (
-            <div
-              key={`passed-${d.docCode}-${i}`}
-              className="flex items-start gap-3"
-              style={{
-                backgroundColor: 'rgba(61,122,82,0.09)',
-                border: `1px solid rgba(61,122,82,0.30)`,
-                borderRadius: 16, padding: '13px 15px',
-              }}
-            >
-              <FileCheck size={18} style={{ color: GREEN_INK, flexShrink: 0, marginBlockStart: 1 }} />
-              <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-extrabold uppercase" style={{ color: GREEN_INK, fontFamily: OUTFIT, letterSpacing: '0.1em' }}>
-                  Adopted by the committee
-                </p>
-                <p className="text-base font-extrabold" style={{ color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.2 }}>
-                  {d.docCode ? `${d.docCode} · ` : ''}{d.title || 'Draft resolution'}
-                </p>
-                {d.sponsors.length > 0 && (
-                  <p className="text-[11px] mt-0.5" style={{ color: SOFT, fontFamily: OUTFIT }}>
-                    Sponsored by {d.sponsors.slice(0, 4).join(', ')}
-                    {d.sponsors.length > 4 && ` +${d.sponsors.length - 4}`}
-                  </p>
-                )}
-                {d.fileUrl ? (
-                  <a
-                    href={d.fileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs font-bold mt-2 rounded-full px-3 py-1.5"
-                    style={{ color: NEU.gold, backgroundColor: NEU.forest, fontFamily: OUTFIT, textDecoration: 'none' }}
-                  >
-                    <ExternalLink size={12} />
-                    {d.fileName || 'Open the adopted text'}
-                  </a>
-                ) : (
-                  <p className="text-[11px] mt-1.5" style={{ color: SOFT, fontFamily: OUTFIT }}>
-                    {(d.content ?? '').trim()
-                      ? 'Text is below.'
-                      : 'No file was uploaded with this resolution. The chair recorded it by title and sponsors.'}
-                  </p>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Type filter, driven by the WP / DR tiles as well as by clicking here. */}
-      {onFilter && all.length > 1 && (
-        <div className="flex items-center gap-1.5 mt-2 mb-1 flex-wrap">
-          {TABS.filter((t) => t.n > 0 || t.key === 'all').map((t) => (
-            <button
-              key={t.key}
-              onClick={() => onFilter(t.key)}
-              className="text-[11px] font-bold rounded-full px-2.5 py-1 focus:outline-none"
-              style={{
-                fontFamily: OUTFIT, border: 'none', cursor: 'pointer',
-                color: filter === t.key ? NEU.ink : SOFT,
-                backgroundColor: filter === t.key ? NEU.base : NEU.surface,
-                boxShadow: filter === t.key ? NEU.inSm : NEU.outSm,
-                transition: `box-shadow 200ms ${EASE}`,
-              }}
-              aria-pressed={filter === t.key}
-            >
-              {t.label} · {t.n}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="mt-2 flex flex-col gap-3">
-        {statuses.map((status) => {
-          const group = docs.filter((d) => d.status === status);
-          return (
-            <div key={status}>
-              <p className="text-[10px] font-bold uppercase mb-1.5" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.08em' }}>
-                {DOC_STATUS_LABELS[status] ?? status} · {group.length}
-              </p>
-              <div className="flex flex-col gap-2">
-                {group.map((d, i) => {
-                  const isDR = d.type === 'draft-resolution';
-                  const Icon = isDR ? ScrollText : FileText;
-                  const body = (d.content ?? '').trim();
-                  return (
-                    <NeuInset key={`${d.docCode}-${d.title}-${i}`} style={{ padding: '11px 13px', borderRadius: 14 }}>
-                      <div className="flex items-start gap-2.5">
-                        <Icon size={14} style={{ color: NEU.forest, flexShrink: 0, marginBlockStart: 2 }} />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-bold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-                            {d.docCode ? `${d.docCode} · ` : ''}{d.title || (isDR ? 'Draft resolution' : 'Working paper')}
-                          </p>
-                          {d.sponsors.length > 0 && (
-                            <p className="text-[11px] mt-0.5" style={{ color: SOFT, fontFamily: OUTFIT }}>
-                              Sponsored by {d.sponsors.slice(0, 4).join(', ')}
-                              {d.sponsors.length > 4 && ` +${d.sponsors.length - 4}`}
-                            </p>
-                          )}
-
-                          {/* A file wins over an inline body; the chair console
-                              renders the same `file_url` in its PDF viewer. */}
-                          {d.fileUrl ? (
-                            <a
-                              href={d.fileUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 text-[11px] font-bold mt-1.5"
-                              style={{ color: NEU.forest, fontFamily: OUTFIT, textDecoration: 'none' }}
-                            >
-                              <ExternalLink size={11} />
-                              {d.fileName || 'Open document'}
-                            </a>
-                          ) : body ? (
-                            <p
-                              className="text-xs mt-1.5 whitespace-pre-wrap"
-                              style={{ color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.5, maxHeight: 160, overflowY: 'auto' }}
-                            >
-                              {body}
-                            </p>
-                          ) : (
-                            /* 17 of 23 production documents (74%) carry no
-                               file and 22 of 23 carry no body, so "nothing
-                               attached" is the ORDINARY case here. It is worded
-                               as a plain fact, never as an error. */
-                            <p className="text-[11px] mt-1.5" style={{ color: SOFT, fontFamily: OUTFIT }}>
-                              Tabled by title and sponsors. No file or text attached.
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </NeuInset>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 // ── Recap modal ─────────────────────────────────────────────────────────────
 
-export type RecapTab = 'overview' | 'documents' | 'scoreboard' | 'feedback' | 'attendance' | 'awards';
+export type RecapTab = 'overview' | 'documents' | 'scoreboard' | 'history' | 'attendance' | 'awards';
 
 /** THE RECAP IS NO LONGER ONE LONG SCROLL.
  *
@@ -1111,12 +657,15 @@ export type RecapTab = 'overview' | 'documents' | 'scoreboard' | 'feedback' | 'a
  *  So the five sections that used to be stacked in one column are five panels
  *  behind a bookmark rail, and NOT ONE OF THEM WAS REBUILT:
  *
- *    Documents   → `DocumentsRecap`            (unchanged, same type filter)
- *    Scoreboard  → `CommitteeScoreboardBody`   (the exact body the standalone
- *                                               Points modal renders)
- *    Feedback    → `FeedbackRecap`             (unchanged)
+ *    Documents   → `SessionDocuments`          (23 Sep 2026: the chair's voting
+ *                                               picker look, every paper a card)
+ *    Scoreboard  → `SessionScoreboardBoard`    (23 Sep 2026: the chair's own
+ *                                               Ranking + Matrix, read only)
+ *    History     → `SessionScoreboardBoard`    (23 Sep 2026: was "Chair
+ *                                               feedback"; the chair's History tab)
  *    Attendance  → `RosterBody`                (the exact body `RosterModal`
- *                                               renders)
+ *                                               renders: the roll-call look and
+ *                                               the status timeline)
  *    Broadcast   → `BroadcastComposer`, via `onBroadcast`
  *
  *  BROADCAST IS AN ACTION TAB, not a panel, and that is deliberate:
@@ -1133,7 +682,6 @@ export type RecapTab = 'overview' | 'documents' | 'scoreboard' | 'feedback' | 'a
  *  Escape stack are untouched; they still come from `ModalShell`. */
 export function RecapModal({
   data, onClose, onOpenScoreboard, onBroadcast, floorDetail = null, initialDocFilter = 'all',
-  scoreboard = null, scoreboardLoading = false, scoreboardError = '', onWantScoreboard,
   conferenceSlug, awardsConfig, awardsPublishedAt, conferenceEndDate = null,
 }: {
   data: LiveCommittee;
@@ -1157,13 +705,6 @@ export function RecapModal({
   /** Broadcast scoped to THIS room. Absent when the committee has no session to
    *  address. */
   onBroadcast: ((d: LiveCommittee) => void) | null;
-  /** The whole-conference scoreboard, loaded lazily and once by the page. Null
-   *  until the reader opens a Points view — which is what `onWantScoreboard`
-   *  tells the page has happened. */
-  scoreboard?: ConferenceScoreboard | null;
-  scoreboardLoading?: boolean;
-  scoreboardError?: string;
-  onWantScoreboard?: () => void;
   conferenceSlug: string;
   /** `getAwardsConfig(conference.awards_config)` and `conference.awards_published_at`,
    *  passed in from the page so the Awards tab can name the slate's state
@@ -1188,17 +729,24 @@ export function RecapModal({
 
   const [tab, setTab] = useState<RecapTab>(initialDocFilter === 'all' ? 'overview' : 'documents');
   const [docFilter, setDocFilter] = useState<DocFilter>(initialDocFilter);
+  // The session itself, read the way the chair's console reads it, for the
+  // Scoreboard, History and Documents tabs. Loaded the first time one of them is
+  // opened and kept (polled) from then on, so switching tabs never reloads it.
+  const [wantsSession, setWantsSession] = useState(initialDocFilter !== 'all');
+  const live = useSessionCommittee(wantsSession ? session?.code : null);
 
   function openDocs(type: DocFilter) {
     setDocFilter(type);
+    setWantsSession(true);
     setTab('documents');
   }
   function openScoreboardTab() {
-    // The page loads the conference scoreboard lazily and once; this is what
-    // tells it a reader has asked for it. Calling it from the click rather than
-    // from an effect keeps it to exactly one call per press.
-    onWantScoreboard?.();
+    setWantsSession(true);
     setTab('scoreboard');
+  }
+  function openHistoryTab() {
+    setWantsSession(true);
+    setTab('history');
   }
 
   // Speech-only: `speechLogs` no longer carries motions, rights of reply or
@@ -1251,9 +799,9 @@ export function RecapModal({
         title="The full delegate performance table, the same one the chairs score from"
       />
       <RailTab
-        side={side} icon={MessageSquareText} label="Chair feedback" count={data.feedback.length}
-        active={tab === 'feedback'} onClick={() => setTab('feedback')}
-        title="Ratings and private notes the dais has written, per delegation"
+        side={side} icon={HistoryIcon} label="History"
+        active={tab === 'history'} onClick={openHistoryTab}
+        title="The session in the order it happened: every debate, motion and speech, with the chairs' comments"
       />
       <RailTab
         side={side} icon={Users} label="Attendance" count={votingTotal}
@@ -1405,22 +953,22 @@ export function RecapModal({
       )}
 
       {tab === 'documents' && (
-        <DocumentsRecap data={data} filter={docFilter} onFilter={setDocFilter} />
+        <SessionLoadState loading={live.loading && !live.data} error={live.error} hasSession={!!session}>
+          {live.data && <SessionDocuments committee={live.data.committee} voteStates={live.data.voteStates} initialFilter={docFilter} />}
+        </SessionLoadState>
       )}
 
       {tab === 'scoreboard' && (
-        <CommitteeScoreboardBody
-          committeeId={data.conf.id}
-          scoreboard={scoreboard}
-          loading={scoreboardLoading}
-          error={scoreboardError}
-          hasSession={!!session}
-          delegationSize={data.conf.delegationSize ?? 1}
-          conferenceSlug={conferenceSlug}
-        />
+        <SessionLoadState loading={live.loading && !live.data} error={live.error} hasSession={!!session}>
+          {live.data && <SessionScoreboardBoard committee={live.data.committee} feedback={live.data.feedback} tabs={['ranking', 'matrix']} />}
+        </SessionLoadState>
       )}
 
-      {tab === 'feedback' && <FeedbackRecap data={data} />}
+      {tab === 'history' && (
+        <SessionLoadState loading={live.loading && !live.data} error={live.error} hasSession={!!session}>
+          {live.data && <SessionScoreboardBoard committee={live.data.committee} feedback={live.data.feedback} tabs={['history']} showChips={false} />}
+        </SessionLoadState>
+      )}
 
       {tab === 'attendance' && <RosterBody data={data} />}
 
@@ -1455,12 +1003,6 @@ export function RecapModal({
 
 // ── Roster / present-delegate detail modal ──────────────────────────────────
 
-/** Present/absent visual language, forest-ivory. */
-function statusMeta(status: string): { label: string; color: string; ring: string; dot: string } {
-  if (status === 'present-voting') return { label: 'Present & Voting', color: NEU.forest, ring: 'rgba(27,56,40,0.32)', dot: NEU.forest };
-  if (status === 'present') return { label: 'Present', color: GREEN_INK, ring: 'rgba(61,122,82,0.30)', dot: NEU.green };
-  return { label: 'Absent', color: SOFT, ring: 'rgba(154,138,120,0.30)', dot: SOFT };
-}
 
 /** Small forest disc holding a chair's initials — a lightweight avatar. */
 function ChairAvatar({ name, size = 30 }: { name: string; size?: number }) {
@@ -1592,145 +1134,21 @@ export function RosterModal({ data, onClose }: { data: LiveCommittee; onClose: (
  *  the same roll rather than a second, thinner version of it. Only the heading
  *  differs, so only the heading lives outside this. */
 export function RosterBody({ data }: { data: LiveCommittee }) {
-  const [expanded, setExpanded] = useState<string | null>(null);
-
-  // Total speaking time + speech count per country, summed from the speaking logs
-  // already assembled for this committee (messages sender='__system__' → __log__).
-  const speakingByCountry = new Map<string, { seconds: number; speeches: number }>();
-  for (const log of data.speechLogs) {
-    const prev = speakingByCountry.get(log.country) ?? { seconds: 0, speeches: 0 };
-    speakingByCountry.set(log.country, { seconds: prev.seconds + (log.seconds || 0), speeches: prev.speeches + 1 });
-  }
-
-  // Present first (present-voting, then present), absent last; alphabetical within
-  // each band. Observers sort last — they are in the room but not in the body.
-  const rank = (s: string) => (s === 'present-voting' ? 0 : s === 'present' ? 1 : 2);
-  const roster = [...data.delegates].sort((a, b) =>
-    Number(a.isObserver) - Number(b.isObserver)
-    || rank(a.status) - rank(b.status)
-    || a.country.localeCompare(b.country));
-
-  // Counts are over the voting body only, so this modal agrees with the chair's
-  // own "N present" rather than quietly counting observers as delegations.
-  const body = votingBody(data);
-  const { present, total } = presence(data);
-  const voting = body.filter((d) => d.status === 'present-voting').length;
-  const observers = data.delegates.length - total;
   const chairNames = data.session?.chairNames ?? [];
-
   return (
     <>
-      {/* Present / voting summary */}
-      <div className="grid grid-cols-3 gap-3 mt-4 mb-5">
-        <StatTile icon={Users} emoji="Busts in silhouette" gradient={NEU_GRADIENTS.sage} value={`${present}/${total}`} label="Present" />
-        <StatTile icon={CheckCircle2} emoji="Ballot box with ballot" gradient={NEU_GRADIENTS.forest} value={String(voting)} label="Present & voting" />
-        <StatTile icon={Users} emoji="Busts in silhouette" gradient={NEU_GRADIENTS.amber} value={String(total - present)} label="Absent" />
-      </div>
-      {observers > 0 && (
-        <p className="text-[11px] -mt-3 mb-4" style={{ color: SOFT, fontFamily: OUTFIT }}>
-          Plus {observers} observer{observers === 1 ? '' : 's'}, listed below but outside the voting body.
-        </p>
-      )}
-
-      {/* Chairs — names + small avatars (shown with the detail per spec) */}
-      <div className="mb-5">
+      <div className="mt-4 mb-5">
         <ChairStrip chairs={data.conf.chairs} chairNames={chairNames} pending={data.conf.pendingChairs} />
       </div>
-
-      {/* Roster list — click a delegate to expand full detail */}
-      <Eyebrow>Delegations</Eyebrow>
-      {roster.length === 0 ? (
-        <p className="text-sm mt-2" style={{ color: SOFT, fontFamily: OUTFIT }}>No delegates on the roster yet.</p>
-      ) : (
-        <div className="mt-2 flex flex-col gap-2">
-          {roster.map((d) => {
-            const meta = statusMeta(d.status);
-            const isOpen = expanded === d.country;
-            const spoken = speakingByCountry.get(d.country) ?? { seconds: 0, speeches: 0 };
-            return (
-              <NeuInset key={d.country} style={{ borderRadius: 14, overflow: 'hidden' }}>
-                <button
-                  onClick={() => setExpanded(isOpen ? null : d.country)}
-                  className="w-full flex flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-3 text-left focus:outline-none"
-                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: OUTFIT, minHeight: 48 }}
-                >
-                  <span
-                    className="flex items-center justify-center rounded-full overflow-hidden flex-shrink-0"
-                    style={{ width: 34, height: 34, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
-                  >
-                    <CircleFlag code={flagCodeFor(d.country) || null} label={d.country} size={34} decorative />
-                  </span>
-                  {/* Same wrap rule as the feedback row above: the status pill
-                      ("PRESENT & VOTING") and the chevron are unshrinkable and
-                      left the caption 63px at 375px, truncating "Represents
-                      Germany". They drop to a second line instead. */}
-                  <div className="min-w-0 flex-1 basis-[140px]">
-                    {/* Name = the delegation's country (delegates join by nation; no personal name is stored) */}
-                    <p className="text-sm font-extrabold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{d.country}</p>
-                    <p className="text-[11px] truncate" style={{ color: SOFT, fontFamily: OUTFIT }}>
-                      {d.isObserver ? 'Observer, not part of the voting body' : `Represents ${d.country}`}
-                    </p>
-                  </div>
-                  <span
-                    className="inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2.5 py-1 rounded-full flex-shrink-0 ms-auto"
-                    style={{ color: meta.color, backgroundColor: NEU.surface, boxShadow: `0 0 0 1.5px ${meta.ring}, ${NEU.outSm}`, fontFamily: OUTFIT, letterSpacing: '0.04em' }}
-                  >
-                    <span className="rounded-full" style={{ width: 7, height: 7, backgroundColor: meta.dot }} />
-                    {meta.label}
-                  </span>
-                  <ChevronDown
-                    size={16}
-                    style={{ color: SOFT, flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: `transform 200ms ${EASE}` }}
-                  />
-                </button>
-
-                {isOpen && (
-                  <div className="px-3.5 pb-3.5 pt-1" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
-                    {/* Full detail: total speaking time (sourced from speech logs) */}
-                    <div className="flex items-center gap-2 mt-3">
-                      <NeuIconDisc gradient={NEU_GRADIENTS.forest} emoji="Studio microphone" icon={Mic} size={30} />
-                      <div className="min-w-0">
-                        <p className="text-[10px] font-bold uppercase" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.08em' }}>Total speaking time</p>
-                        <p className="text-base font-black leading-none mt-0.5" style={{ color: NEU.ink, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
-                          {fmtClock(spoken.seconds)}
-                          <span className="text-[11px] font-bold ml-2" style={{ color: SOFT }}>
-                            {spoken.speeches} {spoken.speeches === 1 ? 'speech' : 'speeches'}
-                          </span>
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Status metadata. The delegates table stores only country/status/is_observer —
-                        there is no updated_at or roll-call timestamp column, so these are surfaced
-                        honestly as "not tracked" rather than fabricated.
-                        TODO(schema): add delegates.status_changed_at + delegates.last_roll_call_at
-                        (and expose them in live/page.tsx's delegates select) to fill these in. */}
-                    <div className="grid grid-cols-2 gap-2 mt-3">
-                      <div className="flex items-center gap-2">
-                        <Clock size={14} style={{ color: SOFT, flexShrink: 0 }} />
-                        <div className="min-w-0">
-                          <p className="text-[10px] font-bold uppercase" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>Status changed</p>
-                          <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT }}>Not tracked in schema</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Timer size={14} style={{ color: SOFT, flexShrink: 0 }} />
-                        <div className="min-w-0">
-                          <p className="text-[10px] font-bold uppercase" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>Last roll call</p>
-                          <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT }}>Not tracked in schema</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </NeuInset>
-            );
-          })}
-        </div>
-      )}
+      <SessionAttendance
+        sessionId={data.session?.id ?? null}
+        seats={data.delegates}
+        endedAt={data.session?.endedAt ?? null}
+      />
     </>
   );
 }
+
 
 // ── Awards tab (inside the recap) ───────────────────────────────────────────
 //
