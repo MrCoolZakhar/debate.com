@@ -98,17 +98,18 @@ export const UNLIMITED_REGION_A = new Set<string>([
   'AE', 'SA', 'QA', 'KW', 'BH', 'OM', 'IL', 'JO', 'LB', 'IQ', 'TR', 'EG',
 ]);
 
-/** Gavelling Unlimited pricing for display purposes only — the server
- *  (create-subscription-checkout) recomputes and enforces the real price by
- *  the buyer's location. Keep in sync with that function: region A when the
- *  code is in UNLIMITED_REGION_A, or when the code is null/unknown (missing
- *  geo defaults to region A, same as the server), else region B. */
-export function unlimitedPricing(countryCode: string | null): { monthly: number; yearly: number; currency: string } {
-  const code = countryCode?.toUpperCase();
-  const isRegionA = !code || UNLIMITED_REGION_A.has(code);
-  return isRegionA
-    ? { monthly: 5, yearly: 45, currency: 'USD' }
-    : { monthly: 2.5, yearly: 25, currency: 'USD' };
+/** Gavelling Unlimited is USD 3/month or USD 30/year everywhere. No regional
+ *  split: this is display only, and create-subscription-checkout v9 is the
+ *  real price, a flat 300 or 3000 cents with no region lookup of its own, so
+ *  the two cannot disagree the way a client-side region list and a
+ *  server-side one once did. The countryCode parameter is kept, unused, so
+ *  every call site keeps compiling and so a future regional split has one
+ *  obvious place to come back to. The old region branch was removed rather
+ *  than renumbered: two copies of one price is exactly what produced a page
+ *  quoting one number while Stripe charged another. Yearly ($30 against
+ *  $36 at the monthly rate) reads as two months free. */
+export function unlimitedPricing(_countryCode: string | null): { monthly: number; yearly: number; currency: string } {
+  return { monthly: 3, yearly: 30, currency: 'USD' };
 }
 
 /** A Gavelling credit is USD 1 everywhere. No regional split: this is

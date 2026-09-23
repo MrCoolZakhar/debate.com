@@ -57,8 +57,8 @@ function lapsedUnlimitedCopy(sub: Subscription): string {
 // accent — reads as "over", not as a warning.
 const ENDED_GRADIENT: [string, string] = ['#9A8A78', '#6B5F52'];
 
-/** Monthly button: "$5 A MONTH". Annual button: "$3.75 A MONTH · BILLED
- *  ANNUALLY ($45)", the annual total divided evenly across 12 months, both
+/** Monthly button: "$3 A MONTH". Annual button: "$2.50 A MONTH · BILLED
+ *  ANNUALLY ($30)", the annual total divided evenly across 12 months, both
  *  derived from unlimitedPricing(code) so the copy always matches whatever
  *  the server actually charges. */
 function monthlyLabel(price: { monthly: number; currency: string }): string {
@@ -269,7 +269,8 @@ export default function UnlimitedPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, session?.access_token]);
 
-  // ── Purchase surface: the buyer's own country decides the region price ──
+  // ── Purchase surface: Unlimited is flat everywhere; Pro still prices by
+  // the buyer's country (proPricing below), so the geo lookup stays. ──
   const [geoCountry, setGeoCountry] = useState<string | null>(null);
   useEffect(() => {
     fetch('/api/geo')
