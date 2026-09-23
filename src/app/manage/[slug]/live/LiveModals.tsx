@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { X, Mic, FileText, ScrollText, Users, Gavel, Trophy, History as HistoryIcon, ExternalLink, Clock, Megaphone, Radio, Medal } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -16,6 +16,7 @@ import Portal from '@/components/Portal';
 import ProfileLink from '@/components/ProfileLink';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { useModalEscape } from '@/components/ModalOverlay';
+import { useDialogFocusTrap } from '@/components/dialogFocus';
 import Avatar from '@/components/Avatar';
 import {
   NeuInset, NeuIconDisc, NEU, NEU_GRADIENTS, type NeuGradient, OUTFIT, EASE,
@@ -323,10 +324,13 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
  *
  *  `rail` is the bookmark strip — see `ModalRail` below. It is rendered OUTSIDE
  *  the scrolling card on purpose. */
-export function ModalShell({ children, onClose, maxWidth = 672, rail }: {
+export function ModalShell({ children, onClose, maxWidth = 672, rail, label }: {
   children: React.ReactNode;
   onClose: () => void;
   maxWidth?: number;
+  /** Accessible name when the content has no heading. Normally not needed:
+   *  the dialog is labelled by the first h1/h2/h3 inside it. */
+  label?: string;
   /** Tabs pinned to the modal's edge. MUST NOT scroll with the body and MUST
    *  NOT be clipped by it, so it is a SIBLING of the scroll container rather
    *  than a child — see the layout note in the body. */
@@ -344,6 +348,60 @@ export function ModalShell({ children, onClose, maxWidth = 672, rail }: {
      the `w-full` + maxWidth sizing the card below relies on. */
   useScrollLock(true);
   useModalEscape(onClose);
+
+  /* A real modal dialog (23 Sep 2026): role="dialog" + aria-modal on the
+     panel (card AND rail), labelled by its own heading, focus moved into it on
+     open, Tab trapped inside (the shared GrowDialog trap, which lets a confirm
+     or popover portaled AFTER this layer keep focus), and focus handed back to
+     whatever opened it on close. Escape is the shared stack above. */
+  const titleId = useId();
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const layerRef = useRef<HTMLDivElement | null>(null);
+  const closingRef = useRef(false);
+  const focusedRef = useRef(false);
+  // Captured during the first render, before the dialog exists, so it is the
+  // control that opened it (Portal mounts its children a render later).
+  const [returnTo] = useState<HTMLElement | null>(() =>
+    typeof document === 'undefined' ? null : (document.activeElement as HTMLElement | null));
+  useDialogFocusTrap(dialogRef, layerRef, closingRef);
+  const labelFromHeading = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return;
+    const h = node.querySelector<HTMLElement>('h1, h2, h3');
+    if (h) {
+      if (!h.id) h.id = titleId;
+      if (node.getAttribute('aria-labelledby') !== h.id) node.setAttribute('aria-labelledby', h.id);
+    }
+  }, [titleId]);
+  const setDialogNode = useCallback((node: HTMLDivElement | null) => {
+    dialogRef.current = node;
+    if (!node) return;
+    labelFromHeading(node);
+    if (!focusedRef.current) {
+      focusedRef.current = true;
+      node.focus({ preventScroll: true });
+    }
+  }, [labelFromHeading]);
+  // The heading can change (a tab switch re-renders the body): keep the label.
+  useLayoutEffect(() => { labelFromHeading(dialogRef.current); });
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    closingRef.current = false;
+    return () => {
+      mountedRef.current = false;
+      closingRef.current = true;
+      // Deferred, and only when the shell is really gone: React's StrictMode
+      // unmounts and re-mounts effects once in dev (the re-run sets
+      // mountedRef back to true before this fires), which would otherwise send
+      // focus back to the trigger and leave the trap switched off.
+      setTimeout(() => {
+        if (mountedRef.current) { closingRef.current = false; return; }
+        if (returnTo && returnTo.isConnected && returnTo !== document.body) {
+          returnTo.focus({ preventScroll: true });
+        }
+      }, 0);
+    };
+  }, [returnTo]);
 
   // The narrow bookmark strip is ONE scrolling row, so the tab you are on can
   // be off-screen. Bring it back whenever the active bookmark CHANGES.
@@ -391,6 +449,7 @@ export function ModalShell({ children, onClose, maxWidth = 672, rail }: {
           instead of the card, which is what "tucked under the card's edge"
           means once the tabs are part of the object. */}
       <div
+        ref={layerRef}
         className={`fixed inset-0 z-50 flex items-center justify-center px-3 py-5 sm:px-4 sm:py-8${rail ? ' lg:pe-[156px]' : ''}`}
         style={{ backgroundColor: 'rgba(27,20,16,0.42)' }}
         onClick={onClose}
@@ -421,7 +480,12 @@ export function ModalShell({ children, onClose, maxWidth = 672, rail }: {
             active tab is scrolled into view on mount and on change, so the tab
             you are on is never the one off-screen. */}
         <div
-          className="w-full relative flex flex-col min-h-0"
+          ref={setDialogNode}
+          role="dialog"
+          aria-modal="true"
+          aria-label={label}
+          tabIndex={-1}
+          className="w-full relative flex flex-col min-h-0 focus:outline-none"
           style={{ maxWidth }}
           onClick={(e) => e.stopPropagation()}
         >

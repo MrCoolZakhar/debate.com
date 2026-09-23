@@ -21,6 +21,21 @@
 
 import type { CSSProperties, ReactNode } from 'react';
 import { getCountryByName, UN_COUNTRIES } from '@/lib/countries';
+import { committeeDisplayName } from '@/lib/presetNames';
+
+/**
+ * THE committee label on the allocation portal, everywhere (23 Sep 2026): the
+ * committee's stored `abbreviation` when it has one, else committeeDisplayName
+ * of the full name. Never an acronym derived from the words: that is how
+ * "Disarmament and International Security Committee" became "DISC" beside a
+ * spelled-out "United Nations Security Council". Put the full name in the
+ * tooltip (`title={c.name}`) wherever this is shown.
+ */
+export function committeeShortName(c: { name?: string | null; abbreviation?: string | null } | null | undefined, fallback = 'Unknown committee'): string {
+  const ab = (c?.abbreviation ?? '').trim();
+  if (ab) return ab;
+  return committeeDisplayName(c?.name ?? '') || fallback;
+}
 
 /** Canonical roster name (src/lib/countries.ts) -> what a secretariat writes. */
 const SHORT_BY_CANONICAL: Record<string, string> = {

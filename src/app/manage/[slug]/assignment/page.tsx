@@ -13,7 +13,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getCountryByName } from '@/lib/countries';
 import { CircleFlag } from '@/components/CircleFlag';
 import { FitTip, explainReason, missingSignals, type ReasonContext } from '@/app/manage/[slug]/assignment/fitReasons';
-import { CountryName, StackedName } from '@/app/manage/[slug]/assignment/displayNames';
+import { CountryName, StackedName, committeeShortName } from '@/app/manage/[slug]/assignment/displayNames';
 import { effectiveSlotArt, parseGroups, type SlotGroup } from '@/lib/slotGroups';
 import { friendlyError } from '@/lib/friendlyError';
 import { ageAt } from '@/lib/age';
@@ -45,7 +45,7 @@ interface AppPref {
   country_code: string;
   country_name: string;
   conference_committee_id: string;
-  conference_committees: { name: string } | null;
+  conference_committees: { name: string; abbreviation: string | null } | null;
 }
 
 interface AcceptedApp {
@@ -814,27 +814,14 @@ function ageOf(app: { date_of_birth?: string | null; profiles?: { date_of_birth?
   return ageAt(dob);
 }
 
-// Committee naming rule: a long full name collapses to an ACRONYM as the big
-// primary label, with the full name shown small beneath. Prefer an explicit
-// abbreviation; otherwise auto-derive initials from a >4-word name (dropping
-// connective stop-words). The subtitle is the full name, shown only when it
-// actually differs from the big label.
-const ACRONYM_STOP = new Set(['and', 'of', 'the', 'for', 'a', 'an', 'on', 'in', 'to', 'de', 'du', 'des', 'la', 'le']);
-function autoAcronym(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .filter(w => !ACRONYM_STOP.has(w.toLowerCase()))
-    .map(w => (/[A-Za-z0-9]/.test(w[0]) ? w[0].toUpperCase() : ''))
-    .join('');
-}
-function committeeLabels(c: { name: string; abbreviation: string | null }): { big: string; full: string | null } {
+// Committee naming rule, one for the whole portal: the stored abbreviation,
+// else committeeDisplayName of the full name (committeeShortName in
+// displayNames.tsx). No acronym is ever DERIVED from the words: preference
+// lines used to read only the name and auto-built "DISC" for DISEC. The
+// subtitle is the full name, shown only when it differs from the big label.
+function committeeLabels(c: { name: string; abbreviation?: string | null }): { big: string; full: string | null } {
   const name = (c.name ?? '').trim();
-  const ab = (c.abbreviation ?? '').trim();
-  const words = name.split(/\s+/).filter(Boolean);
-  let big = ab;
-  if (!big && words.length > 4) big = autoAcronym(name);
-  if (!big) big = name;
+  const big = committeeShortName(c);
   const full = big.toLowerCase() !== name.toLowerCase() ? name : null;
   return { big, full };
 }
@@ -1141,7 +1128,7 @@ async function findExistingSeat(
   const cc = Array.isArray(row.conference_committees) ? row.conference_committees[0] : row.conference_committees;
   return {
     committeeId: row.conference_committee_id,
-    label: cc ? (cc.abbreviation || cc.name) : 'another committee',
+    label: cc ? committeeShortName(cc) : 'another committee',
     country: row.country_name ?? null,
   };
 }
@@ -1533,8 +1520,8 @@ function DelegateDetail({
       <div key={p.preference_order} className="flex items-center gap-2 min-w-0">
         <PrefRankBadge order={p.preference_order} />
         <CountryFlag code={p.country_code} w={18} h={13} radius={2} alt={p.country_name} />
-        <span className="flex-1 min-w-0" style={{ fontSize: 12, color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.3 }} title={`${p.conference_committees?.name ?? 'Unknown'} · ${p.country_name}`}>
-          <span style={{ fontWeight: 700 }}>{committeeLabels({ name: p.conference_committees?.name ?? 'Unknown', abbreviation: null }).big}</span> · <CountryName name={p.country_name} code={p.country_code} />
+        <span className="flex-1 min-w-0" style={{ fontSize: 12, color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.3 }} title={`${p.conference_committees?.name ?? 'Unknown committee'} · ${p.country_name}`}>
+          <span style={{ fontWeight: 700 }}>{committeeShortName(p.conference_committees)}</span> · <CountryName name={p.country_name} code={p.country_code} />
         </span>
         {isMatch && (
           <span title="Matches the seat in view" style={{ flexShrink: 0, lineHeight: 0 }}>
@@ -1685,7 +1672,7 @@ function DropAllocateModal({ committee, app, needy = false, pushDraftNotice, onC
     setBusySlotId(null);
     allocatingRef.current = false;
     if (err) { setError(err); return; }
-    onAssigned(slot, seat, `${app.profiles?.display_name ?? app.invited_name} allocated to ${slot.country_name} in ${committee.abbreviation ?? committee.name}.`);
+    onAssigned(slot, seat, `${app.profiles?.display_name ?? app.invited_name} allocated to ${slot.country_name} in ${committeeShortName(committee)}.`);
     onClose();
   }
 
@@ -1703,7 +1690,7 @@ function DropAllocateModal({ committee, app, needy = false, pushDraftNotice, onC
               <span>{app.profiles?.display_name ?? app.invited_name}</span>
               <ArrowRight size={14} style={{ color: NEU.muted }} />
               <LogoDisc bare src={committee.logo_url} size={30} fallbackText={committeeLabels(committee).big} alt={committee.name} />
-              <span>{committeeLabels(committee).big}</span>
+              <span title={committee.name}>{committeeLabels(committee).big}</span>
             </h2>
           </div>
           <button onClick={onClose} className="focus:outline-none flex-shrink-0 mt-1" style={{ color: NEU.muted }}><X size={18} /></button>
@@ -1809,7 +1796,7 @@ function SocietyDropAllocateModal({ committee, society, onClose, onAssigned }: S
     setBusySlotId(null);
     allocatingRef.current = false;
     if (err) { setError(err); return; }
-    onAssigned(slot, `${slot.country_name} allocated to ${society.name} in ${committee.abbreviation ?? committee.name}.`);
+    onAssigned(slot, `${slot.country_name} allocated to ${society.name} in ${committeeShortName(committee)}.`);
     onClose();
   }
 
@@ -1826,7 +1813,7 @@ function SocietyDropAllocateModal({ committee, society, onClose, onAssigned }: S
               <span>{society.name}</span>
               <ArrowRight size={14} style={{ color: NEU.muted }} />
               <LogoDisc bare src={committee.logo_url} size={30} fallbackText={committeeLabels(committee).big} alt={committee.name} />
-              <span>{committeeLabels(committee).big}</span>
+              <span title={committee.name}>{committeeLabels(committee).big}</span>
             </h2>
           </div>
           <button onClick={onClose} className="focus:outline-none flex-shrink-0 mt-1" style={{ color: NEU.muted }}><X size={18} /></button>
@@ -1998,7 +1985,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
         <div className="flex items-center gap-2.5 mb-4">
           <LogoDisc bare src={committee.logo_url} size={40} fallbackText={committeeLabels(committee).big} alt={committee.name} />
           <div className="min-w-0">
-            <p style={{ fontSize: 18, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em' }}>
+            <p title={committee.name} style={{ fontSize: 18, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em' }}>
               {committeeLabels(committee).big}
             </p>
             {committeeLabels(committee).full && (
@@ -2066,8 +2053,8 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
                 return (
                   <div key={p.preference_order} className="flex items-center gap-2">
                     <PrefRankBadge order={p.preference_order} />
-                    <span className="text-xs" title={`${p.conference_committees?.name ?? 'Unknown'} · ${p.country_name}`} style={{ color: here ? NEU.forest : NEU.inkSoft, fontWeight: here ? 700 : 400, fontFamily: OUTFIT, lineHeight: 1.3 }}>
-                      {committeeLabels({ name: p.conference_committees?.name ?? 'Unknown', abbreviation: null }).big} · <CountryName name={p.country_name} code={p.country_code} />
+                    <span className="text-xs" title={`${p.conference_committees?.name ?? 'Unknown committee'} · ${p.country_name}`} style={{ color: here ? NEU.forest : NEU.inkSoft, fontWeight: here ? 700 : 400, fontFamily: OUTFIT, lineHeight: 1.3 }}>
+                      {committeeShortName(p.conference_committees)} · <CountryName name={p.country_name} code={p.country_code} />
                     </span>
                   </div>
                 );
@@ -2244,7 +2231,7 @@ function DelegationConflictModal({
     const { error: delErr } = await supabase.from('conference_allocations').delete().eq('id', sibling.id);
     if (delErr) {
       setBusy(null);
-      onResolved(`${appName} allocated to ${slot.country_name} (seat ${seat}) in ${committee.abbreviation ?? committee.name}, but the other seat holder could not be removed automatically. Deallocate them manually.`);
+      onResolved(`${appName} allocated to ${slot.country_name} (seat ${seat}) in ${committeeShortName(committee)}, but the other seat holder could not be removed automatically. Deallocate them manually.`);
       return;
     }
     if (sibling.application_id) {
@@ -2263,7 +2250,7 @@ function DelegationConflictModal({
       }
     }
     setBusy(null);
-    onResolved(`${appName} allocated to ${slot.country_name} (seat ${seat}) in ${committee.abbreviation ?? committee.name}. ${siblingHolderName} was removed from the other seat.`, sibling.id);
+    onResolved(`${appName} allocated to ${slot.country_name} (seat ${seat}) in ${committeeShortName(committee)}. ${siblingHolderName} was removed from the other seat.`, sibling.id);
   }
 
   async function handleAddIncomingToSibling() {
@@ -2283,10 +2270,10 @@ function DelegationConflictModal({
       .select('id');
     setBusy(null);
     if (socErr || !data || data.length !== 1) {
-      onResolved(`${appName} allocated to ${slot.country_name} (seat ${seat}) in ${committee.abbreviation ?? committee.name}, but could not be added to ${siblingName}. Set their delegation manually.`);
+      onResolved(`${appName} allocated to ${slot.country_name} (seat ${seat}) in ${committeeShortName(committee)}, but could not be added to ${siblingName}. Set their delegation manually.`);
       return;
     }
-    onResolved(`${appName} added to ${siblingName} and allocated to ${slot.country_name} (seat ${seat}) in ${committee.abbreviation ?? committee.name}.`);
+    onResolved(`${appName} added to ${siblingName} and allocated to ${slot.country_name} (seat ${seat}) in ${committeeShortName(committee)}.`);
   }
 
   // Mirror of handleAddIncomingToSibling: the incoming delegate is the one
@@ -2313,10 +2300,10 @@ function DelegationConflictModal({
       .select('id');
     setBusy(null);
     if (socErr || !data || data.length !== 1) {
-      onResolved(`${appName} allocated to ${slot.country_name} (seat ${seat}) in ${committee.abbreviation ?? committee.name}, but ${siblingHolderName} could not be added to ${incomingDelegationName}. Set their delegation manually.`);
+      onResolved(`${appName} allocated to ${slot.country_name} (seat ${seat}) in ${committeeShortName(committee)}, but ${siblingHolderName} could not be added to ${incomingDelegationName}. Set their delegation manually.`);
       return;
     }
-    onResolved(`${siblingHolderName} added to ${incomingDelegationName} and ${appName} allocated to ${slot.country_name} (seat ${seat}) in ${committee.abbreviation ?? committee.name}.`);
+    onResolved(`${siblingHolderName} added to ${incomingDelegationName} and ${appName} allocated to ${slot.country_name} (seat ${seat}) in ${committeeShortName(committee)}.`);
   }
 
   return (
@@ -2474,11 +2461,14 @@ function OccupiedSeatChip({ alloc, onRemoveAllocation }: { alloc: AllocationRow;
 }
 
 function CountrySlotGrid({
-  committee, flagSize = 28, maxHeight, onAssignSlot, onRemoveAllocation,
+  committee, flagSize = 28, maxHeight, inset = 0, onAssignSlot, onRemoveAllocation,
 }: {
   committee: CommitteeData;
   flagSize?: number;
   maxHeight?: number;
+  /** Inner padding of the (scrolling) grid. The scroll box clips its
+   *  children, so without it a pill's raised shadow is cut at the edges. */
+  inset?: number;
   onAssignSlot?: (slot: SlotRow, seat: number) => void;
   onRemoveAllocation?: (a: AllocationRow) => void;
 }) {
@@ -2517,7 +2507,7 @@ function CountrySlotGrid({
             <span
               key={slot.id}
               className="inline-flex items-center gap-1"
-              style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm, borderRadius: 9999, padding: 2 }}
+              style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm, borderRadius: 9999, padding: 2, maxWidth: '100%', minWidth: 0 }}
             >
               {flag}
               {Array.from({ length: slot.delegation_size }, (_, i) => i + 1).map(seatNum => {
@@ -2559,7 +2549,7 @@ function CountrySlotGrid({
             <span
               key={slot.id}
               className="inline-flex items-center gap-1"
-              style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm, borderRadius: 9999, padding: 2 }}
+              style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm, borderRadius: 9999, padding: 2, maxWidth: '100%', minWidth: 0 }}
             >
               {flag}
               <OccupiedSeatChip alloc={alloc} onRemoveAllocation={onRemoveAllocation} />
@@ -2594,7 +2584,7 @@ function CountrySlotGrid({
       </div>
     );
     return (
-      <div className="flex flex-col gap-2.5" style={maxHeight ? { maxHeight, overflowY: 'auto' } : undefined}>
+      <div className="flex flex-col gap-2.5" style={{ ...(maxHeight ? { maxHeight, overflowY: 'auto' as const } : {}), padding: inset || undefined }}>
         {sections.map(({ group, members }) => (
           <div key={group.id}>
             {header(group.name, group.color)}
@@ -2612,7 +2602,7 @@ function CountrySlotGrid({
   }
 
   return (
-    <div className="flex flex-wrap gap-1.5" style={maxHeight ? { maxHeight, overflowY: 'auto' } : undefined}>
+    <div className="flex flex-wrap gap-1.5" style={{ ...(maxHeight ? { maxHeight, overflowY: 'auto' as const } : {}), padding: inset || undefined }}>
       {slots.map(renderSlot)}
     </div>
   );
@@ -2649,7 +2639,7 @@ function CommitteeBoardPanel({
         onDropPanel(e.dataTransfer.getData('text/plain'));
       }}
       onClick={() => { if (selectable) onClickPanel(); else onOpenOverview(); }}
-      className="p-4 flex flex-col"
+      className="p-5 flex flex-col"
       style={{
         backgroundColor: NEU.surface,
         borderRadius: 22,
@@ -2677,7 +2667,7 @@ function CommitteeBoardPanel({
       >
         <LogoDisc bare src={committee.logo_url} size={54} fallbackText={labels.big} alt={committee.name} />
         <div className="min-w-0 flex-1">
-          <p className="truncate" style={{ fontSize: 22, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em', lineHeight: 1.05 }}>
+          <p title={committee.name} className="truncate" style={{ fontSize: 22, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em', lineHeight: 1.05 }}>
             {labels.big}
           </p>
           {labels.full && (
@@ -2710,7 +2700,13 @@ function CommitteeBoardPanel({
           committee overview. */}
       <div className="mt-3.5">
         <p style={{ fontSize: 10, color: NEU.deepGold, fontFamily: MONO, letterSpacing: '0.12em', fontWeight: 700, marginBottom: 7 }}>ALLOCATION OVERVIEW</p>
-        <CountrySlotGrid committee={committee} flagSize={24} maxHeight={210} onRemoveAllocation={onRemoveAllocation} />
+        {/* 4px inset inside the card's 20px padding: every pill and flag clears
+            the card edge by at least 24px, and their raised shadows are not
+            clipped by the scroll box (owner, 23 Sep 2026). Negative inline
+            margin keeps the flags aligned with the label above. */}
+        <div style={{ marginInline: -4 }}>
+          <CountrySlotGrid committee={committee} flagSize={24} maxHeight={214} inset={4} onRemoveAllocation={onRemoveAllocation} />
+        </div>
       </div>
 
     </div>
@@ -2842,7 +2838,7 @@ function CommitteeOverviewModal({
             <LogoDisc bare src={committee.logo_url} size={54} fallbackText={labels.big} alt={committee.name} />
             <div className="min-w-0">
               <div className="flex items-center gap-2 min-w-0">
-                <h2 className="truncate" style={{ fontSize: 24, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em', lineHeight: 1.05 }}>
+                <h2 title={committee.name} className="truncate" style={{ fontSize: 24, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em', lineHeight: 1.05 }}>
                   {labels.big}
                 </h2>
                 <CommitteeDifficultyBadge level={committee.difficulty} disc={30} glyph={20} />
@@ -3101,7 +3097,7 @@ function InviteChairModal({ conferenceId, committee, onClose, onInvited }: {
               <p style={{ margin: 0, fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', color: NEU.deepGold }}>
                 INVITE CHAIR
               </p>
-              <p className="font-bold text-[15px] mt-0.5 truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+              <p title={committee.name} className="font-bold text-[15px] mt-0.5 truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
                 {committeeLabels(committee).big}
               </p>
             </div>
@@ -3242,7 +3238,7 @@ function ChairBoardPanel({
       <div className="flex items-center gap-3">
         <LogoDisc bare src={committee.logo_url} size={54} fallbackText={labels.big} alt={committee.name} />
         <div className="min-w-0 flex-1">
-          <p className="truncate" style={{ fontSize: 22, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em', lineHeight: 1.05 }}>
+          <p title={committee.name} className="truncate" style={{ fontSize: 22, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em', lineHeight: 1.05 }}>
             {labels.big}
           </p>
           {labels.full && (
@@ -3626,7 +3622,7 @@ export default function AssignmentPage() {
           societies (name),
           application_preferences (
             preference_order, country_code, country_name, conference_committee_id,
-            conference_committees (name)
+            conference_committees (name, abbreviation)
           )
         `)
         .eq('conference_id', conference.id)
@@ -3644,7 +3640,7 @@ export default function AssignmentPage() {
             applications:application_id (
               invited_name, experience_level, role, is_head_delegate, society_id, payment_status, attending, invited_email,
               societies (name),
-              application_preferences (preference_order, country_code, country_name, conference_committee_id, conference_committees (name))
+              application_preferences (preference_order, country_code, country_name, conference_committee_id, conference_committees (name, abbreviation))
             )
           )
         `)
@@ -3955,7 +3951,7 @@ export default function AssignmentPage() {
       showFlash('err', heldRow.c.id === sug.committee.id
         ? ALREADY_IN_COMMITTEE_MESSAGE
         : alreadySeatedMessage({
-            label: heldRow.c.abbreviation ?? heldRow.c.name,
+            label: committeeShortName(heldRow.c),
             country: heldRow.a.country_name,
           }));
       // Open the room they are actually in: its overview list is where the
@@ -3979,7 +3975,7 @@ export default function AssignmentPage() {
     const conferenceId = conference.id;
 
     const tempRow = applyLocalAllocation(sug.committee, sug.app, sug.slot, seat, emailNow);
-    showFlash('ok', `${sug.app.profiles?.display_name ?? sug.app.invited_name} assigned to ${sug.slot.country_name} in ${sug.committee.abbreviation ?? sug.committee.name}.`);
+    showFlash('ok', `${sug.app.profiles?.display_name ?? sug.app.invited_name} assigned to ${sug.slot.country_name} in ${committeeShortName(sug.committee)}.`);
 
     (async () => {
       const err = await insertAllocation(
@@ -4031,7 +4027,7 @@ export default function AssignmentPage() {
   const allocationTargets: AllocationTarget[] = useMemo(() => {
     const out: AllocationTarget[] = [];
     for (const c of committees) {
-      const label = c.abbreviation ?? c.name;
+      const label = committeeShortName(c);
       for (const a of c.conference_allocations) {
         // Delegation (block) seats have no application_id — the society holds
         // the country until it hands the seat to one of its delegates, and
@@ -4261,7 +4257,7 @@ export default function AssignmentPage() {
 
   async function handleAssignChair(chairApp: ChairApp, committee: CommitteeData) {
     const name = chairApp.profiles?.display_name ?? 'this applicant';
-    const label = committee.abbreviation ?? committee.name;
+    const label = committeeShortName(committee);
     const { confirmed } = await confirm({
       title: 'Assign as chair?',
       body: `Assign ${name} as chair of ${label}?`,
@@ -4340,7 +4336,7 @@ export default function AssignmentPage() {
   // chair any other committee, a chair on two daises stays 'assigned' after
   // losing one of them.
   async function handleRemoveChair(userId: string, committee: CommitteeData, name: string) {
-    const label = committee.abbreviation ?? committee.name;
+    const label = committeeShortName(committee);
     const { confirmed } = await confirm({
       title: 'Remove chair?',
       body: `Remove ${name} from the ${label} dais?`,
@@ -4412,7 +4408,7 @@ export default function AssignmentPage() {
     const label = invite.profiles?.display_name ?? invite.email;
     const { confirmed } = await confirm({
       title: 'Revoke invite?',
-      body: `Revoke the chair invite sent to ${label} for ${committee.abbreviation ?? committee.name}?`,
+      body: `Revoke the chair invite sent to ${label} for ${committeeShortName(committee)}?`,
       confirmLabel: 'Revoke',
       danger: true,
     });
@@ -4887,7 +4883,7 @@ export default function AssignmentPage() {
                       <div className="flex items-center gap-1.5 mt-2 min-w-0" style={{ flexWrap: 'nowrap', overflow: 'hidden' }}>
                         <span className="inline-flex items-center gap-1.5 min-w-0" style={{ fontSize: 10, fontWeight: 800, color: NEU.forest, fontFamily: MONO }}>
                           <LogoDisc bare src={sug.committee.logo_url} size={18} fallbackText={committeeLabels(sug.committee).big} alt="" />
-                          <span className="truncate">{committeeLabels(sug.committee).big}</span>
+                          <span className="truncate" title={sug.committee.name}>{committeeLabels(sug.committee).big}</span>
                         </span>
                         <span className="flex items-center gap-1.5 flex-shrink-0">
                           {(() => {
@@ -5100,8 +5096,8 @@ export default function AssignmentPage() {
                             <div className="flex items-center gap-1.5 mt-2">
                               <PrefRankBadge order={1} size={16} />
                               <CountryFlag code={firstPref.country_code} w={17} h={12} radius={2} alt={firstPref.country_name} logoUrl={(() => { const cc = committees.find(c => c.id === firstPref.conference_committee_id); return cc ? committeeSeatLogo(cc, firstPref.country_code) : null; })()} />
-                              <span title={`${firstPref.conference_committees?.name ?? 'Unknown'} · ${firstPref.country_name}`} style={{ fontSize: 11, color: NEU.inkSoft, fontFamily: OUTFIT, lineHeight: 1.3 }}>
-                                {committeeLabels({ name: firstPref.conference_committees?.name ?? 'Unknown', abbreviation: null }).big} · <CountryName name={firstPref.country_name} code={firstPref.country_code} />
+                              <span title={`${firstPref.conference_committees?.name ?? 'Unknown committee'} · ${firstPref.country_name}`} style={{ fontSize: 11, color: NEU.inkSoft, fontFamily: OUTFIT, lineHeight: 1.3 }}>
+                                {committeeShortName(firstPref.conference_committees)} · <CountryName name={firstPref.country_name} code={firstPref.country_code} />
                               </span>
                             </div>
                           )}
@@ -5350,7 +5346,7 @@ export default function AssignmentPage() {
         <AssignConfirmDialog
           delegateName={confirmSuggestion.app.profiles?.display_name ?? confirmSuggestion.app.invited_name ?? 'This delegate'}
           countryName={confirmSuggestion.slot.country_name}
-          committeeLabel={confirmSuggestion.committee.abbreviation ?? confirmSuggestion.committee.name}
+          committeeLabel={committeeShortName(confirmSuggestion.committee)}
           emailsOnAssign={conference?.allocation_email_auto ?? true}
           remainingSuggestions={Math.max(0, suggestions.length - 1)}
           onCancel={() => setConfirmSuggestion(null)}

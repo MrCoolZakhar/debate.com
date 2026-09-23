@@ -18,7 +18,7 @@ import {
 } from '@/app/manage/[slug]/assignment/delegationShared';
 import { PersonAvatar } from '@/app/manage/[slug]/assignment/page';
 import { NEU, NEU_GRADIENTS, NeuCard, NeuInset, NeuButton, NeuIconDisc } from '@/components/neu';
-import { StackedName } from '@/app/manage/[slug]/assignment/displayNames';
+import { StackedName, committeeShortName } from '@/app/manage/[slug]/assignment/displayNames';
 import { Users } from 'lucide-react';
 
 function isHeadDelegate(m: PoolMember): boolean {
@@ -990,8 +990,8 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
                   <div className="flex-1 min-w-0">
                     <div style={{ fontFamily: OUTFIT }}><StackedName name={name} size={14} weight={700} color="#EED98A" restColor="rgba(238,217,138,0.78)" /></div>
                     {m.assigned_committee_id && (
-                      <p className="text-xs truncate" style={{ color: 'rgba(238,217,138,0.7)', fontFamily: OUTFIT }}>
-                        {m.assigned_committee?.abbreviation ?? m.assigned_committee?.name}, {m.assigned_country_name}
+                      <p className="text-xs truncate" title={m.assigned_committee?.name ?? undefined} style={{ color: 'rgba(238,217,138,0.7)', fontFamily: OUTFIT }}>
+                        {committeeShortName(m.assigned_committee)}, {m.assigned_country_name}
                       </p>
                     )}
                   </div>

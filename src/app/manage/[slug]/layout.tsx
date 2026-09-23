@@ -14,7 +14,7 @@ import Loader from '@/components/Loader';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
 import type { EmailTheme } from '@/lib/emailHtml';
 import type { ConferenceTheme } from '@/lib/theme';
-import { financialsAreReadOnly } from '@/lib/organizerPermissions';
+import { financialsAreReadOnly, isConferenceOwner } from '@/lib/organizerPermissions';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import NotificationStack from '@/components/notifications/NotificationStack';
@@ -810,8 +810,10 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     }
     setLoadFailed(false);
 
-    // Ownership check: organizer_id on the conference OR conference_organizers table
-    const owner = (confData as any).organizer_id === user!.id;
+    // Ownership check: organizer_id on the conference OR an owner row in
+    // conference_organizers (isConferenceOwner, the client twin of
+    // is_conference_owner()). The row is read below when the creator check fails.
+    const owner = isConferenceOwner(user!.id, (confData as any).organizer_id, null);
     setIsOwner(owner);
     if (!owner) {
       const { data: orgRow } = await supabase
@@ -839,7 +841,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
         // is_conference_owner() says in the database. Its permissions are
         // usually '{}', so reading them as a section list locked a co-owner
         // out of every section but the dashboard.
-        if ((orgRow as any).role === 'owner') setIsOwner(true);
+        if (isConferenceOwner(user!.id, (confData as any).organizer_id, (orgRow as any).role)) setIsOwner(true);
         setPermissions((orgRow.permissions ?? {}) as Record<string, boolean>);
       }
     }

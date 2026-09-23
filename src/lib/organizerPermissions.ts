@@ -150,3 +150,23 @@ export function financialsAreReadOnly(p: PermissionMap | undefined): boolean {
   if (perms[TEAM_KEY] === true) return false;
   return perms[FINANCIALS_READONLY_KEY] === true;
 }
+
+/**
+ * Is this user an OWNER of the conference? The client mirror of
+ * `is_conference_owner()` in the database: the creator (`conferences.organizer_id`)
+ * or any `conference_organizers` row with role 'owner' (a co-owner). Every
+ * creator also has an owner row (the `handle_new_conference` trigger), so the
+ * row alone is the truth; organizer_id is kept as a fallback for the instant
+ * before that row is readable. Never decide "owner" from organizer_id alone:
+ * that locked co-owners out of sections (fixed 23 Sep 2026).
+ * Platform admins are not owners here; callers that open everything to staff
+ * say so themselves.
+ */
+export function isConferenceOwner(
+  userId: string | null | undefined,
+  organizerId: string | null | undefined,
+  organizerRole: string | null | undefined,
+): boolean {
+  if (!userId) return false;
+  return organizerRole === 'owner' || (!!organizerId && organizerId === userId);
+}

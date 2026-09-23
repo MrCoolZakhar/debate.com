@@ -12,6 +12,7 @@ import { queueEventEmail, type QueueEventEmailResult } from '@/lib/emailEvents';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { ModalOverlay as SharedModalOverlay } from '@/components/ModalOverlay';
 import ProfileLink from '@/components/ProfileLink';
+import { committeeShortName } from '@/app/manage/[slug]/assignment/displayNames';
 
 // ── Shared bits (matches the visual language of the rest of this page) ─────────
 
@@ -710,8 +711,8 @@ export function PaidSlotChip({
           )}
         </div>
         {member.assigned_committee_id && (
-          <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-            {member.assigned_committee?.abbreviation ?? member.assigned_committee?.name}, {member.assigned_country_name}
+          <p className="text-xs truncate" title={member.assigned_committee?.name ?? undefined} style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+            {committeeShortName(member.assigned_committee)}, {member.assigned_country_name}
           </p>
         )}
       </div>
@@ -771,7 +772,7 @@ export function SwapConfirmModal({
   const sourceHasAllocation = !!source.assigned_committee_id;
   const [transfer, setTransfer] = useState(!sourceHasAllocation && !!target.assigned_committee_id);
   const sourceName = source.profiles?.display_name ?? 'this delegate';
-  const targetCommittee = target.assigned_committee?.abbreviation ?? target.assigned_committee?.name;
+  const targetCommittee = target.assigned_committee ? committeeShortName(target.assigned_committee) : undefined;
 
   return (
     <ConfirmModal

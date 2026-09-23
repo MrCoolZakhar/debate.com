@@ -26,7 +26,7 @@ import {
 } from '@/app/manage/[slug]/assignment/delegationShared';
 import { PersonAvatar } from '@/app/manage/[slug]/assignment/page';
 import { NEU, NeuCard, NeuInset, NeuButton } from '@/components/neu';
-import { StackedName } from '@/app/manage/[slug]/assignment/displayNames';
+import { StackedName, committeeShortName } from '@/app/manage/[slug]/assignment/displayNames';
 
 // ── Transfer / give-spot picker ─────────────────────────────────────────────
 // Searchable list of the conference's accepted/assigned delegates and head
@@ -132,7 +132,7 @@ function IndependentCard({
   const notAttending = !app.attending;
   const openSpot = paid && notAttending;
   const allocationLine = app.assigned_committee_id
-    ? `${app.assigned_committee?.abbreviation ?? app.assigned_committee?.name ?? 'Unknown committee'}, ${app.assigned_country_name}`
+    ? `${committeeShortName(app.assigned_committee)}, ${app.assigned_country_name}`
     : null;
 
   return (
@@ -156,7 +156,7 @@ function IndependentCard({
       </div>
 
       {allocationLine && (
-        <p className="text-xs truncate mt-2.5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{allocationLine}</p>
+        <p className="text-xs truncate mt-2.5" title={app.assigned_committee?.name ?? undefined} style={{ color: NEU.muted, fontFamily: OUTFIT }}>{allocationLine}</p>
       )}
 
       {openSpot && (
