@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Sparkles, Ticket, Crown, Coins, Infinity as InfinityIcon, Check, Loader2, Minus, Plus, ArrowLeft } from 'lucide-react';
+import { Sparkles, Ticket, Crown, Infinity as InfinityIcon, Check, Loader2, Minus, Plus, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useCredits } from '@/hooks/useCredits';
@@ -717,7 +717,7 @@ export default function UnlimitedPage() {
 
         {/* PRO card */}
         <NeuCard style={{ padding: '26px 24px', display: 'flex', flexDirection: 'column' }}>
-          <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={Coins} size={44} />
+          <CreditCoin size={44} title="Gavelling credit" />
           <h2 className="font-black text-lg mt-4 mb-1" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
             Gavelling Pro
           </h2>

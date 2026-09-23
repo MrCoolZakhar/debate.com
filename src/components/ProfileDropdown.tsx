@@ -39,7 +39,8 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { compareStartDate, hasConcluded } from '@/lib/conferenceDates';
-import { User, FileText, FileClock, CalendarDays, Sparkles, Coins, LogOut, ArrowRight, Ticket, Plus } from 'lucide-react';
+import { User, FileText, FileClock, CalendarDays, Sparkles, LogOut, ArrowRight, Ticket, Plus } from 'lucide-react';
+import { CreditCoin } from '@/components/CreditCoin';
 import { createPortal } from 'react-dom';
 import { useDraftCount, draftResumeHref } from '@/hooks/useDraftCount';
 import LiveNowMenuSection from '@/components/liveRooms/LiveNowMenuSection';
@@ -542,7 +543,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
               >
-                <Coins size={15} strokeWidth={2.1} style={{ color: '#9A8A78', flexShrink: 0 }} />
+                <CreditCoin size={16} />
                 <span className="flex-1">CREDITS &amp; SUBSCRIPTION</span>
                 <span
                   className="text-[10px] font-black px-1.5 py-0.5 rounded-full"
