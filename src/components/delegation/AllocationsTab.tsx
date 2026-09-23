@@ -193,7 +193,7 @@ function AssignPicker({ members, seatLabel, currentId, busy, onPick }: {
           <div ref={menu} role="dialog" aria-label="Choose a delegate for this seat"
             style={{ position: 'fixed', top: pos.top, left: pos.left, width: W, maxHeight: H, zIndex: 9999, display: 'flex', flexDirection: 'column', backgroundColor: NEU.surface, border: NEU.hairline, borderRadius: 14, padding: 8, boxShadow: '0 12px 28px -12px rgba(27,56,40,0.28)' }}>
             {members.length > 6 && (
-              <label className="flex items-center gap-2 mb-2" style={{ padding: '8px 10px', borderRadius: 10, backgroundColor: NEU.well, border: NEU.hairline }}>
+              <label className="flex items-center gap-2 mb-2" style={{ padding: '8px 10px', borderRadius: 10, backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
                 <Search size={14} strokeWidth={2.3} aria-hidden style={{ color: NEU.inkSoft }} />
                 <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search delegates" aria-label="Search delegates"
                   className="flex-1 outline-none bg-transparent" style={{ fontFamily: OUTFIT, fontSize: 16, color: NEU.ink }} />

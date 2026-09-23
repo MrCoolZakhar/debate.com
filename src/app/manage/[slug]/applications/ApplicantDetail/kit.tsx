@@ -51,7 +51,7 @@ export function SeatFlag({ name, code, size }: { name: string | null | undefined
       size={Math.round(size * 0.8)}
       label={name ?? undefined}
       ring={false}
-      style={{ borderRadius: 999, flexShrink: 0 }}
+      style={{ borderRadius: 999, flexShrink: 0, boxShadow: '0 2px 6px rgba(27,56,40,0.22)' }}
     />
   );
 }

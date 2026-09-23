@@ -7,7 +7,7 @@
 // backdrop) and mintConferenceSession (session minting for conference committees).
 
 import { useState, useEffect, useCallback } from 'react';
-import { X, UserPlus, Mail, Send, Landmark, Scale, Zap, Users2, Languages } from 'lucide-react';
+import { X, UserPlus, Mail, Send, Landmark, Scale, Zap, Users2 } from 'lucide-react';
 import { NEU, NEU_GRADIENTS, OUTFIT, NeuButton, type NeuGradient } from '@/components/neu';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { sessionClient } from '@/lib/sessionClient';
@@ -17,9 +17,9 @@ import { type RosterEntry } from '@/components/ConferenceRosterPicker';
 import {
   CommitteeIdentityPreview,
   CommitteeSetupFields,
+  CommitteeSeatsStep,
   SetupPrimaryButton,
   SetupGhostButton,
-  SetupStep,
   committeeSetupPreview,
   CommitteeTypeGlyph,
   committeeTypeAccent,
@@ -46,7 +46,7 @@ import {
 } from '@/lib/chairInvites';
 import { queueEventEmail } from '@/lib/emailEvents';
 import { friendlyError } from '@/lib/friendlyError';
-import { normaliseCommitteeLanguage } from '@/lib/committeeLanguage';
+import { normaliseCommitteeLanguage, DEFAULT_COMMITTEE_LANGUAGE } from '@/lib/committeeLanguage';
 
 // ── Design constants ──────────────────────────────────────────────────────────
 
@@ -454,14 +454,18 @@ function ChairsDock({ conferenceId, committeeId, committeeName }: {
 
   return (
     <div
-      className="flex flex-col"
-      /* The editor's third column (23 Sep 2026): no card of its own any more,
-         the column rule beside it is the edge. Scrolls inside itself. */
-      style={{ width: '100%', minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain' }}
+      className="flex flex-shrink-0 flex-col rounded-[24px]"
+      /* Its own card under the roster card (23 Sep 2026). Capped, so the
+         country list above keeps the height; scrolls inside itself only when a
+         dais is unusually long. */
+      style={{ width: '100%', maxHeight: 220, overflowY: 'auto', overscrollBehavior: 'contain', backgroundColor: NEU.surface, boxShadow: NEU.out }}
     >
-      <SetupStep step={3} id="ced-step-chairs" title="Chairs" />
+      <div className="px-4 pt-3.5 pb-2.5" style={{ borderBottom: '1px solid rgba(27,56,40,0.08)' }}>
+        <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.16em', color: '#8A6415' }}>THE DAIS</p>
+        <h3 className="font-bold mt-0.5" style={{ margin: 0, fontSize: 15, color: '#1C1410', fontFamily: OUTFIT }}>Chairs</h3>
+      </div>
 
-      <div className="pb-3 flex flex-col gap-2">
+      <div className="px-4 py-3 flex flex-col gap-2">
         {chairs === null ? (
           <div className="flex justify-center py-4"><div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} /></div>
         ) : chairs.length === 0 && invites.length === 0 ? (
@@ -536,7 +540,7 @@ function ChairsDock({ conferenceId, committeeId, committeeName }: {
         )}
       </div>
 
-      <div className="pb-2">
+      <div className="px-4 pb-4">
         {!expanded ? (
           <button
             onClick={() => setExpanded(true)}
@@ -669,7 +673,10 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   const [topics, setTopics] = useState<string[]>(existing?.topics ?? []);
   const [difficulty, setDifficulty] = useState(existing?.difficulty ?? 'intermediate');
   // conference_committees.working_language (src/lib/committeeLanguage.ts).
-  const [workingLanguage, setWorkingLanguage] = useState<string | null>(initialLanguage);
+  // English unless the committee already has a language (owner, 23 Sep 2026:
+  // "Language selection by default should be English"). An existing row with
+  // none shows English preselected, and saving writes it.
+  const [workingLanguage, setWorkingLanguage] = useState<string | null>(initialLanguage ?? DEFAULT_COMMITTEE_LANGUAGE);
   const [roster, setRoster] = useState<RosterEntry[]>(initialRoster ?? []);
   const [baselineRoster] = useState<RosterEntry[]>(initialRoster ?? []);
   // Seat groups (custom committees). Persisted whole into
@@ -821,7 +828,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
       logo_url: previewEmblem,
       delegation_size: delegationSize,
       groups: isCustom ? groups : [],
-      working_language: normaliseCommitteeLanguage(workingLanguage),
+      working_language: normaliseCommitteeLanguage(workingLanguage) ?? DEFAULT_COMMITTEE_LANGUAGE,
     }).select('id').single();
     if (err || !created) { setError(friendlyError(err, "Couldn't create the committee. Please try again.")); return false; }
     await supabase.from('committee_country_slots').insert(
@@ -1112,7 +1119,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
       total_slots: roster.length,
       logo_url: previewEmblem,
       groups: isCustom ? groups : [],
-      working_language: normaliseCommitteeLanguage(workingLanguage),
+      working_language: normaliseCommitteeLanguage(workingLanguage) ?? DEFAULT_COMMITTEE_LANGUAGE,
     }).eq('id', ex.id).select('id');
     if (ccErr || !ccUpd || ccUpd.length !== 1) {
       if (ccErr) console.error('[committee-editor]', ccErr);
@@ -1209,108 +1216,88 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   return (
     <>
     <ModalOverlay onClose={onClose} labelledBy="ced-title">
-      {/* ONE PANEL, THREE COLUMNS, NO PAGE SCROLL (23 Sep 2026, owner: "a lot of
-          things are just too big. At the top there is a bunch of extra space you
-          could use ... In an ideal world, no scrolling is needed").
+      {/* TWO PANELS, SIDE BY SIDE (23 Sep 2026, owner: "how it was before was
+          better. One panel should be the set-up, the other, outside of it,
+          should be the list of countries, similar to how the set-up works in
+          session set-up").
 
-          • The committee's live identity IS the title bar: emblem, acronym over
-            the full name, topic, with "Edit committee · <type>" as its eyebrow.
-            It used to be a title row PLUS an 84px identity block beneath it.
-          • Body: Committee | Seats | Chairs (edit only). The panel has a fixed
-            height; each column scrolls on its own if it must, and the seat list
-            fills the Seats column and scrolls INSIDE its own box, so a
-            190-country roster never pushes the dialog past the fold.
-          • Footer: the error line, then Cancel and Save, always in view.
+          • LEFT, the set-up card: the look from before the three-column pass
+            (title and type, the live identity, then steps 1 and 2 from the
+            SHARED CommitteeSetupFields, so it still matches the wizard), with
+            Cancel and Save at its foot.
+          • RIGHT, outside it, the roster card: step 2 (delegates per seat,
+            search, bundles, paste) above /create's delegation list (the count
+            as a large numeral, roomy rows with round flags on an inset well).
+            The list is the one thing that scrolls. Chairs (edit only, they
+            need a committee id) sit in their own card under it.
 
-          Measured budget at 1280x800: panel 1248 x 712 (the backdrop's gutter
-          is 88), header 84, footer 66, so the columns get about 530px, which
-          holds step 1 with three topics and step 2's add controls plus ~8 seat
-          rows without either column scrolling.
-
-          BELOW 1100px there is no room for three columns: the body becomes one
-          scrolling column (identity and footer stay pinned) and the seat list
-          caps itself at 360px. `dvh`, never `vh` (iOS Safari's vh is the large
-          viewport); `--gv-modal-gutter` comes from the backdrop. */}
+          From 1100px the pair is one fixed-height row that fits a 1280x800
+          screen: `--gv-modal-gutter` comes from the backdrop, and `dvh`, never
+          `vh` (iOS Safari's vh is the large viewport). Narrower, the two cards
+          stack in one scroller and the roster list caps itself. */}
       <style>{`
-        .gv-ced { height: min(780px, calc(100dvh - var(--gv-modal-gutter, 88px))); }
-        .gv-ced-body { display: flex; flex-direction: column; gap: 18px; overflow-y: auto; overscroll-behavior: contain; }
-        .gv-ced-body > * { flex-shrink: 0; }
-        .gv-ced-body > section:nth-of-type(2) > :last-child { max-height: 360px; }
+        .gv-ced-row { display: flex; flex-direction: column; gap: 14px; max-height: calc(100dvh - var(--gv-modal-gutter, 88px)); overflow-y: auto; overscroll-behavior: contain; }
+        .gv-ced-row > * { flex-shrink: 0; }
+        .gv-ced-roster { height: 620px; }
         @media (min-width: 1100px) {
-          .gv-ced-body { display: grid; overflow: hidden; gap: 0; grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); }
-          .gv-ced-body.gv-ced-3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) 248px; }
-          .gv-ced-body > * + * { border-inline-start: 1px solid rgba(27,56,40,0.09); padding-inline-start: 20px; margin-inline-start: 20px; }
-          .gv-ced-body > section:nth-of-type(2) > :last-child { max-height: none; }
+          .gv-ced-row { flex-direction: row; align-items: stretch; height: min(820px, calc(100dvh - var(--gv-modal-gutter, 88px))); overflow: visible; }
+          .gv-ced-main { flex: 1 1 auto; min-width: 0; overflow-y: auto; overscroll-behavior: contain; }
+          .gv-ced-side { flex: 0 0 clamp(340px, 38%, 440px); min-height: 0; }
+          .gv-ced-roster { height: auto; flex: 1 1 auto; min-height: 0; }
         }
       `}</style>
-      <div
-        className="gv-ced flex flex-col overflow-hidden"
-        style={{
-          width: 'min(1200px, calc(100vw - 32px))',
-          backgroundColor: '#FAF8F3',
-          borderRadius: 22,
-          border: '1px solid rgba(27,56,40,0.12)',
-          boxShadow: '0 1px 2px rgba(27,56,40,0.08), 0 24px 60px rgba(27,56,40,0.22)',
-        }}
-      >
-        {/* ── Header: the live identity as the title bar ─────────────────── */}
+      <div className="gv-ced-row" style={{ width: 'min(1180px, calc(100vw - 32px))' }}>
+        {/* ── The set-up card ──────────────────────────────────────────── */}
         <div
-          className="flex flex-shrink-0 items-center justify-between gap-4 px-5 py-3"
-          style={{ backgroundColor: 'rgba(27,56,40,0.04)', borderBottom: '1px solid rgba(27,56,40,0.09)' }}
+          className="gv-ced-main flex flex-col rounded-[24px] p-5"
+          style={{ backgroundColor: NEU.surface, boxShadow: NEU.out }}
         >
-          <h2 id="ced-title" className="sr-only">{isEdit ? 'Edit committee' : 'New committee'}</h2>
-          <div className="min-w-0 flex-1">
-            <CommitteeIdentityPreview
-              compact
-              eyebrow={
-                <span className="flex items-center gap-2" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6E5F4E' }}>
-                  {isEdit ? 'Edit committee' : 'New committee'}
-                  <span aria-hidden style={{ width: 3, height: 3, borderRadius: 9, backgroundColor: 'rgba(27,56,40,0.35)' }} />
-                  {/* The type as an icon beside a plain word, never a pill. */}
-                  <span className="inline-flex items-center gap-1" style={{ color: typeAccent, letterSpacing: '0.06em' }} title="Committee type">
-                    <CommitteeTypeGlyph type={effectiveType as CommitteeType} size={12} />
-                    {COMMITTEE_TYPE_LABEL[effectiveType] ?? effectiveType}
-                  </span>
-                  {workingLanguage && (
-                    <>
-                      <span aria-hidden style={{ width: 3, height: 3, borderRadius: 9, backgroundColor: 'rgba(27,56,40,0.35)' }} />
-                      <span className="inline-flex items-center gap-1" style={{ color: '#6E5F4E', letterSpacing: '0.06em' }}>
-                        <Languages size={12} strokeWidth={2.2} aria-hidden />
-                        {workingLanguage}
-                      </span>
-                    </>
-                  )}
-                </span>
-              }
-              src={previewEmblem}
-              primary={previewPrimary}
-              secondary={previewSecondary}
-              placeholder="Untitled committee"
-              topic={topics[0] ?? ''}
-              topicLabel="Topic:"
-              topicEmpty="No topic yet"
-              tone={medallionTone(effectiveType)}
-              monogramText={previewAcronym || name}
-            />
+          {/* Header. The committee TYPE is an icon beside a plain word, never a
+              status pill (CLAUDE.md §8). The type picker does not re-show in
+              edit mode, so this is how an organiser tells what kind of room is
+              open. */}
+          <div className="mb-3 flex flex-shrink-0 items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <h2 id="ced-title" className="truncate" style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 800, letterSpacing: '-0.01em', color: '#1C1410', margin: 0 }}>
+                {isEdit ? 'Edit committee' : 'New committee'}
+              </h2>
+              <span
+                className="flex flex-shrink-0 items-center gap-1.5"
+                title="Committee type"
+                style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: typeAccent }}
+              >
+                <CommitteeTypeGlyph type={effectiveType as CommitteeType} />
+                {COMMITTEE_TYPE_LABEL[effectiveType] ?? effectiveType}
+              </span>
+            </div>
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              title="Close"
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-[#1B3828]/[0.07] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
+              style={{ color: '#544B3E' }}
+            >
+              <X size={18} />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            title="Close"
-            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-[#1B3828]/[0.08] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
-            style={{ color: '#544B3E' }}
-          >
-            <X size={18} />
-          </button>
-        </div>
 
-        {/* ── Body ──────────────────────────────────────────────────────────
-            Steps 1 and 2 are the SHARED set-up surface, the same component
-            the creation wizard renders, so the two can never drift (owner,
-            23 Sep 2026: "it should always match"). In the 'columns' layout its
-            two sections are the grid's first two items. Chairs stay out of
-            it: they need a committee id the wizard does not have yet. */}
-        <div className={`gv-ced-body flex-1 min-h-0 px-5 py-4${isEdit && existing ? ' gv-ced-3' : ''}`}>
+          {/* The live identity, the /create preview: what the chair masthead
+              and every card will show (committeeDisplayName). */}
+          <CommitteeIdentityPreview
+            src={previewEmblem}
+            primary={previewPrimary}
+            secondary={previewSecondary}
+            placeholder="Untitled committee"
+            topic={topics[0] ?? ''}
+            topicLabel="Topic:"
+            topicEmpty="No topic yet"
+            tone={medallionTone(effectiveType)}
+            monogramText={previewAcronym || name}
+          />
+
+          {/* Step 1 from the SHARED set-up surface, the same component the
+              creation wizard renders, so the two can never drift. Step 2 is
+              the roster card beside this one (CommitteeSeatsStep, same kit). */}
           <CommitteeSetupFields
             draft={draft}
             onChange={patchDraft}
@@ -1319,46 +1306,54 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
             nameInputId="ced-name"
             onUploadEmblem={() => document.getElementById('committee-emblem-upload')?.click()}
             emblemUploading={logoUploading}
-            onUploadFlag={handleFlagUpload}
-            layout="columns"
             showLanguage
+            seatsElsewhere
+          />
+          <input
+            id="committee-emblem-upload"
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/svg+xml"
+            style={{ display: 'none' }}
+            onChange={e => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (!f) return;
+              if (f.size > 5 * 1024 * 1024) { setError('Emblem must be under 5MB.'); return; }
+              setError('');
+              setEmblemCropFile(f);
+            }}
+          />
+
+          <div className="mt-auto flex-shrink-0 pt-4">
+            {error && <p role="alert" className="mb-2.5" style={{ color: '#8B2020', fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.5, margin: '0 0 10px' }}>{error}</p>}
+            <div className="grid gap-2.5" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.6fr)' }}>
+              <SetupGhostButton label="Cancel" onClick={onClose} />
+              <SetupPrimaryButton
+                label={saving ? 'Saving…' : isEdit ? 'Save changes' : 'Add committee'}
+                sub={saveSub}
+                state={saveState}
+                onClick={onPrimary}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* ── Outside it: the roster card, then the chairs ─────────────── */}
+        <div className="gv-ced-side flex flex-col gap-3.5">
+          <CommitteeSeatsStep
+            panel
+            draft={draft}
+            onChange={patchDraft}
+            committeeType={effectiveType as CommitteeType}
+            nameInputId="ced-name"
+            onUploadFlag={handleFlagUpload}
+            compactPaste
+            className="gv-ced-roster rounded-[24px]"
+            style={{ padding: '16px 18px 16px', backgroundColor: NEU.surface, boxShadow: NEU.out }}
           />
           {isEdit && existing && (
             <ChairsDock conferenceId={conferenceId} committeeId={existing.id} committeeName={name.trim() || existing.name} />
           )}
-        </div>
-        <input
-          id="committee-emblem-upload"
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/svg+xml"
-          style={{ display: 'none' }}
-          onChange={e => {
-            const f = e.target.files?.[0];
-            e.target.value = '';
-            if (!f) return;
-            if (f.size > 5 * 1024 * 1024) { setError('Emblem must be under 5MB.'); return; }
-            setError('');
-            setEmblemCropFile(f);
-          }}
-        />
-
-        {/* ── Footer ──────────────────────────────────────────────────────── */}
-        <div
-          className="flex flex-shrink-0 flex-wrap items-center gap-x-4 gap-y-2 px-5 py-2.5"
-          style={{ borderTop: '1px solid rgba(27,56,40,0.09)' }}
-        >
-          <div className="min-w-0 flex-1">
-            {error && <p role="alert" style={{ color: '#8B2020', fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.45, margin: 0 }}>{error}</p>}
-          </div>
-          <div className="grid w-full gap-2.5 sm:w-[400px]" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.6fr)' }}>
-            <SetupGhostButton label="Cancel" onClick={onClose} />
-            <SetupPrimaryButton
-              label={saving ? 'Saving…' : isEdit ? 'Save changes' : 'Add committee'}
-              sub={saveSub}
-              state={saveState}
-              onClick={onPrimary}
-            />
-          </div>
         </div>
       </div>
     </ModalOverlay>
@@ -1461,7 +1456,7 @@ function TypeCard({ opt, onSelect }: { opt: (typeof TYPE_OPTIONS)[number]; onSel
         style={{
           width: 44, height: 44, borderRadius: 14,
           background: `linear-gradient(135deg, ${gradient[0]}, ${gradient[1]})`,
-          boxShadow: `0 4px 10px ${gradient[0]}44, ${NEU.outSm}`,
+          boxShadow: `0 4px 10px color-mix(in srgb, ${gradient[0]} 27%, transparent), ${NEU.outSm}`,
         }}
       >
         {/* Same rule as neu.tsx: forest ink on the gold gradient, white elsewhere. */}

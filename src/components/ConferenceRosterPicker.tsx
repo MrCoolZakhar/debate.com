@@ -512,6 +512,13 @@ div:last-child > .gv-rs-row { border-bottom-color:transparent; }
 .gv-rs-menu-btn:hover, .gv-rs-menu-btn:focus-visible { background:rgba(27,56,40,0.06); outline:none; }
 .gv-rs-menu-btn.gv-rs-danger { color:#8B2020; }
 
+/* ── The editor's roster card (variant 'panel'), /create's rows ─────────── */
+.gv-rs-panel .gv-rs-row { height:auto; min-height:46px; gap:10px; padding:4px 4px 4px 10px; border-bottom:0; border-radius:12px; background:rgba(255,255,255,0.68); box-shadow:0 1px 2px rgba(27,56,40,0.05); margin-bottom:4px; }
+.gv-rs-panel .gv-rs-row:hover { background:#FFFFFF; }
+.gv-rs-panel .gv-rs-art { width:30px; height:30px; }
+.gv-rs-panel .gv-rs-name { font-size:14.5px; }
+.gv-rs-panel .gv-rs-ctl { width:28px; height:28px; border-radius:8px; color:#8A7C6B; }
+
 /* ── Touch ────────────────────────────────────────────────────────────────
    Every rule above is written for a pointer: the controls are 22px squares
    that only reach full contrast when the ROW is hovered, and the "remove this
@@ -543,6 +550,7 @@ div:last-child > .gv-rs-row { border-bottom-color:transparent; }
 export function ConferenceRosterSelected({
   mode, value, onChange, style, className,
   groups = [], onGroupsChange, onUploadLogo, committeeType,
+  variant = 'dense',
 }: {
   mode: 'country' | 'character';
   value: RosterEntry[];
@@ -557,7 +565,13 @@ export function ConferenceRosterSelected({
    *  (see `canSeatArt` below). */
   onUploadLogo?: (file: File, kind: 'seat' | 'group') => Promise<string | null>;
   committeeType?: string;
+  /** 'panel' = the committee editor's own roster card, modelled on /create's
+   *  delegation list (23 Sep 2026, owner): the count as a large numeral, then
+   *  roomy one-line rows with 30px round flags on an inset well. 'dense' is the
+   *  compact list the creation wizard shows under its add controls. */
+  variant?: 'dense' | 'panel';
 }) {
+  const panel = variant === 'panel';
   const isCharacter = mode === 'character';
   const isCustom = committeeType === 'custom';
   const showGroups = isCustom && !!onGroupsChange;
@@ -854,7 +868,7 @@ export function ConferenceRosterSelected({
   } : {};
 
   return (
-    <div className={`flex flex-col min-h-0 ${className ?? ''}`} style={style}>
+    <div className={`flex flex-col min-h-0 ${panel ? 'gv-rs-panel ' : ''}${className ?? ''}`} style={style}>
       <style>{ROSTER_ROW_CSS}</style>
       {canLogo && (
         <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" style={{ display: 'none' }} onChange={onFilePicked} />
@@ -863,12 +877,26 @@ export function ConferenceRosterSelected({
       {/* Header. `flex-wrap` so the label, the count badge and CLEAR ALL never
           squash each other in the narrow rail. */}
       <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-1 mb-2">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <label style={{ ...labelStyle, marginBottom: 0, whiteSpace: 'nowrap' }}>{isCustom ? 'Selected seats' : isCharacter ? 'Selected characters' : 'Selected countries'}</label>
-          {/* A count is plain typography, never a pill (CLAUDE.md §8). */}
-          <span style={{ fontSize: 12, fontWeight: 800, color: '#1B3828', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
-            {value.length}
-          </span>
+        <div className={`flex min-w-0 gap-1.5 ${panel ? 'items-baseline' : 'items-center'}`}>
+          {panel ? (
+            /* /create's DelegationCount: the number big, the word beside it. */
+            <>
+              <span aria-live="polite" style={{ fontSize: 34, fontWeight: 800, lineHeight: 1, letterSpacing: '-0.03em', color: '#1B3828', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
+                {value.length}
+              </span>
+              <span style={{ fontSize: 15, fontWeight: 800, color: '#1B3828', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap' }}>
+                {value.length === 1 ? (isCustom ? 'seat' : isCharacter ? 'character' : 'country') : noun}
+              </span>
+            </>
+          ) : (
+            <>
+              <label style={{ ...labelStyle, marginBottom: 0, whiteSpace: 'nowrap' }}>{isCustom ? 'Selected seats' : isCharacter ? 'Selected characters' : 'Selected countries'}</label>
+              {/* A count is plain typography, never a pill (CLAUDE.md §8). */}
+              <span style={{ fontSize: 12, fontWeight: 800, color: '#1B3828', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
+                {value.length}
+              </span>
+            </>
+          )}
           <HoverInfo>
             <p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#B6871F' }}>Reading this list</p>
             <div className="mt-2.5 flex gap-2.5">
@@ -918,9 +946,11 @@ export function ConferenceRosterSelected({
             <button
               onClick={() => { onChange([]); setApplyFor(null); setChooser(null); }}
               className="text-xs font-bold uppercase tracking-wide transition-colors focus:outline-none"
-              style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 9, whiteSpace: 'nowrap' }}
+              style={panel
+                ? { color: '#544B3E', fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 11, letterSpacing: '0.1em', whiteSpace: 'nowrap', padding: '6px 8px', borderRadius: 8 }
+                : { color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 9, whiteSpace: 'nowrap' }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = panel ? '#544B3E' : '#9A8A78'; }}
             >
               CLEAR ALL
             </button>
@@ -1021,10 +1051,22 @@ export function ConferenceRosterSelected({
 
       {/* The list: a single column of one-line rows, hairline-separated. */}
       <div
-        className="flex-1 rounded-xl min-h-0"
-        style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', overflowY: 'auto', padding: value.length === 0 ? 0 : '4px 6px' }}
+        className={`flex-1 min-h-0 [scrollbar-width:thin] ${panel ? 'rounded-[18px]' : 'rounded-xl'}`}
+        style={panel
+          ? { backgroundColor: '#F0EBDD', boxShadow: 'inset 0 1px 2px rgba(27,56,40,0.07), inset 0 0 0 1px rgba(27,56,40,0.08)', overflowY: 'auto', overscrollBehavior: 'contain', padding: value.length === 0 ? 0 : 6 }
+          : { border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', overflowY: 'auto', padding: value.length === 0 ? 0 : '4px 6px' }}
       >
-        {value.length === 0 ? (
+        {value.length === 0 && panel ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2 px-8 py-8 text-center">
+            <span className="flex items-center justify-center rounded-full" style={{ width: 48, height: 48, backgroundColor: 'rgba(27,56,40,0.07)', color: '#1B3828' }}>
+              {isCharacter ? <Users size={22} strokeWidth={1.75} /> : <Globe size={22} strokeWidth={1.75} />}
+            </span>
+            <p style={{ margin: 0, fontSize: 15.5, fontWeight: 800, color: '#1B3828', fontFamily: "'Outfit', sans-serif", textWrap: 'balance' }}>{`No ${noun} yet`}</p>
+            <p style={{ margin: 0, fontSize: 13, color: '#544B3E', maxWidth: 280, lineHeight: 1.5, fontFamily: "'Outfit', sans-serif", textWrap: 'pretty' }}>
+              {isCharacter ? 'Type or paste names on the left to add them.' : 'Search, pick a bundle, or paste a list on the left.'}
+            </p>
+          </div>
+        ) : value.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full px-3 py-8">
             <p className="text-xs font-bold uppercase text-center" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{`NO ${noun.toUpperCase()}`}</p>
             <p className="text-xs text-center mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{isCharacter ? 'Type or paste names to add' : 'Search, use bundles, or paste'}</p>
@@ -1085,7 +1127,7 @@ export function ConferenceRosterSelected({
                         {/* Art: the seat's own image, its group's, the national flag, or the mode glyph. */}
                         <span className="gv-rs-art">
                           {art.kind === 'logo' || art.kind === 'flag' ? (
-                            <CircleFlag art={art} label={row.name} size={24} logoFit="contain" decorative />
+                            <CircleFlag art={art} label={row.name} size={panel ? 30 : 24} logoFit="contain" decorative />
                           ) : isCharacter ? (
                             <Users size={17} strokeWidth={1.5} style={{ color: '#B6871F' }} />
                           ) : (

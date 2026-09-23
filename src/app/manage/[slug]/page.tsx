@@ -25,16 +25,17 @@ import {
 import Portal from '@/components/Portal';
 import DecorativeBleed from '@/components/DecorativeBleed';
 import ParticipantsChart, { toCumulativeSeries } from '@/components/conferences/ParticipantsChart';
-import InviteAcceptance, { inviteAcceptanceByRole, type ChairInviteRow } from '@/components/conferences/InviteAcceptance';
+import ApplicantsDial from '@/components/conferences/ApplicantsDial';
+import { inviteAcceptanceByRole, INVITE_ROLE_LABEL, type ChairInviteRow } from '@/components/conferences/InviteAcceptance';
 import TrafficSourcesCard from '@/components/conferences/TrafficSourcesCard';
-import { BENTO_BORDER, BENTO_WASH_FOREST, BENTO_WASH_GOLD } from '@/components/conferences/bento';
+import { BENTO_BORDER, BENTO_WASH_FOREST } from '@/components/conferences/bento';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
 import { hasExploredEmails } from '@/lib/emailsExplored';
 import { getConferenceIntent, intentRank } from '@/lib/conferenceIntent';
 import { useConferenceMoney } from '@/lib/conferenceMoney';
 import RevenueReadout from '@/components/conferences/RevenueReadout';
 import { ShareLinkRow, ShareHero } from '@/components/conferences/ShareConferenceLink';
-import { DASH_CSS, UnallocatedBadge } from '@/components/conferences/dashboardLayout';
+import { DASH_CSS, UnallocatedBadge, useDialSize } from '@/components/conferences/dashboardLayout';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import VerifiedCheck, { minutesToCheckmarkLabel } from '@/components/VerifiedCheck';
 
@@ -331,7 +332,7 @@ interface AppRow {
   advisors_pledged: number | null;
   /** Null for an imported / invited applicant who has not claimed the invite
    *  yet (claim_import_invite writes it). Read only as "is there an account";
-   *  the invite card counts on it (src/components/conferences/InviteAcceptance.tsx). */
+   *  the dial counts on it (src/components/conferences/InviteAcceptance.ts). */
   user_id: string | null;
 }
 
@@ -343,8 +344,8 @@ interface AppRow {
 
 // The old PipelineCell / "Delegates" pipeline card and the Applications +
 // Accepted stat tiles were deleted here, not misplaced: the rewritten
-// ApplicantsDial prints Applications / Accepted / Assigned / Paid in its key
-// and deep-links each one, so those cards were the same four numbers a third
+// ApplicantsDial printed Applications / Accepted / Assigned / Paid in its key
+// (it shows invites accepted per role since 23 Sep 2026), so those cards were the same four numbers a third
 // and fourth time. Removing them is most of what bought the single screen.
 
 // ── Dashboard data shape ───────────────────────────────────────────────────
@@ -967,6 +968,7 @@ export default function DashboardPage() {
   const [publishBlockMsg, setPublishBlockMsg] = useState('');
   const [dash, setDash] = useState<DashData | null>(null);
   // The applicants card's width decides the dial's diameter (one-screen grid).
+  const [dialCardRef, dialSize] = useDialSize();
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   // `now` starts at 0 (same on server + client, no hydration mismatch) and is
   // set on mount, then ticked every minute so relative times stay fresh.
@@ -1365,8 +1367,17 @@ export default function DashboardPage() {
 
   // Invite acceptance per role (delegates, faculty advisors, observers,
   // chairs). The definition of "accepted" is written at the top of
-  // src/components/conferences/InviteAcceptance.tsx.
-  const inviteCounts = inviteAcceptanceByRole(dash.apps, dash.chairInvites);
+  // src/components/conferences/InviteAcceptance.ts. They feed the dial: one
+  // segment per role (accepted), the centre accepted of invited, the key each
+  // role's accepted / invited. Chairs deep-link to the committees page, where
+  // chairs are invited; the other roles to the applications table.
+  const dialStages = inviteAcceptanceByRole(dash.apps, dash.chairInvites).map(r => ({
+    key: r.key,
+    label: INVITE_ROLE_LABEL[r.key],
+    value: r.accepted,
+    of: r.invited,
+    href: r.key === 'chairs' ? `/manage/${slug}/committees` : `/manage/${slug}/applications`,
+  }));
 
   // ── Set-up priorities: 8 detection checks, in journey order ──────────────
   // Base order = the natural build journey (page → committees → chairs → email →
@@ -1786,23 +1797,27 @@ export default function DashboardPage() {
 
         </div>
 
-        {/* Invites accepted, per role: one ring each for delegates, faculty
-            advisors, observers and chairs (owner, 23 Sep 2026: the status
-            dial is gone). The red "to assign" badge stays beside the heading.
-            Gold wash: this is the headline card of the page. */}
+        {/* Invites accepted, per role, on the original applicants dial (owner,
+            23 Sep 2026: "It should look the same, but the data should just be
+            different"). The red "to assign" badge beside the heading, one quiet
+            footer line. */}
         <div className="gv-dash-dial gv-dash-cell">
-        <NeuCard className="flex flex-col" style={{ padding: '13px 16px 12px', border: BENTO_BORDER, backgroundColor: BENTO_WASH_GOLD, height: '100%' }}>
-          <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginBottom: 10, minHeight: 28 }}>
+        <NeuCard className="flex flex-col" style={{ padding: '13px 16px 12px', border: BENTO_BORDER, height: '100%' }}>
+          <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginBottom: 6, minHeight: 28 }}>
             <h2 className="truncate" style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>
               Invites accepted
             </h2>
             <UnallocatedBadge count={unallocated} href={`/manage/${slug}/assignment`} />
           </div>
-          <div className="flex items-center" style={{ flex: 1, minHeight: 0 }}>
-            <InviteAcceptance counts={inviteCounts} />
+          <div ref={dialCardRef} className="flex items-center" style={{ flex: 1, minHeight: 0 }}>
+            <ApplicantsDial
+              stages={dialStages}
+              size={dialSize}
+              onNavigate={(href) => router.push(href)}
+            />
           </div>
-          <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginTop: 10 }}>
-            <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
+          <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginTop: 6 }}>
+            <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
               {societies} delegation{societies === 1 ? '' : 's'} · {committeeCount} committee{committeeCount === 1 ? '' : 's'}
             </span>
             <Link

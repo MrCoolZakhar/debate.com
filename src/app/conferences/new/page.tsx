@@ -61,7 +61,7 @@ import {
   type CommitteeSetupDraft,
   type Difficulty,
 } from '@/components/committeeSetupKit';
-import { normaliseCommitteeLanguage } from '@/lib/committeeLanguage';
+import { normaliseCommitteeLanguage, DEFAULT_COMMITTEE_LANGUAGE } from '@/lib/committeeLanguage';
 
 
 // Mirrors settings' ensureRoleConfigs default set (source of truth there) —
@@ -1152,7 +1152,7 @@ export default function NewConferencePage() {
             delegation_size: c.doubleDelegation ? 2 : 1,
             groups: c.type === 'custom' ? c.groups : [],
             logo_url: effectiveEmblem(c),
-            working_language: normaliseCommitteeLanguage(c.workingLanguage),
+            working_language: normaliseCommitteeLanguage(c.workingLanguage) ?? DEFAULT_COMMITTEE_LANGUAGE,
           }))
         )
         .select('id, name');

@@ -8,7 +8,6 @@ export const BENTO_BORDER = '1px solid color-mix(in srgb, var(--gv-main) 10%, tr
 // comes from colour rather than from a lighter halo around the card (owner,
 // 23 Sep 2026: the white shadowy backdrop "looks sloppy"). Both follow the
 // theme variables.
-/** A 4% forest wash: the set-up priorities (the page's to-do list). */
+/** A 4% forest wash: the set-up priorities (the page's to-do list). The gold
+ *  wash the dial card briefly had was removed with the dial's return. */
 export const BENTO_WASH_FOREST = 'color-mix(in srgb, var(--gv-main) 4%, var(--gv-surface))';
-/** A faint gold wash: the headline numbers card (invites accepted). */
-export const BENTO_WASH_GOLD = 'color-mix(in srgb, var(--gv-accent-light) 16%, var(--gv-surface))';

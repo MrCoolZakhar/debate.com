@@ -140,7 +140,7 @@ function RollCallReplica({ caption }: { caption: string }) {
   return (
     <span className="flex flex-col items-center" style={{ gap: 6 }}>
       <span style={{ fontSize: T.caption, fontWeight: W.title, color: DG.body, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{caption}</span>
-      <span className="relative inline-grid" style={{ gridTemplateColumns: '1fr 1fr', padding: 4, borderRadius: 999, background: DG.ivory, boxShadow: '0 0 0 1px rgba(27,56,40,0.10), 0 1px 2px rgba(27,56,40,0.08), inset 0 0 0 1px rgba(27,56,40,0.09), inset 0 1px 1.5px rgba(27,56,40,0.06)' }}>
+      <span className="relative inline-grid" style={{ gridTemplateColumns: '1fr 1fr', padding: 4, borderRadius: 999, background: DG.ivory, boxShadow: '0 1px 2px rgba(27,56,40,0.12), 0 3px 7px -2px rgba(27,56,40,0.17), inset 2px 2px 6px rgba(27,56,40,0.13), inset -2px -2px 5px rgba(255,255,255,0.6)' }}>
         <span className="absolute" style={{ top: 4, bottom: 4, insetInlineStart: 'calc(50%)', width: 'calc(50% - 4px)', borderRadius: 999, background: `linear-gradient(135deg, ${DG.forestMid}, ${DG.forest})`, boxShadow: '0 3px 8px rgba(27,56,40,0.30)' }} />
         {['P', 'PV'].map((l, i) => (
           <span key={l} className="relative inline-flex items-center justify-center stg-num" style={{ minWidth: 64, height: 48, padding: '0 16px', fontSize: T.section, fontWeight: W.title, color: i === 1 ? DG.gold : DG.body }}>{l}</span>

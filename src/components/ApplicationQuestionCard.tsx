@@ -97,7 +97,7 @@ function QuestionNumeral({ n, done }: { n: number; done: boolean }) {
         background: done
           ? `linear-gradient(135deg, ${NEU.green}, ${NEU.forest})`
           : `linear-gradient(135deg, ${NEU.gold}, ${NEU.deepGold})`,
-        boxShadow: done ? `0 2px 7px ${NEU.forest}44` : `0 2px 7px ${NEU.deepGold}55`,
+        boxShadow: done ? `0 2px 7px color-mix(in srgb, ${NEU.forest} 27%, transparent)` : `0 2px 7px color-mix(in srgb, ${NEU.deepGold} 33%, transparent)`,
         transition: `background 320ms ${EASE}, box-shadow 320ms ${EASE}`,
       }}
     >

@@ -4,10 +4,11 @@
  * neu.tsx, Gavelling neumorphic primitives.
  *
  * Pilot design system for the organiser dashboard: one continuous ivory
- * surface (#EDE7D8 page, #F0EBDD cards). Elements are raised by a crisp
- * forest-tinted hairline ring and a soft forest-tinted drop shadow, and
- * pressed in by a tinted fill with an inner hairline: never neutral black,
- * never a white highlight halo, never white cards. Vibrancy lives ONLY in small gradient icon
+ * surface (#EDE7D8 page, #F0EBDD cards). Cards read as extruded via a
+ * forest-tinted dual-shadow pair (a tight, faint light highlight top-left);
+ * small pills and buttons are raised by an inner top highlight and a compact
+ * forest drop with NO outer white halo; wells are pressed in (the dent).
+ * Never neutral black, never white cards. Vibrancy lives ONLY in small gradient icon
  * discs and the single accent gradient; everything else stays calm.
  *
  * Dependency-free (inline styles + lucide icons already in the app).
@@ -46,40 +47,44 @@ export const NEU = {
   // `surface`): use it for emails, meta values, captions, any real sentence
   // that is not primary.
   inkSoft: 'color-mix(in srgb, var(--gv-on-surface) 72%, var(--gv-surface))',
-  // ── Elevation (23 Sep 2026: the white top-left highlight is GONE) ──────
-  // The old dual-shadow pair painted a blurry white halo up and to the left
-  // of every card, pill and button. On ivory it read as a smudge, not depth
-  // (owner: "that weird white shadowy backdrop ... looks sloppy"). Elevation
-  // is now a crisp forest-tinted hairline ring plus a soft forest-tinted drop
-  // shadow falling DOWN (never neutral grey, never white). Token names are
-  // unchanged, so every caller repaints without an edit.
+  // ── Elevation (23 Sep 2026, second pass) ───────────────────────────────
+  // Neumorphism is back, tuned. The first pass (earlier the same day) removed
+  // the white top-left highlight everywhere because it painted a blurry white
+  // halo round small pills and buttons; the owner then said the site "lost
+  // its charge": cards should be 3D, with the occasional neumorphic dent.
+  // So the rule is now split by SIZE:
   //
-  //   out / outHover      raised cards and panels (ring + soft drop)
-  //   outSm / outSmHover  chips, pills, small buttons, discs (ring + 1-2px drop)
-  //   in / inSm           wells, tracks, done rows: an inner hairline + a faint
-  //                       top inner shade. Pair with `well` as the FILL, never
-  //                       with a white inner glow.
+  //   out / outHover      CARDS and large panels: the genuine dual shadow, a
+  //                       light top-left highlight and a forest-tinted
+  //                       bottom-right shadow, but the highlight is tighter and
+  //                       fainter than the original (0.55 / 10px, was 0.85 /
+  //                       14px) so it reads as a lift, never a white fog.
+  //   outSm / outSmHover  SMALL things (pills, chips, small buttons, discs):
+  //                       NO outer white highlight at all. A 1px inner top
+  //                       highlight plus a compact forest drop, so they still
+  //                       look raised with no halo around them.
+  //   in / inSm           the neumorphic DENT for wells, inputs, progress
+  //                       tracks and selected states: a forest inner shadow
+  //                       top-left and a soft inner highlight bottom-right.
+  //                       The highlight is INSIDE the element, so it cannot
+  //                       halo. Use occasionally, on the page ground (`base`).
   //
-  // Backdrops and accents for page agents (use these instead of shadows to
-  // make a region stand out; colour and borders do the grouping now):
-  //   ring        a bare 1px forest hairline (boxShadow), e.g. a flat tile
-  //   ringStrong  the same at a firmer 18%, e.g. a focused / selected tile
-  //   hairline    a CSS `border` value, 1px forest 12%, for cards and dividers
-  //   well        FILL for a pressed-in area (4% forest over the page ground)
-  //   wash        FILL for a quiet tinted section on a card (4% forest over
-  //               the surface), e.g. a group of meta fields, a sidebar block
-  //   goldWash    FILL for an accent / highlighted section (pale gold over
-  //               the surface), e.g. "needs attention", a featured summary
-  //   goldRing    boxShadow ring for a gold-highlighted tile or pill
-  //   accentBar   a CSS border value for `borderInlineStart` (3px forest),
-  //               marking a callout or the active item in a list. Use
-  //               borderInlineStart, never borderLeft, so Arabic mirrors.
-  out: '0 0 0 1px color-mix(in srgb, var(--gv-main) 9%, transparent), 0 1px 2px color-mix(in srgb, var(--gv-main) 6%, transparent), 0 8px 20px -8px color-mix(in srgb, var(--gv-main) 18%, transparent)',
-  outHover: '0 0 0 1px color-mix(in srgb, var(--gv-main) 14%, transparent), 0 2px 4px color-mix(in srgb, var(--gv-main) 8%, transparent), 0 14px 30px -10px color-mix(in srgb, var(--gv-main) 24%, transparent)',
-  outSm: '0 0 0 1px color-mix(in srgb, var(--gv-main) 10%, transparent), 0 1px 2px color-mix(in srgb, var(--gv-main) 8%, transparent)',
-  outSmHover: '0 0 0 1px color-mix(in srgb, var(--gv-main) 16%, transparent), 0 4px 10px -3px color-mix(in srgb, var(--gv-main) 18%, transparent)',
-  in: 'inset 0 0 0 1px color-mix(in srgb, var(--gv-main) 10%, transparent), inset 0 1px 2px color-mix(in srgb, var(--gv-main) 7%, transparent)',
-  inSm: 'inset 0 0 0 1px color-mix(in srgb, var(--gv-main) 9%, transparent), inset 0 1px 1.5px color-mix(in srgb, var(--gv-main) 6%, transparent)',
+  // A coloured pill may add a glow in its OWN hue (e.g. 0 3px 8px of its
+  // colour at 30%). A white glow outside a small element is never allowed.
+  //
+  // Flat accents, still available:
+  //   ring / ringStrong  a bare 1px forest hairline (10% / 18%)
+  //   hairline           a CSS `border` value, 1px forest 12%
+  //   well               FILL alternative for a pressed area (4% forest)
+  //   wash / goldWash    FILLS for a quiet / highlighted section on a card
+  //   goldRing           boxShadow ring for a gold-highlighted tile or pill
+  //   accentBar          `borderInlineStart` value (3px forest), so RTL mirrors
+  out: '-4px -4px 10px rgba(255,255,255,0.55), 6px 7px 18px color-mix(in srgb, var(--gv-main) 17%, transparent), 0 1px 2px color-mix(in srgb, var(--gv-main) 6%, transparent)',
+  outHover: '-5px -5px 12px rgba(255,255,255,0.62), 9px 11px 26px color-mix(in srgb, var(--gv-main) 22%, transparent), 0 2px 4px color-mix(in srgb, var(--gv-main) 7%, transparent)',
+  outSm: 'inset 0 1px 0 rgba(255,255,255,0.5), 0 1px 2px color-mix(in srgb, var(--gv-main) 12%, transparent), 0 3px 7px -2px color-mix(in srgb, var(--gv-main) 17%, transparent)',
+  outSmHover: 'inset 0 1px 0 rgba(255,255,255,0.6), 0 2px 3px color-mix(in srgb, var(--gv-main) 12%, transparent), 0 7px 14px -4px color-mix(in srgb, var(--gv-main) 22%, transparent)',
+  in: 'inset 3px 3px 8px color-mix(in srgb, var(--gv-main) 14%, transparent), inset -3px -3px 8px rgba(255,255,255,0.7)',
+  inSm: 'inset 2px 2px 5px color-mix(in srgb, var(--gv-main) 13%, transparent), inset -2px -2px 5px rgba(255,255,255,0.7)',
   ring: '0 0 0 1px color-mix(in srgb, var(--gv-main) 10%, transparent)',
   ringStrong: '0 0 0 1px color-mix(in srgb, var(--gv-main) 18%, transparent)',
   hairline: '1px solid color-mix(in srgb, var(--gv-main) 12%, transparent)',
@@ -263,7 +268,7 @@ export function NeuInset({
     <div
       className={className}
       style={{
-        backgroundColor: NEU.well,
+        backgroundColor: NEU.base,
         borderRadius: 16,
         boxShadow: small ? NEU.inSm : NEU.in,
         ...style,
@@ -477,7 +482,7 @@ export function NeuProgress({
         position: 'relative',
         height,
         borderRadius: 999,
-        backgroundColor: NEU.well,
+        backgroundColor: NEU.base,
         boxShadow: NEU.inSm,
         ...style,
       }}
@@ -719,7 +724,7 @@ export function NeuChecklistRow({
       style={{
         padding: dense ? '4px 10px' : '11px 14px',
         borderRadius: dense ? 12 : 16,
-        backgroundColor: done ? NEU.well : NEU.surface,
+        backgroundColor: done ? NEU.base : NEU.surface,
         boxShadow: done ? NEU.inSm : clickable && hovered ? NEU.outSmHover : NEU.outSm,
         transform: clickable && hovered ? 'translateY(-2px)' : 'translateY(0)',
         transition: `box-shadow 260ms ${EASE}, transform 260ms ${EASE}`,

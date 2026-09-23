@@ -62,7 +62,7 @@ export function MembersTab({ data, busyId, onMakeHead, onMakeAdvisor }: {
   return (
     <div className="flex flex-col gap-4">
       {all.length > 8 && (
-        <label className="flex items-center gap-2" style={{ padding: '10px 14px', borderRadius: 12, backgroundColor: NEU.surface, border: NEU.hairline }}>
+        <label className="flex items-center gap-2" style={{ padding: '10px 14px', borderRadius: 12, backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
           <Search size={16} strokeWidth={2.2} aria-hidden style={{ color: NEU.inkSoft }} />
           <input
             value={q}

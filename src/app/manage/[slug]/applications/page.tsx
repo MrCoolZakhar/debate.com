@@ -297,7 +297,7 @@ function StatusPill({ status, size = 'md', awaitingResubmission = false }: { sta
         background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[1]})`,
         color: '#FFFFFF',
         fontFamily: OUTFIT, fontSize: size === 'sm' ? 11 : 11.5, fontWeight: 800, letterSpacing: '0.03em',
-        boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
+        boxShadow: `0 3px 8px ${t.grad[0]}55, inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -1px 0 rgba(0,0,0,0.08)`,
         whiteSpace: 'nowrap',
       }}
     >
@@ -323,7 +323,7 @@ function NotAttendingBadge({ size = 'md' }: { size?: 'sm' | 'md' }) {
         background: `linear-gradient(135deg, ${grad[0]}, ${grad[1]})`,
         color: '#FFFFFF',
         fontFamily: OUTFIT, fontSize: size === 'sm' ? 11 : 11.5, fontWeight: 800, letterSpacing: '0.03em',
-        boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
+        boxShadow: `0 3px 8px ${grad[0]}55, inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -1px 0 rgba(0,0,0,0.08)`,
         whiteSpace: 'nowrap',
       }}
     >
@@ -391,7 +391,7 @@ function RolePill({ role, size = 'md' }: { role: string; size?: 'sm' | 'md' }) {
         background: `linear-gradient(135deg, ${spec.grad[0]}, ${spec.grad[1]})`,
         color: spec.ink,
         fontFamily: OUTFIT, fontSize: size === 'sm' ? 11 : 11.5, fontWeight: 800, letterSpacing: '0.03em',
-        boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
+        boxShadow: `0 3px 8px ${spec.grad[0]}55, inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -1px 0 rgba(0,0,0,0.08)`,
         whiteSpace: 'nowrap',
       }}
     >
@@ -770,7 +770,7 @@ function QuickAllocate({
             minHeight: 44, padding: '11px 18px', borderRadius: 999,
             fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, letterSpacing: '0.05em',
             color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.gold[0]}, ${NEU_GRADIENTS.gold[1]})`,
-            boxShadow: open ? NEU.inSm : `0 3px 8px ${NEU_GRADIENTS.gold[0]}44, ${NEU.outSm}`,
+            boxShadow: open ? NEU.inSm : `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.gold[0]} 27%, transparent), ${NEU.outSm}`,
             border: 'none', cursor: 'pointer', transition: `box-shadow 160ms ${EASE_LOCAL}`,
           }}
         >
@@ -922,7 +922,7 @@ function SelectBox({ checked, indeterminate, onClick, title }: { checked: boolea
       style={{
         width: 20, height: 20, borderRadius: 7,
         background: checked || indeterminate ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : NEU.base,
-        boxShadow: checked || indeterminate ? `0 2px 5px ${NEU_GRADIENTS.forest[0]}55` : NEU.inSm,
+        boxShadow: checked || indeterminate ? `0 2px 5px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 33%, transparent)` : NEU.inSm,
         border: 'none', cursor: 'pointer', transition: `box-shadow 160ms ${EASE_LOCAL}`,
       }}
     >
@@ -1281,7 +1281,7 @@ function CheckChip({ label, checked, onClick }: { label: string; checked: boolea
         letterSpacing: '0.02em',
         color: checked ? '#FFFFFF' : NEU.ink,
         background: checked ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : NEU.surface,
-        boxShadow: checked ? `0 3px 8px ${NEU_GRADIENTS.forest[0]}44, ${NEU.outSm}` : NEU.outSm,
+        boxShadow: checked ? `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}` : NEU.outSm,
         border: 'none',
         cursor: 'pointer',
         transition: `box-shadow 180ms ${EASE_LOCAL}`,
@@ -1379,7 +1379,7 @@ function FilterPanel({
           fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.03em',
           color: show ? '#FFFFFF' : NEU.ink,
           background: show ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : NEU.surface,
-          boxShadow: show ? `0 4px 10px ${NEU_GRADIENTS.forest[0]}44, ${NEU.outSm}` : NEU.outSm,
+          boxShadow: show ? `0 4px 10px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}` : NEU.outSm,
           border: 'none', cursor: 'pointer',
           transition: `box-shadow 200ms ${EASE_LOCAL}`,
         }}
@@ -1592,7 +1592,7 @@ function CommitteeFilter({
           fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.03em',
           color: active || open ? '#FFFFFF' : NEU.ink,
           background: active || open ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : NEU.surface,
-          boxShadow: active || open ? `0 4px 10px ${NEU_GRADIENTS.forest[0]}44, ${NEU.outSm}` : NEU.outSm,
+          boxShadow: active || open ? `0 4px 10px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}` : NEU.outSm,
           border: 'none', cursor: 'pointer',
           transition: `box-shadow 200ms ${EASE_LOCAL}`,
         }}
@@ -2801,7 +2801,7 @@ export default function ApplicationsPage() {
           minHeight: 44, padding: '13px 10px', borderRadius: 14,
           fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, letterSpacing: '0.05em',
           color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
-          boxShadow: '0 2px 6px rgba(27,56,40,0.2)', border: 'none',
+          boxShadow: `0 4px 12px -2px color-mix(in srgb, ${NEU_GRADIENTS.green[0]} 40%, transparent), inset 0 1px 0 rgba(255,255,255,0.22)`, border: 'none',
           cursor: blocked ? 'not-allowed' : 'pointer',
           opacity: blocked ? 0.5 : 1,
           ...busyStyle,
@@ -4970,7 +4970,7 @@ export default function ApplicationsPage() {
                         padding: '8px 15px', borderRadius: 999, border: 'none', cursor: 'pointer',
                         fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: '#FFFFFF',
                         background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
-                        boxShadow: `0 3px 8px ${NEU_GRADIENTS.green[0]}55, ${NEU.outSm}`,
+                        boxShadow: `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.green[0]} 33%, transparent), ${NEU.outSm}`,
                         animation: suggestion === 'accept' ? 'bulkPulse 1.5s ease-in-out infinite' : undefined,
                       }}
                     >
@@ -5008,7 +5008,7 @@ export default function ApplicationsPage() {
                   padding: '8px 15px', borderRadius: 999, border: 'none', cursor: 'pointer',
                   fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: '#FFFFFF',
                   background: `linear-gradient(135deg, ${NEU_GRADIENTS.sage[0]}, ${NEU_GRADIENTS.sage[1]})`,
-                  boxShadow: `0 3px 8px ${NEU_GRADIENTS.sage[0]}55, ${NEU.outSm}`,
+                  boxShadow: `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.sage[0]} 33%, transparent), ${NEU.outSm}`,
                   animation: suggestion === 'checkin' ? 'bulkPulse 1.5s ease-in-out infinite' : undefined,
                 }}
               >
@@ -5166,7 +5166,7 @@ export default function ApplicationsPage() {
           minHeight: 44, padding: '0 24px', borderRadius: 999, border: 'none',
           fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, letterSpacing: '0.05em',
           color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
-          boxShadow: '0 2px 6px rgba(27,56,40,0.2)',
+          boxShadow: `0 4px 12px -2px color-mix(in srgb, ${NEU_GRADIENTS.green[0]} 40%, transparent), inset 0 1px 0 rgba(255,255,255,0.22)`,
           cursor: 'pointer', textDecoration: 'none', whiteSpace: 'nowrap',
           transition: `box-shadow 220ms ${EASE_LOCAL}, transform 160ms ${EASE_LOCAL}`,
         };
@@ -5174,13 +5174,13 @@ export default function ApplicationsPage() {
         const secondaryBtn: React.CSSProperties = {
           minHeight: 40, padding: '0 18px', borderRadius: 999, border: 'none',
           fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
-          color: NEU.ink, backgroundColor: '#FFFFFF', boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.16)',
+          color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm,
           cursor: 'pointer', whiteSpace: 'nowrap',
           transition: `box-shadow 220ms ${EASE_LOCAL}`,
         };
-        // Hairline, firmer on hover. No extrusion, no white halo (owner, 23 Sep 2026).
-        const liftOn = (e: React.MouseEvent<HTMLElement>) => { (e.currentTarget as HTMLElement).style.boxShadow = 'inset 0 0 0 1px rgba(27,56,40,0.32)'; };
-        const liftOff = (e: React.MouseEvent<HTMLElement>) => { (e.currentTarget as HTMLElement).style.boxShadow = 'inset 0 0 0 1px rgba(27,56,40,0.16)'; };
+        // Compact 3D (NEU.outSm: inner top highlight + forest drop), never a white halo.
+        const liftOn = (e: React.MouseEvent<HTMLElement>) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; };
+        const liftOff = (e: React.MouseEvent<HTMLElement>) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; };
 
         // A role this conference charges nothing for gets no payment control:
         // there is no state to mark. Chairs are simply the most common such
@@ -5286,7 +5286,7 @@ export default function ApplicationsPage() {
             {app.status === 'submitted' && isAcceptBlockedByFee(app) && (
               <p
                 className="mb-2.5 rounded-xl px-3.5 py-2.5"
-                style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, lineHeight: 1.5, color: REVIEW_WARN_INK, backgroundColor: 'rgba(184,132,74,0.14)', border: '1px solid rgba(184,132,74,0.35)' }}
+                style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, lineHeight: 1.5, color: REVIEW_WARN_INK, backgroundColor: 'rgba(184,132,74,0.14)', boxShadow: NEU.inSm }}
               >
                 {ACCEPT_BLOCKED_MESSAGE}
               </p>
@@ -5576,7 +5576,7 @@ export default function ApplicationsPage() {
                     minHeight: 44, padding: '0 24px', borderRadius: 999, border: 'none',
                     fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, letterSpacing: '0.05em',
                     color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-                    boxShadow: '0 2px 6px rgba(27,56,40,0.2)',
+                    boxShadow: `0 4px 12px -2px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 40%, transparent), inset 0 1px 0 rgba(255,255,255,0.22)`,
                     cursor: bulkEmailBusy ? 'default' : 'pointer', opacity: bulkEmailBusy ? 0.6 : 1,
                   }}
                 >
@@ -5734,7 +5734,7 @@ export default function ApplicationsPage() {
                     minHeight: 44, padding: '0 22px', borderRadius: 999, border: 'none',
                     fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, letterSpacing: '0.05em',
                     color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
-                    boxShadow: '0 2px 6px rgba(27,56,40,0.2)',
+                    boxShadow: `0 4px 12px -2px color-mix(in srgb, ${NEU_GRADIENTS.green[0]} 40%, transparent), inset 0 1px 0 rgba(255,255,255,0.22)`,
                     cursor: secretariatBusy ? 'default' : 'pointer', opacity: secretariatBusy ? 0.75 : 1,
                   }}
                 >

@@ -119,7 +119,7 @@ export function OverviewTab({
             <SectionTitle icon={Flag}><span id="apd-alloc">Allocation</span></SectionTitle>
             <div
               className="flex items-center gap-4"
-              style={{ padding: 18, borderRadius: 20, background: `radial-gradient(120% 160% at 0% 0%, ${C.forestMid} 0%, ${C.forest} 70%)`, color: C.ivory }}
+              style={{ padding: 18, borderRadius: 20, background: `radial-gradient(120% 160% at 0% 0%, ${C.forestMid} 0%, ${C.forest} 70%)`, color: C.ivory, boxShadow: '0 14px 30px -18px rgba(27,56,40,0.7), inset 0 1px 0 rgba(255,255,255,0.08)' }}
             >
               {app.role === 'chair' || !app.assigned_country_name ? (
                 <LogoDisc src={app.assigned_committee?.logo_url ?? null} size={68} alt={committee.primary} fallbackText={monogramFor(app.assigned_committee?.name ?? '')} />

@@ -171,7 +171,7 @@ export function StepDisc({ n, complete, size = 34 }: { n: number; complete: bool
           ? 'linear-gradient(145deg, #16301F, #2E6040)'
           : `linear-gradient(145deg, #F6F2E7, ${NEU.base})`,
         boxShadow: complete
-          ? 'inset 0 2px 5px rgba(0,0,0,0.35), 0 2px 6px rgba(27,56,40,0.22)'
+          ? 'inset 2px 2px 5px rgba(0,0,0,0.35), inset -2px -2px 5px rgba(255,255,255,0.12), 0 2px 6px rgba(27,56,40,0.22)'
           : NEU.outSm,
         color: complete ? NEU.gold : NEU.ink,
         fontFamily: OUTFIT, fontSize: size * 0.4, fontWeight: 800,

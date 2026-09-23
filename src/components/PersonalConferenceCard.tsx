@@ -318,7 +318,7 @@ export function PersonalConferenceCard({
               padding: '6px 13px',
               borderRadius: 999,
               background: `linear-gradient(135deg, ${NEU.gold}, ${NEU.deepGold})`,
-              boxShadow: `0 3px 8px ${NEU.deepGold}44, ${NEU.outSm}`,
+              boxShadow: `0 3px 8px color-mix(in srgb, ${NEU.deepGold} 27%, transparent), ${NEU.outSm}`,
               color: NEU.forest,
               fontFamily: OUTFIT,
               fontSize: '12px',
@@ -326,8 +326,8 @@ export function PersonalConferenceCard({
               letterSpacing: '0.03em',
               textDecoration: 'none',
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = `0 5px 12px ${NEU.deepGold}66, ${NEU.outSmHover}`; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = `0 3px 8px ${NEU.deepGold}44, ${NEU.outSm}`; }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = `0 5px 12px color-mix(in srgb, ${NEU.deepGold} 40%, transparent), ${NEU.outSmHover}`; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = `0 3px 8px color-mix(in srgb, ${NEU.deepGold} 27%, transparent), ${NEU.outSm}`; }}
           >
             <Users size={13} strokeWidth={2.6} style={{ color: NEU.forest }} />
             Manage delegation

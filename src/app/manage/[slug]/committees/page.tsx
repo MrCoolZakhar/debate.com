@@ -1,5 +1,7 @@
 'use client';
 
+import { CircleFlag } from '@/components/CircleFlag';
+import { committeeLanguageFlag } from '@/lib/committeeLanguage';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Plus, X, Copy, Check, Building2, CalendarClock, Clock, Trash2, ArrowDown, ArrowUp, ArrowUpDown, Send, LayoutGrid, LayoutList, Settings, UserRound, Languages } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
@@ -376,7 +378,7 @@ function CompactSendButton({ releasedAt, busy, onSend }: {
         color: busy ? NEU.muted : NEU.gold,
         fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em',
         cursor: busy ? 'default' : 'pointer',
-        boxShadow: busy ? 'none' : `0 3px 8px ${NEU_GRADIENTS.forest[0]}44, ${NEU.outSm}`,
+        boxShadow: busy ? 'none' : `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}`,
       }}
     >
       <Send size={11} />
@@ -2338,7 +2340,9 @@ export default function CommitteesPage() {
                         )}
                         {c.working_language && (
                           <span className="inline-flex items-center gap-1" title="Working language" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: '#6B5F52' }}>
-                            <Languages size={11} style={{ color: NEU.deepGold, flexShrink: 0 }} aria-hidden />
+                            {committeeLanguageFlag(c.working_language)
+                              ? <CircleFlag code={committeeLanguageFlag(c.working_language)!} size={13} decorative />
+                              : <Languages size={11} style={{ color: NEU.deepGold, flexShrink: 0 }} aria-hidden />}
                             {c.working_language}
                           </span>
                         )}
@@ -2575,7 +2579,9 @@ export default function CommitteesPage() {
                         <>
                           <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
                           <span className="inline-flex items-center gap-1 text-[11px] font-semibold" title="Working language" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif" }}>
-                            <Languages size={11} aria-hidden style={{ color: '#7A5A10' }} />
+                            {committeeLanguageFlag(c.working_language)
+                              ? <CircleFlag code={committeeLanguageFlag(c.working_language)!} size={13} decorative />
+                              : <Languages size={11} aria-hidden style={{ color: '#7A5A10' }} />}
                             {c.working_language}
                           </span>
                         </>

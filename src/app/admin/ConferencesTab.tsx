@@ -414,7 +414,7 @@ function FilterChip({ icon: Icon, children, onFilter, active, title }: {
         backgroundColor: active ? undefined : NEU.surface,
         background: active ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : undefined,
         color: active ? '#FFFFFF' : NEU.ink,
-        boxShadow: active ? `0 3px 8px ${NEU_GRADIENTS.forest[0]}44, ${NEU.outSm}` : hovered ? NEU.outSmHover : NEU.outSm,
+        boxShadow: active ? `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}` : hovered ? NEU.outSmHover : NEU.outSm,
         fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.03em',
         whiteSpace: 'nowrap', maxWidth: 220,
         transition: `box-shadow 180ms ${EASE}`,
@@ -574,7 +574,7 @@ function SortMenu({ value, onChange }: { value: SortKey; onChange: (k: SortKey) 
           fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.03em',
           color: open ? '#FFFFFF' : NEU.ink,
           background: open ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : NEU.surface,
-          boxShadow: open ? `0 4px 10px ${NEU_GRADIENTS.forest[0]}44, ${NEU.outSm}` : NEU.outSm,
+          boxShadow: open ? `0 4px 10px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}` : NEU.outSm,
           transition: `box-shadow 200ms ${EASE}`,
         }}
       >
@@ -977,7 +977,7 @@ export default function ConferencesTab({
                 padding: '4px 8px 4px 11px', borderRadius: 999, border: 'none', cursor: 'pointer',
                 background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
                 color: '#FFFFFF', fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.02em',
-                boxShadow: `0 3px 8px ${NEU_GRADIENTS.forest[0]}44, ${NEU.outSm}`,
+                boxShadow: `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}`,
               }}
             >
               {c.label}

@@ -425,8 +425,8 @@ export function CurrencyPicker({
             fontWeight: 800,
             letterSpacing: '0.02em',
             boxShadow: open
-              ? '0 1px 2px rgba(27,56,40,0.08), 0 0 0 2px rgba(27,56,40,0.18)'
-              : '0 0 0 1px rgba(27,56,40,0.10), 0 1px 2px rgba(27,56,40,0.08)',
+              ? 'inset 0 1px 0 rgba(255,255,255,0.5), 0 1px 2px rgba(27,56,40,0.12), 0 3px 7px -2px rgba(27,56,40,0.17), 0 0 0 2px rgba(27,56,40,0.18)'
+              : 'inset 0 1px 0 rgba(255,255,255,0.5), 0 1px 2px rgba(27,56,40,0.12), 0 3px 7px -2px rgba(27,56,40,0.17)',
           }
         : {
             backgroundColor: WELL,
@@ -436,8 +436,8 @@ export function CurrencyPicker({
             fontSize: 13,
             fontWeight: 700,
             boxShadow: open
-              ? 'inset 0 1px 1.5px rgba(27,56,40,0.06), 0 0 0 2px rgba(27,56,40,0.18)'
-              : 'inset 0 0 0 1px rgba(27,56,40,0.09), inset 0 1px 1.5px rgba(27,56,40,0.06)',
+              ? 'inset 2px 2px 5px rgba(27,56,40,0.13), inset -2px -2px 5px rgba(255,255,255,0.7), 0 0 0 2px rgba(27,56,40,0.18)'
+              : 'inset 2px 2px 5px rgba(27,56,40,0.13), inset -2px -2px 5px rgba(255,255,255,0.7)',
           };
 
   return (

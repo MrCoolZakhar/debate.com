@@ -509,7 +509,7 @@ export default function VouchersSection({
                           ? `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`
                           : NEU.base,
                         color: v.active ? '#FFFFFF' : NEU.muted,
-                        boxShadow: v.active ? `0 3px 8px ${NEU_GRADIENTS.green[0]}55, ${NEU.outSm}` : NEU.inSm,
+                        boxShadow: v.active ? `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.green[0]} 33%, transparent), ${NEU.outSm}` : NEU.inSm,
                         transition: `box-shadow 200ms ${EASE}`,
                       }}
                     >

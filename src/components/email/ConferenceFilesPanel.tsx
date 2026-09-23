@@ -197,7 +197,7 @@ export default function ConferenceFilesPanel({
               className="inline-flex items-center justify-center flex-shrink-0"
               style={{
                 width: 34, height: 34, borderRadius: 12,
-                background: `linear-gradient(135deg, ${NEU_GRADIENTS.gold[0]}40, ${NEU_GRADIENTS.gold[1]}2E), ${NEU.surface}`,
+                background: `linear-gradient(135deg, color-mix(in srgb, ${NEU_GRADIENTS.gold[0]} 25%, transparent), color-mix(in srgb, ${NEU_GRADIENTS.gold[1]} 18%, transparent)), ${NEU.surface}`,
                 boxShadow: NEU.outSm,
               }}
             >

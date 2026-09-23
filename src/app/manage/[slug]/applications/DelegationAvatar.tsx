@@ -52,7 +52,7 @@ export function DelegationAvatar({ name, size = 52, logoUrl }: { name: string; s
         aria-hidden
         onError={() => setFailed(logoUrl)}
         className="flex-shrink-0 select-none"
-        style={{ width: size, height: size, borderRadius: 999, objectFit: 'cover', background: '#FFFFFF', border: `1.5px solid ${GOLD}` }}
+        style={{ width: size, height: size, borderRadius: 999, objectFit: 'cover', background: '#FFFFFF', border: `1.5px solid ${GOLD}`, boxShadow: '0 4px 10px -3px rgba(27,56,40,0.35)' }}
       />
     );
   }
@@ -64,6 +64,7 @@ export function DelegationAvatar({ name, size = 52, logoUrl }: { name: string; s
         width: size, height: size, borderRadius: 999,
         background: `radial-gradient(120% 120% at 25% 20%, #2A5A3C 0%, ${FOREST} 70%)`,
         border: `1.5px solid ${GOLD}`,
+        boxShadow: '0 4px 10px -3px rgba(27,56,40,0.45), inset 0 1px 0 rgba(255,255,255,0.16)',
         color: GOLD, fontFamily: OUTFIT, fontWeight: 900,
         fontSize: Math.round(size * 0.36), letterSpacing: '0.02em', lineHeight: 1,
       }}

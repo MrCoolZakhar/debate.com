@@ -7,6 +7,8 @@
 
 import { useEffect, useRef, type CSSProperties } from 'react';
 import { X, Languages } from 'lucide-react';
+import { committeeLanguageFlag } from '@/lib/committeeLanguage';
+import { CircleFlag } from '@/components/CircleFlag';
 import Portal from '@/components/Portal';
 import ProfileLink from '@/components/ProfileLink';
 import { DifficultyTile } from '@/components/DifficultyTile';
@@ -249,7 +251,9 @@ export function CommitteeInfoDialog({
                   {c.abbreviation}
                   {c.working_language && (
                     <span className="inline-flex items-center gap-1" title="Working language" style={{ letterSpacing: '0.04em', fontWeight: 600, color: '#6B5F52' }}>
-                      <Languages size={13} aria-hidden style={{ color: 'var(--gv-accent)' }} />
+                      {committeeLanguageFlag(c.working_language)
+                        ? <CircleFlag code={committeeLanguageFlag(c.working_language)!} size={15} decorative />
+                        : <Languages size={13} aria-hidden style={{ color: 'var(--gv-accent)' }} />}
                       {c.working_language}
                     </span>
                   )}

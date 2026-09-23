@@ -1391,11 +1391,11 @@ export function RecapModal({
               style={{
                 background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
                 color: NEU.gold, fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none', cursor: 'pointer',
-                boxShadow: `0 4px 10px ${NEU_GRADIENTS.forest[0]}4D, ${NEU.outSm}`,
+                boxShadow: `0 4px 10px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 30%, transparent), ${NEU.outSm}`,
                 transition: `box-shadow 220ms ${EASE}, transform 220ms ${EASE}`,
               }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 16px ${NEU_GRADIENTS.forest[0]}66, ${NEU.outSmHover}`; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 10px ${NEU_GRADIENTS.forest[0]}4D, ${NEU.outSm}`; }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 16px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 40%, transparent), ${NEU.outSmHover}`; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 10px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 30%, transparent), ${NEU.outSm}`; }}
             >
               JOIN AS SECRETARIAT
               <ExternalLink size={14} />
@@ -1477,7 +1477,7 @@ function ChairAvatar({ name, size = 30 }: { name: string; size?: number }) {
         width: size, height: size, borderRadius: Math.round(size * 0.34),
         background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
         color: NEU.gold, fontFamily: OUTFIT, fontWeight: 900, fontSize: size * 0.4,
-        boxShadow: `0 3px 8px ${NEU_GRADIENTS.forest[0]}33, ${NEU.outSm}`,
+        boxShadow: `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 20%, transparent), ${NEU.outSm}`,
         letterSpacing: '0.02em',
       }}
       title={name}

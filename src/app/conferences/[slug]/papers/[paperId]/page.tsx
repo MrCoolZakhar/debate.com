@@ -114,7 +114,7 @@ function SendButton({ onClick, disabled }: { onClick: () => void; disabled: bool
         background: disabled ? 'rgba(27,56,40,0.12)' : `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
         color: disabled ? NEU.muted : NEU.gold,
         cursor: disabled ? 'default' : 'pointer',
-        boxShadow: disabled ? 'none' : hovered ? `0 6px 14px ${NEU_GRADIENTS.forest[0]}55, ${NEU.outSmHover}` : `0 3px 8px ${NEU_GRADIENTS.forest[0]}40, ${NEU.outSm}`,
+        boxShadow: disabled ? 'none' : hovered ? `0 6px 14px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 33%, transparent), ${NEU.outSmHover}` : `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 25%, transparent), ${NEU.outSm}`,
         transform: disabled ? 'none' : pressed ? 'scale(0.94)' : hovered ? 'translateY(-2px)' : 'translateY(0)',
         transition: `box-shadow 220ms ${EASE}, transform 140ms ${EASE}`,
       }}
@@ -142,7 +142,7 @@ function SignInLink({ next }: { next: string }) {
         background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
         color: NEU.gold, fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, letterSpacing: '0.06em',
         textDecoration: 'none',
-        boxShadow: hovered ? `0 6px 14px ${NEU_GRADIENTS.forest[0]}55, ${NEU.outSmHover}` : `0 3px 8px ${NEU_GRADIENTS.forest[0]}40, ${NEU.outSm}`,
+        boxShadow: hovered ? `0 6px 14px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 33%, transparent), ${NEU.outSmHover}` : `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 25%, transparent), ${NEU.outSm}`,
         transform: pressed ? 'scale(0.96)' : hovered ? 'translateY(-2px)' : 'translateY(0)',
         transition: `box-shadow 220ms ${EASE}, transform 140ms ${EASE}`,
       }}
@@ -196,7 +196,7 @@ function PaperHandoff({ fileName, fileUrl, sizeBytes }: { fileName: string; file
           style={{
             width: 46, height: 46, borderRadius: 14,
             background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-            color: NEU.gold, boxShadow: `0 4px 12px ${NEU_GRADIENTS.forest[0]}40`,
+            color: NEU.gold, boxShadow: `0 4px 12px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 25%, transparent)`,
           }}
         >
           <FileText size={22} strokeWidth={1.9} />
@@ -221,7 +221,7 @@ function PaperHandoff({ fileName, fileUrl, sizeBytes }: { fileName: string; file
           minHeight: 48, borderRadius: 14, textDecoration: 'none',
           background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
           color: NEU.gold, fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, letterSpacing: '0.05em',
-          boxShadow: `0 6px 16px ${NEU_GRADIENTS.forest[0]}45`,
+          boxShadow: `0 6px 16px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent)`,
         }}
       >
         <ExternalLink size={17} strokeWidth={2.2} />
@@ -531,7 +531,7 @@ export default function PositionPaperPage() {
                         icon={Check}
                         background={`linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`}
                         color={NEU.gold}
-                        boxShadowColor={`${NEU_GRADIENTS.green[0]}55`}
+                        boxShadowColor={`color-mix(in srgb, ${NEU_GRADIENTS.green[0]} 33%, transparent)`}
                       >
                         APPROVE
                       </ActionButton>
@@ -652,7 +652,7 @@ export default function PositionPaperPage() {
                     icon={Download}
                     background={`linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`}
                     color={NEU.gold}
-                    boxShadowColor={`${NEU_GRADIENTS.forest[0]}55`}
+                    boxShadowColor={`color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 33%, transparent)`}
                     style={{ flexShrink: 0 }}
                   >
                     DOWNLOAD

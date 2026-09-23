@@ -284,7 +284,7 @@ function NeuAnchorCta({ href, icon: Icon, children, gradient = NEU_GRADIENTS.for
         fontWeight: 800,
         letterSpacing: '0.05em',
         textDecoration: 'none',
-        boxShadow: hovered ? `0 6px 16px ${gradient[0]}66, ${NEU.outSmHover}` : `0 4px 10px ${gradient[0]}4D, ${NEU.outSm}`,
+        boxShadow: hovered ? `0 6px 16px color-mix(in srgb, ${gradient[0]} 40%, transparent), ${NEU.outSmHover}` : `0 4px 10px color-mix(in srgb, ${gradient[0]} 30%, transparent), ${NEU.outSm}`,
         transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
         transition: `box-shadow 260ms ${EASE}, transform 260ms ${EASE}`,
       }}
@@ -447,7 +447,7 @@ function InviteCardShell({ title, subtitle, responding, onDecline, onAccept }: {
           style={{
             padding: '7px 14px', borderRadius: 999, border: 'none',
             background: busy ? NEU.base : `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-            boxShadow: busy ? NEU.inSm : `0 3px 8px ${NEU_GRADIENTS.forest[0]}44, ${NEU.outSm}`,
+            boxShadow: busy ? NEU.inSm : `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}`,
             color: busy ? NEU.muted : NEU.gold, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800,
             letterSpacing: '0.04em', cursor: busy ? 'not-allowed' : 'pointer',
           }}
@@ -537,7 +537,7 @@ function PendingImportInvitesSection({ invites }: { invites: ImportInvite[] }) {
                 style={{
                   background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
                   color: NEU.gold, textDecoration: 'none', fontFamily: OUTFIT, letterSpacing: '0.05em',
-                  boxShadow: `0 4px 10px ${NEU_GRADIENTS.forest[0]}4D, ${NEU.outSm}`,
+                  boxShadow: `0 4px 10px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 30%, transparent), ${NEU.outSm}`,
                 }}
               >
                 OPEN INVITATION
@@ -658,7 +658,7 @@ function DraftRowCard({ draft, onDelete }: { draft: DraftRow; onDelete: (draft: 
           style={{
             padding: '8px 14px', borderRadius: 999, border: 'none',
             background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-            boxShadow: `0 3px 8px ${NEU_GRADIENTS.forest[0]}44, ${NEU.outSm}`,
+            boxShadow: `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}`,
             color: NEU.gold, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800,
             letterSpacing: '0.05em', textDecoration: 'none', whiteSpace: 'nowrap',
           }}

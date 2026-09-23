@@ -37,7 +37,7 @@ export function Panel({ children, style, tone = 'surface', id }: {
   return (
     <section
       id={id}
-      style={{ backgroundColor: bg, border: NEU.hairline, borderRadius: 18, padding: '18px 18px', ...style }}
+      style={{ backgroundColor: bg, boxShadow: NEU.out, borderRadius: 18, padding: '18px 18px', ...style }}
     >
       {children}
     </section>
@@ -79,10 +79,23 @@ export function Divider() {
 
 // ── Marks: icon + plain word ────────────────────────────────────────────────
 
+/** Icon + plain word (never a pill). The icon sits in a small raised disc of
+ *  the status's own colour: a gradient, a glow in that hue and an inner top
+ *  highlight, so the state reads at a glance and still feels 3D. */
 function Mark({ icon: I, text, color, title }: { icon: Icon; text: string; color: string; title?: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 min-w-0" title={title} style={{ color, fontFamily: OUTFIT, fontSize: 13, fontWeight: 600 }}>
-      <I size={15} strokeWidth={2.2} aria-hidden style={{ flexShrink: 0 }} />
+    <span className="inline-flex items-center gap-1.5 min-w-0" title={title} style={{ color, fontFamily: OUTFIT, fontSize: 13, fontWeight: 700 }}>
+      <span
+        aria-hidden
+        className="inline-flex items-center justify-center flex-shrink-0"
+        style={{
+          width: 20, height: 20, borderRadius: 999, color: '#FFFFFF',
+          background: `linear-gradient(135deg, color-mix(in srgb, ${color} 72%, white), ${color})`,
+          boxShadow: `0 2px 6px -1px color-mix(in srgb, ${color} 45%, transparent), inset 0 1px 0 rgba(255,255,255,0.3)`,
+        }}
+      >
+        <I size={12} strokeWidth={2.6} />
+      </span>
       <span className="truncate">{text}</span>
     </span>
   );
@@ -142,7 +155,7 @@ export function CommitteeHeading({ committee, aside }: { committee: PortalCommit
   const { primary, secondary } = committeeDisplay(committee);
   return (
     <div className="flex items-center gap-3 min-w-0">
-      <LogoDisc src={committee?.logo_url} size={40} fallbackText={committeeMonogram(committee)} alt={primary} style={{ boxShadow: 'none', border: NEU.hairline }} />
+      <LogoDisc src={committee?.logo_url} size={40} fallbackText={committeeMonogram(committee)} alt={primary} style={{ boxShadow: NEU.outSm }} />
       <div className="min-w-0 flex-1">
         <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 16, fontWeight: 800, color: NEU.ink, letterSpacing: '-0.01em' }}>{primary}</p>
         {secondary && <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.inkSoft, marginTop: 1 }}>{secondary}</p>}
@@ -158,13 +171,13 @@ export function PersonAvatar({ name, url, size = 36 }: { name: string; url: stri
   const initial = (name?.trim()?.charAt(0) ?? '?').toUpperCase();
   if (url) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={url} alt="" aria-hidden className="rounded-full object-cover flex-shrink-0" style={{ width: size, height: size, border: NEU.hairline }} />;
+    return <img src={url} alt="" aria-hidden className="rounded-full object-cover flex-shrink-0" style={{ width: size, height: size, boxShadow: '0 2px 6px -1px rgba(27,56,40,0.3)' }} />;
   }
   return (
     <span
       aria-hidden
       className="inline-flex items-center justify-center rounded-full flex-shrink-0"
-      style={{ width: size, height: size, backgroundColor: NEU.forest, color: NEU.gold, fontFamily: OUTFIT, fontWeight: 700, fontSize: Math.round(size * 0.42), lineHeight: 1 }}
+      style={{ width: size, height: size, background: `linear-gradient(135deg, ${NEU.green}, ${NEU.forest})`, boxShadow: '0 3px 8px -2px rgba(27,56,40,0.4), inset 0 1px 0 rgba(255,255,255,0.16)', color: NEU.gold, fontFamily: OUTFIT, fontWeight: 700, fontSize: Math.round(size * 0.42), lineHeight: 1 }}
     >
       {initial}
     </span>
@@ -178,7 +191,8 @@ export function PrimaryButton({ children, onClick, disabled, icon: I, href, styl
 }) {
   const s: CSSProperties = {
     display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 12,
-    backgroundColor: NEU.forest, color: NEU.gold, fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700,
+    background: `linear-gradient(160deg, ${NEU.green}, ${NEU.forest} 70%)`, color: NEU.gold, fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700,
+    boxShadow: disabled ? 'none' : '0 4px 12px -3px rgba(27,56,40,0.45), inset 0 1px 0 rgba(255,255,255,0.16)',
     border: 'none', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1, textDecoration: 'none',
     whiteSpace: 'nowrap', ...style,
   };
@@ -204,7 +218,7 @@ export function QuietButton({ children, onClick, disabled, icon: I, title, dange
       style={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: children ? '8px 12px' : 0,
         width: children ? undefined : 34, height: children ? undefined : 34,
-        borderRadius: 10, backgroundColor: NEU.surface, border: NEU.hairline,
+        borderRadius: 10, backgroundColor: NEU.surface, border: 'none', boxShadow: NEU.outSm,
         color: danger ? DANGER : NEU.forest, fontFamily: OUTFIT, fontSize: 13, fontWeight: 700,
         cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1, whiteSpace: 'nowrap', ...style,
       }}
@@ -329,7 +343,7 @@ export function RowMenu({ actions, label }: { actions: MenuAction[]; label: stri
         aria-expanded={open}
         onClick={() => { if (!open) place(); setOpen((o) => !o); }}
         className="focus:outline-none focus-visible:ring-2 inline-flex items-center justify-center flex-shrink-0"
-        style={{ width: 36, height: 36, borderRadius: 10, border: NEU.hairline, backgroundColor: NEU.surface, color: NEU.forest, cursor: 'pointer' }}
+        style={{ width: 36, height: 36, borderRadius: 10, border: 'none', boxShadow: NEU.outSm, backgroundColor: NEU.surface, color: NEU.forest, cursor: 'pointer' }}
       >
         <MoreHorizontal size={18} strokeWidth={2.3} aria-hidden />
       </button>

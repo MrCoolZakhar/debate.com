@@ -218,7 +218,7 @@ export default function AdminClient() {
                   textTransform: 'uppercase',
                   color: on ? NEU.gold : NEU.ink,
                   background: on ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : 'transparent',
-                  boxShadow: on ? `0 4px 12px ${NEU_GRADIENTS.forest[0]}4D, ${NEU.outSm}` : 'none',
+                  boxShadow: on ? `0 4px 12px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 30%, transparent), ${NEU.outSm}` : 'none',
                   transition: `box-shadow 240ms ${EASE}, color 240ms ${EASE}, background 240ms ${EASE}`,
                 }}
               >

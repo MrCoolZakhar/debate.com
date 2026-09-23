@@ -924,7 +924,9 @@ function ReasonChip({ reason, why, more }: { reason: string; why?: string | null
         fontSize: 9, fontWeight: 800, letterSpacing: '0.05em', fontFamily: MONO,
         backgroundColor: bg,
         color: fg,
-        border: `1px solid color-mix(in srgb, ${fg} 22%, transparent)`,
+        // Raised in its own hue: a coloured drop, an inner top highlight and
+        // a ring of its own colour. Never a white halo.
+        boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${fg} 20%, transparent), inset 0 1px 0 rgba(255,255,255,0.5), 0 2px 6px -1px color-mix(in srgb, ${fg} 30%, transparent)`,
       }}
     >
       {reason}
@@ -1093,7 +1095,7 @@ function RailSourceToggle({ value, onChange }: { value: 'delegates' | 'delegatio
               letterSpacing: '0.06em',
               border: 'none',
               background: active ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : 'transparent',
-              boxShadow: active ? `0 3px 8px ${NEU_GRADIENTS.forest[0]}44, ${NEU.outSm}` : 'none',
+              boxShadow: active ? `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}` : 'none',
               color: active ? NEU.gold : NEU.muted,
               cursor: 'pointer',
               transition: 'color 200ms, box-shadow 200ms',
@@ -2654,7 +2656,7 @@ function CommitteeBoardPanel({
         boxShadow: isDropTarget
           ? `0 0 0 2px ${NEU.forest}, ${NEU.outHover}`
           : primed
-          ? `0 0 0 1.5px ${NEU.deepGold}66, ${NEU.out}`
+          ? `0 0 0 1.5px color-mix(in srgb, ${NEU.deepGold} 40%, transparent), ${NEU.out}`
           : NEU.out,
         transform: isDropTarget ? 'translateY(-2px)' : 'translateY(0)',
         transition: `box-shadow 220ms cubic-bezier(0.22,1,0.36,1), transform 220ms cubic-bezier(0.22,1,0.36,1)`,
@@ -3229,7 +3231,7 @@ function ChairBoardPanel({
         boxShadow: isDropTarget
           ? `0 0 0 2px ${NEU.forest}, ${NEU.outHover}`
           : (dragging || selectable)
-          ? `0 0 0 1.5px ${NEU.deepGold}66, ${NEU.out}`
+          ? `0 0 0 1.5px color-mix(in srgb, ${NEU.deepGold} 40%, transparent), ${NEU.out}`
           : NEU.out,
         transform: isDropTarget ? 'translateY(-2px)' : 'translateY(0)',
         transition: `box-shadow 220ms cubic-bezier(0.22,1,0.36,1), transform 220ms cubic-bezier(0.22,1,0.36,1)`,
@@ -4760,7 +4762,7 @@ export default function AssignmentPage() {
                 letterSpacing: '0.06em',
                 border: 'none',
                 background: active ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : 'transparent',
-                boxShadow: active ? `0 3px 8px ${NEU_GRADIENTS.forest[0]}44, ${NEU.outSm}` : 'none',
+                boxShadow: active ? `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}` : 'none',
                 color: active ? NEU.gold : NEU.muted,
                 cursor: 'pointer',
                 transition: 'color 200ms, box-shadow 200ms',
@@ -4801,7 +4803,7 @@ export default function AssignmentPage() {
               style={{
                 borderRadius: 22,
                 background: `linear-gradient(140deg, rgba(238,217,138,0.22), rgba(240,235,221,0.55)), ${NEU.surface}`,
-                boxShadow: `inset 0 0 0 1.5px ${NEU.deepGold}40, ${NEU.out}`,
+                boxShadow: `inset 0 0 0 1.5px color-mix(in srgb, ${NEU.deepGold} 25%, transparent), ${NEU.out}`,
               }}
             >
               <div className="flex items-center gap-2 mb-3.5">

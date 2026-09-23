@@ -83,7 +83,7 @@ export function OverviewTab({ data, onGo }: { data: PortalData; onGo: (tab: Port
       {/* The delegation */}
       <Panel style={{ padding: '20px 18px' }}>
         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-          <LogoDisc src={society.logo_url ?? null} size={84} fallbackText={initialsOf(society.name)} alt={society.name} style={{ boxShadow: 'none', border: NEU.hairline }} />
+          <LogoDisc src={society.logo_url ?? null} size={84} fallbackText={initialsOf(society.name)} alt={society.name} style={{ boxShadow: NEU.out }} />
           <div className="min-w-0 flex-1">
             <h1 style={{ fontFamily: OUTFIT, fontSize: 26, fontWeight: 800, color: NEU.ink, letterSpacing: '-0.02em', lineHeight: 1.15, textWrap: 'balance' }}>
               {society.name}
@@ -165,7 +165,7 @@ function GoLink({ children, onClick }: { children: ReactNode; onClick: () => voi
 
 function LeaderLine({ icon: I, label, people, empty }: { icon: typeof Crown; label: string; people: { id: string; name: string; avatar_url: string | null }[]; empty: string }) {
   return (
-    <div className="flex items-center gap-3 min-w-0" style={{ padding: '12px 14px', borderRadius: 14, backgroundColor: NEU.wash }}>
+    <div className="flex items-center gap-3 min-w-0" style={{ padding: '12px 14px', borderRadius: 14, backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
       <I size={18} strokeWidth={2.2} aria-hidden style={{ color: NEU.deepGold, flexShrink: 0 }} />
       <div className="min-w-0 flex-1">
         <p style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: NEU.inkSoft }}>{label}</p>

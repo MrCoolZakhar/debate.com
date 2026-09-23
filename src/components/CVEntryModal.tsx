@@ -130,7 +130,7 @@ const inputStyle: React.CSSProperties = {
   backgroundColor: '#F4EFE3',
   color: '#1C1410',
   fontFamily: OUTFIT,
-  boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.10), inset 0 1px 1.5px rgba(27,56,40,0.05)',
+  boxShadow: 'inset 2px 2px 5px rgba(27,56,40,0.10), inset -2px -2px 5px rgba(255,255,255,0.7)',
 };
 
 // ── Anchored dropdown (portaled, never clipped) ──────────────────────────────
@@ -1012,7 +1012,7 @@ export function CVEntryModal({
                         : '#F4EFE3',
                       boxShadow: active
                         ? `0 4px 12px ${t.accent}2E`
-                        : 'inset 0 0 0 1px rgba(27,56,40,0.08), inset 0 1px 1.5px rgba(27,56,40,0.04)',
+                        : 'inset 2px 2px 5px rgba(27,56,40,0.08), inset -2px -2px 5px rgba(255,255,255,0.7)',
                       cursor: isVerified ? 'not-allowed' : 'pointer',
                       opacity: isVerified && !active ? 0.5 : 1,
                     }}

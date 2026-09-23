@@ -541,8 +541,8 @@ const RED_PANEL: React.CSSProperties = {
  *  now-playing panel (`live/CommitteeCard.tsx:474-479`) — same base colour,
  *  same inset shadow — so the two surfaces are visibly the same material. */
 const WELL: React.CSSProperties = {
-  backgroundColor: NEU.well,
-  boxShadow: NEU.in,
+  backgroundColor: '#EDE7D8',
+  boxShadow: NEU.inSm,
 };
 
 /** A raised token sitting IN a pressed well — the live card's art disc
@@ -1094,7 +1094,7 @@ function NewEmailModal({
           style={{
             ...PANEL,
             maxWidth: 760,
-            boxShadow: `${NEU.ring}, 0 18px 46px -10px rgba(27,56,40,0.36)`,
+            boxShadow: '-8px -8px 20px rgba(255,255,255,0.45), 16px 18px 46px rgba(27,56,40,0.34)',
             animation: `commsPop 220ms ${EASE} both`,
           }}
         >
@@ -1147,7 +1147,7 @@ function NewEmailModal({
                 }}
                 onMouseEnter={e => {
                   (e.currentTarget as HTMLElement).style.boxShadow =
-                    `inset ${NEU.ringStrong}, inset 0 2px 4px rgba(27,56,40,0.10)`;
+                    'inset 3px 3px 9px rgba(27,56,40,0.18), inset -3px -3px 9px rgba(255,255,255,0.75)';
                 }}
                 onMouseLeave={e => {
                   (e.currentTarget as HTMLElement).style.boxShadow = WELL.boxShadow as string;
@@ -1487,7 +1487,7 @@ function Console({
           <div
             className="w-full overflow-hidden"
             style={{
-              height: 6, borderRadius: 6, backgroundColor: NEU.well,
+              height: 6, borderRadius: 6, backgroundColor: '#F0EBDD',
               // The empty track keeps its FULL inset. On the live card the
               // 0.55 dim is fine because that card's track sits on a lighter
               // well; here a dimmed empty track vanished into the well
@@ -1563,7 +1563,7 @@ function StatWell({
       }}
       onMouseEnter={interactive ? e => {
         (e.currentTarget as HTMLElement).style.boxShadow =
-          `inset ${NEU.ringStrong}, inset 0 2px 4px rgba(27,56,40,0.10)`;
+          'inset 3px 3px 8px rgba(27,56,40,0.17), inset -3px -3px 8px rgba(255,255,255,0.72)';
       } : undefined}
       onMouseLeave={interactive ? e => {
         (e.currentTarget as HTMLElement).style.boxShadow = WELL.boxShadow as string;

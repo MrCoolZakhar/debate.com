@@ -37,7 +37,7 @@ export function CheckChip({ label, checked, onClick }: { label: string; checked:
         letterSpacing: '0.02em',
         color: checked ? '#FFFFFF' : NEU.ink,
         background: checked ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : NEU.surface,
-        boxShadow: checked ? `0 3px 8px ${NEU_GRADIENTS.forest[0]}44, ${NEU.outSm}` : NEU.outSm,
+        boxShadow: checked ? `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}` : NEU.outSm,
         border: 'none',
         cursor: 'pointer',
         transition: `box-shadow 180ms ${EASE}`,
@@ -219,7 +219,7 @@ export function FilterPopoverShell({
           fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.03em',
           color: open ? '#FFFFFF' : NEU.ink,
           background: open ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : NEU.surface,
-          boxShadow: open ? `0 4px 10px ${NEU_GRADIENTS.forest[0]}44, ${NEU.outSm}` : NEU.outSm,
+          boxShadow: open ? `0 4px 10px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}` : NEU.outSm,
           border: 'none', cursor: 'pointer',
           transition: `box-shadow 200ms ${EASE}`,
         }}

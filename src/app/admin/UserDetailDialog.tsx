@@ -191,7 +191,7 @@ function Section({
   return (
     <section aria-labelledby={id} className="mb-7">
       <h3 id={id} className="flex items-center gap-2 mb-1.5" style={{ fontSize: 13, fontWeight: 800, color: C.forest }}>
-        <span className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 24, height: 24, borderRadius: 999, background: `${tint}1F`, color: tint }}>
+        <span className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 24, height: 24, borderRadius: 999, background: `${tint}1F`, color: tint, boxShadow: `inset 0 0 0 1px ${tint}33, 0 2px 5px -1px ${tint}40` }}>
           <Icon size={13} strokeWidth={2.4} aria-hidden />
         </span>
         {title}
@@ -302,6 +302,7 @@ function EmailDraft({ to, name }: { to: string; name: string }) {
           style={{
             padding: '8px 15px', borderRadius: 999, border: `1.5px solid ${ready ? C.forest : C.parchment}`,
             background: ready ? C.forest : C.cream, color: ready ? C.gold : C.inkSoft,
+            boxShadow: ready ? '0 4px 10px -2px rgba(27,56,40,0.4), inset 0 1px 0 rgba(255,255,255,0.14)' : 'none',
             fontSize: 12, fontWeight: 800, textDecoration: 'none', pointerEvents: ready ? 'auto' : 'none',
           }}
         >
@@ -314,7 +315,8 @@ function EmailDraft({ to, name }: { to: string; name: string }) {
             onClick={() => void copy(what)}
             className="inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2"
             style={{
-              padding: '8px 13px', borderRadius: 999, border: `1.5px solid ${C.parchment}`, background: C.cream,
+              padding: '8px 13px', borderRadius: 999, border: 'none', background: C.cream,
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.5), 0 1px 2px rgba(27,56,40,0.12), 0 3px 7px -2px rgba(27,56,40,0.17)',
               color: C.forest, fontSize: 12, fontWeight: 800, cursor: 'pointer',
             }}
           >
@@ -391,7 +393,7 @@ export default function UserDetailDialog({ userId, onClose }: { userId: string; 
               <div className="py-12 px-6 text-center">
                 <p style={{ fontSize: 13, color: RED }}>{error}</p>
                 <button type="button" onClick={requestClose} className="mt-4 focus:outline-none focus-visible:ring-2"
-                  style={{ padding: '8px 15px', borderRadius: 999, border: `1.5px solid ${C.parchment}`, background: C.cream, color: C.forest, fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>
+                  style={{ padding: '8px 15px', borderRadius: 999, border: 'none', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.5), 0 1px 2px rgba(27,56,40,0.12), 0 3px 7px -2px rgba(27,56,40,0.17)', background: C.cream, color: C.forest, fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>
                   Close
                 </button>
               </div>
@@ -587,7 +589,7 @@ export default function UserDetailDialog({ userId, onClose }: { userId: string; 
                               title={<><span className="truncate" title={r.committee_full}>{r.committee}</span><span style={{ fontSize: 12, fontWeight: 700, color: C.inkSoft }}>{r.conference}</span></>}
                               detail={<span className="flex items-center gap-2 flex-wrap">
                                 <span className="inline-flex items-center gap-1" style={{ color: room.colour, fontWeight: 700 }}>
-                                  {room.live && <span aria-hidden style={{ width: 7, height: 7, borderRadius: 999, background: room.colour }} />}
+                                  {room.live && <span aria-hidden style={{ width: 7, height: 7, borderRadius: 999, background: room.colour, boxShadow: `0 0 0 3px color-mix(in srgb, ${room.colour} 18%, transparent)` }} />}
                                   {room.word}
                                 </span>
                                 {r.session_code && <span style={{ fontFamily: 'ui-monospace, monospace', letterSpacing: '0.06em' }}>{r.session_code}</span>}

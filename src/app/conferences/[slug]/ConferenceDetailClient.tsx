@@ -5,7 +5,8 @@ import { Fragment, useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound, Gavel, Eye, ScrollText, CreditCard, Languages } from 'lucide-react';
-import { committeeLanguageCode } from '@/lib/committeeLanguage';
+import { committeeLanguageCode, committeeLanguageFlag } from '@/lib/committeeLanguage';
+import { CircleFlag } from '@/components/CircleFlag';
 import SiteNav from '@/components/SiteNav';
 import FooterLegal from '@/components/FooterLegal';
 import Portal from '@/components/Portal';
@@ -2968,7 +2969,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                       aria-label={`Working language: ${c.working_language}`}
                                       style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 700, color: '#6B5F52', letterSpacing: '0.06em' }}
                                     >
-                                      <Languages size={12} strokeWidth={2.2} aria-hidden style={{ color: 'var(--gv-accent)' }} />
+                                      {committeeLanguageFlag(c.working_language)
+                                        ? <CircleFlag code={committeeLanguageFlag(c.working_language)!} size={14} decorative />
+                                        : <Languages size={12} strokeWidth={2.2} aria-hidden style={{ color: 'var(--gv-accent)' }} />}
                                       {committeeLanguageCode(c.working_language)}
                                     </span>
                                   </div>

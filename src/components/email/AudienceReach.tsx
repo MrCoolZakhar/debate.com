@@ -446,7 +446,7 @@ export default function AudienceReach({
               className="inline-flex items-center justify-center flex-shrink-0"
               style={{
                 width: 38, height: 38, borderRadius: 13,
-                background: `linear-gradient(135deg, ${NEU_GRADIENTS.gold[0]}40, ${NEU_GRADIENTS.gold[1]}33), ${NEU.surface}`,
+                background: `linear-gradient(135deg, color-mix(in srgb, ${NEU_GRADIENTS.gold[0]} 25%, transparent), color-mix(in srgb, ${NEU_GRADIENTS.gold[1]} 20%, transparent)), ${NEU.surface}`,
                 boxShadow: NEU.outSm,
               }}
             >

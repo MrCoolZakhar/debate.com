@@ -227,7 +227,7 @@ export default function ApplicantDetailDialog({
               {meta.length > 0 && <div className="flex items-center flex-wrap gap-x-3.5 gap-y-1 mt-2" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: 'rgba(237,231,216,0.92)' }}>
                 {meta.map((m, i) => (
                   <span key={i} className="inline-flex items-center gap-3.5">
-                    {i > 0 && <span aria-hidden style={{ color: 'rgba(237,231,216,0.45)' }}>·</span>}
+                    {i > 0 && <span aria-hidden style={{ color: C.goldDeep, fontSize: 9 }}>◆</span>}
                     {m}
                   </span>
                 ))}

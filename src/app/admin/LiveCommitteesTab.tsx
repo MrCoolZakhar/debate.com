@@ -59,8 +59,9 @@ import {
 
 const MONO = 'ui-monospace, monospace';
 const SURFACE = '#F0EBDD';
-const WELL = 'rgba(27,56,40,0.05)';
-const WELL_EDGE = 'inset 0 0 0 1px rgba(27,56,40,0.08)';
+// The neumorphic dent: the page ground pressed into the card.
+const WELL = NEU.base;
+const WELL_EDGE = NEU.in;
 
 // ── Row shape, mirrors admin_live_committees() exactly ──────────────────────
 
@@ -364,7 +365,7 @@ function CopyCode({ value }: { value: string }) {
       }}
       className="inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2"
       style={{
-        border: CARD_BORDER, borderRadius: 999, padding: '5px 10px', backgroundColor: SURFACE, cursor: 'pointer',
+        border: 'none', boxShadow: NEU.outSm, borderRadius: 999, padding: '5px 10px', backgroundColor: SURFACE, cursor: 'pointer',
         fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: '0.09em',
         color: copied ? GREEN_INK : NEU.ink,
       }}
@@ -424,7 +425,7 @@ function NowPlayingPanel({ np }: { np: NowPlaying }) {
       </div>
 
       <div style={{ marginBlockStart: 9 }}>
-        <div className="w-full overflow-hidden" style={{ height: 6, borderRadius: 6, backgroundColor: 'rgba(27,56,40,0.10)', opacity: hasMeter ? 1 : 0.55 }}>
+        <div className="w-full overflow-hidden" style={{ height: 6, borderRadius: 6, backgroundColor: SURFACE, boxShadow: 'inset 1px 1px 3px rgba(27,56,40,0.18), inset -1px -1px 3px rgba(255,255,255,0.7)', opacity: hasMeter ? 1 : 0.55 }}>
           <div style={{ inlineSize: `${hasMeter ? pct : 0}%`, height: '100%', borderRadius: 6, background: `linear-gradient(90deg, ${from}, ${to})`, transition: 'inline-size 900ms linear' }} />
         </div>
         <div className="flex items-start justify-between gap-3" style={{ marginBlockStart: 6 }}>
@@ -542,7 +543,7 @@ function CommitteeCard({ r }: { r: LiveRow }) {
             </div>
             <div className="flex flex-col items-end flex-shrink-0" style={{ paddingBlockStart: 3, maxWidth: '50%' }}>
               <span className="inline-flex items-center gap-1.5" title={`Last activity ${fmtIdle(r.idle_minutes)}`}>
-                <span className={`rounded-full flex-shrink-0${meta.pulse ? ' animate-pulse' : ''}`} style={{ width: 8, height: 8, backgroundColor: meta.color }} />
+                <span className={`rounded-full flex-shrink-0${meta.pulse ? ' animate-pulse' : ''}`} style={{ width: 8, height: 8, backgroundColor: meta.color, boxShadow: `0 0 0 3px color-mix(in srgb, ${meta.color} 18%, transparent), 0 0 6px color-mix(in srgb, ${meta.color} 45%, transparent)` }} />
                 <span className="font-extrabold uppercase" style={{ color: meta.ink, fontFamily: OUTFIT, fontSize: 12, letterSpacing: '0.09em' }}>{meta.label}</span>
               </span>
               <div className="flex flex-col items-end" style={{ marginBlockStart: 5, gap: 3 }}>
@@ -746,7 +747,7 @@ export default function LiveCommitteesTab() {
             disabled={refreshing}
             className="inline-flex items-center gap-2 rounded-full py-2 px-3.5 focus:outline-none focus-visible:ring-2"
             style={{
-              border: CARD_BORDER, color: NEU.forest, backgroundColor: SURFACE,
+              border: 'none', boxShadow: NEU.outSm, color: NEU.forest, backgroundColor: SURFACE,
               fontFamily: OUTFIT, fontSize: 12, fontWeight: 800,
               opacity: refreshing ? 0.6 : 1, cursor: refreshing ? 'default' : 'pointer',
             }}
@@ -767,7 +768,7 @@ export default function LiveCommitteesTab() {
           const Icon = s.icon;
           return (
             <div key={s.label} className="flex items-center gap-3" style={{ padding: '12px 14px', borderRadius: 18, border: CARD_BORDER, backgroundColor: SURFACE, boxShadow: CARD_SHADOW }}>
-              <span className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 34, height: 34, borderRadius: 999, backgroundColor: `${s.tint}1A`, color: s.tint }}>
+              <span className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 34, height: 34, borderRadius: 999, background: `linear-gradient(135deg, color-mix(in srgb, ${s.tint} 78%, white), ${s.tint})`, color: '#FFFFFF', boxShadow: `0 4px 10px -2px color-mix(in srgb, ${s.tint} 45%, transparent), inset 0 1px 0 rgba(255,255,255,0.28)` }}>
                 <Icon size={16} strokeWidth={2.4} aria-hidden />
               </span>
               <div className="min-w-0">
@@ -794,17 +795,18 @@ export default function LiveCommitteesTab() {
               className="rounded-full px-3 py-1.5 focus:outline-none focus-visible:ring-2"
               style={{
                 fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, cursor: 'pointer',
-                border: active ? `1px solid ${NEU.forest}` : CARD_BORDER,
+                border: 'none',
                 backgroundColor: active ? NEU.forest : SURFACE,
+                boxShadow: active ? '0 4px 10px -2px rgba(27,56,40,0.4), inset 0 1px 0 rgba(255,255,255,0.14)' : NEU.outSm,
                 color: active ? NEU.gold : NEU.ink,
-                transition: `background-color 200ms ${EASE}, color 200ms ${EASE}`,
+                transition: `background-color 200ms ${EASE}, color 200ms ${EASE}, box-shadow 200ms ${EASE}`,
               }}
             >
               {f.label} <span style={{ opacity: 0.7, fontVariantNumeric: 'tabular-nums' }}>{f.n}</span>
             </button>
           );
         })}
-        <span className="flex items-center gap-2 rounded-full px-3 py-2 ml-auto" style={{ backgroundColor: WELL, border: CARD_BORDER }}>
+        <span className="flex items-center gap-2 rounded-full px-3 py-2 ml-auto" style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
           <Search size={13} style={{ color: SOFT }} />
           <input
             value={q}

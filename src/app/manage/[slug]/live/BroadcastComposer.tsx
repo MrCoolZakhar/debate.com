@@ -367,7 +367,7 @@ function Segment<T extends string>({
               border: 'none',
               textAlign: 'start',
               backgroundColor: active ? NEU.base : NEU.surface,
-              boxShadow: active ? `inset 0 0 0 1.5px ${o.gradient[0]}66, ${NEU.inSm}` : NEU.outSm,
+              boxShadow: active ? `inset 0 0 0 1.5px color-mix(in srgb, ${o.gradient[0]} 40%, transparent), ${NEU.inSm}` : NEU.outSm,
               cursor: disabled ? 'default' : 'pointer',
               opacity: disabled ? 0.55 : 1,
               transition: `box-shadow 220ms ${EASE}`,
@@ -711,7 +711,7 @@ export function BroadcastComposer({
                                 padding: '7px 14px', border: 'none',
                                 background: active ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : NEU.surface,
                                 color: active ? NEU.gold : NEU.ink,
-                                boxShadow: active ? `0 3px 8px ${NEU_GRADIENTS.forest[0]}55, ${NEU.outSm}` : NEU.outSm,
+                                boxShadow: active ? `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 33%, transparent), ${NEU.outSm}` : NEU.outSm,
                                 fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800,
                                 fontVariantNumeric: 'tabular-nums', cursor: 'pointer',
                                 transition: `box-shadow 200ms ${EASE}`,
@@ -806,7 +806,7 @@ export function BroadcastComposer({
                             style={{
                               width: 20, height: 20,
                               background: on ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : NEU.surface,
-                              boxShadow: on ? `0 2px 6px ${NEU_GRADIENTS.forest[0]}55` : NEU.inSm,
+                              boxShadow: on ? `0 2px 6px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 33%, transparent)` : NEU.inSm,
                               color: NEU.gold,
                             }}
                           >

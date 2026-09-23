@@ -210,7 +210,7 @@ export default function PositionPaperRoster({
                         icon={Check}
                         background={`linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`}
                         color={NEU.gold}
-                        boxShadowColor={`${NEU_GRADIENTS.green[0]}55`}
+                        boxShadowColor={`color-mix(in srgb, ${NEU_GRADIENTS.green[0]} 33%, transparent)`}
                       >
                         APPROVE
                       </ActionButton>

@@ -34,8 +34,11 @@
 // from joinUi so /join, /create and the organiser editor stay one family.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useId, useRef, useState, type ReactNode } from 'react';
-import { ImagePlus, RotateCcw, Loader2, Lock, X, Users2, Landmark, Scale, Zap, Minus, Plus, ChevronDown, Languages } from 'lucide-react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { ImagePlus, RotateCcw, Loader2, Lock, X, Users2, Landmark, Scale, Zap, Minus, Plus, ChevronDown, Check, Languages } from 'lucide-react';
+import Portal from '@/components/Portal';
+import { CircleFlag } from '@/components/CircleFlag';
+import { viewBox, useReposition } from '@/lib/visualViewport';
 import { C, OUTFIT, SHADOW } from '@/app/join/joinUi';
 import {
   EMBLEM_PICKS,
@@ -57,6 +60,8 @@ import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import {
   COMMITTEE_LANGUAGES,
   COMMITTEE_LANGUAGE_MAX,
+  DEFAULT_COMMITTEE_LANGUAGE,
+  committeeLanguageFlag,
   isListedCommitteeLanguage,
   normaliseCommitteeLanguage,
 } from '@/lib/committeeLanguage';
@@ -65,20 +70,20 @@ export { C, OUTFIT, SHADOW };
 
 /** One input look for every field in the editor. 16px on phones so iOS never zooms. */
 export const SETUP_INPUT_CLS =
-  'w-full rounded-[12px] bg-white/80 px-3 py-2 text-base sm:text-[14px] text-[#1C1410] placeholder-[#8A7C6B] ' +
+  'w-full rounded-[14px] bg-white/80 px-3.5 py-2.5 text-base sm:text-[15px] text-[#1C1410] placeholder-[#8A7C6B] ' +
   'shadow-[inset_0_0_0_1px_rgba(27,56,40,0.16)] focus:outline-none ' +
   'focus:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)] transition-[box-shadow] duration-150 ' +
   'disabled:opacity-55';
 
 /** Small uppercase label above a field. */
 export function SetupLabel({ children, htmlFor, aside }: { children: ReactNode; htmlFor?: string; aside?: ReactNode }) {
-  const style = { fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.14em', color: C.inkSoft } as const;
+  const style = { fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: C.inkSoft } as const;
   return (
-    <div className="mb-1 flex items-baseline gap-2">
+    <div className="mb-1.5 flex items-baseline gap-2">
       {htmlFor
         ? <label htmlFor={htmlFor} className="block uppercase" style={style}>{children}</label>
         : <span className="block uppercase" style={style}>{children}</span>}
-      {aside && <span className="min-w-0 flex-1 truncate" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: C.inkSoft }}>{aside}</span>}
+      {aside && <span className="min-w-0 flex-1 truncate" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: C.muted }}>{aside}</span>}
     </div>
   );
 }
@@ -86,18 +91,18 @@ export function SetupLabel({ children, htmlFor, aside }: { children: ReactNode; 
 /** The numbered step heading: a forest disc with the gold numeral, then the title. */
 export function SetupStep({ step, title, id, aside }: { step: number; title: string; id: string; aside?: ReactNode }) {
   return (
-    <header className="mb-2 flex min-h-[28px] flex-wrap items-center gap-x-2.5 gap-y-1.5">
+    <header className="mb-2.5 flex min-h-[30px] flex-wrap items-center gap-x-3 gap-y-1.5">
       <span
         aria-hidden
         className="flex flex-shrink-0 items-center justify-center tabular-nums"
         style={{
-          width: 22, height: 22, borderRadius: 999, backgroundColor: C.forest, color: C.gold,
-          fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, boxShadow: '0 1px 3px rgba(27,56,40,0.18)',
+          width: 26, height: 26, borderRadius: 999, backgroundColor: C.forest, color: C.gold,
+          fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, boxShadow: '0 2px 6px rgba(27,56,40,0.18)',
         }}
       >
         {step}
       </span>
-      <h3 id={id} className="me-auto" style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 800, letterSpacing: '-0.01em', color: C.forest, lineHeight: 1.2, margin: 0 }}>
+      <h3 id={id} className="me-auto" style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 800, letterSpacing: '-0.01em', color: C.forest, lineHeight: 1.2, margin: 0 }}>
         {title}
       </h3>
       {aside && <div className="flex flex-wrap items-center gap-2">{aside}</div>}
@@ -108,7 +113,7 @@ export function SetupStep({ step, title, id, aside }: { step: number; title: str
 // ── The live committee identity ──────────────────────────────────────────────
 // The /create preview, with the conference editor's type-toned monogram as the
 // fallback so nothing about crisis / custom committees is lost.
-export function CommitteeIdentityPreview({ src, primary, secondary, placeholder, topic, topicLabel, topicEmpty, tone, monogramText, compact = false, eyebrow }: {
+export function CommitteeIdentityPreview({ src, primary, secondary, placeholder, topic, topicLabel, topicEmpty, tone, monogramText }: {
   src: string | null;
   primary: string;
   secondary: string | null;
@@ -119,23 +124,17 @@ export function CommitteeIdentityPreview({ src, primary, secondary, placeholder,
   tone: MedallionTone;
   /** Initials for the fallback seal when there is no emblem. */
   monogramText: string;
-  /** The editor's header: a 56px emblem, one line each, so the identity IS the
-   *  dialog's title bar instead of a block of its own under it. */
-  compact?: boolean;
-  /** A small line above the name (the editor says what it is doing there). */
-  eyebrow?: ReactNode;
 }) {
   const hasName = !!primary;
   const shown = primary || placeholder;
-  const disc = compact ? 56 : 84;
   return (
-    <div aria-hidden className={`flex min-w-0 flex-shrink-0 items-center ${compact ? 'gap-3' : 'gap-4'}`}>
+    <div aria-hidden className="flex flex-shrink-0 items-center gap-4">
       {src ? (
         <span
           key={src}
           className="relative flex flex-shrink-0 items-center justify-center rounded-full bg-white"
           style={{
-            width: disc, height: disc,
+            width: 84, height: 84,
             boxShadow: '0 1px 2px rgba(27,56,40,0.10), 0 8px 22px rgba(27,56,40,0.14), inset 0 0 0 1px rgba(0,0,0,0.06)',
           }}
         >
@@ -145,28 +144,27 @@ export function CommitteeIdentityPreview({ src, primary, secondary, placeholder,
       ) : (
         /* No name yet → MonogramMedallion's own em-dash, never initials of the
            placeholder ("Untitled committee" used to read UNTITL). */
-        <MonogramMedallion text={monogramText} tone={tone} size={disc} />
+        <MonogramMedallion text={monogramText} tone={tone} size={84} />
       )}
 
       <div className="min-w-0 flex-1">
-        {eyebrow && <div className="mb-0.5">{eyebrow}</div>}
         <p
           className="truncate"
           title={shown}
           style={{
             fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '-0.015em', lineHeight: 1.12,
-            fontSize: compact ? (shown.length > 22 ? 18 : 22) : (shown.length > 22 ? 21 : 27),
-            color: hasName ? C.forest : C.inkSoft,
+            fontSize: shown.length > 22 ? 21 : 27,
+            color: hasName ? C.forest : C.muted,
           }}
         >
           {shown}
         </p>
         {secondary && (
-          <p className="mt-0.5 truncate" style={{ fontFamily: OUTFIT, fontSize: compact ? 12.5 : 13.5, fontWeight: 500, lineHeight: 1.35, color: C.inkSoft }}>
+          <p className="mt-0.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 500, lineHeight: 1.35, color: C.inkSoft }}>
             {secondary}
           </p>
         )}
-        <p className={`mt-0.5 ${compact ? 'truncate' : 'line-clamp-2'}`} style={{ fontFamily: OUTFIT, fontSize: compact ? 12.5 : 13.5, lineHeight: 1.4, color: topic ? C.ink : C.inkSoft, textWrap: 'pretty' }}>
+        <p className="mt-1 line-clamp-2" style={{ fontFamily: OUTFIT, fontSize: 13.5, lineHeight: 1.4, color: topic ? C.ink : C.muted, textWrap: 'pretty' }}>
           <span style={{ fontWeight: 800, color: C.goldDeep }}>{topicLabel}</span>{' '}
           <span style={{ fontWeight: 500 }}>{topic || topicEmpty}</span>
         </p>
@@ -209,7 +207,7 @@ export function AcronymField({ value, suggestion, onChange, disabled, onSubmit }
   const ch = Math.max(5, Math.min(18, (shown || suggestion || 'Add one').length + 1));
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-      <label htmlFor={id} style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.1em', color: C.inkSoft, textTransform: 'uppercase' }}>
+      <label htmlFor={id} style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', color: C.inkSoft, textTransform: 'uppercase' }}>
         Short name
       </label>
       <span className="relative inline-flex items-center">
@@ -226,10 +224,10 @@ export function AcronymField({ value, suggestion, onChange, disabled, onSubmit }
           onKeyDown={(e) => { if (e.key === 'Enter' && onSubmit) { e.preventDefault(); onSubmit(); } }}
           placeholder={suggestion || 'Add one'}
           title="The acronym shown wherever the full name is too long. Leave it empty to use the suggestion."
-          className="rounded-[9px] bg-white/80 px-2 py-0.5 text-center focus:outline-none focus:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_3px_rgba(27,56,40,0.08)] transition-[box-shadow] duration-150 disabled:opacity-55"
+          className="rounded-[10px] bg-white/80 px-2.5 py-1 text-center focus:outline-none focus:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_3px_rgba(27,56,40,0.08)] transition-[box-shadow] duration-150 disabled:opacity-55"
           style={{
             width: `calc(${ch}ch + 22px)`, minWidth: 72,
-            fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, letterSpacing: '0.05em',
+            fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 800, letterSpacing: '0.05em',
             color: C.forest,
             boxShadow: has
               ? 'inset 0 0 0 1.5px rgba(27,56,40,0.28)'
@@ -249,7 +247,7 @@ export function AcronymField({ value, suggestion, onChange, disabled, onSubmit }
           </button>
         )}
       </span>
-      <span className="min-w-0 flex-1 truncate" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: C.inkSoft }}>
+      <span className="min-w-0 flex-1 truncate" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 600, color: C.muted }}>
         {has
           ? 'Shown when the full name is long'
           : suggestion
@@ -289,22 +287,22 @@ export function EmblemPicker({ value, onPick, onUpload, onReset, uploading, canR
             aria-pressed={active}
             title={p.title}
             aria-label={p.title}
-            className="flex flex-col items-center gap-0.5 rounded-[12px] px-1 pb-0.5 pt-1 transition-[background-color,transform,box-shadow] duration-150 hover:bg-[#1B3828]/[0.05] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
-            style={{ width: 46, backgroundColor: active ? 'rgba(238,217,138,0.38)' : undefined }}
+            className="flex flex-col items-center gap-1 rounded-[14px] px-1.5 pb-1 pt-1.5 transition-[background-color,transform,box-shadow] duration-150 hover:bg-[#1B3828]/[0.05] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
+            style={{ width: 56, backgroundColor: active ? 'rgba(238,217,138,0.38)' : undefined }}
           >
             <span
               className="relative flex items-center justify-center rounded-full bg-white"
               style={{
-                width: 32, height: 32,
+                width: 38, height: 38,
                 boxShadow: active
                   ? '0 0 0 2px #1B3828, 0 2px 6px rgba(27,56,40,0.18)'
                   : '0 1px 2px rgba(27,56,40,0.10), inset 0 0 0 1px rgba(0,0,0,0.07)',
               }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={p.logo} alt="" draggable={false} decoding="async" className="block h-full w-full object-contain" style={{ padding: 4 }} />
+              <img src={p.logo} alt="" draggable={false} decoding="async" className="block h-full w-full object-contain" style={{ padding: 5 }} />
             </span>
-            <span className="max-w-full truncate" style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.04em', color: active ? C.forest : C.inkSoft }}>
+            <span className="max-w-full truncate" style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.04em', color: active ? C.forest : C.inkSoft }}>
               {p.label}
             </span>
           </button>
@@ -319,16 +317,16 @@ export function EmblemPicker({ value, onPick, onUpload, onReset, uploading, canR
         disabled={uploading}
         title="Upload your own emblem"
         aria-label="Upload your own emblem"
-        className="flex flex-col items-center gap-0.5 rounded-[12px] px-1 pb-0.5 pt-1 transition-[background-color,transform] duration-150 enabled:hover:bg-[#1B3828]/[0.05] enabled:active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
-        style={{ width: 46 }}
+        className="flex flex-col items-center gap-1 rounded-[14px] px-1.5 pb-1 pt-1.5 transition-[background-color,transform] duration-150 enabled:hover:bg-[#1B3828]/[0.05] enabled:active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
+        style={{ width: 56 }}
       >
         <span
           className="flex items-center justify-center rounded-full"
-          style={{ width: 32, height: 32, color: C.forest, boxShadow: 'inset 0 0 0 1.5px rgba(27,56,40,0.22)' }}
+          style={{ width: 38, height: 38, color: C.forest, boxShadow: 'inset 0 0 0 1.5px rgba(27,56,40,0.22)' }}
         >
           {uploading ? <Loader2 size={16} strokeWidth={2.4} className="animate-spin" /> : <ImagePlus size={16} strokeWidth={2.2} />}
         </span>
-        <span style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.04em', color: C.inkSoft }}>
+        <span style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.04em', color: C.inkSoft }}>
           {uploading ? 'Wait' : 'Upload'}
         </span>
       </button>
@@ -340,13 +338,13 @@ export function EmblemPicker({ value, onPick, onUpload, onReset, uploading, canR
           type="button"
           onClick={onReset}
           title="Go back to the emblem Gavelling picks from the committee name"
-          className="flex flex-col items-center gap-0.5 rounded-[12px] px-1 pb-0.5 pt-1 transition-[background-color,transform] duration-150 hover:bg-[#1B3828]/[0.05] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
-          style={{ width: 46 }}
+          className="flex flex-col items-center gap-1 rounded-[14px] px-1.5 pb-1 pt-1.5 transition-[background-color,transform] duration-150 hover:bg-[#1B3828]/[0.05] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
+          style={{ width: 56 }}
         >
-          <span className="flex items-center justify-center rounded-full" style={{ width: 32, height: 32, color: C.inkSoft, boxShadow: 'inset 0 0 0 1.5px rgba(27,56,40,0.16)' }}>
+          <span className="flex items-center justify-center rounded-full" style={{ width: 38, height: 38, color: C.inkSoft, boxShadow: 'inset 0 0 0 1.5px rgba(27,56,40,0.16)' }}>
             <RotateCcw size={15} strokeWidth={2.2} />
           </span>
-          <span style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.04em', color: C.inkSoft }}>Auto</span>
+          <span style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.04em', color: C.inkSoft }}>Auto</span>
         </button>
       )}
 
@@ -384,7 +382,7 @@ export function SetupPrimaryButton({ label, sub, state, onClick }: {
       disabled={saving}
       className={`relative flex w-full flex-col items-center justify-center overflow-hidden px-5 text-center transition-[transform,box-shadow,background-color] duration-150 focus:outline-none focus-visible:shadow-[0_0_0_3px_#FAF8F3,0_0_0_5px_#1B3828] ${ready ? 'hover:-translate-y-px active:scale-[0.97]' : ''}`}
       style={{
-        minHeight: 46, borderRadius: 14,
+        minHeight: 52, borderRadius: 16,
         backgroundColor: blocked ? 'rgba(27,56,40,0.06)' : C.forest,
         backgroundImage: blocked ? undefined : 'linear-gradient(135deg, #2E6446 0%, #1F4230 42%, #1B3828 62%, #122A1D 100%)',
         boxShadow: blocked
@@ -393,11 +391,11 @@ export function SetupPrimaryButton({ label, sub, state, onClick }: {
         cursor: blocked ? 'not-allowed' : saving ? 'progress' : 'pointer',
       }}
     >
-      <span className="relative flex max-w-full items-center justify-center gap-2 py-1.5">
+      <span className="relative flex max-w-full items-center justify-center gap-2 py-2">
         {saving && <Loader2 size={16} strokeWidth={2.6} className="shrink-0 animate-spin" style={{ color: C.gold }} aria-hidden />}
         {blocked && <Lock size={14} strokeWidth={2.4} className="shrink-0" style={{ color: C.muted }} aria-hidden />}
         <span className="flex min-w-0 flex-col items-center">
-          <span className="max-w-full truncate" style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 800, letterSpacing: '0.01em', lineHeight: 1.2, color: blocked ? C.forest : C.gold }}>
+          <span className="max-w-full truncate" style={{ fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 800, letterSpacing: '0.01em', lineHeight: 1.2, color: blocked ? C.forest : C.gold }}>
             {label}
           </span>
           {sub && (
@@ -419,9 +417,9 @@ export function SetupGhostButton({ label, onClick }: { label: string; onClick: (
       onClick={onClick}
       className="flex items-center justify-center px-5 transition-[background-color,transform] duration-150 hover:bg-[#1B3828]/[0.06] active:scale-[0.97] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
       style={{
-        minHeight: 46, borderRadius: 14, backgroundColor: 'transparent',
+        minHeight: 52, borderRadius: 16, backgroundColor: 'transparent',
         boxShadow: 'inset 0 0 0 1.5px rgba(27,56,40,0.16)',
-        fontFamily: OUTFIT, fontSize: 14, fontWeight: 800, color: C.forest,
+        fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 800, color: C.forest,
       }}
     >
       {label}
@@ -496,9 +494,9 @@ export interface CommitteeSetupDraft {
    *  Press roster free-text seats even under a non-crisis type). Null → the
    *  committee type's own default. */
   presetRosterMode: 'country' | 'character' | null;
-  /** `conference_committees.working_language`: a display name, or null for
-   *  "not set" (see src/lib/committeeLanguage.ts). Optional: the picker shows
-   *  only where the caller passes `showLanguage` (the editor and the wizard). */
+  /** `conference_committees.working_language`: a display name. New drafts start
+   *  on English (the column default); null still means "not set". Optional:
+   *  the picker shows only where the caller passes `showLanguage`. */
   workingLanguage?: string | null;
 }
 
@@ -507,7 +505,7 @@ export function emptyCommitteeSetupDraft(): CommitteeSetupDraft {
     name: '', abbreviation: '', topics: [], difficulty: 'intermediate',
     roster: [], groups: [], doubleDelegation: false,
     logoUrl: null, emblemManuallySet: false, presetRosterMode: null,
-    workingLanguage: null,
+    workingLanguage: DEFAULT_COMMITTEE_LANGUAGE,
   };
 }
 
@@ -568,12 +566,13 @@ export function committeeSetupPreview(draft: CommitteeSetupDraft) {
   };
 }
 
+// ── The set-up fields: step 1 (Committee) and step 2 (the seats) ─────────────
 // ── Delegates per seat ───────────────────────────────────────────────────────
 // (23 Sep 2026, owner: "I don't like the single/double delegation slider".) A
 // stepper that states the answer as a number and a plain sentence: "[−] 2 [+]
-// delegates per country". It still stores exactly what it always did: the draft's
-// `doubleDelegation` boolean, which the editor writes as delegation_size 1 or 2.
-// The range is 1 to 2 because that is all the allocation model supports.
+// delegates per country". It stores exactly what it always did: the draft's
+// `doubleDelegation` boolean, written as delegation_size 1 or 2 (all the
+// allocation model supports).
 export function DelegationSizeStepper({ value, onChange, noun }: {
   value: 1 | 2;
   onChange: (next: 1 | 2) => void;
@@ -591,23 +590,23 @@ export function DelegationSizeStepper({ value, onChange, noun }: {
         disabled={!can}
         aria-label={dir < 0 ? 'One delegate per seat' : 'Two delegates per seat'}
         title={dir < 0 ? `Single delegation: one delegate per ${noun}` : `Double delegation: two delegates share each ${noun}`}
-        className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full transition-[background-color,color,transform] duration-150 enabled:hover:bg-[#1B3828] enabled:hover:text-[#EED98A] enabled:active:scale-[0.94] disabled:opacity-30 focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
-        style={{ color: C.forest, boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.22)' }}
+        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-white transition-[background-color,color,transform,opacity] duration-150 enabled:hover:bg-[#1B3828] enabled:hover:text-[#EED98A] enabled:active:scale-[0.94] disabled:opacity-35 focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
+        style={{ color: C.forest, boxShadow: '0 1px 2px rgba(27,56,40,0.14), inset 0 0 0 1px rgba(27,56,40,0.12)' }}
       >
-        <Icon size={12} strokeWidth={2.6} />
+        <Icon size={13} strokeWidth={2.6} />
       </button>
     );
   };
   return (
-    <div role="group" aria-label="Delegates per seat" className="inline-flex flex-shrink-0 items-center gap-2">
-      <span className="inline-flex items-center gap-1.5 rounded-full px-1 py-0.5" style={{ backgroundColor: 'rgba(27,56,40,0.05)' }}>
+    <div role="group" aria-label="Delegates per seat" className="inline-flex flex-shrink-0 items-center gap-2.5">
+      <span className="inline-flex items-center gap-2 rounded-full p-1" style={{ backgroundColor: '#EFE9DB', boxShadow: 'inset 0 1px 2px rgba(27,56,40,0.10)' }}>
         {btn(-1)}
-        <span aria-live="polite" className="tabular-nums" style={{ minWidth: 14, textAlign: 'center', fontFamily: OUTFIT, fontSize: 15, fontWeight: 800, color: C.forest }}>
+        <span aria-live="polite" className="tabular-nums" style={{ minWidth: 14, textAlign: 'center', fontFamily: OUTFIT, fontSize: 16, fontWeight: 800, color: C.forest }}>
           {value}
         </span>
         {btn(1)}
       </span>
-      <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: C.inkSoft, whiteSpace: 'nowrap' }}>
+      <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: C.inkSoft, whiteSpace: 'nowrap' }}>
         {value === 1 ? 'delegate' : 'delegates'} per {noun}
       </span>
     </div>
@@ -615,8 +614,22 @@ export function DelegationSizeStepper({ value, onChange, noun }: {
 }
 
 // ── The working language ─────────────────────────────────────────────────────
-// A small select of the usual MUN languages, "Not set", and Other (free text).
-// Writes `workingLanguage` as a display name or null; see src/lib/committeeLanguage.ts.
+// (23 Sep 2026, owner: "Language selection by default should be English; use
+// flags for it as well.") A listbox, not a native select, because an <option>
+// cannot draw a flag: each listed language wears its round flag (CircleFlag,
+// `committeeLanguageFlag`), "Other" the Languages glyph and a free-text field.
+// The list renders through Portal at fixed coordinates, flipped above near the
+// bottom, so the editor's overflow can never clip it (UI RULES).
+function LanguageArt({ name, size }: { name: string | null; size: number }) {
+  const code = committeeLanguageFlag(name);
+  if (code) return <CircleFlag code={code} size={size} decorative />;
+  return (
+    <span className="flex flex-shrink-0 items-center justify-center rounded-full" style={{ width: size, height: size, backgroundColor: 'rgba(27,56,40,0.08)', color: C.forest }}>
+      <Languages size={Math.round(size * 0.58)} strokeWidth={2.1} aria-hidden />
+    </span>
+  );
+}
+
 export function CommitteeLanguagePicker({ value, onChange, id }: {
   value: string | null;
   onChange: (next: string | null) => void;
@@ -625,31 +638,112 @@ export function CommitteeLanguagePicker({ value, onChange, id }: {
   const listed = isListedCommitteeLanguage(value);
   const [otherOpen, setOtherOpen] = useState<boolean>(!!value && !listed);
   const showOther = otherOpen || (!!value && !listed);
-  const selectValue = showOther ? '__other' : (value ? COMMITTEE_LANGUAGES.find((l) => l.toLowerCase() === value.trim().toLowerCase()) ?? '' : '');
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const [pos, setPos] = useState<{ left: number; top: number; width: number; maxH: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const listId = useId();
+  const options: { key: string; label: string }[] = [
+    ...COMMITTEE_LANGUAGES.map((l) => ({ key: l, label: l })),
+    { key: '__other', label: 'Other…' },
+  ];
+  const current = showOther
+    ? options.length - 1
+    : Math.max(0, COMMITTEE_LANGUAGES.findIndex((l) => l.toLowerCase() === (value ?? '').trim().toLowerCase()));
+
+  const place = useCallback(() => {
+    const el = btnRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const vb = viewBox();
+    const want = Math.min(320, options.length * 38 + 12);
+    const below = vb.bottom - r.bottom - 8;
+    const above = r.top - vb.top - 8;
+    const up = below < Math.min(want, 220) && above > below;
+    const maxH = Math.max(120, Math.min(want, up ? above : below));
+    const width = Math.max(r.width, 200);
+    const left = Math.min(Math.max(vb.left + 8, r.left), vb.right - width - 8);
+    setPos({ left, width, maxH, top: up ? r.top - 6 - maxH : r.bottom + 6 });
+  }, [options.length]);
+  useReposition(open, place);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || listRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    // Escape folds the list only. The editor's own Escape (useModalEscape) is a
+    // DOCUMENT capture listener, so this one sits on WINDOW capture, earlier.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      setOpen(false);
+      btnRef.current?.focus();
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('pointerdown', onDown, true);
+      window.removeEventListener('keydown', onKey, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    listRef.current?.querySelector<HTMLElement>(`[data-idx="${active}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [open, active]);
+
+  function openList() {
+    place();
+    setActive(current);
+    setOpen(true);
+  }
+  function choose(i: number) {
+    const o = options[i];
+    setOpen(false);
+    btnRef.current?.focus();
+    if (o.key === '__other') { setOtherOpen(true); onChange(listed ? null : value); return; }
+    setOtherOpen(false);
+    onChange(o.key);
+  }
+
+  const shownName = showOther ? (value || 'Other') : (value || DEFAULT_COMMITTEE_LANGUAGE);
   return (
-    <div className="flex min-w-0 items-center gap-1.5">
-      <span className="relative inline-flex flex-shrink-0 items-center">
-        <select
-          id={id}
-          value={selectValue}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (v === '__other') { setOtherOpen(true); onChange(listed ? null : value); return; }
-            setOtherOpen(false);
-            onChange(v || null);
-          }}
-          className="appearance-none rounded-[10px] bg-white/80 py-1.5 ps-2.5 pe-7 focus:outline-none focus:shadow-[inset_0_0_0_2px_#1B3828] transition-[box-shadow] duration-150"
-          style={{
-            fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: value || showOther ? C.forest : C.inkSoft,
-            boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.16)', cursor: 'pointer',
-          }}
-        >
-          <option value="">Not set</option>
-          {COMMITTEE_LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
-          <option value="__other">Other…</option>
-        </select>
-        <ChevronDown aria-hidden size={13} strokeWidth={2.4} className="pointer-events-none absolute end-2" style={{ color: C.inkSoft }} />
-      </span>
+    <div className="flex min-w-0 items-center gap-2">
+      <button
+        ref={btnRef}
+        id={id}
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={open ? listId : undefined}
+        onClick={() => (open ? setOpen(false) : openList())}
+        onKeyDown={(e) => {
+          if (!open) {
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openList(); }
+            return;
+          }
+          if (e.key === 'ArrowDown') { e.preventDefault(); setActive((a) => Math.min(options.length - 1, a + 1)); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((a) => Math.max(0, a - 1)); }
+          else if (e.key === 'Home') { e.preventDefault(); setActive(0); }
+          else if (e.key === 'End') { e.preventDefault(); setActive(options.length - 1); }
+          else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(active); }
+          else if (e.key === 'Tab') setOpen(false);
+        }}
+        className="inline-flex h-11 min-w-0 flex-shrink-0 items-center gap-2 rounded-[14px] bg-white/80 ps-1.5 pe-2.5 transition-[box-shadow] duration-150 focus:outline-none focus-visible:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)]"
+        style={{ boxShadow: open ? 'inset 0 0 0 2px #1B3828' : 'inset 0 0 0 1px rgba(27,56,40,0.16)', cursor: 'pointer' }}
+        title={`Working language: ${shownName}`}
+      >
+        <LanguageArt name={showOther ? null : shownName} size={30} />
+        <span className="min-w-0 truncate" style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 700, color: C.forest }}>
+          {showOther ? 'Other' : shownName}
+        </span>
+        <ChevronDown aria-hidden size={15} strokeWidth={2.4} className="ms-auto flex-shrink-0" style={{ color: C.inkSoft, transform: open ? 'rotate(180deg)' : undefined, transition: 'transform 150ms' }} />
+      </button>
       {showOther && (
         <input
           value={value ?? ''}
@@ -658,32 +752,62 @@ export function CommitteeLanguagePicker({ value, onChange, id }: {
           maxLength={COMMITTEE_LANGUAGE_MAX}
           placeholder="Which language?"
           aria-label="Working language"
-          className="min-w-0 flex-1 rounded-[10px] bg-white/80 px-2.5 py-1.5 text-base sm:text-[13px] focus:outline-none focus:shadow-[inset_0_0_0_2px_#1B3828]"
-          style={{ fontFamily: OUTFIT, fontWeight: 600, color: C.ink, boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.16)' }}
+          className={SETUP_INPUT_CLS}
+          style={{ flex: 1, minWidth: 0 }}
         />
+      )}
+      {open && pos && (
+        <Portal>
+          <div
+            ref={listRef}
+            id={listId}
+            role="listbox"
+            aria-label="Working language"
+            aria-activedescendant={`${listId}-${active}`}
+            className="overflow-y-auto overscroll-contain p-1.5 [scrollbar-width:thin]"
+            style={{
+              position: 'fixed', zIndex: 10000, left: pos.left, top: pos.top, width: pos.width, maxHeight: pos.maxH,
+              backgroundColor: C.surface, borderRadius: 14,
+              boxShadow: '0 12px 34px rgba(27,56,40,0.18), 0 2px 8px rgba(27,56,40,0.08), inset 0 0 0 1px rgba(27,56,40,0.10)',
+              fontFamily: OUTFIT,
+            }}
+          >
+            {options.map((o, i) => {
+              const selected = i === current;
+              return (
+                <div
+                  key={o.key}
+                  id={`${listId}-${i}`}
+                  data-idx={i}
+                  role="option"
+                  aria-selected={selected}
+                  onPointerEnter={() => setActive(i)}
+                  onClick={() => choose(i)}
+                  className="flex cursor-pointer items-center gap-2.5 rounded-[10px] px-2 py-1.5"
+                  style={{ backgroundColor: i === active ? 'rgba(27,56,40,0.07)' : undefined }}
+                >
+                  <LanguageArt name={o.key === '__other' ? null : o.key} size={24} />
+                  <span className="min-w-0 flex-1 truncate" style={{ fontSize: 14, fontWeight: selected ? 800 : 600, color: selected ? C.forest : C.ink }}>{o.label}</span>
+                  {selected && <Check size={15} strokeWidth={2.6} style={{ color: C.forest }} aria-hidden />}
+                </div>
+              );
+            })}
+          </div>
+        </Portal>
       )}
     </div>
   );
 }
 
-// ── The set-up fields: step 1 (Committee) and step 2 (the seats) ─────────────
-//
-// TWO LAYOUTS (23 Sep 2026, owner: "a lot of things are just too big ... in an
-// ideal world, no scrolling is needed when setting up the committee"):
-//   • 'stacked' — the creation wizard: the two steps one above the other.
-//   • 'columns' — the committee editor: the fragment's two sections become two
-//     grid items of the caller's grid. Step 1 scrolls on its own if it must;
-//     step 2 is a flex column whose selected list takes the rest of the height
-//     and scrolls inside its own box, so the dialog itself never scrolls at
-//     1280x800 for a typical committee.
 export function CommitteeSetupFields({
   draft, onChange, committeeType, isEdit = false,
   nameInputId = 'committee-setup-name',
   onUploadEmblem, emblemUploading = false,
   onUploadFlag, selectedInline = false,
   onSubmit,
-  layout = 'stacked',
   showLanguage = false,
+  compactPaste = false,
+  seatsElsewhere = false,
 }: {
   draft: CommitteeSetupDraft;
   /** A PARTIAL patch, so a caller holding separate useStates can fan it out. */
@@ -698,26 +822,26 @@ export function CommitteeSetupFields({
   emblemUploading?: boolean;
   /** Uploads a seat or group crest. Omitted → the per-row flag control is off. */
   onUploadFlag?: (file: File, kind: 'seat' | 'group') => Promise<string | null>;
-  /** True renders the selected roster directly under the add controls. Always
-   *  on in the 'columns' layout. */
+  /** True renders the selected roster directly under the add controls (the
+   *  wizard). False leaves it to the caller, which is what the editor's docked
+   *  rail does. */
   selectedInline?: boolean;
   /** Enter in the name or acronym field. The wizard saves the draft with it. */
   onSubmit?: () => void;
-  layout?: 'stacked' | 'columns';
-  /** Offer the working-language picker. Only a caller that SAVES
-   *  `workingLanguage` may turn it on. */
+  /** Offer the working-language picker (beside Difficulty). Only a caller that
+   *  SAVES `workingLanguage` may turn it on. */
   showLanguage?: boolean;
+  /** Fold the paste box behind a "Paste a list" button (the committee editor,
+   *  where the set-up card must fit one screen). */
+  compactPaste?: boolean;
+  /** The caller renders step 2 itself (CommitteeSeatsStep), elsewhere. */
+  seatsElsewhere?: boolean;
 }) {
   const [topicInput, setTopicInput] = useState('');
   const [topicError, setTopicError] = useState('');
   const isCrisis = committeeType === 'crisis';
   const isCustom = committeeType === 'custom';
-  const cols = layout === 'columns';
-  const mode = rosterModeOf(draft, committeeType);
-  const isCharacterRoster = mode === 'character';
-  const { noun: seatNoun } = seatNounsOf(committeeType, isCharacterRoster);
   const { suggestion, emblem } = committeeSetupPreview(draft);
-  const inline = cols || selectedInline;
 
   function addTopic() {
     const t = topicInput.trim();
@@ -731,13 +855,9 @@ export function CommitteeSetupFields({
   return (
     <>
       {/* ── 1. Committee ──────────────────────────────────────────────── */}
-      <section
-        aria-labelledby={`${nameInputId}-step-committee`}
-        className={cols ? 'min-h-0 overflow-y-auto overscroll-contain pe-1' : 'mt-3.5 pt-3'}
-        style={cols ? undefined : { boxShadow: 'inset 0 1px 0 rgba(27,56,40,0.08)' }}
-      >
+      <section aria-labelledby={`${nameInputId}-step-committee`} className="mt-3.5 pt-3" style={{ boxShadow: 'inset 0 1px 0 rgba(27,56,40,0.08)' }}>
         <SetupStep step={1} id={`${nameInputId}-step-committee`} title="Committee" />
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3.5">
           <div>
             <SetupLabel htmlFor={nameInputId}>Name</SetupLabel>
             {!isCrisis && !isCustom ? (
@@ -782,52 +902,48 @@ export function CommitteeSetupFields({
           </div>
 
           <div>
-            <SetupLabel htmlFor={`${nameInputId}-topic`} aside="up to 3">Topics</SetupLabel>
-            {/* One line, Enter adds. It was a two-row textarea; a topic is a
-                sentence, and the list below shows it whole once added. */}
-            <div className="flex items-center gap-1.5">
-              <input
-                id={`${nameInputId}-topic`}
+            <SetupLabel aside="up to 3">Topics</SetupLabel>
+            <div className="flex items-start gap-2">
+              <textarea
                 value={topicInput}
                 onChange={(e) => { setTopicInput(e.target.value); if (topicError) setTopicError(''); }}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTopic(); } }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addTopic(); } }}
                 placeholder={draft.topics.length >= 3 ? 'Three topics is the maximum' : 'Type a topic, then press Enter'}
+                rows={2}
                 disabled={draft.topics.length >= 3}
                 className={SETUP_INPUT_CLS}
-                style={{ flex: 1 }}
+                style={{ flex: 1, resize: 'vertical', lineHeight: 1.5, minHeight: 52 }}
               />
               <button
                 type="button"
                 onClick={addTopic}
                 disabled={draft.topics.length >= 3 || !topicInput.trim()}
-                aria-label="Add topic"
-                title="Add topic"
-                className="flex h-[38px] w-[38px] flex-shrink-0 items-center justify-center rounded-[12px] transition-[background-color,transform,opacity] duration-150 enabled:hover:bg-[#2A5A3C] enabled:active:scale-[0.96] disabled:opacity-35 focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
-                style={{ backgroundColor: C.forest, color: C.gold }}
+                className="flex-shrink-0 rounded-[14px] px-4 transition-[background-color,transform,opacity] duration-150 enabled:hover:bg-[#2A5A3C] enabled:active:scale-[0.97] disabled:opacity-40 focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
+                style={{ minHeight: 44, backgroundColor: C.forest, color: C.gold, fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 800, whiteSpace: 'nowrap' }}
               >
-                <Plus size={17} strokeWidth={2.6} />
+                Add topic
               </button>
             </div>
             {topicError ? (
-              <p role="alert" className="mt-1" style={{ color: C.danger, fontFamily: OUTFIT, fontSize: 12 }}>{topicError}</p>
+              <p role="alert" className="mt-1.5" style={{ color: C.danger, fontFamily: OUTFIT, fontSize: 12 }}>{topicError}</p>
             ) : null}
             {draft.topics.length > 0 && (
-              <div className="mt-1.5 flex flex-col gap-1">
+              <div className="mt-2 flex flex-col gap-1.5">
                 {draft.topics.map((t, i) => (
                   <div
                     key={i}
-                    className="flex items-start gap-2 rounded-[10px] px-2.5 py-1"
-                    style={{ backgroundColor: 'rgba(27,56,40,0.05)', fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.4, color: C.ink }}
+                    className="flex items-start gap-2 rounded-[12px] px-3 py-1.5"
+                    style={{ backgroundColor: 'rgba(27,56,40,0.06)', fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.45, color: C.ink }}
                   >
                     <span aria-hidden className="flex-shrink-0 tabular-nums" style={{ fontWeight: 800, color: C.goldDeep }}>{i + 1}</span>
-                    <span className="min-w-0 flex-1 line-clamp-2" style={{ wordBreak: 'break-word' }} title={t}>{t}</span>
+                    <span className="min-w-0 flex-1" style={{ wordBreak: 'break-word' }}>{t}</span>
                     <button
                       type="button"
                       onClick={() => onChange({ topics: draft.topics.filter((_, j) => j !== i) })}
                       aria-label={`Remove topic ${i + 1}`}
                       title="Remove this topic"
-                      className="mt-px flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full transition-[background-color,color,transform] duration-150 hover:bg-[#8B2020]/[0.10] hover:text-[#8B2020] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
-                      style={{ color: C.inkSoft }}
+                      className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full transition-[background-color,color,transform] duration-150 hover:bg-[#8B2020]/[0.10] hover:text-[#8B2020] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
+                      style={{ color: C.muted }}
                     >
                       <X size={12} strokeWidth={2.4} />
                     </button>
@@ -837,15 +953,15 @@ export function CommitteeSetupFields({
             )}
           </div>
 
-          <div>
+          <div className={showLanguage ? 'grid gap-x-3 gap-y-3.5 sm:grid-cols-[minmax(0,1fr)_auto]' : undefined}>
+          <div className="min-w-0">
             <SetupLabel>Difficulty</SetupLabel>
             {/* Same MUN-level insignia the applications/account pages use to rank
-                delegates (beginner chevron → crowned-star expert), for consistency.
-                One compact row: insignia beside the word. */}
-            <div className="flex gap-1.5">
+                delegates (beginner chevron → crowned-star expert), for consistency. */}
+            <div className="flex gap-2">
               {DIFFICULTIES.map((lvl) => {
                 const active = draft.difficulty === lvl;
-                const accent = LEVEL_ACCENT[lvl] ?? C.inkSoft;
+                const accent = LEVEL_ACCENT[lvl] ?? C.muted;
                 const lbl = lvl.charAt(0).toUpperCase() + lvl.slice(1);
                 return (
                   <button
@@ -853,37 +969,36 @@ export function CommitteeSetupFields({
                     type="button"
                     onClick={() => onChange({ difficulty: lvl })}
                     aria-pressed={active}
-                    className="flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[10px] px-1.5 transition-[background-color,box-shadow] duration-150 focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
+                    className="flex flex-1 flex-col items-center gap-1 rounded-[14px] py-2 transition-[background-color,box-shadow] duration-150 focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
                     style={{
-                      height: 34,
-                      boxShadow: active ? `inset 0 0 0 1.5px ${accent}` : 'inset 0 0 0 1px rgba(27,56,40,0.12)',
-                      backgroundColor: active ? `${accent}14` : 'rgba(27,56,40,0.025)',
+                      boxShadow: active ? `inset 0 0 0 1.5px ${accent}` : 'inset 0 0 0 1px rgba(27,56,40,0.14)',
+                      backgroundColor: active ? `${accent}14` : 'rgba(255,255,255,0.55)',
                       cursor: 'pointer',
                     }}
                   >
-                    <span className="flex flex-shrink-0 items-center justify-center"><LevelInsignia level={lvl} size={14} /></span>
-                    <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: active ? accent : C.inkSoft }}>{lbl}</span>
+                    <span
+                      className="flex items-center justify-center"
+                      style={{ width: 26, height: 26, borderRadius: '9999px', background: `linear-gradient(150deg, ${accent}22, ${accent}12)`, border: `1px solid ${accent}55` }}
+                    >
+                      <LevelInsignia level={lvl} size={16} />
+                    </span>
+                    <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: active ? accent : C.inkSoft, letterSpacing: '0.01em' }}>{lbl}</span>
                   </button>
                 );
               })}
             </div>
           </div>
-
           {showLanguage && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <label htmlFor={`${nameInputId}-language`} className="inline-flex items-center gap-1.5 uppercase" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.14em', color: C.inkSoft }}>
-                <Languages size={13} strokeWidth={2.2} aria-hidden style={{ color: C.goldDeep }} />
-                Language
-              </label>
-              <div className="min-w-0 flex-1">
-                <CommitteeLanguagePicker
-                  id={`${nameInputId}-language`}
-                  value={draft.workingLanguage ?? null}
-                  onChange={(v) => onChange({ workingLanguage: v })}
-                />
-              </div>
+            <div className="min-w-0 sm:w-[190px]">
+              <SetupLabel htmlFor={`${nameInputId}-language`}>Language</SetupLabel>
+              <CommitteeLanguagePicker
+                id={`${nameInputId}-language`}
+                value={draft.workingLanguage ?? null}
+                onChange={(v) => onChange({ workingLanguage: v })}
+              />
             </div>
           )}
+          </div>
 
           <div>
             <SetupLabel aside={onUploadEmblem ? 'or upload your own' : undefined}>Emblem</SetupLabel>
@@ -901,54 +1016,96 @@ export function CommitteeSetupFields({
         </div>
       </section>
 
-      {/* ── 2. Seats ───────────────────────────────────────────────────────
-          DELEGATES PER SEAT sits on the step heading's own line: it describes
-          the list about to be built. */}
-      <section
-        aria-labelledby={`${nameInputId}-step-seats`}
-        className={cols ? 'flex min-h-0 flex-col' : 'mt-4 pt-3.5'}
-        style={cols ? undefined : { boxShadow: 'inset 0 1px 0 rgba(27,56,40,0.08)' }}
-      >
-        <SetupStep
-          step={2}
-          id={`${nameInputId}-step-seats`}
-          title={isCustom ? 'Members' : isCharacterRoster ? 'Characters' : 'Countries'}
-          aside={
-            <DelegationSizeStepper
-              value={draft.doubleDelegation ? 2 : 1}
-              onChange={(n) => onChange({ doubleDelegation: n === 2 })}
-              noun={seatNoun}
-            />
-          }
+      {!seatsElsewhere && (
+        <CommitteeSeatsStep
+          draft={draft}
+          onChange={onChange}
+          committeeType={committeeType}
+          nameInputId={nameInputId}
+          onUploadFlag={onUploadFlag}
+          selectedInline={selectedInline}
+          compactPaste={compactPaste}
         />
-        {/* Add controls only; the chosen list renders right below. */}
-        <ConferenceRosterPicker
+      )}
+    </>
+  );
+}
+
+// ── Step 2, the seats ────────────────────────────────────────────────────────
+// Its own component so the committee editor can put it in the roster card
+// OUTSIDE the set-up card (owner, 23 Sep 2026: "one panel should be the set-up,
+// the other, outside of it, should be the list of countries"), while the wizard
+// keeps it under step 1 through CommitteeSetupFields. `panel` = the editor's
+// card: a flex column whose list fills the rest of the card and is the only
+// thing that scrolls.
+export function CommitteeSeatsStep({
+  draft, onChange, committeeType,
+  nameInputId = 'committee-setup-name',
+  onUploadFlag, selectedInline = false, compactPaste = false,
+  panel = false, className, style,
+}: {
+  draft: CommitteeSetupDraft;
+  onChange: (patch: Partial<CommitteeSetupDraft>) => void;
+  committeeType: CommitteeType;
+  nameInputId?: string;
+  onUploadFlag?: (file: File, kind: 'seat' | 'group') => Promise<string | null>;
+  selectedInline?: boolean;
+  compactPaste?: boolean;
+  panel?: boolean;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  const isCustom = committeeType === 'custom';
+  const mode = rosterModeOf(draft, committeeType);
+  const isCharacterRoster = mode === 'character';
+  const { noun: seatNoun } = seatNounsOf(committeeType, isCharacterRoster);
+  // DELEGATES PER SEAT sits on the step heading's own line, which is where it
+  // belongs semantically: it describes the list about to be built.
+  return (
+    <section
+      aria-labelledby={`${nameInputId}-step-seats`}
+      className={panel ? `flex min-h-0 flex-col ${className ?? ''}` : 'mt-4 pt-3.5'}
+      style={panel ? style : { boxShadow: 'inset 0 1px 0 rgba(27,56,40,0.08)' }}
+    >
+      <SetupStep
+        step={2}
+        id={`${nameInputId}-step-seats`}
+        title={isCustom ? 'Members' : isCharacterRoster ? 'Characters' : 'Countries'}
+        aside={
+          <DelegationSizeStepper
+            value={draft.doubleDelegation ? 2 : 1}
+            onChange={(n) => onChange({ doubleDelegation: n === 2 })}
+            noun={seatNoun}
+          />
+        }
+      />
+      {/* The add controls, then (wizard, or the editor's card) the list. */}
+      <ConferenceRosterPicker
+        mode={mode}
+        value={draft.roster}
+        onChange={(roster) => onChange({ roster })}
+        showSelected={false}
+        compact={compactPaste}
+      />
+      {(selectedInline || panel) && (
+        <ConferenceRosterSelected
           mode={mode}
           value={draft.roster}
           onChange={(roster) => onChange({ roster })}
-          showSelected={false}
-          compact={cols}
+          committeeType={committeeType}
+          groups={draft.groups}
+          onGroupsChange={isCustom ? (groups) => onChange({ groups }) : undefined}
+          onUploadLogo={onUploadFlag}
+          variant={panel ? 'panel' : 'dense'}
+          className={panel ? 'mt-3 min-h-0 flex-1' : 'mt-3 rounded-2xl'}
+          style={panel ? undefined : {
+            maxHeight: 340, padding: '14px 14px 12px',
+            backgroundColor: 'rgba(255,255,255,0.55)',
+            boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.12)',
+          }}
         />
-        {inline && (
-          <ConferenceRosterSelected
-            mode={mode}
-            value={draft.roster}
-            onChange={(roster) => onChange({ roster })}
-            committeeType={committeeType}
-            groups={draft.groups}
-            onGroupsChange={isCustom ? (groups) => onChange({ groups }) : undefined}
-            onUploadLogo={onUploadFlag}
-            className={cols ? 'mt-2.5 rounded-2xl' : 'mt-3 rounded-2xl'}
-            style={{
-              ...(cols ? { flex: '1 1 auto', minHeight: 180 } : { maxHeight: 340 }),
-              padding: '10px 10px 8px',
-              backgroundColor: 'rgba(27,56,40,0.03)',
-              boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.10)',
-            }}
-          />
-        )}
-      </section>
-    </>
+      )}
+    </section>
   );
 }
 

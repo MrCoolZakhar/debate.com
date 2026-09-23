@@ -293,8 +293,8 @@ function SetupReminderModal({
                 textTransform: 'uppercase',
                 textDecoration: 'none',
                 boxShadow: ctaHover
-                  ? `0 6px 16px ${NEU_GRADIENTS.gold[0]}66, ${NEU.outSmHover}`
-                  : `0 4px 10px ${NEU_GRADIENTS.gold[0]}4D, ${NEU.outSm}`,
+                  ? `0 6px 16px color-mix(in srgb, ${NEU_GRADIENTS.gold[0]} 40%, transparent), ${NEU.outSmHover}`
+                  : `0 4px 10px color-mix(in srgb, ${NEU_GRADIENTS.gold[0]} 30%, transparent), ${NEU.outSm}`,
                 transform: ctaPress ? 'scale(0.96)' : ctaHover ? 'translateY(-2px)' : 'translateY(0)',
                 transition: `box-shadow 260ms ${EASE}, transform 160ms ${EASE}`,
               }}

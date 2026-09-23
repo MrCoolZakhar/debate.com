@@ -741,8 +741,8 @@ export default function LiveStatusPage() {
               background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
               fontFamily: OUTFIT, letterSpacing: '0.06em',
               boxShadow: broadcastHover
-                ? `0 6px 16px ${NEU_GRADIENTS.forest[0]}66, ${NEU.outSmHover}`
-                : `0 4px 10px ${NEU_GRADIENTS.forest[0]}4D, ${NEU.outSm}`,
+                ? `0 6px 16px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 40%, transparent), ${NEU.outSmHover}`
+                : `0 4px 10px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 30%, transparent), ${NEU.outSm}`,
               transform: broadcastHover ? 'translateY(-2px)' : 'translateY(0)',
               cursor: 'pointer',
               transition: `box-shadow 220ms ${EASE}, transform 200ms ${EASE}`,
@@ -786,7 +786,7 @@ export default function LiveStatusPage() {
         {/* Gold accent rail — a small hit of colour on the left edge */}
         <span
           className="absolute left-0 top-0 bottom-0"
-          style={{ width: 5, background: `linear-gradient(180deg, ${NEU.gold}, ${NEU.deepGold})`, boxShadow: `2px 0 6px ${NEU.deepGold}44` }}
+          style={{ width: 5, background: `linear-gradient(180deg, ${NEU.gold}, ${NEU.deepGold})`, boxShadow: `2px 0 6px color-mix(in srgb, ${NEU.deepGold} 27%, transparent)` }}
         />
         <div className="flex items-center gap-4 min-w-0" style={{ paddingLeft: 8 }}>
           <span className="relative inline-flex flex-shrink-0">
@@ -794,7 +794,7 @@ export default function LiveStatusPage() {
             {counts.live > 0 && (
               <span
                 className="absolute rounded-full animate-pulse"
-                style={{ top: 0, right: 0, width: 13, height: 13, backgroundColor: NEU.green, boxShadow: `0 0 0 3px ${NEU.surface}, 0 0 0 5px ${NEU.green}33` }}
+                style={{ top: 0, right: 0, width: 13, height: 13, backgroundColor: NEU.green, boxShadow: `0 0 0 3px ${NEU.surface}, 0 0 0 5px color-mix(in srgb, ${NEU.green} 20%, transparent)` }}
               />
             )}
           </span>

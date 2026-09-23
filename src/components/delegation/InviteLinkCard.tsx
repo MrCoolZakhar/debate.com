@@ -99,7 +99,7 @@ export function InviteLinkCard({ accessToken, societyId, conferenceId, societyNa
       <div className="mt-3.5 flex flex-col sm:flex-row gap-2">
         <div
           className="flex-1 min-w-0 flex items-center gap-2"
-          style={{ padding: '10px 12px', borderRadius: 12, backgroundColor: NEU.surface, border: NEU.hairline }}
+          style={{ padding: '10px 12px', borderRadius: 12, backgroundColor: NEU.base, boxShadow: NEU.inSm }}
         >
           <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13.5, color: token ? NEU.ink : NEU.inkSoft }} title={url || undefined}>
             {token ? url.replace(/^https?:\/\//, '') : busy ? 'Making your link…' : 'No link yet'}
