@@ -18,6 +18,8 @@ import {
   CommitteeIdentityPreview,
   CommitteeSetupFields,
   CommitteeSeatsStep,
+  CommitteeMetaControls,
+  SetupStep,
   SetupPrimaryButton,
   SetupGhostButton,
   committeeSetupPreview,
@@ -301,10 +303,14 @@ interface ChairApplicant {
   profiles: { display_name: string; email: string; avatar_url: string | null } | null;
 }
 
-function ChairsDock({ conferenceId, committeeId, committeeName }: {
+function ChairsDock({ conferenceId, committeeId, committeeName, embedded = false }: {
   conferenceId: string;
   committeeId: string;
   committeeName: string;
+  /** Inside the editor's set-up card (23 Sep 2026, owner: chairs must not
+   *  squeeze the added-list, so they moved to the left): no card of its own,
+   *  no height cap, the step-style heading, no side padding. */
+  embedded?: boolean;
 }) {
   const { session } = useAuth();
   const [chairs, setChairs] = useState<DisplayChair[] | null>(null);
@@ -454,18 +460,23 @@ function ChairsDock({ conferenceId, committeeId, committeeName }: {
 
   return (
     <div
-      className="flex flex-shrink-0 flex-col rounded-[24px]"
-      /* Its own card under the roster card (23 Sep 2026). Capped, so the
-         country list above keeps the height; scrolls inside itself only when a
-         dais is unusually long. */
-      style={{ width: '100%', maxHeight: 220, overflowY: 'auto', overscrollBehavior: 'contain', backgroundColor: NEU.surface, boxShadow: NEU.out }}
+      className={embedded ? 'mt-4 flex flex-col pt-3' : 'flex flex-shrink-0 flex-col rounded-[24px]'}
+      /* Standalone: its own capped card that scrolls inside itself only when a
+         dais is unusually long. Embedded: a section of the set-up card. */
+      style={embedded
+        ? { boxShadow: 'inset 0 1px 0 rgba(27,56,40,0.08)' }
+        : { width: '100%', maxHeight: 220, overflowY: 'auto', overscrollBehavior: 'contain', backgroundColor: NEU.surface, boxShadow: NEU.out }}
     >
+      {embedded ? (
+        <SetupStep step={3} id={`ced-chairs-${committeeId}`} title="Chairs" />
+      ) : (
       <div className="px-4 pt-3.5 pb-2.5" style={{ borderBottom: '1px solid rgba(27,56,40,0.08)' }}>
         <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.16em', color: '#8A6415' }}>THE DAIS</p>
         <h3 className="font-bold mt-0.5" style={{ margin: 0, fontSize: 15, color: '#1C1410', fontFamily: OUTFIT }}>Chairs</h3>
       </div>
+      )}
 
-      <div className="px-4 py-3 flex flex-col gap-2">
+      <div className={`${embedded ? 'pb-3' : 'px-4 py-3'} flex flex-col gap-2`}>
         {chairs === null ? (
           <div className="flex justify-center py-4"><div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} /></div>
         ) : chairs.length === 0 && invites.length === 0 ? (
@@ -540,7 +551,7 @@ function ChairsDock({ conferenceId, committeeId, committeeName }: {
         )}
       </div>
 
-      <div className="px-4 pb-4">
+      <div className={embedded ? '' : 'px-4 pb-4'}>
         {!expanded ? (
           <button
             onClick={() => setExpanded(true)}
@@ -1216,20 +1227,22 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   return (
     <>
     <ModalOverlay onClose={onClose} labelledBy="ced-title">
-      {/* TWO PANELS, SIDE BY SIDE (23 Sep 2026, owner: "how it was before was
-          better. One panel should be the set-up, the other, outside of it,
-          should be the list of countries, similar to how the set-up works in
-          session set-up").
+      {/* TWO PANELS, SIDE BY SIDE (23 Sep 2026, owner: "one panel should be
+          the set-up, the other, outside of it, should be the list of
+          countries"; then, the same day: "once again the ENTIRE right side
+          should just be the countries already added").
 
-          • LEFT, the set-up card: the look from before the three-column pass
-            (title and type, the live identity, then steps 1 and 2 from the
-            SHARED CommitteeSetupFields, so it still matches the wizard), with
-            Cancel and Save at its foot.
-          • RIGHT, outside it, the roster card: step 2 (delegates per seat,
-            search, bundles, paste) above /create's delegation list (the count
-            as a large numeral, roomy rows with round flags on an inset well).
-            The list is the one thing that scrolls. Chairs (edit only, they
-            need a committee id) sit in their own card under it.
+          • LEFT, the set-up card, everything that is not the list: the
+            title and type, the live identity with Difficulty and Language
+            beside it (CommitteeMetaControls), step 1 from the SHARED
+            CommitteeSetupFields (name, short name, topics, the emblem folded
+            behind "Change emblem"), step 2's add tools (search, Quick
+            Bundles, the paste box, always open), then the chairs (edit only,
+            they need a committee id). Its body scrolls inside itself if it
+            must; Cancel and Save stay pinned at its foot.
+          • RIGHT, outside it, ONLY the added seats: the count as a large
+            numeral with the delegates-per-seat stepper and CLEAR ALL on the
+            same line, then /create's delegation list, the one scroller.
 
           From 1100px the pair is one fixed-height row that fits a 1280x800
           screen: `--gv-modal-gutter` comes from the backdrop, and `dvh`, never
@@ -1238,10 +1251,15 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
       <style>{`
         .gv-ced-row { display: flex; flex-direction: column; gap: 14px; max-height: calc(100dvh - var(--gv-modal-gutter, 88px)); overflow-y: auto; overscroll-behavior: contain; }
         .gv-ced-row > * { flex-shrink: 0; }
-        .gv-ced-roster { height: 620px; }
+        .gv-ced-roster { height: 560px; }
+        .gv-ced-head { display: flex; flex-direction: column; gap: 14px; }
+        @media (min-width: 640px) {
+          .gv-ced-head { flex-direction: row; align-items: flex-start; }
+        }
         @media (min-width: 1100px) {
           .gv-ced-row { flex-direction: row; align-items: stretch; height: min(820px, calc(100dvh - var(--gv-modal-gutter, 88px))); overflow: visible; }
-          .gv-ced-main { flex: 1 1 auto; min-width: 0; overflow-y: auto; overscroll-behavior: contain; }
+          .gv-ced-main { flex: 1 1 auto; min-width: 0; min-height: 0; }
+          .gv-ced-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin-inline: -6px; padding-inline: 6px; scrollbar-width: thin; }
           .gv-ced-side { flex: 0 0 clamp(340px, 38%, 440px); min-height: 0; }
           .gv-ced-roster { height: auto; flex: 1 1 auto; min-height: 0; }
         }
@@ -1281,34 +1299,60 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
             </button>
           </div>
 
-          {/* The live identity, the /create preview: what the chair masthead
-              and every card will show (committeeDisplayName). */}
-          <CommitteeIdentityPreview
-            src={previewEmblem}
-            primary={previewPrimary}
-            secondary={previewSecondary}
-            placeholder="Untitled committee"
-            topic={topics[0] ?? ''}
-            topicLabel="Topic:"
-            topicEmpty="No topic yet"
-            tone={medallionTone(effectiveType)}
-            monogramText={previewAcronym || name}
-          />
+          <div className="gv-ced-scroll">
+            {/* The live identity, the /create preview (what the chair
+                masthead and every card will show, committeeDisplayName), with
+                Difficulty and Language beside it rather than in rows below. */}
+            <div className="gv-ced-head">
+              <div className="min-w-0 flex-1">
+                <CommitteeIdentityPreview
+                  src={previewEmblem}
+                  primary={previewPrimary}
+                  secondary={previewSecondary}
+                  placeholder="Untitled committee"
+                  topic={topics[0] ?? ''}
+                  topicLabel="Topic:"
+                  topicEmpty="No topic yet"
+                  tone={medallionTone(effectiveType)}
+                  monogramText={previewAcronym || name}
+                />
+              </div>
+              <CommitteeMetaControls draft={draft} onChange={patchDraft} idPrefix="ced-name" />
+            </div>
 
-          {/* Step 1 from the SHARED set-up surface, the same component the
-              creation wizard renders, so the two can never drift. Step 2 is
-              the roster card beside this one (CommitteeSeatsStep, same kit). */}
-          <CommitteeSetupFields
-            draft={draft}
-            onChange={patchDraft}
-            committeeType={effectiveType as CommitteeType}
-            isEdit={isEdit}
-            nameInputId="ced-name"
-            onUploadEmblem={() => document.getElementById('committee-emblem-upload')?.click()}
-            emblemUploading={logoUploading}
-            showLanguage
-            seatsElsewhere
-          />
+            {/* Step 1 from the SHARED set-up surface, the same component the
+                creation wizard renders, so the two can never drift. Difficulty
+                and Language are drawn above (metaElsewhere), the emblem folds
+                (foldEmblem). */}
+            <CommitteeSetupFields
+              draft={draft}
+              onChange={patchDraft}
+              committeeType={effectiveType as CommitteeType}
+              isEdit={isEdit}
+              nameInputId="ced-name"
+              onUploadEmblem={() => document.getElementById('committee-emblem-upload')?.click()}
+              emblemUploading={logoUploading}
+              showLanguage
+              seatsElsewhere
+              metaElsewhere
+              foldEmblem
+            />
+
+            {/* Step 2's add tools: search, Quick Bundles, the paste box (always
+                open). The list they fill is the card on the right. */}
+            <CommitteeSeatsStep
+              part="add"
+              draft={draft}
+              onChange={patchDraft}
+              committeeType={effectiveType as CommitteeType}
+              nameInputId="ced-name"
+              compactPaste
+            />
+
+            {isEdit && existing && (
+              <ChairsDock embedded conferenceId={conferenceId} committeeId={existing.id} committeeName={name.trim() || existing.name} />
+            )}
+          </div>
           <input
             id="committee-emblem-upload"
             type="file"
@@ -1338,22 +1382,18 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
           </div>
         </div>
 
-        {/* ── Outside it: the roster card, then the chairs ─────────────── */}
-        <div className="gv-ced-side flex flex-col gap-3.5">
+        {/* ── Outside it: ONLY the seats already added ─────────────────── */}
+        <div className="gv-ced-side flex flex-col">
           <CommitteeSeatsStep
-            panel
+            part="list"
             draft={draft}
             onChange={patchDraft}
             committeeType={effectiveType as CommitteeType}
             nameInputId="ced-name"
             onUploadFlag={handleFlagUpload}
-            compactPaste
             className="gv-ced-roster rounded-[24px]"
             style={{ padding: '16px 18px 16px', backgroundColor: NEU.surface, boxShadow: NEU.out }}
           />
-          {isEdit && existing && (
-            <ChairsDock conferenceId={conferenceId} committeeId={existing.id} committeeName={name.trim() || existing.name} />
-          )}
         </div>
       </div>
     </ModalOverlay>

@@ -2946,35 +2946,25 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                     style={{ position: 'absolute', top: 12, left: 12, zIndex: 10 }}
                                   />
                                 )}
-                                {/* ACRONYM + WORKING LANGUAGE, TOP-LEFT (owner, 23 Sep
-                                    2026: "make sure the language setting is displayed
-                                    on the conference page as well, top left side with
-                                    the acronym"). Only when a language is set; the
-                                    two-letter tag keeps it inside the 77px beside the
-                                    emblem, the full name is its tooltip. Below the
-                                    organiser's pencil when that is shown. */}
+                                {/* WORKING LANGUAGE, TOP-LEFT (owner, 23 Sep 2026).
+                                    Only when a language is set; the two-letter tag
+                                    keeps it inside the 77px beside the emblem, the
+                                    full name is its tooltip. Below the organiser's
+                                    pencil when that is shown. The acronym used to
+                                    stack here too; it now sits small above the
+                                    name, under the emblem. */}
                                 {c.working_language && (
-                                  <div
-                                    className="absolute flex flex-col items-start"
-                                    style={{ top: isOrganizerViewer ? 50 : 16, left: 16, gap: 3, maxWidth: 76 }}
+                                  <span
+                                    className="absolute inline-flex items-center gap-1"
+                                    title={`Working language: ${c.working_language}`}
+                                    aria-label={`Working language: ${c.working_language}`}
+                                    style={{ top: isOrganizerViewer ? 50 : 16, left: 16, fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 700, color: '#6B5F52', letterSpacing: '0.06em' }}
                                   >
-                                    {c.abbreviation && (
-                                      <span className="truncate" style={{ maxWidth: 76, fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', color: 'var(--gv-accent)' }}>
-                                        {c.abbreviation.toUpperCase()}
-                                      </span>
-                                    )}
-                                    <span
-                                      className="inline-flex items-center gap-1"
-                                      title={`Working language: ${c.working_language}`}
-                                      aria-label={`Working language: ${c.working_language}`}
-                                      style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 700, color: '#6B5F52', letterSpacing: '0.06em' }}
-                                    >
-                                      {committeeLanguageFlag(c.working_language)
-                                        ? <CircleFlag code={committeeLanguageFlag(c.working_language)!} size={14} decorative />
-                                        : <Languages size={12} strokeWidth={2.2} aria-hidden style={{ color: 'var(--gv-accent)' }} />}
-                                      {committeeLanguageCode(c.working_language)}
-                                    </span>
-                                  </div>
+                                    {committeeLanguageFlag(c.working_language)
+                                      ? <CircleFlag code={committeeLanguageFlag(c.working_language)!} size={14} decorative />
+                                      : <Languages size={12} strokeWidth={2.2} aria-hidden style={{ color: 'var(--gv-accent)' }} />}
+                                    {committeeLanguageCode(c.working_language)}
+                                  </span>
                                 )}
                                 {/* LEVEL MARKER, TOP-RIGHT: the same DifficultyTile
                                     the organiser committees page stamps on its
@@ -3020,13 +3010,32 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                     </div>
                                   )}
 
-                                  {/* Name */}
-                                  <h3
-                                    className="text-center font-bold text-[15.5px] leading-snug"
-                                    style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: '18px 0 0 0', minHeight: '2.6em' }}
-                                  >
-                                    {c.name}
-                                  </h3>
+                                  {/* Acronym, small, directly above the name (owner,
+                                      23 Sep 2026: out of the top-left corner). Not
+                                      repeated when it is the name itself. */}
+                                  {(() => {
+                                    const acr = c.abbreviation?.trim();
+                                    const showAcr = !!acr && acr.toUpperCase() !== c.name.trim().toUpperCase();
+                                    return (
+                                      <>
+                                        {showAcr && (
+                                          <p
+                                            className="max-w-full truncate text-center"
+                                            style={{ margin: '16px 0 0 0', fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: 'var(--gv-accent)' }}
+                                          >
+                                            {acr!.toUpperCase()}
+                                          </p>
+                                        )}
+                                        {/* Name */}
+                                        <h3
+                                          className="text-center font-bold text-[15.5px] leading-snug"
+                                          style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: showAcr ? '3px 0 0 0' : '18px 0 0 0', minHeight: '2.6em' }}
+                                        >
+                                          {c.name}
+                                        </h3>
+                                      </>
+                                    );
+                                  })()}
 
                                   {/* Meta row. Difficulty is no longer here: it is
                                       the level marker in the card's top-right

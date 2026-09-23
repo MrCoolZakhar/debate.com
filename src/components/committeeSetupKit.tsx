@@ -630,10 +630,12 @@ function LanguageArt({ name, size }: { name: string | null; size: number }) {
   );
 }
 
-export function CommitteeLanguagePicker({ value, onChange, id }: {
+export function CommitteeLanguagePicker({ value, onChange, id, compact = false }: {
   value: string | null;
   onChange: (next: string | null) => void;
   id?: string;
+  /** The committee editor's header: a 36px button, the "Other" field wraps below. */
+  compact?: boolean;
 }) {
   const listed = isListedCommitteeLanguage(value);
   const [otherOpen, setOtherOpen] = useState<boolean>(!!value && !listed);
@@ -713,7 +715,7 @@ export function CommitteeLanguagePicker({ value, onChange, id }: {
 
   const shownName = showOther ? (value || 'Other') : (value || DEFAULT_COMMITTEE_LANGUAGE);
   return (
-    <div className="flex min-w-0 items-center gap-2">
+    <div className={`flex min-w-0 items-center gap-2 ${compact ? 'flex-wrap' : ''}`}>
       <button
         ref={btnRef}
         id={id}
@@ -734,12 +736,12 @@ export function CommitteeLanguagePicker({ value, onChange, id }: {
           else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(active); }
           else if (e.key === 'Tab') setOpen(false);
         }}
-        className="inline-flex h-11 min-w-0 flex-shrink-0 items-center gap-2 rounded-[14px] bg-white/80 ps-1.5 pe-2.5 transition-[box-shadow] duration-150 focus:outline-none focus-visible:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)]"
+        className={`inline-flex ${compact ? 'h-9 rounded-[12px] ps-1 pe-2' : 'h-11 rounded-[14px] ps-1.5 pe-2.5'} min-w-0 flex-shrink-0 items-center gap-2 bg-white/80 transition-[box-shadow] duration-150 focus:outline-none focus-visible:shadow-[inset_0_0_0_2px_#1B3828,0_0_0_4px_rgba(27,56,40,0.08)]`}
         style={{ boxShadow: open ? 'inset 0 0 0 2px #1B3828' : 'inset 0 0 0 1px rgba(27,56,40,0.16)', cursor: 'pointer' }}
         title={`Working language: ${shownName}`}
       >
-        <LanguageArt name={showOther ? null : shownName} size={30} />
-        <span className="min-w-0 truncate" style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 700, color: C.forest }}>
+        <LanguageArt name={showOther ? null : shownName} size={compact ? 26 : 30} />
+        <span className="min-w-0 truncate" style={{ fontFamily: OUTFIT, fontSize: compact ? 13.5 : 14.5, fontWeight: 700, color: C.forest }}>
           {showOther ? 'Other' : shownName}
         </span>
         <ChevronDown aria-hidden size={15} strokeWidth={2.4} className="ms-auto flex-shrink-0" style={{ color: C.inkSoft, transform: open ? 'rotate(180deg)' : undefined, transition: 'transform 150ms' }} />
@@ -753,7 +755,7 @@ export function CommitteeLanguagePicker({ value, onChange, id }: {
           placeholder="Which language?"
           aria-label="Working language"
           className={SETUP_INPUT_CLS}
-          style={{ flex: 1, minWidth: 0 }}
+          style={{ flex: 1, minWidth: compact ? 140 : 0 }}
         />
       )}
       {open && pos && (
@@ -799,6 +801,171 @@ export function CommitteeLanguagePicker({ value, onChange, id }: {
   );
 }
 
+// ── Difficulty + language, compact (the committee editor's header) ───────────
+// (23 Sep 2026, owner: "add the language and difficulty at the top to save
+// space".) The same two answers CommitteeSetupFields collects, drawn small
+// enough to sit beside the live identity: the four MUN-level insignia as 34px
+// discs (the word is the tooltip and the accessible name; the chosen level is
+// written beside the label), then the language picker at 36px. Writes exactly
+// what the full rows write: `difficulty` and `workingLanguage`.
+export function CommitteeMetaControls({ draft, onChange, idPrefix }: {
+  draft: CommitteeSetupDraft;
+  onChange: (patch: Partial<CommitteeSetupDraft>) => void;
+  idPrefix: string;
+}) {
+  const current = DIFFICULTIES.find((d) => d === draft.difficulty);
+  const label = current ? current.charAt(0).toUpperCase() + current.slice(1) : null;
+  return (
+    <div className="flex flex-shrink-0 flex-col gap-2.5" style={{ width: 196 }}>
+      <div>
+        <SetupLabel aside={label ?? undefined}>Difficulty</SetupLabel>
+        <div role="group" aria-label="Difficulty" className="flex gap-1.5">
+          {DIFFICULTIES.map((lvl) => {
+            const active = draft.difficulty === lvl;
+            const accent = LEVEL_ACCENT[lvl] ?? C.muted;
+            const lbl = lvl.charAt(0).toUpperCase() + lvl.slice(1);
+            return (
+              <button
+                key={lvl}
+                type="button"
+                onClick={() => onChange({ difficulty: lvl })}
+                aria-pressed={active}
+                aria-label={lbl}
+                title={lbl}
+                className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-full transition-[background-color,box-shadow,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
+                style={{
+                  background: active ? `linear-gradient(150deg, ${accent}2E, ${accent}18)` : 'rgba(255,255,255,0.6)',
+                  boxShadow: active ? `inset 0 0 0 1.5px ${accent}` : 'inset 0 0 0 1px rgba(27,56,40,0.14)',
+                  cursor: 'pointer',
+                }}
+              >
+                <LevelInsignia level={lvl} size={16} />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div>
+        <SetupLabel htmlFor={`${idPrefix}-language`}>Language</SetupLabel>
+        <CommitteeLanguagePicker
+          id={`${idPrefix}-language`}
+          compact
+          value={draft.workingLanguage ?? null}
+          onChange={(v) => onChange({ workingLanguage: v })}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ── The emblem, folded ───────────────────────────────────────────────────────
+// (23 Sep 2026, owner: "collapse the change emblem; only when clicked, give the
+// two options: select from the presets or upload your own".) One row: the
+// current emblem small, "Change emblem", a chevron. Opened, two choices: Presets
+// (the same EmblemPicker swatches, with Auto) and Upload your own (the caller's
+// own file picker, straight away). Same writes as the unfolded picker.
+function EmblemDisclosure({ value, onPick, onUpload, onReset, uploading, canReset, tone, monogramText }: {
+  value: string | null;
+  onPick: (logo: string) => void;
+  onUpload?: () => void;
+  onReset: () => void;
+  uploading: boolean;
+  canReset: boolean;
+  tone: MedallionTone;
+  monogramText: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [showPresets, setShowPresets] = useState(false);
+  const panelId = useId();
+  const choice = (active: boolean) =>
+    `inline-flex items-center gap-1.5 rounded-[10px] px-3 py-1.5 transition-[background-color,color,transform] duration-150 active:scale-[0.97] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828] ${active ? '' : 'hover:bg-[#1B3828]/[0.06]'}`;
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => { setOpen((o) => !o); if (open) setShowPresets(false); }}
+        aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
+        className="inline-flex items-center gap-2.5 rounded-[14px] py-1.5 ps-1.5 pe-3 transition-[background-color,transform] duration-150 hover:bg-[#1B3828]/[0.05] active:scale-[0.98] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
+        style={{ boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.14)', backgroundColor: 'rgba(255,255,255,0.55)' }}
+      >
+        {value ? (
+          <span className="flex flex-shrink-0 items-center justify-center rounded-full bg-white" style={{ width: 30, height: 30, boxShadow: '0 1px 2px rgba(27,56,40,0.10), inset 0 0 0 1px rgba(0,0,0,0.07)' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={value} alt="" draggable={false} decoding="async" className="block h-full w-full object-contain" style={{ padding: 4 }} />
+          </span>
+        ) : (
+          <MonogramMedallion text={monogramText || '—'} tone={tone} size={30} />
+        )}
+        <span style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 800, color: C.forest }}>
+          {uploading ? 'Uploading…' : 'Change emblem'}
+        </span>
+        {uploading
+          ? <Loader2 size={14} strokeWidth={2.4} className="animate-spin" style={{ color: C.inkSoft }} aria-hidden />
+          : <ChevronDown size={15} strokeWidth={2.4} aria-hidden style={{ color: C.inkSoft, transform: open ? 'rotate(180deg)' : undefined, transition: 'transform 150ms' }} />}
+      </button>
+      {open && (
+        <div id={panelId} className="mt-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowPresets((v) => !v)}
+              aria-pressed={showPresets}
+              className={choice(showPresets)}
+              style={{
+                fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800,
+                color: showPresets ? C.gold : C.forest,
+                backgroundColor: showPresets ? C.forest : 'transparent',
+                boxShadow: showPresets ? undefined : 'inset 0 0 0 1px rgba(27,56,40,0.18)',
+              }}
+            >
+              <Landmark size={13} strokeWidth={2.3} aria-hidden />
+              Choose a preset
+            </button>
+            {onUpload && (
+              <button
+                type="button"
+                onClick={() => { if (!uploading) onUpload(); }}
+                disabled={uploading}
+                className={choice(false)}
+                style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: C.forest, boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.18)' }}
+              >
+                {uploading ? <Loader2 size={13} strokeWidth={2.4} className="animate-spin" aria-hidden /> : <ImagePlus size={13} strokeWidth={2.3} aria-hidden />}
+                Upload your own
+              </button>
+            )}
+            {canReset && !showPresets && (
+              <button
+                type="button"
+                onClick={onReset}
+                title="Go back to the emblem Gavelling picks from the committee name"
+                className={choice(false)}
+                style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: C.inkSoft }}
+              >
+                <RotateCcw size={13} strokeWidth={2.3} aria-hidden />
+                Automatic
+              </button>
+            )}
+          </div>
+          {showPresets && (
+            <div className="mt-2">
+              <EmblemPicker
+                value={value}
+                onPick={onPick}
+                onReset={onReset}
+                uploading={uploading}
+                canReset={canReset}
+                tone={tone}
+                monogramText={monogramText}
+              />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CommitteeSetupFields({
   draft, onChange, committeeType, isEdit = false,
   nameInputId = 'committee-setup-name',
@@ -808,6 +975,8 @@ export function CommitteeSetupFields({
   showLanguage = false,
   compactPaste = false,
   seatsElsewhere = false,
+  metaElsewhere = false,
+  foldEmblem = false,
 }: {
   draft: CommitteeSetupDraft;
   /** A PARTIAL patch, so a caller holding separate useStates can fan it out. */
@@ -836,6 +1005,11 @@ export function CommitteeSetupFields({
   compactPaste?: boolean;
   /** The caller renders step 2 itself (CommitteeSeatsStep), elsewhere. */
   seatsElsewhere?: boolean;
+  /** The caller renders Difficulty and Language itself (CommitteeMetaControls,
+   *  the committee editor's header), so the rows here are left out. */
+  metaElsewhere?: boolean;
+  /** The emblem is one "Change emblem" row that opens to Presets / Upload. */
+  foldEmblem?: boolean;
 }) {
   const [topicInput, setTopicInput] = useState('');
   const [topicError, setTopicError] = useState('');
@@ -953,6 +1127,7 @@ export function CommitteeSetupFields({
             )}
           </div>
 
+          {!metaElsewhere && (
           <div className={showLanguage ? 'grid gap-x-3 gap-y-3.5 sm:grid-cols-[minmax(0,1fr)_auto]' : undefined}>
           <div className="min-w-0">
             <SetupLabel>Difficulty</SetupLabel>
@@ -999,9 +1174,22 @@ export function CommitteeSetupFields({
             </div>
           )}
           </div>
+          )}
 
           <div>
-            <SetupLabel aside={onUploadEmblem ? 'or upload your own' : undefined}>Emblem</SetupLabel>
+            <SetupLabel aside={onUploadEmblem && !foldEmblem ? 'or upload your own' : undefined}>Emblem</SetupLabel>
+            {foldEmblem ? (
+              <EmblemDisclosure
+                value={emblem}
+                onPick={(logo) => onChange({ logoUrl: logo, emblemManuallySet: true })}
+                onUpload={onUploadEmblem}
+                onReset={() => onChange({ emblemManuallySet: false })}
+                uploading={emblemUploading}
+                canReset={draft.emblemManuallySet && !emblemUploading}
+                tone={medallionTone(committeeType)}
+                monogramText={draft.abbreviation || draft.name}
+              />
+            ) : (
             <EmblemPicker
               value={emblem}
               onPick={(logo) => onChange({ logoUrl: logo, emblemManuallySet: true })}
@@ -1012,6 +1200,7 @@ export function CommitteeSetupFields({
               tone={medallionTone(committeeType)}
               monogramText={draft.abbreviation || draft.name}
             />
+            )}
           </div>
         </div>
       </section>
@@ -1042,7 +1231,7 @@ export function CommitteeSeatsStep({
   draft, onChange, committeeType,
   nameInputId = 'committee-setup-name',
   onUploadFlag, selectedInline = false, compactPaste = false,
-  panel = false, className, style,
+  panel = false, className, style, part = 'all',
 }: {
   draft: CommitteeSetupDraft;
   onChange: (patch: Partial<CommitteeSetupDraft>) => void;
@@ -1054,30 +1243,61 @@ export function CommitteeSeatsStep({
   panel?: boolean;
   className?: string;
   style?: React.CSSProperties;
+  /** The committee editor splits step 2 in two (owner, 23 Sep 2026: "the
+   *  ENTIRE right side should just be the countries already added"):
+   *  'add' = the heading plus search, bundles and paste (the left card);
+   *  'list' = only the added seats, with the delegates-per-seat stepper in
+   *  the list's own header (the right card). 'all' = both, as before. */
+  part?: 'all' | 'add' | 'list';
 }) {
   const isCustom = committeeType === 'custom';
   const mode = rosterModeOf(draft, committeeType);
   const isCharacterRoster = mode === 'character';
   const { noun: seatNoun } = seatNounsOf(committeeType, isCharacterRoster);
+  const stepper = (
+    <DelegationSizeStepper
+      value={draft.doubleDelegation ? 2 : 1}
+      onChange={(n) => onChange({ doubleDelegation: n === 2 })}
+      noun={seatNoun}
+    />
+  );
+  const title = isCustom ? 'Members' : isCharacterRoster ? 'Characters' : 'Countries';
+
+  if (part === 'list') {
+    // Only the added seats: the count, the stepper and CLEAR ALL on one header
+    // line, then the list, which fills the card and is the only scroller.
+    return (
+      <section aria-label={`${title} added`} className={`flex min-h-0 flex-col ${className ?? ''}`} style={style}>
+        <ConferenceRosterSelected
+          mode={mode}
+          value={draft.roster}
+          onChange={(roster) => onChange({ roster })}
+          committeeType={committeeType}
+          groups={draft.groups}
+          onGroupsChange={isCustom ? (groups) => onChange({ groups }) : undefined}
+          onUploadLogo={onUploadFlag}
+          variant="panel"
+          headerAside={stepper}
+          className="min-h-0 flex-1"
+        />
+      </section>
+    );
+  }
+
   // DELEGATES PER SEAT sits on the step heading's own line, which is where it
-  // belongs semantically: it describes the list about to be built.
+  // belongs semantically: it describes the list about to be built. In the
+  // editor's 'add' half it moves to the list's header instead.
   return (
     <section
       aria-labelledby={`${nameInputId}-step-seats`}
-      className={panel ? `flex min-h-0 flex-col ${className ?? ''}` : 'mt-4 pt-3.5'}
-      style={panel ? style : { boxShadow: 'inset 0 1px 0 rgba(27,56,40,0.08)' }}
+      className={panel ? `flex min-h-0 flex-col ${className ?? ''}` : `mt-4 pt-3.5 ${className ?? ''}`}
+      style={panel ? style : { boxShadow: 'inset 0 1px 0 rgba(27,56,40,0.08)', ...style }}
     >
       <SetupStep
         step={2}
         id={`${nameInputId}-step-seats`}
-        title={isCustom ? 'Members' : isCharacterRoster ? 'Characters' : 'Countries'}
-        aside={
-          <DelegationSizeStepper
-            value={draft.doubleDelegation ? 2 : 1}
-            onChange={(n) => onChange({ doubleDelegation: n === 2 })}
-            noun={seatNoun}
-          />
-        }
+        title={part === 'add' ? `Add ${title.toLowerCase()}` : title}
+        aside={part === 'add' ? undefined : stepper}
       />
       {/* The add controls, then (wizard, or the editor's card) the list. */}
       <ConferenceRosterPicker
@@ -1087,7 +1307,7 @@ export function CommitteeSeatsStep({
         showSelected={false}
         compact={compactPaste}
       />
-      {(selectedInline || panel) && (
+      {part === 'all' && (selectedInline || panel) && (
         <ConferenceRosterSelected
           mode={mode}
           value={draft.roster}

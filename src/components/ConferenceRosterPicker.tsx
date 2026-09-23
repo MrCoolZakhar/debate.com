@@ -12,7 +12,7 @@
 // Reuses shared logic (findCountryFlexible, UN_COUNTRIES) rather than copying.
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Globe, Users, PenLine, Megaphone, Info, ArrowDownAZ, X, ImagePlus, Replace, FolderInput, Plus, Check, GripVertical, ClipboardPaste } from 'lucide-react';
+import { Globe, Users, PenLine, Megaphone, Info, ArrowDownAZ, X, ImagePlus, Replace, FolderInput, Plus, Check, GripVertical } from 'lucide-react';
 import Portal from '@/components/Portal';
 // One implementation of "where may a fixed layer be drawn" (keyboard-aware).
 import { viewBox, useReposition } from '@/lib/visualViewport';
@@ -550,7 +550,7 @@ div:last-child > .gv-rs-row { border-bottom-color:transparent; }
 export function ConferenceRosterSelected({
   mode, value, onChange, style, className,
   groups = [], onGroupsChange, onUploadLogo, committeeType,
-  variant = 'dense',
+  variant = 'dense', headerAside,
 }: {
   mode: 'country' | 'character';
   value: RosterEntry[];
@@ -570,6 +570,9 @@ export function ConferenceRosterSelected({
    *  roomy one-line rows with 30px round flags on an inset well. 'dense' is the
    *  compact list the creation wizard shows under its add controls. */
   variant?: 'dense' | 'panel';
+  /** Rendered at the end of the header row, before CLEAR ALL (the committee
+   *  editor puts its delegates-per-seat stepper there). */
+  headerAside?: React.ReactNode;
 }) {
   const panel = variant === 'panel';
   const isCharacter = mode === 'character';
@@ -942,6 +945,7 @@ export function ConferenceRosterSelected({
           </HoverInfo>
         </div>
         <div className="flex items-center gap-2">
+          {headerAside}
           {value.length > 0 && (
             <button
               onClick={() => { onChange([]); setApplyFor(null); setChooser(null); }}
@@ -1336,9 +1340,8 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
   mode: 'country' | 'character';
   value: RosterEntry[];
   onChange: (roster: RosterEntry[]) => void;
-  /** The committee editor's two-column layout: the paste box folds behind a
-   *  "Paste a list" button and the labels tighten, so the seat list below
-   *  gets the height. */
+  /** The committee editor's layout: the paste box is three rows and the
+   *  gaps tighten. The paste box is always shown, never folded. */
   compact?: boolean;
   /** False when the caller renders `ConferenceRosterSelected` itself somewhere
    *  else — the committee editor docks it outside its main panel. */
@@ -1348,7 +1351,6 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
   const [search, setSearch] = useState('');
   const [pasteText, setPasteText] = useState('');
   const [pasteError, setPasteError] = useState('');
-  const [pasteOpen, setPasteOpen] = useState(false);
   const [review, setReview] = useState<ReviewRow[] | null>(null);
   // The paste-review overlay is a modal. Ref-counted, so when it opens on top
   // of the committee editor modal the editor's own lock survives its close.
@@ -1547,18 +1549,9 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
           </div>
         )}
 
-        {/* Paste list. Compact: folded behind one button until wanted. */}
-        {compact && !pasteOpen ? (
-          <button
-            type="button"
-            onClick={() => setPasteOpen(true)}
-            className="inline-flex items-center gap-1.5 self-start rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828] hover:bg-[#1B3828]/[0.06]"
-            style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.16)' }}
-          >
-            <ClipboardPaste size={13} strokeWidth={2.2} />
-            {isCharacter ? 'Paste a list of characters' : 'Paste a list of countries'}
-          </button>
-        ) : (
+        {/* Paste list. Always open, compact included (owner, 23 Sep 2026:
+            "the copy-a-list-of-countries should be there all the time, not a
+            drop-down"). Compact only makes it three rows. */}
         <div className="flex flex-col flex-1">
           <label style={labelStyle}>{isCharacter ? 'Paste Character List' : 'Paste Country List'}</label>
           {isCharacter && (
@@ -1575,7 +1568,6 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
                ~90px of the committee editor's height — the single biggest
                reason the main step did not fit a 900px-tall viewport. */
             rows={compact ? 3 : 4}
-            autoFocus={compact}
             className="flex-1 rounded-xl px-3 py-2.5 text-sm resize-y focus:outline-none"
             style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: "'Outfit', sans-serif", minHeight: compact ? 70 : 92, lineHeight: 1.55 }}
           />
@@ -1591,19 +1583,8 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
               {isCharacter ? 'Add All' : 'Auto-Match'}
             </button>
             {pasteError && <p className="text-xs" style={{ color: '#7A5A10', fontFamily: "'Outfit', sans-serif" }}>{pasteError}</p>}
-            {compact && (
-              <button
-                type="button"
-                onClick={() => { setPasteOpen(false); setPasteError(''); }}
-                className="ms-auto text-[11px] font-bold focus:outline-none focus-visible:underline"
-                style={{ color: '#6E5F4E', fontFamily: "'Outfit', sans-serif" }}
-              >
-                Close
-              </button>
-            )}
           </div>
         </div>
-        )}
       </div>
 
       {/* Right: selected list, unless the caller is placing it itself. */}

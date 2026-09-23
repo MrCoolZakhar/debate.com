@@ -244,19 +244,12 @@ export function CommitteeInfoDialog({
                   style={{ width: 88, height: 88, objectFit: 'contain', filter: 'drop-shadow(0 10px 18px color-mix(in srgb, var(--gv-main) 28%, transparent))', marginBottom: 14 }}
                 />
               )}
-              {/* The acronym, with the working language beside it when set
-                  (owner, 23 Sep 2026: "top left side with the acronym"). */}
-              {(c.abbreviation || c.working_language) && (
-                <p className="flex items-center justify-center gap-2 flex-wrap" style={{ fontFamily: FONT, fontWeight: 700, fontSize: 12, letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: 0 }}>
-                  {c.abbreviation}
-                  {c.working_language && (
-                    <span className="inline-flex items-center gap-1" title="Working language" style={{ letterSpacing: '0.04em', fontWeight: 600, color: '#6B5F52' }}>
-                      {committeeLanguageFlag(c.working_language)
-                        ? <CircleFlag code={committeeLanguageFlag(c.working_language)!} size={15} decorative />
-                        : <Languages size={13} aria-hidden style={{ color: 'var(--gv-accent)' }} />}
-                      {c.working_language}
-                    </span>
-                  )}
+              {/* The acronym alone, small above the name, and never the name
+                  twice. The working language moved to the meta line below
+                  (owner, 23 Sep 2026: acronym and language no longer stacked). */}
+              {c.abbreviation?.trim() && c.abbreviation.trim().toUpperCase() !== c.name.trim().toUpperCase() && (
+                <p style={{ fontFamily: FONT, fontWeight: 700, fontSize: 12, letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: 0 }}>
+                  {c.abbreviation.trim()}
                 </p>
               )}
               <h2 id={titleId} className="font-bold leading-snug" style={{ fontFamily: FONT, fontSize: 20, color: 'var(--gv-on-surface)', margin: '6px 0 0 0', textWrap: 'balance' }}>
@@ -267,6 +260,14 @@ export function CommitteeInfoDialog({
                 <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: '#6B5F52' }}>
                   {seatsLine}{isCrisis ? ' · Crisis' : ''}
                 </span>
+                {c.working_language && (
+                  <span className="inline-flex items-center gap-1" title="Working language" style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: '#6B5F52' }}>
+                    {committeeLanguageFlag(c.working_language)
+                      ? <CircleFlag code={committeeLanguageFlag(c.working_language)!} size={15} decorative />
+                      : <Languages size={13} aria-hidden style={{ color: 'var(--gv-accent)' }} />}
+                    {c.working_language}
+                  </span>
+                )}
               </div>
             </div>
 
