@@ -316,6 +316,30 @@ export function flattenBlocksToPlainText(blocks: EmailBlock[], conference: Butto
     .join('\n\n');
 }
 
+/**
+ * Does this block model actually say anything?
+ *
+ * THE COUNT OF BLOCKS IS NOT THE ANSWER (23 Sep 2026). A composer that has
+ * been opened and left alone stores `[{ type: 'paragraph', content: '' }]`,
+ * which is one block and no words. Every "has the organiser drafted this?"
+ * test used to read `blocks.length > 0`, so that row counted as a draft and
+ * sent as a draft: a subject with nothing under it. KenyaMUN's chair invite
+ * was exactly that, enabled, with 7 chairs behind it.
+ *
+ * The rules match `flattenBlocksToPlainText` below, which is what decides
+ * whether a block contributes anything to the email a person reads: text for
+ * a paragraph, a label for a button, alt text or a URL for an image, and at
+ * least one labelled or valued row for a facts panel.
+ */
+export function blocksHaveContent(blocks: EmailBlock[]): boolean {
+  return blocks.some(b => {
+    if (b.type === 'paragraph') return b.content.trim().length > 0;
+    if (b.type === 'button') return b.label.trim().length > 0;
+    if (b.type === 'facts') return b.items.some(i => i.label.trim().length > 0 || i.value.trim().length > 0);
+    return b.url.trim().length > 0 || b.alt.trim().length > 0;
+  });
+}
+
 /** Templates saved before body_blocks existed have body_blocks=[] and only a plain body — treat that as a single paragraph. */
 export function normalizeBlocks(bodyBlocks: unknown, legacyBody: string): EmailBlock[] {
   if (Array.isArray(bodyBlocks) && bodyBlocks.length > 0) return bodyBlocks as EmailBlock[];

@@ -73,7 +73,7 @@ import {
 
 /** THE switch for app-rendered email. Flip to true (or set the env var) to
  *  send every app email in the card design. */
-export const EMAIL_CARD_DESIGN = false;
+export const EMAIL_CARD_DESIGN = true;
 
 export function emailCardDesignEnabled(): boolean {
   return EMAIL_CARD_DESIGN || process.env.NEXT_PUBLIC_EMAIL_CARD_DESIGN === 'on';
@@ -95,7 +95,7 @@ const LINK = '#1B3828';
 
 /** Where the email images live (round flags, icon discs, the white logo disc,
  *  banner crops, product shots). Keep in step with gavelling_email_asset_base_v2(). */
-export const EMAIL_ASSET_BASE = 'https://luruhkwrgisytejswlas.supabase.co/storage/v1/object/public/email-assets/';
+export const EMAIL_ASSET_BASE = 'https://gavelling.com/email/';
 const LEGACY_ASSETS = 'https://luruhkwrgisytejswlas.supabase.co/storage/v1/object/public/session-documents/email-assets/';
 
 /** ISO codes that have round-flag artwork in public/email/flags. */
@@ -409,8 +409,15 @@ function seatStatement(o: { country: string; committee: string | null; committee
 /** The award, stated plainly: the award name big, then the seat it was won in:
  *  the round flag and country, the emblem and committee. */
 function awardStatement(o: { award: string; country: string | null; flag: RowIcon | null; committee: string | null; committeeName: string | null; committeeLogo: string | null }): string {
+  // The two seat cells sit side by side on a desktop card and STACK on a
+  // phone (.e-stack in the media query). Left in one row, their min-content is
+  // the sum of both columns: "The Democratic Republic of the Congo" beside a
+  // 71-character committee needs 326px, which pushed the whole card past a
+  // 320px screen and put the email into sideways scroll (QA, 23 Sep 2026).
+  // Outlook desktop ignores the media query and keeps the row, which is right
+  // at 600px.
   const cell = (img: string, top: string, sub: string | null) =>
-    `<td valign="middle" style="padding:0 10px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>`
+    `<td valign="middle" class="e-stack" style="padding:0 10px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>`
     + (img ? `<td valign="middle" style="padding-right:10px;line-height:0;">${img}</td>` : '')
     + `<td valign="middle" style="font-family:${SANS};text-align:left;"><div class="e-ink" style="font-size:16px;line-height:1.3;font-weight:bold;color:#1C1410;">${escapeHtml(top)}</div>`
     + (sub ? `<div class="e-soft" style="font-size:12.5px;line-height:1.4;color:${INK_SOFT};">${escapeHtml(sub)}</div>` : '')
@@ -463,7 +470,7 @@ const STYLE = `<style>
 body{margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;}
 img{border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;}
 a{text-decoration:none;}
-@media only screen and (max-width:620px){.e-pad{padding-left:22px !important;padding-right:22px !important;}.e-h1{font-size:25px !important;}}
+@media only screen and (max-width:620px){.e-pad{padding-left:22px !important;padding-right:22px !important;}.e-h1{font-size:25px !important;}.e-card table{max-width:100% !important;}.e-card td{word-break:break-word;}.e-stack{display:block !important;width:100% !important;padding:0 0 14px 0 !important;}}
 @media (prefers-color-scheme: dark){body,.e-page{background-color:#0E0D0A !important;}.e-card{background-color:#232019 !important;border-color:#3A352A !important;}.e-hair{border-color:#3A352A !important;}.e-ink,.e-ink div,.e-ink span,.e-ink strong,.e-ink em{color:#F3EFE6 !important;}.e-soft{color:#CFC7B8 !important;}.e-muted,.e-muted a,.e-muted div{color:#A79D8D !important;}.e-accent{color:#D9E4DC !important;}.e-label{color:#8FC3A0 !important;}.e-ring{background-color:#232019 !important;}.e-tile{background-color:#FFFFFF !important;}.e-link{color:#BFD3C6 !important;}.e-btn{background-color:#2F5A40 !important;}}
 [data-ogsc] .e-page{background-color:#0E0D0A !important;}[data-ogsc] .e-card{background-color:#232019 !important;}[data-ogsc] .e-ink,[data-ogsc] .e-ink div,[data-ogsc] .e-ink span,[data-ogsc] .e-ink strong{color:#F3EFE6 !important;}[data-ogsc] .e-soft{color:#CFC7B8 !important;}[data-ogsc] .e-muted,[data-ogsc] .e-muted a{color:#A79D8D !important;}[data-ogsc] .e-accent{color:#D9E4DC !important;}[data-ogsc] .e-label{color:#8FC3A0 !important;}[data-ogsc] .e-link{color:#BFD3C6 !important;}[data-ogsc] .e-btn{background-color:#2F5A40 !important;}
 [data-ogsc] .e-tile,[data-ogsb] .e-tile{background-color:#FFFFFF !important;}

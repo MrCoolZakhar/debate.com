@@ -301,7 +301,11 @@ export async function queueAdHocEmail(
       body_html: renderEmailHtml({ blocks, conference: renderConf, ctx }),
       status: 'pending' as const,
     };
-  });
+  })
+  // Never a blank email. A one-off has no default copy to fall back to, so a
+  // recipient whose merge fields empty the whole message is dropped rather
+  // than sent a white page; the send itself still goes to everyone else.
+  .filter(r => r.subject.trim().length > 0 && r.body.trim().length > 0);
 
   const { error: outboxError } = await supabase.from('email_outbox').insert(rows);
   if (outboxError) {
