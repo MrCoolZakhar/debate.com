@@ -784,7 +784,13 @@ export default function UnlimitedPage() {
             boxShadow: `0 0 0 2px rgba(182,135,31,0.5), ${NEU.out}`,
           }}
         >
-          <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={Sparkles} size={44} />
+          {/* A heap of credit tokens (owner, 23 Sep 2026: "just have a looot of
+              tokens"). Same artwork as CreditCoin, public/credit-token-heap.*. */}
+          <picture style={{ display: 'block', lineHeight: 0 }}>
+            <source srcSet="/credit-token-heap.webp" type="image/webp" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/credit-token-heap.png" alt="A heap of Gavelling credits" width={132} height={80} decoding="async" draggable={false} style={{ width: 132, height: 80, objectFit: 'contain', objectPosition: 'left center', display: 'block' }} />
+          </picture>
           <h2 className="font-black text-lg mt-4 mb-1" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
             Gavelling Unlimited
           </h2>
