@@ -12,14 +12,14 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  Check, Copy, LogIn, Gavel, X, RotateCcw, CirclePause, CircleDot, Clock, Eye, Activity,
+  Check, Copy, LogIn, Gavel, X, RotateCcw, CirclePause, CircleDot, Clock, Eye, Activity, Play, Users,
 } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { CircleFlag, flagMonogram } from '@/components/CircleFlag';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { useT } from '@/contexts/LanguageContext';
 import { committeeDisplayName, deriveCommitteeAcronym, matchPresetEmblem } from '@/lib/presetNames';
-import { liveEntryHref, type LiveEntry, type LiveRoomInfo } from '@/lib/liveRooms';
+import { liveEntryHref, useChairPresence, type LiveEntry, type LiveRoomInfo } from '@/lib/liveRooms';
 
 // ── Palette (CLAUDE.md §8) ────────────────────────────────────────────────────
 export const LR = {
@@ -84,10 +84,18 @@ function statusOf(room: LiveRoomInfo): Status {
   return room.started ? 'live' : 'ready';
 }
 
-export function actionLabel(item: PromptItem, t: T, long: boolean): string {
+/** Is anyone already on this dais? Drives "Start the session" vs "Join as co-chair".
+ *  Advisory only: the outcome is decided by `enter_live_chair_room` at press time. */
+export function daisOccupied(room: LiveRoomInfo, presentChairs: string[] = []): boolean {
+  return presentChairs.length > 0 || !!room.headChair || room.chairCount > 0;
+}
+
+export function actionLabel(item: PromptItem, t: T, long: boolean, presentChairs: string[] = []): string {
   switch (item.role) {
     case 'organiser': return long ? t('srp_org_open') : t('srp_menu_open');
-    case 'chair': return long ? t('srp_join_chair') : t('srp_menu_join');
+    case 'chair': return daisOccupied(item.room, presentChairs)
+      ? (long ? t('srp_join_cochair') : t('srp_menu_join'))
+      : (long ? t('srp_start_session') : t('srp_menu_start'));
     case 'delegate': return t('srp_menu_join');
     case 'advisor': return long ? t('srp_adv_open') : t('srp_menu_join');
     case 'standalone': return t('srp_rejoin');
@@ -104,8 +112,9 @@ export function roleWord(item: PromptItem, t: T): string {
   }
 }
 
-function ActionIcon({ item, size }: { item: PromptItem; size: number }) {
+function ActionIcon({ item, size, presentChairs = [] }: { item: PromptItem; size: number; presentChairs?: string[] }) {
   if (item.role === 'organiser') return <Activity size={size} strokeWidth={2.4} aria-hidden />;
+  if (item.role === 'chair' && !daisOccupied(item.room, presentChairs)) return <Play size={size} strokeWidth={2.4} aria-hidden />;
   if (item.role === 'advisor') return <Eye size={size} strokeWidth={2.4} aria-hidden />;
   if (item.role === 'standalone') return <RotateCcw size={size} strokeWidth={2.4} aria-hidden />;
   return <LogIn size={size} strokeWidth={2.4} aria-hidden />;
@@ -249,7 +258,7 @@ export interface LiveRoomsDialogProps {
   displayName: string;
   avatarUrl: string | null;
   showAvatar: boolean;
-  onGo: (item: PromptItem) => void;
+  onGo: (item: PromptItem) => void | Promise<void>;
   onClose: () => void;
   /** Standalone only: forget this room for good (the old Dismiss). */
   onForget: (item: PromptItem) => void;
@@ -348,13 +357,80 @@ export default function LiveRoomsDialog({ items, displayName, avatarUrl, showAva
 interface ViewProps {
   t: T;
   primaryRef: React.RefObject<HTMLButtonElement | null>;
-  onGo: (item: PromptItem) => void;
+  onGo: (item: PromptItem) => void | Promise<void>;
   onClose: () => void;
   onForget: (item: PromptItem) => void;
 }
 
+/** Who is already in: the dais (chair_names plus whoever has the chair page open
+ *  right now, from the anon presence channel) and the delegations marked present. */
+function RoomOccupancy({ room, presence, t }: { room: LiveRoomInfo; presence: string[]; t: T }) {
+  const dais = Array.from(new Set([...presence, ...room.chairNames])).slice(0, 4);
+  const daisTotal = new Set([...presence, ...room.chairNames]).size;
+  const flags = room.presentCountries.slice(0, 6);
+  const moreFlags = Math.max(0, room.presentCount - flags.length);
+  return (
+    <div className="srp-occupancy">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className="flex shrink-0 items-center">
+          {dais.length === 0 ? (
+            <span className="inline-flex items-center justify-center rounded-full" style={{ width: 28, height: 28, background: 'rgba(27,56,40,0.08)', color: LR.inkSoft }}>
+              <Gavel size={14} strokeWidth={2.3} aria-hidden />
+            </span>
+          ) : dais.map((name, i) => (
+            <span
+              key={name}
+              title={name}
+              className="inline-flex items-center justify-center rounded-full"
+              style={{
+                width: 28, height: 28, marginInlineStart: i === 0 ? 0 : -8,
+                background: presence.includes(name) ? LR.forest : 'rgba(27,56,40,0.14)',
+                color: presence.includes(name) ? LR.gold : LR.forest,
+                fontSize: 11, fontWeight: 800,
+                boxShadow: `0 0 0 2px ${LR.surface}`,
+              }}
+            >
+              {flagMonogram(name)}
+            </span>
+          ))}
+        </span>
+        <span className="min-w-0" style={{ fontSize: 12.5, color: LR.inkSoft }}>
+          {daisTotal === 0
+            ? t('srp_dais_empty')
+            : t('srp_dais_count').replace('{n}', String(daisTotal))}
+          {presence.length > 0 && <span style={{ color: '#2F7A4A', fontWeight: 600 }}>{' · '}{t('srp_dais_here').replace('{n}', String(presence.length))}</span>}
+        </span>
+      </div>
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className="flex shrink-0 items-center">
+          {flags.length === 0 ? (
+            <span className="inline-flex items-center justify-center rounded-full" style={{ width: 28, height: 28, background: 'rgba(27,56,40,0.08)', color: LR.inkSoft }}>
+              <Users size={14} strokeWidth={2.3} aria-hidden />
+            </span>
+          ) : flags.map((c, i) => (
+            <CircleFlag key={c} country={c} title={c} size={28} ring={false}
+              style={{ marginInlineStart: i === 0 ? 0 : -8, boxShadow: `0 0 0 2px ${LR.surface}` }} />
+          ))}
+          {moreFlags > 0 && (
+            <span className="inline-flex items-center justify-center rounded-full" style={{ width: 28, height: 28, marginInlineStart: -8, background: 'rgba(27,56,40,0.14)', color: LR.forest, fontSize: 10.5, fontWeight: 800, boxShadow: `0 0 0 2px ${LR.surface}` }}>
+              +{moreFlags}
+            </span>
+          )}
+        </span>
+        <span className="min-w-0" style={{ fontSize: 12.5, color: LR.inkSoft }}>
+          {t('srp_present_count').replace('{n}', String(room.presentCount)).replace('{total}', String(room.delegateCount))}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function SingleCard({ item, t, primaryRef, onGo, onClose, onForget }: ViewProps & { item: PromptItem }) {
+  // The chair card watches the dais live, so the label is right when it is pressed.
+  const presence = useChairPresence(item.role === 'chair' ? item.room.sessionId : null);
+  const [pending, setPending] = useState(false);
   let hero: ReactNode;
+  let occupancy: ReactNode = null;
   let code: string | null = null;
   let topic: string | null = null;
   let note: string | null = null;
@@ -421,6 +497,7 @@ function SingleCard({ item, t, primaryRef, onGo, onClose, onForget }: ViewProps 
     code = r.sessionCode;
     topic = r.topic;
     note = item.role === 'chair' ? t('srp_conf_note') : t('srp_adv_note');
+    if (item.role === 'chair') occupancy = <RoomOccupancy room={r} presence={presence} t={t} />;
     hero = (
       <div className="srp-hero">
         <div className="relative shrink-0" style={{ width: 104, height: 104 }}>
@@ -471,17 +548,19 @@ function SingleCard({ item, t, primaryRef, onGo, onClose, onForget }: ViewProps 
   return (
     <>
       {hero}
+      {occupancy}
       <Topic topic={topic} t={t} />
       {code && <CopyCode code={code} t={t} />}
       <div className="srp-actions">
         <button
           ref={primaryRef}
           type="button"
-          onClick={() => onGo(item)}
+          disabled={pending}
+          onClick={async () => { setPending(true); try { await onGo(item); } finally { setPending(false); } }}
           className="srp-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A] focus-visible:ring-offset-2"
         >
-          <ActionIcon item={item} size={20} />
-          <span>{actionLabel(item, t, true)}</span>
+          <ActionIcon item={item} size={20} presentChairs={presence} />
+          <span>{pending ? t('srp_entering') : actionLabel(item, t, true, presence)}</span>
         </button>
         <button
           type="button"
@@ -538,6 +617,7 @@ export function entryLines(item: PromptItem, t: T): { title: string; sub: string
 }
 
 function Chooser({ items, t, primaryRef, onGo, onClose, onForget }: ViewProps & { items: PromptItem[] }) {
+  const [busy, setBusy] = useState<string | null>(null);
   return (
     <>
       <p style={{ fontSize: 14, color: LR.inkSoft, marginTop: -6 }}>{t('srp_chooser_hint')}</p>
@@ -577,12 +657,13 @@ function Chooser({ items, t, primaryRef, onGo, onClose, onForget }: ViewProps & 
                 <button
                   ref={i === 0 ? primaryRef : undefined}
                   type="button"
-                  onClick={() => onGo(item)}
+                  disabled={busy === item.key}
+                  onClick={async () => { setBusy(item.key); try { await onGo(item); } finally { setBusy(null); } }}
                   aria-label={`${actionLabel(item, t, true)}: ${title}`}
                   className="srp-row-go focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A] focus-visible:ring-offset-2"
                 >
                   <ActionIcon item={item} size={16} />
-                  <span>{actionLabel(item, t, false)}</span>
+                  <span>{busy === item.key ? t('srp_entering') : actionLabel(item, t, false)}</span>
                 </button>
               </div>
             </li>
@@ -613,6 +694,7 @@ const CSS = `
   background:linear-gradient(160deg,#FFFDF8 0%,${LR.page} 100%);box-shadow:inset 0 0 0 1px rgba(27,56,40,0.06)}
 .srp-acronym{font-size:30px;font-weight:900;line-height:1.02;letter-spacing:-0.01em;overflow-wrap:anywhere}
 .srp-num{font-size:34px;font-weight:900;line-height:1;color:${LR.forest};font-variant-numeric:tabular-nums}
+.srp-occupancy{display:flex;flex-direction:column;gap:10px;padding:0 4px;margin-top:-6px}
 .srp-topic{padding:0 4px}
 .srp-clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-wrap:pretty}
 .srp-actions{display:flex;gap:10px}

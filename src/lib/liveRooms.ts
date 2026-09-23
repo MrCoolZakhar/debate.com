@@ -20,13 +20,17 @@
 // "Live now" section: one read per page load per account, re-read by the menu
 // when the cached answer is more than a minute old.
 
-import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import { supabase } from '@/lib/supabase';
+import { getGavelDeviceId } from '@/lib/gavelDevice';
 
 export type LiveRole = 'organiser' | 'chair' | 'delegate' | 'advisor';
 
 export interface LiveRoomInfo {
   conferenceCommitteeId: string;
+  /** `committees.id` of the live session: the anon chair-presence channel's topic. */
+  sessionId: string;
   committeeName: string;
   committeeAbbreviation: string | null;
   committeeLogoUrl: string | null;
@@ -41,6 +45,15 @@ export interface LiveRoomInfo {
   phase: string;
   suspended: boolean;
   started: boolean;
+  /** Everyone who has ever joined this dais (`committees.chair_names`; names only). */
+  chairNames: string[];
+  chairCount: number;
+  /** The gavel holder's NAME (`settings.headChair`), never the chair suffix. */
+  headChair: string | null;
+  delegateCount: number;
+  presentCount: number;
+  /** Up to ten present delegations, for their round flags. */
+  presentCountries: string[];
 }
 
 export interface LiveConferenceInfo {
@@ -78,11 +91,18 @@ function roomFrom(r: Row): LiveRoomInfo | null {
     conferenceLogoUrl: str(r.conference_logo_url),
     conferenceCountry: str(r.conference_country),
     conferenceSlug: str(r.conference_slug),
+    sessionId: String(r.session_id ?? ''),
     sessionCode: code.toUpperCase(),
     topic: str(r.topic),
     phase: String(r.phase ?? ''),
     suspended: r.suspended === true,
     started: r.started === true,
+    chairNames: Array.isArray(r.chair_names) ? (r.chair_names as unknown[]).filter((n): n is string => typeof n === 'string' && !!n.trim()) : [],
+    chairCount: num(r.chair_count),
+    headChair: str(r.head_chair),
+    delegateCount: num(r.delegate_count),
+    presentCount: num(r.present_count),
+    presentCountries: Array.isArray(r.present_countries) ? (r.present_countries as unknown[]).filter((c): c is string => typeof c === 'string' && !!c.trim()) : [],
   };
 }
 
@@ -139,6 +159,101 @@ export function liveEntryHref(e: LiveEntry): string {
       return `/advisor/${e.room.sessionCode}`;
   }
 }
+
+// ── Walking into a chair's room without the chair code ────────────────────────
+
+export interface ChairEntry {
+  ok: boolean;
+  /** True when THIS press opened the dais: nobody held the gavel until now. */
+  started: boolean;
+  moderator: boolean;
+  chairCount: number;
+  presentCount: number;
+}
+
+/**
+ * `enter_live_chair_room(code, name, device)`: the server checks the caller is an
+ * assigned chair of that room (`conference_committees.chair_user_ids`, a stronger
+ * check than the anon-readable chair suffix), puts their name on `chair_names`
+ * and claims the gavel ONLY when nobody holds it, under the committee's row lock.
+ * So the "Start the session" / "Join as co-chair" outcome is decided at PRESS
+ * TIME by the database: two chairs pressing together produce one Moderator and
+ * one Commenter, never two. It writes no phase, caucus or clock.
+ */
+export async function enterLiveChairRoom(
+  accessToken: string,
+  code: string,
+  chairName: string,
+): Promise<ChairEntry | null> {
+  try {
+    const { data, error } = await getAuthedClient(accessToken).rpc('enter_live_chair_room', {
+      p_code: code,
+      p_name: chairName,
+      p_device: getGavelDeviceId(code) || null,
+    });
+    const r = (data ?? null) as Row | null;
+    if (error || !r || r.ok !== true) return null;
+    return {
+      ok: true,
+      started: r.started === true,
+      moderator: r.moderator === true,
+      chairCount: num(r.chair_count),
+      presentCount: num(r.present_count),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Where a press takes this person. For a chair it first walks them in (above) and
+ * lands on the chair page with their profile name as the chair identity, so no
+ * chair code is typed and no chair-code screen appears; if that call cannot be
+ * answered it falls back to the join page's verified chair path, which asks for
+ * nothing either. Every other role is a plain href.
+ */
+/** The chair's identity in a session is a NAME (AGENTS.md, CHAIR ROLES): their
+ *  profile name, as the join page uses, so nothing has to be typed. */
+export function chairIdentity(displayName: string | null | undefined, email: string | null | undefined): string {
+  return (displayName ?? '').trim() || (email ?? '').trim().split('@')[0] || 'Chair';
+}
+
+export async function resolveEntryHref(
+  e: LiveEntry,
+  ctx: { accessToken: string | null; chairName: string },
+): Promise<string> {
+  if (e.role !== 'chair') return liveEntryHref(e);
+  const name = ctx.chairName.trim();
+  if (!ctx.accessToken || !name) return liveEntryHref(e);
+  const res = await enterLiveChairRoom(ctx.accessToken, e.room.sessionCode, name);
+  if (!res) return liveEntryHref(e);
+  return `/chair/${e.room.sessionCode}?chairName=${encodeURIComponent(name)}`;
+}
+
+/**
+ * The chairs whose chair page is open right now, from the same anon presence
+ * channel the join page reads (`chair-presence-<committee id>`, presence key =
+ * the chair's name). Read only: it never tracks, so the prompt never appears to
+ * be a chair in the room. `[]` until the channel has synced.
+ */
+export function useChairPresence(sessionId: string | null): string[] {
+  const [state, setState] = useState<{ id: string; names: string[] }>({ id: '', names: [] });
+  useEffect(() => {
+    if (!sessionId) return;
+    const setNames = (names: string[]) => setState({ id: sessionId, names });
+    const channel = supabase.channel(`chair-presence-${sessionId}`);
+    const sync = () => {
+      const state = channel.presenceState() as Record<string, unknown[]>;
+      setNames(Object.keys(state).filter((n) => !!n.trim()));
+    };
+    channel.on('presence', { event: 'sync' }, sync).subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [sessionId]);
+  // A room this hook has not synced yet reads as empty rather than as the previous room's dais.
+  return sessionId && state.id === sessionId ? state.names : EMPTY_NAMES;
+}
+
+const EMPTY_NAMES: string[] = [];
 
 export async function fetchMyLiveRooms(accessToken: string): Promise<LiveEntry[] | null> {
   try {

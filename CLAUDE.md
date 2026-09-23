@@ -301,7 +301,9 @@ answer shapes what we lead them with afterwards.
 The moment a signed-in person lands on the site while one of their conference rooms is live,
 `LiveRoomsGate` (root layout, `src/components/liveRooms/`) sends them straight in: an
 **organiser** to `/manage/[slug]/live` (how many committees are live and in session), a
-**chair** to the verified chair join (`/join?code=CODE&mode=chair`, no chair code), a
+**chair** straight onto the dais with no chair code at all (`enter_live_chair_room` decides at
+press time: "Start the session" for the first chair in, "Join as co-chair" for the next, and the
+card shows who is already on the dais and how many delegations are present), a
 **delegate** to their allocated seat (`/delegate/CODE?country=...&locked=1`, round country
 flag as the headline), and a **faculty advisor** (accepted application; owner: "put in a note
 for faculty advisors to have the pop up as well") to `/advisor/CODE`, every live room of their

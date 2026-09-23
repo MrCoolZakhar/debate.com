@@ -7,7 +7,7 @@ import {
   Mail, AlertTriangle, Send, Bell, Copy, X, ChevronDown, ChevronLeft, ChevronRight, Trash2,
   BadgeCheck, MessageSquare, CalendarDays, ArrowRight, Compass, Wrench,
   Zap, Clock, BookOpen, KeyRound, PenLine, Plus, Inbox, Users, CheckCircle2,
-  CreditCard, Globe, FileText, Mic, HelpCircle,
+  CreditCard, Globe, FileText, Mic, HelpCircle, Info,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
@@ -20,7 +20,7 @@ import {
   type EmailTokenContext, type EmailTokenKey,
 } from '@/lib/emailTokens';
 import { TOKEN_IDENTITY } from '@/components/email/tokenKit';
-import { EVENT_REGISTRY, queueEventEmail, getEventLabel, notifyIfNeeded, turnOnDefaultEmail, type EventDef, type EventKey } from '@/lib/emailEvents';
+import { EVENT_REGISTRY, queueEventEmail, getEventLabel, notifyIfNeeded, turnOnDefaultEmail, newTemplateStartsEnabled, hasDraftContent, type EventDef, type EventKey } from '@/lib/emailEvents';
 import { EASE, NEU, NEU_GRADIENTS, Emoji3D, NeuIconDisc, type NeuGradient } from '@/components/neu';
 import {
   SOFT, GREEN_INK, RED,
@@ -28,7 +28,7 @@ import {
 } from '../live/tokens';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
-import { type EmailBlock, normalizeBlocks, flattenBlocksToPlainText } from '@/lib/emailBlocks';
+import { type EmailBlock, normalizeBlocks, flattenBlocksToPlainText, blocksHaveContent } from '@/lib/emailBlocks';
 import { renderEmailHtml, resolveEmailTheme, type EmailTheme } from '@/lib/emailHtml';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import { queueAdHocEmail } from '@/lib/adHocEmail';
@@ -554,12 +554,12 @@ const RAISED_DISC: React.CSSProperties = {
 };
 
 /** Same three-state rule queueEventEmail applies: a stub row created by TURN ON
- *  (enabled, empty content) still sends the DEFAULT copy. */
-function templateHasContent(t: { body_blocks: unknown; body: string } | undefined | null): boolean {
-  if (!t) return false;
-  const blocks = Array.isArray(t.body_blocks) ? (t.body_blocks as unknown[]) : [];
-  return blocks.length > 0 || !!(t.body && t.body.trim().length > 0);
-}
+ *  (enabled, empty content) still sends the DEFAULT copy. It delegates to the
+ *  send path's own `hasDraftContent` rather than repeating the test, because a
+ *  second copy of the rule is how this pill came to disagree with what was
+ *  actually sent: blocks whose content is all empty read as a draft here and
+ *  sent as a draft there, which is a subject with a blank page under it. */
+const templateHasContent = hasDraftContent;
 
 // ── Automatic-emails registry, grouped by lifecycle stage ────────────────────
 // Exhaustive over EventKey on purpose: add a key to EVENT_REGISTRY and this
@@ -2728,7 +2728,14 @@ function CommunicationsPageInner() {
     const eventDef = builderEventKey ? EVENT_REGISTRY.find(e => e.key === builderEventKey) : null;
     const name = isAdHoc ? builderName.trim() : (eventDef?.label ?? builderEventKey ?? '');
     if (isAdHoc && !name) { if (!opts.silent) setBuilderError('Name is required.'); return null; }
-    if (!subject.trim() || blocks.length === 0) { if (!opts.silent) setBuilderError('Subject and message are required.'); return null; }
+    // `blocks.length === 0` was the old test, and an editor opened and left
+    // alone holds ONE empty paragraph, so a blank email saved cleanly and then
+    // sent as the organiser's own copy. The test is now whether there are
+    // words in it.
+    if (!subject.trim() || !blocksHaveContent(blocks)) {
+      if (!opts.silent) setBuilderError('Add a subject and a message. An email with nothing in it is never sent.');
+      return null;
+    }
 
     const supabase = getAuthedClient(session.access_token);
     const payload: Record<string, unknown> = {
@@ -2751,6 +2758,15 @@ function CommunicationsPageInner() {
     const { data, error } = await supabase.from('email_templates').insert({
       conference_id: conference.id,
       event_key: builderEventKey,
+      // `enabled` defaults to false in the database, which is right for almost
+      // every event and wrong for the session join invite: an organiser who
+      // writes that email has, by writing it, said they want delegates to get
+      // their join code, and nothing sends it without a further explicit
+      // action anyway. See DEFAULT_ENABLED_EVENTS in @/lib/emailEvents for why
+      // this is one key and not the whole registry. Only on CREATE — an
+      // existing row's on/off state is the organiser's, and the update branch
+      // above never touches it.
+      enabled: newTemplateStartsEnabled(builderEventKey),
       ...payload,
     }).select('id').single();
     if (error) { if (!opts.silent) setBuilderError(friendlyError(error, "Couldn't save this email. Please try again.")); return null; }
@@ -5051,6 +5067,22 @@ function CommunicationsPageInner() {
               <AlertTriangle size={14} style={{ flexShrink: 0 }} />
               {builderError}
             </div>
+          )}
+
+          {/* Switched on with nothing written in it. The row still sends, our
+              default copy rather than theirs, and an organiser looking at an
+              empty editor has no way of knowing that. Quiet, permanent while
+              it is true, and never shown for an event that is off or for a
+              one-off broadcast, which has no default to fall back to. */}
+          {builderEventKey !== null && templatesByEvent.get(builderEventKey)?.enabled && !blocksHaveContent(builderBlocks) && (
+            <p
+              className="flex items-start gap-2 text-xs leading-relaxed mb-4"
+              style={{ color: SOFT, fontFamily: OUTFIT, maxWidth: 620, textWrap: 'pretty' }}
+            >
+              <Info size={13} style={{ flexShrink: 0, marginTop: 2 }} />
+              This email is switched on but has nothing written in it, so we send our default copy.
+              Write your own message here and it replaces ours.
+            </p>
           )}
 
           {/* Event templates share this builder but have NO audience step —

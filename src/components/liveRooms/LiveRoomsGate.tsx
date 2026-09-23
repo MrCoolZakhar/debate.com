@@ -38,7 +38,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { useBasicsGateBlocking } from '@/lib/basicsGateState';
 import { supabase } from '@/lib/supabase';
-import { useLiveRooms } from '@/lib/liveRooms';
+import { chairIdentity, resolveEntryHref, useLiveRooms } from '@/lib/liveRooms';
 import LiveRoomsDialog, { PROMPT_ATTR, itemHref, type PromptItem, type StandaloneItem } from './LiveRoomsDialog';
 
 const EXCLUDED_PREFIXES = [
@@ -196,7 +196,19 @@ export default function LiveRoomsGate() {
   }, [wanted]);
 
   const close = useCallback(() => setDismissed(true), []);
-  const go = useCallback((item: PromptItem) => { window.location.href = itemHref(item); }, []);
+  // A chair walks straight in: `resolveEntryHref` calls `enter_live_chair_room`,
+  // which decides at PRESS TIME whether this press starts the session or joins an
+  // open dais, and lands on the chair page with the profile name as the chair
+  // identity. Every other role is the plain href.
+  const go = useCallback(async (item: PromptItem) => {
+    const href = item.role === 'standalone'
+      ? itemHref(item)
+      : await resolveEntryHref(item, {
+          accessToken: session?.access_token ?? null,
+          chairName: chairIdentity(profile?.display_name, user?.email),
+        });
+    window.location.href = href;
+  }, [session?.access_token, profile?.display_name, user?.email]);
   const forget = useCallback((item: PromptItem) => {
     if (item.role !== 'standalone') return;
     try {

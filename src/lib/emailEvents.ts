@@ -4,7 +4,7 @@
 
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { resolveTokens, UNRESOLVED_MARKER_PATTERN, EMAIL_TOKEN_LABELS, type EmailTokenContext } from '@/lib/emailTokens';
-import { normalizeBlocks, flattenBlocksToPlainText, getSiteUrl, type EmailBlock } from '@/lib/emailBlocks';
+import { normalizeBlocks, flattenBlocksToPlainText, blocksHaveContent, getSiteUrl, type EmailBlock } from '@/lib/emailBlocks';
 import { renderEmailHtml, type EmailRenderConference, type EmailTheme } from '@/lib/emailHtml';
 import { emailCardSubject } from '@/lib/emailCard';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
@@ -213,6 +213,40 @@ const ALWAYS_SEND_EVENTS = new Set([
   'import_claim_reminder_1', 'import_claim_reminder_2', 'import_claim_reminder_3',
 ]);
 
+// ── Events whose first template row starts ON ───────────────────────────────
+// `email_templates.enabled` defaults to false in the database, so a template
+// an organiser writes in the composer is saved switched OFF, and
+// queueEventEmail answers 'off' for it: zero outbox rows, silently.
+//
+// KenyaMUN, 23 Sep 2026: the secretariat wrote their own "SESSION CODES" email,
+// scheduled the delegate release across all seven committees, and 286 allocated
+// delegates would have been given no join code at all, because the row that
+// copy lived in had never been switched on. The owner's answer: this one starts
+// on for every new conference.
+//
+// WHY ONLY THIS EVENT, and not every event in the registry. Almost everything
+// here is `defaultDelivery: 'immediate'` and fires from a call site an organiser
+// passes through in the ordinary run of the job (accepting an application,
+// allocating a seat, marking a payment). Starting those on by default would
+// send a half-written draft the moment it was saved, to real people, with no
+// second action to reconsider at. `session_join_invite` is 'manual': nothing
+// queues it except an explicit SEND TO PARTICIPANTS, or a delegate release time
+// the organiser chose. Enabling it by default therefore cannot cause a send
+// nobody asked for; it can only make the send they did ask for actually happen.
+//
+// `session_chair_invite` is here for exactly the same reason (owner, 23 Sep
+// 2026: "chair invites should also be sent at the same times delegate invites
+// go out"). It is 'manual' too, it is queued by the same two release paths, and
+// a dais that never gets its codes is the same failure as a delegation that
+// never gets its codes. Everything else in the registry stays default-off.
+export const DEFAULT_ENABLED_EVENTS = new Set<string>(['session_join_invite', 'session_chair_invite']);
+
+/** Whether a NEWLY CREATED template row for this event should start enabled.
+ *  Ad-hoc templates (no event key) always start off, as before. */
+export function newTemplateStartsEnabled(eventKey: string | null | undefined): boolean {
+  return !!eventKey && DEFAULT_ENABLED_EVENTS.has(eventKey);
+}
+
 /** True if this recipient should receive an email in `category` given their
  *  notification preferences. THE one place a notify_email_* column is read at
  *  send time — `recipientAllowsEvent` (registry events) and the ad-hoc sender
@@ -275,6 +309,11 @@ export interface QueueEventEmailResult {
   heldUnresolved?: number;
   /** The fields missing for the held recipients, e.g. ['committee', 'country']. */
   unresolvedFields?: string[];
+  /** Recipients NOT queued because the email would have been blank: the
+   *  organiser's copy rendered to nothing AND this event has no default copy
+   *  to put in its place. An empty email is worse than no email, so the row is
+   *  never written. Normally 0 — every event a person receives has a default. */
+  heldEmpty?: number;
 }
 
 /** True when the outcome should surface a DraftNotice-style nudge, the two
@@ -298,18 +337,37 @@ export function notifyIfNeeded(
  *  a merge field had no value, or null when nothing was held. Pure, so the
  *  server route can import this module; the page decides how to show it. */
 export function heldUnresolvedMessage(result: QueueEventEmailResult): string | null {
+  const empty = result.heldEmpty ?? 0;
+  if (empty > 0) {
+    return `The "${result.eventLabel ?? result.eventKey}" email was not sent to ${empty === 1 ? '1 person' : `${empty} people`}: it came out blank. Write the message in Communications and send it again.`;
+  }
   const n = result.heldUnresolved ?? 0;
   if (n === 0) return null;
   const fields = (result.unresolvedFields ?? []).map(k => EMAIL_TOKEN_LABELS[k as keyof typeof EMAIL_TOKEN_LABELS] ?? k).join(', ');
   return `The "${result.eventLabel ?? result.eventKey}" email was not sent to ${n === 1 ? '1 person' : `${n} people`}: it uses ${fields || 'a field'} and they have none yet. Edit the email in Communications, or assign them first.`;
 }
 
-/** A template row counts as "drafted" only once it actually has content, a
- *  stub row created by TURN ON (enabled, empty body) is still "undrafted"
- *  and falls back to the default copy. */
-function hasDraftContent(template: TemplateRow): boolean {
-  const blocks = Array.isArray(template.body_blocks) ? (template.body_blocks as unknown[]) : [];
-  return blocks.length > 0 || !!(template.body && template.body.trim().length > 0);
+/** A template row counts as "drafted" only once it actually has WORDS in it.
+ *  A stub row created by TURN ON, and a row whose blocks are all empty (a
+ *  composer opened and left alone stores one empty paragraph), are both
+ *  undrafted and fall back to the default copy — exactly as if the organiser
+ *  had never touched it. THE one definition; every reader imports it, so the
+ *  Communications pill, the send path and the empty-email guard can never
+ *  disagree about what a draft is. */
+export function hasDraftContent(template: { body_blocks: unknown; body: string } | null | undefined): boolean {
+  if (!template) return false;
+  return blocksHaveContent(normalizeBlocks(template.body_blocks, template.body ?? ''));
+}
+
+/** The last line of defence before any outbox row is written: an email with no
+ *  subject or no body is never queued. Every caller above tries the default
+ *  copy first, so reaching here means there was nothing to say at all. Logged
+ *  rather than thrown, because a functional invite failing to render must not
+ *  take down the action that triggered it. */
+function outboxContentOk(eventKey: string, subject: string, body: string): boolean {
+  if (subject.trim() && body.trim()) return true;
+  console.error(`[email] refused to queue an empty "${eventKey}" email (subject ${subject.trim() ? 'present' : 'blank'}, body ${body.trim() ? 'present' : 'blank'}).`);
+  return false;
 }
 
 function roleLabel(role: string): string {
@@ -517,7 +575,18 @@ export async function queueEventEmail(
   const subjectSource = useDraft ? template.subject : (fallback?.subject ?? '');
   const flatBody = flattenBlocksToPlainText(blocks, renderConf);
 
-  const rows = recipients.map(app => {
+  // THE DEFAULT COPY IS ALWAYS IN HAND, even on the draft path. `hasDraftContent`
+  // above already sends an empty template down the default route, so this is the
+  // belt to that braces: copy can still come out empty per recipient, because a
+  // merge field can resolve to nothing (a template that is only "{{committee}}"
+  // for someone with no allocation), and no reader is ever served a blank email.
+  const defaultEmail = getDefaultEventEmail(eventKey);
+  const defaultBlocks = defaultEmail?.blocks ?? [];
+  const defaultSubject = defaultEmail?.subject ?? '';
+  const defaultFlat = flattenBlocksToPlainText(defaultBlocks, renderConf);
+
+  let heldEmpty = 0;
+  const rows = recipients.flatMap(app => {
     const ctx: EmailTokenContext = {
       delegate_name: app.profiles?.display_name ?? app.invited_name ?? null,
       role: roleLabel(app.role),
@@ -530,15 +599,35 @@ export async function queueEventEmail(
       fee: resolveFeeToken(app.role, roleConfigs, conference),
       ...extraCtx,
     };
-    return {
+
+    // Body: the chosen copy, and our default the moment it renders to nothing.
+    let bodyBlocks = blocks;
+    let body = resolveTokens(flatBody, ctx);
+    let isDefault = !useDraft;
+    if (!body.trim()) {
+      bodyBlocks = defaultBlocks;
+      body = resolveTokens(defaultFlat, ctx);
+      isDefault = true;
+    }
+    // Subject: the same rule, independently. A drafted body with a blank
+    // subject line keeps the body and borrows our subject.
+    let subject = emailCardSubject(resolveTokens(isDefault ? defaultSubject : subjectSource, ctx), renderConf, isDefault);
+    if (!subject.trim()) subject = emailCardSubject(resolveTokens(defaultSubject, ctx), renderConf, true);
+
+    // Nothing to say, in their words or ours: an event with no default copy
+    // (the SQL-queued reminders) and an empty template. Never queued, always
+    // counted, and reported beside the merge-field holds below.
+    if (!body.trim() || !subject.trim()) { heldEmpty++; return []; }
+
+    return [{
       conference_id: conferenceId,
       template_id: template.id,
       recipient_application_id: app.id,
       recipient_email: app.profiles?.email ?? app.invited_email ?? null,
-      subject: emailCardSubject(resolveTokens(subjectSource, ctx), renderConf, !useDraft),
-      body: resolveTokens(flatBody, ctx),
+      subject,
+      body,
       body_html: renderEmailHtml({
-        blocks, conference: renderConf, ctx, variant: 'transactional', event: eventKey, isDefault: !useDraft,
+        blocks: bodyBlocks, conference: renderConf, ctx, variant: 'transactional', event: eventKey, isDefault,
         // Per-recipient, so a `facts` row asking for 'country' or 'committee'
         // draws THIS delegate's flag and THIS committee's emblem.
         media: {
@@ -551,8 +640,11 @@ export async function queueEventEmail(
       }),
       status: 'pending' as const,
       ...(opts?.sendAfter ? { send_after: opts.sendAfter } : {}),
-    };
+    }];
   });
+  if (heldEmpty > 0) {
+    console.warn(`[queueEventEmail] held ${heldEmpty} "${eventKey}" email(s): the copy rendered empty and there is no default to fall back to.`);
+  }
 
   // Merge-field guard: never queue a row whose subject or rendered HTML still
   // shows a ⚠field⚠ marker. Checked on body_html rather than the plain body on
@@ -581,13 +673,13 @@ export async function queueEventEmail(
     console.warn(`[queueEventEmail] held ${heldUnresolved} "${eventKey}" email(s) with unresolved fields: ${unresolvedFields.join(', ')}`);
   }
   if (sendable.length === 0) {
-    return { outcome, drafted: useDraft, queued: 0, queuedApplicationIds: [], eventKey, eventLabel, heldUnresolved, unresolvedFields };
+    return { outcome, drafted: useDraft, queued: 0, queuedApplicationIds: [], eventKey, eventLabel, heldUnresolved, unresolvedFields, heldEmpty };
   }
 
   const { error } = await supabase.from('email_outbox').insert(sendable);
   if (error) {
     console.error(`[queueEventEmail] email_outbox insert failed for "${eventKey}" (${sendable.length} row${sendable.length === 1 ? '' : 's'}):`, error.message);
-    return { outcome, drafted: useDraft, queued: 0, queuedApplicationIds: [], eventKey, eventLabel, heldUnresolved, unresolvedFields };
+    return { outcome, drafted: useDraft, queued: 0, queuedApplicationIds: [], eventKey, eventLabel, heldUnresolved, unresolvedFields, heldEmpty };
   }
 
   // A scheduled row (send_after set) is left for the server-side cron to
@@ -606,6 +698,7 @@ export async function queueEventEmail(
     eventLabel,
     heldUnresolved,
     unresolvedFields,
+    heldEmpty,
   };
 }
 
@@ -716,19 +809,26 @@ export async function queueChairInviteEmail(
     conference_name: conference?.full_name ?? null,
   };
 
-  const useTemplate = !!template && template.enabled;
+  // Enabled is not the same as written. An enabled row with nothing in it used
+  // to be used verbatim, which sent a subject with a blank page under it; it
+  // now falls back to the default copy like any undrafted row.
+  const useTemplate = !!template && template.enabled && hasDraftContent(template);
   const fallback = getDefaultEventEmail('committee_chair_invite');
   const blocks: EmailBlock[] = useTemplate ? normalizeBlocks(template!.body_blocks, template!.body) : (fallback?.blocks ?? []);
   const subjectSource = useTemplate ? template!.subject : (fallback?.subject ?? '');
   const flatBody = flattenBlocksToPlainText(blocks, renderConf, { chairInviteToken: token });
+
+  const subject = emailCardSubject(resolveTokens(subjectSource, ctx), renderConf, !useTemplate);
+  const body = resolveTokens(flatBody, ctx);
+  if (!outboxContentOk('committee_chair_invite', subject, body)) return;
 
   const { error } = await supabase.from('email_outbox').insert({
     conference_id: conferenceId,
     template_id: useTemplate ? template!.id : null,
     recipient_application_id: null,
     recipient_email: invitedEmail,
-    subject: emailCardSubject(resolveTokens(subjectSource, ctx), renderConf, !useTemplate),
-    body: resolveTokens(flatBody, ctx),
+    subject,
+    body,
     body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, chairInviteToken: token, variant: 'transactional', event: 'committee_chair_invite', isDefault: !useTemplate }),
     status: 'pending',
   });
@@ -808,7 +908,10 @@ export async function queueOrganizerInviteEmail(
     conference_name: conference?.full_name ?? null,
   };
 
-  const useTemplate = !!template && template.enabled;
+  // Enabled is not the same as written. An enabled row with nothing in it used
+  // to be used verbatim, which sent a subject with a blank page under it; it
+  // now falls back to the default copy like any undrafted row.
+  const useTemplate = !!template && template.enabled && hasDraftContent(template);
   const fallback = getDefaultEventEmail('organizer_invite');
 
   // No account yet: there's no invitee name to greet ({{delegate_name}}
@@ -862,13 +965,17 @@ export async function queueOrganizerInviteEmail(
   const subjectSource = useTemplate ? template!.subject : (fallback?.subject ?? '');
   const flatBody = flattenBlocksToPlainText(blocks, renderConf, { organizerInviteToken: token });
 
+  const subject = emailCardSubject(resolveTokens(subjectSource, ctx), renderConf, !useTemplate);
+  const body = resolveTokens(flatBody, ctx);
+  if (!outboxContentOk('organizer_invite', subject, body)) return;
+
   const { error } = await supabase.from('email_outbox').insert({
     conference_id: conferenceId,
     template_id: useTemplate ? template!.id : null,
     recipient_application_id: null,
     recipient_email: invitedEmail,
-    subject: emailCardSubject(resolveTokens(subjectSource, ctx), renderConf, !useTemplate),
-    body: resolveTokens(flatBody, ctx),
+    subject,
+    body,
     body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, organizerInviteToken: token, variant: 'transactional', event: 'organizer_invite', isDefault: !useTemplate }),
     status: 'pending',
   });
@@ -963,7 +1070,10 @@ export async function queueImportJoinInviteEmails(
     }
   }
 
-  const useTemplate = !!template && template.enabled;
+  // Enabled is not the same as written. An enabled row with nothing in it used
+  // to be used verbatim, which sent a subject with a blank page under it; it
+  // now falls back to the default copy like any undrafted row.
+  const useTemplate = !!template && template.enabled && hasDraftContent(template);
   const fallback = getDefaultEventEmail('import_join_invite');
   // A custom enabled template is shared verbatim across recipients (organizer's
   // own copy); otherwise each recipient gets the default, with an allocation
@@ -991,13 +1101,16 @@ export async function queueImportJoinInviteEmails(
       delegate_name: r.invitedName,
       conference_name: conference?.full_name ?? null,
     };
+    const subject = emailCardSubject(resolveTokens(subjectSource, ctx), renderConf, !useTemplate);
+    const body = resolveTokens(flattenBlocksToPlainText(blocks, renderConf, { importClaimToken: token }), ctx);
+    if (!outboxContentOk('import_join_invite', subject, body)) return [];
     return [{
       conference_id: conferenceId,
       template_id: useTemplate ? template!.id : null,
       recipient_application_id: r.applicationId,
       recipient_email: r.invitedEmail,
-      subject: emailCardSubject(resolveTokens(subjectSource, ctx), renderConf, !useTemplate),
-      body: resolveTokens(flattenBlocksToPlainText(blocks, renderConf, { importClaimToken: token }), ctx),
+      subject,
+      body,
       body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, importClaimToken: token, variant: 'transactional', event: 'import_join_invite', isDefault: !useTemplate }),
       status: 'pending' as const,
     }];
@@ -1137,16 +1250,21 @@ export async function queueRequestReceivedEmail(
     .map(o => o.profiles?.email)
     .filter((e): e is string => !!e)
     .filter((e, i, all) => all.indexOf(e) === i)
-    .map(email => ({
-      conference_id: conferenceId,
-      template_id: useDraft ? template!.id : null,
-      recipient_application_id: null,
-      recipient_email: email,
-      subject: emailCardSubject(resolveTokens(subjectSource, ctx), renderConf, !useDraft),
-      body: resolveTokens(flatBody, ctx),
-      body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, variant: 'transactional', event: eventKey, isDefault: !useDraft }),
-      status: 'pending' as const,
-    }));
+    .flatMap(email => {
+      const subject = emailCardSubject(resolveTokens(subjectSource, ctx), renderConf, !useDraft);
+      const body = resolveTokens(flatBody, ctx);
+      if (!outboxContentOk(eventKey, subject, body)) return [];
+      return [{
+        conference_id: conferenceId,
+        template_id: useDraft ? template!.id : null,
+        recipient_application_id: null,
+        recipient_email: email,
+        subject,
+        body,
+        body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, variant: 'transactional', event: eventKey, isDefault: !useDraft }),
+        status: 'pending' as const,
+      }];
+    });
 
   if (rows.length === 0) return { queued: 0 };
 

@@ -8,15 +8,17 @@
  * opens and the cached answer is more than a minute old.
  */
 
+import { useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { useT } from '@/contexts/LanguageContext';
-import { useLiveRooms } from '@/lib/liveRooms';
-import { EntryMark, LR, actionLabel, entryLines, itemHref } from './LiveRoomsDialog';
+import { chairIdentity, liveEntryHref, resolveEntryHref, useLiveRooms } from '@/lib/liveRooms';
+import { EntryMark, LR, actionLabel, entryLines } from './LiveRoomsDialog';
 
 export default function LiveNowMenuSection({ onNavigate }: { onNavigate: () => void }) {
   const t = useT();
-  const { user, session, loading } = useAuth();
+  const { user, session, profile, loading } = useAuth();
   const { entries } = useLiveRooms(loading ? null : user?.id ?? null, session?.access_token ?? null, { maxAgeMs: 60_000 });
+  const [busy, setBusy] = useState<string | null>(null);
   if (!entries || entries.length === 0) return null;
 
   return (
@@ -36,13 +38,24 @@ export default function LiveNowMenuSection({ onNavigate }: { onNavigate: () => v
                 <p className="truncate" title={sub} style={{ color: LR.inkSoft, fontSize: 11, lineHeight: 1.3 }}>{sub}</p>
               </div>
               <a
-                href={itemHref(e)}
-                onClick={onNavigate}
+                href={liveEntryHref(e)}
+                onClick={async (ev) => {
+                  // Same walk-in as the pop-up. A modified click (new tab) keeps the plain href.
+                  if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button !== 0) { onNavigate(); return; }
+                  ev.preventDefault();
+                  setBusy(e.key);
+                  const href = await resolveEntryHref(e, {
+                    accessToken: session?.access_token ?? null,
+                    chairName: chairIdentity(profile?.display_name, user?.email),
+                  });
+                  onNavigate();
+                  window.location.href = href;
+                }}
                 aria-label={`${actionLabel(e, t, true)}: ${title}`}
                 className="shrink-0 inline-flex items-center rounded-lg font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[filter] hover:brightness-110"
                 style={{ backgroundColor: LR.forest, color: LR.gold, fontSize: 11.5, padding: '6px 10px', textDecoration: 'none', whiteSpace: 'nowrap' }}
               >
-                {actionLabel(e, t, false)}
+                {busy === e.key ? t('srp_entering') : actionLabel(e, t, false)}
               </a>
             </div>
           );
