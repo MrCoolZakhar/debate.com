@@ -1004,7 +1004,7 @@ export async function queueImportJoinInviteEmails(
 
   const recipientIds = recipients.map(r => r.applicationId);
 
-  const [{ data: confData }, { data: templateData }, { data: claimData }, { data: allocData }] = await Promise.all([
+  const [{ data: confData }, { data: templateData }, { data: claimData }] = await Promise.all([
     supabase
       .from('conferences')
       .select('slug, acronym, full_name, start_date, end_date, dates_tbd, city, country, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url, display_secretariat')
@@ -1020,15 +1020,15 @@ export async function queueImportJoinInviteEmails(
     // 'import_claim' button resolves to. A null token means the DB trigger
     // hasn't minted one (or the row isn't really an imported invite), so that
     // recipient is skipped rather than sent a dead-link '#' button.
+    // The allocation comes off the APPLICATION, exactly as the allocation email
+    // reads it (queueEventEmail): assigned_committee / assigned_country_*. That
+    // is a superset of conference_allocations for imported rows, holds each
+    // seat of a double delegation on its own application, and carries a custom
+    // seat's character name as assigned_country_name.
     supabase
       .from('applications')
-      .select('id, claim_token')
+      .select('id, claim_token, assigned_committee_id, assigned_country_name, assigned_country_code, assigned_committee:conference_committees!assigned_committee_id (abbreviation, name, logo_url, topics)')
       .in('id', recipientIds),
-    // Per-recipient allocation, so the default copy can lead with their seat.
-    supabase
-      .from('conference_allocations')
-      .select('application_id, country_name, conference_committees(name, abbreviation)')
-      .in('application_id', recipientIds),
   ]);
 
   const conference = confData as ConferenceRow | null;
@@ -1054,21 +1054,38 @@ export async function queueImportJoinInviteEmails(
     email_theme: conference?.email_theme ?? null,
   };
 
+  type CommitteeLite = { abbreviation: string | null; name: string | null; logo_url: string | null; topics: string[] | null };
+  type ClaimRow = {
+    id: string;
+    claim_token: string | null;
+    assigned_committee_id: string | null;
+    assigned_country_name: string | null;
+    assigned_country_code: string | null;
+    assigned_committee: CommitteeLite | CommitteeLite[] | null;
+  };
   const claimTokenByApp = new Map<string, string | null>();
-  for (const c of (claimData ?? []) as { id: string; claim_token: string | null }[]) {
+  const allocByApp = new Map<string, { countryName: string; countryCode: string | null; committeeId: string | null; committee: CommitteeLite | null }>();
+  for (const c of (claimData ?? []) as unknown as ClaimRow[]) {
     claimTokenByApp.set(c.id, c.claim_token);
-  }
-  const allocByApp = new Map<string, { countryName: string; committeeName: string }>();
-  type CommitteeLite = { name: string; abbreviation: string | null };
-  type AllocRow = { application_id: string; country_name: string | null; conference_committees: CommitteeLite | CommitteeLite[] | null };
-  for (const a of (allocData ?? []) as unknown as AllocRow[]) {
     // PostgREST types this to-one embed as an array in the generic even though
     // it returns a single object at runtime, so normalize both shapes.
-    const committee = Array.isArray(a.conference_committees) ? a.conference_committees[0] : a.conference_committees;
-    if (a.application_id && committee?.name && a.country_name && !allocByApp.has(a.application_id)) {
-      allocByApp.set(a.application_id, { countryName: a.country_name, committeeName: committee.name });
+    const committee = Array.isArray(c.assigned_committee) ? c.assigned_committee[0] ?? null : c.assigned_committee;
+    const countryName = (c.assigned_country_name ?? '').trim();
+    if (countryName) {
+      allocByApp.set(c.id, { countryName, countryCode: c.assigned_country_code, committeeId: c.assigned_committee_id, committee });
     }
   }
+  // A seat's own crest or its group's crest (parliamentary committees) stands
+  // in for the flag, the same way the allocation email draws it.
+  const seatArt: SlotArtIndex = await loadSlotArtIndex(
+    supabase,
+    [...allocByApp.values()].map(a => a.committeeId).filter((id): id is string => !!id),
+  ).catch(() => new Map());
+  const seatLogoFor = (a: { committeeId: string | null; countryCode: string | null }): string | null => {
+    if (!a.committeeId || !a.countryCode) return null;
+    const art = artFromIndex(seatArt.get(slotArtKey(a.committeeId, a.countryCode)), a.countryCode);
+    return art.kind === 'logo' ? art.url : null;
+  };
 
   // Enabled is not the same as written. An enabled row with nothing in it used
   // to be used verbatim, which sent a subject with a blank page under it; it
@@ -1086,20 +1103,34 @@ export async function queueImportJoinInviteEmails(
     if (!token) return []; // no claim link to send, skip this recipient entirely
 
     let blocks = sharedBlocks;
-    if (!useTemplate) {
-      const alloc = allocByApp.get(r.applicationId);
-      if (alloc) {
-        blocks = sharedBlocks.map(b =>
-          b.type === 'paragraph'
-            ? { ...b, content: 'Hi {{delegate_name}},\n\n{{conference_name}} runs on Gavelling. You are registered as ' + alloc.countryName + ' in ' + alloc.committeeName + '. Open your invitation to confirm your seat and activate your account, and everything attaches automatically.' }
-            : b
-        );
-      }
+    const alloc = allocByApp.get(r.applicationId) ?? null;
+    if (!useTemplate && alloc) {
+      // Our default copy, for someone who already holds a seat: the body
+      // paragraph says so, and a facts panel right under it shows the seat the
+      // way the allocation email does (Committee with its emblem, Representing
+      // with the flag or the seat's crest). Only the BODY paragraph is
+      // rewritten; the heading stays a heading (it used to be overwritten with
+      // the body text too). No allocation: the default untouched, no panel.
+      blocks = sharedBlocks.flatMap((b): EmailBlock[] => {
+        if (b.type !== 'paragraph' || b.variant === 'heading' || b.variant === 'small') return [b];
+        return [
+          { ...b, content: 'Hi {{delegate_name}},\n\n{{conference_name}} runs on Gavelling, and your seat is already there under this email address.' },
+          { type: 'facts', items: [
+            { label: 'Committee', value: '{{committee}}', iconFrom: 'committee' },
+            { label: 'Representing', value: '{{country}}', iconFrom: 'country' },
+          ] },
+          { type: 'paragraph', content: 'Open your invitation to confirm your seat and activate your account. Everything attaches itself; you do not need to register again.' },
+        ];
+      });
     }
 
     const ctx: EmailTokenContext = {
       delegate_name: r.invitedName,
       conference_name: conference?.full_name ?? null,
+      // Resolved for an organiser's own template too, so {{committee}} and
+      // {{country}} in their copy name the seat instead of a warning marker.
+      committee: alloc ? (alloc.committee?.abbreviation?.trim() || alloc.committee?.name || null) : null,
+      country: alloc?.countryName ?? null,
     };
     const subject = emailCardSubject(resolveTokens(subjectSource, ctx), renderConf, !useTemplate);
     const body = resolveTokens(flattenBlocksToPlainText(blocks, renderConf, { importClaimToken: token }), ctx);
@@ -1111,7 +1142,16 @@ export async function queueImportJoinInviteEmails(
       recipient_email: r.invitedEmail,
       subject,
       body,
-      body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, importClaimToken: token, variant: 'transactional', event: 'import_join_invite', isDefault: !useTemplate }),
+      body_html: renderEmailHtml({
+        blocks, conference: renderConf, ctx, importClaimToken: token, variant: 'transactional', event: 'import_join_invite', isDefault: !useTemplate,
+        media: alloc ? {
+          countryCode: alloc.countryCode,
+          committeeEmblem: alloc.committee?.logo_url ?? null,
+          committeeName: alloc.committee?.name ?? null,
+          committeeTopic: alloc.committee?.topics?.[0] ?? null,
+          seatLogo: seatLogoFor(alloc),
+        } : undefined,
+      }),
       status: 'pending' as const,
     }];
   });
