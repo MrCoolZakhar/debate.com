@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Committee emblem">
+  <defs>
+    <linearGradient id="gavelSeal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2A5A3C"/>
+      <stop offset="1" stop-color="#16301F"/>
+    </linearGradient>
+  </defs>
+  <circle cx="60" cy="60" r="58" fill="url(#gavelSeal)"/>
+  <circle cx="60" cy="60" r="49" fill="none" stroke="#EED98A" stroke-width="2" opacity="0.85"/>
+  <!-- The gavel: head canted, handle running down to the lower right. -->
+  <g transform="rotate(-38 60 56)">
+    <rect x="38" y="42" width="44" height="17" rx="5" fill="#EED98A"/>
+    <rect x="56" y="59" width="8" height="30" rx="4" fill="#EED98A"/>
+  </g>
+  <!-- The sound block it strikes. -->
+  <rect x="32" y="86" width="56" height="9" rx="4.5" fill="#EED98A" opacity="0.92"/>
+</svg>
