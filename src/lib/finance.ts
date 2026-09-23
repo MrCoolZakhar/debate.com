@@ -15,7 +15,10 @@ export { currencySymbol, formatFee, formatFeeAmount };
 // here since most fee/currency call sites already import from '@/lib/finance'.
 export { CURRENCIES, CURRENCY_CODES, type CurrencyOption };
 
-/** Gavelling's platform fee: 5% of the post-discount total. */
+/** LEGACY. There is NO platform fee (owner, 23 Sep 2026): create-checkout
+ *  charges exactly the invoice amount and no screen shows serviceFee. Kept only
+ *  so computeCheckout's shape (and fee_waiver_source reporting) is unchanged;
+ *  do not surface or charge it. */
 export const PLATFORM_FEE_RATE = 0.05;
 
 /** Stripe processing pass-through: 3% of the post-discount total. */

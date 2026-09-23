@@ -9,6 +9,11 @@
 //
 // Do NOT add an application-side send here — that is what caused duplicate
 // alerts before.
+//
+// A second AFTER INSERT trigger (route_contact_submission_to_conference_t,
+// 23 Sep 2026) files the message in a conference's Communications inbox when
+// it names a conference the sender's account has applied to (exactly one
+// match). Nothing to do here for that either.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';

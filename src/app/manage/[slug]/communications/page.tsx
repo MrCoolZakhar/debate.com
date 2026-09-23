@@ -49,6 +49,7 @@ import ProfileLink from '@/components/ProfileLink';
 import Portal from '@/components/Portal';
 import { friendlyError, UserFacingError } from '@/lib/friendlyError';
 import { formatConferenceDates } from '@/lib/conferenceDates';
+import { waitingSince, waitAgeLabel } from './waitingOnReply';
 
 /** THE GOLD THAT CAN CARRY TEXT — and this page's replacement for `AMBER_INK`.
  *
@@ -2831,6 +2832,16 @@ function CommunicationsPageInner() {
     (async () => {
       const { error } = await supabase.from('email_templates').update({ enabled: next }).eq('id', template.id);
       if (error) throw error;
+      // One state for allocation emails: "Sending automatically" on Assignment
+      // can never sit beside a switched-off Allocation Assigned email (SISMUN,
+      // 23 Sep 2026: 138 seated delegates never told). Turning the email off
+      // here puts Assignment on manual release too; turning Assignment's
+      // automatic toggle on turns this email back on (assignment/page.tsx).
+      if (!next && ev.key === 'allocation_assigned' && conference.allocation_email_auto !== false) {
+        const { error: autoErr } = await supabase
+          .from('conferences').update({ allocation_email_auto: false }).eq('id', conference.id);
+        if (!autoErr) void refreshConferenceQuiet();
+      }
     })().catch((e: unknown) => {
       setTemplates(ts => ts.map(t => (t.id === template.id ? { ...t, enabled: prev } : t)));
       showFlash('err', friendlyError(e, 'Could not update the notification toggle.'));
@@ -3576,6 +3587,8 @@ function CommunicationsPageInner() {
     const unread = unreadCountOf(r);
     const attention = unread > 0;
     const kindChip = KIND_CHIP[r.kind] ?? KIND_CHIP.question;
+    const waiting = waitingSince(r, inboxMessagesByRequest.get(r.id) ?? []);
+    const fromContactForm = (r.metadata as { source?: string } | null)?.source === 'contact_form';
     const name = threadProfile?.display_name ?? 'Unknown';
     return (
       <button
@@ -3660,9 +3673,25 @@ function CommunicationsPageInner() {
             <span className="truncate" style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700 }}>
               {name}{role ? ` · ${roleLabel(role)}` : ''}
             </span>
-            <span className="ml-auto flex-shrink-0" style={{ fontSize: 10.5, color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
-              {formatDate(r.last_message_at)}
-            </span>
+            {fromContactForm && (
+              <span className="flex-shrink-0" title="Sent through the gavelling.com contact form. The form does not verify the address." style={{ fontSize: 10.5, color: SOFT, fontFamily: OUTFIT, fontWeight: 700 }}>
+                · Contact form
+              </span>
+            )}
+            {waiting ? (
+              <span
+                className="ml-auto flex-shrink-0 inline-flex items-center gap-1"
+                title={`Waiting on your reply since ${new Date(waiting).toLocaleString()}`}
+                style={{ fontSize: 10.5, color: '#8A5A00', fontFamily: OUTFIT, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}
+              >
+                <Clock size={11} aria-hidden />
+                Waiting {waitAgeLabel(waiting)}
+              </span>
+            ) : (
+              <span className="ml-auto flex-shrink-0" style={{ fontSize: 10.5, color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
+                {formatDate(r.last_message_at)}
+              </span>
+            )}
           </span>
           {last && (
             <span
@@ -3725,6 +3754,8 @@ function CommunicationsPageInner() {
 
       // Silent refetch swaps the temp message for the real server row.
       void loadInbox();
+      // The rail badge counts threads waiting on a reply: this one no longer is.
+      window.dispatchEvent(new CustomEvent('gv-inbox-read-changed'));
     })().catch((e: unknown) => {
       // Rollback: remove only the optimistic bubble, restore this request's
       // prior fields, and put the draft back so the text isn't lost.
@@ -3847,6 +3878,7 @@ function CommunicationsPageInner() {
       }
 
       void loadInbox();
+      window.dispatchEvent(new CustomEvent('gv-inbox-read-changed'));
     })().catch((e: unknown) => {
       // Rollback the thread bookkeeping only, an approved swap itself (RPC)
       // has already been applied and is not undone here.

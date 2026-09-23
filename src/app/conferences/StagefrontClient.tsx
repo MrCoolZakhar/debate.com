@@ -1,16 +1,15 @@
 'use client';
 
 // Production conferences landing: the owner-approved "Stagefront" composition,
-// rendered by `/`. This thin client does the data fetch and renders the
-// composition. The component still lives in the landing-lab/ directory for
-// history — the design-lab route itself has been deleted, so VariantStagefront
-// and landing-lab/shared are now production-only files despite the folder name.
+// rendered by `/`. The data is read on the SERVER (src/app/page.tsx through
+// src/lib/listedConferences.ts) and handed in as props, so the conference
+// cards, the trust counts and the job-board figures are real numbers in the
+// HTML a crawler receives. They used to be fetched here after mount, which
+// left "—" in every count of the server render. The component still lives in
+// the landing-lab/ directory for history.
 
-import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '@/lib/supabase';
-import { fetchDelegatePrices, withDelegatePrice } from '@/lib/publicFees';
-import { LabConference, LabReview, ratingMap } from './landing-lab/shared';
-import VariantStagefront from './landing-lab/VariantStagefront';
+import VariantStagefront, { type JobStats } from './landing-lab/VariantStagefront';
+import type { LabConference } from './landing-lab/shared';
 
 export interface PlatformStats {
   total_conferences: number;
@@ -18,43 +17,14 @@ export interface PlatformStats {
   countries: number;
 }
 
-export default function StagefrontClient() {
-  const [conferences, setConferences] = useState<LabConference[]>([]);
-  const [reviews, setReviews] = useState<LabReview[]>([]);
-  // Real platform totals, including conferences still being set up. RLS hides
-  // those rows from anon, so the numbers come from a counts-only definer RPC
-  // rather than from the `conferences` rows the cards are built from.
-  const [stats, setStats] = useState<PlatformStats | null>(null);
-
-  useEffect(() => {
-    async function fetchData() {
-      const [confRes, reviewRes] = await Promise.all([
-        supabase
-          .from('conferences')
-          .select('id, slug, full_name, acronym, city, country, start_date, end_date, fee_amount, fee_currency, expected_delegates, logo_url, banner_url')
-          .eq('is_public', true)
-          .order('start_date', { ascending: true }),
-        supabase
-          .from('conference_reviews')
-          .select('conference_id, rating, review_text, display_name'),
-      ]);
-      const confs = (confRes.data as LabConference[]) ?? [];
-      // Headline price is displayDelegatePrice (src/lib/publicFees.ts): TBD
-      // until delegate applications are launched, then the current stage's
-      // delegate price. Resolved BEFORE the first setConferences so a card
-      // never flashes a wrong price.
-      const prices = await fetchDelegatePrices(supabase, confs);
-      setConferences(confs.map(c => withDelegatePrice(c, prices)));
-      setReviews((reviewRes.data as LabReview[]) ?? []);
-    }
-    fetchData();
-    supabase.rpc('public_conference_stats').then(({ data }) => {
-      const row = Array.isArray(data) ? data[0] : data;
-      if (row) setStats(row as PlatformStats);
-    });
-  }, []);
-
-  const ratings = useMemo(() => ratingMap(reviews), [reviews]);
-
-  return <VariantStagefront conferences={conferences} ratings={ratings} stats={stats} />;
+export default function StagefrontClient({
+  conferences,
+  stats,
+  jobStats,
+}: {
+  conferences: LabConference[];
+  stats: PlatformStats | null;
+  jobStats: JobStats | null;
+}) {
+  return <VariantStagefront conferences={conferences} ratings={{}} stats={stats} jobStats={jobStats} />;
 }

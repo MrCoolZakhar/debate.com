@@ -9,7 +9,7 @@ import { companyLegalLines, TRADING_NAME } from '@/lib/companyDetails';
  * Tailwind classes rather than inline JS so no 'use client' boundary is needed.
  *
  * Only links to routes that exist: the two public hubs (/conferences/explore,
- * /blog), /terms, /privacy (and its #your-rights anchor). Do NOT add a
+ * /blog), the organiser landing page (/organisers), /terms, /privacy (and its #your-rights anchor). Do NOT add a
  * /cookies link here until that page actually exists.
  */
 
@@ -70,6 +70,12 @@ export default function FooterLegal({
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
         <Link href="/blog" className={hubLink}>
           MUN Guides
+        </Link>
+        <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
+        {/* The organiser landing page (server-rendered, in the sitemap). An
+            information link, as the footer rule allows (CLAUDE.md §4). */}
+        <Link href="/organisers" className={hubLink}>
+          List your conference
         </Link>
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
         <Link href="/terms" className={hubLink}>

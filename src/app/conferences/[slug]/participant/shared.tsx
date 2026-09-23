@@ -144,7 +144,7 @@ export function useAllocationPartner(
       const supabase = getAuthedClient(session.access_token);
       const { data } = await supabase
         .from('conference_allocations')
-        .select('user_id, profiles (display_name), applications:application_id (invited_name)')
+        .select('user_id, profiles:profile_cards (display_name), applications:application_id (invited_name)')
         .eq('conference_committee_id', myAllocation.conference_committee_id)
         .eq('country_code', myAllocation.country_code)
         .neq('id', myAllocation.id);

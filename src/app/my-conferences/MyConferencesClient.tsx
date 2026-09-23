@@ -13,6 +13,7 @@ import { notifyDraftsChanged } from '@/hooks/useDraftCount';
 import { committeeDisplayName } from '@/lib/presetNames';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import SiteNav from '@/components/SiteNav';
+import { PaymentsDueSection } from '@/app/conferences/[slug]/participant/PayNowCard';
 import Loader from '@/components/Loader';
 import DecorativeBleed from '@/components/DecorativeBleed';
 import { Eyebrow, OUTFIT, MONO } from '@/app/account/accountUi';
@@ -943,7 +944,7 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
         .select(`id, assigned_committee_id, assigned_committee:conference_committees!assigned_committee_id (name), status, conferences (${CONF})`)
         .eq('user_id', user.id)
         .eq('role', 'chair')
-        .in('status', ['accepted', 'assigned', 'rejected']),
+        .in('status', ['accepted', 'assigned', 'checked-in', 'rejected']),
       supabase
         .from('conference_committees')
         .select(`id, name, conferences (${CONF})`)
@@ -1269,6 +1270,7 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
           </div>
         </div>
 
+        {activeTab === 'all' && <PaymentsDueSection userId={user.id} />}
         {activeTab === 'all' && <PendingImportInvitesSection invites={importInvites} />}
         {/* Above the card grid, and outside the loading/empty chain below —
             a user with drafts but no conferences yet must still see them. */}

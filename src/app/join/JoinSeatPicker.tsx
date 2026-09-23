@@ -65,7 +65,7 @@ function fold(s: string): string {
 }
 
 export default function JoinSeatPicker({
-  seats, value, onChange, language, labels, blockedNote,
+  seats, value, onChange, language, labels, blockedNote, onReservedPick, reservedPicked,
 }: {
   seats: JoinSeatRow[];
   value: string;
@@ -74,6 +74,11 @@ export default function JoinSeatPicker({
   labels: SeatPickerLabels;
   /** One line under the list (e.g. why some seats read Taken). */
   blockedNote?: React.ReactNode;
+  /** When given, a RESERVED seat can be pointed at (never taken): the page then
+   *  says who the seat is held for and offers sign in / sign up. */
+  onReservedPick?: (country: string) => void;
+  /** The reserved seat currently pointed at, drawn with a gold outline. */
+  reservedPicked?: string;
 }) {
   const [query, setQuery] = useState('');
   // The keyboard cursor is only drawn while the search field has focus, so a
@@ -111,11 +116,16 @@ export default function JoinSeatPicker({
   }, [index, query, language]);
 
   const selectable = (s: JoinSeatRow) => s.state === 'open' || s.state === 'mine';
+  const pointable = (s: JoinSeatRow) => selectable(s) || (!!onReservedPick && s.state === 'reserved');
+  const pick = (s: JoinSeatRow) => {
+    if (selectable(s)) onChange(s.country);
+    else if (onReservedPick && s.state === 'reserved') onReservedPick(s.country);
+  };
 
   // Keep the active row inside the filtered list (derived, never an effect).
   const current = rows.some((r) => r.seat.country === active)
     ? active
-    : ((rows.find((r) => selectable(r.seat)) ?? rows[0])?.seat.country ?? '');
+    : ((rows.find((r) => pointable(r.seat)) ?? rows[0])?.seat.country ?? '');
   const currentAt = index.find((r) => r.seat.country === current)?.at ?? -1;
 
   // Follow the active row with the scroll container, never the page.
@@ -132,7 +142,7 @@ export default function JoinSeatPicker({
   }, [current]);
 
   const move = (delta: number) => {
-    const pool = rows.filter((r) => selectable(r.seat));
+    const pool = rows.filter((r) => pointable(r.seat));
     if (pool.length === 0) return;
     const at = pool.findIndex((r) => r.seat.country === current);
     const next = at === -1
@@ -145,18 +155,18 @@ export default function JoinSeatPicker({
     if (e.key === 'ArrowDown') { e.preventDefault(); move(1); return; }
     if (e.key === 'ArrowUp') { e.preventDefault(); move(-1); return; }
     if (e.key === 'Home') {
-      const first = rows.find((r) => selectable(r.seat));
+      const first = rows.find((r) => pointable(r.seat));
       if (first) { e.preventDefault(); setActive(first.seat.country); }
       return;
     }
     if (e.key === 'End') {
-      const pool = rows.filter((r) => selectable(r.seat));
+      const pool = rows.filter((r) => pointable(r.seat));
       if (pool.length) { e.preventDefault(); setActive(pool[pool.length - 1].seat.country); }
       return;
     }
     if (e.key === 'Enter') {
       const row = rows.find((r) => r.seat.country === current);
-      if (row && selectable(row.seat)) { e.preventDefault(); onChange(row.seat.country); }
+      if (row && pointable(row.seat)) { e.preventDefault(); pick(row.seat); }
       return;
     }
     if (e.key === 'Escape' && query) { e.preventDefault(); setQuery(''); }
@@ -252,6 +262,8 @@ export default function JoinSeatPicker({
             const picked = value === seat.country;
             const isActive = focused && current === seat.country;
             const can = selectable(seat);
+            const point = pointable(seat);
+            const pointed = !can && point && reservedPicked === seat.country;
             return (
               <div
                 key={seat.country}
@@ -259,9 +271,9 @@ export default function JoinSeatPicker({
                 data-seat={seat.country}
                 role="option"
                 aria-selected={picked}
-                aria-disabled={!can}
+                aria-disabled={!point}
                 tabIndex={-1}
-                onClick={() => { if (can) { setActive(seat.country); onChange(seat.country); } }}
+                onClick={() => { if (point) { setActive(seat.country); pick(seat); } }}
                 className="flex items-center gap-2.5"
                 style={{
                   height: ROW_H,
@@ -269,12 +281,13 @@ export default function JoinSeatPicker({
                   containIntrinsicSize: `0 ${ROW_H}px`,
                   paddingInline: 10,
                   borderRadius: 12,
-                  cursor: can ? 'pointer' : 'default',
-                  opacity: can ? 1 : 0.55,
-                  backgroundColor: picked ? C.forest : isActive && can ? 'rgba(27,56,40,0.07)' : 'transparent',
+                  cursor: point ? 'pointer' : 'default',
+                  opacity: point ? 1 : 0.55,
+                  backgroundColor: picked ? C.forest : pointed ? 'rgba(238,217,138,0.40)' : isActive && point ? 'rgba(27,56,40,0.07)' : 'transparent',
                   boxShadow: picked
                     ? `inset 0 0 0 1.5px ${C.gold}, 0 4px 12px rgba(27,56,40,0.22)`
-                    : isActive && can ? 'inset 0 0 0 1px rgba(27,56,40,0.14)' : 'none',
+                    : pointed ? 'inset 0 0 0 1.5px rgba(182,135,31,0.7)'
+                    : isActive && point ? 'inset 0 0 0 1px rgba(27,56,40,0.14)' : 'none',
                   transitionProperty: 'background-color, box-shadow, opacity',
                   transitionDuration: '140ms',
                 }}

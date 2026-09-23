@@ -383,7 +383,9 @@ export function BrandPanel({
 export function JoinCard({ children }: { children: ReactNode }) {
   return (
     <section
-      className="relative overflow-hidden"
+      // overflow: clip, not hidden: `hidden` makes the card a scroll container, which
+      // would pin the phone's sticky Join bar to the card instead of the screen.
+      className="relative overflow-clip"
       style={{
         borderRadius: 28,
         backgroundColor: C.surface,

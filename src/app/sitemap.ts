@@ -2,6 +2,8 @@ import { MetadataRoute } from 'next';
 import { supabase } from '@/lib/supabase';
 import { articles } from './blog/posts';
 import { SITE_URL } from '@/lib/seo';
+import { isListedConference } from '@/lib/publicConferences';
+import { countryHubs } from '@/lib/countryHubs';
 
 // ── The sitemap: every indexable URL, exactly as it canonicalises ────────────
 //
@@ -49,21 +51,28 @@ const BLOG_PRIORITY: Record<string, number> = {
 
 interface ConfRow {
   slug: string | null;
+  full_name?: string | null;
+  is_demo?: boolean | null;
+  country?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
   updated_at: string | null;
   awards_published_at?: string | null;
 }
 
 // Failure here must never break the sitemap: degrade to the static list.
+// Test and demo conferences ("test mun", "TestMUN7", is_demo) are public but
+// never advertised (src/lib/publicConferences.ts): they stay reachable by link.
 async function publicConferences(): Promise<ConfRow[]> {
   try {
     const { data, error } = await supabase
       .from('conferences')
-      .select('slug, updated_at, awards_published_at')
+      .select('slug, full_name, is_demo, country, start_date, end_date, updated_at, awards_published_at')
       .eq('is_public', true)
       .order('updated_at', { ascending: false });
-    if (!error) return ((data as ConfRow[]) ?? []).filter((c) => !!c.slug);
-    const fallback = await supabase.from('conferences').select('slug, updated_at').eq('is_public', true);
-    return ((fallback.data as ConfRow[]) ?? []).filter((c) => !!c.slug);
+    if (!error) return ((data as ConfRow[]) ?? []).filter(isListedConference);
+    const fallback = await supabase.from('conferences').select('slug, full_name, is_demo, updated_at').eq('is_public', true);
+    return ((fallback.data as ConfRow[]) ?? []).filter(isListedConference);
   } catch {
     return [];
   }
@@ -84,6 +93,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: url('/'), lastModified: hubDate, changeFrequency: 'daily', priority: 1 },
     { url: url('/conferences/explore'), lastModified: hubDate, changeFrequency: 'daily', priority: 0.9 },
     { url: url('/conferences/map'), lastModified: hubDate, changeFrequency: 'weekly', priority: 0.6 },
+    // The organiser landing page (static copy plus the live conference list).
+    { url: url('/organisers'), lastModified: hubDate, changeFrequency: 'weekly', priority: 0.9 },
+    // Country hubs: only countries with enough upcoming public conferences
+    // (countryHubs.ts decides, the hub page 404s below the same threshold).
+    ...countryHubs(conferences).map((h) => ({
+      url: url(`/conferences/in/${h.slug}`),
+      lastModified: h.lastModified ? new Date(h.lastModified) : hubDate,
+      changeFrequency: 'weekly' as const,
+      priority: 0.7,
+    })),
     // /blog lists the posts, so it changes when the newest post does. Derived
     // rather than hardcoded: a hand-kept date here went stale every time a post
     // was added, which is the same "lastmod that lies" problem as above.

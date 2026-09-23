@@ -2,7 +2,13 @@ import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_LOGO } from '@/lib/seo';
 import Link from 'next/link';
 import StagefrontClient from './conferences/StagefrontClient';
-import { supabase } from '@/lib/supabase';
+import { fetchListedConferences, fetchJobStats, fetchPlatformStats } from '@/lib/listedConferences';
+
+// The cards, the trust counts and the job-board figures are read here, on the
+// server, so they are real in the HTML (they used to render "—" until a
+// client fetch landed). Ten minutes is fresh enough for a front page and keeps
+// it a cached page rather than a query per visit.
+export const revalidate = 600;
 
 // RULE (owner, 23 Sep 2026, after this regressed repeatedly): the site footer
 // lists INFORMATION links only. Never a list of conferences, and never a
@@ -32,7 +38,7 @@ const HUB_LINKS: { href: string; label: string }[] = [
   { href: '/conferences/explore', label: 'Explore conferences' },
   { href: '/conferences/map', label: 'Conference map' },
   { href: '/conferences/roles', label: 'Chair and staff roles' },
-  { href: '/conferences/new', label: 'List your conference' },
+  { href: '/organisers', label: 'For organisers' },
   { href: '/blog', label: 'MUN guides' },
   { href: '/sessions', label: 'Committee session software' },
   { href: '/create', label: 'Create a committee' },
@@ -78,7 +84,12 @@ const websiteSchema = {
   },
 };
 
-export default function HomePage() {
+export default async function HomePage() {
+  const [conferences, stats, jobStats] = await Promise.all([
+    fetchListedConferences(),
+    fetchPlatformStats(),
+    fetchJobStats(),
+  ]);
   return (
     <>
       <script
@@ -89,7 +100,7 @@ export default function HomePage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
       />
-      <StagefrontClient />
+      <StagefrontClient conferences={conferences} stats={stats} jobStats={jobStats} />
 
       <nav aria-label="Gavelling" style={{ backgroundColor: '#FAF8F3' }}>
         <ul

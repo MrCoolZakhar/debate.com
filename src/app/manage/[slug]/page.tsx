@@ -28,6 +28,8 @@ import ParticipantsChart, { toCumulativeSeries } from '@/components/conferences/
 import ApplicantsDial from '@/components/conferences/ApplicantsDial';
 import { applicationsByRole, INVITE_ROLE_LABEL, type ChairInviteRow } from '@/components/conferences/InviteAcceptance';
 import TrafficSourcesCard from '@/components/conferences/TrafficSourcesCard';
+import UntoldSeatsRow from './UntoldSeatsRow';
+import { fetchAllRows } from '@/lib/fetchAllRows';
 import { BENTO_BORDER, BENTO_WASH_FOREST } from '@/components/conferences/bento';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
 import { hasExploredEmails } from '@/lib/emailsExplored';
@@ -1003,17 +1005,23 @@ export default function DashboardPage() {
     const confId = conference.id;
     (async () => {
       const [appsRes, allocRes, committeesRes, orgRes, emailRes, chairInvRes, orgInvRes, chairInvAllRes] = await Promise.all([
-        supabase
+        // Paged: one request stops silently at 1,000 rows, which undercounted
+        // every tile of a big conference.
+        fetchAllRows((from, to) => supabase
           .from('applications')
           .select('id, user_id, submitted_at, status, payment_status, role, society_id, pledge_type, spots_pledged, advisors_pledged')
-          .eq('conference_id', confId),
+          .eq('conference_id', confId)
+          .order('id', { ascending: true })
+          .range(from, to)),
         // created_at, not a head-only count: the Assigned series on
         // ParticipantsChart is plotted from these instants. The count the
         // tiles use is just this array's length.
-        supabase
+        fetchAllRows((from, to) => supabase
           .from('conference_allocations')
-          .select('created_at')
-          .eq('conference_id', confId),
+          .select('id, created_at')
+          .eq('conference_id', confId)
+          .order('id', { ascending: true })
+          .range(from, to)),
         supabase
           .from('conference_committees')
           // committee_country_slots gives the SEAT count: a double-delegation
@@ -1722,6 +1730,7 @@ export default function DashboardPage() {
 
         {allSetAndVerified ? (
           <NeuCard className="gv-dash-prio flex flex-col" style={{ padding: '14px 15px', border: BENTO_BORDER, backgroundColor: BENTO_WASH_FOREST }}>
+            <UntoldSeatsRow conferenceId={conference.id} slug={slug} />
             <ShareHero conference={conference} />
           </NeuCard>
         ) : (
@@ -1748,6 +1757,8 @@ export default function DashboardPage() {
               list never pushes the feed below the fold. Finished rows are gone,
               not greyed; the share row is always last. */}
           <div className="gv-dash-prio-rows flex flex-col" style={{ gap: 5 }}>
+            {/* Work, not set-up: outside `checklist`, so the ring never counts it. */}
+            <UntoldSeatsRow conferenceId={conference.id} slug={slug} />
             {pendingChecklist.length === 0 ? (
               /* Every stage is done but the checkmark has not landed yet (the
                  database recomputes it on this visit). The share row below is

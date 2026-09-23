@@ -11,7 +11,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, ChevronRight, ChevronUp, FileText } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
-import { getAuthedClient } from '@/lib/supabase-auth';
+import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { isPaperLate, countUnread, type PaperMessageStub } from '@/lib/positionPapers';
 import { NEU, EASE, NeuCard } from '@/components/neu';
 import ProfileLink from '@/components/ProfileLink';
@@ -72,10 +72,25 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
   // The replace-paper confirm is a modal — freeze the participant page behind it.
   useScrollLock(showPPWarning);
   const ppFileInputRef = useRef<HTMLInputElement>(null);
+  // A failed read of the paper is NOT "no paper": the card used to say
+  // "NOT SUBMITTED" to a delegate whose paper was on file, whenever the read
+  // was refused (an expired token on a tab left open). 'error' shows a retry.
+  const [paperLoad, setPaperLoad] = useState<'loading' | 'ok' | 'error'>('loading');
+
+  // The session captured in React state goes stale on a tab left open (its
+  // access_token expires; supabase-js refreshes its own copy). Ask the auth
+  // client for the current session at call time, falling back to the
+  // captured one only when that read returns nothing.
+  const client = useCallback(async () => {
+    const fresh = await getFreshAuthedClient();
+    if (fresh) return fresh;
+    return session ? getAuthedClient(session.access_token) : null;
+  }, [session]);
 
   const loadPpEnabled = useCallback(async () => {
     if (!myAllocation || !session) return;
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = await client();
+    if (!supabase) return;
     const { data: ccData } = await supabase
       .from('conference_committees')
       .select('pp_submissions_enabled')
@@ -83,7 +98,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
       .single();
     setPpEnabled((ccData as { pp_submissions_enabled?: boolean } | null)?.pp_submissions_enabled ?? false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myAllocation?.conference_committee_id, session?.access_token]);
+  }, [myAllocation?.conference_committee_id, session?.access_token, client]);
 
   useEffect(() => { loadPpEnabled(); }, [loadPpEnabled]);
 
@@ -91,13 +106,22 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
   // paper between its two seat-holders, whoever submitted it.
   const loadMyPositionPaper = useCallback(async () => {
     if (!user || !myAllocation || !session) return;
-    const supabase = getAuthedClient(session.access_token);
-    const { data } = await supabase
+    const supabase = await client();
+    if (!supabase) { setPaperLoad('error'); return; }
+    const { data, error } = await supabase
       .from('position_papers')
       .select('id, status, submitted_at, file_name, file_url, user_id, delegate_seen_at')
       .eq('conference_committee_id', myAllocation.conference_committee_id)
       .eq('country_code', myAllocation.country_code)
       .maybeSingle();
+    if (error) {
+      // Keep whatever we last showed; only a first load with nothing on
+      // screen turns into the retry state.
+      console.error('[PositionPaperCard] position_papers read failed:', error);
+      setPaperLoad(prev => (prev === 'ok' ? 'ok' : 'error'));
+      return;
+    }
+    setPaperLoad('ok');
     const paper = (data as PositionPaper | null) ?? null;
     setMyPositionPaper(paper);
     if (paper) {
@@ -110,7 +134,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
       setUnreadCount(0);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, myAllocation?.conference_committee_id, myAllocation?.country_code, session?.access_token]);
+  }, [user?.id, myAllocation?.conference_committee_id, myAllocation?.country_code, session?.access_token, client]);
 
   useEffect(() => { loadMyPositionPaper(); }, [loadMyPositionPaper]);
 
@@ -142,7 +166,8 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
   async function handlePPSubmit() {
     if (!ppFile || !myAllocation || !user || !session) return;
     setPPUploading(true);
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = await client();
+    if (!supabase) { setPPError('Your session has ended. Sign in again and retry.'); setPPUploading(false); return; }
     const path = `${conferenceId}/${myAllocation.conference_committee_id}/${user.id}_${Date.now()}.pdf`;
     const { error: storageError } = await supabase.storage.from('position-papers').upload(path, ppFile, { contentType: 'application/pdf' });
     if (storageError) { setPPError('Upload failed.'); setPPUploading(false); return; }
@@ -176,7 +201,8 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
     if (!ppFile || !myAllocation || !myPositionPaper || !user || !session) return;
     setPPUploading(true);
     setPPError('');
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = await client();
+    if (!supabase) { setPPError('Your session has ended. Sign in again and retry.'); setPPUploading(false); return; }
     const path = `${conferenceId}/${myAllocation.conference_committee_id}/${user.id}_${Date.now()}.pdf`;
     const { error: storageError } = await supabase.storage.from('position-papers').upload(path, ppFile, { contentType: 'application/pdf' });
     if (storageError) { setPPError('Upload failed.'); setPPUploading(false); return; }
@@ -340,6 +366,34 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
                 </ActionButton>
               </div>
             </div>
+          </div>
+        )}
+      </SectionCard>
+    );
+  }
+
+  // The paper could not be read. Say so, never "not submitted".
+  if (!myPositionPaper && paperLoad !== 'ok') {
+    return (
+      <SectionCard>
+        <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 8px 0' }}>
+          POSITION PAPER
+        </p>
+        {dueLine}
+        {paperLoad === 'loading' ? (
+          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>Loading your paper…</p>
+        ) : (
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm" style={{ color: '#4A4238', fontFamily: OUTFIT, margin: 0 }}>
+              Couldn&apos;t load your position paper. Check your connection and try again.
+            </p>
+            <button
+              onClick={() => { setPaperLoad('loading'); loadMyPositionPaper(); }}
+              className="focus:outline-none flex-shrink-0 rounded-full px-3.5 py-1.5"
+              style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#EED98A', background: '#1B3828', border: 'none', cursor: 'pointer' }}
+            >
+              Retry
+            </button>
           </div>
         )}
       </SectionCard>

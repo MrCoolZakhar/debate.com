@@ -7,7 +7,7 @@
 // renders a read-only CV (public view).
 
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Landmark } from 'lucide-react';
 import { Emoji3D, NEU } from '@/components/neu';
 import { committeeDisplayName } from '@/lib/presetNames';
 import { conferenceAcronymLabel, editionYear } from '@/lib/conferenceLabels';
@@ -176,6 +176,9 @@ export function TimelineEntry({
   // Blue when Gavelling wrote the entry from a conference the person attended;
   // grey when they typed it themselves.
   const verifiedEntry = entry.source === 'gavelling_verified';
+  // A seat Gavelling recorded at a finished conference (record_attended_cv_entries):
+  // a record, not the verified seal, which stays for published awards.
+  const attendedEntry = entry.source === 'gavelling_attended';
   // Chairs can be awarded too (Best Chair, Best Dais, custom), shown exactly
   // like delegate awards.
   const displayAwards = (entry.entry_type === 'delegate' || entry.entry_type === 'chair' || isDelegation)
@@ -296,9 +299,19 @@ export function TimelineEntry({
                     verified={verifiedEntry}
                     showUnverified
                     size={18}
-                    title={verifiedEntry ? 'Verified by Gavelling' : 'Self-reported'}
+                    title={verifiedEntry ? 'Verified by Gavelling' : attendedEntry ? 'Recorded by Gavelling from the conference' : 'Self-reported'}
                   />
                 </h3>
+                {attendedEntry && (
+                  <p
+                    className="inline-flex items-center gap-1 mt-1"
+                    title="Gavelling recorded this seat from the conference's own allocation."
+                    style={{ color: '#2A5A3C', fontFamily: OUTFIT, fontSize: '11px', fontWeight: 600, margin: '4px 0 0 0' }}
+                  >
+                    <Landmark size={12} strokeWidth={2.2} aria-hidden />
+                    Gavelling record
+                  </p>
+                )}
                 {disp.secondary && (
                   <p className="mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, fontSize: '11.5px', fontWeight: 500, margin: '2px 0 0 0', lineHeight: 1.3 }}>
                     {disp.secondary}

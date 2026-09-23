@@ -71,15 +71,20 @@ function ConfirmationInner({ conference }: { conference: ConfRow }) {
     let cancelled = false;
     (async () => {
       const authed = getAuthedClient(session.access_token);
-      const { data } = await authed
+      // applications has no created_at column: ordering by it was a 400 on
+      // every load (and the pass never showed its money row). submitted_at is
+      // the filing time; an imported row with none sorts last.
+      const { data, error } = await authed
         .from('applications')
         .select('id, role, payment_status, amount_paid, society_id')
         .eq('conference_id', conference.id)
         .eq('user_id', user.id)
         .eq('role', role)
-        .order('created_at', { ascending: false })
+        .order('submitted_at', { ascending: false, nullsFirst: false })
         .limit(1);
       if (cancelled) return;
+      // A failed read simply leaves the money row off the pass (see above).
+      if (error) return;
       const row = ((data ?? []) as AppRow[])[0] ?? null;
       setApp(row);
       if (row?.society_id) {

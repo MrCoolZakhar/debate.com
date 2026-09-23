@@ -21,6 +21,7 @@ import NotificationStack from '@/components/notifications/NotificationStack';
 import VerifiedCheck, { minutesToCheckmarkLabel } from '@/components/VerifiedCheck';
 import { formatConferenceDates } from '@/lib/conferenceDates';
 import { NEU } from '@/components/neu';
+import { waitingSince } from './communications/waitingOnReply';
 
 // ── Conference type ────────────────────────────────────────────────────────
 
@@ -172,7 +173,7 @@ const CONFERENCE_COLUMNS = [
 
 /** Unhandled work, per rail entry. Every number is a real count of things
  *  waiting on the organiser — applications nobody has decided on, accepted
- *  delegates with no committee yet, participant queries with an unread reply,
+ *  delegates with no committee yet, participant threads waiting on a reply,
  *  financial aid requests still pending. Never a decoration: a zero renders
  *  nothing at all.
  *
@@ -685,37 +686,35 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
    *  the organiser just cleared. */
   const [workBadges, setWorkBadges] = useState({ applications: 0, assignment: 0, financialAid: 0 });
 
-  // Nav badge — same unread definition as the communications inbox
-  // (unreadCountOf there): a thread counts as unread when it has a
-  // participant-side message (is_organizer false) newer than
-  // organizer_seen_at, or every message counts when that stamp is null.
-  // Independent of `status` — a closed thread can still carry unread
-  // messages. seen_by_organizer is a separate legacy flag (still read by
-  // DelegationsView's unseen-society tracking) and is NOT this definition.
+  // Nav badge: threads WAITING ON A REPLY (waitingOnReply.ts, the same
+  // definition the Communications inbox rows use). Open, not a swap notice,
+  // and the newest message is from the participant side. Opening a thread
+  // does not clear it; answering (or closing) it does.
   const loadInboxBadge = useCallback(async () => {
     if (!conferenceId || !accessToken) return;
     const supabase = getAuthedClient(accessToken);
     const { data: reqData } = await supabase
       .from('conference_requests')
-      .select('id, organizer_seen_at')
-      .eq('conference_id', conferenceId);
-    const requests = (reqData ?? []) as { id: string; organizer_seen_at: string | null }[];
+      .select('id, status, kind')
+      .eq('conference_id', conferenceId)
+      .neq('status', 'closed');
+    const requests = (reqData ?? []) as { id: string; status: string; kind: string }[];
     if (requests.length === 0) { setInboxBadge(0); return; }
 
     const { data: msgData } = await supabase
       .from('conference_request_messages')
       .select('request_id, is_organizer, created_at')
-      .in('request_id', requests.map(r => r.id))
-      .eq('is_organizer', false);
-    const messages = (msgData ?? []) as { request_id: string; is_organizer: boolean; created_at: string }[];
-
-    const unreadCount = requests.filter(r =>
-      messages.some(m => m.request_id === r.id && (!r.organizer_seen_at || m.created_at > r.organizer_seen_at))
-    ).length;
-    setInboxBadge(unreadCount);
+      .in('request_id', requests.map(r => r.id));
+    const byRequest = new Map<string, { is_organizer: boolean; created_at: string }[]>();
+    for (const m of (msgData ?? []) as { request_id: string; is_organizer: boolean; created_at: string }[]) {
+      const list = byRequest.get(m.request_id) ?? [];
+      list.push(m);
+      byRequest.set(m.request_id, list);
+    }
+    setInboxBadge(requests.filter(r => waitingSince(r, byRequest.get(r.id) ?? []) !== null).length);
   }, [conferenceId, accessToken]);
 
-  useEffect(() => { loadInboxBadge(); }, [loadInboxBadge]);
+  useEffect(() => { loadInboxBadge(); }, [loadInboxBadge, pathname]);
 
   // ── The other unhandled-work counts ───────────────────────────────────────
   // Three head-only counts, so nothing but a number crosses the wire and no

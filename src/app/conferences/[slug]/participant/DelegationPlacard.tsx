@@ -39,10 +39,10 @@ export default function DelegationPlacard({ societyId, paymentStatus, selfPaid, 
       supabase.from('societies').select('name').eq('id', societyId).maybeSingle(),
       supabase
         .from('applications')
-        .select('profiles (display_name)')
+        .select('profiles:profile_cards (display_name)')
         .eq('society_id', societyId)
         .eq('role', 'faculty-advisor')
-        .in('status', ['accepted', 'assigned']),
+        .in('status', ['accepted', 'assigned', 'checked-in']),
     ]);
     setSocietyName((societyRow as { name?: string } | null)?.name ?? null);
     setAdvisorNames(

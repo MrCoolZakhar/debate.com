@@ -239,7 +239,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
     const supabase = getAuthedClient(session.access_token);
     const [{ data: societyRow }, { data: memberRows }, { data: coveredRows }] = await Promise.all([
       supabase.from('societies').select('id, name, spots_purchased').eq('id', societyId).maybeSingle(),
-      supabase.from('applications').select(POOL_MEMBER_SELECT).eq('society_id', societyId).in('status', ['accepted', 'assigned']),
+      supabase.from('applications').select(POOL_MEMBER_SELECT).eq('society_id', societyId).in('status', ['accepted', 'assigned', 'checked-in']),
       supabase.rpc('society_credit_covered_apps', { p_society: societyId }),
     ]);
     const memberList = (memberRows ?? []) as unknown as PoolMember[];

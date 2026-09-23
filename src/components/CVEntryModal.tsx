@@ -50,7 +50,10 @@ export interface CVEntry {
   logo_url: string | null;
   conference_id: string | null;
   event_date: string | null;
-  source: 'gavelling_verified' | 'manual';
+  /** gavelling_verified = an award Gavelling published (blue seal);
+   *  gavelling_attended = a seat Gavelling recorded at a finished conference
+   *  ("Gavelling record", no seal); manual = self-reported. */
+  source: 'gavelling_verified' | 'gavelling_attended' | 'manual';
   created_at: string;
 }
 

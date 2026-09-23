@@ -23,6 +23,7 @@ import ChairParticipant from './ChairParticipant';
 import ObserverParticipant from './ObserverParticipant';
 import RequestsPanel from './RequestsPanel';
 import ApplyPointer from './ApplyPointer';
+import { PayNowCard } from './PayNowCard';
 import type { ParticipantApplication, ParticipantRoleConfig, ParticipantAllocation, ParticipantCommittee } from './types';
 import { friendlyError, UserFacingError } from '@/lib/friendlyError';
 
@@ -348,6 +349,10 @@ export default function ParticipantView({
               )}
             </SectionCard>
           )}
+
+          {/* What is owed right now across this conference (own + delegation
+              invoices), with the due date when set and a way to /pay. */}
+          <PayNowCard userId={user?.id ?? null} conferenceId={conferenceId} />
 
           <PayGate gateState={gateState}>
             {DELEGATE_ROLES.has(selected.role) ? (

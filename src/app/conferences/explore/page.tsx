@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import ConferencesExploreClient from './ConferencesExploreClient';
 import Loader from '@/components/Loader';
+import { isListedConference } from '@/lib/publicConferences';
+import { countryHubs, type CountryHub } from '@/lib/countryHubs';
 
 // Re-render hourly so the server-rendered directory below picks up newly
 // published conferences without a redeploy.
@@ -32,6 +34,10 @@ interface DirectoryConf {
   full_name: string;
   city: string | null;
   country: string | null;
+  is_demo: boolean | null;
+  start_date: string | null;
+  end_date: string | null;
+  updated_at: string | null;
 }
 
 // The interactive grid above loads client-side (and geo-filters by default),
@@ -44,14 +50,16 @@ async function ConferenceDirectory() {
   try {
     const { data } = await supabase
       .from('conferences')
-      .select('slug, full_name, city, country')
+      .select('slug, full_name, city, country, is_demo, start_date, end_date, updated_at')
       .eq('is_public', true)
       .order('full_name', { ascending: true });
-    confs = ((data as DirectoryConf[]) ?? []).filter((c) => c.slug && c.full_name);
+    // Test and demo conferences are never listed (src/lib/publicConferences.ts).
+    confs = ((data as DirectoryConf[]) ?? []).filter((c) => c.full_name && isListedConference(c));
   } catch {
     return null;
   }
   if (confs.length === 0) return null;
+  const hubs = countryHubs(confs);
 
   return (
     <section
@@ -59,6 +67,7 @@ async function ConferenceDirectory() {
       style={{ backgroundColor: '#EDE7D8', borderTop: '1px solid rgba(221,212,192,0.9)' }}
     >
       <div className="mx-auto max-w-6xl px-6 py-8">
+        {hubs.length > 0 && <CountryHubLinks hubs={hubs} />}
         {/* COLLAPSED, NOT REMOVED, and the distinction is the whole point.
             This wall of names is the crawl path: the browse UI above renders
             client-side, so without these <a href>s the conference pages have
@@ -125,6 +134,51 @@ async function ConferenceDirectory() {
         </details>
       </div>
     </section>
+  );
+}
+
+// Country hubs (/conferences/in/<country>) for every country with enough
+// upcoming conferences: plain links, always open, so each hub has a
+// server-rendered way in. Deliberately here and NOT in the footer.
+function CountryHubLinks({ hubs }: { hubs: CountryHub[] }) {
+  return (
+    <nav aria-label="Conferences by country" style={{ marginBottom: 28 }}>
+      <h2
+        style={{
+          fontFamily: "'Outfit', sans-serif",
+          fontWeight: 800,
+          fontSize: 11,
+          letterSpacing: '0.14em',
+          color: '#5C5140',
+          textTransform: 'uppercase',
+          margin: '0 0 12px',
+        }}
+      >
+        Conferences by country
+      </h2>
+      <ul className="flex flex-wrap gap-2" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+        {hubs.map((h) => (
+          <li key={h.slug}>
+            <Link
+              href={`/conferences/in/${h.slug}`}
+              className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 focus:outline-none"
+              style={{
+                fontFamily: "'Outfit', sans-serif",
+                fontSize: 13,
+                fontWeight: 600,
+                color: '#1B3828',
+                backgroundColor: '#F4EFE3',
+                textDecoration: 'none',
+                boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.10)',
+              }}
+            >
+              MUN in {h.name}
+              <span style={{ color: '#5C5140', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{h.count}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </nav>
   );
 }
 

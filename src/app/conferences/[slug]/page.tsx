@@ -6,6 +6,7 @@ import { conferenceOgImageUrl } from '@/lib/ogVersion';
 import { supabase } from '@/lib/supabase';
 import ConferenceDetailClient from './ConferenceDetailClient';
 import ConferenceViewBeacon from '@/components/conferences/ConferenceViewBeacon';
+import { fetchDelegatePrices, delegatePriceLabel, TBD_PRICE, type DelegatePrice } from '@/lib/publicFees';
 
 // Server-rendered shell only; the client always does its own live fetch on
 // mount (ConferenceDetailClient's fetchAll, unconditional) with the right
@@ -18,6 +19,8 @@ import ConferenceViewBeacon from '@/components/conferences/ConferenceViewBeacon'
 export const revalidate = 3600;
 
 interface ConfMeta {
+  id: string;
+  fee_currency: string | null;
   full_name: string;
   acronym: string | null;
   description: string | null;
@@ -40,7 +43,7 @@ export const getConference = cache(async (slug: string): Promise<ConfMeta | null
   try {
     const { data } = await supabase
       .from('conferences')
-      .select('full_name, acronym, description, banner_url, logo_url, city, country, start_date, end_date, is_public, format')
+      .select('id, fee_currency, full_name, acronym, description, banner_url, logo_url, city, country, start_date, end_date, is_public, format')
       .eq('slug', slug)
       .maybeSingle();
     return (data as ConfMeta) ?? null;
@@ -112,6 +115,56 @@ function formatRange(start: string | null, end: string | null): string | null {
   return `${s.toLocaleDateString('en', { month: 'short', day: 'numeric' })} – ${e.toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 }
 
+/** The public delegate price (publicFees.ts), for the description and the
+ *  Event offer. Public conferences only; TBD on any failure. */
+const getDelegatePrice = cache(async (id: string, currency: string | null): Promise<DelegatePrice> => {
+  try {
+    const prices = await fetchDelegatePrices(supabase, [{ id, fee_currency: currency }]);
+    return prices.get(id) ?? TBD_PRICE;
+  } catch {
+    return TBD_PRICE;
+  }
+});
+
+const tidy = (s: string | null | undefined) => (s ?? '').replace(/\s+/g, ' ').trim();
+
+/**
+ * The title template (owner, 23 Sep 2026):
+ *   "<Acronym> <year> · <Full name>, <City> · Model UN conference | Gavelling"
+ * The year is added only when the acronym does not already carry it, the full
+ * name only when it says more than the acronym, the city only when known.
+ */
+function conferenceTitle(conf: ConfMeta): string {
+  const acronym = tidy(conf.acronym);
+  const full = tidy(conf.full_name);
+  const year = conf.start_date ? conf.start_date.slice(0, 4) : '';
+  const lead = acronym || full || 'Conference';
+  const head = year && !lead.includes(year) ? `${lead} ${year}` : lead;
+  const second = acronym && full && full.toLowerCase() !== acronym.toLowerCase() ? full : '';
+  const city = tidy(conf.city);
+  const named = second ? `${head} · ${second}` : head;
+  return `${named}${city ? `, ${city}` : ''} · Model UN conference | Gavelling`;
+}
+
+/** A factual description: what, where, when, how many committees, the fee. */
+function conferenceDescription(conf: ConfMeta, committeeCount: number, price: DelegatePrice): string {
+  const full = tidy(conf.full_name) || tidy(conf.acronym) || 'This conference';
+  const acronym = tidy(conf.acronym);
+  const name = acronym && acronym.toLowerCase() !== full.toLowerCase() ? `${full} (${acronym})` : full;
+  const place = [tidy(conf.city), tidy(conf.country)].filter(Boolean).join(', ');
+  const online = conf.format === 'online';
+  const dates = formatRange(conf.start_date, conf.end_date);
+  const where = online ? ' held online' : place ? ` in ${place}` : '';
+  const when = dates ? `, ${dates}` : '';
+  const committees = committeeCount > 0 ? ` ${committeeCount} ${committeeCount === 1 ? 'committee' : 'committees'}.` : '';
+  const fee = price.kind === 'tbd'
+    ? ' Delegate fee to be announced.'
+    : price.kind === 'free'
+      ? ' Free for delegates.'
+      : ` Delegate fee ${delegatePriceLabel(price)}.`;
+  return `${name} is a Model UN conference${where}${when}.${committees}${fee} Apply as a delegate, chair or advisor on Gavelling.`;
+}
+
 // Per-conference link preview (Open Graph / Twitter) so sharing a conference URL
 // on WhatsApp, iMessage, Slack, etc. shows the conference's banner, name, and a
 // brief description instead of the generic Gavelling card. Private/unknown
@@ -147,15 +200,12 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   }
 
   const name = conf.full_name || conf.acronym || 'Conference';
-  const place = [conf.city, conf.country].filter(Boolean).join(', ');
-  const dates = formatRange(conf.start_date, conf.end_date);
-  const bits = [place, dates].filter(Boolean).join(' · ');
-  const rawDesc = (conf.description ?? '').replace(/\s+/g, ' ').trim();
-  const description = rawDesc
-    ? (rawDesc.length > 200 ? `${rawDesc.slice(0, 197).trimEnd()}…` : rawDesc)
-    : bits
-      ? `Model UN conference, ${bits}. Apply on Gavelling.`
-      : 'A Model UN conference on Gavelling. Apply now.';
+  // Committees and the public delegate price are read for PUBLIC conferences
+  // only (a private one is noindex and must not leak its set-up into HTML).
+  const [committees, price] = conf.is_public
+    ? await Promise.all([getCommittees(conf.id), getDelegatePrice(conf.id, conf.fee_currency)])
+    : [[], TBD_PRICE as DelegatePrice];
+  const description = conferenceDescription(conf, committees.length, price);
   /* The share card is RENDERED, not the raw banner.
    
      Pointing og:image at the organiser's upload had two failure modes that
@@ -186,7 +236,10 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const image = conferenceOgImageUrl(slug, conf);
 
   return pageMetadata({
-    title: name,
+    // Absolute: the brand is part of the template, so the root `%s | Gavelling`
+    // must not add it twice.
+    title: { absolute: conferenceTitle(conf) },
+    ogTitle: name,
     description,
     path: `/conferences/${slug}`,
     image,
@@ -209,6 +262,7 @@ function eventSchema(
   slug: string,
   conf: ConfMeta,
   committees: { name: string; abbreviation: string | null; topics: unknown }[] = [],
+  price: DelegatePrice = TBD_PRICE,
 ): object | null {
   if (conf.is_public === false || !conf.start_date) return null;
   const name = conf.full_name || conf.acronym || 'Model UN Conference';
@@ -264,6 +318,19 @@ function eventSchema(
       name,
       url: `https://gavelling.com/conferences/${slug}`,
     },
+    // The delegate price, only once it is set (publicFees.ts): never a
+    // guessed or stale number.
+    ...(price.kind !== 'tbd'
+      ? {
+          offers: {
+            '@type': 'Offer',
+            name: 'Delegate',
+            url: `https://gavelling.com/conferences/${slug}/apply`,
+            price: price.kind === 'free' ? 0 : price.amount,
+            priceCurrency: price.kind === 'paid' ? price.currency : (conf.fee_currency || 'USD'),
+          },
+        }
+      : {}),
   };
 }
 
@@ -279,8 +346,9 @@ export default async function ConferenceDetailPage({ params }: { params: Promise
   // private conference, which leaves the client's existing authed path intact.
   const full = conf?.is_public ? await getConferenceFull(slug) : null;
   const committees = full ? await getCommittees((full as { id: string }).id) : [];
+  const price = full ? await getDelegatePrice(conf.id, conf.fee_currency) : TBD_PRICE;
   const schema = conf
-    ? eventSchema(slug, conf, committees as { name: string; abbreviation: string | null; topics: unknown }[])
+    ? eventSchema(slug, conf, committees as { name: string; abbreviation: string | null; topics: unknown }[], price)
     : null;
   return (
     <>

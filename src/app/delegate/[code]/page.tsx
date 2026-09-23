@@ -1072,7 +1072,21 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     const timeout = new Promise((resolve) => setTimeout(resolve, 3000));
     Promise.race([leave, timeout]).finally(() => router.replace(target));
   }, [code, country, router]);
-  const idle = useDelegateIdleLogout(idleEnabled, handleIdleLogout);
+  // Never idle on the floor or in a queue (delegateIdle.ts): read at check time from the
+  // latest committee through a ref, so this costs no render.
+  const onFloorOrQueueRef = useRef(false);
+  {
+    const k = seatKey(country);
+    const c = committee;
+    onFloorOrQueueRef.current = !!c && !!country && (
+      (!!c.currentSpeaker && seatKey(c.currentSpeaker.country) === k)
+      || c.speakersList.some((s) => seatKey(s.country) === k)
+      || (c.caucusQueue ?? []).some((s) => seatKey(s.country) === k)
+      || (!!c.caucus?.currentSpeaker && seatKey(c.caucus.currentSpeaker) === k)
+    );
+  }
+  const idleProtected = useCallback(() => onFloorOrQueueRef.current, []);
+  const idle = useDelegateIdleLogout(idleEnabled, handleIdleLogout, idleProtected);
 
   // Seat re-verify. A claim checked only on load let the wrong device keep a working page
   // after its claim expired and the right person took the seat. So while the page is in,

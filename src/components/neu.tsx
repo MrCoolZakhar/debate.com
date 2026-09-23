@@ -15,7 +15,7 @@
  * Dependency-free (inline styles + lucide icons already in the app).
  */
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import Link from 'next/link';
 import { Check, ChevronRight } from 'lucide-react';
 
@@ -540,14 +540,22 @@ export function NeuRing({
   const pct = max > 0 ? Math.min(1, value / max) : 0;
   const r = (size - strokeWidth) / 2;
   const circ = 2 * Math.PI * r;
-  const gid = `neu-ring-${gradient[0].replace('#', '')}-${gradient[1].replace('#', '')}`;
+  // The gradient stops are CSS variables (NEU_GRADIENTS.gold is
+  // ['var(--gv-accent-light)', 'var(--gv-accent)']), and that broke the ring
+  // twice over: the id built from them contained "(" and ")", so
+  // `url(#neu-ring-var(--gv-...))` pointed at nothing and the arc was never
+  // painted (the /admin set-up rings and the dashboard ring sat empty at 7/7),
+  // and a var() in the stop-color ATTRIBUTE is ignored. The id is now useId()
+  // (unique per ring, no shared-id pitfalls) and the colours go through style,
+  // where var() resolves.
+  const gid = `neu-ring-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   return (
     <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
       <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }} aria-hidden>
         <defs>
           <linearGradient id={gid} x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor={gradient[0]} />
-            <stop offset="100%" stopColor={gradient[1]} />
+            <stop offset="0%" style={{ stopColor: gradient[0] }} />
+            <stop offset="100%" style={{ stopColor: gradient[1] }} />
           </linearGradient>
         </defs>
         {/* inset-looking track: dark inner edge + light outer relief */}

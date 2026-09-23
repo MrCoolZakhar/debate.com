@@ -290,7 +290,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const all = await getFeedbackForCommittee(committee.id);
+      const all = await getFeedbackForCommittee(committee.id, { code: committee.code, chairSuffix: committee.dbChairJoinSuffix ?? undefined });
       if (cancelled) return;
       const fb = all.filter((f) => f.level === 'speech');
 

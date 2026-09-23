@@ -13,6 +13,33 @@ export interface PaperMessageStub {
   created_at: string;
 }
 
+/** The storage key inside the `position-papers` bucket, from the URL stored in
+ *  `position_papers.file_url` (always the bucket's public-URL form). */
+export function positionPaperPath(fileUrl: string | null | undefined): string | null {
+  if (!fileUrl) return null;
+  const marker = '/position-papers/';
+  const i = fileUrl.indexOf(marker);
+  if (i === -1) return null;
+  const path = fileUrl.slice(i + marker.length).split(/[?#]/)[0];
+  try { return decodeURIComponent(path); } catch { return path; }
+}
+
+/** The bucket is private (23 Sep 2026): a paper is opened through a short-lived
+ *  signed URL minted for the viewer, which storage grants only to the author,
+ *  their seatmates, the committee's chairs and the conference's organisers.
+ *  Falls back to the stored URL when signing fails, so nothing throws. */
+export async function signedPositionPaperUrl(
+  supabase: SupabaseLike,
+  fileUrl: string,
+  expiresInSeconds = 4 * 60 * 60,
+): Promise<string> {
+  const path = positionPaperPath(fileUrl);
+  if (!path) return fileUrl;
+  const { data, error } = await supabase.storage.from('position-papers').createSignedUrl(path, expiresInSeconds);
+  if (error || !data?.signedUrl) return fileUrl;
+  return data.signedUrl;
+}
+
 /** A paper is late when it was submitted after its committee's deadline.
  *  Informational only, never blocks anything. */
 export function isPaperLate(submittedAt: string | null, deadline: string | null): boolean {

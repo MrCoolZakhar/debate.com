@@ -13,7 +13,7 @@
 //
 // FOUR THINGS ARE SESSION-ONLY and have no organiser equivalent, so they stay
 // here rather than moving into the shared table:
-//   • the forest header bar with Export CSV and ✕, and the strip of session
+//   • the forest header bar with Download record (an .xlsx workbook) and ✕, and the strip of session
 //     figures under it;
 //   • the MANUAL plus / minus (`scoreboard/ManualAdjust`) — only the Moderator
 //     awards points, so it rides in the chair's own drill-in
@@ -41,7 +41,8 @@
 //      with the Ranking tab's badge for the same delegation. It is now labelled
 //      "Points" (objective) and sits beside an explicit "Score" column carrying
 //      the same headline the Ranking tab shows.
-//   3. the CSV exported only the objective total. It now carries both.
+//   3. the CSV exported only the objective total. The .xlsx record that replaced it
+//      (23 Sep 2026) carries score, objective points and quality per delegation.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -63,19 +64,13 @@ import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { buildSessionScoreboardRows, sessionPointSlices } from '@/lib/sessionScoreboard';
 import { buildSessionHistory, type HistorySpeech } from '@/lib/sessionHistory';
 import {
-  formatSpeakingTime, type ScoreboardDelegateRow,
+  formatSpeakingTime,
 } from '@/lib/conferenceScoreboard';
-import type { LedgerRow } from '@/lib/scoring';
 import { logEvent, getFeedbackForCommittee, type FeedbackEntry } from '@/lib/committeeService';
 import { updateFeedbackContent } from '@/lib/feedbackEdit';
 import { NoteEditingProvider } from '@/components/scoreboard/EditableNote';
 import { resolveChairAwardsHref } from '@/lib/sessionAwardsLink';
-import { Trophy, ListOrdered, Grid3x3, History } from 'lucide-react';
-
-function csvEscape(v: string | number): string {
-  const s = String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
+import { Trophy, ListOrdered, Grid3x3, History, FileSpreadsheet } from 'lucide-react';
 
 export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 0, isViewOnly = false, chairName = '' }: {
   committee: Committee; onClose: () => void; feedbackVersion?: number;
@@ -106,13 +101,14 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
   // silently went stale the moment a second chair wrote anything.
   useEffect(() => {
     let cancelled = false;
-    getFeedbackForCommittee(committee.id).then((rows) => {
+    // Chair notes are readable only with the chair suffix header (RLS), so read through it.
+    getFeedbackForCommittee(committee.id, { code: committee.code, chairSuffix: committee.dbChairJoinSuffix ?? undefined }).then((rows) => {
       if (cancelled) return;
       if (openedRef.current) setFeedback(rows);
       else heldFeedback.current = rows;
     });
     return () => { cancelled = true; };
-  }, [committee.id, feedbackVersion]);
+  }, [committee.id, committee.code, committee.dbChairJoinSuffix, feedbackVersion]);
   const handleOpened = () => {
     openedRef.current = true;
     if (heldFeedback.current) { setFeedback(heldFeedback.current); heldFeedback.current = null; }
@@ -275,67 +271,21 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
     }, committee.code, committee.dbChairJoinSuffix ?? undefined);
   };
 
-  const exportCsv = () => {
-    // Every chair note written on a specific speech, matched the way the ledger
-    // matches: country + speaking context + seconds. Two chairs may now write on
-    // the SAME speech (commit 4755225), so this joins them and names each author
-    // rather than picking whichever one happened to come back first.
-    const commentsFor = (row: ScoreboardDelegateRow, r: LedgerRow): string => {
-      if (r.type !== 'speech') return '';
-      return row.comments
-        .filter((c) => c.level === 'speech' && c.content.trim()
-          && (c.speechContext ?? '') === (r.context ?? '')
-          && (c.speechSeconds ?? 0) === (r.seconds ?? 0))
-        .map((c) => (c.chairName ? `${c.chairName}: ${c.content}` : c.content))
-        .join(' | ');
-    };
-
-    const byName = [...allRows].sort((a, b) =>
-      getCountryDisplayName(a.country, language).localeCompare(getCountryDisplayName(b.country, language), language));
-
-    const header = ['Delegation', 'GSL', 'Caucus', 'Speaking (s)', 'Motions', 'RTR', 'WP', 'DR', 'Manual', 'Points (objective)', 'Score (headline)', 'Quality /100'];
-    const lines = [header.join(',')];
-    [...allRows].sort((a, b) => b.headline - a.headline).forEach((r) => {
-      lines.push([
-        getCountryDisplayName(r.country, language), r.gslSpeeches, r.caucusSpeeches, r.speakingSeconds,
-        r.motions, r.rightsOfReply, r.workingPapers, r.draftResolutions, r.manual,
-        r.objective, r.headline, r.quality ?? '',
-      ].map(csvEscape).join(','));
-    });
-
-    // Detailed per-speech / event breakdown (topics + comments + points).
-    lines.push('');
-    lines.push('Per-speech / event breakdown');
-    lines.push(['Delegation', 'Time', 'Source', 'Detail', 'Comment', 'Points'].map(csvEscape).join(','));
-    byName.forEach((row) => {
-      [...row.ledger]
-        .sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''))
-        .forEach((r) => {
-          const time = r.timestamp ? new Date(r.timestamp).toLocaleString() : '';
-          lines.push([getCountryDisplayName(row.country, language), time, r.label, r.detail, commentsFor(row, r), r.pts].map(csvEscape).join(','));
-        });
-    });
-
-    // Chair ratings, one line per factor per delegation — the subjective half of
-    // the board, which the old export dropped entirely.
-    const anyFactors = allRows.some((r) => r.factors.length);
-    if (anyFactors) {
-      lines.push('');
-      lines.push('Chair ratings');
-      lines.push(['Delegation', 'Factor', 'Average', 'Scale max', 'Ratings'].map(csvEscape).join(','));
-      byName.forEach((row) => {
-        row.factors.forEach((f) => {
-          lines.push([getCountryDisplayName(row.country, language), f.name, f.average, f.scaleMax, f.ratings].map(csvEscape).join(','));
-        });
-      });
+  // The whole session as one Excel workbook (src/lib/sessionRecordExport.ts): History,
+  // Scores, Per motion, Speeches, Attendance, Documents. Replaces the old CSV, which was
+  // one flat sheet and lost the motions, the roll call and the papers.
+  const [exporting, setExporting] = useState<'idle' | 'busy' | 'failed'>('idle');
+  const exportRecord = async () => {
+    if (exporting === 'busy') return;
+    setExporting('busy');
+    try {
+      const { downloadSessionRecord } = await import('@/lib/sessionRecordExport');
+      await downloadSessionRecord(committee, feedback);
+      setExporting('idle');
+    } catch (e) {
+      console.error('Record export failed:', e);
+      setExporting('failed');
     }
-
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `${committee.code}-scoreboard.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   const TH: React.CSSProperties = {
@@ -399,7 +349,13 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
                   {t('sb_awards_link')}
                 </button>
               )}
-              <button onClick={exportCsv} className="text-xs font-bold px-3 py-1.5 rounded-lg gv-lift" style={{ backgroundColor: NEU.gold, color: NEU.forest }}>{t('sb_export_csv')}</button>
+              <button onClick={() => { void exportRecord(); }} disabled={exporting === 'busy'}
+                title={exporting === 'failed' ? t('session_record_failed') : t('session_record_hint')}
+                className="text-xs font-bold px-3 py-1.5 rounded-lg gv-lift inline-flex items-center gap-1.5 disabled:opacity-70 disabled:cursor-wait"
+                style={{ backgroundColor: exporting === 'failed' ? '#F3D9D3' : NEU.gold, color: exporting === 'failed' ? '#8B2020' : NEU.forest }}>
+                <FileSpreadsheet size={13} strokeWidth={2.4} aria-hidden="true" />
+                {exporting === 'busy' ? t('session_record_busy') : exporting === 'failed' ? t('session_record_retry') : t('sb_export_record')}
+              </button>
               <button onClick={requestClose} className="inline-flex items-center justify-center w-9 h-9 rounded-full text-[#EDE7D8] hover:text-white hover:bg-[rgba(238,217,138,0.12)] text-lg leading-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]" aria-label={t('sb_close')}>✕</button>
             </div>
           </div>

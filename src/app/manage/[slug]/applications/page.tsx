@@ -11,6 +11,7 @@ import {
 import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
+import { fetchAllRows, chunk } from '@/lib/fetchAllRows';
 import { useAuth } from '@/components/AuthProvider';
 import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail, heldUnresolvedMessage } from '@/lib/emailEvents';
 import { queueAdHocEmail } from '@/lib/adHocEmail';
@@ -1953,8 +1954,10 @@ export default function ApplicationsPage() {
     // now owes (same sync-before-read pattern as financials/invoices and
     // useInvoiceTotals).
     await supabase.rpc('sync_conference_invoices', { p_conference_id: conference.id });
+    // Paged (fetchAllRows): a single request stops at 1,000 rows without a
+    // word, so a big conference silently lost its oldest applications.
     const [appRes, cfgRes, gatingRes] = await Promise.all([
-      supabase
+      fetchAllRows((from, to) => supabase
         .from('applications')
         .select(`
           id, user_id, invited_email, invited_name, role, status, is_head_delegate, experience_level,
@@ -1972,7 +1975,9 @@ export default function ApplicationsPage() {
           )
         `)
         .eq('conference_id', conference.id)
-        .order('submitted_at', { ascending: false }),
+        .order('submitted_at', { ascending: false, nullsFirst: true })
+        .order('id', { ascending: true })
+        .range(from, to)),
       supabase
         .from('application_role_configs')
         .select('role, payment_timing, custom_questions, fee_amount, fee_currency, fee_phases, allow_resubmission')
@@ -1983,12 +1988,14 @@ export default function ApplicationsPage() {
       // invoice by sync_participant_invoices. The old role-level gate
       // (application_role_configs.fee_gates_acceptance) was removed from
       // Settings > Applications and dropped from the database.
-      supabase
+      fetchAllRows((from, to) => supabase
         .from('invoices')
         .select('application_id, society_id')
         .eq('conference_id', conference.id)
         .eq('gates_acceptance', true)
-        .not('status', 'in', '(settled,waived,void)'),
+        .not('status', 'in', '(settled,waived,void)')
+        .order('id', { ascending: true })
+        .range(from, to)),
     ]);
 
     if (seq !== loadSeq.current) return; // stale response, a newer load superseded this one
@@ -2015,11 +2022,15 @@ export default function ApplicationsPage() {
     // Batched MUN-history counts, ONE query for every visible applicant.
     const userIds = Array.from(new Set(apps.map(a => a.user_id).filter((id): id is string => !!id)));
     if (userIds.length > 0) {
-      const { data: cvRows } = await supabase
+      // Chunked (URL length) and paged (1,000-row cap) for big conferences.
+      const cvPages = await Promise.all(chunk(userIds, 150).map(ids => fetchAllRows((from, to) => supabase
         .from('mun_cv_entries')
-        .select('user_id')
-        .in('user_id', userIds);
+        .select('id, user_id')
+        .in('user_id', ids)
+        .order('id', { ascending: true })
+        .range(from, to))));
       if (seq !== loadSeq.current) return;
+      const cvRows = cvPages.flatMap(p => p.data);
       const counts: Record<string, number> = {};
       for (const row of (cvRows ?? []) as { user_id: string }[]) {
         counts[row.user_id] = (counts[row.user_id] ?? 0) + 1;

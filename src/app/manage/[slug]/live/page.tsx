@@ -248,7 +248,7 @@ export default function LiveStatusPage() {
           // Chair feedback: ratings AND private notes. In practice almost every
           // row is a factor rating with no prose, so factor_scores is as much
           // the payload as `content` is.
-          anonSupabase.from('feedback')
+          authed.from('feedback')
             .select('committee_id, country, chair_name, content, created_at, level, factor_scores, speech_context, speech_seconds, speech_topic, spoken_at')
             .in('committee_id', sessionIds)
             .order('created_at', { ascending: true }),

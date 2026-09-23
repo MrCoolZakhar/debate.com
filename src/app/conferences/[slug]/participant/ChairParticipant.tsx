@@ -220,7 +220,7 @@ function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDis
     const [{ data: allocData }, { data: paperData }] = await Promise.all([
       supabase
         .from('conference_allocations')
-        .select('id, country_code, country_name, user_id, profiles (display_name), applications:application_id (invited_name)')
+        .select('id, country_code, country_name, user_id, profiles:profile_cards (display_name), applications:application_id (invited_name)')
         .eq('conference_committee_id', committee.id),
       supabase
         .from('position_papers')

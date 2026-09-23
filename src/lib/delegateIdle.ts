@@ -18,6 +18,17 @@
 // expired, and the page's 30 s re-verify stops once isIdle() is true, so an idle device
 // that never runs this code (closed lid, killed tab) still frees the seat.
 //
+// NEVER IDLE ON THE FLOOR OR IN A QUEUE (23 Sep 2026). A delegation that holds the floor,
+// is on the GSL or is in the caucus queue is never signed out, whatever the clock says: the
+// caller passes `isProtected` (read at check time through a ref, so no re-render) and a
+// protected delegate is treated as active on every 5 s check.
+//
+// A VISIBLE, FOCUSED PAGE IS ACTIVITY while the room is live (the hook is only enabled
+// then): a phone lying face up on the desk, open on the board, is someone following the
+// debate. Every check that finds the tab visible and focused refreshes the clock, at most
+// once per VISIBLE_REFRESH_MS, so it costs no state update. Order still matters: a device
+// that woke PAST the deadline logs out first (unless protected), so a wake is never a rescue.
+//
 // Nothing here writes committee state (AGENTS.md rules 3 and 4). The hook only changes
 // React state when the warning opens or closes; the per-second countdown lives in
 // DelegateIdleWarning.
@@ -25,6 +36,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 export const DELEGATE_IDLE_LOGOUT_MS = 60 * 60 * 1000;
 export const DELEGATE_IDLE_WARNING_MS = 2 * 60 * 1000;
+/** How often a visible + focused page counts as activity (no per-second work). */
+const VISIBLE_REFRESH_MS = 3 * 60 * 1000;
+
+function isGuarded(fn: (() => boolean) | undefined): boolean {
+  try { return !!fn?.(); } catch { return false; }
+}
+
+function pageVisibleAndFocused(): boolean {
+  try {
+    return typeof document !== 'undefined' && document.visibilityState === 'visible' && document.hasFocus();
+  } catch { return false; }
+}
 
 const ACTIVITY_EVENT = 'gavelling:delegate-activity';
 
@@ -48,23 +71,38 @@ export interface DelegateIdle {
   check: () => void;
 }
 
-export function useDelegateIdleLogout(enabled: boolean, onLogout: () => void): DelegateIdle {
+export function useDelegateIdleLogout(
+  enabled: boolean,
+  onLogout: () => void,
+  /** True while the delegation holds the floor or is on the GSL / caucus queue: never idle. */
+  isProtected?: () => boolean,
+): DelegateIdle {
   // 0 until the hook is enabled, which stamps the real start time (render must stay pure).
   const lastActivity = useRef(0);
   const fired = useRef(false);
   const [warning, setWarning] = useState(false);
   const onLogoutRef = useRef(onLogout);
   useEffect(() => { onLogoutRef.current = onLogout; }, [onLogout]);
+  const protectedRef = useRef(isProtected);
+  useEffect(() => { protectedRef.current = isProtected; }, [isProtected]);
 
   const isIdle = useCallback(
-    () => lastActivity.current > 0 && Date.now() - lastActivity.current >= DELEGATE_IDLE_LOGOUT_MS,
+    () => lastActivity.current > 0 && !isGuarded(protectedRef.current) && Date.now() - lastActivity.current >= DELEGATE_IDLE_LOGOUT_MS,
     [],
   );
   const deadline = useCallback(() => lastActivity.current + DELEGATE_IDLE_LOGOUT_MS, []);
 
   const check = useCallback(() => {
     if (fired.current || lastActivity.current === 0) return;
-    const idleFor = Date.now() - lastActivity.current;
+    const now = Date.now();
+    // On the floor or in a queue: always active.
+    if (isGuarded(protectedRef.current)) { lastActivity.current = now; setWarning((w) => (w ? false : w)); return; }
+    let idleFor = now - lastActivity.current;
+    // A visible, focused page is someone following the room, but only BEFORE the deadline.
+    if (idleFor < DELEGATE_IDLE_LOGOUT_MS && idleFor >= VISIBLE_REFRESH_MS && pageVisibleAndFocused()) {
+      lastActivity.current = now;
+      idleFor = 0;
+    }
     if (idleFor >= DELEGATE_IDLE_LOGOUT_MS) {
       fired.current = true;
       setWarning(false);
@@ -76,7 +114,8 @@ export function useDelegateIdleLogout(enabled: boolean, onLogout: () => void): D
 
   const activity = useCallback(() => {
     if (fired.current || lastActivity.current === 0) return;
-    // Past the deadline already (a sleeping device that just woke): log out, do not reset.
+    // Past the deadline already (a sleeping device that just woke): log out, do not reset
+    // (check() still spares a delegation on the floor or in a queue).
     if (Date.now() - lastActivity.current >= DELEGATE_IDLE_LOGOUT_MS) { check(); return; }
     lastActivity.current = Date.now();
     setWarning((w) => (w ? false : w));

@@ -296,6 +296,7 @@ function SendMenu({
 export function AllocationEmailBar({
   autoSend, onToggleAuto, togglePending, targets, busy, onSend,
   templateOff = false, onTurnOnTemplate, turningOnTemplate = false,
+  openWithUnsent = false, onOpenedWithUnsent,
 }: {
   autoSend: boolean;
   onToggleAuto: (next: boolean) => void;
@@ -310,10 +311,23 @@ export function AllocationEmailBar({
   /** Re-enables the template. Queues nothing for delegates already seated. */
   onTurnOnTemplate?: () => void;
   turningOnTemplate?: boolean;
+  /** Arrived from the dashboard's "never told their seat" row: open the
+   *  custom picker with everyone not yet emailed already ticked. Nothing is
+   *  sent until the organiser presses Send in the picker. */
+  openWithUnsent?: boolean;
+  onOpenedWithUnsent?: () => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [initialPicked, setInitialPicked] = useState<string[]>([]);
   const unsent = targets.filter(t => !t.sent);
   const sentCount = targets.length - unsent.length;
+
+  useEffect(() => {
+    if (!openWithUnsent || targets.length === 0) return;
+    setInitialPicked(targets.filter(t => !t.sent).map(t => t.applicationId));
+    setPickerOpen(true);
+    onOpenedWithUnsent?.();
+  }, [openWithUnsent, targets, onOpenedWithUnsent]);
 
   return (
     <>
@@ -427,7 +441,7 @@ export function AllocationEmailBar({
             emphasise={!autoSend}
             onAllNew={() => onSend(unsent.map(t => t.applicationId), 'new')}
             onEveryone={() => onSend(targets.map(t => t.applicationId), 'all')}
-            onCustom={() => setPickerOpen(true)}
+            onCustom={() => { setInitialPicked([]); setPickerOpen(true); }}
           />
         </div>
       </div>
@@ -435,6 +449,7 @@ export function AllocationEmailBar({
       {pickerOpen && (
         <AllocationPicker
           targets={targets}
+          initialPicked={initialPicked}
           busy={busy}
           onClose={() => setPickerOpen(false)}
           onSend={ids => { setPickerOpen(false); onSend(ids, 'custom'); }}
@@ -447,15 +462,16 @@ export function AllocationEmailBar({
 // ── Custom picker ────────────────────────────────────────────────────────────
 
 function AllocationPicker({
-  targets, busy, onClose, onSend,
+  targets, initialPicked = [], busy, onClose, onSend,
 }: {
   targets: AllocationTarget[];
+  initialPicked?: string[];
   busy: boolean;
   onClose: () => void;
   onSend: (applicationIds: string[]) => void;
 }) {
   const [search, setSearch] = useState('');
-  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(initialPicked));
 
   // Not yet emailed first — that is the wave an organiser is usually building —
   // then alphabetical inside each group.

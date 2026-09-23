@@ -61,6 +61,8 @@ import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { invoiceDueCents, isInvoicePayable, type InvoiceStatus } from '@/lib/invoices';
 import { CircleFlag } from '@/components/CircleFlag';
 import { deriveCommitteeAcronym } from '@/lib/presetNames';
+import { useUnlimitedStatus, isUnlimited } from '@/lib/unlimitedStatus';
+import { useClaimImportedOnLoad } from '@/lib/importClaim';
 
 /** One row in the dropdown's "YOUR CONFERENCES" section. */
 interface NavConference {
@@ -137,6 +139,12 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
   const confsFetched = useRef(false);
 
   const { user, profile, session, signOut, loading: authLoading } = useAuth();
+  // Unlimited is read from subscriptions (my_unlimited_status), never the dead
+  // profiles.unlimited_status column. null = not known yet.
+  const unlimitedStatus = useUnlimitedStatus();
+  // Imported registrations for this account's verified address attach on
+  // the first page of a visit (src/lib/importClaim.ts).
+  useClaimImportedOnLoad(authLoading ? null : user?.id ?? null);
 
   // Needs your attention (src/lib/myActivity.ts). Read once per page load by the
   // avatar badge; re-read here when the menu opens on an answer over a minute old.
@@ -548,7 +556,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
               );
             })}
 
-            {profile?.unlimited_status === 'none' ? (
+            {profile && unlimitedStatus !== null && !isUnlimited(unlimitedStatus) ? (
               <Link
                 href="/account/unlimited"
                 onClick={() => setOpen(false)}
@@ -567,7 +575,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                 <span className="flex-1">UPGRADE TO UNLIMITED</span>
                 <span style={{ color: '#B6871F' }}>✦</span>
               </Link>
-            ) : profile ? (
+            ) : profile && isUnlimited(unlimitedStatus) ? (
               <Link
                 href="/account/unlimited"
                 onClick={() => setOpen(false)}

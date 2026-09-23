@@ -59,7 +59,7 @@ import {
 } from '@/lib/delegationCreate';
 import { validateBasics } from '@/lib/pendingBasics';
 import { type CustomAnswers, normalizeBlocks, questionsOf, validateAnswers, answerIsEmpty, displayAnswer } from '@/lib/customQuestions';
-import { readFirstTouch } from '@/lib/trafficSource';
+import { readFirstTouch, ensureFirstTouch } from '@/lib/trafficSource';
 import {
   Gavel, Users, Sprout,
   GraduationCap, Trophy, Crown, Sparkles,
@@ -868,6 +868,8 @@ function UpgradePhotoCard({
 
 function ConferenceApplyInner() {
   const { slug } = useParams() as { slug: string };
+  // Arrived straight on the apply link: keep where they came from (category only).
+  useEffect(() => { ensureFirstTouch(slug); }, [slug]);
   const searchParams = useSearchParams();
   const role = searchParams.get('role') ?? 'delegate';
   // Delegation-invite token (?role=delegate&delegationInvite=<token>). We only
@@ -2843,7 +2845,7 @@ function ConferenceApplyInner() {
               .select('id', { count: 'exact', head: true })
               .eq('society_id', societyId)
               .in('role', ['delegate', 'head-delegate'])
-              .in('status', ['accepted', 'assigned'])
+              .in('status', ['accepted', 'assigned', 'checked-in'])
               .eq('attending', true)
               .eq('payment_status', 'paid'),
             supabase.from('societies').select('spots_purchased').eq('id', societyId).single(),
@@ -2857,7 +2859,7 @@ function ConferenceApplyInner() {
               .select('id', { count: 'exact', head: true })
               .eq('society_id', societyId)
               .eq('role', 'faculty-advisor')
-              .in('status', ['accepted', 'assigned'])
+              .in('status', ['accepted', 'assigned', 'checked-in'])
               .eq('attending', true)
               .eq('payment_status', 'paid'),
             supabase.from('societies').select('advisor_spots_purchased').eq('id', societyId).single(),

@@ -1,5 +1,6 @@
 'use client';
 
+import { leaveVotingPhaseKeepalive, markVotingTabAlive } from '@/lib/votingPhaseUnload';
 import { openAuth } from '@/lib/authModal';
 import { use, useEffect, useRef, useState } from 'react';
 import FitToScreen from '@/components/FitToScreen';
@@ -857,6 +858,50 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   // Keyed on identity and on the room opening or closing, not on every refetched committee object.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessGranted, committee?.id, committee?.endedAt, isViewOnly, roomClosed]);
+
+  // ── Never leave the room stuck in `voting` (src/lib/votingPhaseUnload.ts) ────
+  // While this page is open as the Moderator it stamps a per-device "voting tab alive"
+  // marker (so the chair page in another tab does not release the phase under it), and
+  // when the page goes away with NO vote open it hands the room back to its remembered
+  // phase with a keepalive fetch. A page restored from the back/forward cache re-enters
+  // voting through the effect above.
+  const leaveCtxRef = useRef({ id: '', code: '', suffix: undefined as string | undefined, mod: false, open: false, ended: false });
+  leaveCtxRef.current = {
+    id: committee?.id ?? '', code: committee?.code ?? '', suffix: committee?.dbChairJoinSuffix ?? undefined,
+    mod: accessGranted && !!committee && !isViewOnly, open: anyOpenVote, ended: !!committee?.endedAt,
+  };
+  const [reenterTick, setReenterTick] = useState(0);
+  useEffect(() => {
+    if (!reenterTick) return;
+    enteredVotingRef.current = false;
+    const c = leaveCtxRef.current;
+    if (!c.mod || c.ended || !c.id) return;
+    enteredVotingRef.current = true;
+    void setVotingPhase(c.id, true, c.code, c.suffix).then((r) => {
+      if (!r.ok) enteredVotingRef.current = false;
+    });
+  }, [reenterTick]);
+  useEffect(() => {
+    const code = committee?.code;
+    if (!code) return;
+    const stamp = () => { if (leaveCtxRef.current.mod) markVotingTabAlive(code, true); };
+    stamp();
+    const id = setInterval(stamp, 20_000);
+    const onHide = () => {
+      const c = leaveCtxRef.current;
+      markVotingTabAlive(code, false);
+      if (c.mod && !c.open && !c.ended && c.id) leaveVotingPhaseKeepalive(c.id, c.code, c.suffix);
+    };
+    const onShow = (e: PageTransitionEvent) => { if (e.persisted) { stamp(); setReenterTick((n) => n + 1); } };
+    window.addEventListener('pagehide', onHide);
+    window.addEventListener('pageshow', onShow);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('pagehide', onHide);
+      window.removeEventListener('pageshow', onShow);
+      markVotingTabAlive(code, false);
+    };
+  }, [committee?.code]);
 
   // "Vote" goes straight to the roll call when there is exactly ONE paper to vote on (owner,
   // 17 Sep 2026): a draft resolution that is introduced and has no stored vote state at all

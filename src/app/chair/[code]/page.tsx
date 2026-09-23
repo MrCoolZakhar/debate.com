@@ -15,9 +15,10 @@ import DraggablePopover from '@/components/DraggablePopover';
 import SpeakerStrip, { type StripHeader } from '@/components/SpeakerStrip';
 import CommenterFloor from '@/components/CommenterFloor';
 import SessionCodePresenter from '@/components/SessionCodePresenter';
+import { RollCallWithJoin } from '@/components/RollCallJoinPanel';
 import FloorEmblemBackdrop from '@/components/FloorEmblemBackdrop';
 import ConferencePromoDialog from '@/components/ConferencePromoDialog';
-import { Ban, ClockPlus, ListOrdered, Maximize2, MessageCircle, MessageSquareReply, Settings, Trophy, Users } from 'lucide-react';
+import { Ban, ClockPlus, FileSpreadsheet, ListOrdered, Maximize2, MessageCircle, MessageSquareReply, Settings, Trophy, Users } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { CaucusState, Committee, Delegate, DelegateStatus } from '@/lib/types';
@@ -57,6 +58,9 @@ import ConnectionPill from '@/components/ConnectionPill';
 import TutorialOverlay from '@/components/TutorialOverlay';
 import { useAgendaPicker } from '@/components/AgendaPicker';
 import { useSettingsSync } from '@/lib/useSettingsSync';
+import { loadVoteStates, isVoteOpen, setVotingPhase } from '@/lib/voteState';
+import { roomKeptUntil, formatKeptUntil } from '@/lib/roomRetention';
+import { votingTabAliveRecently } from '@/lib/votingPhaseUnload';
 import { VotingInProgressCard } from '@/components/VotingInProgressCard';
 import { useGavelCue, type GavelCue } from '@/lib/useGavelCue';
 import NotificationStack, { type NotificationExtra } from '@/components/notifications/NotificationStack';
@@ -1516,17 +1520,64 @@ function ChairAwardsCta({ code, label, className, style }: {
   );
 }
 
+// ── Download the record (End View; 23 Sep 2026) ───────────────────────────────
+// The whole session as one Excel workbook, built on this device from the committee in
+// memory (src/lib/sessionRecordExport.ts). Loaded lazily: the workbook library is only
+// fetched when a chair asks for the file.
+function DownloadRecordButton({ committee }: { committee: Committee }) {
+  const t = useT();
+  const [state, setState] = useState<'idle' | 'busy' | 'failed'>('idle');
+  const run = async () => {
+    if (state === 'busy') return;
+    setState('busy');
+    try {
+      const { downloadSessionRecord } = await import('@/lib/sessionRecordExport');
+      await downloadSessionRecord(committee);
+      setState('idle');
+    } catch (e) {
+      console.error('Record export failed:', e);
+      setState('failed');
+    }
+  };
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <button
+        type="button"
+        onClick={() => { void run(); }}
+        disabled={state === 'busy'}
+        className="inline-flex items-center gap-3 px-7 py-4 rounded-2xl font-black text-lg focus:outline-none gv-lift-dark disabled:opacity-70 disabled:cursor-wait"
+        style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}
+      >
+        <FileSpreadsheet size={24} strokeWidth={2.2} aria-hidden="true" />
+        {state === 'busy' ? t('session_record_busy') : t('session_record_download')}
+      </button>
+      <p className="text-sm" style={{ color: state === 'failed' ? '#8B2020' : '#6A5A4A' }} role={state === 'failed' ? 'alert' : undefined}>
+        {state === 'failed' ? t('session_record_failed') : t('session_record_hint')}
+      </p>
+    </div>
+  );
+}
+
 function SessionEndedContent({ committee, hoursRemaining }: { committee: Committee; hoursRemaining: number | null }) {
   const { language } = useLanguage();
   const t = useT();
   const isConferenceSession = committee.sessionOrigin === 'conference';
+  const keptUntil = roomKeptUntil(committee);
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
       <h1 className="text-5xl font-black mb-4" style={{ color: '#1B3828' }}>{t('session_ended_title')}</h1>
       <p className="text-xl mb-2" style={{ color: '#1C1410' }}>{getCommitteeDisplayName(committee.name, language)}</p>
       <p className="text-lg mb-8" style={{ color: '#9A8A78' }}>{committee.topic}</p>
-      {hoursRemaining !== null && (
-        <p className="text-base" style={{ color: '#9A8A78' }}>{t('session_hours_until_delete', { n: hoursRemaining ?? 0, s: hoursRemaining !== 1 ? 's' : '' })}</p>
+      {/* The record, before the room is deleted (src/lib/sessionRecordExport.ts). */}
+      <DownloadRecordButton committee={committee} />
+      {/* A conference room is never deleted; a standalone one goes at expires_at. */}
+      {!isConferenceSession && keptUntil && (
+        <p className="text-base mt-5" style={{ color: '#6A5A4A' }}>
+          {t('session_kept_until', { when: formatKeptUntil(keptUntil, language) })}
+          {hoursRemaining !== null && (
+            <span style={{ color: '#9A8A78' }}> · {t('session_hours_until_delete', { n: hoursRemaining ?? 0, s: hoursRemaining !== 1 ? 's' : '' })}</span>
+          )}
+        </p>
       )}
       {/* Conference-linked sessions only — see ChairAwardsCta. Standalone sessions get nothing here. */}
       {isConferenceSession && (
@@ -3201,6 +3252,31 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       unmodLoadingFiredRef.current = false;
     }
   }, [committee?.phase, committee?.caucus?.proposedBy, committee?.caucus?.totalTime]);
+
+  // ── A room stuck in `voting` with no ballot (src/lib/votingPhaseUnload.ts) ────
+  // /voting/[code] puts the room into `voting`; a Moderator who closed that tab without
+  // "Back to Session" left every delegate phone on "Vote in progress" for good. On load the
+  // Moderator's device checks, once: row says `voting`, no document has an open vote_state,
+  // and no voting tab on THIS device is alive, then the room goes back to its remembered
+  // phase through the same RPC ("Back to Session"). The new phase arrives by realtime.
+  const votingReleaseRef = useRef(false);
+  useEffect(() => {
+    if (votingReleaseRef.current || !committee || accessState !== 'allowed') return;
+    if (committee.phase !== 'voting' || committee.endedAt || committee.suspendedAt) return;
+    if (deviceLock.kicked || !gavelRoleOf(committee).isModerator) return;
+    if (votingTabAliveRecently(committee.code)) return;
+    votingReleaseRef.current = true;
+    const { id, code: c } = committee;
+    const suffix = committee.dbChairJoinSuffix ?? undefined;
+    void loadVoteStates(id).then((states) => {
+      if (!states) { votingReleaseRef.current = false; return; }   // unreadable: try on a later render
+      if (Object.values(states).some(isVoteOpen)) return;
+      void setVotingPhase(id, false, c, suffix).then((r) => {
+        if (r.ok && r.phase) { const phase = r.phase; updateLocal(setCommittee, (prev) => (prev.id === id && prev.phase === 'voting' ? { ...prev, phase } : prev)); }
+      });
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [committee?.id, committee?.phase, accessState, committee?.dbHeadChair, committee?.dbHeadChairDevice, deviceLock.kicked]);
 
   useEffect(() => {
     if (!committee?.expiresAt) { setHoursRemaining(null); return; }
@@ -5047,12 +5123,19 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             // or a chair holding the latch under the 'Chair' fallback sees a disabled button
             // and cannot finish their own resume.
             // Mirrors foreignResumeLatch: same name on another device counts as another chair.
+            const suspendKeptUntil = roomKeptUntil(committee, serverNow());
             const anotherChairResuming = committee.resumingChair && !(committee.resumingChair === (myChairName || committee.chairNames[0] || 'Chair')
               && resumeClaimIsMine(committee.code, committee.suspendedAt));
             return (
               <>
                 <h1 className="text-6xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('session_suspended_title')}</h1>
-                <p className="text-xl mb-12" style={{ color: '#6A5A4A' }}>{t('session_suspended_desc')}</p>
+                <p className={`text-xl ${suspendKeptUntil ? 'mb-3' : 'mb-12'}`} style={{ color: '#6A5A4A' }}>{t('session_suspended_desc')}</p>
+                {/* A standalone room nobody resumes is deleted (src/lib/roomRetention.ts). */}
+                {suspendKeptUntil && (
+                  <p className="text-base mb-12 max-w-lg" style={{ color: '#9A8A78' }}>
+                    {t('session_suspended_kept_until', { when: formatKeptUntil(suspendKeptUntil, language) })}
+                  </p>
+                )}
                 {anotherChairResuming ? (
                   <>
                     <button disabled className="px-12 py-5 rounded-2xl cursor-not-allowed font-black text-xl gv-lift-dark" style={{ backgroundColor: '#DDD4C0', color: '#9A8A78' }}>
@@ -5112,11 +5195,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           </ChatDialog>
         )}
         {!showChat && committee.phase === 'pre-session' && (
-          <div className="flex-1 flex items-center justify-center px-6 py-5 min-h-0">
+          // "Will delegates join on their phones?" sits on the LEFT of the roll call (the
+          // compact strip above it when there is no room), with the session code and a QR
+          // (src/components/RollCallJoinPanel.tsx). Pre-session only, so Begin Session removes it.
+          <RollCallWithJoin code={committee.code} onPresent={setCodePresenterOrigin}>
             {/* The full-screen roll call: wide and tall enough for projector-sized rows
                 (RollCallPanel isRollCallPhase). max-height is 100% of this box, never vh:
                 FitToScreen scales the page, so vh would overshoot the scaled layout. */}
-            <div className="w-full max-w-2xl rounded-3xl overflow-hidden relative" style={{ maxHeight: '100%', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#1B3828', border: '1.5px solid #3D7A52', boxShadow: '0 32px 80px rgba(27,56,40,0.40)' }}>
+            <div className="w-full max-w-2xl min-w-0 rounded-3xl overflow-hidden relative" style={{ maxHeight: '100%', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#1B3828', border: '1.5px solid #3D7A52', boxShadow: '0 32px 80px rgba(27,56,40,0.40)' }}>
               <div className="pointer-events-none absolute inset-0 z-[1]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'overlay', opacity: 0.07 }} />
               <div className="relative z-[2] shrink-0">{identityBadge}</div>
               <div className="flex-1 min-h-0">
@@ -5133,7 +5219,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 isViewOnly={isViewOnly} onCommenterAttempt={isCommenter ? notifyCommenter : undefined} />
               </div>
             </div>
-          </div>
+          </RollCallWithJoin>
         )}
         {committee.phase !== 'pre-session' && (
           <>

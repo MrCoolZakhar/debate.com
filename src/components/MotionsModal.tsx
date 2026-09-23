@@ -1,5 +1,6 @@
 'use client';
 
+import { roomKeptUntil, formatKeptUntil } from '@/lib/roomRetention';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Portal from '@/components/Portal';
 import GrowDialog from '@/components/GrowDialog';
@@ -1496,7 +1497,17 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         <p className="text-xs font-mono tracking-widest text-[#9A8A78] mb-6">
           {(typeMeta[specialVoteMotion.type]?.label ?? specialVoteMotion.type).toUpperCase()} · {specialVoteMotion.proposedBy === CHAIR_KEY ? chairDisplayName(language) : getCountryDisplayName(specialVoteMotion.proposedBy, language)}
         </p>
-        <h1 className="text-4xl font-black mb-14 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('motions_does_pass')}</h1>
+        <h1 className={`text-4xl font-black tracking-wide ${isSuspend ? 'mb-4' : 'mb-14'}`} style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('motions_does_pass')}</h1>
+        {/* How long a suspended room is kept (src/lib/roomRetention.ts), said BEFORE the
+            chair suspends: a standalone room with no resume is deleted after that. */}
+        {isSuspend && (() => {
+          const until = roomKeptUntil(committee, serverNow());
+          return until ? (
+            <p className="text-base mb-12 max-w-lg" style={{ color: '#6A5A4A' }}>
+              {t('motions_suspend_kept_until', { when: formatKeptUntil(until, language) })}
+            </p>
+          ) : <div className="mb-10" />;
+        })()}
         <div className="flex gap-8">
           <button
             disabled={specialBlocked}

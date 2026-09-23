@@ -130,3 +130,38 @@ export function readFirstTouch(slug: string): TrafficSource | null {
     return null;
   }
 }
+
+/** True when this page was reached by an in-app (client-side) navigation, in
+ *  which case document.referrer names the page the SITE was entered from. */
+function reachedInApp(): boolean {
+  try {
+    const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+    if (!nav?.name) return false;
+    return new URL(nav.name).pathname !== window.location.pathname;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The apply page's own first touch. A visitor who lands on /conferences/<slug>/apply
+ * straight from a link (an organiser's Instagram post, an email) never passed
+ * the conference page, so ConferenceViewBeacon never stored a first touch and
+ * the application was filed "Not tracked". When nothing is stored yet, this
+ * classifies the referrer and utm_* params exactly the way the beacon does and
+ * keeps the CATEGORY only (same localStorage key, same 90 days). It counts no
+ * view and sends nothing anywhere. Browser only; a no-op on the server.
+ */
+export function ensureFirstTouch(slug: string): void {
+  if (typeof window === 'undefined' || !slug) return;
+  if (readFirstTouch(slug)) return;
+  try {
+    const { source } = classifyTraffic({
+      referrer: document.referrer,
+      search: window.location.search,
+      ownOrigin: window.location.origin,
+      internalNav: reachedInApp(),
+    });
+    rememberFirstTouch(slug, source);
+  } catch { /* best effort */ }
+}

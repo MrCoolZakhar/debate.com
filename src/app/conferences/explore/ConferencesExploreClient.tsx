@@ -23,6 +23,7 @@ import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { ConferenceCard } from '../ConferenceCard';
 import VerifiedCheck from '@/components/VerifiedCheck';
 import { LogoDisc } from '@/components/LogoDisc';
+import { isListedConference } from '@/lib/publicConferences';
 
 // ── Continent maps ─────────────────────────────────────────────────────────────
 
@@ -839,10 +840,11 @@ export default function ConferencesExploreClient() {
       setLoading(true);
       const { data } = await supabase
         .from('conferences')
-        .select('id, slug, full_name, acronym, country, city, start_date, end_date, expected_delegates, fee_amount, fee_currency, format, student_level, logo_url, banner_url, is_public, is_verified, organizer_id')
+        .select('id, slug, full_name, acronym, country, city, start_date, end_date, expected_delegates, fee_amount, fee_currency, format, student_level, logo_url, banner_url, is_public, is_verified, organizer_id, is_demo')
         .eq('is_public', true)
         .order('start_date', { ascending: true });
-      const confs = (data as Conference[]) ?? [];
+      // Test and demo conferences are never listed (src/lib/publicConferences.ts).
+      const confs = ((data as (Conference & { is_demo?: boolean | null })[]) ?? []).filter(isListedConference);
 
       // Single source of truth for the price shown on cards:
       // displayDelegatePrice (src/lib/publicFees.ts). TBD until delegate

@@ -42,8 +42,8 @@ Design consequences: mobile-first on every delegate and applicant surface; the c
 | Mechanism | Where |
 |---|---|
 | **Credits**: 1 credit = 1 application (delegate, head-delegate, faculty-advisor, observer; chairs exempt). Bought via `create-credit-checkout`; refunded on rejection. Welcome credit + one-time modal on signup (`CreditsWelcomeGate`). | `src/lib/payments.ts`, `src/hooks/useCredits.ts`, `ConferenceApplyClient.tsx` |
-| **Subscriptions**: Unlimited (unlimited credits, platform fee waived), Pro. Regional pricing A/B. | `src/app/account/unlimited/page.tsx`, `payments.ts` |
-| **Conference fees**: Stripe Connect; 5% platform fee (`PLATFORM_FEE_RATE`) + 3% + fixed processing pass-through; every amount recomputed server-side in the `create-checkout` edge function. Manual payments with proof review exist as a fallback. | `src/lib/finance.ts`, `manage/[slug]/financials/*` |
+| **Subscriptions**: Unlimited (unlimited credits), Pro. Regional pricing A/B. Whether someone is on Unlimited is `my_unlimited_status()` (a personal `unlimited_*` subscription, active or trialing, not past `current_period_end`), read client-side through `useUnlimitedStatus()` (`src/lib/unlimitedStatus.ts`). `profiles.unlimited_status` is DEAD: nothing ever wrote it (every profile read `none` while 129 subscriptions were live); never read it. | `src/app/account/unlimited/page.tsx`, `payments.ts` |
+| **Conference fees**: **there is NO platform fee** (owner, 23 Sep 2026; Stripe Connect is unavailable in many countries, so manual payment is a first-class path, not a fallback). Card payments are direct charges on the organiser's Stripe Connect account (or, for `platform_collects` conferences, the platform account) with no `application_fee_amount`; the participant pays exactly the invoice amount, recomputed server-side in the `create-checkout` edge function. `PLATFORM_FEE_RATE` / `PROCESSING_RATE` in `src/lib/finance.ts` are legacy: `computeCheckout` still computes a `serviceFee`, but no screen shows it and nothing charges it. Do not wire them back in. Manual payments with proof review sit beside Stripe. | `src/lib/finance.ts`, `manage/[slug]/financials/*` |
 | **Gavelling Points**: earned (welcome bonus, awards at paid conferences), stored in `profiles.points_balance` via the `points_ledger` trigger. Spending is not built. | `points_ledger`, `publish_conference_awards()` |
 
 **Money shown to anyone is the payments ledger, never `payment_status`** (19 Sep 2026). `conference_money_summary(conference, detail)` (`src/lib/conferenceMoney.ts`) is the one definition used by the dashboard money card, Financials and /admin: *received* = succeeded Stripe payments (money that came in through Gavelling), *offline* = succeeded manual payments (organiser mark-paid / approved proof), shown apart and never added, *outstanding* = open invoice balances of accepted participants. `payment_status = 'paid'` is an access flag: free registrations (chairs) are stamped paid on arrival and pledge-covered members are paid with no money of their own, so never multiply it by a fee. The daily report and `admin_platform_metrics` use the same split.
@@ -65,8 +65,46 @@ conference's last day. Refusals raise named `arc_timeline_*` constraints with se
 says what moved in one line, and shows a warning with a one-click fix for rows saved before the
 rule. Existing rows were not rewritten. The apply page and the conference page judge "open" by the
 database clock (`src/lib/applicationWindow.ts`) and show the closed / not-yet-open state before the
-form; a window refusal at submit is not a crash alert. There is no payment deadline or invoice due
-date anywhere in the schema.
+form; a window refusal at submit is not a crash alert. The only payment date in the schema is the
+optional `invoices.due_date` (23 Sep 2026): nothing sets it yet (no organiser UI), it enforces
+nothing, and it is only SHOWN (the Pay now card, `queue_payment_reminders()`).
+
+**Participant lifecycle jobs (23 Sep 2026).** All SECURITY DEFINER, all callable only by the
+service role / cron:
+- **Pay now.** `my_open_balances(p_conference)` (authenticated) returns what the caller owes
+  today per conference (open/partial invoices payable now: payable before acceptance or the
+  application accepted; own, or the delegation's as its head delegate / advisor), with the
+  earliest `due_date` and `payments_ready`. `PaymentsDueSection` on `/my-conferences` and
+  `PayNowCard` on the participant page (`participant/PayNowCard.tsx`) render it.
+- **`queue_payment_reminders(p_preview default TRUE, p_limit)`**: one email per payer per
+  conference, only for accepted participants, first no sooner than 3 days after acceptance, at
+  most one per invoice per 7 days (`payment_reminder_log`), respects `notify_email_payments` /
+  `notify_email_reminders`, the global opt-out, failed addresses, `conference_payments_ready()`,
+  and stands down for 7 days after the organiser's own `queue_payment_reminder_emails()`
+  (template `payment_available`). **NOT SCHEDULED.** Preview inserts nothing (90 payers across 9
+  conferences on 23 Sep 2026).
+- **`queue_claim_reminders(p_preview default TRUE, p_limit)`**: imported / invited applicants
+  with no account. Upcoming conference: "Your place is waiting" (Committee + Representing facts
+  when allocated), at most 3, a week apart. Finished conference: "We know, it's over", accepted
+  and beyond only, within a year, ONCE ever. Link `/invites/import/<claim_token>`; skips anyone
+  with an account, opted-out or failed addresses, and anyone emailed in the last 7 days
+  (`claim_reminder_log`). **NOT SCHEDULED.** Preview: 165 (69 upcoming, 96 past) on 23 Sep 2026.
+- **Imported applications attach by VERIFIED email only** (`auth.users.email_confirmed_at`, never
+  `profiles.email`): the profile-insert trigger, a trigger on `auth.users` when an address is
+  confirmed (`claim_imported_on_email_confirmed`), and `claim_my_imported_applications()` once per
+  browser session from `ProfileDropdown` (`src/lib/importClaim.ts`).
+- **`close_undecided_after_conference()`**, cron `close-undecided-after-conference` 02:20 UTC:
+  applications still `submitted` the day after a conference's last day (its timezone) become
+  `withdrawn` (the credit gate refunds the credit), recorded in `application_auto_closures`. No
+  email. First run closed 34 (16 credits refunded).
+- **`record_attended_cv_entries()`**, cron `record-attended-cv-entries` 02:40 UTC: after a
+  conference ends, one `mun_cv_entries` row with `source = 'gavelling_attended'` per seat holder
+  (allocation) and chair, unless the person already has an entry for it. Shown as "Gavelling
+  record" on `/account/cv` and `/cv/[id]`, never the blue seal (awards still upgrade it to
+  `gavelling_verified`). Deleting one leaves a tombstone (`cv_attended_dismissals`) so it never
+  comes back. Backfill wrote 177 across 23 conferences. `mun_cv_entries_guard_source` stops a
+  client from writing any source but `manual` (the owner RLS policy used to allow forging the
+  seal).
 
 **Stripe's own limits are the thing that breaks a big bill, and they live only in
 the edge function.** `create-checkout` (v18, 8 Sep 2026; not in git, read it with
@@ -101,7 +139,7 @@ long invoice list hit them in production:
 - What the alias does NOT fix: three `localStorage` namespaces keyed on the slug (`gavelling-first-touch:<slug>`, the guest apply draft, `gavelling-fin-currency-<slug>`) silently orphan on a rename, and `record_conference_page_view(p_slug, …)` drops a view posted by a tab that was open across the rename. Sent emails, QR codes, bookmarks and already-scraped share cards are all covered (the OG route follows the alias, so a preview cached in a WhatsApp thread keeps rendering).
 3. **The MUN CV as a credential**: every profile link resolves to `/cv/<name>-<hex>`; `ShareAchievementModal` fires after a new entry; `PublicCVSignupPrompt` converts the reader. **Awards are the first thing that writes a `gavelling_verified` entry**; before that every CV entry was self-reported, which is why the awards pipeline matters commercially.
 4. **Job board** for chairs and secretariat, cross-conference.
-5. **Ambassadors** (`/about` form, platform fee waived) and **delegation invite links**.
+5. **Ambassadors** (`/about` form) and **delegation invite links**.
 6. **Draft-recovery emails** for abandoned applications.
 
 **Indexability rules (17 Sep 2026, after Search Console kept reopening the same issues).** `npm run check:indexability` (`scripts/check-indexability.mjs`, default https://gavelling.com, `-- --base=http://localhost:3000`) enforces them and must pass after any routing or SEO change:
@@ -346,6 +384,8 @@ src/components/ neu.tsx (design tokens), DatePicker, Portal, SiteNav, Scoreboard
 
 **Email:** nothing sends inline. Every email is an `email_outbox` row (rendered by a DB trigger, delivered by the `send-emails` edge function via Resend). Add an event to `EVENT_REGISTRY` in `emailEvents.ts` and TypeScript forces a category and a default body.
 
+**Cron-only edge functions carry a DB-held secret (24 Sep 2026).** The anon key is public, so an edge function that sends must not trust it. `public.internal_secrets` (RLS on, no policies, no grants to anon / authenticated / service_role) holds `cron_edge_secret`; `verify_internal_secret(name, value)` (SECURITY DEFINER, EXECUTE for service_role only) checks it. pg_cron puts it in an `x-cron-secret` header built by a subselect in the job command (`'x-cron-secret', (select value from public.internal_secrets where name = 'cron_edge_secret')`), and the function verifies it with its service-role client, failing closed (403). Applied to `send-setup-nudges` v14 (cron `organiser-setup-nudges`): the live run and `dryRun` need the header, and `previewTo` is honoured only for exactly petizakhar@gmail.com (it used to email any address: an open relay). Rotate by updating the row; nothing else changes. `send-emails` is deliberately NOT gated: the app kicks it from browsers after queueing (`triggerEmailDelivery`, 8 call sites), it reads no request body and only drains rows already queued. `preview-setup-nudges` is a 410 stub and `send-setup-nudges-v2` only ever writes to the owner.
+
 **Allocation emails have two switches, and the template's OFF wins (23 Sep 2026).**
 `conferences.allocation_email_auto` (Assignment → "Sending automatically" / "Manual
 release") decides WHEN `allocation_assigned` is raised; the `email_templates` row's
@@ -399,10 +439,53 @@ are never released. The one exemption is the burst alarm's own email to the
 owner, which must still get out to say what happened. See
 `scratchpad/cardv2/30_email_emergency_stop.sql`.
 
-`email_burst_check()` runs every 5 minutes: over 150 outbox rows in 10 minutes it
+`email_burst_check()` runs every 5 minutes: over 150 outbox rows DUE in 10 minutes
+(counted by `coalesce(send_after, created_at)`, between the window start and now, so
+a campaign queued for later counts when it comes due, not when it was written) it
 writes an `email_burst_alerts` row and emails the owner once, naming the subjects
 and conferences; over 600 it also calls `email_pause`, so a runaway stops itself
 and a human restarts it.
+
+### Never more than TWO emails to one address in any rolling hour (23 Sep 2026)
+
+Owner's hard rule, enforced in the database so every sender (SQL crons, edge
+functions, the app) obeys it. `email_outbox_rate_cap_t`, a BEFORE INSERT trigger
+(`email_outbox_rate_cap()`, SECURITY DEFINER, migration
+`email_outbox_two_per_hour_cap`), named so it fires AFTER
+`email_outbox_fill_body_html_t` and `email_outbox_hold_when_paused_t` (BEFORE
+triggers run in name order) and so sees the final recipient and status:
+- Counts the address's rows (`lower(recipient_email)`, status pending / held /
+  sending / sent) by their effective time `coalesce(send_after, created_at)`. If
+  this row would make three inside one hour, `send_after` is DEFERRED to 61 minutes
+  after the earlier of the conflicting pair (the extra minute is drain slack), and
+  re-checked until it fits. Never dropped. `send-emails` only claims rows whose
+  `send_after` is null or past, so a deferred row simply waits.
+- Deferral is always possible in practice; after 500 attempts the row is `held`
+  with an `error` saying so (and `email_resume()` would release it: check first).
+- Exempt: the owner's alarm (`petizakhar@gmail.com` with the `email_alert_prefix()`
+  subject), and rows that are not pending / held (suppressed). Auth codes do not go
+  through the outbox (Supabase Auth sends them).
+- A per-address advisory lock serialises concurrent inserts; index
+  `email_outbox_recipient_time_idx`. Existing rows were NOT rewritten.
+- A bug in the cap fails OPEN (a warning, the row is inserted unchanged), so it can
+  never stop email altogether.
+- What this means for a broadcast: an address already sent two emails in the last
+  hour gets the broadcast later, not never. Scheduled waves (e.g. KenyaMUN's session
+  codes at one instant) still land together as long as each address gets at most two.
+- Verified in a rolled-back transaction: five inserts to one test address gave
+  now, now, +61 min, +61 min, +122 min; three alarm rows to the owner all stayed
+  immediate.
+
+**Inbox "waiting on your reply" and the contact form (23 Sep 2026).** The manage
+rail's Communications badge counts threads WAITING ON A REPLY
+(`manage/[slug]/communications/waitingOnReply.ts`: open, not a swap notice, newest
+message from the participant); reading a thread no longer clears it, answering or
+closing it does. Inbox rows show "Waiting 3 h". A `/contact` message that names a
+conference (acronym as a whole word, full name or slug) the sender's ACCOUNT has
+applied to, and exactly one such conference, is also filed in that conference's
+inbox by the AFTER INSERT trigger `route_contact_submission_to_conference_t`
+(metadata `source: 'contact_form'`, first line says the address is unverified,
+the row shows "Contact form"). The team alert is unchanged. It inserts no email.
 
 ### AGENTS NEVER CALL A LIVE SENDING FUNCTION TO TEST ANYTHING
 

@@ -11,11 +11,11 @@
 //   1. Hero, headline left, "up next" card rail right         , DARK (theatre photo)
 //   2. "Find your seat" role carousel + circuit-in-numbers strip, CREAM
 //   3. "Opportunities beyond delegating" job board             , CREAM (no panel)
-//   4. "Happening near you" regional auto-scroll rail (IP geo) , IVORY
+//   4. "Conferences near you", three cards chosen by IP country , IVORY
 //   5. The production globe section, verbatim                  , FOREST
 //   6. Ivory footer (design rule)
 //
-// The hero rail + the regional rail reuse the SHARED ConferenceCard
+// The hero rail + the near-you row reuse the SHARED ConferenceCard
 // (../ConferenceCard), the same definition the explore directory renders;
 // the hero stack uses its photo-forward `heroCompact` tier (banner photo
 // fills the card) so three fit gracefully, pinned to the right screen edge.
@@ -30,9 +30,8 @@ import { ArrowRight, ArrowUpRight, ChevronLeft, ChevronRight, MapPin, Search } f
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { supabase } from '@/lib/supabase';
 import { UN_COUNTRIES } from '@/lib/countries';
-import { compareStartDate } from '@/lib/conferenceDates';
+import { recommendNearby } from '@/lib/nearbyConferences';
 import { ConferenceCard } from '../ConferenceCard';
 import { LogoDisc } from '@/components/LogoDisc';
 import {
@@ -50,7 +49,7 @@ const INK = '#1C1410';
 const INK_70 = '#4A4238';
 const INK_55 = '#6B5F52';
 
-interface JobStats {
+export interface JobStats {
   open: number;
   hiring: number;
   chairing: number;
@@ -82,7 +81,7 @@ const ROLE_SLIDES: RoleSlide[] = [
     image: '/roles/secretariat.webp',
     imageAlt: 'Secretariat staff coordinating a conference',
     primary: { label: 'See open roles', href: '/conferences/roles' },
-    secondary: { label: 'List your conference', href: '/conferences/new' },
+    secondary: { label: 'List your conference', href: '/organisers' },
   },
   {
     role: 'Chairs',
@@ -111,6 +110,7 @@ function countryNameFromCode(code: string | null | undefined): string | null {
 }
 
 interface GeoResult {
+  code: string | null;    // ISO alpha-2
   country: string | null; // full name
   city: string | null;
 }
@@ -147,12 +147,15 @@ const FEATURED_SLUGS = [
 export default function VariantStagefront({
   conferences,
   stats,
+  jobStats,
 }: {
   conferences: LabConference[];
   ratings: Record<string, RatingSummary>; // accepted for caller compatibility (season ledger removed)
   /** Platform-wide totals (all conferences, not just the published ones the
    *  cards are drawn from). Null until the RPC lands. */
   stats?: { total_conferences: number; published_conferences: number; countries: number } | null;
+  /** Open job-board figures, read on the server so the numbers are in the HTML. */
+  jobStats?: JobStats | null;
 }) {
   const router = useRouter();
   const headliner = useMemo(() => pickHeadliner(conferences), [conferences]);
@@ -224,93 +227,56 @@ export default function VariantStagefront({
   }, [conferences]);
 
   // ── Geolocation ────────────────────────────────────────────────────────────
-  // Fetch /api/geo (Vercel edge headers). If it yields nothing (local dev, or a
-  // visitor Vercel can't place), fall back to a keyless IP API. Never blocks render.
+  // /api/geo only: Vercel's IP-country header, first party. There is NO
+  // third-party fallback (a keyless IP API used to be called here, which the
+  // privacy policy does not allow): when Vercel cannot place the visitor (local
+  // dev, a VPN), the row simply keeps the soonest-first answer the server drew.
   const [geo, setGeo] = useState<GeoResult | null>(null);
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const res = await fetch('/api/geo');
-        if (res.ok) {
-          const data = await res.json();
-          const country = countryNameFromCode(data.countryCode) ?? (data.country ?? null);
-          if (!cancelled && (country || data.city)) {
-            setGeo({ country, city: data.city ?? null });
-            return;
-          }
-        }
-      } catch { /* fall through to the keyless lookup */ }
-
-      // Fallback: free, no-key IP geolocation.
-      try {
-        const res = await fetch('https://ipapi.co/json/');
-        if (res.ok) {
-          const data = await res.json();
-          const country = data.country_name ?? countryNameFromCode(data.country_code) ?? null;
-          if (!cancelled) setGeo({ country, city: data.city ?? null });
-        }
+        if (!res.ok) return;
+        const data = await res.json();
+        const code = typeof data.countryCode === 'string' && /^[A-Za-z]{2}$/.test(data.countryCode) ? data.countryCode.toUpperCase() : null;
+        const country = countryNameFromCode(code);
+        if (!cancelled && code) setGeo({ code, country, city: data.city ?? null });
       } catch { /* geolocation is best-effort, leave geo null */ }
     })();
     return () => { cancelled = true; };
   }, []);
 
-  // Regional conferences: those in the visitor's country first (upcoming only),
-  // else a graceful soonest-upcoming fallback.
-  const regional = useMemo(() => {
+  // "Conferences near you": always three, chosen by src/lib/nearbyConferences.ts
+  // (own country, then its neighbours, sub-region, continent, then anywhere;
+  // conferences taking applications first). Before geo answers, and for a
+  // crawler, this is the no-country answer, which the server rendered too, so
+  // hydration never disagrees.
+  const nearby = useMemo(() => {
     const upcoming = conferences.filter(c => !isConcluded(c));
-    if (geo?.country) {
-      const inCountry = upcoming.filter(
-        c => c.country.toLowerCase() === geo.country!.toLowerCase(),
-      );
-      if (inCountry.length > 0) {
-        return { list: inCountry.sort((a, b) => compareStartDate(a.start_date, b.start_date)), matched: true };
-      }
-    }
-    return {
-      list: upcoming.sort((a, b) => compareStartDate(a.start_date, b.start_date)),
-      matched: false,
-    };
+    return recommendNearby(upcoming, geo?.code ?? null, 3);
   }, [conferences, geo]);
 
-  const regionHeading = geo?.country ? `MUN in ${geo.country}` : 'Happening near you';
-  const regionSub = regional.matched
-    ? geo?.city
-      ? `Conferences around ${geo.city} and across ${geo!.country}.`
-      : `Conferences on the board in ${geo!.country} right now.`
-    : geo?.country
-      ? `None in ${geo.country} yet. Here's what's coming up across the circuit.`
-      : `Finding your region… here's what's coming up across the circuit.`;
+  const nearbySub = !geo?.country
+    ? 'Taking applications now, soonest first.'
+    : nearby.tier === 0
+      ? `Coming up in ${geo.country}.`
+      : `Nothing open in ${geo.country} right now. These are the nearest.`;
 
-  // Live job-board stats, one query, fetched dynamically (seed data changes
-  // under us). Feeds the forest stat ledger beside the job-board photo.
-  const [jobStats, setJobStats] = useState<JobStats | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data } = await supabase
-        .from('job_postings')
-        .select('id, category, conference_id')
-        .eq('is_open', true);
-      if (cancelled || !data) return;
-      const hiring = new Set(data.map(r => r.conference_id)).size;
-      const chairing = data.filter(r => String(r.category ?? '').toLowerCase().includes('chair')).length;
-      setJobStats({ open: data.length, hiring, chairing });
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  // The logo row: real public conferences with a logo, verified ones first,
+  // upcoming before past. Plain links, so they are in the server HTML.
+  const logoRow = useMemo(() => {
+    const withLogo = conferences.filter(c => c.logo_url);
+    const score = (c: LabConference) => (c.is_verified ? 0 : 2) + (isConcluded(c) ? 1 : 0);
+    return [...withLogo].sort((a, b) => score(a) - score(b) || (a.start_date ?? '').localeCompare(b.start_date ?? '')).slice(0, 12);
+  }, [conferences]);
 
+  // Job-board figures come from the server (page.tsx), so they are real in the HTML.
   const goTo = (slug: string) => router.push(`/conferences/${slug}`);
 
   return (
     <div style={{ backgroundColor: CREAM, minHeight: '100vh', position: 'relative' }}>
       <style>{`
-        @keyframes sfRailScroll {
-          from { transform: translateX(0); }
-          to { transform: translateX(-50%); }
-        }
-        .sf-rail-track { animation: sfRailScroll 46s linear infinite; will-change: transform; }
-        .sf-rail:hover .sf-rail-track { animation-play-state: paused; }
         /* Hero "up next" rail: horizontal snap on narrow screens, vertical stack ≥lg. */
         .sf-hero-rail { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
         .sf-hero-rail::-webkit-scrollbar { display: none; }
@@ -333,12 +299,6 @@ export default function VariantStagefront({
           .sf-hero-rail { scroll-snap-type: none; }
           .sf-hero-aside { width: clamp(340px, 23.5vw, 476px); }
           .sf-hero-rail .gv-photo-card { height: clamp(180px, 12.5vw, 252px) !important; }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .sf-rail { overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
-          .sf-rail-track { animation: none !important; transform: none !important; }
-          .sf-rail-track > * { scroll-snap-align: start; }
-          .sf-rail-dupe { display: none !important; }
         }
       `}</style>
 
@@ -432,7 +392,7 @@ export default function VariantStagefront({
               <div className="flex flex-col gap-3" style={{ marginTop: '32px', maxWidth: 'clamp(460px, 40vw, 640px)' }}>
                 <HeroSearchBar conferences={conferences} />
                 <div className="flex justify-end">
-                  <HeroTextLink href="/conferences/new" label="Organising one? List it free" />
+                  <HeroTextLink href="/organisers" label="Organising one? List it free" />
                 </div>
               </div>
             </div>
@@ -557,6 +517,52 @@ export default function VariantStagefront({
           </div>
         </section>
 
+        {/* ── Conferences on Gavelling: a logo row of real public conferences,
+            each a plain link to its page (in the server HTML). ─────────────── */}
+        {logoRow.length > 0 && (
+          <section
+            className="px-6 md:px-14"
+            aria-labelledby="sf-logos-heading"
+            style={{ backgroundColor: CREAM, paddingTop: '8px', paddingBottom: '48px' }}
+          >
+            <h2
+              id="sf-logos-heading"
+              style={{ fontFamily: SANS, fontWeight: 700, fontSize: 'clamp(12px, 0.8vw, 14px)', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 22px 0', textAlign: 'center' }}
+            >
+              Conferences on Gavelling
+            </h2>
+            <ul
+              className="mx-auto flex flex-wrap items-start justify-center gap-x-6 gap-y-5 sm:gap-x-9"
+              style={{ listStyle: 'none', margin: '0 auto', padding: 0, maxWidth: '1180px' }}
+            >
+              {logoRow.map(c => (
+                <li key={c.id}>
+                  <Link
+                    href={`/conferences/${c.slug}`}
+                    className="group flex flex-col items-center gap-2 focus:outline-none"
+                    style={{ textDecoration: 'none', width: '84px' }}
+                    title={c.full_name}
+                  >
+                    <span
+                      className="flex items-center justify-center overflow-hidden rounded-full transition-transform duration-200 group-hover:-translate-y-0.5"
+                      style={{ width: 56, height: 56, backgroundColor: '#FFFFFF', boxShadow: '0 4px 12px rgba(27,56,40,0.12), 0 0 0 1px rgba(27,56,40,0.06)' }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={c.logo_url!} alt="" width={56} height={56} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </span>
+                    <span
+                      className="text-center"
+                      style={{ fontFamily: SANS, fontSize: '12px', fontWeight: 700, lineHeight: 1.25, color: INK_70, maxWidth: '84px', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
+                    >
+                      {landingConfTitle(c)}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         {/* ── Opportunities beyond delegating, job board, cream, no panel ──── */}
         <section
           className="relative px-6 md:px-14 xl:px-20"
@@ -667,41 +673,52 @@ export default function VariantStagefront({
           </div>
         </section>
 
-        {/* ── Happening near you, regional auto-scroll rail (IP geo) ───────── */}
-        {regional.list.length > 0 && (
+        {/* ── Conferences near you: always three cards (src/lib/nearbyConferences.ts) ── */}
+        {nearby.picks.length > 0 && (
           <section
-            className="relative"
+            className="relative px-6 md:px-14"
+            aria-labelledby="sf-near-heading"
             style={{ backgroundColor: IVORY, paddingTop: '64px', paddingBottom: '72px' }}
           >
-            <div className="px-6 md:px-14">
-              <p className="flex items-center gap-2" style={{ fontFamily: SANS, fontWeight: 700, fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 8px 0' }}>
-                <MapPin size={13} strokeWidth={2.25} /> Near you
-              </p>
-              <h2
-                style={{
-                  fontFamily: SANS,
-                  fontWeight: 900,
-                  fontSize: 'clamp(26px, 3vw, 48px)',
-                  letterSpacing: '-0.015em',
-                  color: INK,
-                  margin: '0 0 6px 0',
-                }}
-              >
-                {regionHeading}
-              </h2>
-              <p style={{ fontFamily: SANS, fontSize: 'clamp(15px, 1.05vw, 18px)', lineHeight: 1.6, color: INK_55, margin: 0, maxWidth: 'clamp(540px, 40vw, 680px)' }}>
-                {regionSub}
-              </p>
+            <div className="mx-auto" style={{ maxWidth: '1320px' }}>
+              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+                <div>
+                  <p className="flex items-center gap-2" style={{ fontFamily: SANS, fontWeight: 700, fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 8px 0' }}>
+                    <MapPin size={13} strokeWidth={2.25} aria-hidden="true" /> Near you
+                  </p>
+                  <h2
+                    id="sf-near-heading"
+                    style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(26px, 3vw, 48px)', letterSpacing: '-0.015em', color: INK, margin: '0 0 6px 0', textWrap: 'balance' }}
+                  >
+                    Conferences near you
+                  </h2>
+                  <p aria-live="polite" style={{ fontFamily: SANS, fontSize: 'clamp(15px, 1.05vw, 18px)', lineHeight: 1.6, color: INK_55, margin: 0 }}>
+                    {nearbySub}
+                  </p>
+                </div>
+                <Link
+                  href="/conferences/explore"
+                  className="inline-flex items-center gap-1.5 self-start sm:self-auto focus:outline-none"
+                  style={{ fontFamily: SANS, fontSize: '14px', fontWeight: 700, color: FOREST, textDecoration: 'none', whiteSpace: 'nowrap' }}
+                >
+                  See every conference <ArrowRight size={15} strokeWidth={2.5} aria-hidden="true" />
+                </Link>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 md:gap-6" style={{ marginTop: '32px' }}>
+                {nearby.picks.map(c => (
+                  <ConferenceCard
+                    key={c.id}
+                    conf={c}
+                    applied={appliedIds.has(c.id)}
+                    member={memberIds.has(c.id)}
+                    hovered={hoveredId === c.id}
+                    onHover={() => setHoveredId(c.id)}
+                    onLeave={() => setHoveredId(null)}
+                    onClick={() => goTo(c.slug)}
+                  />
+                ))}
+              </div>
             </div>
-
-            <RegionalRail
-              conferences={regional.list}
-              appliedIds={appliedIds}
-              memberIds={memberIds}
-              hoveredId={hoveredId}
-              onHover={setHoveredId}
-              onClick={goTo}
-            />
           </section>
         )}
 
@@ -1323,78 +1340,3 @@ function CarouselArrow({
     </button>
   );
 }
-
-/**
- * Regional auto-scrolling rail. Duplicates the card list once so the CSS
- * translateX(-50%) loop is seamless. Pauses on hover. Under prefers-reduced-
- * motion the track becomes a plain scroll-snap rail (the duplicate is hidden).
- */
-function RegionalRail({
-  conferences, appliedIds, memberIds, hoveredId, onHover, onClick,
-}: {
-  conferences: LabConference[];
-  appliedIds: Set<string>;
-  memberIds: Set<string>;
-  hoveredId: string | null;
-  onHover: (id: string | null) => void;
-  onClick: (slug: string) => void;
-}) {
-  const track = useRef<HTMLDivElement>(null);
-  const rail = useRef<HTMLDivElement>(null);
-  // Only loop-duplicate when there are enough cards to fill the row; a couple of
-  // cards looping looks jittery, so with <4 we render a single, static set.
-  const loop = conferences.length >= 4;
-  const sequence = loop ? [...conferences, ...conferences] : conferences;
-
-  // The marquee keeps animating (and repainting) even while scrolled off-screen
-  // unless we pause it ourselves. Only relevant when the track actually loops.
-  const [isVisible, setIsVisible] = useState(true);
-  useEffect(() => {
-    if (!loop) return;
-    const el = rail.current;
-    if (!el || typeof IntersectionObserver === 'undefined') return;
-    const observer = new IntersectionObserver(([entry]) => setIsVisible(entry.isIntersecting), { threshold: 0 });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [loop]);
-
-  return (
-    <div
-      ref={rail}
-      className="sf-rail"
-      style={{ marginTop: '32px', overflowX: 'clip', maskImage: 'linear-gradient(to right, transparent, black 3%, black 97%, transparent)', WebkitMaskImage: 'linear-gradient(to right, transparent, black 3%, black 97%, transparent)' }}
-    >
-      <div
-        ref={track}
-        className={loop ? 'sf-rail-track' : undefined}
-        style={{
-          display: 'flex', gap: '24px', width: 'max-content', paddingLeft: '24px', paddingRight: '24px', paddingTop: '4px', paddingBottom: '12px',
-          animationPlayState: loop && !isVisible ? 'paused' : undefined,
-        }}
-      >
-        {sequence.map((c, i) => {
-          const isDupe = loop && i >= conferences.length;
-          return (
-            <div
-              key={`${c.id}-${i}`}
-              className={isDupe ? 'sf-rail-dupe' : undefined}
-              aria-hidden={isDupe}
-              style={{ width: 'clamp(300px, 20vw, 400px)', flexShrink: 0 }}
-            >
-              <ConferenceCard
-                conf={c}
-                applied={appliedIds.has(c.id)}
-                member={memberIds.has(c.id)}
-                hovered={!isDupe && hoveredId === c.id}
-                onHover={() => onHover(c.id)}
-                onLeave={() => onHover(null)}
-                onClick={() => onClick(c.slug)}
-              />
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-

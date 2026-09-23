@@ -19,7 +19,7 @@ import { getCountryByCode } from '@/lib/countries';
 import { FlagImg } from '@/components/FlagImg';
 import ProfileLink from '@/components/ProfileLink';
 import Avatar from '@/components/Avatar';
-import { isPaperLate } from '@/lib/positionPapers';
+import { isPaperLate, signedPositionPaperUrl } from '@/lib/positionPapers';
 import { NEU, NEU_GRADIENTS, EASE, OUTFIT, NeuCard } from '@/components/neu';
 import { ActionButton } from '@/components/PositionPaperButtons';
 
@@ -274,7 +274,7 @@ export default function PositionPaperPage() {
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('position_paper_messages')
-      .select('id, sender_user_id, is_reviewer, is_system, body, created_at, profiles (display_name, avatar_url)')
+      .select('id, sender_user_id, is_reviewer, is_system, body, created_at, profiles:profile_cards (display_name, avatar_url)')
       .eq('paper_id', paperId)
       .order('created_at', { ascending: true });
     setMessages((data ?? []) as unknown as ChatMessage[]);
@@ -301,6 +301,9 @@ export default function PositionPaperPage() {
       if (cancelled) return;
       if (error || !data) { setPaper(null); setLoading(false); return; }
       const row = data as unknown as PaperRow;
+      // The bucket is private: open the file through a signed URL minted for this viewer.
+      row.file_url = await signedPositionPaperUrl(supabase, row.file_url);
+      if (cancelled) return;
       setPaper(row);
 
       const committee = row.conference_committees;
@@ -327,7 +330,7 @@ export default function PositionPaperPage() {
         committee
           ? supabase
               .from('conference_allocations')
-              .select('user_id, profiles (display_name, avatar_url)')
+              .select('user_id, profiles:profile_cards (display_name, avatar_url)')
               .eq('conference_committee_id', committee.id)
               .eq('country_code', row.country_code)
           : Promise.resolve({ data: [] as unknown[] }),

@@ -1827,10 +1827,17 @@ function rowToFeedback(row: DbRow): FeedbackEntry {
   };
 }
 
+// Chair notes are private to the dais and the organisers (RLS: is_session_chair via the
+// x-chair-suffix header, or an organiser / conference chair / platform admin JWT). Pass
+// the session code + chair suffix (every chair surface has both on the committee row), or
+// an authed client for the organiser views. The plain anon client reads nothing.
 export async function getFeedbackForCommittee(
   committeeId: string,
+  access?: { code?: string; chairSuffix?: string; client?: typeof supabase },
 ): Promise<FeedbackEntry[]> {
-  const { data, error } = await supabase.from('feedback').select('*')
+  const db = access?.client
+    ?? (access?.code ? sessionClient(access.code, access.chairSuffix) : supabase);
+  const { data, error } = await db.from('feedback').select('*')
     .eq('committee_id', committeeId).order('created_at', { ascending: true });
   if (error || !data) return [];
   return (data as DbRow[]).map(rowToFeedback);
@@ -2337,9 +2344,14 @@ export function subscribeToCommittee(
   let channel = supabase.channel(`committee-${committeeId}-${Date.now()}`);
   for (const table of tables) {
     const filter = table === 'committees' ? `id=eq.${committeeId}` : `committee_id=eq.${committeeId}`;
+    // `feedback` rows are private to the dais (RLS checks the x-chair-suffix header, which
+    // realtime never carries), so chairs listen to the content-free `feedback_signals` row
+    // a trigger bumps on every feedback write, and refetch with the header. Handlers only
+    // ever bumped a version on `feedback`, so they receive it under that name as before.
+    const dbTable = table === 'feedback' ? 'feedback_signals' : table;
     channel = channel.on(
       'postgres_changes',
-      { event: '*', schema: 'public', table, filter },
+      { event: '*', schema: 'public', table: dbTable, filter },
       (p: { eventType: CommitteeChangePayload['eventType']; new: Record<string, unknown>; old: Record<string, unknown> }) =>
         onChange(table, {
           eventType: p.eventType,

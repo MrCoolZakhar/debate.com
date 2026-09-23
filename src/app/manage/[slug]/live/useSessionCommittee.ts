@@ -60,7 +60,7 @@ export function useSessionCommittee(code: string | null | undefined): {
           return;
         }
         const [feedback, votes] = await Promise.all([
-          getFeedbackForCommittee(committee.id),
+          getFeedbackForCommittee(committee.id, { code: committee.code, chairSuffix: committee.dbChairJoinSuffix ?? undefined }),
           loadVoteStates(committee.id),
         ]);
         if (!alive) return;

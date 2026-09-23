@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { cache } from 'react';
+import { notFound } from 'next/navigation';
 import { pageMetadata } from '@/lib/seo';
 import { supabase } from '@/lib/supabase';
 import type { CVEntry } from '@/components/CVEntryModal';
@@ -14,21 +16,32 @@ interface CvPayload { profile: PublicProfile | null; entries: CVEntry[] }
 //     characters are resolved to a single user via get_public_cv_by_prefix.
 // Runs entirely on the server so the page ships with data on first paint
 // (no client RPC round-trip / spinner).
-async function resolveCv(idParam: string): Promise<CvPayload | null> {
-  const raw = decodeURIComponent(idParam).trim();
+// Three answers, kept apart: a payload, `null` (no such public CV: a real
+// 404), or 'error' (the read failed: render the page's own empty state rather
+// than 404 a CV that exists over a transient blip).
+const resolveCv = cache(async (idParam: string): Promise<CvPayload | null | 'error'> => {
+  let raw: string;
+  try { raw = decodeURIComponent(idParam).trim(); } catch { return null; }
   try {
     if (UUID_RE.test(raw)) {
-      const { data } = await supabase.rpc('get_public_cv', { p_user_id: raw });
+      const { data, error } = await supabase.rpc('get_public_cv', { p_user_id: raw });
+      if (error) return 'error';
       return (data as CvPayload) ?? null;
     }
     // Pretty slug — the id is the trailing run of 8 hex chars.
     const prefix = raw.match(/([0-9a-f]{8})$/i)?.[1];
     if (!prefix) return null;
-    const { data } = await supabase.rpc('get_public_cv_by_prefix', { p_prefix: prefix });
+    const { data, error } = await supabase.rpc('get_public_cv_by_prefix', { p_prefix: prefix });
+    if (error) return 'error';
     return (data as CvPayload) ?? null;
   } catch {
-    return null;
+    return 'error';
   }
+});
+
+/** No such public CV (as opposed to a failed read). */
+function isMissing(r: CvPayload | null | 'error'): boolean {
+  return r !== 'error' && !r?.profile;
 }
 
 // A public CV is a link people paste into chats and applications, so it needs
@@ -36,7 +49,16 @@ async function resolveCv(idParam: string): Promise<CvPayload | null> {
 // root layout's would make every CV share one preview-cache entry.
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const profile = (await resolveCv(id))?.profile ?? null;
+  const resolved = await resolveCv(id);
+  if (isMissing(resolved)) {
+    return pageMetadata({
+      title: { absolute: 'MUN CV not found · Gavelling' },
+      description: 'This Model UN CV does not exist or is no longer public.',
+      path: `/cv/${id}`,
+      robots: { index: false, follow: true },
+    });
+  }
+  const profile = resolved === 'error' ? null : resolved?.profile ?? null;
   const name = (profile?.display_name ?? '').trim();
 
   return pageMetadata({
@@ -51,7 +73,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function PublicCVPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const payload = await resolveCv(id);
+  const resolved = await resolveCv(id);
+  // An unknown or private CV is a real 404, not a 200 "empty CV" page (a
+  // soft 404 in Search Console).
+  if (isMissing(resolved)) notFound();
+  const payload = resolved === 'error' ? null : resolved;
 
   const profile = payload?.profile ?? null;
   const entries: CVEntry[] = ((payload?.entries as CVEntry[]) ?? []).map((r) => ({

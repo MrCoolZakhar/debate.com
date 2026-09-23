@@ -9,6 +9,7 @@ import { useCredits } from '@/hooks/useCredits';
 import { CreditCoin } from '@/components/CreditCoin';
 import { extractFunctionErrorMessage, unlimitedPricing, creditPricing, proPricing } from '@/lib/payments';
 import { formatFee } from '@/lib/finance';
+import { forgetUnlimitedStatus } from '@/lib/unlimitedStatus';
 import { Eyebrow, GlassCard, T } from '../accountUi';
 import { NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuButton, NeuPill, NeuIconDisc, NeuInset } from '@/components/neu';
 import Loader from '@/components/Loader';
@@ -252,6 +253,8 @@ export default function UnlimitedPage() {
         if (cancelled) return;
         if (found) {
           setConfirming(false);
+          // The profile menu's Unlimited badge reads a cached answer.
+          forgetUnlimitedStatus(user.id);
           tryReturnTo();
           return;
         }

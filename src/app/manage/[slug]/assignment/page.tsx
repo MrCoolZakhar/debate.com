@@ -3521,6 +3521,21 @@ export default function AssignmentPage() {
   const [societies, setSocieties] = useState<DelegationSource[]>([]);
   const [history, setHistory] = useState<Record<string, UserHistory>>({});
   const [mode, setMode] = useState<'delegates' | 'chairs' | 'delegations' | 'independents'>('delegates');
+  // ?release=unsent (the dashboard's "never told their seat" row) opens the
+  // allocation email picker with the unsent delegates ticked. It only OPENS the
+  // picker; sending is still the organiser's press. Read once, then dropped
+  // from the URL so a reload does not reopen it.
+  const [releaseFromDashboard, setReleaseFromDashboard] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (new URLSearchParams(window.location.search).get('release') === 'unsent') setReleaseFromDashboard(true);
+  }, []);
+  const clearReleaseFromDashboard = useCallback(() => {
+    setReleaseFromDashboard(false);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('release');
+    window.history.replaceState({}, '', url.toString());
+  }, []);
   // Deep link from Applications → Delegations ("Open in Assignment"):
   // ?mode=delegations&delegation=<society id>. Read once after mount, so the
   // server render and the first client render agree.
@@ -4114,6 +4129,14 @@ export default function AssignmentPage() {
       if (error || !data || data.length !== 1) {
         showFlash('err', 'Could not change how allocation emails are sent.');
         return;
+      }
+      // One state: automatic sending with the Allocation Assigned email
+      // switched off under Communications is exactly the SISMUN conflict (the
+      // bar said "Sending automatically" and nothing went out). Turning
+      // automatic on turns the email on too. It queues nothing by itself.
+      if (next && allocTemplateEnabled !== true) {
+        const res = await turnOnDefaultEmail(supabase, conferenceId, 'allocation_assigned');
+        if (res.ok) setAllocTemplateEnabled(true);
       }
       // The assign modals read conference.allocation_email_auto straight off
       // the manage context, so the context has to learn about this too.
@@ -4725,6 +4748,8 @@ export default function AssignmentPage() {
             templateOff={allocTemplateEnabled === false}
             onTurnOnTemplate={handleTurnOnAllocTemplate}
             turningOnTemplate={turningOnAllocTemplate}
+            openWithUnsent={releaseFromDashboard}
+            onOpenedWithUnsent={clearReleaseFromDashboard}
           />
         )}
       </div>

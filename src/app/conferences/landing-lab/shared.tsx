@@ -50,6 +50,11 @@ export interface LabConference {
   expected_delegates: number;
   logo_url: string | null;
   banner_url: string | null;
+  is_verified?: boolean;
+  dates_tbd?: boolean;
+  format?: string;
+  /** Delegate application window (listedConferences.ts), for the near-you row. */
+  window?: 'open' | 'not_open' | 'closed' | 'disabled';
 }
 
 export interface LabReview {

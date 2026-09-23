@@ -27,7 +27,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   AlertCircle, ArrowRight, BadgeCheck, CheckCircle2, Eye, Flag, Gavel, Globe2, KeyRound,
-  Loader2, Lock, LogIn, MessageSquareText, Plus, Radio, RotateCw, Sparkles, UserRound, Users,
+  Loader2, Lock, LogIn, Mail, MessageSquareText, Plus, Radio, RotateCw, Sparkles, UserRound, Users,
 } from 'lucide-react';
 import { getCommitteeRosterByCode, addChairName, updateCommitteeHeadChairInDB } from '@/lib/committeeService';
 import { getGavelDeviceId } from '@/lib/gavelDevice';
@@ -50,6 +50,8 @@ import {
   PageBackdrop, PrimaryAction, RoleTile,
 } from './joinUi';
 import JoinSeatPicker, { type JoinSeatRow } from './JoinSeatPicker';
+import { getReservedSeatHint, setClaimMarker, takeClaimMarker, type ReservedSeatHint } from './reservedSeatHint';
+import { getAuthedClient } from '@/lib/supabase-auth';
 
 type JoinMode = 'delegate' | 'chair' | 'advisor';
 
@@ -136,6 +138,14 @@ function JoinPageInner() {
   const [seatAvail, setSeatAvail] = useState<SeatAvailability>({});
   // The role the conference records give this signed-in user here, if any.
   const [verifiedKind, setVerifiedKind] = useState<ConferenceAccess['kind'] | null>(null);
+  // A signed-out visitor pointing at a RESERVED seat: who the seat is held for (masked),
+  // so an invited delegate who never made an account can sign up right here.
+  const [reservedPick, setReservedPick] = useState('');
+  const [reservedHint, setReservedHint] = useState<{ country: string; hints: ReservedSeatHint[] | null } | null>(null);
+  // The seat the visitor pointed at before signing in (?seat=), to recommend on return.
+  const returnSeat = (searchParams.get('seat') ?? '').trim().slice(0, 120);
+  // The phone's sticky Join bar sits above the on-screen keyboard (visual viewport).
+  const joinBarRef = useRef<HTMLDivElement>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -172,7 +182,19 @@ function JoinPageInner() {
       // Resolve access via the shared authed helper. It reads conference_committees and the
       // user's allocation on the authed client, so it works for PRIVATE conferences too (via the
       // "associated users read their committee" policy), not just public ones.
-      const access = await verifyConferenceAccess(lookupCode.toUpperCase(), session!.access_token, user!.id);
+      let access = await verifyConferenceAccess(lookupCode.toUpperCase(), session!.access_token, user!.id);
+      // Back from "This is me" on a reserved seat with an EXISTING account: link any
+      // invitation addressed to this account's email (a new account was already linked
+      // by the profiles trigger), then ask again. Once per press, never on a plain visit.
+      if (access.kind !== 'delegate' && access.kind !== 'chair' && access.kind !== 'advisor' && access.kind !== 'organizer'
+          && takeClaimMarker(lookupCode)) {
+        try {
+          const { data } = await getAuthedClient(session!.access_token).rpc('claim_my_imported_applications');
+          if ((data as { claimed?: number } | null)?.claimed) {
+            access = await verifyConferenceAccess(lookupCode.toUpperCase(), session!.access_token, user!.id);
+          }
+        } catch { /* the not-linked card below says what to do */ }
+      }
       setVerifiedKind(access.kind === 'delegate' || access.kind === 'chair' || access.kind === 'advisor' || access.kind === 'organizer' ? access.kind : null);
 
       // Conference sessions: role is authoritative (allocation / chair record) and the
@@ -350,6 +372,8 @@ function JoinPageInner() {
     setReservedCountries([]);
     setSeatAvail({});
     setVerifiedKind(null);
+    setReservedPick('');
+    setReservedHint(null);
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
@@ -385,20 +409,69 @@ function JoinPageInner() {
   // end; an allocated user never takes it and still goes straight to their locked seat.
   const openPath = isConferenceSession && !checkingConference && !authLoading && !allocationLoading
     && !hasVerifiedRole && (openSeatCount > 0 || chairsOpen);
+  // Signed out on a conference code with reserved seats: the visitor may point at a
+  // reserved seat to see who it is held for (masked) and sign up / sign in as them.
+  const canPointReserved = isConferenceSession && !checkingConference && !authLoading && !user && reservedCountries.length > 0;
 
   // The open path offers only the roles that are actually open, so snap the mode onto one
   // of them. The advisor view stays with the conference's own advisors and organisers.
   useEffect(() => {
     if (!openPath) return;
-    if (mode === 'advisor' || (mode === 'delegate' && openSeatCount === 0) || (mode === 'chair' && !chairsOpen)) {
-      setMode(openSeatCount > 0 ? 'delegate' : 'chair');
+    if (mode === 'advisor' || (mode === 'delegate' && openSeatCount === 0 && !canPointReserved) || (mode === 'chair' && !chairsOpen)) {
+      setMode(openSeatCount > 0 || canPointReserved ? 'delegate' : 'chair');
       setCountry('');
     }
-  }, [openPath, mode, openSeatCount, chairsOpen]);
+  }, [openPath, mode, openSeatCount, chairsOpen, canPointReserved]);
 
   // Sign in is a pop-up (src/lib/authModal.ts): the join page stays put, and
   // the signed-in session lands here through AuthProvider.
   const goSignIn = () => openAuth({ next: lookupCode ? '/join?code=' + lookupCode + '&mode=' + mode : '/join' });
+
+  // ── Reserved seats, signed out: who the seat is held for ────────────────────
+  useEffect(() => {
+    if (!reservedPick || !foundCommittee) return;
+    let cancelled = false;
+    setReservedHint(null);
+    getReservedSeatHint(foundCommittee.code, reservedPick).then((hints) => {
+      if (!cancelled) setReservedHint({ country: reservedPick, hints });
+    });
+    return () => { cancelled = true; };
+  }, [reservedPick, foundCommittee]);
+  useEffect(() => { if (user) { setReservedPick(''); setReservedHint(null); } }, [user]);
+  const claimReservedSeat = (hasAccount: boolean) => {
+    if (!lookupCode) return;
+    setClaimMarker(lookupCode);
+    openAuth({
+      step: hasAccount ? 'signin' : 'signup',
+      next: '/join?code=' + lookupCode + '&mode=delegate&seat=' + encodeURIComponent(reservedPick),
+    });
+  };
+
+  // Phones: keep the sticky Join bar above the on-screen keyboard. Written to the
+  // node (never state), only when the covered height changes.
+  useEffect(() => {
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    const node = joinBarRef.current;
+    if (!vv || !node) return;
+    let last = -1;
+    let raf = 0;
+    const place = () => {
+      raf = 0;
+      const covered = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      if (covered === last) return;
+      last = covered;
+      node.style.setProperty('--join-kb', covered + 'px');
+    };
+    const schedule = () => { if (!raf) raf = requestAnimationFrame(place); };
+    place();
+    vv.addEventListener('resize', schedule);
+    vv.addEventListener('scroll', schedule);
+    return () => {
+      vv.removeEventListener('resize', schedule);
+      vv.removeEventListener('scroll', schedule);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
 
   const handleJoin = async () => {
     // ── Conference-linked session fork ──
@@ -514,7 +587,7 @@ function JoinPageInner() {
 
   const joinLabel = isConferenceSession && !openPath
     ? (allocatedCountry
-        ? t('join_btn_as', { country: getCountryDisplayName(allocatedCountry.name, language) })
+        ? (returnSeat ? t('join_take_your_seat') : t('join_btn_as', { country: getCountryDisplayName(allocatedCountry.name, language) }))
         : noArrow(t('join_btn_delegate')))
     : mode === 'delegate'
     ? noArrow(foundCommittee?.endedAt ? t('join_btn_delegate_ended') : t('join_btn_delegate'))
@@ -613,7 +686,7 @@ function JoinPageInner() {
           </div>
         )}
 
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)] lg:gap-8">
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)] lg:gap-8">
           <div className="lg:sticky lg:top-6">
             <BrandPanel
               title={t('join_hero_title')}
@@ -630,6 +703,7 @@ function JoinPageInner() {
           </div>
 
           <JoinCard>
+            <style>{JOIN_BAR_CSS}</style>
             {/* ── 1. The code ─────────────────────────────────────────────── */}
             <FieldLabel htmlFor="join-code">{t('join_code_label')}</FieldLabel>
             <div className="relative">
@@ -701,7 +775,9 @@ function JoinPageInner() {
             </div>
 
             {/* ── 3. The stage: reserved height, so steps swap in place ──────── */}
-            <div className="mt-4 min-h-[632px] sm:min-h-[656px]">
+            {/* Reserved from lg only: on a phone the stage grows with its step and the
+                Join action is a sticky bar at the bottom of the screen instead (#36). */}
+            <div className="mt-4 lg:min-h-[656px]">
               {!foundCommittee ? (
                 <EmptyStage busy={lookingUp} title={t('join_stage_empty_title')} body={t('join_stage_empty_body')} />
               ) : (
@@ -728,10 +804,15 @@ function JoinPageInner() {
                         <div className="flex items-center gap-3.5 rounded-2xl p-4" style={{ backgroundColor: 'rgba(61,122,82,0.10)', boxShadow: 'inset 0 0 0 1px rgba(61,122,82,0.28)' }}>
                           <CircleFlag code={allocatedCountry.code} country={allocatedCountry.name} size={48} decorative />
                           <div className="min-w-0">
-                            <Chip tone="green" icon={<BadgeCheck size={12} strokeWidth={2.6} />}>{t('join_conf_verified')}</Chip>
+                            <Chip tone="green" icon={<BadgeCheck size={12} strokeWidth={2.6} />}>{returnSeat ? t('join_recommended') : t('join_conf_verified')}</Chip>
                             <p className="mt-1.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 18, fontWeight: 800, color: C.ink, letterSpacing: '-0.01em' }}>
                               {getCountryDisplayName(allocatedCountry.name, language)}
                             </p>
+                            {conferenceCommittee?.name && (
+                              <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: C.forest }}>
+                                {conferenceCommittee.name}
+                              </p>
+                            )}
                             <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: C.inkSoft }}>
                               {t('join_conf_locked', { country: getCountryDisplayName(allocatedCountry.name, language) })}
                             </p>
@@ -739,7 +820,18 @@ function JoinPageInner() {
                         </div>
                       ) : null}
 
-                      {allocationError === '__signin__' && (!openPath || openSeatCount === 0) && (
+                      {/* Signed out on a committee with reserved seats: say so first, then let
+                          the visitor point at their country to see who it is held for. */}
+                      {canPointReserved && (
+                        <NoticeCard
+                          tone="forest"
+                          icon={<Lock size={18} strokeWidth={2.4} />}
+                          title={t('join_conf_reserved_title')}
+                          body={t('join_conf_reserved_body')}
+                        />
+                      )}
+
+                      {allocationError === '__signin__' && (!openPath || openSeatCount === 0) && !canPointReserved && (
                         <NoticeCard
                           tone="forest"
                           icon={<LogIn size={18} strokeWidth={2.4} />}
@@ -784,7 +876,7 @@ function JoinPageInner() {
                     // Open path: only what needs no conference role. Delegate when an open seat
                     // exists, chair when the dais is open. The advisor view is not offered.
                     const roleCards = openPath
-                      ? allCards.filter((c) => (c.key === 'delegate' && openSeatCount > 0) || (c.key === 'chair' && chairsOpen))
+                      ? allCards.filter((c) => (c.key === 'delegate' && (openSeatCount > 0 || canPointReserved)) || (c.key === 'chair' && chairsOpen))
                       : allCards;
                     const cols = roleCards.length >= 3 ? 'grid-cols-3' : roleCards.length === 2 ? 'grid-cols-2' : 'grid-cols-1';
                     return (
@@ -800,7 +892,7 @@ function JoinPageInner() {
                   })()}
 
                   {/* Delegate: the flag-led seat list */}
-                  {showRoleFlow && mode === 'delegate' && (() => {
+                  {((showRoleFlow && mode === 'delegate') || (canPointReserved && !openPath)) && (() => {
                     const seats: JoinSeatRow[] = foundCommittee.delegates.map((d) => {
                       const st = seatState(d.country);
                       const reserved = isReservedSeat(d.country);
@@ -817,11 +909,20 @@ function JoinPageInner() {
                     const anyTaken = seats.some((s) => s.state === 'taken');
                     const removedSeat = seats.find((s) => s.state === 'removed');
                     const anyReserved = isConferenceSession && reservedSet.size > 0;
+                    const pointing = canPointReserved && !!reservedPick;
                     const note = (anyTaken || removedSeat || (anyReserved && !user)) ? (
                       <div className="space-y-2">
                         {removedSeat && <p>{t('join_seat_removed_note', { n: seatState(removedSeat.country)?.removedMinutes ?? 10 })}</p>}
                         {anyTaken && <p>{t('join_seat_taken_note')}</p>}
-                        {anyReserved && !user && (
+                        {pointing && (
+                          <ReservedHintPanel
+                            country={getCountryDisplayName(reservedPick, language)}
+                            hint={reservedHint && reservedHint.country === reservedPick ? reservedHint.hints : undefined}
+                            t={t}
+                            onClaim={claimReservedSeat}
+                          />
+                        )}
+                        {anyReserved && !user && !canPointReserved && (
                           <div className="flex flex-wrap items-center gap-2.5">
                             <p className="min-w-0 flex-1">{t('join_seat_reserved_note')}</p>
                             <GhostAction onClick={goSignIn} icon={<Lock size={14} strokeWidth={2.4} />}>{t('join_signin_cta')}</GhostAction>
@@ -835,7 +936,9 @@ function JoinPageInner() {
                         <JoinSeatPicker
                           seats={seats}
                           value={country}
-                          onChange={(c) => { setCountry(c); setError(''); }}
+                          onChange={(c) => { setCountry(c); setError(''); setReservedPick(''); }}
+                          onReservedPick={canPointReserved ? (c) => { setReservedPick(c); setCountry(''); setError(''); } : undefined}
+                          reservedPicked={reservedPick}
                           language={language}
                           labels={{
                             search: t('join_seat_search'),
@@ -1003,7 +1106,9 @@ function JoinPageInner() {
             </div>
 
             {/* ── 4. The action ───────────────────────────────────────────── */}
-            <div className="mt-5">
+            {/* A sticky bar at the bottom of the screen, above the safe area and (through
+                --join-kb, the visual viewport) above the on-screen keyboard. */}
+            <div ref={joinBarRef} className="join-action-bar mt-5">
               <PrimaryAction
                 onClick={handleJoin}
                 disabled={joinDisabled}
@@ -1038,6 +1143,86 @@ function JoinPageInner() {
 }
 
 // ── Page pieces ──────────────────────────────────────────────────────────────
+
+// The Join action is a sticky bar at the bottom of the screen, above the home indicator
+// (safe area) and above the on-screen keyboard (--join-kb, written from the visual
+// viewport). It sits in place once the card's end scrolls into view, so it never
+// covers the rows under it. At 1280x800 the reserved stage alone already pushed the
+// button below the fold, so desktop gets the same bar.
+const JOIN_BAR_CSS = `
+.join-action-bar {
+  position: sticky;
+  bottom: var(--join-kb, 0px);
+  z-index: 20;
+  margin-inline: -20px;
+  padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(to bottom, rgba(250,248,243,0.88), #FAF8F3 34%);
+  box-shadow: 0 -10px 20px -14px rgba(27,56,40,0.30);
+}
+@media (min-width: 640px) {
+  .join-action-bar { margin-inline: -28px; padding-inline: 28px; }
+}
+`;
+
+/** A reserved seat a signed-out visitor pointed at: who it is held for, masked, and a
+ *  way to sign up or sign in with that address. */
+function ReservedHintPanel({ country, hint, t, onClaim }: {
+  country: string;
+  /** undefined = loading, null = the read failed. */
+  hint: ReservedSeatHint[] | null | undefined;
+  t: ReturnType<typeof useT>;
+  onClaim: (hasAccount: boolean) => void;
+}) {
+  const hasAccount = !!hint && hint.length > 0 && hint.every((h) => h.hasAccount);
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="rounded-2xl p-3.5"
+      style={{ backgroundColor: 'rgba(238,217,138,0.30)', boxShadow: 'inset 0 0 0 1px rgba(182,135,31,0.34)' }}
+    >
+      <div className="flex items-start gap-3">
+        <CircleFlag country={country} size={34} decorative />
+        <div className="min-w-0 flex-1">
+          <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 800, color: C.ink }}>{country}</p>
+          {hint === undefined ? (
+            <p className="mt-1 inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: C.inkSoft }}>
+              <Loader2 size={13} className="animate-spin" /> {t('join_reserved_loading')}
+            </p>
+          ) : hint === null ? (
+            <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: C.danger, textWrap: 'pretty' }}>{t('join_reserved_failed')}</p>
+          ) : (
+            <>
+              <ul className="mt-1.5 space-y-1">
+                {(hint.length ? hint : [{ seat: null, email: null, initial: null, hasAccount: false }]).map((h, i) => (
+                  <li key={i} className="flex min-w-0 items-center gap-2">
+                    <span
+                      aria-hidden
+                      className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full"
+                      style={{ backgroundColor: C.forest, color: C.gold, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800 }}
+                    >
+                      {h.initial ?? <Mail size={12} strokeWidth={2.6} />}
+                    </span>
+                    <span className="min-w-0 truncate" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: C.forest }}>
+                      {h.email ? t('join_reserved_held_for', { email: h.email }) : t('join_reserved_held_unknown')}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2" style={{ fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.5, color: C.inkSoft, textWrap: 'pretty' }}>
+                {hasAccount ? t('join_reserved_hint_existing') : t('join_reserved_hint_new')}
+              </p>
+              <div className="mt-2.5">
+                <GhostAction onClick={() => onClaim(hasAccount)} icon={<LogIn size={15} strokeWidth={2.4} />}>{t('join_reserved_this_is_me')}</GhostAction>
+              </div>
+              <p className="mt-2" style={{ fontFamily: OUTFIT, fontSize: 11.5, lineHeight: 1.5, color: C.inkSoft }}>{t('join_reserved_not_me')}</p>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /** Before a code: a warm placeholder that fills the stage, so the card is already its final size. */
 function EmptyStage({ busy, title, body }: { busy: boolean; title: string; body: string }) {

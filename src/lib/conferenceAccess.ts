@@ -160,7 +160,9 @@ export async function verifyConferenceAccess(
       .eq('conference_id', committee.conference_id)
       .eq('user_id', userId)
       .in('role', ['faculty-advisor', 'observer'])
-      .in('status', ['accepted', 'assigned'])
+      // checked-in is still an accepted participant: at the venue, which is
+      // exactly when the advisor view is needed.
+      .in('status', ['accepted', 'assigned', 'checked-in'])
       .maybeSingle();
     if (isTransientReadError(advError)) readFailed = true;
     if (adv) {

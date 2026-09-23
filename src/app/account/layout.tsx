@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { User, ScrollText, CalendarDays, Coins, CalendarCheck, ArrowRight, FileClock, type LucideIcon } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
+import { useUnlimitedStatus, isUnlimited } from '@/lib/unlimitedStatus';
 import { useDraftCount } from '@/hooks/useDraftCount';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
@@ -28,6 +29,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
   const router = useRouter();
   const pathname = usePathname();
   const { user, profile, signOut, loading: authLoading } = useAuth();
+  const unlimitedStatus = useUnlimitedStatus();
   const { count: draftCount } = useDraftCount();
 
   // This is a NAV rail, not a conference list — so unlike ProfileDropdown and
@@ -250,7 +252,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                   {profile?.email ?? user.email ?? ''}
                 </p>
 
-                {profile?.unlimited_status && profile.unlimited_status !== 'none' && (
+                {isUnlimited(unlimitedStatus) && (
                   <div className="flex justify-center mt-2">
                     <span
                       className="rounded-full px-2 py-0.5"

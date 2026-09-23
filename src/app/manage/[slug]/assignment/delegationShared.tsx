@@ -142,7 +142,7 @@ export const POOL_MEMBER_SELECT = `
   pledge_type, spots_pledged, pledge_confirmed_at, submitted_at,
   assigned_committee_id, assigned_country_code, assigned_country_name, society_id,
   assigned_committee:conference_committees!assigned_committee_id (abbreviation, name),
-  profiles (display_name, avatar_url)
+  profiles:profile_cards (display_name, avatar_url)
 `;
 
 // A lighter row used for the cross-conference participant search. Carries
