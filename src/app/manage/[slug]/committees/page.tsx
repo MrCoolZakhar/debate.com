@@ -284,6 +284,35 @@ function ReleaseTimePicker({ value, onSave, placeholder, disabled }: {
   );
 }
 
+// What stands where GENERATE CODE used to. The page mints the code itself (see
+// the auto-mint effect), so this is a read-out, never a control: the organiser
+// has nothing to press and no decision to make. `failed` is the only state
+// worth words, because the room really is missing until the page is reloaded.
+function SessionCodePending({ failed, block = false }: { failed: boolean; block?: boolean }) {
+  return (
+    <span
+      role="status"
+      title={failed
+        ? 'The join code could not be created. Reload the page to try again.'
+        : 'A join code is being created for this committee.'}
+      className={block
+        ? 'w-full inline-flex items-center justify-center rounded-[10px]'
+        : 'inline-flex items-center flex-shrink-0'}
+      style={{
+        minHeight: block ? 34 : undefined,
+        padding: block ? undefined : '6px 13px',
+        borderRadius: block ? 10 : 9999,
+        border: `1.5px dashed ${failed ? 'rgba(139,32,32,0.35)' : 'rgba(27,56,40,0.28)'}`,
+        color: failed ? '#8B2020' : NEU.muted,
+        backgroundColor: 'transparent',
+        fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em',
+      }}
+    >
+      {failed ? 'CODE NOT READY' : 'CREATING CODE…'}
+    </span>
+  );
+}
+
 // Compact right-of-row send action, used by the Settings tab's per-committee
 // release list AND the overview card / list release affordances — three-state
 // semantics: SEND (unreleased) / SCHEDULED / SENT+RESEND. The confirm dialog
@@ -1219,6 +1248,20 @@ export default function CommitteesPage() {
     setCommittees(prev => prev.map(c => (ids.includes(c.id) ? { ...c, ...patch } : c)));
 
     const isFuture = isoValue !== null && new Date(isoValue).getTime() > Date.now();
+    // SCHEDULING AN EMAIL THAT IS SWITCHED OFF QUEUES NOTHING, AND USED TO SAY
+    // NOTHING (23 Sep 2026). `queueEventEmail` answers 'off' when the
+    // conference has a template row for the event with `enabled = false`, and
+    // 'unconfigured' when it has none — in both cases zero outbox rows are
+    // written. This function threw that answer away, so the card went on
+    // reading SCHEDULED while no email existed to send. Found on a real
+    // conference opening in three days: 286 allocated delegates, a delegate
+    // release scheduled across all seven committees, `session_join_invite`
+    // disabled, and not one outbox row. `notifyIfNeeded` covers the
+    // "unconfigured / still our copy" half (with its TURN ON action); 'off' is
+    // deliberately silent there, because OFF is normally a choice — but a
+    // choice to switch it off plus a choice to schedule it is a contradiction,
+    // and the organiser is the only one who can resolve it.
+    const offLabels = new Set<string>();
     for (const f of fields) {
       const eventKey = f === 'released_to_chairs_at' ? 'session_chair_invite' : 'session_join_invite';
       for (const t of targets) {
@@ -1227,9 +1270,16 @@ export default function CommitteesPage() {
         await clearStaleScheduled(supabase, conference.id, eventKey, applicationIds);
         if (isFuture) {
           const extraCtx = eventKey === 'session_join_invite' ? { session_code: t.session_code } : undefined;
-          await queueEventEmail(supabase, conference.id, eventKey, applicationIds, extraCtx, { sendAfter: isoValue! });
+          const result = await queueEventEmail(supabase, conference.id, eventKey, applicationIds, extraCtx, { sendAfter: isoValue! });
+          notifyIfNeeded(result, pushDraftNotice);
+          if (result.outcome === 'off') {
+            offLabels.add(eventKey === 'session_join_invite' ? 'the delegate join email' : 'the chair session email');
+          }
         }
       }
+    }
+    if (offLabels.size > 0) {
+      setActionError(`The release time was saved, but ${Array.from(offLabels).join(' and ')} is switched off in Communications, so nothing will be sent at that time. Switch it on there, or send the codes yourself from this page.`);
     }
     return true;
   }
@@ -1332,38 +1382,93 @@ export default function CommitteesPage() {
     })().finally(() => setSendingAllToParticipants(false));
   }
 
-  // The session code is minted server-side, so this keeps its await, but the
-  // busy state is scoped to this one button; the rest of the page stays live.
-  async function generateSessionCode(committee: CommitteeRow) {
-    if (!session) return;
-    if (committee.session_id) return; // already linked to a real session
-    const busyKey = `mint-${committee.id}`;
-    if (busyIds.has(busyKey)) return;
-    markBusy(busyKey, true);
-    setActionError('');
-    const supabase = getAuthedClient(session.access_token);
+  // ── SESSION CODES MINT THEMSELVES (owner, 23 Sep 2026) ────────────────────
+  //
+  // Every codeless card used to carry a GENERATE CODE button. It was a chore
+  // with exactly one right answer, and forgetting it is expensive: the chair
+  // reminder emails (`queue_chair_session_reminders`, cron
+  // `chair-session-reminders`) select `where cc.session_code is not null`, so a
+  // committee nobody pressed the button on silently loses BOTH of its
+  // pre-conference chair emails. 402 of 975 production committees are in that
+  // state.
+  //
+  // WHEN: on arrival at this page, for the conference being opened. Not on
+  // publish and not on first need, because both put the mint somewhere the
+  // organiser cannot see it land, and the room has to exist before the day-
+  // before reminder runs, not at the moment a chair opens the join page. The
+  // committee editor already mints on create; this covers every other route in
+  // (import, older committees, a delete that unlinked the room).
+  //
+  // NEVER REGENERATES, NEVER TOUCHES A LIVE ROOM: a committee with a
+  // `session_id` or a `session_code` is skipped outright, so nothing that has
+  // been handed out or started is disturbed. Each id is attempted at most once
+  // per page load, so a failure waits for a reload instead of looping.
+  const autoMintTried = useRef<Set<string>>(new Set());
+  const [mintFailedIds, setMintFailedIds] = useState<Set<string>>(new Set());
+
+  // Seats the new room from the committee's own country slots, the way the
+  // editor does on create, so a chair never gavels into an empty committee.
+  // The slots are read only for a committee that has no room at all.
+  const mintSessionFor = useCallback(async (
+    supabase: ReturnType<typeof getAuthedClient>,
+    c: CommitteeRow,
+  ): Promise<{ ok: boolean; problems: string[] }> => {
+    const { data: slotRows } = await supabase
+      .from('committee_country_slots')
+      .select('country_name, logo_url, is_observer')
+      .eq('conference_committee_id', c.id)
+      .order('country_name', { ascending: true });
+    const slots = (slotRows ?? []) as { country_name: string; logo_url: string | null; is_observer: boolean | null }[];
     // A session that mints but does not link is worse than no session: the code
-    // below would be handed out and joined, while the live wall, the scoreboard
-    // and awards would never find the room. Report it instead of swallowing it.
-    const mintProblems: string[] = [];
+    // would be handed out and joined, while the live wall, the scoreboard and
+    // awards would never find the room. Report it instead of swallowing it.
+    const problems: string[] = [];
     const code = await mintConferenceSession(
-      supabase, committee.id, committee.name, (committee.topics ?? [])[0] ?? '', [], [],
-      (msg) => { mintProblems.push(msg); },
+      supabase, c.id, c.name, (c.topics ?? [])[0] ?? '',
+      slots.map(s => ({ name: s.country_name, logoUrl: s.logo_url })),
+      slots.filter(s => s.is_observer).map(s => s.country_name),
+      (msg) => { problems.push(msg); },
     );
-    markBusy(busyKey, false);
-    if (!code) {
-      setActionError("Couldn't generate a session code. Please try again.");
-      return;
-    }
-    if (mintProblems.length > 0) {
-      setActionError(`A session was created for "${committee.name}", but it was not set up correctly: ${mintProblems.join('; ')}. Do not hand out this code. Refresh and try again.`);
+    // NOTE: deliberately does NOT patch `committees` with the new code. That
+    // would change the array this effect depends on, re-run it, and its
+    // cleanup would cancel the loop after the FIRST committee — leaving every
+    // other codeless committee unminted until a reload. The one
+    // `loadCommittees` at the end shows every new code at once instead.
+    return { ok: !!code && problems.length === 0, problems };
+  }, []);
+
+  useEffect(() => {
+    if (!accessToken || committees.length === 0) return;
+    const pending = committees.filter(c => !c.session_id && !c.session_code && !autoMintTried.current.has(c.id));
+    if (pending.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const supabase = getAuthedClient(accessToken);
+      const broken: string[] = [];
+      // Sequential on purpose: each mint is four writes, and a burst of thirty
+      // in parallel is how a code collision retry turns into a stampede.
+      for (const c of pending) {
+        // Claimed one at a time, right before the attempt: if this run is
+        // cancelled part way (an unmount, or anything else replacing the
+        // committee list), the committees it never reached are still eligible
+        // for the next run rather than being marked done and skipped.
+        if (autoMintTried.current.has(c.id)) continue;
+        autoMintTried.current.add(c.id);
+        const { ok, problems } = await mintSessionFor(supabase, c);
+        if (cancelled) return;
+        if (!ok) {
+          setMintFailedIds(prev => new Set(prev).add(c.id));
+          broken.push(problems.length > 0 ? `"${c.name}" (${problems.join('; ')})` : `"${c.name}"`);
+        }
+      }
+      if (cancelled) return;
+      if (broken.length > 0) {
+        setActionError(`A join code could not be set up for ${broken.join(', ')}. Reload the page to try again, and do not hand those codes out yet.`);
+      }
       loadCommittees({ silent: true });
-      return;
-    }
-    // Show the minted code immediately; a silent refetch syncs session_id.
-    setCommittees(prev => prev.map(x => x.id === committee.id ? { ...x, session_code: code } : x));
-    loadCommittees({ silent: true });
-  }
+    })();
+    return () => { cancelled = true; };
+  }, [committees, accessToken, mintSessionFor, loadCommittees, setActionError]);
 
   function handleCopyCode(code: string) {
     navigator.clipboard.writeText(code);
@@ -1971,7 +2076,6 @@ export default function CommitteesPage() {
               // ConferenceDetailClient.tsx and handleRemoveChair above.
               const daisIds = c.chair_user_ids ?? [];
               const daisLinkable = daisIds.length === dais.length;
-              const minting = busyIds.has(`mint-${c.id}`);
               const seatLabel = !isCrisis && c.delegation_size === 2
                 ? `${seats} ${isCustom ? 'members' : 'countries'} · ${seats * 2} seats`
                 : `${seats} ${isCrisis ? (seats === 1 ? 'role' : 'roles') : isCustom ? (seats === 1 ? 'member' : 'members') : (seats === 1 ? 'seat' : 'seats')}`;
@@ -2067,30 +2171,22 @@ export default function CommitteesPage() {
                         )}
                       </button>
                     ) : (
-                      <button
-                        onClick={() => generateSessionCode(c)}
-                        disabled={minting}
-                        className="gv-lift inline-flex items-center flex-shrink-0 focus:outline-none"
-                        style={{ padding: '6px 13px', borderRadius: 9999, border: '1.5px dashed rgba(27,56,40,0.35)', color: minting ? NEU.muted : NEU.forest, backgroundColor: 'transparent', fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', cursor: minting ? 'default' : 'pointer' }}
-                      >
-                        {minting ? 'GENERATING…' : 'GENERATE CODE'}
-                      </button>
+                      <SessionCodePending failed={mintFailedIds.has(c.id)} />
                     )}
                     <ChairCodeChip layout="row" code={chairCodeFor(c)} copiedCode={copiedCode} onCopy={handleCopyCode} />
 
-                    {/* Release actions */}
-                    <div className="flex items-center gap-2.5 flex-shrink-0">
-                      {(c.chair_user_ids?.length ?? 0) > 0 && (
+                    {/* Release actions. DELEGATES was removed here too (see the
+                        card above): the list is the same grid in another shape,
+                        and leaving the send on one view only would be worse
+                        than leaving it on both. Settings keeps it. */}
+                    {(c.chair_user_ids?.length ?? 0) > 0 && (
+                      <div className="flex items-center gap-2.5 flex-shrink-0">
                         <div className="flex items-center gap-1.5">
                           <span style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted }}>CHAIRS</span>
                           <CompactSendButton releasedAt={c.released_to_chairs_at} busy={sendingToChairs === c.id} onSend={() => handleSendToChairs(c)} />
                         </div>
-                      )}
-                      <div className="flex items-center gap-1.5">
-                        <span style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted }}>DELEGATES</span>
-                        <CompactSendButton releasedAt={c.released_to_delegates_at} busy={sendingToParticipants === c.id} onSend={() => handleSendToParticipants(c)} />
                       </div>
-                    </div>
+                    )}
 
                     {/* Edit / delete */}
                     <div className="flex items-center gap-2 flex-shrink-0">
@@ -2349,37 +2445,27 @@ export default function CommitteesPage() {
                               )}
                             </button>
                           ) : (
-                            <button
-                              onClick={() => generateSessionCode(c)}
-                              disabled={busyIds.has(`mint-${c.id}`)}
-                              className="gv-lift w-full rounded-[10px] text-[10px] font-bold focus:outline-none"
-                              style={{
-                                minHeight: 34,
-                                border: '1.5px dashed rgba(27,56,40,0.35)',
-                                color: busyIds.has(`mint-${c.id}`) ? NEU.muted : NEU.forest,
-                                backgroundColor: 'transparent',
-                                fontFamily: OUTFIT, letterSpacing: '0.09em',
-                                cursor: busyIds.has(`mint-${c.id}`) ? 'default' : 'pointer',
-                              }}
-                            >
-                              {busyIds.has(`mint-${c.id}`) ? 'GENERATING…' : 'GENERATE CODE'}
-                            </button>
+                            <SessionCodePending block failed={mintFailedIds.has(c.id)} />
                           )}
                           <ChairCodeChip layout="card" code={chairCodeFor(c)} copiedCode={copiedCode} onCopy={handleCopyCode} />
 
-                          {/* Release affordances, side by side */}
-                          <div className="mt-2 pt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
-                            {(c.chair_user_ids?.length ?? 0) > 0 && (
+                          {/* The DELEGATES send left this card on 23 Sep 2026
+                              (owner: "it shouldn't be on that card"). It is one
+                              press that writes to every allocated delegate, and
+                              a grid of cards is the wrong place to keep it. It
+                              still lives in Settings → the per-committee
+                              release list above (and SEND ALL TO PARTICIPANTS),
+                              and in the email builder's Session Join Invite.
+                              Chairs stay: that send reaches at most two people
+                              and is the one the dais waits on. */}
+                          {(c.chair_user_ids?.length ?? 0) > 0 && (
+                            <div className="mt-2 pt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
                               <div className="flex items-center gap-1.5">
                                 <span style={{ fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.1em', color: '#6B5F52' }}>CHAIRS</span>
                                 <CompactSendButton releasedAt={c.released_to_chairs_at} busy={sendingToChairs === c.id} onSend={() => handleSendToChairs(c)} />
                               </div>
-                            )}
-                            <div className="flex items-center gap-1.5">
-                              <span style={{ fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.1em', color: '#6B5F52' }}>DELEGATES</span>
-                              <CompactSendButton releasedAt={c.released_to_delegates_at} busy={sendingToParticipants === c.id} onSend={() => handleSendToParticipants(c)} />
                             </div>
-                          </div>
+                          )}
 
                           {/* The position-paper deadline used to print a third
                               band here ("Papers due 4 Mar"). Removed: it is a
