@@ -1784,7 +1784,7 @@ export default function NewConferencePage() {
                   >
                     {logoUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={logoUrl} alt="Conference logo" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 14 }} />
+                      <img src={logoUrl} alt="Conference logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                     ) : (
                       <span className="flex flex-col items-center" style={{ gap: 8, color: NEU.muted }}>
                         <Emoji3D name="Framed picture" size={46} fallback={ImagePlus} fallbackColor={NEU.forest} />

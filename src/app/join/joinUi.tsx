@@ -309,7 +309,7 @@ export function BrandPanel({
             >
               {conference.logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={conference.logoUrl} alt="" className="h-full w-full object-contain" style={{ padding: 6 }} />
+                <img src={conference.logoUrl} alt="" className="h-full w-full object-contain" style={{ padding: 3 }} />
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src="/gavel-mark.png" alt="" className="h-full w-full object-contain" style={{ padding: 8 }} />

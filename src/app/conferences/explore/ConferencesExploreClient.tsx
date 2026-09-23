@@ -22,6 +22,7 @@ import { compareStartDate, hasConcluded, splitConferenceDates } from '@/lib/conf
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { ConferenceCard } from '../ConferenceCard';
 import VerifiedCheck from '@/components/VerifiedCheck';
+import { LogoDisc } from '@/components/LogoDisc';
 
 // ── Continent maps ─────────────────────────────────────────────────────────────
 
@@ -332,30 +333,19 @@ function ConferenceListRow({
         transition: 'background-color 160ms ease',
       }}
     >
-      {/* Round logo, near-white disc, forest fallback with acronym initials */}
-      <div
-        className="flex-shrink-0 flex items-center justify-center overflow-hidden"
+      {/* Round logo: the shared LogoDisc (near-white disc, forest fallback
+          with acronym initials), so a circle-cropped logo fills it edge to edge. */}
+      <LogoDisc
+        src={conf.logo_url}
+        alt={conf.acronym}
+        size={64}
+        fallbackText={initials}
         style={{
-          width: '64px', height: '64px', borderRadius: '9999px',
-          backgroundColor: conf.logo_url ? '#FDFCF9' : '#1B3828',
           border: '0.5px solid rgba(221,212,192,0.8)',
           boxShadow: hovered ? '0 6px 16px rgba(27,56,40,0.16)' : '0 3px 8px rgba(27,56,40,0.10)',
-          padding: conf.logo_url ? '8px' : 0,
           transition: 'box-shadow 160ms ease',
         }}
-      >
-        {conf.logo_url ? (
-          <img
-            src={conf.logo_url}
-            alt={conf.acronym}
-            style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
-          />
-        ) : (
-          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '15px', letterSpacing: '0.06em', color: '#EED98A', fontVariantNumeric: 'tabular-nums' }}>
-            {initials}
-          </span>
-        )}
-      </div>
+      />
 
       {/* Name · city/country with flag · badge chips.
           Grows to absorb ALL slack so the metadata columns to its right land in

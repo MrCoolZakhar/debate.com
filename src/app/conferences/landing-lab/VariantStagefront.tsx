@@ -34,6 +34,7 @@ import { supabase } from '@/lib/supabase';
 import { UN_COUNTRIES } from '@/lib/countries';
 import { compareStartDate } from '@/lib/conferenceDates';
 import { ConferenceCard } from '../ConferenceCard';
+import { LogoDisc } from '@/components/LogoDisc';
 import {
   LabConference, RatingSummary,
   CREAM, FOREST, GOLD, IVORY, PALE_GOLD, SANS,
@@ -1064,15 +1065,12 @@ function HeroSearchBar({ conferences }: { conferences: LabConference[] }) {
               onFocus={() => router.prefetch(`/conferences/${c.slug}`)}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
             >
-              <span
-                className="flex items-center justify-center flex-shrink-0 overflow-hidden"
-                style={{ width: 34, height: 34, borderRadius: 9999, backgroundColor: c.logo_url ? '#FFFFFF' : FOREST, border: '1px solid rgba(0,0,0,0.08)' }}
-              >
-                {c.logo_url
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  ? <img src={c.logo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 3 }} />
-                  : <span style={{ color: GOLD, fontFamily: SANS, fontWeight: 800, fontSize: 11 }}>{(c.acronym || c.full_name).slice(0, 3).toUpperCase()}</span>}
-              </span>
+              <LogoDisc
+                src={c.logo_url}
+                size={34}
+                fallbackText={(c.acronym || c.full_name).slice(0, 3)}
+                style={{ boxShadow: 'none', border: '1px solid rgba(0,0,0,0.08)' }}
+              />
               <span className="min-w-0 flex-1">
                 <span className="block truncate" style={{ fontFamily: SANS, fontWeight: 700, fontSize: 14.5, color: INK }}>
                   {landingConfTitle(c)}

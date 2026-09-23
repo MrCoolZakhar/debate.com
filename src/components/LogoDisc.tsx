@@ -3,11 +3,18 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // LogoDisc, the ONE way a conference logo renders anywhere in the app.
 //
-// Conference logos are arbitrary user uploads (transparent PNGs, odd crops,
-// dark seals). Rendered raw they look bad on cards, so every logo sits inside
-// a clean circular backdrop: a near-white disc (#FDFCF9, reads as white on
-// both ivory and forest surfaces) with a soft forest shadow, only a hairline
-// rim, and the artwork contained inside a ~7% inner margin so it barely chips.
+// Conference logos sit inside a clean circular backdrop: a near-white disc
+// (#FDFCF9, reads as white on both ivory and forest surfaces) with a soft
+// forest shadow and only a hairline rim.
+//
+// Since 23 Sep 2026 every upload goes through LogoCropModal's CIRCLE crop, so
+// the file is a square whose inscribed circle is exactly what the organiser
+// framed. A square picture is therefore drawn EDGE TO EDGE: no inner margin,
+// nothing cropped twice (the old ~7% margin on top of the crop tool's own
+// margin is what made logos look small). A picture that is NOT square (an
+// upload from before any crop tool, or seeded data) is contained with just
+// enough padding for its corners to stay inside the circle, measured from its
+// real aspect ratio once it loads, so a wide logo is never clipped by the rim.
 //
 // `bare` renders the logo free-floating instead: no disc, no border, no chip,
 // just the contained artwork on a transparent background (still with the
@@ -26,6 +33,19 @@
 
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
+
+/**
+ * Inner padding (px) that keeps a contained picture's corners inside the disc.
+ * A square picture (every circle-cropped upload) gets none: its circle is the
+ * disc. A w/h picture contained in a square box of side b shows as b x b/r
+ * (r >= 1); its half-diagonal b/2 * sqrt(1 + 1/r^2) must not pass the radius.
+ */
+function circleSafePadding(size: number, aspect: number): number {
+  const r = aspect >= 1 ? aspect : 1 / aspect;
+  if (!Number.isFinite(r) || r < 1.03) return 0;
+  const box = size / Math.sqrt(1 + 1 / (r * r));
+  return Math.max(0, Math.round((size - box) / 2));
+}
 
 export function LogoDisc({
   src,
@@ -67,6 +87,16 @@ export function LogoDisc({
   // Track failures per-URL so a src change retries the image.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const showImage = !!src && failedSrc !== src;
+  // Aspect ratio (w / h) of the loaded picture, per URL. Unknown until it
+  // loads; square is assumed meanwhile because every cropped upload is square.
+  const [loaded, setLoaded] = useState<{ src: string; aspect: number } | null>(null);
+  const aspect = loaded && loaded.src === src ? loaded.aspect : 1;
+  function noteAspect(el: HTMLImageElement) {
+    if (!src) return;
+    const a = el.naturalWidth > 0 && el.naturalHeight > 0 ? el.naturalWidth / el.naturalHeight : 1;
+    if (loaded && loaded.src === src && Math.abs(loaded.aspect - a) < 0.001) return;
+    setLoaded({ src, aspect: a });
+  }
 
   const base: CSSProperties = {
     width: `${size}px`,
@@ -86,11 +116,11 @@ export function LogoDisc({
         className={className}
         style={{
           ...base,
-          // bare: transparent, no rim, no inner padding, the raw mark floats.
+          // bare: transparent, no rim, the raw mark floats. Padding only for a
+          // non-square picture, so its corners stay inside the circle.
           backgroundColor: bare ? 'transparent' : '#FDFCF9',
           border: bare ? 'none' : '0.5px solid rgba(221,212,192,0.5)',
-          // ~7% of the diameter so the logo barely chips (none when bare).
-          padding: bare ? 0 : `${Math.round(size * 0.07)}px`,
+          padding: `${circleSafePadding(size, aspect)}px`,
           ...style,
         }}
       >
@@ -99,6 +129,10 @@ export function LogoDisc({
           src={src}
           alt={alt ?? ''}
           onError={() => setFailedSrc(src)}
+          // A server-rendered <img> can finish loading before hydration, when
+          // onLoad has nobody to tell, so the ref reads a complete image too.
+          ref={(el) => { if (el && el.complete && el.naturalWidth > 0) noteAspect(el); }}
+          onLoad={(e) => noteAspect(e.currentTarget)}
           draggable={false}
           style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
         />

@@ -20,7 +20,7 @@
 // `heroCompact` is the PHOTO-FORWARD hero tier, used ONLY by the Stagefront
 // hero "up next" rail: the banner photo fills the entire 188px card (cover)
 // under a forest-tinted scrim that darkens toward the bottom; the logo floats
-// top-left over the photo; the name is overlaid in bold white Outfit; the four
+// top-left over the photo (68px); the name is overlaid in bold white Outfit; the four
 // key facts (location+flag · dates · fee · attendees) sit in a 2×2 micro-grid
 // in the photo's lower zone with the APPLY pill bottom-right. Cards without a
 // banner fall back to the forest gradient + watermark acronym. This tier
@@ -232,12 +232,15 @@ export function ConferenceCard({
         </span>
       )}
 
-      {/* Floating logo disc, top-left over the photo */}
+      {/* Floating logo disc, top-left over the photo. 68px (was 40, owner
+          23 Sep 2026: "increase the size of the logo on the 3 highlighted
+          conferences"); the name block starts about 118px down the 188px card,
+          so the disc (12..80) never meets it, and the date chip is top-right. */}
       <div style={{ position: 'absolute', top: '12px', left: '14px' }}>
         <LogoDisc
           src={conf.logo_url}
           alt={conf.acronym}
-          size={40}
+          size={68}
           fallbackText={initials}
           style={{ boxShadow: '0 6px 14px rgba(6,14,10,0.45)' }}
         />

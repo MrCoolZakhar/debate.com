@@ -127,7 +127,7 @@ export function NewDelegationCard({
           >
             {details.logoUrl ? (
               /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={details.logoUrl} alt="" className="absolute inset-0 w-full h-full" style={{ objectFit: 'contain', padding: '10%' }} />
+              <img src={details.logoUrl} alt="" className="absolute inset-0 w-full h-full" style={{ objectFit: 'contain', padding: '4%' }} />
             ) : name.trim() ? (
               <span aria-hidden style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 26, color: 'color-mix(in srgb, var(--gv-main) 45%, transparent)' }}>
                 {monogram(name)}
