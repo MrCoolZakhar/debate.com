@@ -357,6 +357,49 @@ unsubscribe link in the footer is doing real work and must never be removed
 from a broadcast. Treat "everyone" as including strangers, and write it
 accordingly.
 
+### STOP ALL EMAIL
+
+```sql
+select public.email_pause('why you stopped it');   -- nothing leaves, no deploy needed
+select public.email_resume();                      -- everything held goes back to pending
+select * from public.email_sending_paused;         -- is it paused, who paused it, why
+select status, count(*) from email_outbox group by 1;
+```
+
+Paused parks every new and every waiting row as `held`, keeping `send_after`;
+`send-emails` only ever claims `pending`, so the brake works from the SQL editor
+with nothing to deploy. Resume puts them back with their `send_after` intact, so
+a scheduled release still fires at its own time. Suppressed rows (unsubscribed)
+are never released. The one exemption is the burst alarm's own email to the
+owner, which must still get out to say what happened. See
+`scratchpad/cardv2/30_email_emergency_stop.sql`.
+
+`email_burst_check()` runs every 5 minutes: over 150 outbox rows in 10 minutes it
+writes an `email_burst_alerts` row and emails the owner once, naming the subjects
+and conferences; over 600 it also calls `email_pause`, so a runaway stops itself
+and a human restarts it.
+
+### AGENTS NEVER CALL A LIVE SENDING FUNCTION TO TEST ANYTHING
+
+**Whatever the argument is called.** Testing is a rolled-back transaction
+(`begin; select ...; rollback;`) or a send to the owner's own address, and
+nothing else. Before calling anything that can write `email_outbox`, read its
+body and find the line that skips the insert. If you cannot point at that line,
+you are about to send.
+
+Why this rule exists: on 23 Sep 2026 an agent called
+`queue_checkmark_emails(null, true)` believing `p_preview` meant dry run. It did
+not: it prefixed the subject with `[Preview]` and sent anyway. **440 emails
+reached 424 organisers across 272 conferences** before anyone noticed, and
+nothing could be recalled. The flag has since been fixed to insert nothing and
+return counts plus a sample, and every other preview flag was audited (the rest
+were already honest). Nineteen senders have **no** flag at all
+(`queue_organizer_reminder_emails`, `queue_request_digest_emails`,
+`queue_study_guide_release_emails`, `queue_chair_session_reminders`,
+`compose_daily_platform_report`, `admin_email_conference_organisers`,
+`mark_invoice_paid`, `settle_invoice_effects`, `review_payment_batch` and
+others): calling one of those always sends, immediately, to real people.
+
 ---
 
 ## 7. Sessions runtime in one screen
