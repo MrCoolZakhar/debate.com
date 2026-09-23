@@ -201,8 +201,10 @@ export function RoleBookmarks({ roles, active, statusOf, onPick }: {
     <div
       role="tablist"
       aria-label="Application roles"
-      className="grid items-end"
-      style={{ gridTemplateColumns: `repeat(${roles.length}, minmax(0, 1fr))`, gap: 6, paddingTop: 4 }}
+      className="grid items-end overflow-x-auto"
+      // minmax(88px, 1fr): on a phone seven roles cannot share ~300px, so the
+      // row scrolls sideways instead of squeezing the names into each other.
+      style={{ gridTemplateColumns: `repeat(${roles.length}, minmax(88px, 1fr))`, gap: 6, paddingTop: 4, scrollbarWidth: 'none' }}
     >
       {roles.map(role => {
         const on = role === active;
@@ -223,7 +225,7 @@ export function RoleBookmarks({ roles, active, statusOf, onPick }: {
             title={ROLE_BLURB[role]}
             className="flex flex-col items-center w-full min-w-0 focus:outline-none"
             style={{
-              padding: on ? '11px 12px 14px' : '9px 12px 11px',
+              padding: on ? '11px 6px 14px' : '9px 6px 11px',
               // Bookmark: rounded at the top, square at the bottom, so the
               // active tab reads as part of the panel it opens.
               borderRadius: '16px 16px 4px 4px',
