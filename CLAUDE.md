@@ -50,6 +50,8 @@ Design consequences: mobile-first on every delegate and applicant surface; the c
 
 Hard rules: organisers are never charged; Unlimited status is server-verified; public price display goes through `displayDelegatePrice` / `fetchDelegatePrices` in `src/lib/publicFees.ts` (reading the read-only `conference_public_fees` view), because `conferences.fee_amount` is a stale denormalised column: "TBD" and no Pricing details list until delegate applications are set up (delegate role config `is_enabled`, open now or opening later); once set up, the delegate price of the current fee stage (for an upcoming opening, the stage that applies at opening) with the Pricing details list ("Applications open {date}" when upcoming), "Free" at 0. The creation wizard asks no price.
 
+**Stripe Connect set-up needs financials write access (23 Sep 2026).** The `connect-onboard` edge function (v8, not in git) refuses `start` (create the Express account, mint an onboarding link) with a 403 unless `can_write_financials(conference)` is true for the caller (owners, and organisers with financials write access; asked with the caller's JWT); `status` stays open to every organiser, and Financials → Settings disables the Stripe buttons for a read-only organiser with the same sentence.
+
 **A role's application window and its fee phases are one timeline (21 Sep 2026).** Since 19 Sep
 `guard_application_write()` refuses a non-organiser application outside `applications_open_at` /
 `applications_close_at`; MUNBU WS then advertised a Late price for days nobody could apply on. Now

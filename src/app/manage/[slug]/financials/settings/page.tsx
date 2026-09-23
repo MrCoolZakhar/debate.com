@@ -73,8 +73,10 @@ function MethodRow({
   );
 }
 
+const CONNECT_READONLY_MESSAGE = 'Only organisers who can edit financials can set up payouts.';
+
 export default function FinancialsSettingsPage() {
-  const { conference, refreshConferenceQuiet } = useManage();
+  const { conference, financialsReadOnly, refreshConferenceQuiet } = useManage();
   const { session } = useAuth();
   const router = useRouter();
   const { displayCurrency } = useFinancialsCurrency();
@@ -83,6 +85,10 @@ export default function FinancialsSettingsPage() {
   const [connectStatus, setConnectStatus] = useState<ConnectStatus>('none');
   const [connectBusy, setConnectBusy] = useState<'start' | 'status' | null>(null);
   const [connectError, setConnectError] = useState('');
+  // Stripe Connect set-up is limited to organisers who can edit financials
+  // (connect-onboard v8 checks can_write_financials server-side); a read-only
+  // organiser sees why the button is off instead of a refusal after a click.
+  const connectNotice = financialsReadOnly ? CONNECT_READONLY_MESSAGE : connectError;
 
   useEffect(() => {
     if (!conference) return;
@@ -115,7 +121,7 @@ export default function FinancialsSettingsPage() {
   }, [conference?.id, session?.access_token]);
 
   async function startConnectOnboarding(overrideCountryCode?: string) {
-    if (!conference || connectBusy) return;
+    if (!conference || connectBusy || financialsReadOnly) return;
     setConnectBusy('start');
     setConnectError('');
     const supabase = await getFreshAuthedClient();
@@ -524,10 +530,10 @@ export default function FinancialsSettingsPage() {
               <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.ink, lineHeight: 1.6 }}>
                 You&apos;ll be redirected to Stripe to enter your bank and business details, then brought back here.
               </p>
-              {connectError && (
+              {connectNotice && (
                 <p className="flex items-start gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, color: '#8B2020', lineHeight: 1.5 }}>
                   <TriangleAlert size={12} strokeWidth={2.4} style={{ marginTop: 2, flexShrink: 0 }} />
-                  {connectError}
+                  {connectNotice}
                 </p>
               )}
               <div className="flex items-center justify-between">
@@ -537,7 +543,7 @@ export default function FinancialsSettingsPage() {
                 <NeuButton
                   icon={CreditCard}
                   gradient={NEU_GRADIENTS.gold}
-                  disabled={connectBusy !== null}
+                  disabled={connectBusy !== null || financialsReadOnly}
                   // Writes payment_method before onboarding completes, which
                   // used to permanently satisfy the old gate. Harmless now:
                   // readiness for stripe requires connect_onboarding_status
@@ -686,10 +692,10 @@ export default function FinancialsSettingsPage() {
                         Finish your Stripe onboarding. Stripe still needs a few details before payouts can start.
                       </p>
                     )}
-                    {connectError && (
+                    {connectNotice && (
                       <p className="flex items-start gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, color: '#8B2020', lineHeight: 1.5 }}>
                         <TriangleAlert size={12} strokeWidth={2.4} style={{ marginTop: 2, flexShrink: 0 }} />
-                        {connectError}
+                        {connectNotice}
                       </p>
                     )}
                     <div className="flex items-center gap-3 flex-wrap">
@@ -711,7 +717,7 @@ export default function FinancialsSettingsPage() {
                       <NeuButton
                         icon={CreditCard}
                         gradient={NEU_GRADIENTS.gold}
-                        disabled={connectBusy !== null}
+                        disabled={connectBusy !== null || financialsReadOnly}
                         onClick={() => startConnectOnboarding()}
                       >
                         {connectBusy === 'start' ? 'CONNECTING…' : 'FINISH ONBOARDING'}
@@ -726,16 +732,16 @@ export default function FinancialsSettingsPage() {
                     <p style={mutedCaption}>
                       Stripe&apos;s standard processing fee applies, since your conference is the merchant of record. Gavelling charges nothing.
                     </p>
-                    {connectError && (
+                    {connectNotice && (
                       <p className="flex items-start gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, color: '#8B2020', lineHeight: 1.5 }}>
                         <TriangleAlert size={12} strokeWidth={2.4} style={{ marginTop: 2, flexShrink: 0 }} />
-                        {connectError}
+                        {connectNotice}
                       </p>
                     )}
                     <NeuButton
                       icon={CreditCard}
                       gradient={NEU_GRADIENTS.gold}
-                      disabled={connectBusy !== null}
+                      disabled={connectBusy !== null || financialsReadOnly}
                       onClick={() => startConnectOnboarding(payoutCountry)}
                     >
                       {connectBusy === 'start' ? 'CONNECTING…' : 'CONNECT STRIPE'}
