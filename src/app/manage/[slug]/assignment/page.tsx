@@ -13,6 +13,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { CircleFlag } from '@/components/CircleFlag';
 import { effectiveSlotArt, parseGroups, type SlotGroup } from '@/lib/slotGroups';
+import { friendlyError } from '@/lib/friendlyError';
 import { ageAt } from '@/lib/age';
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import DelegationsView from '@/app/manage/[slug]/assignment/DelegationsView';
@@ -1266,7 +1267,7 @@ async function insertAllocation(
         ? 'That seat is already taken.'
         : 'This allocation already exists.';
     }
-    return insertErr.message;
+    return friendlyError(insertErr, 'Could not save this seat. Please try again.');
   }
 
   // This flip used to be fired and forgotten, and that is what turned a
@@ -1347,7 +1348,7 @@ async function insertSocietyAllocation(
         ? 'That seat is already taken.'
         : 'This allocation already exists.';
     }
-    return insertErr.message;
+    return friendlyError(insertErr, 'Could not save this seat. Please try again.');
   }
   return null;
 }
@@ -3536,6 +3537,17 @@ export default function AssignmentPage() {
   const [societies, setSocieties] = useState<DelegationSource[]>([]);
   const [history, setHistory] = useState<Record<string, UserHistory>>({});
   const [mode, setMode] = useState<'delegates' | 'chairs' | 'delegations' | 'independents'>('delegates');
+  // Deep link from Applications → Delegations ("Open in Assignment"):
+  // ?mode=delegations&delegation=<society id>. Read once after mount, so the
+  // server render and the first client render agree.
+  const [deepDelegationId, setDeepDelegationId] = useState<string | null>(null);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const m = q.get('mode');
+    if (m === 'delegates' || m === 'chairs' || m === 'delegations' || m === 'independents') setMode(m);
+    const d = q.get('delegation');
+    if (d) setDeepDelegationId(d);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [expandedAppId, setExpandedAppId] = useState<string | null>(null);
@@ -5199,7 +5211,7 @@ export default function AssignmentPage() {
 
 
       {mode === 'delegations' && (
-        <DelegationsView conference={conference} showFlash={showFlash} />
+        <DelegationsView conference={conference} showFlash={showFlash} initialSocietyId={deepDelegationId} />
       )}
 
       {mode === 'independents' && (

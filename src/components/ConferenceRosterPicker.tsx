@@ -322,10 +322,17 @@ function useAnchoredDropdown<T extends HTMLElement>(
 }
 
 // ── Committee-name input with preset dropdown ─────────────────────────────────
-export function ConferenceCommitteeNameInput({ value, onChange, onPresetSelect }: {
+export function ConferenceCommitteeNameInput({ value, onChange, onPresetSelect, id, className, style, placeholder }: {
   value: string;
   onChange: (v: string) => void;
   onPresetSelect: (preset: CommitteePreset) => void;
+  /** Optional look-and-feel overrides. Omitted, the field is exactly what it
+   *  always was, so the creation wizard is untouched; the committee editor
+   *  passes the /create input class instead (23 Sep 2026). */
+  id?: string;
+  className?: string;
+  style?: React.CSSProperties;
+  placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -353,8 +360,10 @@ export function ConferenceCommitteeNameInput({ value, onChange, onPresetSelect }
           if (e.key === 'Enter' && topMatch) { e.preventDefault(); onPresetSelect(topMatch); setOpen(false); }
           if (e.key === 'Escape') setOpen(false);
         }}
-        placeholder="e.g. Human Rights Council or UNHRC"
-        style={inputStyle}
+        id={id}
+        placeholder={placeholder ?? 'e.g. Human Rights Council or UNHRC'}
+        className={className}
+        style={className ? style : { ...inputStyle, ...style }}
       />
       {menuOpen && pos && (
         <Portal>

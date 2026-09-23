@@ -14,6 +14,7 @@ import { Check, X, Gavel } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { reportBlocked } from '@/lib/reportCrash';
+import { friendlyError } from '@/lib/friendlyError';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import { Eyebrow, OUTFIT } from '@/app/account/accountUi';
@@ -76,7 +77,7 @@ export default function ChairInvitePage() {
     const supabase = getAuthedClient(session.access_token);
     const { data, error: rpcErr } = await supabase.rpc('get_chair_invite', { p_token: token });
     setLoading(false);
-    if (rpcErr) { setError(rpcErr.message || 'Could not load this invite.'); return; }
+    if (rpcErr) { setError(friendlyError(rpcErr, 'Could not load this invite.')); return; }
     setInvite(data as InviteData);
   }, [session, token]);
 
@@ -105,7 +106,7 @@ export default function ChairInvitePage() {
           inviteStatus: invite?.status ?? null,
         });
       }
-      setError((rpcErr ? rpcErr.message : result?.error) || 'Could not respond to this invite.');
+      setError((rpcErr ? friendlyError(rpcErr, 'Could not respond to this invite.') : result?.error) || 'Could not respond to this invite.');
       return;
     }
 

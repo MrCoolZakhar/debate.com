@@ -9,26 +9,45 @@ const INDEXNOW_KEY = '8b2d058420fbf3a0f241bf68224fb156';
 const HOST = 'gavelling.com';
 
 // Called fire-and-forget by the organizer UI right after a conference is
-// published. We re-check is_public server-side so the endpoint can't be used
-// to ping arbitrary or private URLs.
+// published, and after a rename moves its slug. We re-check is_public
+// server-side so the endpoint can't be used to ping arbitrary or private URLs.
+//
+// `previous` is the slug the conference just moved OFF. It is announced too,
+// so the old URL gets recrawled and the 308 (src/middleware.ts) is seen rather
+// than waiting for the crawler to come back on its own. It is only honoured
+// when it really is an alias OF THIS conference, so it cannot be used to point
+// the ping at an arbitrary URL either.
 export async function POST(req: NextRequest) {
+  const SLUG = /^[a-z0-9-]{1,120}$/;
   let slug: unknown;
+  let previous: unknown;
   try {
-    ({ slug } = await req.json());
+    ({ slug, previous } = await req.json());
   } catch {
     return NextResponse.json({ error: 'invalid body' }, { status: 400 });
   }
-  if (typeof slug !== 'string' || !/^[a-z0-9-]{1,120}$/.test(slug)) {
+  if (typeof slug !== 'string' || !SLUG.test(slug)) {
     return NextResponse.json({ error: 'invalid slug' }, { status: 400 });
   }
 
   const { data } = await supabase
     .from('conferences')
-    .select('is_public')
+    .select('id, is_public')
     .eq('slug', slug)
     .maybeSingle();
   if (!data?.is_public) {
     return NextResponse.json({ error: 'not public' }, { status: 404 });
+  }
+
+  let movedFrom: string | null = null;
+  if (typeof previous === 'string' && previous !== slug && SLUG.test(previous)) {
+    const { data: alias } = await supabase
+      .from('conference_slug_aliases')
+      .select('slug')
+      .eq('slug', previous)
+      .eq('conference_id', (data as { id: string }).id)
+      .maybeSingle();
+    if (alias) movedFrom = previous;
   }
 
   try {
@@ -41,6 +60,8 @@ export async function POST(req: NextRequest) {
         keyLocation: `https://${HOST}/${INDEXNOW_KEY}.txt`,
         urlList: [
           `https://${HOST}/conferences/${slug}`,
+          // The page moved: announce where it used to live so the 308 is read.
+          ...(movedFrom ? [`https://${HOST}/conferences/${movedFrom}`] : []),
           // The listing surfaces changed too — nudge them along with the page.
           `https://${HOST}/conferences/explore`,
           `https://${HOST}/conferences/map`,

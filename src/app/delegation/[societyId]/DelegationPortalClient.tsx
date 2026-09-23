@@ -29,6 +29,7 @@ import {
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { queueLeaderAllocationEmail } from '@/lib/emailEvents';
+import { friendlyError } from '@/lib/friendlyError';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import { NEU, NEU_GRADIENTS, EASE, OUTFIT, NeuCard, NeuIconDisc } from '@/components/neu';
@@ -434,7 +435,7 @@ export default function DelegationPortalClient() {
     setInviteBusy(false);
     const result = data as { ok: boolean; error?: string; token?: string } | null;
     if (error || !result?.ok || !result.token) {
-      setInviteError(result?.error ?? error?.message ?? 'Could not create an invite link.');
+      setInviteError(result?.error ?? friendlyError(error, 'Could not create an invite link.'));
       return;
     }
     setInviteToken(result.token);

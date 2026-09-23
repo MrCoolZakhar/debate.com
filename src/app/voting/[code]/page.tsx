@@ -120,14 +120,12 @@ function nowMs(): number {
 }
 
 /**
- * How long an optimistic observer placard survives without the refetched row
- * agreeing. `setDelegateObserver` returns void and swallows its error, and every
- * `delegates` write is gated on the `x-chair-suffix` header by RLS — the exact
- * class of silent rejection that broke every delegate write for two months. Long
- * enough for a slow write, short enough that a refused one cannot keep hiding
- * behind a placard that looks correct. Mirrors RollCallPanel's OPTIMISTIC_TTL_MS.
+ * How long an optimistic observer placard whose write LANDED waits for the refetched
+ * row to agree before the row is trusted again (realtime down, a sleeping laptop).
+ * A refused write never waits for this: `setDelegateObserver` resolves false and the
+ * placard is rolled back at once.
  */
-const OBSERVER_WRITE_TTL_MS = 8000;
+const OBSERVER_ECHO_TTL_MS = 15000;
 
 /** Announces delegations that joined the committee since this screen opened.
  *  It never seats anyone: seating a delegation is the chair's decision. */
@@ -555,8 +553,19 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   // has landed (seq per document). If another device's newer state wins instead, nothing
   // is written to the document and the stored state is applied.
   const backStatusSeqRef = useRef<Record<string, number>>({});
-  /** Optimistic observer placards awaiting confirmation from the refetched row. */
-  const observerWriteRef = useRef<Record<string, { value: boolean; at: number }>>({});
+  /** Optimistic observer placards awaiting confirmation from the refetched row. `seq` names
+   *  the tap (a newer tap on the same seat supersedes the older one's result), `landed` is
+   *  set once THAT write resolved true. The override is dropped only when it landed AND the
+   *  row agrees: a row that merely still carries the old value (a quick on-off before any
+   *  echo) must not end the override, or the echo of the first write flashes it back. */
+  const observerWriteRef = useRef<Record<string, { value: boolean; at: number; seq: number; landed: boolean }>>({});
+  const observerSeqRef = useRef(0);
+  /** The latest status tap per seat, so a refused OLDER write never rolls back a newer tap. */
+  const statusTapRef = useRef<Record<string, number>>({});
+  /** The committee as last rendered, for async continuations (a refused status write
+   *  hands the seat back to the row as it is THEN, not as it was at the tap). */
+  const committeeRef = useRef(committee);
+  useEffect(() => { committeeRef.current = committee; });
   const [observerOverrides, setObserverOverrides] = useState<Record<string, boolean>>({});
   const [observerReconcileTick, setObserverReconcileTick] = useState(0);
   const [observerWriteFailed, setObserverWriteFailed] = useState(false);
@@ -757,11 +766,11 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   }, [code, loadAttempt]);
 
   // ── Observer write reconciliation ──────────────────────────────────────────
-  // `setDelegateObserver` returns void and swallows its error, and every delegates
-  // write is gated on the x-chair-suffix header by RLS. So an optimistic placard is
-  // only a claim until the refetched row agrees with it: drop the override the
-  // moment it does, revert it and say so after OBSERVER_WRITE_TTL_MS if it never
-  // does. An RLS rejection must never hide behind a placard that looks correct.
+  // An optimistic placard is held until its write LANDED and the refetched row agrees
+  // with it; only then does the row take over again. A refused write is rolled back by
+  // `toggleObserverSeat` itself (setDelegateObserver resolves false), never here. The TTL
+  // is only for a landed write whose echo never arrives (realtime down): after it the row
+  // is trusted again, and a catch-up brings it up to date.
   useEffect(() => {
     const pending = observerWriteRef.current;
     const ids = Object.keys(pending);
@@ -769,32 +778,22 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     const flagById = new Map((committee?.delegates ?? []).map((d) => [d.id, d.isObserver === true]));
     const now = nowMs();
     let changed = false;
-    let failed = false;
     let nextCheckIn = Infinity;
     for (const id of ids) {
       const entry = pending[id];
       const dbFlag = flagById.get(id);
-      if (dbFlag === undefined || dbFlag === entry.value) {
+      if (dbFlag === undefined || (entry.landed && (dbFlag === entry.value || now - entry.at >= OBSERVER_ECHO_TTL_MS))) {
         delete pending[id];
         changed = true;
-      } else if (now - entry.at >= OBSERVER_WRITE_TTL_MS) {
-        delete pending[id];
-        changed = true;
-        failed = true;
-      } else {
-        nextCheckIn = Math.min(nextCheckIn, OBSERVER_WRITE_TTL_MS - (now - entry.at));
+      } else if (entry.landed) {
+        nextCheckIn = Math.min(nextCheckIn, OBSERVER_ECHO_TTL_MS - (now - entry.at));
       }
     }
     if (changed) {
       const rebuilt: Record<string, boolean> = {};
       for (const [id, entry] of Object.entries(pending)) rebuilt[id] = entry.value;
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- the DB row is the external system this effect synchronises against; there is no render-time value that can tell a landed write from a silently refused one.
       setObserverOverrides(rebuilt);
-      // Same reason: only this reconcile pass knows the write never landed, and a
-      // silent RLS rejection has to become visible.
-      if (failed) setObserverWriteFailed(true);
     }
-    // Nothing will arrive if the write was refused, so self-schedule the backstop.
     if (nextCheckIn !== Infinity) {
       const timer = setTimeout(() => setObserverReconcileTick((n) => n + 1), nextCheckIn + 50);
       return () => clearTimeout(timer);
@@ -1687,28 +1686,52 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const setRollCallStatus = (id: string, next: DelegateStatus) => {
     if (isViewOnly) return;
     touchedStatusRef.current.add(id);
+    const tap = (statusTapRef.current[id] ?? 0) + 1;
+    statusTapRef.current[id] = tap;
     setRollCallStatuses((prev) => ({ ...prev, [id]: next }));
-    setDelegateStatusInDB(id, next, committee.code, suffix);
+    // Optimistic first; the write rides the seat's own chain (committeeService), so rapid
+    // taps land in order. A refusal hands the seat back to the row, and only when no newer
+    // tap has happened since.
+    void setDelegateStatusInDB(id, next, committee.code, suffix).then((ok) => {
+      if (ok || statusTapRef.current[id] !== tap) return;
+      touchedStatusRef.current.delete(id);
+      setRollCallStatuses((prev) => {
+        const row = committeeRef.current?.delegates.find((x) => x.id === id);
+        return row ? { ...prev, [id]: row.status } : prev;
+      });
+    });
   };
 
-  /** Hand out or take back an observer placard. Optimistic first, write
-   *  fire-and-forget (AGENTS.md rule 5); the ref is the receipt the reconcile
-   *  effect above checks the DB against. */
+  /** Hand out or take back an observer placard. Optimistic first, write fire-and-forget
+   *  (AGENTS.md rule 5). The placard stays exactly as tapped until that write has landed and
+   *  the row agrees (reconcile effect above); a refused write rolls it back at once and says
+   *  so. Nothing in between can flash the old value back. */
   const toggleObserverSeat = (d: Delegate) => {
     if (isViewOnly) return;
     const next = !isObserverSeat(d);
-    observerWriteRef.current[d.id] = { value: next, at: nowMs() };
+    const seq = ++observerSeqRef.current;
+    observerWriteRef.current[d.id] = { value: next, at: nowMs(), seq, landed: false };
     setObserverOverrides((prev) => ({ ...prev, [d.id]: next }));
     setObserverWriteFailed(false);
-    // Arms the TTL backstop even when no refetch ever arrives.
-    setObserverReconcileTick((n) => n + 1);
-    setDelegateObserverInDB(d.id, next, committee.code, suffix);
+    void setDelegateObserverInDB(d.id, next, committee.code, suffix).then((ok) => {
+      const entry = observerWriteRef.current[d.id];
+      if (!entry || entry.seq !== seq) return;   // a newer tap owns the placard now
+      if (ok) {
+        entry.landed = true;
+        entry.at = nowMs();
+        setObserverReconcileTick((n) => n + 1);
+        return;
+      }
+      delete observerWriteRef.current[d.id];
+      setObserverOverrides((prev) => {
+        const rest = { ...prev };
+        delete rest[d.id];
+        return rest;
+      });
+      setObserverWriteFailed(true);
+    });
     // An observer holds no voting placard, so present-voting drops to present.
-    if (next && seatStatus(d) === 'present-voting') {
-      touchedStatusRef.current.add(d.id);
-      setRollCallStatuses((prev) => ({ ...prev, [d.id]: 'present' }));
-      setDelegateStatusInDB(d.id, 'present', committee.code, suffix);
-    }
+    if (next && seatStatus(d) === 'present-voting') setRollCallStatus(d.id, 'present');
   };
 
   const newSeats = newSeatIds
@@ -1763,7 +1786,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       seats={livePresent}
       starting={!!pendingDoc}
       readOnly={isViewOnly}
-    >{(gateNode, gateBlocked) => (
+    >{(gate) => (
     <VotingRollCall
       delegates={committee.delegates}
       rollCallStatuses={rollCallStatuses}
@@ -1784,8 +1807,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       onVetoModeChange={changeVetoMode}
       vetoEntries={vetoListFor(settings)}
       readOnly={isViewOnly}
-      footerExtra={gateNode}
-      confirmBlocked={gateBlocked}
+      votingPanel={gate.panel}
+      votingWarn={gate.warn}
+      confirmBlocked={gate.blocked}
     />
     )}</DeviceVoteGate>
   ) : null;

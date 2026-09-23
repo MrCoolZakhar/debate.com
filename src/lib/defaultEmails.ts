@@ -48,7 +48,7 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     subject: "We've received your application to {{conference_name}}",
     blocks: [
       { type: 'paragraph', variant: 'heading', content: 'Your application is in' },
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nThanks for applying to {{conference_name}} as a {{role}}. Your application is now with the organizing team for review.\n\nThere is nothing further for you to do right now — we'll email you as soon as there's a decision." },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nThanks for applying to {{conference_name}} as a {{role}}. Your application is now with the organizing team for review.\n\nThere is nothing further for you to do right now. We'll email you as soon as there's a decision." },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
@@ -78,7 +78,7 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     subject: "You're in! Your {{conference_name}} application has been accepted",
     blocks: [
       { type: 'paragraph', variant: 'heading', content: "You're in" },
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour application to {{conference_name}} as a {{role}} has been accepted. We're glad to have you with us.\n\nYour committee allocation, any fee you owe, and the documents your chairs publish all live in one place — open your conference view to see where things stand." },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour application to {{conference_name}} as a {{role}} has been accepted. We're glad to have you with us.\n\nYour committee allocation, any fee you owe, and the documents your chairs publish all live in one place. Open your conference view to see where things stand." },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
@@ -86,7 +86,7 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     subject: 'An update on your {{conference_name}} application',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: 'About your application' },
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nThank you for applying to {{conference_name}}. After review, we aren't able to offer you a place this time.\n\nWe know that's a disappointing thing to read, and it isn't a judgement on you as a delegate — good conferences turn away strong applicants every year simply because there are more of them than there are seats. We hope you'll apply again." },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nThank you for applying to {{conference_name}}. After review, we aren't able to offer you a place this time.\n\nWe know that's a disappointing thing to read, and it isn't a judgement on you as a delegate. Good conferences turn away strong applicants every year simply because there are more of them than there are seats. We hope you'll apply again." },
     ],
   },
   payment_available: {
@@ -98,7 +98,7 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
         { label: 'Amount due', value: '{{fee}}' },
         { label: 'Registered as', value: '{{role}}' },
       ] },
-      { type: 'paragraph', content: 'You can pay any time before the conference — open your conference view for the payment details the organizing team has set.' },
+      { type: 'paragraph', content: 'You can pay any time before the conference. Open your conference view for the payment details the organizing team has set.' },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
@@ -118,7 +118,7 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
   // a Google Calendar template URL built from this conference's name, dates
   // and location has nowhere to come from. See the note in emailBlocks.ts.
   payment_received: {
-    subject: 'Payment received — {{conference_name}}',
+    subject: 'Payment received: {{conference_name}}',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: 'Payment received' },
       { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nYour registration for {{conference_name}} is fully settled. Thank you.' },
@@ -185,7 +185,7 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     ],
   },
   allocation_changed: {
-    subject: 'Your committee allocation has changed — {{conference_name}}',
+    subject: 'Your committee allocation has changed: {{conference_name}}',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: 'Your allocation has changed' },
       { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nYour allocation for {{conference_name}} has been updated. You are now in:' },
@@ -198,14 +198,14 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     ],
   },
   allocation_removed: {
-    subject: 'Your committee allocation has been removed — {{conference_name}}',
+    subject: 'Your committee allocation has been removed: {{conference_name}}',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: 'Your allocation has been removed' },
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour committee allocation for {{conference_name}} has been removed, so you don't currently hold a committee or country placement.\n\nThis is usually a step in a reshuffle rather than the end of the story — the organizing team will be in touch if a new allocation is on the way. If you weren't expecting this, reply and ask." },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour committee allocation for {{conference_name}} has been removed, so you don't currently hold a committee or country placement.\n\nThis is usually a step in a reshuffle rather than the end of the story. The organizing team will be in touch if a new allocation is on the way. If you weren't expecting this, reply and ask." },
     ],
   },
   pledge_received: {
-    subject: 'Delegation pledge received — {{conference_name}}',
+    subject: 'Delegation pledge received: {{conference_name}}',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: 'Pledge received' },
       { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nYour pledge to cover delegation spots for {{delegation_name}} at {{conference_name}} has been marked received. Thank you for handling payment on behalf of your delegation.\n\nYour conference view shows which spots the pledge covers and who is currently holding them.' },
@@ -213,7 +213,7 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     ],
   },
   added_to_delegation: {
-    subject: "You've joined {{delegation_name}} — {{conference_name}}",
+    subject: "You've joined {{delegation_name}}: {{conference_name}}",
     blocks: [
       { type: 'paragraph', variant: 'heading', content: "You're part of {{delegation_name}}" },
       { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou've been added to {{delegation_name}}'s delegation for {{conference_name}}. Your head delegate and faculty advisor can now see you as part of their group, and any spots the delegation has paid for can be assigned to you." },
@@ -221,14 +221,14 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     ],
   },
   removed_from_delegation: {
-    subject: 'You have left {{delegation_name}} — {{conference_name}}',
+    subject: 'You have left {{delegation_name}}: {{conference_name}}',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: "You've left {{delegation_name}}" },
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou've been removed from {{delegation_name}}'s delegation for {{conference_name}}. Your own registration is unaffected — you are still applying or attending exactly as before.\n\nIf that doesn't look right, get in touch with your head delegate or the organizing team." },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou've been removed from {{delegation_name}}'s delegation for {{conference_name}}. Your own registration is unaffected. You are still applying or attending exactly as before.\n\nIf that doesn't look right, get in touch with your head delegate or the organizing team." },
     ],
   },
   spot_received: {
-    subject: "You've been given a paid spot — {{conference_name}}",
+    subject: "You've been given a paid spot: {{conference_name}}",
     blocks: [
       { type: 'paragraph', variant: 'heading', content: 'Your spot is paid for' },
       { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nA paid delegation spot for {{conference_name}} has been transferred to you, so your registration is now covered.' },
@@ -244,7 +244,7 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     ],
   },
   spot_lost: {
-    subject: 'A change to your paid spot — {{conference_name}}',
+    subject: 'A change to your paid spot: {{conference_name}}',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: 'Your paid spot has moved' },
       { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nThe paid delegation spot that was covering your registration at {{conference_name}} has been transferred to another delegate.\n\nYour place is not cancelled. Speak to your head delegate, faculty advisor, or the organizing team about how payment will be settled.' },
@@ -260,14 +260,14 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     ],
   },
   not_attending: {
-    subject: "You've been marked not attending — {{conference_name}}",
+    subject: "You've been marked not attending: {{conference_name}}",
     blocks: [
       { type: 'paragraph', variant: 'heading', content: "You're marked as not attending" },
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou've been marked as not attending {{conference_name}}. If you held a committee allocation, it has been released back to the pool for someone else.\n\nIf this was a mistake, contact the organizing team as soon as you can — allocations get taken quickly." },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou've been marked as not attending {{conference_name}}. If you held a committee allocation, it has been released back to the pool for someone else.\n\nIf this was a mistake, contact the organizing team as soon as you can, because allocations get taken quickly." },
     ],
   },
   attendance_restored: {
-    subject: 'Your attendance has been restored — {{conference_name}}',
+    subject: 'Your attendance has been restored: {{conference_name}}',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: "You're back on the list" },
       { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour registration for {{conference_name}} is active again.\n\nWorth checking: your committee allocation may have been released while you were marked as not attending, so confirm your current committee and payment status." },
@@ -283,7 +283,7 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     ],
   },
   chair_assigned: {
-    subject: "You've been assigned as a chair — {{conference_name}}",
+    subject: "You've been assigned as a chair: {{conference_name}}",
     blocks: [
       { type: 'paragraph', variant: 'heading', content: "You're on the dais" },
       { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou've been assigned as a chair at {{conference_name}}." },
@@ -302,9 +302,9 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     subject: "You're invited to chair {{committee}} at {{conference_name}}",
     blocks: [
       { type: 'paragraph', variant: 'heading', content: "You've been invited to chair" },
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\n{{conference_name}} has invited you to chair **{{committee}}**.\n\nAccepting adds the conference to your Gavelling account and opens your chair tools — roll call, speakers list, motions, documents, and voting." },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\n{{conference_name}} has invited you to chair **{{committee}}**.\n\nAccepting adds the conference to your Gavelling account and opens your chair tools: roll call, speakers list, motions, documents, and voting." },
       { type: 'button', label: 'Accept the invitation', destination: 'chair_invite_accept' },
-      { type: 'paragraph', variant: 'small', content: "If you weren't expecting this invitation, you can ignore it — nothing happens until you accept." },
+      { type: 'paragraph', variant: 'small', content: "If you weren't expecting this invitation, you can ignore it. Nothing happens until you accept." },
     ],
   },
   organizer_invite: {
@@ -313,11 +313,11 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
       { type: 'paragraph', variant: 'heading', content: "You've been invited to organize" },
       { type: 'paragraph', content: "Hi {{delegate_name}},\n\n{{conference_name}} has invited you to join its organizing team.\n\nAccepting opens the management dashboard, where organizers handle applications, committees, allocations, finances, and communications." },
       { type: 'button', label: 'Accept the invitation', destination: 'organizer_invite_accept' },
-      { type: 'paragraph', variant: 'small', content: "If you weren't expecting this invitation, you can ignore it — nothing happens until you accept." },
+      { type: 'paragraph', variant: 'small', content: "If you weren't expecting this invitation, you can ignore it. Nothing happens until you accept." },
     ],
   },
   session_chair_invite: {
-    subject: 'Your session details for {{committee}} — {{conference_name}}',
+    subject: 'Your session details for {{committee}}: {{conference_name}}',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: '{{conference_name}} is live' },
       { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour session code and chair code are ready in your chair dashboard. Use them to open your committee room when it's time to gavel in." },
@@ -332,7 +332,7 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     ],
   },
   session_join_invite: {
-    subject: 'Join your live committee — {{conference_name}}',
+    subject: 'Join your live committee: {{conference_name}}',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: 'Your committee is open' },
       { type: 'paragraph', content: 'Hi {{delegate_name}},\n\n{{conference_name}} is live. Join your committee room with the code below. See you on the floor.' },
@@ -359,17 +359,17 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
   // the deep link to that specific inbox thread, and the digest fills it with
   // the inbox itself.
   request_received: {
-    subject: 'New question from {{delegate_name}} — {{request_subject}}',
+    subject: 'New question from {{delegate_name}}: {{request_subject}}',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: 'A delegate has a question' },
       { type: 'paragraph', content: '{{delegate_name}} asked {{conference_name}} about “{{request_subject}}”.' },
       { type: 'paragraph', content: '{{request_body}}' },
       { type: 'button', label: 'Reply in the inbox', destination: 'custom', url: '' },
-      { type: 'paragraph', variant: 'small', content: 'Reply from the inbox rather than this email — the delegate sees your answer in their conference view, and the thread stays with the conference.' },
+      { type: 'paragraph', variant: 'small', content: 'Reply from the inbox rather than this email. The delegate sees your answer in their conference view, and the thread stays with the conference.' },
     ],
   },
   delegation_swap: {
-    subject: 'Your committee allocation has been swapped — {{conference_name}}',
+    subject: 'Your committee allocation has been swapped: {{conference_name}}',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: 'Your allocation has been swapped' },
       { type: 'paragraph', content: 'Hi {{delegate_name}},\n\n{{delegation_name}} has swapped allocations within its delegation at {{conference_name}}, and yours has changed as part of it. You are now in:' },
@@ -380,14 +380,14 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
         { label: 'Representing', value: '{{country}}', iconFrom: 'country' },
       ] },
       VIEW_CONFERENCE_BUTTON,
-      { type: 'paragraph', variant: 'small', content: 'Any research or position paper you had started applies to your old committee — check it against the new one before you continue.' },
+      { type: 'paragraph', variant: 'small', content: 'Any research or position paper you had started applies to your old committee. Check it against the new one before you continue.' },
     ],
   },
   import_join_invite: {
     subject: 'Your {{conference_name}} registration is on Gavelling',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: 'Your registration is waiting' },
-      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\n{{conference_name}} runs on Gavelling, and your registration is already there under this email address — committee, country, and payment status included.\n\nOpen your invitation to activate your account. Everything attaches itself; you do not need to register again.' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\n{{conference_name}} runs on Gavelling, and your registration is already there under this email address, with committee, country and payment status included.\n\nOpen your invitation to activate your account. Everything attaches itself; you do not need to register again.' },
       { type: 'button', label: 'View my invitation', destination: 'import_claim' },
     ],
   },

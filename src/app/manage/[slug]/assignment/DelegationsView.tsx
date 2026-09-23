@@ -174,9 +174,11 @@ function AdvisorTransferModal({
 interface DelegationsViewProps {
   conference: Conference;
   showFlash: (kind: 'ok' | 'err', msg: string) => void;
+  /** Open this delegation on arrival (Applications → "Open in Assignment"). */
+  initialSocietyId?: string | null;
 }
 
-export default function DelegationsView({ conference, showFlash }: DelegationsViewProps) {
+export default function DelegationsView({ conference, showFlash, initialSocietyId = null }: DelegationsViewProps) {
   const { session } = useAuth();
   /** The stable half of `session`. AuthProvider replaces the session OBJECT on
    *  every auth event (token refresh, tab focus); the token is a string and
@@ -190,7 +192,13 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
   const [searchPool, setSearchPool] = useState<SearchApp[]>([]);
   const [advisorPool, setAdvisorPool] = useState<SearchApp[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(initialSocietyId);
+  // A deep link (?delegation=) that arrives after mount opens that delegation.
+  const [seenInitialId, setSeenInitialId] = useState(initialSocietyId);
+  if (initialSocietyId !== seenInitialId) {
+    setSeenInitialId(initialSocietyId);
+    if (initialSocietyId) setExpandedId(initialSocietyId);
+  }
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [dragMemberId, setDragMemberId] = useState<string | null>(null);

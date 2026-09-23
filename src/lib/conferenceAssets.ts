@@ -2,12 +2,16 @@
 // 'conference-assets' bucket under their own folder, mirroring the recipe in
 // manage/[slug]/settings (handleBannerUpload / handleLogoUpload).
 // 'seat-logos' and 'group-logos' are the per-seat crests and the seat-group
-// crests of custom (parliamentary) committees, see src/lib/slotGroups.ts. They
-// are treated exactly like logos: small, PNG, transparency preserved.
+// crests of custom (parliamentary) committees, see src/lib/slotGroups.ts.
+// 'committee-emblems' is a committee's own mark (23 Sep 2026: the committee
+// editor used to upload it by hand, and the creation wizard needs the same
+// path). All three are treated exactly like logos: small, PNG, transparency
+// preserved.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { friendlyError } from '@/lib/friendlyError';
 
-export type ConferenceAssetFolder = 'banners' | 'logos' | 'seat-logos' | 'group-logos';
+export type ConferenceAssetFolder = 'banners' | 'logos' | 'seat-logos' | 'group-logos' | 'committee-emblems';
 
 export type UploadConferenceAssetResult =
   | { url: string; error?: undefined }
@@ -17,7 +21,7 @@ const MAX_BYTES = 5 * 1024 * 1024;
 
 // Display caps — banners render full-width hero art, logos render inside a
 // small disc. Anything larger is downscaled before upload so pages stay light.
-const CAP: Record<ConferenceAssetFolder, number> = { banners: 1600, logos: 512, 'seat-logos': 512, 'group-logos': 512 };
+const CAP: Record<ConferenceAssetFolder, number> = { banners: 1600, logos: 512, 'seat-logos': 512, 'group-logos': 512, 'committee-emblems': 512 };
 
 // Formats we should never rasterize/re-encode (vectors, animations) — upload as-is.
 const PASSTHROUGH = new Set(['image/svg+xml', 'image/gif']);
@@ -118,7 +122,7 @@ export async function uploadConferenceAsset(
     .from('conference-assets')
     .upload(path, outFile, { contentType, upsert: true });
   if (error) {
-    return { error: 'Upload failed: ' + error.message };
+    return { error: friendlyError(error, "Couldn't upload the image. Please try a different one.") };
   }
   const { data } = supabase.storage.from('conference-assets').getPublicUrl(path);
   return { url: data.publicUrl };

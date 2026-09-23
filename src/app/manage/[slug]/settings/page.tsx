@@ -23,6 +23,7 @@ import { useScrollLock } from '@/hooks/useScrollLock';
 import { LogoDisc } from '@/components/LogoDisc';
 import { LogoCropModal } from '@/components/LogoCropModal';
 import { safeStorageKey } from '@/lib/storageKey';
+import { notify } from '@/lib/sessionNotifications';
 import { DatePicker } from '@/components/DatePicker';
 import { sendOrganizerInvite, listPendingOrganizerInvites, revokeOrganizerInvite, type OrganizerInviteRow } from '@/lib/organizerInvites';
 import {
@@ -947,6 +948,37 @@ export default function SettingsPage() {
   const minAgeBaseline = useRef<string | null>(null);
   const intentBaseline = useRef<string | null>(null);
   const detailsSnap = () => snap({ fullName, acronym, description, studentLevel, startDate, endDate, datesTbd, country, city, format, expectedDelegates });
+
+  // ── The name and the acronym MINT THE URL ─────────────────────────────────
+  // Renaming a conference re-slugs it (`conferences_reslug_on_rename`) and
+  // files the slug it had as a permanent redirect. On the 800ms timer below
+  // that would fire once per pause in the middle of typing "KU MUN": three
+  // throwaway slugs, three permanent aliases, and the manage URL yanked out
+  // from under the organiser mid-word. So these two fields — and only these
+  // two — wait for the field to be LEFT before the section saves. Everything
+  // else in the section keeps saving on the timer as before.
+  const identityFocused = useRef(false);
+  const [identityBlurs, setIdentityBlurs] = useState(0);
+  const identityDirty = () => !!conference
+    && (fullName !== (conference.full_name ?? '') || acronym.trim() !== (conference.acronym ?? ''));
+  const onIdentityFocus = () => { identityFocused.current = true; };
+  const onIdentityBlur = () => { identityFocused.current = false; setIdentityBlurs(n => n + 1); };
+  // A rename that is never blurred (tab closed, the organiser clicks straight
+  // into another tab of the page) would otherwise be dropped, because its save
+  // is waiting for a blur that never comes.
+  const identityFlushRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    identityFlushRef.current = () => {
+      if (!identityFocused.current || detailsSaving || !identityDirty()) return;
+      identityFocused.current = false;
+      void handleSaveDetails();
+    };
+  });
+  useEffect(() => {
+    const flush = () => identityFlushRef.current();
+    window.addEventListener('pagehide', flush);
+    return () => { window.removeEventListener('pagehide', flush); flush(); };
+  }, []);
   const visualSnap = () => snap({ contactEmail, instagramUrl, facebookUrl, tiktokUrl, whatsappUrl, websiteUrl });
   const minAgeSnap = () => snap({ minAge, maxAge });
   const intentSnap = () => snap({ intentKeys });
@@ -2803,13 +2835,50 @@ export default function SettingsPage() {
       city: city || null,
       format: format || null,
       expected_delegates: expected,
-    }).eq('id', conference.id).select('id');
+    }).eq('id', conference.id).select('id, slug');
     if (error || !data || data.length !== 1) {
       // Failure: inputs keep the user's edits untouched for a retry.
       setDetailsSaving(false);
       setDetailsError(saveFailMessage(error));
       return;
     }
+
+    // A rename re-mints the slug IN THE DATABASE, so the row that came back
+    // may live at a different URL than the one in the address bar. Follow it:
+    // `refreshConferenceQuiet` and every other read on this page resolve the
+    // conference by the slug in the route, and would silently stop finding it
+    // (`if (!confData) return;`). The old URL still works — it 308s to the new
+    // one — but leaving the organiser sitting on it means a redirect on every
+    // click from here on.
+    const previousSlug = conference.slug;
+    const newSlug = (data[0] as { slug?: string | null }).slug ?? previousSlug;
+    if (newSlug !== previousSlug) {
+      detailsBaseline.current = detailsSnap();
+      setDetailsSaving(false);
+      setDetailsSaved(true);
+      setTimeout(() => setDetailsSaved(false), 2500);
+      // Say what happened: the address bar is about to change under them.
+      notify({
+        key: 'conference-slug-moved',
+        kind: 'info',
+        level: 'ok',
+        title: 'Your conference link changed',
+        body: `It is now gavelling.com/conferences/${newSlug}. The old link still works and sends people here.`,
+        ttlMs: 12_000,
+      });
+      // Tell IndexNow the page moved, naming both ends so the old URL is
+      // recrawled and the 308 is seen. Best effort, exactly like publish.
+      if (conference.is_public) {
+        void fetch('/api/indexnow', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug: newSlug, previous: previousSlug }),
+        }).catch(() => {});
+      }
+      router.replace(`/manage/${newSlug}/settings${window.location.search}`);
+      return;
+    }
+
     await refreshConferenceQuiet();
     detailsBaseline.current = detailsSnap();
     setDetailsSaving(false);
@@ -2886,10 +2955,13 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!conference || detailsBaseline.current === null || detailsSaving) return;
     if (detailsSnap() === detailsBaseline.current) return;
+    // A rename in progress: hold the whole section until the field is left,
+    // so the URL is re-minted once, from the finished name. See identityDirty.
+    if (identityFocused.current && identityDirty()) return;
     const t = setTimeout(() => { void handleSaveDetails(); }, 800);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullName, acronym, description, studentLevel, startDate, endDate, datesTbd, country, city, format, expectedDelegates, detailsSaving, conference]);
+  }, [fullName, acronym, description, studentLevel, startDate, endDate, datesTbd, country, city, format, expectedDelegates, detailsSaving, conference, identityBlurs]);
 
   // Same debounced autosave as the three above. 800ms of quiet also means a
   // burst of toggles (picking four of the six is one thought, not four) lands
@@ -4226,8 +4298,8 @@ export default function SettingsPage() {
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="London International Model United Nations 2027"
                 style={inputStyle}
-                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                onFocus={(e) => { onIdentityFocus(); e.currentTarget.style.borderColor = '#1B3828'; }}
+                onBlur={(e) => { onIdentityBlur(); e.currentTarget.style.borderColor = '#DDD4C0'; }}
               />
             </div>
 
@@ -4237,9 +4309,10 @@ export default function SettingsPage() {
                 type="text"
                 value={acronym}
                 onChange={(e) => { setAcronym(e.target.value); if (acronymError) setAcronymError(''); }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                onFocus={(e) => { onIdentityFocus(); e.currentTarget.style.borderColor = '#1B3828'; }}
                 onBlur={(e) => {
                   setAcronymError(acronymProblem(e.target.value));
+                  onIdentityBlur();
                   e.currentTarget.style.borderColor = '#DDD4C0';
                 }}
                 placeholder="e.g. LIMUN, or Model NATO Germany"

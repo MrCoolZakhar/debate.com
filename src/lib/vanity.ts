@@ -96,6 +96,10 @@ function isVanityCandidate(raw: string): boolean {
  * printed material / socials, where "the organiser edited their acronym" must not
  * be able to break it. A pin is still resolved against the live public-conference
  * set, so pinning can never expose a conference that went private.
+ *
+ * The VALUE is a slug, and a slug now moves when a conference is renamed, so a
+ * pin whose target has been re-minted is followed through `conference_slug_aliases`
+ * rather than silently 404-ing.
  */
 const PINNED: Readonly<Record<string, string>> = {
   // Actively being shared as gavelling.com/worldmun.
@@ -106,6 +110,33 @@ type VanityIndex = ReadonlyMap<string, string>;
 
 let cached: { at: number; index: VanityIndex } | null = null;
 const TTL_MS = 60_000;
+
+/**
+ * Old slugs of public conferences, keyed the same way as an acronym.
+ *
+ * A conference's slug follows its acronym now (`conferences_reslug_on_rename`),
+ * so `/kumun` starts resolving the moment KU MUN is renamed — but `/demomun`,
+ * which was a working vanity URL five minutes earlier because `demomun` WAS
+ * the acronym, would stop dead. Every slug is derived from the acronym it was
+ * minted under, so the alias table is also the history of old acronyms, and
+ * this reads it back.
+ *
+ * Live acronyms always win (this map is only consulted on a miss), so a dead
+ * name can never shadow a conference that is actually called that today.
+ */
+async function loadAliases(): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const { data, error } = await supabase
+    .from('conference_slug_aliases')
+    .select('slug, conferences!inner(slug, is_public)')
+    .eq('conferences.is_public', true);
+  if (error || !data) return out;
+  for (const row of data as unknown as { slug: string; conferences: { slug: string | null } | null }[]) {
+    const current = row.conferences?.slug;
+    if (current) out.set(row.slug, current);
+  }
+  return out;
+}
 
 async function loadIndex(): Promise<VanityIndex> {
   const now = Date.now();
@@ -164,10 +195,32 @@ async function loadIndex(): Promise<VanityIndex> {
   }
   for (const key of ambiguous) index.delete(key);
 
+  // Old acronyms, recovered from the old slugs they minted. Fallback only: a
+  // key a LIVE acronym already claims is never overwritten, and a key an
+  // ambiguous live acronym deliberately vacated stays vacant (it is in
+  // `ambiguous`, so the visitor gets a 404 rather than a guess). Two dead
+  // slugs normalising to the same key drop out for the same reason.
+  const aliases = await loadAliases();
+  const aliasAmbiguous = new Set<string>();
+  const aliasKeys = new Map<string, string>();
+  for (const [old, current] of aliases) {
+    const key = normalizeVanity(old);
+    if (!key || RESERVED.has(key) || key === normalizeVanity(current)) continue;
+    if (aliasKeys.has(key) && aliasKeys.get(key) !== current) { aliasAmbiguous.add(key); continue; }
+    aliasKeys.set(key, current);
+  }
+  for (const key of aliasAmbiguous) aliasKeys.delete(key);
+  for (const [key, slug] of aliasKeys) {
+    if (!index.has(key) && !ambiguous.has(key)) index.set(key, slug);
+  }
+
   // Pins win over derived acronyms, but only for conferences that are actually
   // public right now — a pin must never become a private-conference backdoor.
+  // A pinned slug that has since been re-minted by a rename is followed
+  // through the alias table, so a pin cannot rot the way it used to.
   for (const [name, slug] of Object.entries(PINNED)) {
-    if (publicSlugs.has(slug)) index.set(normalizeVanity(name), slug);
+    const target = publicSlugs.has(slug) ? slug : aliases.get(slug);
+    if (target && publicSlugs.has(target)) index.set(normalizeVanity(name), target);
   }
 
   cached = { at: now, index };

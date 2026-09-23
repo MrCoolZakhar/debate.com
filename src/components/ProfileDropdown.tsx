@@ -42,9 +42,12 @@ import { compareStartDate, hasConcluded } from '@/lib/conferenceDates';
 import { User, FileText, FileClock, CalendarDays, Sparkles, Coins, LogOut, ArrowRight, Ticket, Plus } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useDraftCount, draftResumeHref } from '@/hooks/useDraftCount';
+import LiveNowMenuSection from '@/components/liveRooms/LiveNowMenuSection';
 import { usePendingInvites, inviteAcceptHref } from '@/hooks/usePendingInvites';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { invoiceDueCents, isInvoicePayable, type InvoiceStatus } from '@/lib/invoices';
+import { CircleFlag } from '@/components/CircleFlag';
+import { deriveCommitteeAcronym } from '@/lib/presetNames';
 
 /** One row in the dropdown's "YOUR CONFERENCES" section. */
 interface NavConference {
@@ -65,7 +68,17 @@ interface NavConference {
   /** Something here is waiting on this person. One short phrase, shown as a
    *  quiet gold dot whose accessible name is this text. */
   attention?: string;
+  /** Delegates and faculty advisors only: where their application stands.
+   *  Allocation first (flag + committee), then Unpaid, then Approved. */
+  standing?:
+    | { kind: 'allocated'; countryCode: string | null; countryName: string | null; committee: string }
+    | { kind: 'unpaid' }
+    | { kind: 'approved' };
 }
+
+/** Roles that get the standing line: everyone who attends as a participant
+ *  rather than running the room. */
+const STANDING_ROLES = new Set(['delegate', 'head-delegate', 'faculty-advisor', 'observer']);
 
 /** Attention, most urgent first: money the conference is waiting for, then work
  *  an organiser owes their applicants, then a decision this person is waiting
@@ -207,7 +220,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
         const [appsRes, orgRes, ownedRes] = await Promise.all([
           supabase
             .from('applications')
-            .select(`id, role, status, conferences (${CONF})`)
+            .select(`id, role, status, payment_status, conferences (${CONF})`)
             .eq('user_id', userId)
             .in('status', ['submitted', 'accepted', 'assigned', 'checked-in']),
           supabase
@@ -237,7 +250,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
           byId.set(conf.id, { id: conf.id, slug: conf.slug, acronym: conf.acronym, logo_url: conf.logo_url, start_date: conf.start_date, end_date: conf.end_date, role, pending });
         };
 
-        type AppRow = { id: string; role: string; status: string; conferences: ConfRow | ConfRow[] | null };
+        type AppRow = { id: string; role: string; status: string; payment_status: string | null; conferences: ConfRow | ConfRow[] | null };
         const appRows = (appsRes.data ?? []) as AppRow[];
         /** application id → the conference it belongs to and its status, so an
          *  unpaid invoice (which is keyed by application, never by user) can be
@@ -264,6 +277,36 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
         // is running right now, which is exactly when someone opens this menu
         // to find it. It also falls back to start_date when end_date is null,
         // and treats a dates-TBD conference as still to come rather than past.
+        // ── Standing, for delegates and faculty advisors ───────────────────
+        // Optional like the markers below: a failed read just leaves the line off.
+        try {
+          const allocRes = await supabase
+            .from('conference_allocations')
+            .select('conference_id, country_code, country_name, seat, conference_committees (name, abbreviation)')
+            .eq('user_id', userId);
+          type AllocRow = { conference_id: string; country_code: string | null; country_name: string | null; seat: number | null; conference_committees: { name: string | null; abbreviation: string | null } | { name: string | null; abbreviation: string | null }[] | null };
+          const allocByConf = new Map<string, AllocRow>();
+          for (const a of ((allocRes.data ?? []) as AllocRow[])) {
+            const had = allocByConf.get(a.conference_id);
+            if (!had || (a.seat ?? 1) < (had.seat ?? 1)) allocByConf.set(a.conference_id, a);
+          }
+          for (const row of appRows) {
+            const conf = firstRow(row.conferences);
+            const nav = conf ? byId.get(conf.id) : null;
+            if (!nav || nav.role !== 'DELEGATE' || !STANDING_ROLES.has(row.role)) continue;
+            const alloc = allocByConf.get(nav.id);
+            if (alloc) {
+              const cc = firstRow(alloc.conference_committees);
+              const committee = cc?.abbreviation?.trim() || deriveCommitteeAcronym(cc?.name ?? '') || cc?.name || '';
+              nav.standing = { kind: 'allocated', countryCode: alloc.country_code, countryName: alloc.country_name, committee };
+            } else if (row.status !== 'submitted' && nav.standing?.kind !== 'allocated') {
+              const unpaid = row.payment_status != null && row.payment_status !== 'paid' && row.payment_status !== 'waived';
+              if (unpaid) nav.standing = { kind: 'unpaid' };
+              else if (!nav.standing) nav.standing = { kind: 'approved' };
+            }
+          }
+        } catch { /* the rows still list without a standing line */ }
+
         const list = Array.from(byId.values())
           .filter(c => !hasConcluded(c))
           .sort((a, b) => compareStartDate(a.start_date, b.start_date));
@@ -427,6 +470,10 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
             </div>
           </div>
           <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
+
+          {/* Live now: this account's conference rooms that are live right now
+              (src/components/liveRooms). Nothing while there is none. */}
+          <LiveNowMenuSection onNavigate={() => setOpen(false)} />
 
           {/* Menu rows */}
           <div className="py-1">
@@ -593,7 +640,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                   >
                     <span
                       style={{
-                        width: '20px', height: '20px', borderRadius: '50%',
+                        width: '24px', height: '24px', borderRadius: '50%',
                         backgroundColor: '#FFFEFA', border: '0.5px solid rgba(61,122,82,0.45)',
                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                         overflow: 'hidden', flexShrink: 0,
@@ -642,7 +689,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                   >
                     <span
                       style={{
-                        width: '20px', height: '20px', borderRadius: '50%',
+                        width: '24px', height: '24px', borderRadius: '50%',
                         backgroundColor: '#FFFEFA', border: '0.5px solid rgba(182,135,31,0.5)',
                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                         overflow: 'hidden', flexShrink: 0,
@@ -670,7 +717,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                       style={{ color: '#8A6614', fontSize: '9px', letterSpacing: '0.06em', fontFamily: "'Outfit', sans-serif" }}
                     >
                       <FileClock size={10} strokeWidth={2.6} />
-                      UNFINISHED
+                      DRAFT
                     </span>
                   </Link>
                 ))}
@@ -700,8 +747,8 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                         {/* Small round logo on a near-white disc */}
                         <span
                           style={{
-                            width: '20px',
-                            height: '20px',
+                            width: '24px',
+                            height: '24px',
                             borderRadius: '50%',
                             backgroundColor: '#FFFEFA',
                             border: '0.5px solid #E7E0CF',
@@ -720,7 +767,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                             />
                           ) : (
-                            <span style={{ fontSize: '8px', fontWeight: 900, color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
+                            <span style={{ fontSize: '9.5px', fontWeight: 900, color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
                               {conf.acronym?.[0] ?? '•'}
                             </span>
                           )}
@@ -744,12 +791,28 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                             style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#B6871F' }}
                           />
                         )}
-                        <span
-                          className="font-bold uppercase shrink-0"
-                          style={{ color: conf.pending ? '#8A6614' : '#9A8A78', fontSize: '9px', letterSpacing: '0.06em', fontFamily: "'Outfit', sans-serif" }}
-                        >
-                          {conf.pending ? 'APPLIED' : conf.role}
-                        </span>
+                        {conf.standing?.kind === 'allocated' ? (
+                          <span
+                            className="inline-flex min-w-0 max-w-[55%] shrink items-center gap-1.5 font-semibold"
+                            style={{ color: '#1B3828', fontSize: '11px', fontFamily: "'Outfit', sans-serif" }}
+                            title={`${conf.standing.countryName ?? ''}${conf.standing.committee ? ` · ${conf.standing.committee}` : ''}`}
+                          >
+                            <CircleFlag code={conf.standing.countryCode} country={conf.standing.countryName} size={18} decorative />
+                            <span className="truncate">{conf.standing.committee || conf.standing.countryName}</span>
+                          </span>
+                        ) : (
+                          <span
+                            className="font-bold uppercase shrink-0"
+                            style={{
+                              color: conf.standing?.kind === 'unpaid' ? '#8B2020' : conf.standing?.kind === 'approved' ? '#2A5A3C' : conf.pending ? '#8A6614' : '#9A8A78',
+                              fontSize: '9px', letterSpacing: '0.06em', fontFamily: "'Outfit', sans-serif",
+                            }}
+                          >
+                            {conf.standing?.kind === 'unpaid' ? 'UNPAID'
+                              : conf.standing?.kind === 'approved' ? 'APPROVED'
+                              : conf.pending ? 'APPLIED' : conf.role}
+                          </span>
+                        )}
                       </Link>
                     ))}
 

@@ -8,42 +8,6 @@ import { getFlagUrl, getCountryByName, getCountryDisplayName } from '@/lib/count
 import SiteNav from '@/components/SiteNav';
 import FooterLegal from '@/components/FooterLegal';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
-import { useScrollLock } from '@/hooks/useScrollLock';
-
-function getCommitteeAcronym(title: string): string {
-  const t = title.toUpperCase();
-  if (t.includes('SECURITY COUNCIL')) return 'UNSC';
-  if (t.includes('GENERAL ASSEMBLY')) return 'UNGA';
-  if (t.includes('HUMAN RIGHTS')) return 'UNHRC';
-  if (t.includes('ECOSOC')) return 'ECOSOC';
-  if (t.includes('ENVIRONMENT') || t.includes('UNEP')) return 'UNEP';
-  if (t.includes('WHO') || t.includes('WORLD HEALTH')) return 'WHO';
-  if (t.includes('NATO')) return 'NATO';
-  if (t.includes('AFRICAN UNION') || /\bAU\b/.test(t)) return 'AU';
-  if (t.includes('EUROPEAN UNION') || /\bEU\b/.test(t)) return 'EU';
-  if (t.includes('G20') || t.includes('G-20')) return 'G20';
-  if (t.includes('ARAB LEAGUE') || t.includes('LAS')) return 'LAS';
-  if (t.includes('ASEAN')) return 'ASEAN';
-  if (t.includes('IMF')) return 'IMF';
-  return 'UNGA';
-}
-
-const REJOIN_LOGOS: Record<string, string> = {
-  UNSC:   '/logos/un.svg',
-  UNGA:   '/logos/un.svg',
-  UNHRC:  '/logos/UNHRC.png',
-  ECOSOC: '/logos/un.svg',
-  UNEP:   '/logos/UNEP.png',
-  NATO:   '/logos/nato.png',
-  EU:     '/logos/eu.png',
-  AU:     '/logos/AU.png',
-  WHO:    '/logos/who.png',
-  IMF:    '/logos/IMF.png',
-  G20:    '/logos/g20.svg',
-  LAS:    '/logos/arab-league.png',
-  ASEAN:  '/logos/asean.png',
-  WB:     '/logos/worldbank.svg',
-};
 
 // ── Individual feature card components ──────────────────────────────────────
 
@@ -467,12 +431,7 @@ export default function HomeClient() {
     { step: '02', title: t('step2_title'), desc: t('step2_desc') },
     { step: '03', title: t('step3_title'), desc: t('step3_desc') },
   ];
-  const [rejoinData, setRejoinData] = useState<{
-    code: string; chairName: string; committeeTitle: string; savedAt: number; chairSuffix?: string | null;
-  } | null>(null);
   const [showDeletedNotice, setShowDeletedNotice] = useState(false);
-  // The "session in progress" rejoin card is a modal — freeze the landing page.
-  useScrollLock(!!rejoinData);
 
   useEffect(() => {
     // Read via window.location rather than useSearchParams, so this stays a
@@ -485,31 +444,6 @@ export default function HomeClient() {
       url.searchParams.delete('accountDeleted');
       window.history.replaceState({}, '', url.toString());
     }
-  }, []);
-
-  useEffect(() => {
-    try {
-      // Also check old key name for backward compat
-      const raw = localStorage.getItem('gavelling-rejoin') ?? localStorage.getItem('gavelling_active_session');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        const dismissedCode = localStorage.getItem('gavelling-rejoin-dismissed');
-        if (parsed.code === dismissedCode) {
-          localStorage.removeItem('gavelling-rejoin');
-          return;
-        }
-        const eightHours = 18 * 60 * 60 * 1000;
-        if (Date.now() - parsed.savedAt < eightHours) {
-          // Migrate old key to new key if needed
-          localStorage.setItem('gavelling-rejoin', raw);
-          localStorage.removeItem('gavelling_active_session');
-          setRejoinData(parsed);
-        } else {
-          localStorage.removeItem('gavelling-rejoin');
-          localStorage.removeItem('gavelling_active_session');
-        }
-      }
-    } catch { /* ignore */ }
   }, []);
 
   const handleJoin = () => {
@@ -868,108 +802,6 @@ export default function HomeClient() {
         </div>
       </div>
 
-      {rejoinData && (() => {
-        const acronym = getCommitteeAcronym(rejoinData.committeeTitle);
-        const logoUrl = REJOIN_LOGOS[acronym];
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-            <div
-              className="rounded-2xl shadow-xl p-6 flex flex-col gap-4"
-              style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', width: '320px' }}
-            >
-              {/* SESSION IN PROGRESS */}
-              <p
-                className="font-black uppercase tracking-widest text-center"
-                style={{ color: '#B8844A', fontSize: '17px', letterSpacing: '0.12em' }}
-              >
-                Session in progress
-              </p>
-
-              {/* Logo + title row */}
-              <div className="flex items-start gap-3">
-                {logoUrl && (
-                  <div
-                    className="rounded-2xl flex items-center justify-center shrink-0 overflow-hidden"
-                    style={{ width: '56px', height: '56px', backgroundColor: 'rgba(27,56,40,0.08)', border: '1px solid rgba(27,56,40,0.12)' }}
-                  >
-                    <img
-                      src={logoUrl}
-                      alt={acronym}
-                      width={36}
-                      height={36}
-                      style={{ objectFit: 'contain', width: '36px', height: '36px' }}
-                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                    />
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-lg font-black leading-snug" style={{ color: '#1B3828' }}>
-                    {rejoinData.committeeTitle}
-                  </p>
-                  <p className="text-xs mt-0.5" style={{ color: '#6A5A4A' }}>
-                    Signed in as <span className="font-semibold">{rejoinData.chairName}</span>
-                  </p>
-                </div>
-              </div>
-
-              {/* Code badge + password row */}
-              <div className="flex flex-col gap-1.5">
-                <div
-                  className="w-full flex items-center justify-center rounded-xl py-2"
-                  style={{ backgroundColor: '#F5F0E8', border: '1.5px solid #C8BFB0' }}
-                >
-                  <p
-                    className="font-black tracking-widest"
-                    style={{ color: '#1C1410', fontFamily: "'DM Mono', monospace", fontSize: '15px', letterSpacing: '0.18em' }}
-                  >
-                    {rejoinData.code.toUpperCase()}
-                  </p>
-                </div>
-                {rejoinData.chairSuffix && (
-                  <p className="text-xs text-center" style={{ color: '#6A5A4A' }}>
-                    Password: <span className="font-black" style={{ fontFamily: "'DM Mono', monospace", color: '#1B3828' }}>{rejoinData.chairSuffix}</span>
-                  </p>
-                )}
-              </div>
-
-              {/* Buttons */}
-              {/*
-                ?chairName is the chair's ONLY identity — chat sender, feedback author and the
-                gavel comparison all key off it. Rejoining without it silently renamed the
-                chair to the literal "Chair", so their own DMs stopped grouping into the
-                threads both sides could already see.
-              */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    const q = rejoinData.chairName ? `?chairName=${encodeURIComponent(rejoinData.chairName)}` : '';
-                    window.location.href = `/chair/${rejoinData.code}${q}`;
-                  }}
-                  className="flex-1 py-2.5 rounded-xl font-black text-sm transition-colors"
-                  style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-                >
-                  Rejoin →
-                </button>
-                <button
-                  onClick={() => {
-                    localStorage.setItem('gavelling-rejoin-dismissed', rejoinData.code);
-                    localStorage.removeItem('gavelling-rejoin');
-                    setRejoinData(null);
-                  }}
-                  className="flex-1 py-2.5 rounded-xl font-black text-sm border transition-colors"
-                  style={{ borderColor: '#DDD4C0', color: '#1B3828', backgroundColor: 'transparent' }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#DDD4C0'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                >
-                  Dismiss
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
     </>
   );
 }

@@ -7,24 +7,34 @@
 // backdrop) and mintConferenceSession (session minting for conference committees).
 
 import { useState, useEffect, useCallback } from 'react';
-import { X, Globe, Users, Users2, Landmark, Scale, Zap, UserPlus, Mail, User, Send } from 'lucide-react';
+import { X, UserPlus, Mail, Send, Landmark, Scale, Zap, Users2 } from 'lucide-react';
 import { NEU, NEU_GRADIENTS, OUTFIT, NeuButton, type NeuGradient } from '@/components/neu';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { sessionClient } from '@/lib/sessionClient';
 import { useAuth } from '@/components/AuthProvider';
 import { getCountryByName } from '@/lib/countries';
 import {
-  ConferenceRosterPicker,
   ConferenceRosterSelected,
-  ConferenceCommitteeNameInput,
-  entry,
   type RosterEntry,
 } from '@/components/ConferenceRosterPicker';
-import { matchPresetEmblem } from '@/lib/presetNames';
-import { type SlotGroup, parseGroups, effectiveSlotArt } from '@/lib/slotGroups';
+import {
+  CommitteeIdentityPreview,
+  CommitteeSetupFields,
+  SetupPrimaryButton,
+  SetupGhostButton,
+  committeeSetupPreview,
+  CommitteeTypeGlyph,
+  committeeTypeAccent,
+  effectiveEmblem,
+  resolveSeatArt,
+  rosterModeOf,
+  seatNounsOf,
+  COMMITTEE_TYPE_LABEL,
+  type CommitteeType,
+  type CommitteeSetupDraft,
+} from '@/components/committeeSetupKit';
+import { type SlotGroup, parseGroups } from '@/lib/slotGroups';
 import { uploadConferenceAsset } from '@/lib/conferenceAssets';
-import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
-import { LogoDisc } from '@/components/LogoDisc';
 import { LogoCropModal } from '@/components/LogoCropModal';
 import Portal from '@/components/Portal';
 import Loader from '@/components/Loader';
@@ -37,35 +47,15 @@ import {
   type PendingChairInvite,
 } from '@/lib/chairInvites';
 import { queueEventEmail } from '@/lib/emailEvents';
+import { friendlyError } from '@/lib/friendlyError';
 
 // ── Design constants ──────────────────────────────────────────────────────────
 
-// Same recipe as the public conference detail page committee cards.
-const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
-
 const EASE = 'cubic-bezier(0.22,1,0.36,1)';
 
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  border: '1px solid #DDD4C0',
-  borderRadius: 8,
-  padding: '8px 12px',
-  fontSize: 14,
-  color: '#1C1410',
-  backgroundColor: '#FAF8F3',
-  outline: 'none',
-  fontFamily: "'Outfit', sans-serif",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  fontSize: 11,
-  fontWeight: 700,
-  color: '#6E5F4E',
-  fontFamily: "'Outfit', sans-serif",
-  letterSpacing: '0.01em',
-  marginBottom: 4,
-};
+// `inputStyle` / `labelStyle` lived here until 23 Sep 2026. Every field in the
+// editor now uses the shared kit (SETUP_INPUT_CLS / SetupLabel), so both were
+// dead. ConferenceRosterPicker keeps its own copies for its own controls.
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -74,14 +64,13 @@ const labelStyle: React.CSSProperties = {
 // (Model EP, Lok Sabha, Commons, Congress, youth parliaments): free-text seats
 // like Crisis, plus seat GROUPS with their own flags (src/lib/slotGroups.ts). Crisis and
 // Custom take the character path, the other two fall through to countries.
-export type CommitteeType = 'general-assembly' | 'specialised' | 'crisis' | 'custom';
-
-export const COMMITTEE_TYPE_LABEL: Record<string, string> = {
-  'general-assembly': 'General Assembly',
-  specialised: 'Specialised',
-  crisis: 'Crisis',
-  custom: 'Custom',
-};
+//
+// Declared in @/components/committeeSetupKit (23 Sep 2026) so the shared set-up
+// surface can read them without importing this file back. Re-exported, so every
+// existing `import { CommitteeType, COMMITTEE_TYPE_LABEL } from
+// '@/components/CommitteeEditorModal'` keeps working.
+export { COMMITTEE_TYPE_LABEL };
+export type { CommitteeType };
 
 export interface EditableCommittee {
   id: string;
@@ -97,40 +86,14 @@ export interface EditableCommittee {
 }
 
 // ── Fallback emblem, gradient monogram disc with grain, matching the public card
+// Moved to @/components/MonogramMedallion (23 Sep 2026) so the committee set-up
+// kit can draw it without importing this file back. Re-exported so every
+// existing `import { MonogramMedallion, medallionTone } from
+// '@/components/CommitteeEditorModal'` keeps working.
 
-export type MedallionTone = 'forest' | 'crisis' | 'custom';
-
-const MEDALLION_BG: Record<MedallionTone, string> = {
-  forest: 'linear-gradient(135deg, #16301F 0%, #2A5A3C 100%)',
-  crisis: 'linear-gradient(135deg, #3C1414 0%, #6E1E1E 100%)',
-  // Custom (parliamentary) committees: gold on dark amber.
-  custom: 'linear-gradient(135deg, #5C3D10 0%, #9C6B1C 100%)',
-};
-
-export function medallionTone(committeeType: string | null | undefined): MedallionTone {
-  return committeeType === 'crisis' ? 'crisis' : committeeType === 'custom' ? 'custom' : 'forest';
-}
-
-// `tone` wins when given; `isCrisis` is kept for the existing callers.
-export function MonogramMedallion({ text, isCrisis = false, tone, size }: { text: string; isCrisis?: boolean; tone?: MedallionTone; size: number }) {
-  const monogram = text.replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase() || '—';
-  const resolved: MedallionTone = tone ?? (isCrisis ? 'crisis' : 'forest');
-  return (
-    <div
-      className="relative flex items-center justify-center overflow-hidden flex-shrink-0"
-      style={{
-        width: size, height: size, borderRadius: '9999px',
-        background: MEDALLION_BG[resolved],
-        boxShadow: '0 10px 24px rgba(27,56,40,0.26)',
-      }}
-    >
-      <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: GRAIN, backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.12 }} />
-      <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: monogram.length > 4 ? Math.round(size * 0.135) : Math.round(size * 0.167), fontWeight: 700, color: '#EED98A', letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums' }}>
-        {monogram}
-      </span>
-    </div>
-  );
-}
+import { MonogramMedallion, medallionTone, type MedallionTone } from '@/components/MonogramMedallion';
+export { MonogramMedallion, medallionTone };
+export type { MedallionTone };
 
 // ── Shared modal overlay ──────────────────────────────────────────────────────
 // Moved to @/components/ModalOverlay (background scroll lock + Escape + ARIA
@@ -194,7 +157,7 @@ export async function sessionCommitteeClient(
     .select('code, settings, topic')
     .eq('id', sessionId)
     .maybeSingle();
-  if (error) return { error: `the live session could not be read (${error.message})` };
+  if (error) { console.error('[committee-editor]', error); return { error: 'the live session could not be read' }; }
   if (!data?.code) return { error: 'the live session row is missing', missing: true };
   const settings = (data.settings as Record<string, unknown> | null) ?? {};
   const suffix = settings.chairJoinSuffix;
@@ -281,8 +244,8 @@ export async function mintConferenceSession(
       time_remaining: 90,
     });
     if (csErr) {
-      console.error('Error creating current_speaker for minted session:', csErr);
-      onProblem?.(`the speaker slot could not be created (${csErr.message})`);
+      console.error('[committee-editor] Error creating current_speaker for minted session:', csErr);
+      onProblem?.('the speaker slot could not be created');
     }
     if (seats.length > 0) {
       const observerSet = new Set(observers.map((o) => o.toLowerCase()));
@@ -296,8 +259,8 @@ export async function mintConferenceSession(
         }))
       );
       if (dErr) {
-        console.error('Error seating delegates on minted session:', dErr);
-        onProblem?.(`the ${seats.length} seats could not be added to the live session (${dErr.message})`);
+        console.error('[committee-editor] Error seating delegates on minted session:', dErr);
+        onProblem?.(`the ${seats.length} seats could not be added to the live session`);
       }
     }
     // THE LINK IS THE WHOLE POINT OF THE MINT. Without `session_id` the live
@@ -313,9 +276,9 @@ export async function mintConferenceSession(
       .eq('id', confCommitteeId)
       .select('id');
     if (linkErr || !linked || linked.length === 0) {
-      console.error('Error linking minted session to conference committee:', linkErr);
+      console.error('[committee-editor] Error linking minted session to conference committee:', linkErr);
       onProblem?.(
-        `the session was created but not linked to the committee${linkErr ? ` (${linkErr.message})` : ''}, so the live wall, the scoreboard and awards cannot see it`,
+        'the session was created but not linked to the committee, so the live wall, the scoreboard and awards cannot see it',
       );
     }
     return code;
@@ -701,13 +664,10 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   const { session } = useAuth();
   const isEdit = !!existing;
   const effectiveType = existing ? existing.committee_type : committeeType;
-  const isCrisis = effectiveType === 'crisis';
   const isCustom = effectiveType === 'custom';
   const [name, setName] = useState(existing?.name ?? '');
   const [abbreviation, setAbbreviation] = useState(existing?.abbreviation ?? '');
   const [topics, setTopics] = useState<string[]>(existing?.topics ?? []);
-  const [topicInput, setTopicInput] = useState('');
-  const [topicError, setTopicError] = useState('');
   const [difficulty, setDifficulty] = useState(existing?.difficulty ?? 'intermediate');
   const [roster, setRoster] = useState<RosterEntry[]>(initialRoster ?? []);
   const [baselineRoster] = useState<RosterEntry[]>(initialRoster ?? []);
@@ -746,20 +706,47 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   // roster free-text seats even under a non-crisis type). Null → fall back to the
   // committee_type default. Cleared to 'country'/'character' on preset select.
   const [presetRosterMode, setPresetRosterMode] = useState<'country' | 'character' | null>(null);
-  const rosterMode: 'country' | 'character' = presetRosterMode ?? ((isCrisis || isCustom) ? 'character' : 'country');
-  const isCharacterRoster = rosterMode === 'character';
-  // What one row of the roster is called in copy: a country, a character, or
-  // (custom, parliamentary) a member.
-  const seatNoun = isCustom ? 'member' : isCharacterRoster ? 'character' : 'country';
-  const seatNounPlural = isCustom ? 'members' : isCharacterRoster ? 'characters' : 'countries';
 
-  // Auto-assign a preset emblem as the default when the committee's name /
-  // abbreviation matches a known body (UNSC, DISEC, WHO, …) and the organiser
-  // has not set their own. Never overrides a manual choice.
-  useEffect(() => {
-    if (emblemManuallySet) return;
-    setLogoUrl(matchPresetEmblem(name, abbreviation));
-  }, [name, abbreviation, emblemManuallySet]);
+  // ── THE SHARED DRAFT ────────────────────────────────────────────────────────
+  // One view of this editor's own useStates, in the shape the shared set-up
+  // surface speaks (`CommitteeSetupFields`, used identically by the creation
+  // wizard). `patchDraft` fans a partial patch back out to the setters, so every
+  // existing write path — doCreate, doEdit, the destructive confirms, the
+  // baselines — is untouched and still reads the individual pieces of state.
+  const draft: CommitteeSetupDraft = {
+    name, abbreviation, topics, difficulty,
+    roster, groups, doubleDelegation,
+    logoUrl, emblemManuallySet, presetRosterMode,
+  };
+  const patchDraft = (p: Partial<CommitteeSetupDraft>) => {
+    if (p.name !== undefined) setName(p.name);
+    if (p.abbreviation !== undefined) setAbbreviation(p.abbreviation);
+    if (p.topics !== undefined) setTopics(p.topics);
+    if (p.difficulty !== undefined) setDifficulty(p.difficulty);
+    if (p.roster !== undefined) setRoster(p.roster);
+    if (p.groups !== undefined) setGroups(p.groups);
+    if (p.doubleDelegation !== undefined) setDoubleDelegation(p.doubleDelegation);
+    if (p.logoUrl !== undefined) setLogoUrl(p.logoUrl);
+    if (p.emblemManuallySet !== undefined) setEmblemManuallySet(p.emblemManuallySet);
+    if (p.presetRosterMode !== undefined) setPresetRosterMode(p.presetRosterMode);
+  };
+
+  const rosterMode = rosterModeOf(draft, effectiveType as CommitteeType);
+  const isCharacterRoster = rosterMode === 'character';
+  const { noun: seatNoun, plural: seatNounPlural } = seatNounsOf(effectiveType as CommitteeType, isCharacterRoster);
+
+  // The live identity, the acronym suggestion and the emblem, all derived once
+  // by the shared helper so the editor, the wizard and the saved row cannot
+  // disagree. `previewEmblem` is what `logo_url` is written from: the
+  // organiser's own choice, else whatever `matchPresetEmblem` resolves from the
+  // name and acronym. It used to be an EFFECT that wrote `logoUrl` on every
+  // keystroke (a cascading-render setState-in-effect that could also disagree
+  // with what was about to be saved); it is a pure derivation now.
+  const { primary: previewPrimary, secondary: previewSecondary, acronym: previewAcronym } = committeeSetupPreview(draft);
+  const previewEmblem = effectiveEmblem(draft);
+
+  // Committee type as an icon beside a plain word (no status pills, CLAUDE.md §8).
+  const typeAccent = committeeTypeAccent(effectiveType as CommitteeType);
 
   // Mirrors the conference logo upload in manage/[slug]/settings, same bucket, own
   // folder — including the LogoCropModal step in front of it, so a committee emblem
@@ -767,15 +754,15 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   // always the crop tool's flattened 512×512 transparent PNG.
   async function handleEmblemUpload(file: File) {
     if (!session) return;
-    if (file.size > 5 * 1024 * 1024) { setError('Emblem must be under 5MB.'); return; }
     setLogoUploading(true); setError('');
     const supabase = getAuthedClient(session.access_token);
-    const ext = file.name.split('.').pop();
-    const path = 'committee-emblems/' + conferenceId + '-' + Date.now() + '.' + ext;
-    const { error: upErr } = await supabase.storage.from('conference-assets').upload(path, file, { contentType: file.type, upsert: true });
-    if (upErr) { setError('Upload failed: ' + upErr.message); setLogoUploading(false); return; }
-    const { data: urlData } = supabase.storage.from('conference-assets').getPublicUrl(path);
-    setLogoUrl(urlData.publicUrl);
+    // `uploadConferenceAsset` is the ONE upload path (23 Sep 2026): same bucket
+    // and folder as before, plus the 5MB guard and the client-side downscale the
+    // conference logo already used. What arrives here is the crop tool's
+    // flattened 512x512 transparent PNG, so the downscale is a no-op.
+    const res = await uploadConferenceAsset(supabase, 'committee-emblems', conferenceId, file);
+    if (res.url === undefined) { setError(res.error ?? 'Upload failed.'); setLogoUploading(false); return; }
+    setLogoUrl(res.url);
     setEmblemManuallySet(true);
     setLogoUploading(false);
   }
@@ -811,27 +798,11 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   const resolvedSeatArt = (
     r: { name: string; logoUrl?: string | null; groupId?: string | null },
     gs: SlotGroup[],
-  ): string | null => {
-    const groupId = isCustom && r.groupId && gs.some((g) => g.id === r.groupId) ? r.groupId : null;
-    const art = effectiveSlotArt(
-      {
-        country_code: getCountryByName(r.name)?.code ?? r.name,
-        logo_url: r.logoUrl ?? null,
-        group_id: groupId,
-      },
-      gs,
-    );
-    return art.kind === 'logo' ? art.url : null;
-  };
+  ): string | null => resolveSeatArt(r, gs, isCustom);
 
-  function addTopic() {
-    const t = topicInput.trim();
-    if (!t || topics.length >= 3) return;
-    if (topics.includes(t)) { setTopicError('That topic is already on the list.'); return; }
-    setTopics([...topics, t]);
-    setTopicInput('');
-    setTopicError('');
-  }
+  // The topic draft and its error moved INTO the shared set-up surface
+  // (CommitteeSetupFields, 23 Sep 2026): they are local to that control and
+  // nothing else in this file read them.
 
   async function doCreate(supabase: ReturnType<typeof getAuthedClient>): Promise<boolean> {
     const delegationSize = doubleDelegation ? 2 : 1;
@@ -844,11 +815,11 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
       committee_type: committeeType,
       total_slots: roster.length,
       notification_email: null,
-      logo_url: logoUrl,
+      logo_url: previewEmblem,
       delegation_size: delegationSize,
       groups: isCustom ? groups : [],
     }).select('id').single();
-    if (err || !created) { setError(err?.message ?? 'Failed to create committee.'); return false; }
+    if (err || !created) { setError(friendlyError(err, "Couldn't create the committee. Please try again.")); return false; }
     await supabase.from('committee_country_slots').insert(
       roster.map((r) => ({
         conference_committee_id: created.id,
@@ -951,7 +922,10 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
       if ('error' in res) sessErrors.push(res.error);
       else { sessDb = res.client; sessSettings = res.settings; sessTopic = res.topic; }
     }
-    const noteSess = (what: string, message: string) => sessErrors.push(`${what} (${message})`);
+    const noteSess = (what: string, message: string) => {
+      console.error('[committee-editor]', message);
+      sessErrors.push(what);
+    };
 
     if (removed.length > 0) {
       await supabase.from('conference_allocations').delete().eq('conference_committee_id', ex.id).in('country_name', removed);
@@ -1132,11 +1106,12 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
       topics,
       difficulty,
       total_slots: roster.length,
-      logo_url: logoUrl,
+      logo_url: previewEmblem,
       groups: isCustom ? groups : [],
     }).eq('id', ex.id).select('id');
     if (ccErr || !ccUpd || ccUpd.length !== 1) {
-      setError(`Could not save the committee${ccErr ? ` (${ccErr.message})` : ''}. Please try again.`);
+      if (ccErr) console.error('[committee-editor]', ccErr);
+      setError('Could not save the committee. Please try again.');
       return 'fail';
     }
     // `committees` UPDATE is gated on is_session_chair too — same client, same
@@ -1206,6 +1181,26 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
     onClose();
   }
 
+  // The primary action, /create's way round: the button says what is MISSING
+  // rather than going dead, and a press on a blocked button takes the organiser
+  // to the field that is missing instead of doing nothing.
+  const missingName = !name.trim();
+  const missingRoster = roster.length === 0;
+  const saveState: 'ready' | 'blocked' | 'saving' =
+    saving ? 'saving' : (createHalted || missingName || missingRoster) ? 'blocked' : 'ready';
+  const saveSub = saving
+    ? null
+    : createHalted ? 'Close this dialog to carry on'
+    : missingName && missingRoster ? `Needs a name and at least one ${seatNoun}`
+    : missingName ? 'Needs a committee name'
+    : missingRoster ? `Needs at least one ${seatNoun}`
+    : null;
+  const onPrimary = () => {
+    if (saving || createHalted) return;
+    if (missingName) { document.getElementById('ced-name')?.focus(); return; }
+    void handleSave(false);
+  };
+
   return (
     <>
     <ModalOverlay onClose={onClose}>
@@ -1256,235 +1251,89 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
           overflows its flex line by the difference. */}
       <div className="gv-ced-row flex items-stretch gap-3" style={{ width: 'min(980px, calc(100vw - 32px))' }}>
       <div className="gv-ced-main rounded-2xl p-4" style={{ flex: '1 1 auto', minWidth: 0, backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <p className="text-[15px] font-bold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{isEdit ? 'Edit committee' : 'New committee'}</p>
-            {/* Type pill. The picker never re-shows in edit mode, so this is
-                how an organiser can tell what kind of committee is open. */}
+        {/* ── Header. The committee TYPE is an icon beside a plain word, never a
+            status pill (CLAUDE.md §8). The type picker does not re-show in edit
+            mode, so this is how an organiser tells what kind of room is open. */}
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 16, fontWeight: 800, letterSpacing: '-0.01em', color: '#1C1410', margin: 0 }}>
+              {isEdit ? 'Edit committee' : 'New committee'}
+            </p>
             <span
+              className="flex flex-shrink-0 items-center gap-1.5"
               title="Committee type"
-              style={{
-                fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase',
-                padding: '2px 8px', borderRadius: 999, whiteSpace: 'nowrap',
-                color: isCrisis ? '#8B2020' : isCustom ? '#7A5416' : '#1B3828',
-                backgroundColor: isCrisis ? 'rgba(139,32,32,0.10)' : isCustom ? 'rgba(238,217,138,0.4)' : 'rgba(27,56,40,0.08)',
-              }}
+              style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: typeAccent }}
             >
+              <CommitteeTypeGlyph type={effectiveType as CommitteeType} />
               {COMMITTEE_TYPE_LABEL[effectiveType] ?? effectiveType}
             </span>
           </div>
-          <button onClick={onClose} className="focus:outline-none" style={{ color: '#9A8A78' }}><X size={18} /></button>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            title="Close"
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-[#1B3828]/[0.07] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
+            style={{ color: '#6E5F4E' }}
+          >
+            <X size={17} />
+          </button>
         </div>
-        <div className="flex flex-col gap-4">
-          {/* Top row — name + difficulty on the left, live emblem preview on the right. */}
-          <div className="flex gap-5 items-start">
-            <div className="flex-1 min-w-0 flex flex-col gap-4">
-              <div>
-                <label style={labelStyle}>Committee Name *</label>
-                {!isCrisis && !isCustom ? (
-                  <ConferenceCommitteeNameInput
-                    value={name}
-                    onChange={setName}
-                    onPresetSelect={(p) => {
-                      // Store the CANONICAL FULL NAME, always — the acronym goes
-                      // in its own column and the display layer collapses the two
-                      // (committeeDisplayName). This used to store the collapsed
-                      // label as the name, which is why production has rows whose
-                      // name and abbreviation are both literally "DISEC": the full
-                      // name was thrown away at creation and no surface could ever
-                      // show it beneath the acronym again.
-                      setName(p.name);
-                      setAbbreviation(p.acronym);
-                      setPresetRosterMode(p.rosterMode ?? 'country');
-                      if (!isEdit) setRoster(p.members.map((m) => entry(m)));
-                    }}
-                  />
-                ) : (
-                  <input value={name} onChange={e => setName(e.target.value)} placeholder={isCustom ? 'e.g. Model European Parliament, Youth Lok Sabha' : 'e.g. The Cuban Missile Crisis, 1962'} style={inputStyle} />
-                )}
-              </div>
-              <div>
-                <label style={labelStyle}>Difficulty</label>
-                {/* Same MUN-level insignia the applications/account pages use to rank
-                    delegates (beginner chevron → crowned-star expert), for consistency. */}
-                <div className="flex gap-2">
-                  {(['beginner', 'intermediate', 'advanced', 'expert'] as const).map((lvl) => {
-                    const active = difficulty === lvl;
-                    const accent = LEVEL_ACCENT[lvl] ?? '#9A8A78';
-                    const lbl = lvl.charAt(0).toUpperCase() + lvl.slice(1);
-                    return (
-                      <button
-                        key={lvl}
-                        type="button"
-                        onClick={() => setDifficulty(lvl)}
-                        className="flex-1 flex flex-col items-center gap-1 rounded-xl py-2 focus:outline-none"
-                        style={{
-                          border: active ? `1.5px solid ${accent}` : '1px solid #DDD4C0',
-                          backgroundColor: active ? `${accent}14` : '#FAF8F3',
-                          cursor: 'pointer', transition: `all 180ms ${EASE}`,
-                        }}
-                      >
-                        <span
-                          className="flex items-center justify-center"
-                          style={{ width: 26, height: 26, borderRadius: '9999px', background: `linear-gradient(150deg, ${accent}22, ${accent}12)`, border: `1px solid ${accent}55` }}
-                        >
-                          <LevelInsignia level={lvl} size={16} />
-                        </span>
-                        <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: active ? accent : '#6E5F4E', letterSpacing: '0.01em' }}>{lbl}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-            {/* Emblem — auto-derived from the committee NAME (matchPresetEmblem), with
-                an upload override. No manual preset swatches. */}
-            {/* 96px → 76px. The preview only has to confirm WHICH emblem is
-                attached; at 96 it was the tallest thing in this row and set the
-                whole editor's height. */}
-            <div className="flex flex-col items-center gap-1.5" style={{ width: 132, flexShrink: 0 }}>
-              <label style={{ ...labelStyle, alignSelf: 'flex-start' }}>Emblem</label>
-              {logoUploading ? (
-                <div className="flex items-center justify-center" style={{ width: 76, height: 76 }}>
-                  <Loader size={40} />
-                </div>
-              ) : logoUrl ? (
-                /* `bare`: the emblem floats transparently, matching both the
-                   crop tool's preview and every other committee-emblem render
-                   (assignment page, CommitteeIdentityBadge). Without it this
-                   preview paints a near-white disc the emblem never actually
-                   ships on. */
-                <LogoDisc bare src={logoUrl} alt="Committee emblem" size={76} fallbackText={(abbreviation || name).replace(/[^A-Za-z0-9]/g, '').slice(0, 3)} />
-              ) : (
-                <MonogramMedallion text={abbreviation || name} tone={medallionTone(effectiveType)} size={76} />
-              )}
-              <div className="flex flex-col gap-1.5 w-full">
-                <button
-                  onClick={() => { if (!logoUploading) document.getElementById('committee-emblem-upload')?.click(); }}
-                  className="gv-lift w-full rounded-lg py-1.5 font-bold text-[10.5px] focus:outline-none"
-                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, letterSpacing: '0.07em', cursor: 'pointer' }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-                >
-                  {logoUploading ? 'UPLOADING…' : logoUrl ? 'REPLACE ART' : 'UPLOAD ART'}
-                </button>
-                {emblemManuallySet && !logoUploading && (
-                  <button
-                    onClick={() => setEmblemManuallySet(false)}
-                    title="Re-derive the emblem from the committee name"
-                    className="w-full rounded-lg py-1.5 font-bold text-[10.5px] focus:outline-none"
-                    style={{ border: '1.5px solid #DDD4C0', color: '#6E5F4E', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.07em', cursor: 'pointer', transition: `background-color 250ms ${EASE}` }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                  >
-                    RESET TO AUTO
-                  </button>
-                )}
-              </div>
-              {/* The three-line "Auto-set from the name. Square transparent PNG
-                  works best, max 5MB." caption used to sit here. Removed: it
-                  cost ~34px of the editor's height to restate what the RESET TO
-                  AUTO button already says and to pre-empt an error the upload
-                  handler raises anyway ("Emblem must be under 5MB"). */}
-              <input
-                id="committee-emblem-upload"
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/svg+xml"
-                style={{ display: 'none' }}
-                onChange={e => {
-                  const f = e.target.files?.[0];
-                  e.target.value = '';
-                  if (!f) return;
-                  if (f.size > 5 * 1024 * 1024) { setError('Emblem must be under 5MB.'); return; }
-                  setError('');
-                  setEmblemCropFile(f);
-                }}
-              />
-            </div>
-          </div>
-          <div>
-            <label style={labelStyle}>Topics (optional, up to 3)</label>
-            <div className="flex gap-2 items-start">
-              <textarea value={topicInput} onChange={e => { setTopicInput(e.target.value); if (topicError) setTopicError(''); }} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addTopic(); } }} placeholder="Type a topic..." rows={2} style={{ ...inputStyle, flex: 1, resize: 'vertical', lineHeight: 1.6, minHeight: 44, borderColor: '#DDD4C0' }} disabled={topics.length >= 3} />
-              <button onClick={addTopic} disabled={topics.length >= 3} className="gv-lift rounded-xl px-4 font-bold text-sm focus:outline-none" style={{ backgroundColor: topics.length >= 3 ? '#DDD4C0' : '#1B3828', color: topics.length >= 3 ? '#9A8A78' : '#EED98A', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap' }}>Add topic</button>
-            </div>
-            {topicError ? (
-              <p role="alert" className="text-xs mt-1.5" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{topicError}</p>
-            ) : null}
-            {topics.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
-                {topics.map((t, i) => (
-                  <span key={i} className="inline-flex items-start gap-1.5 rounded-lg px-2.5 py-1 text-xs" style={{ backgroundColor: '#EDE7D8', color: '#1C1410', fontFamily: "'Outfit', sans-serif", maxWidth: '100%', whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'left', lineHeight: 1.45 }}>
-                    {t}
-                    <button onClick={() => setTopics(topics.filter((_, j) => j !== i))} className="focus:outline-none" style={{ color: '#9A8A78', flexShrink: 0, marginTop: 2 }}><X size={12} /></button>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="mt-4 pt-4" style={{ borderTop: '1px solid #EDE7D8' }}>
-          {/* DELEGATION SIZE, AS A PILL BESIDE THE HEADING.
-              It used to be its own labelled block of two 66px-tall cards with
-              icon discs and a sentence of description each — about 100px of the
-              editor's height, and a visual weight suggesting a bigger decision
-              than "does a seat hold one delegate or two".
 
-              It is now a two-option segmented pill on the roster heading's own
-              line, which is also where it belongs semantically: it describes
-              the list about to be built. The labels say the answer outright
-              ("1 per country" / "2 per country") so the descriptions they
-              replaced are not missed. Same `doubleDelegation` boolean, and
-              turning it off when second seats are filled is still gated by the
-              destructive confirm in doEdit. */}
-          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-            <p className="flex items-center gap-1.5 text-sm font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-              {isCustom ? <Users2 size={15} style={{ color: '#B6871F' }} /> : isCharacterRoster ? <Users size={15} style={{ color: '#B6871F' }} /> : <Globe size={15} style={{ color: '#B6871F' }} />}
-              {isCustom ? 'Committee Members' : isCharacterRoster ? 'Committee Characters' : 'Committee Countries'}
-            </p>
-            <div
-              role="group"
-              aria-label="Delegation size"
-              className="inline-flex items-center gap-0.5 flex-shrink-0"
-              style={{ padding: 3, borderRadius: 9999, backgroundColor: '#EFE9DB', border: '1px solid #E1D9C6' }}
-            >
-              {([
-                { val: false, Icon: User, label: `1 per ${seatNoun}`, hint: `Single delegation: one delegate per ${seatNoun}.` },
-                { val: true, Icon: Users, label: `2 per ${seatNoun}`, hint: `Double delegation: two delegates share each ${seatNoun}.` },
-              ] as const).map(({ val, Icon, label, hint }) => {
-                const active = doubleDelegation === val;
-                return (
-                  <button
-                    key={label}
-                    type="button"
-                    onClick={() => setDoubleDelegation(val)}
-                    aria-pressed={active}
-                    title={hint}
-                    className="inline-flex items-center gap-1.5 focus:outline-none"
-                    style={{
-                      padding: '5px 11px', borderRadius: 9999, border: 'none',
-                      fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.02em',
-                      color: active ? '#EED98A' : '#6E5F4E',
-                      backgroundColor: active ? '#1B3828' : 'transparent',
-                      boxShadow: active ? '0 1px 3px rgba(27,56,40,0.22)' : undefined,
-                      cursor: 'pointer', whiteSpace: 'nowrap',
-                      transition: `background-color 180ms ${EASE}, color 180ms ${EASE}`,
-                    }}
-                  >
-                    <Icon size={13} strokeWidth={2.2} />
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          {/* Add controls only — the selected list is docked in the rail. */}
-          <ConferenceRosterPicker mode={isCharacterRoster ? 'character' : 'country'} value={roster} onChange={setRoster} showSelected={false} />
-        </div>
-        {error && <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{error}</p>}
-        <div className="flex gap-3 mt-4">
-          <button onClick={onClose} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}>CANCEL</button>
-          <button onClick={() => handleSave(false)} disabled={saving || createHalted} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: (saving || createHalted) ? '#DDD4C0' : '#1B3828', color: (saving || createHalted) ? '#9A8A78' : '#EED98A', fontFamily: "'Outfit', sans-serif" }}>{saving ? 'SAVING...' : (isEdit ? 'SAVE CHANGES' : 'ADD COMMITTEE')}</button>
+        {/* The live identity — the /create preview: the emblem in a white disc,
+            the acronym big with the full name small beneath, then the topic.
+            The organiser sees what the chair masthead and every card will show
+            (committeeDisplayName) before anything is written. */}
+        <CommitteeIdentityPreview
+          src={previewEmblem}
+          primary={previewPrimary}
+          secondary={previewSecondary}
+          placeholder="Untitled committee"
+          topic={topics[0] ?? ''}
+          topicLabel="Topic:"
+          topicEmpty="No topic yet"
+          tone={medallionTone(effectiveType)}
+          monogramText={previewAcronym || name}
+        />
+
+        {/* Steps 1 and 2 are the SHARED set-up surface — the same component the
+            creation wizard's step 7 renders, so the two can never drift (owner,
+            23 Sep 2026: "it should always match"). Only the shell differs: here
+            the selected roster is docked in the rail below, so `selectedInline`
+            is off. Chairs stay out of it and keep their own rail card, because
+            they need a committee id the wizard does not have yet. */}
+        <CommitteeSetupFields
+          draft={draft}
+          onChange={patchDraft}
+          committeeType={effectiveType as CommitteeType}
+          isEdit={isEdit}
+          nameInputId="ced-name"
+          onUploadEmblem={() => document.getElementById('committee-emblem-upload')?.click()}
+          emblemUploading={logoUploading}
+        />
+        <input
+          id="committee-emblem-upload"
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/svg+xml"
+          style={{ display: 'none' }}
+          onChange={e => {
+            const f = e.target.files?.[0];
+            e.target.value = '';
+            if (!f) return;
+            if (f.size > 5 * 1024 * 1024) { setError('Emblem must be under 5MB.'); return; }
+            setError('');
+            setEmblemCropFile(f);
+          }}
+        />
+
+        {error && <p role="alert" className="mt-3" style={{ color: '#8B2020', fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.5 }}>{error}</p>}
+        <div className="mt-4 grid gap-2.5" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.6fr)' }}>
+          <SetupGhostButton label="Cancel" onClick={onClose} />
+          <SetupPrimaryButton
+            label={saving ? 'Saving…' : isEdit ? 'Save changes' : 'Add committee'}
+            sub={saveSub}
+            state={saveState}
+            onClick={onPrimary}
+          />
         </div>
       </div>
       {/* THE DOCKED RAIL — bookmarks tabbed onto the panel, floating free of

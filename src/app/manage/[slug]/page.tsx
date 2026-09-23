@@ -34,6 +34,8 @@ import { getConferenceIntent, intentRank } from '@/lib/conferenceIntent';
 import { outstandingPledgedSpots } from '@/lib/pledgedSpots';
 import { useConferenceMoney } from '@/lib/conferenceMoney';
 import RevenueReadout from '@/components/conferences/RevenueReadout';
+import { ShareLinkRow, ShareHero } from '@/components/conferences/ShareConferenceLink';
+import { DASH_CSS, UnallocatedBadge, useDialSize } from '@/components/conferences/dashboardLayout';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import VerifiedCheck, { minutesToCheckmarkLabel } from '@/components/VerifiedCheck';
 
@@ -330,52 +332,11 @@ interface AppRow {
   advisors_pledged: number | null;
 }
 
-// ── Unallocated-delegates alert ────────────────────────────────────────────
-// Shown ONLY while accepted delegates are waiting for a committee and country:
-// a warning with the number large and a direct way to the assignment board.
-// Nothing at all once everyone is placed (owner, 18 Sep 2026: no check mark).
-
-function UnallocatedTile({ count, href }: { count: number; href: string }) {
-  if (count <= 0) return null;
-  return (
-    <div
-      role="status"
-      className="flex items-center"
-      style={{
-        minWidth: 0,
-        gap: 12,
-        padding: '11px 12px 11px 14px',
-        borderRadius: 18,
-        background: 'linear-gradient(135deg, rgba(184,132,74,0.24) 0%, rgba(184,132,74,0.12) 100%)',
-        boxShadow: 'inset 0 0 0 1.5px rgba(160,104,44,0.55)',
-      }}
-    >
-      <AlertCircle size={22} strokeWidth={2.4} style={{ color: '#8A5A2E', flexShrink: 0 }} aria-hidden />
-      <p style={{ fontFamily: OUTFIT, fontSize: 34, fontWeight: 900, color: '#7A4A1C', fontVariantNumeric: 'tabular-nums', lineHeight: 1, flexShrink: 0 }}>
-        {count}
-      </p>
-      <div className="min-w-0" style={{ flex: 1 }}>
-        <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: '#6B3F14', lineHeight: 1.2 }}>
-          {count === 1 ? 'Delegate without a seat' : 'Delegates without a seat'}
-        </p>
-        <p style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: '#7A4A1C', marginTop: 2, lineHeight: 1.3 }}>
-          Accepted, still waiting for a committee and country.
-        </p>
-      </div>
-      <Link
-        href={href}
-        className="inline-flex items-center gap-1.5 flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7A4A1C] transition-transform active:scale-[0.97]"
-        style={{
-          fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, color: '#FFFFFF',
-          background: '#8A5A2E', borderRadius: 999, padding: '8px 13px', textDecoration: 'none',
-        }}
-      >
-        Assign now
-        <ArrowRight size={13} />
-      </Link>
-    </div>
-  );
-}
+// ── Unallocated delegates ──────────────────────────────────────────────────
+// A red count badge beside the applicants heading now (UnallocatedBadge in
+// src/components/conferences/dashboardLayout.tsx). The full-width amber tile
+// that used to sit here was the biggest single block of dead space on a
+// laptop screen (owner, 21 Sep 2026).
 
 // The old PipelineCell / "Delegates" pipeline card and the Applications +
 // Accepted stat tiles were deleted here, not misplaced: the rewritten
@@ -798,15 +759,10 @@ const VERIFICATION_MINUTES: Record<string, number> = {
   page: 5, committees: 10, chairs: 5, email: 3, secretariat: 3, financials: 5, publish: 1,
 };
 
-function VerificationStrip({ doneCount, fallbackMinutes }: { doneCount: number; fallbackMinutes: number }) {
-  const { conference, verification, refreshVerification } = useManage();
+function VerificationStrip({ fallbackMinutes }: { fallbackMinutes: number }) {
+  const { conference, verification } = useManage();
   const verified = !!conference?.is_verified;
   const verifiedAt = conference?.verified_at ?? null;
-
-  // Ask the database to recompute the mark on mount and whenever the
-  // checklist moves. Cheap and idempotent: it only refetches the row when the
-  // answer changed.
-  useEffect(() => { void refreshVerification(); }, [doneCount, refreshVerification]);
 
   // A flip from unverified to verified during this visit earns a short
   // celebration. A conference that loads already verified gets none.
@@ -850,18 +806,33 @@ function VerificationStrip({ doneCount, fallbackMinutes }: { doneCount: number; 
         </div>
       )}
       <div className="flex items-center gap-1.5 min-w-0">
-        <VerifiedCheck verified={verified} showUnverified size={16} title={verified ? 'Verified conference' : headline} />
+        <VerifiedCheck
+          verified={verified}
+          showUnverified
+          size={16}
+          title={verified
+            ? 'Verified conference'
+            : 'Earned automatically once page, committees, chairs, emails, secretariat, payment method and publishing are done.'}
+        />
         <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: verified ? NEU.forest : NEU.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
           {headline}
         </span>
       </div>
-      {!verified && (
-        <p style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted, margin: '2px 0 0 0', lineHeight: 1.35 }}>
-          Earned automatically once page, committees, chairs, emails, secretariat, payment method and publishing are done.
-        </p>
-      )}
     </div>
   );
+}
+
+/**
+ * Renders nothing. Asks the database to recompute the checkmark on mount and
+ * whenever the checklist moves (cheap and idempotent: it only refetches the
+ * row when the answer changed). It lived inside VerificationStrip, which is
+ * not rendered once the priorities card collapses to the share hero, so it is
+ * mounted on its own in both states.
+ */
+function VerificationRefresher({ doneCount }: { doneCount: number }) {
+  const { refreshVerification } = useManage();
+  useEffect(() => { void refreshVerification(); }, [doneCount, refreshVerification]);
+  return null;
 }
 
 // ── Announcing a finished set-up priority ─────────────────────────────────
@@ -989,6 +960,8 @@ export default function DashboardPage() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [publishBlockMsg, setPublishBlockMsg] = useState('');
   const [dash, setDash] = useState<DashData | null>(null);
+  // The applicants card's width decides the dial's diameter (one-screen grid).
+  const [dialCardRef, dialSize] = useDialSize();
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   // `now` starts at 0 (same on server + client, no hydration mismatch) and is
   // set on mount, then ticked every minute so relative times stay fresh.
@@ -1275,18 +1248,21 @@ export default function DashboardPage() {
 
   // ── Loading skeleton, mirrors the fixed one-viewport grid ───────────────
   if (!conference || !dash) {
+    const bone = (style: React.CSSProperties, className = '') => (
+      <div className={`rounded-[22px] animate-pulse ${className}`} style={{ backgroundColor: NEU.surface, boxShadow: NEU.out, ...style }} />
+    );
     return (
-      <div className="flex flex-col" style={{ minHeight: 'calc(100vh - 56px)', padding: '14px 20px 20px' }}>
-        <div className="rounded-[22px] animate-pulse flex-shrink-0" style={{ height: 48, backgroundColor: NEU.surface, boxShadow: NEU.out, marginBottom: 12 }} />
-        <div className="flex flex-col xl:flex-row" style={{ alignItems: 'stretch', gap: 14 }}>
-          <div className="flex flex-col w-full xl:basis-[34%] xl:shrink-0 xl:min-w-[320px]" style={{ gap: 14 }}>
-            <div className="rounded-[22px] animate-pulse flex-shrink-0" style={{ height: 450, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
-            <div className="rounded-[22px] animate-pulse" style={{ flex: 1, minHeight: 168, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
+      <div className="gv-dash">
+        <style>{DASH_CSS}</style>
+        {bone({ height: 44, marginBottom: 12, flexShrink: 0 })}
+        <div className="gv-dash-grid">
+          <div className="gv-dash-col1">
+            {bone({ height: 360 }, 'gv-dash-prio')}
+            {bone({ minHeight: 170 }, 'gv-dash-activity')}
           </div>
-          <div className="flex flex-col" style={{ flex: 1, minWidth: 0, gap: 14 }}>
-            <div className="rounded-[22px] animate-pulse flex-shrink-0" style={{ height: 254, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
-            <div className="rounded-[22px] animate-pulse flex-shrink-0" style={{ height: 368, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
-          </div>
+          {bone({ height: 250 }, 'gv-dash-dial')}
+          {bone({ height: 250 }, 'gv-dash-traffic')}
+          {bone({}, 'gv-dash-chart')}
         </div>
       </div>
     );
@@ -1516,7 +1492,7 @@ export default function DashboardPage() {
       sub: dash.organizerCount > 1
         ? `${dash.organizerCount} organizers on the team.`
         : dash.pendingOrganizerInvites > 0
-          ? 'Invite sent — waiting for them to accept.'
+          ? 'Invite sent. Waiting for them to accept.'
           : soloSecretariat
             ? 'You are running this one on your own.'
             : 'Invite co-organizers and grant them access.',
@@ -1645,29 +1621,38 @@ export default function DashboardPage() {
     setShowPublishModal(false);
   }
 
+  // Everything done AND verified: the priorities card collapses to one line
+  // and the share action becomes its protagonist (owner, 21 Sep 2026).
+  const allSetAndVerified = pendingChecklist.length === 0 && !!conference.is_verified;
+
   return (
     <div
-      className="relative flex flex-col"
-      style={{ minHeight: 'calc(100vh - 56px)', padding: '14px 20px 20px', fontFamily: OUTFIT, isolation: 'isolate', overflowX: 'clip' }}
+      className="gv-dash relative"
+      style={{ fontFamily: OUTFIT, isolation: 'isolate', overflowX: 'clip' }}
     >
-      {/* Decorative bleed — faded organiser glyphs off the dashboard edges,
+      <style>{DASH_CSS}</style>
+      {/* Decorative bleed: faded organiser glyphs off the dashboard edges,
           tucked behind the content (zIndex -1). */}
       <DecorativeBleed
         zIndex={-1}
         items={[
           { Icon: Gavel, size: 170, top: '-30px', right: '-40px', opacity: 0.045, rotate: -12 },
-          { Icon: UsersRound, size: 150, bottom: '-42px', left: '-38px', opacity: 0.04 },
+          // bottom 0, never negative: overflow-x is clipped but overflow-y is
+          // not, so a glyph hanging below the page used to add a scroll of its own.
+          { Icon: UsersRound, size: 150, bottom: 0, left: '-38px', opacity: 0.04 },
           { Icon: Globe2, size: 110, top: '55%', right: '-24px', opacity: 0.035 },
         ]}
       />
 
-      {/* ── Header, compact single row ── */}
-      <div className="flex items-center justify-between gap-4 flex-shrink-0" style={{ marginBottom: 12 }}>
-        <div className="flex items-center gap-3 min-w-0">
+      {/* ── Header, one row: identity, the money strip, status ──
+          The money is one line here now instead of a card inside the
+          applicants tile (owner: "make the financials much smaller"). */}
+      <div className="flex items-center gap-x-4 gap-y-2 flex-wrap flex-shrink-0" style={{ marginBottom: 12 }}>
+        <div className="flex items-center gap-3 min-w-0" style={{ flex: '1 1 260px' }}>
           <LogoDisc
             src={conference.logo_url}
             alt={conference.acronym}
-            size={38}
+            size={36}
             fallbackText={conference.acronym.slice(0, 2)}
           />
           <div className="min-w-0">
@@ -1680,7 +1665,13 @@ export default function DashboardPage() {
             </h1>
           </div>
         </div>
-        <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="flex items-center gap-3 min-w-0 flex-wrap">
+          <RevenueReadout
+            fee={fee}
+            currency={conference.fee_currency}
+            money={money}
+            href={`/manage/${slug}/financials`}
+          />
           <NeuPill active={conference.is_public} gradient={NEU_GRADIENTS.green}>
             <span style={{ width: 6, height: 6, borderRadius: 999, backgroundColor: conference.is_public ? '#FFFFFF' : NEU.amber, flexShrink: 0 }} />
             {conference.is_public ? 'LIVE' : 'DRAFT'}
@@ -1693,196 +1684,169 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Main layout, two stretched columns.
-          `items-start` used to be the fix for the left card growing a hole
-          underneath it — but the hole was ~200px of nothing beside a much
-          taller right column, which is exactly the "wonky, gaps" complaint.
-          The fix is to give the short column something to spend the height on
-          instead of shrinking it: Recent activity now lives under the
-          checklist with `flex: 1`, so BOTH columns end on the same line by
-          construction and the leftover height becomes feed rows rather than
-          dead cream. Hence items-stretch in both directions.
-          The priorities card still keeps the top-left corner: it is first in
-          the DOM, so nothing in the right column can push it down. ── */}
-      <div className="flex flex-col xl:flex-row items-stretch" style={{ gap: 14 }}>
+      {/* ── The one-screen grid (src/components/conferences/dashboardLayout.tsx).
+          From 1024x600 up it takes exactly the window under the top bar and
+          nothing grows the page; below that it stacks and scrolls. ── */}
+      <div className="gv-dash-grid">
 
-        {/* Left column: set-up priorities (natural height) + recent activity
-            (claims the rest). 34% rather than 32% — every point given to the
-            left narrows the right, and ParticipantsChart is a scaled viewBox
-            whose HEIGHT is 0.32x its width, so a narrower right column is a
-            shorter page. It also buys the activity lines room for the actor
-            chip without truncating them to nothing. */}
-        <div className="flex flex-col w-full xl:basis-[34%] xl:shrink-0 xl:min-w-[320px]" style={{ gap: 14 }}>
+        {/* Column 1: priorities (shrinks, its rows scroll inside) over the
+            activity feed (takes the rest). The feed rises as the priorities
+            get done, and owns almost the whole column once they are. */}
+        <div className="gv-dash-col1">
 
-        <NeuCard className="flex flex-col flex-shrink-0" style={{ padding: '14px 15px 11px', border: BENTO_BORDER }}>
-          <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginBottom: 9 }}>
+        {/* Headless: keeps the stored checkmark in step with the checklist in
+            both card states. */}
+        <VerificationRefresher doneCount={doneCount} />
+        {/* Headless. Raises a card as each row leaves the list. */}
+        <SetupCompletionNotices
+          conferenceId={conference.id}
+          items={checklist.map(c => ({ key: c.key, done: c.done }))}
+        />
+
+        {allSetAndVerified ? (
+          <NeuCard className="gv-dash-prio flex flex-col" style={{ padding: '14px 15px', border: BENTO_BORDER }}>
+            <ShareHero conference={conference} />
+          </NeuCard>
+        ) : (
+        <NeuCard className="gv-dash-prio flex flex-col" style={{ padding: '13px 15px 11px', border: BENTO_BORDER }}>
+          <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginBottom: 7 }}>
             <div className="min-w-0">
               <h2 style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>Set-up priorities</h2>
               <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
                 {doneCount} of {checklist.length} done{doneCount === checklist.length ? '. You are all set.' : ''}
               </p>
             </div>
-            <NeuRing value={doneCount} max={checklist.length} size={50} strokeWidth={7} gradient={NEU_GRADIENTS.gold}>
-              <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 13, color: NEU.ink, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+            <NeuRing value={doneCount} max={checklist.length} size={44} strokeWidth={6} gradient={NEU_GRADIENTS.gold}>
+              <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 12, color: NEU.ink, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
                 {doneCount}<span style={{ fontSize: 9, color: NEU.muted }}>/{checklist.length}</span>
               </span>
             </NeuRing>
           </div>
 
-          {/* Headless. Raises a card as each row leaves the list. */}
-          <SetupCompletionNotices
-            conferenceId={conference.id}
-            items={checklist.map(c => ({ key: c.key, done: c.done }))}
-          />
+          <VerificationStrip fallbackMinutes={fallbackMinutes} />
 
-          <VerificationStrip doneCount={doneCount} fallbackMinutes={fallbackMinutes} />
+          <NeuProgress value={doneCount} max={checklist.length} gradient={NEU_GRADIENTS.gold} thumb height={8} style={{ marginBottom: 9, flexShrink: 0 }} />
 
-          <NeuProgress value={doneCount} max={checklist.length} gradient={NEU_GRADIENTS.gold} thumb height={9} style={{ marginBottom: 10, flexShrink: 0 }} />
-
-          {/* Natural-height snug stack, the card ends exactly at the last row,
-              no leftover void below (finished rows are gone, not greyed). */}
-          {pendingChecklist.length === 0 ? (
-            /* Genuinely finished, not an empty list with nothing in it. The
-               verification strip above already carries the checkmark and the
-               "verified since" line, so this only has to close the card. */
-            <div
-              className="flex items-center gap-2.5 flex-shrink-0"
-              style={{
-                padding: '11px 12px', borderRadius: 14,
-                background: 'linear-gradient(135deg, rgba(61,122,82,0.18) 0%, rgba(61,122,82,0.06) 100%)',
-                boxShadow: 'inset 0 0 0 1px rgba(61,122,82,0.30)',
-              }}
-            >
-              <Emoji3D name="Party popper" size={26} fallback={CheckCircle2} fallbackColor={NEU.forest} />
-              <div className="min-w-0">
+          {/* The rows scroll inside the card in the one-screen grid, so a long
+              list never pushes the feed below the fold. Finished rows are gone,
+              not greyed; the share row is always last. */}
+          <div className="gv-dash-prio-rows flex flex-col" style={{ gap: 5 }}>
+            {pendingChecklist.length === 0 ? (
+              /* Every stage is done but the checkmark has not landed yet (the
+                 database recomputes it on this visit). The share row below is
+                 already the next thing to do. */
+              <div
+                className="flex items-center gap-2.5 flex-shrink-0"
+                style={{
+                  padding: '9px 12px', borderRadius: 14,
+                  background: 'linear-gradient(135deg, rgba(61,122,82,0.18) 0%, rgba(61,122,82,0.06) 100%)',
+                  boxShadow: 'inset 0 0 0 1px rgba(61,122,82,0.30)',
+                }}
+              >
+                <Emoji3D name="Party popper" size={24} fallback={CheckCircle2} fallbackColor={NEU.forest} />
                 <p style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, color: NEU.forest, margin: 0, lineHeight: 1.3 }}>
                   Every priority is done
                 </p>
-                <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, margin: '2px 0 0 0', lineHeight: 1.35 }}>
-                  Your conference is set up end to end. Run it from the pages in the sidebar.
-                </p>
               </div>
-            </div>
-          ) : (
-            <div className="flex flex-col" style={{ gap: 5 }}>
-              {/* One quiet line, and only when the answer actually moved a row,
-                  so the order never looks arbitrary. Settings → Conference now
-                  edits `conferences.intent`, so the sentence has somewhere to
-                  point: only the last two words are the link, in the readable
-                  ink token, so the aside stays an aside on a dense screen
-                  rather than becoming a call to action. */}
-              {intentReordered && (
-                <p style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.muted, margin: '0 0 1px 2px' }}>
-                  Ordered around what you told us you need.{' '}
-                  <Link
-                    href={`/manage/${slug}/settings?tab=conference&focus=intent`}
-                    className="focus:outline-none"
-                    style={{ color: NEU.inkSoft, textDecoration: 'underline', textUnderlineOffset: 2 }}
-                  >
-                    Change this
-                  </Link>
-                </p>
-              )}
-              {pendingChecklist.map(item => (
-                <NeuChecklistRow
-                  key={item.key}
-                  done={item.done}
-                  icon={item.icon}
-                  emoji={item.emoji}
-                  gradient={item.gradient}
-                  title={item.title}
-                  sub={item.sub}
-                  action={'action' in item ? item.action : undefined}
-                  onClick={item.onClick}
-                  dense
-                />
-              ))}
-            </div>
-          )}
+            ) : (
+              <>
+                {/* One quiet line, and only when the answer actually moved a
+                    row, so the order never looks arbitrary. */}
+                {intentReordered && (
+                  <p className="flex-shrink-0" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.muted, margin: '0 0 1px 2px' }}>
+                    Ordered around what you told us you need.{' '}
+                    <Link
+                      href={`/manage/${slug}/settings?tab=conference&focus=intent`}
+                      className="focus:outline-none"
+                      style={{ color: NEU.inkSoft, textDecoration: 'underline', textUnderlineOffset: 2 }}
+                    >
+                      Change this
+                    </Link>
+                  </p>
+                )}
+                {pendingChecklist.map(item => (
+                  <div key={item.key} className="flex-shrink-0">
+                    <NeuChecklistRow
+                      done={item.done}
+                      icon={item.icon}
+                      emoji={item.emoji}
+                      gradient={item.gradient}
+                      title={item.title}
+                      sub={item.sub}
+                      action={'action' in item ? item.action : undefined}
+                      onClick={item.onClick}
+                      dense
+                    />
+                  </div>
+                ))}
+              </>
+            )}
+            <ShareLinkRow conference={conference} />
+          </div>
           {publishBlockMsg && (
             <p className="flex-shrink-0" style={{ fontSize: 11, marginTop: 7, color: NEU.amber, fontFamily: OUTFIT, fontWeight: 700 }}>{publishBlockMsg}</p>
           )}
         </NeuCard>
+        )}
 
-        {/* Momentum feed, fills whatever height the right column dictates. */}
-        <RecentActivity events={activity} now={now} fill />
+        {/* Secretariat activity, fills whatever height column 1 has left. */}
+        <div className="gv-dash-activity">
+          <RecentActivity events={activity} now={now} fill />
+        </div>
 
         </div>
 
-        {/* Right column: applicants headline → chart */}
-        <div className="flex flex-col" style={{ flex: 1, minWidth: 0, gap: 14 }}>
-
-        {/* Applicants against target — the headline read of the whole funnel.
-            The dial is the left half; the right half carries the numbers that
-            used to need their own tile row (allocation alert, money) so the
-            card is full edge to edge instead of a big ring beside a
-            paragraph. */}
-        {/* Applicants against target, with the compact traction card on its
-            right (stacked below lg). */}
-        <div className="flex flex-col lg:flex-row items-stretch flex-shrink-0" style={{ gap: 14 }}>
-        <NeuCard className="flex-shrink-0 lg:flex-1 min-w-0" style={{ padding: '15px 18px', border: BENTO_BORDER }}>
-          <div className="flex items-stretch flex-wrap" style={{ gap: 20 }}>
-            {/* 224, not the 236 default: the dial's height IS this card's
-                height, and 224 is what the vertical budget affords once the
-                chart below has taken its 0.32 x width. */}
-            <div className="flex-shrink-0">
-              <ApplicantsDial
-                stages={dialStages}
-                expected={expectedDelegates}
-                pledged={pledgedSpots}
-                size={224}
-                onNavigate={(href) => router.push(href)}
-              />
-            </div>
-            <div
-              className="flex flex-col min-w-0"
-              style={{ flex: 1, minWidth: 240, gap: 9, justifyContent: 'space-between' }}
+        {/* Applicants against target: the dial and its key, the red
+            unassigned badge beside the heading, one quiet footer line. */}
+        <div className="gv-dash-dial gv-dash-cell">
+        <NeuCard className="flex flex-col" style={{ padding: '13px 16px 12px', border: BENTO_BORDER, height: '100%' }}>
+          <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginBottom: 6, minHeight: 28 }}>
+            <h2 className="truncate" style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>
+              Applicants against target
+            </h2>
+            <UnallocatedBadge count={unallocated} href={`/manage/${slug}/assignment`} />
+          </div>
+          <div ref={dialCardRef} className="flex items-center" style={{ flex: 1, minHeight: 0 }}>
+            <ApplicantsDial
+              stages={dialStages}
+              expected={expectedDelegates}
+              pledged={pledgedSpots}
+              size={dialSize}
+              onNavigate={(href) => router.push(href)}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginTop: 6 }}>
+            <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
+              {societies} delegation{societies === 1 ? '' : 's'} · {committeeCount} committee{committeeCount === 1 ? '' : 's'}
+            </span>
+            <Link
+              href={expectedDelegates > 0 ? `/manage/${slug}/applications` : `/manage/${slug}/settings?tab=conference`}
+              className="inline-flex items-center gap-1.5 flex-shrink-0 transition-opacity hover:opacity-70"
+              style={{
+                fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em',
+                color: NEU.deepGold, textDecoration: 'none',
+              }}
             >
-              <h2 style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>
-                Applicants against target
-              </h2>
-              <UnallocatedTile count={unallocated} href={`/manage/${slug}/assignment`} />
-              <RevenueReadout
-                fee={fee}
-                currency={conference.fee_currency}
-                money={money}
-                href={`/manage/${slug}/financials/settings`}
-              />
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
-                  {societies} delegation{societies === 1 ? '' : 's'} · {committeeCount} committee{committeeCount === 1 ? '' : 's'}
-                </span>
-                <Link
-                  href={expectedDelegates > 0 ? `/manage/${slug}/applications` : `/manage/${slug}/settings?tab=conference`}
-                  className="inline-flex items-center gap-1.5 flex-shrink-0 transition-opacity hover:opacity-70"
-                  style={{
-                    fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em',
-                    color: NEU.deepGold, textDecoration: 'none',
-                  }}
-                >
-                  {expectedDelegates > 0 ? 'REVIEW APPLICATIONS' : 'SET AN EXPECTED HEAD COUNT'}
-                  <ArrowRight size={12} />
-                </Link>
-              </div>
-            </div>
+              {expectedDelegates > 0 ? 'REVIEW APPLICATIONS' : 'SET AN EXPECTED HEAD COUNT'}
+              <ArrowRight size={12} />
+            </Link>
           </div>
         </NeuCard>
-        <div className="flex-shrink-0 lg:w-[272px]">
+        </div>
+
+        <div className="gv-dash-traffic gv-dash-cell">
           <TrafficSourcesCard conferenceId={conference.id} />
         </div>
-        </div>
 
-        {/* The participants chart, sole occupant of this slot. It used to
-            share the card with a revenue chart behind a two-pill switch; the
-            revenue chart and BOTH pills were removed on request, so the chart
-            now carries its own title (the active pill used to name it, which
-            is why `title` was empty before).
-            Full right-column width on purpose: its SVG is a scaled viewBox,
-            so squeezing it sideways shrinks the axis type with it. */}
-        <NeuCard className="flex flex-col flex-shrink-0" style={{ padding: '12px 16px 12px', border: BENTO_BORDER }}>
-          <ParticipantsChart points={participantSeries} />
+        {/* Participants over time, across both right-hand columns, taking
+            every pixel of height row 2 has (fill mode draws 1:1, so the axis
+            type never scales with the card). */}
+        <div className="gv-dash-chart gv-dash-cell">
+        <NeuCard className="flex flex-col" style={{ padding: '12px 16px 12px', border: BENTO_BORDER, height: '100%' }}>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <ParticipantsChart points={participantSeries} fill />
+          </div>
         </NeuCard>
-
         </div>
       </div>
 

@@ -29,7 +29,7 @@
 //    construction, so identity never rests on colour alone: each line is
 //    directly labelled at its end and the legend is always present.
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { OUTFIT } from '@/components/neu';
 
 const INK = '#1C1410';
@@ -59,8 +59,10 @@ const SERIES: { key: SeriesKey; label: string; color: string }[] = [
   { key: 'paid', label: 'Paid', color: FUNNEL_RAMP[3] },
 ];
 
-const W = 1000;
-const H = 320;
+/** Default drawing box. In `fill` mode the box is the measured plot area in
+ *  CSS pixels instead, so the axis type stays at its real size at any height. */
+const BASE_W = 1000;
+const BASE_H = 320;
 const PAD = { top: 18, right: 96, bottom: 34, left: 46 };
 
 function niceCeil(v: number): number {
@@ -93,10 +95,42 @@ function smooth(pts: { x: number; y: number }[]): string {
 export default function ParticipantsChart({
   points,
   title = 'Participants over time',
-}: { points: ParticipantPoint[]; title?: string }) {
+  fill = false,
+}: {
+  points: ParticipantPoint[];
+  title?: string;
+  /** Take the height the parent gives it (the parent must be a sized flex or
+   *  grid cell) instead of a fixed 0.32 aspect ratio. Used by the one-screen
+   *  organiser dashboard, where the chart's height must never grow the page. */
+  fill?: boolean;
+}) {
   const [hover, setHover] = useState<number | null>(null);
   const [showTable, setShowTable] = useState(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const plotRef = useRef<HTMLDivElement | null>(null);
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+  const hasPoints = points.length > 0;
+
+  // Fill mode: measure the plot area and draw 1:1 in CSS pixels. State only
+  // changes when the rounded size does, so a resize settles in one render.
+  useEffect(() => {
+    if (!fill) return;
+    const el = plotRef.current;
+    if (!el) return;
+    const read = () => {
+      const w = Math.round(el.clientWidth);
+      const h = Math.round(el.clientHeight);
+      if (w < 40 || h < 40) return;
+      setBox(prev => (prev && prev.w === w && prev.h === h ? prev : { w, h }));
+    };
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fill, showTable, hasPoints]);
+
+  const W = fill && box ? box.w : BASE_W;
+  const H = fill && box ? box.h : BASE_H;
 
   const geom = useMemo(() => {
     const n = points.length;
@@ -106,12 +140,19 @@ export default function ParticipantsChart({
     const x = (i: number) => PAD.left + (n <= 1 ? plotW / 2 : (i / (n - 1)) * plotW);
     const y = (v: number) => PAD.top + plotH - (v / maxY) * plotH;
     return { n, plotW, plotH, maxY, x, y };
-  }, [points]);
+  }, [points, W, H]);
 
   if (points.length === 0) {
-    return (
+    const empty = (
       <div style={{ padding: 28, textAlign: 'center', fontFamily: OUTFIT, fontSize: 14, color: MUTED }}>
-        No applications yet — the chart appears once the first one arrives.
+        No applications yet. The chart appears once the first one arrives.
+      </div>
+    );
+    if (!fill) return empty;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+        <h3 style={{ margin: 0, fontFamily: OUTFIT, fontSize: 15, fontWeight: 800, color: INK }}>{title}</h3>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{empty}</div>
       </div>
     );
   }
@@ -134,8 +175,31 @@ export default function ParticipantsChart({
   const fmtDate = (t: number) =>
     new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 
+  const readout = active && !showTable && (
+    <div
+      style={fill ? {
+        position: 'absolute', insetInlineStart: PAD.left, top: 0, display: 'flex', flexWrap: 'wrap', gap: 12,
+        fontFamily: OUTFIT, fontSize: 12, color: INK_70, pointerEvents: 'none',
+        background: 'rgba(250,248,243,0.94)', borderRadius: 8, padding: '3px 8px',
+      } : {
+        marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 14,
+        fontFamily: OUTFIT, fontSize: 12, color: INK_70,
+      }}
+    >
+      <strong style={{ color: INK }}>{fmtDate(active.t)}</strong>
+      {SERIES.map((s) => (
+        <span key={s.key}>
+          {s.label}{' '}
+          <strong style={{ color: INK, fontVariantNumeric: 'tabular-nums' }}>
+            {active[s.key].toLocaleString()}
+          </strong>
+        </span>
+      ))}
+    </div>
+  );
+
   return (
-    <div>
+    <div style={fill ? { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 } : undefined}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 4 }}>
         <h3 style={{ margin: 0, fontFamily: OUTFIT, fontSize: 15, fontWeight: 800, color: INK }}>
           {title}
@@ -175,7 +239,7 @@ export default function ParticipantsChart({
       </div>
 
       {showTable ? (
-        <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+        <div style={fill ? { flex: 1, minHeight: 0, overflowY: 'auto' } : { maxHeight: 300, overflowY: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: OUTFIT, fontSize: 12 }}>
             <thead>
               <tr>
@@ -216,12 +280,15 @@ export default function ParticipantsChart({
           </table>
         </div>
       ) : (
+        <div ref={plotRef} style={fill ? { flex: 1, minHeight: 0, position: 'relative' } : undefined}>
         <svg
           ref={svgRef}
           viewBox={`0 0 ${W} ${H}`}
           role="img"
           aria-label={`Cumulative participants. Latest: ${SERIES.map((s) => `${s.label} ${last[s.key]}`).join(', ')}.`}
-          style={{ width: '100%', height: 'auto', display: 'block', touchAction: 'none' }}
+          style={fill
+            ? { position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', touchAction: 'none' }
+            : { width: '100%', height: 'auto', display: 'block', touchAction: 'none' }}
           onMouseMove={onMove}
           onMouseLeave={() => setHover(null)}
         >
@@ -316,26 +383,11 @@ export default function ParticipantsChart({
             </g>
           )}
         </svg>
-      )}
-
-      {active && !showTable && (
-        <div
-          style={{
-            marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 14,
-            fontFamily: OUTFIT, fontSize: 12, color: INK_70,
-          }}
-        >
-          <strong style={{ color: INK }}>{fmtDate(active.t)}</strong>
-          {SERIES.map((s) => (
-            <span key={s.key}>
-              {s.label}{' '}
-              <strong style={{ color: INK, fontVariantNumeric: 'tabular-nums' }}>
-                {active[s.key].toLocaleString()}
-              </strong>
-            </span>
-          ))}
+        {fill && readout}
         </div>
       )}
+
+      {!fill && readout}
     </div>
   );
 }

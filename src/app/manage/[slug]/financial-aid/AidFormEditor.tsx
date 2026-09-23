@@ -15,6 +15,7 @@ import { PillToggle } from '@/app/account/accountUi';
 import QuestionBuilder from '@/components/QuestionBuilder';
 import { type FormBlock, normalizeBlocks, unpublishableQuestions } from '@/lib/customQuestions';
 import { NEU, OUTFIT, NeuCard } from '@/components/neu';
+import { friendlyError } from '@/lib/friendlyError';
 
 const inputStyle: React.CSSProperties = {
   backgroundColor: '#FAF8F3',
@@ -32,8 +33,8 @@ const inputStyle: React.CSSProperties = {
 // Standard failure copy for a verified-write save: a write that returns an
 // error OR affects zero rows (RLS silently filtered it, or the row vanished)
 // is treated identically, never a silent false success.
-function saveFailMessage(error?: { message: string } | null): string {
-  return "Couldn't save, please refresh and try again." + (error?.message ? ' ' + error.message : '');
+function saveFailMessage(error?: unknown): string {
+  return error ? friendlyError(error, "Couldn't save, please refresh and try again.") : "Couldn't save, please refresh and try again.";
 }
 
 export interface AidFormEditorProps {

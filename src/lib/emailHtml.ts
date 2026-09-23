@@ -109,6 +109,9 @@ export interface EmailRenderConference extends ButtonUrlConference {
   tiktok_url?: string | null;
   facebook_url?: string | null;
   whatsapp_url?: string | null;
+  /** Card design only: the named secretariat (conferences.display_secretariat)
+   *  that signs the email. Optional; without it the sign-off is the team. */
+  display_secretariat?: { name?: string | null; title?: string | null }[] | null;
 }
 
 export interface RenderEmailHtmlArgs {
@@ -146,7 +149,7 @@ export interface RenderEmailHtmlArgs {
    */
   /** `seatLogo` is a seat's own or group crest (already a PNG/WebP URL); when
    *  present it replaces the twemoji flag for the `country` icon. */
-  media?: { countryCode?: string | null; committeeEmblem?: string | null; seatLogo?: string | null };
+  media?: { countryCode?: string | null; committeeEmblem?: string | null; seatLogo?: string | null; committeeName?: string | null; committeeTopic?: string | null };
   /** EVENT_REGISTRY key, when this is an event email. Only the card design
    *  reads it (the status pill, and a product snapshot on our own default
    *  copy); the classic renderer ignores it. */
@@ -1027,7 +1030,7 @@ export function renderEmailHtml({
     .e-chip { background-color: ${D_CHIP_BG} !important; box-shadow: 0 0 0 1px rgba(255,255,255,0.22) !important; }
     .e-link { color: ${mixHex(theme.accentColor, '#FFFFFF', 0.55)} !important; }
     /* The CTA is now a solid brand colour, and forest on a near-black card is
-       about 1.2:1 — the button would disappear exactly where the old pale gold
+       about 1.2:1, so the button would disappear exactly where the old pale gold
        used to work. Lifted toward the light, with ink to match. Any future
        change to a solid dark button needs this pair or dark mode regresses. */
     .e-btn { background-color: ${mixHex(theme.buttonColor, '#FFFFFF', 0.30)} !important; }

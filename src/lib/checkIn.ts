@@ -11,6 +11,7 @@
 // the current status, so an idempotent re-check-in or a defensive undo is safe.
 
 import type { getAuthedClient } from '@/lib/supabase-auth';
+import { friendlyError } from '@/lib/friendlyError';
 
 type AuthedClient = ReturnType<typeof getAuthedClient>;
 
@@ -37,7 +38,7 @@ export async function checkInApplication(
     .single();
 
   if (error) {
-    return { error: error.message || 'Could not check in that attendee.', checked_in_at: null };
+    return { error: friendlyError(error, 'Could not check in that attendee.'), checked_in_at: null };
   }
 
   return { error: null, checked_in_at: (data?.checked_in_at as string | null) ?? checkedInAt };
@@ -69,7 +70,7 @@ export async function undoCheckIn(
     .eq('id', applicationId);
 
   if (error) {
-    return { error: error.message || 'Could not undo that check-in.' };
+    return { error: friendlyError(error, 'Could not undo that check-in.') };
   }
 
   return { error: null };

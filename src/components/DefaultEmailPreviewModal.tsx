@@ -16,6 +16,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import { ModalOverlay } from '@/components/CommitteeEditorModal';
 import type { PreviewCandidate } from '@/components/EmailComposer';
+import { friendlyError } from '@/lib/friendlyError';
 
 const OUTFIT = "'Outfit', sans-serif";
 const BORDER = '#DDD4C0';
@@ -77,7 +78,7 @@ export default function DefaultEmailPreviewModal({
       status: 'pending',
     });
     setSendingTest(false);
-    if (error) { setTestMessage(`Failed to send test: ${error.message}`); return; }
+    if (error) { setTestMessage(friendlyError(error, "Couldn't send the test email. Please try again.")); return; }
     triggerEmailDelivery(supabase);
     setTestMessage(`Test sent to ${organizerEmail}`);
     setTimeout(() => setTestMessage(m => (m?.startsWith('Test sent') ? null : m)), 4500);

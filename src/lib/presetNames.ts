@@ -124,22 +124,40 @@ export const PRESET_EMBLEMS: PresetEmblem[] = [
   { key: 'crisis', label: 'CRISIS', logo: '/committee-emblems/crisis.svg',    aliases: ['crisis', 'crisis committee', 'jcc', 'joint crisis', 'cabinet', 'ad hoc', 'ad-hoc'] },
 ];
 
-// A short, high-signal subset surfaced as one-click swatches in the editor.
-// De-duplicated BY LOGO: unsc/disec/specpol/legal/ecosoc all wear the same UN
-// seal, so the raw filter used to render the identical UN emblem five times. We
-// keep the first entry per distinct logo (UNSC stands in for the UN family).
-export const PRESET_EMBLEM_PICKS: PresetEmblem[] = (() => {
-  const wanted = ['unsc', 'disec', 'specpol', 'legal', 'ecosoc', 'hrc', 'who', 'crisis'];
-  const seenLogos = new Set<string>();
-  const picks: PresetEmblem[] = [];
-  for (const key of wanted) {
-    const e = PRESET_EMBLEMS.find((x) => x.key === key);
-    if (!e || seenLogos.has(e.logo)) continue;
-    seenLogos.add(e.logo);
-    picks.push(e);
-  }
-  return picks;
-})();
+// ── The six one-click emblems in the committee editor ────────────────────────
+// (23 Sep 2026, owner: "provide a few preset emblems for organisers to choose
+// from: 6 presets, or upload your own".)
+//
+// Chosen by what conferences actually attach, measured on all 975
+// `conference_committees` rows: /logos/un.svg 281, /logos/UNHRC.png 76,
+// /committee-emblems/crisis.svg 59, /logos/who.png 44, /logos/press.svg 19.
+// Those five plus a NEUTRAL GAVEL for everything else (251 committees carry no
+// emblem at all, and a parliamentary or bespoke room has no seal to borrow).
+//
+// DE-DUPLICATED BY ARTWORK, which is why the Security Council, the General
+// Assembly and ECOSOC are not three separate tiles: all of them — and DISEC,
+// SPECPOL, SOCHUM and LEGAL — wear the SAME UN seal, so one tile stands for the
+// whole UN family. Repeating it would spend half the row on one picture.
+//
+// Only artwork already in the repo, plus the one mark drawn in the house
+// palette (gavel.svg). Never invent a seal for a real body.
+export interface EmblemPick {
+  key: string;
+  /** Short word under the swatch. */
+  label: string;
+  logo: string;
+  /** Tooltip / accessible name: what this emblem is for. */
+  title: string;
+}
+
+export const EMBLEM_PICKS: EmblemPick[] = [
+  { key: 'un',     label: 'UN',     logo: '/logos/un.svg',                  title: 'United Nations emblem (Security Council, General Assembly, ECOSOC, DISEC, SPECPOL, SOCHUM, LEGAL)' },
+  { key: 'hrc',    label: 'HRC',    logo: '/logos/UNHRC.png',               title: 'UN Human Rights Council' },
+  { key: 'who',    label: 'WHO',    logo: '/logos/who.png',                 title: 'World Health Organization' },
+  { key: 'crisis', label: 'Crisis', logo: '/committee-emblems/crisis.svg',  title: 'Crisis committee or cabinet' },
+  { key: 'press',  label: 'Press',  logo: '/logos/press.svg',               title: 'International Press Corps' },
+  { key: 'gavel',  label: 'Gavel',  logo: '/committee-emblems/gavel.svg',   title: 'A neutral gavel mark for any other committee' },
+];
 
 // Match a committee's name + abbreviation to a preset emblem logo, or null.
 // Abbreviation is weighted first (exact acronym), then name substring.

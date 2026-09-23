@@ -28,6 +28,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useConfirmModal } from '@/components/ConfirmModal';
+import { friendlyError } from '@/lib/friendlyError';
 import { InfoHint } from './applicationsUi';
 import {
   type ConferenceTheme, GAVELLING_THEME, themeCssVars, themeWarnings,
@@ -121,8 +122,8 @@ function normalizeHexInput(raw: string): string | null {
 // Standard failure copy for a verified-write save: an error OR zero affected
 // rows (RLS silently filtered it, or the row vanished) is treated identically,
 // never a silent false success.
-function saveFailMessage(error?: { message: string } | null): string {
-  return "Could not save, please refresh and try again." + (error?.message ? ' ' + error.message : '');
+function saveFailMessage(error?: unknown): string {
+  return error ? friendlyError(error, "Couldn't save, please refresh and try again.") : "Couldn't save, please refresh and try again.";
 }
 
 export interface CustomizationCardProps {
@@ -287,7 +288,7 @@ export default function CustomizationCard({
     const { data, error } = await supabase.rpc('publish_conference_theme', { p_conference_id: conferenceId });
     setPublishing(false);
     if (error) {
-      setPublishError(error.message);
+      setPublishError(friendlyError(error, "Couldn't publish your changes. Please try again."));
       return;
     }
     setPublished((data as ConferenceTheme) ?? {});

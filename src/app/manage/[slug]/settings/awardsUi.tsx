@@ -20,6 +20,7 @@ import {
   type AwardsConfig, type AwardTier, type AwardTypeConfig,
 } from '@/lib/awards';
 import { saveAwardsConfig } from '@/lib/awardsService';
+import { friendlyError } from '@/lib/friendlyError';
 
 const OUTFIT = "'Outfit', sans-serif";
 
@@ -261,7 +262,7 @@ export function AwardsSettings({ conference, onSaved }: {
         ? await saveAwardsConfig(supabase, conferenceIdRef.current, stamped)
         : 'Your session has expired. Sign in again and retry.';
     } catch (e) {
-      err = e instanceof Error ? e.message : 'Your changes were not saved.';
+      err = friendlyError(e, 'Your changes were not saved.');
     }
     if (silent || seq !== seqRef.current) return;
     setSaving(false);

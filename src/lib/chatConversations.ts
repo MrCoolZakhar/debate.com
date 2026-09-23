@@ -20,25 +20,57 @@ export interface ChatConv {
 // A group MESSAGE is an ordinary row with recipient `group:<id>` and is_private true.
 //
 // The definition row's primary key IS the group id, and that row wins (parseChatGroups), so a
-// forged row cannot rename a group or add members to it, even backdated (created_at is
-// client-writable). Older rows without that binding fall back to "first by created_at". Messages are shown only to members and only when their sender is a
+// forged DEFINITION cannot replace a group, even backdated (created_at is client-writable).
+// Renames and additions go through edit rows only (below). Older rows without that binding fall back to "first by created_at". Messages are shown only to members and only when their sender is a
 // member.
 //
+// Groups are EDITED by append-only rows (rename, add members), never by touching the
+// definition: sender `__system__`, recipient `__group__`, is_private true, content
+// `__group_edit__:{"group","name"?,"add"?,"by","at"}`. The recipient alone makes every chat
+// builder skip them (isSystemLog), the scoring ledger needs recipient `__log__`, and the
+// prefix is not `__group__:`, so an older bundle neither shows them nor mistakes them for a
+// definition. parseChatGroups folds them onto the definition in created_at order, then id:
+// an edit applies only when its `by` is a member AT THAT POINT of the fold (the creator or
+// anyone already added). Members can only be added, never removed. Honest limits, exactly
+// like group messages: `by` is free text and `created_at` is client-writable, so anyone with
+// the session code can write an edit claiming to be a member.
+//
 // NOT PRIVATE. `messages` SELECT is `true` and every device downloads every row of its
-// committee, group rows included. Membership decides what the UI shows, nothing more.
+// committee, group rows included. Membership decides what the UI shows, nothing more. A
+// member added later sees the whole history, because it was always on their device.
 
 export const GROUP_DEF_PREFIX = '__group__:';
 export const GROUP_DEF_RECIPIENT = '__group__';
 export const GROUP_KEY_PREFIX = 'group:';
+export const GROUP_EDIT_PREFIX = '__group_edit__:';
 export const GROUP_NAME_MAX = 40;
+/** Longest identity kept from a stored member list (a chair name or a delegation). */
+const MEMBER_MAX = 120;
+
+/** One applied edit, for the thread's system lines. */
+export interface ChatGroupEvent {
+  /** The edit row's id. */
+  id: string;
+  by: string;
+  at: Date;
+  /** The new name, when this edit renamed the group. */
+  name?: string;
+  /** Members this edit added (never ones already in). */
+  added?: string[];
+}
 
 export interface ChatGroupDef {
   id: string;
   name: string;
+  /** Current members: the definition's, plus every applied edit's additions. */
   members: string[];
   /** The creator's display name (chair name or delegation). */
   by: string;
   createdAt: Date;
+  /** Applied edits, in fold order. */
+  events: ChatGroupEvent[];
+  /** When the last applied edit was written, or null. */
+  lastEditAt: Date | null;
 }
 
 export function isGroupKey(key: ChatConvKey | null | undefined): boolean {
@@ -54,17 +86,70 @@ export function encodeGroupDef(def: { id: string; name: string; members: string[
   return GROUP_DEF_PREFIX + JSON.stringify({ id: def.id, name: def.name, members: def.members, by: def.by });
 }
 
+/** Content of an edit row (rename and / or add members). */
+export function encodeGroupEdit(edit: { group: string; name?: string; add?: string[]; by: string; at: string }): string {
+  const body: Record<string, unknown> = { group: edit.group };
+  if (edit.name) body.name = edit.name;
+  if (edit.add && edit.add.length) body.add = edit.add;
+  body.by = edit.by;
+  body.at = edit.at;
+  return GROUP_EDIT_PREFIX + JSON.stringify(body);
+}
+
+function cleanMembers(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return Array.from(new Set(
+    raw.filter((x): x is string => typeof x === 'string' && x.trim() !== '').map((x) => x.trim().slice(0, MEMBER_MAX)),
+  ));
+}
+
+const GROUP_ID_RE = /^[A-Za-z0-9-]{8,64}$/;
+
+interface GroupEditRow {
+  rowId: string;
+  group: string;
+  name?: string;
+  add: string[];
+  by: string;
+  ts: number;
+  /** This device's optimistic copy, not yet echoed. */
+  pending: boolean;
+}
+
+function parseGroupEditRow(m: ChatMessage): GroupEditRow | null {
+  if (m.recipient !== GROUP_DEF_RECIPIENT || !m.content.startsWith(GROUP_EDIT_PREFIX)) return null;
+  try {
+    const raw = JSON.parse(m.content.slice(GROUP_EDIT_PREFIX.length)) as Record<string, unknown>;
+    const group = typeof raw.group === 'string' ? raw.group.trim() : '';
+    const by = typeof raw.by === 'string' ? raw.by.trim() : '';
+    if (!GROUP_ID_RE.test(group) || !by) return null;
+    const name = typeof raw.name === 'string' ? raw.name.trim().slice(0, GROUP_NAME_MAX) : '';
+    return {
+      rowId: String(m.id),
+      group,
+      name: name || undefined,
+      add: cleanMembers(raw.add),
+      by,
+      ts: new Date(m.timestamp).getTime(),
+      pending: String(m.id).startsWith('pending-'),
+    };
+  } catch {
+    return null;
+  }
+}
+
 function parseGroupDefRow(m: ChatMessage): ChatGroupDef | null {
   if (m.recipient !== GROUP_DEF_RECIPIENT || !m.content.startsWith(GROUP_DEF_PREFIX)) return null;
   try {
     const raw = JSON.parse(m.content.slice(GROUP_DEF_PREFIX.length)) as Record<string, unknown>;
     const id = typeof raw.id === 'string' ? raw.id.trim() : '';
     const name = typeof raw.name === 'string' ? raw.name.trim().slice(0, GROUP_NAME_MAX) : '';
-    const members = Array.isArray(raw.members)
-      ? Array.from(new Set(raw.members.filter((x): x is string => typeof x === 'string' && x.trim() !== '').map((x) => x.trim())))
-      : [];
-    if (!/^[A-Za-z0-9-]{8,64}$/.test(id) || !name || members.length < 2) return null;
-    return { id, name, members, by: typeof raw.by === 'string' ? raw.by : '', createdAt: new Date(m.timestamp) };
+    const members = cleanMembers(raw.members);
+    if (!GROUP_ID_RE.test(id) || !name || members.length < 2) return null;
+    return {
+      id, name, members, by: typeof raw.by === 'string' ? raw.by : '', createdAt: new Date(m.timestamp),
+      events: [], lastEditAt: null,
+    };
   } catch {
     return null;
   }
@@ -74,7 +159,7 @@ function parseGroupDefRow(m: ChatMessage): ChatGroupDef | null {
 // mutated (mergeMessagesById returns the previous array when nothing changed).
 const groupCache = new WeakMap<ChatMessage[], Map<string, ChatGroupDef>>();
 
-/** Every group defined in this committee, first definition per id wins. */
+/** Every group defined in this committee (first definition per id wins), with its edits folded in. */
 export function parseChatGroups(messages: ChatMessage[]): Map<string, ChatGroupDef> {
   const hit = groupCache.get(messages);
   if (hit) return hit;
@@ -100,6 +185,32 @@ export function parseChatGroups(messages: ChatMessage[]): Map<string, ChatGroupD
     else if (!legacy.has(def.id)) legacy.set(def.id, def);
   }
   for (const [id, def] of legacy) if (!out.has(id)) out.set(id, def);
+
+  // Edits, in created_at order then id; this device's optimistic copies after every real row
+  // (their clock is the device's, and they are replaced by the real row when it echoes).
+  const edits: GroupEditRow[] = [];
+  for (const m of messages) {
+    if (m.sender !== '__system__') continue;
+    const e = parseGroupEditRow(m);
+    if (e && out.has(e.group)) edits.push(e);
+  }
+  edits.sort((a, b) => (Number(a.pending) - Number(b.pending)) || (a.ts - b.ts) || (a.rowId < b.rowId ? -1 : a.rowId > b.rowId ? 1 : 0));
+  for (const e of edits) {
+    const g = out.get(e.group)!;
+    // Only a member at this point of the fold may edit (the creator or anyone already added).
+    if (!g.members.includes(e.by)) continue;
+    const name = e.name && e.name !== g.name ? e.name : undefined;
+    const added = e.add.filter((x) => !g.members.includes(x));
+    if (!name && added.length === 0) continue;
+    // `g` was built by this call (parseGroupDefRow returns a fresh object), so it is safe to
+    // update in place before it is cached.
+    if (name) g.name = name;
+    if (added.length) g.members = [...g.members, ...added];
+    const at = new Date(e.ts);
+    g.events.push({ id: e.rowId, by: e.by, at, name, added: added.length ? added : undefined });
+    g.lastEditAt = at;
+  }
+
   groupCache.set(messages, out);
   return out;
 }
@@ -109,9 +220,10 @@ export function chatGroupsFor(messages: ChatMessage[], senderName: string): Chat
   return Array.from(parseChatGroups(messages).values()).filter((g) => g.members.includes(senderName));
 }
 
-/** Rows that are never chat: the scoring ledger and group definitions. */
+/** Rows that are never chat: the scoring ledger, group definitions and group edits. */
 function isSystemLog(m: ChatMessage): boolean {
-  return m.content.startsWith('__log__:') || m.recipient === GROUP_DEF_RECIPIENT || m.content.startsWith(GROUP_DEF_PREFIX);
+  return m.content.startsWith('__log__:') || m.recipient === GROUP_DEF_RECIPIENT
+    || m.content.startsWith(GROUP_DEF_PREFIX) || m.content.startsWith(GROUP_EDIT_PREFIX);
 }
 
 function isGroupRecipient(recipient: string | undefined): boolean {
@@ -363,7 +475,9 @@ export function buildChatDirectory({
     const kind = kindOf(key);
     const group = kind === 'group' ? groups.get(key.slice(GROUP_KEY_PREFIX.length)) : undefined;
     let lastAt: number | null = msgs.length ? new Date(msgs[msgs.length - 1].timestamp).getTime() : null;
-    if (group) lastAt = Math.max(lastAt ?? 0, group.createdAt.getTime());
+    // A group counts from its creation and from its latest edit, so a member who was just
+    // added finds it near the top.
+    if (group) lastAt = Math.max(lastAt ?? 0, group.createdAt.getTime(), group.lastEditAt?.getTime() ?? 0);
     const extra = extraActivity[key];
     if (extra != null) lastAt = Math.max(lastAt ?? 0, extra);
     return { key, kind, messages: msgs, lastAt, group };

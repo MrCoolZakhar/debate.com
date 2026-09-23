@@ -38,6 +38,7 @@ import {
   committeeIdentities,
 } from './cardModel';
 import { SOFT, AMBER_INK, RED } from './tokens';
+import { friendlyError } from '@/lib/friendlyError';
 
 /** Deadline on the in-flight load guard. Longer than any healthy load (the
  *  batch is eight indexed `in` queries) but short enough that a hung request
@@ -134,7 +135,7 @@ export default function LiveStatusPage() {
       // nothing honest to draw, so bail out loudly and leave whatever was last
       // known on screen rather than blanking the floor.
       if (confErr) {
-        setLoadError("Couldn't load the committee list: " + confErr.message);
+        setLoadError(friendlyError(confErr, "Couldn't load the committee list. Please refresh the page."));
         return;
       }
 
@@ -504,7 +505,7 @@ export default function LiveStatusPage() {
     } catch (e) {
       // A thrown request (network down, aborted fetch) is a failed load, not an
       // empty floor. Same rule: say so, and don't stamp a fresh timestamp.
-      setLoadError("Couldn't refresh the floor: " + (e instanceof Error ? e.message : String(e)));
+      setLoadError(friendlyError(e, "Couldn't refresh the floor. Please refresh the page."));
     } finally {
       loadingRef.current = false;
       setRefreshing(false);

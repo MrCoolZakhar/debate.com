@@ -89,7 +89,14 @@ long invoice list hit them in production:
 ## 4. Growth loops (what the code is built to do)
 
 1. **Content SEO**: 84 posts in `src/app/blog/posts.ts` (the sitemap is generated from that manifest), the competitor-alternative posts carry the highest sitemap priority. Bare `/join` and `/create` stay indexable; `/join?code=...` is noindex by header.
-2. **Public conference pages** as landing pages: dynamic sitemap (was ISR, which froze for days on Vercel), IndexNow ping on publish, dynamic OG cards (`/api/og/*`), `pageMetadata()` makes a missing OG image structurally impossible (`src/lib/seo.ts`; `npm run check:og`).
+2. **Public conference pages** as landing pages: dynamic sitemap (was ISR, which froze for days on Vercel), IndexNow ping on publish and on a rename, dynamic OG cards (`/api/og/*`), `pageMetadata()` makes a missing OG image structurally impossible (`src/lib/seo.ts`; `npm run check:og`).
+
+**The slug follows the name, and every old link keeps working (23 Sep 2026).** A conference minted `demomun`, was renamed to KU MUN, and kept the DEMOMUN link forever, because `conferences.slug` was written once by the creation wizard and by nothing else ever again. Now:
+- Renaming a conference (its acronym or its full name) re-mints the slug from the new name, down the SAME ladder `src/lib/conferenceSlug.ts` uses at creation. It happens in the DATABASE (`conferences_reslug_on_rename`, migration `conference_slug_aliases_and_reslug_on_rename`), because the name is editable from the organiser settings autosave, from the admin console's `admin_update_conference` RPC and from hand-written SQL, and because the forwarding address must be written in the same transaction as the slug it replaces. `conference_slug_ladder()` in the database is a PORT of `conferenceSlugLadder()`; change one, change the other (the parity query is in that file's header — it matched byte for byte over all 272 live conferences on 23 Sep 2026). A DATE change never moves a slug, and an edit whose new name mints the slug the conference already has writes nothing.
+- `conference_slug_aliases (slug pk, conference_id, created_at)` holds every slug a conference has ever answered to, seeded on 23 Sep 2026 with all 272 live slugs. RLS: read for anyone (it is public routing data); no write policy at all, so only the SECURITY DEFINER trigger and the service role write it. A conference can never mint a slug another conference holds as a live slug OR as an alias (`conference_slug_alias_guard` raises 23505 naming the slug, so `isSlugTakenError` walks the creation ladder to the next rung).
+- `src/middleware.ts` 308s `/conferences/<old>/…` and `/manage/<old>/…` to the same path on the current slug, query string kept, one hop, never a loop (it fires only when the alias names a conference whose current slug is different). Middleware because the redirect must cover a dozen route files, several of them client components that cannot issue a 308 at all. `src/lib/conferenceAliases.ts` is the lookup: one point query per unknown segment, memoised for 60 s including the misses, so a live slug costs nothing per request.
+- **Canonical and sitemap stay on the current slug only.** The sitemap reads `conferences.slug` and never the alias table: an alias is honoured, never advertised. `/<ACRONYM>` vanity stays 307 (derived from a mutable acronym) and now falls back to the alias table, so an old acronym typed bare still resolves, live acronyms always winning.
+- What the alias does NOT fix: three `localStorage` namespaces keyed on the slug (`gavelling-first-touch:<slug>`, the guest apply draft, `gavelling-fin-currency-<slug>`) silently orphan on a rename, and `record_conference_page_view(p_slug, …)` drops a view posted by a tab that was open across the rename. Sent emails, QR codes, bookmarks and already-scraped share cards are all covered (the OG route follows the alias, so a preview cached in a WhatsApp thread keeps rendering).
 3. **The MUN CV as a credential**: every profile link resolves to `/cv/<name>-<hex>`; `ShareAchievementModal` fires after a new entry; `PublicCVSignupPrompt` converts the reader. **Awards are the first thing that writes a `gavelling_verified` entry**; before that every CV entry was self-reported, which is why the awards pipeline matters commercially.
 4. **Job board** for chairs and secretariat, cross-conference.
 5. **Ambassadors** (`/about` form, platform fee waived) and **delegation invite links**.
@@ -288,6 +295,24 @@ answer shapes what we lead them with afterwards.
 
 ---
 
+## 5e. "Your room is live" (22 Sep 2026)
+
+The moment a signed-in person lands on the site while one of their conference rooms is live,
+`LiveRoomsGate` (root layout, `src/components/liveRooms/`) sends them straight in: an
+**organiser** to `/manage/[slug]/live` (how many committees are live and in session), a
+**chair** to the verified chair join (`/join?code=CODE&mode=chair`, no chair code), a
+**delegate** to their allocated seat (`/delegate/CODE?country=...&locked=1`, round country
+flag as the headline), and a **faculty advisor** (accepted application; owner: "put in a note
+for faculty advisors to have the pop up as well") to `/advisor/CODE`, every live room of their
+conference listed. One prompt at a time, organiser > chair > delegate > advisor; several
+entries are a compact list. "Not now" lasts for the page visit; it stops by itself when the
+conference ends or the room ends. The same rooms stay under "Live now" in the profile menu.
+Source: `my_live_rooms()` (caller's own rows only, never the chair suffix). It never opens on a
+live session route, /join, auth or apply paths, and never over another gate. On /sessions it
+also carries the standalone rejoin. Rules in AGENTS.md, "Your room is live".
+
+---
+
 ## 6. Where things live
 
 ```
@@ -301,7 +326,7 @@ src/app/
   api/         ambassador, contact, geo, indexnow, emails/queue-participant, og/*
 src/lib/
   sessions     types.ts, committeeService.ts (all session DB I/O + realtime), scoring.ts, sessionScoreboard.ts, settingsStore.ts, committeeFlags.ts, docNames.ts
-  conferences  conferenceAccess.ts, conferenceScoreboard.ts, awards.ts, awardsService.ts, slotGroups.ts, conferenceIntent.ts, finance.ts, payments.ts, invoices.ts, emailEvents.ts, defaultEmails.ts, organizerPermissions.ts, publicFees.ts, seo.ts, vanity.ts
+  conferences  conferenceAccess.ts, conferenceScoreboard.ts, awards.ts, awardsService.ts, slotGroups.ts, conferenceIntent.ts, finance.ts, payments.ts, invoices.ts, emailEvents.ts, defaultEmails.ts, organizerPermissions.ts, publicFees.ts, seo.ts, vanity.ts, conferenceSlug.ts, conferenceAliases.ts
   shared       translations.ts (4 locales), countries.ts, supabase.ts (anon), supabase-auth.ts (getAuthedClient), sessionClient.ts (chair suffix header)
 src/components/ neu.tsx (design tokens), DatePicker, Portal, SiteNav, ScoreboardTable, ScoreboardPanel, MotionsModal, DocumentsModal, RollCallPanel, ChatPanel, SettingsPanel, FeedbackLogPanel, TutorialOverlay, GuidedWalkthrough
 ```
@@ -356,6 +381,7 @@ Everything else, with line numbers and the reasons behind each rule, is in `AGEN
 - **No count or status pills like '15 delegations' or 'Observer' anywhere: show counts as plain typography and observer status as an icon.** (Owner, 17 Sep 2026. /create shows the count as a large tabular numeral and observers as the megaphone; the join seat picker shows seat state as icon + plain words.)
 - **No em dashes in user-facing copy.** Short sentences. Say what happened and what to do next.
 - **Errors are written for people, never for engineers.** Never render `error.message`, `err.message`, a Postgres, PostgREST, Storage or Stripe string, or a stack trace to a user. Route every caught error through `friendlyError(error, fallback)` from `src/lib/friendlyError.ts`, with a fallback that says what failed and what to do next. When a migration adds a CHECK a user can reach, add its plain sentence to `CONSTRAINT_MESSAGES` in the same change. Better still, check the condition in the UI first so the database never has to refuse (the TBD publish rule is the example). Our own human-written thrown errors use `new UserFacingError('...')` so friendlyError passes them through. The one exemption is `src/app/admin/*`, seen only by platform admins, where raw errors are kept on purpose for debugging; do not copy that pattern anywhere else.
+- **One screen, no page scroll** for consoles and dashboards at 1280x800 and up: the organiser dashboard `/manage/[slug]` (grid in `src/components/conferences/dashboardLayout.tsx`), `/chair`, `/voting`, `/advisor` (`FitToScreen`) and the sessions set-up screens; only a list inside them scrolls. Below 1024 px wide or 600 px tall they stack and scroll. Lists and long forms (applications, assignment, the live wall, settings, apply, blog) scroll by design. Rule and list: `docs/ui-audit/00-DESIGN-RULEBOOK.md` §9.
 - Dates: the shared `DatePicker` only. Popovers: through `Portal` at fixed coordinates, flipped near edges, never clipped. Info hints open on hover. Long committee names show the acronym with the full name beneath (`committeeDisplayName`).
 - i18n: four locales in `src/lib/translations.ts` (en, es, fr, ar with RTL), **sessions only** (18 Sep 2026): `LanguageProvider` returns the stored language only on a sessions route (`src/lib/sessionRoutes.ts`) and English everywhere else, and only sessions surfaces show a picker. Every sessions picker offers "Request a language" (`LanguageRequestDialog`: language, email, Rules of Procedure file into the private `language-requests` bucket, a `language_requests` row (RLS insert-only, trigger rate limit 3 per email / 60 per hour, file must exist), and a team email to wearegavelling@gmail.com through `email_outbox`). The DB stores English; translate at render. Rules and the list of hand-maintained bypasses are in `.claude/TRANSLATIONS.md`, which must be updated when keys change. Manage surfaces are English-only by convention.
 - Polish reference: `.claude/skills/make-interfaces-feel-better/SKILL.md` (the only UI skill installed in this repo).

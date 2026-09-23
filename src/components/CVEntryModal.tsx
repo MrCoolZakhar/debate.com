@@ -26,6 +26,7 @@ import { UN_COUNTRIES, getCountryByName, getFlagUrl, countryMatchRank } from '@/
 import { CONFERENCE_COMMITTEE_PRESETS } from '@/components/ConferenceRosterPicker';
 import { LogoDisc } from '@/components/LogoDisc';
 import Portal from '@/components/Portal';
+import { friendlyError } from '@/lib/friendlyError';
 import { viewBox, useReposition } from '@/lib/visualViewport';
 import {
   Eyebrow, Pill, LevelBadge, LEVEL_ACCENT, AwardArtwork, AWARD_LIST, isCustomAward,
@@ -934,7 +935,7 @@ export function CVEntryModal({
     }
     setSubmitting(false);
     if (dbErr) {
-      setError(dbErr.message);
+      setError(friendlyError(dbErr, "Couldn't save this entry. Please try again."));
       return;
     }
     onSaved(addedRow);

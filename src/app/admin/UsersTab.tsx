@@ -579,7 +579,7 @@ export function UserDrawer({ userId, onClose }: { userId: string; onClose: () =>
                           <Chip key={a} text={a.toUpperCase()} bg={TINT.gold} fg={NEU.deepGold} />
                         ))}
                         <span className="ml-auto" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.inkSoft, ...NUM }}>
-                          {e.event_date ? fmtDate(e.event_date) : fmtDate(e.created_at)}
+                          {e.event_date ? fmtDate(`${e.event_date}T00:00:00`) : fmtDate(e.created_at)}
                         </span>
                       </div>
                     </MiniRow>

@@ -15,6 +15,7 @@ import { currencySymbol } from '@/lib/utils';
 import { type FormBlock, type CustomAnswers, questionsOf, splitIntoSections, validateAnswers, answerIsEmpty } from '@/lib/customQuestions';
 import CustomQuestionsField from '@/components/CustomQuestionsField';
 import { OUTFIT } from './shared';
+import { friendlyError } from '@/lib/friendlyError';
 
 export interface AidRequestModalProps {
   applicationId: string;
@@ -97,7 +98,7 @@ export default function AidRequestModal({
     const result = data as { ok?: boolean; error?: string } | null;
     if (error || !result?.ok) {
       setSubmitting(false);
-      setSubmitError(result?.error || error?.message || 'Could not submit your request. Please try again.');
+      setSubmitError(result?.error || friendlyError(error, 'Could not submit your request. Please try again.'));
       return;
     }
     setSubmitting(false);

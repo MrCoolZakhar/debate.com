@@ -191,7 +191,8 @@ export default function PrivacyPage() {
             <p className="mt-3">
               We do not run Google Analytics, advertising pixels, or any third-party tracking on
               Gavelling. The anonymous count of conference page visits above is our own and never
-              leaves Gavelling.
+              leaves Gavelling. The one outside service your browser talks to directly is GIPHY,
+              when a GIF is shown in a session (see &ldquo;Who else handles your data&rdquo;).
             </p>
           </Disclosure>
         </div>
@@ -427,6 +428,7 @@ export default function PrivacyPage() {
           <li><strong>Vercel</strong> — hosting and content delivery for the website itself.</li>
           <li><strong>Stripe</strong> — payment processing. Card details go to Stripe, not to us.</li>
           <li><strong>Resend</strong> — sending transactional and announcement emails.</li>
+          <li><strong>GIPHY</strong>: the GIFs in session chat and on vote results. When you search for a GIF, the search goes from our server to GIPHY, so GIPHY never learns who searched. But the GIF images themselves load from GIPHY&apos;s servers in your browser, so when a GIF is on your screen GIPHY receives your IP address and browser details, as any website you load an image from does. No page address is sent with it. This happens when someone in your committee sends a GIF in chat, and on a chair&apos;s screen when a vote result is shown. A chair can turn chat off for a session.</li>
         </ul>
         <p className="mt-3">
           Each of them is bound by a contract that limits them to processing data for us. Beyond

@@ -33,6 +33,7 @@ import {
   NeuInset, NeuIconDisc, NEU, NEU_GRADIENTS, type NeuGradient, OUTFIT, EASE,
 } from '@/components/neu';
 import { type LiveCommittee, type CardStatus, cardStatus } from './LiveModals';
+import { friendlyError } from '@/lib/friendlyError';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -228,7 +229,7 @@ export async function sendBroadcast(
   const supabase = await getFreshAuthedClient();
   if (!supabase) return EXPIRED_SESSION;
   const { error } = await supabase.from('session_broadcasts').insert(rows);
-  return error ? error.message : null;
+  return error ? friendlyError(error, "Couldn't send the broadcast. Please try again.") : null;
 }
 
 /** Delete every row of one send. Returns an error string, or null on success. */
@@ -237,7 +238,7 @@ export async function deleteBroadcastGroup(ids: string[]): Promise<string | null
   const supabase = await getFreshAuthedClient();
   if (!supabase) return EXPIRED_SESSION;
   const { error } = await supabase.from('session_broadcasts').delete().in('id', ids);
-  return error ? error.message : null;
+  return error ? friendlyError(error, "Couldn't delete this broadcast. Please try again.") : null;
 }
 
 /** Upload a broadcast image to the public `conference-assets` bucket.
@@ -268,7 +269,7 @@ export async function uploadBroadcastImage(
   const { error } = await supabase.storage
     .from('conference-assets')
     .upload(path, file, { contentType: file.type, upsert: false });
-  if (error) return { error: "Couldn't upload the image: " + error.message };
+  if (error) return { error: friendlyError(error, "Couldn't upload the image. Please try a different one.") };
   const { data } = supabase.storage.from('conference-assets').getPublicUrl(path);
   return { url: data.publicUrl };
 }

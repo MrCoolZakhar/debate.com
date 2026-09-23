@@ -28,6 +28,8 @@ import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import { unresolvedFields } from '@/lib/emailUnresolved';
 import { formatFee } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
+import { friendlyError } from '@/lib/friendlyError';
+import { formatConferenceDates } from '@/lib/conferenceDates';
 
 interface ConferenceRow {
   slug: string;
@@ -109,20 +111,8 @@ function paymentStatusLabel(status: string | null): string | null {
   return map[status] ?? status;
 }
 
-function formatDate(d: string | null): string {
-  if (!d) return 'TBD';
-  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
 function formatDateRange(start: string | null, end: string | null): string {
-  if (!start || !end) return 'TBD';
-  if (start === end) return formatDate(start);
-  const s = new Date(start);
-  const e = new Date(end);
-  if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
-    return `${s.toLocaleDateString('en-GB', { day: 'numeric' })}–${formatDate(end)}`;
-  }
-  return `${formatDate(start)} – ${formatDate(end)}`;
+  return formatConferenceDates(start, end, { fallback: 'TBD' });
 }
 
 /** Role- and phase-aware {{fee}}, same resolution queueEventEmail and the
@@ -212,7 +202,7 @@ export async function queueAdHocEmail(
   const readError = confRes.error ?? recipientsRes.error ?? roleConfigsRes.error;
   if (readError) {
     const which = confRes.error ? 'conference' : recipientsRes.error ? 'recipients' : 'role fees';
-    return { ...empty, error: `Could not load the ${which} for this send: ${readError.message}` };
+    return { ...empty, error: friendlyError(readError, `Could not load the ${which} for this send. Refresh the page and try again.`) };
   }
 
   const conference = confRes.data as ConferenceRow | null;
@@ -291,7 +281,7 @@ export async function queueAdHocEmail(
     .select('id')
     .single();
   if (sendError || !sendData) {
-    return { ...empty, optedOut, skippedUnresolved, unresolvedFields: unresolvedList, error: sendError?.message ?? 'Could not record this send.' };
+    return { ...empty, optedOut, skippedUnresolved, unresolvedFields: unresolvedList, error: friendlyError(sendError, 'Could not record this send.') };
   }
   const emailSendId = (sendData as { id: string }).id;
 
@@ -315,7 +305,7 @@ export async function queueAdHocEmail(
 
   const { error: outboxError } = await supabase.from('email_outbox').insert(rows);
   if (outboxError) {
-    return { queued: 0, optedOut, skippedUnresolved, unresolvedFields: unresolvedList, emailSendId, error: outboxError.message };
+    return { queued: 0, optedOut, skippedUnresolved, unresolvedFields: unresolvedList, emailSendId, error: friendlyError(outboxError, 'Could not queue this send. Please try again.') };
   }
 
   triggerEmailDelivery(supabase);

@@ -21,7 +21,7 @@ import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
 import { createClient } from '@supabase/supabase-js';
 import { conferenceSlugAttempts, conferenceYear, isSlugTakenError } from '@/lib/conferenceSlug';
-import { UN_COUNTRIES } from '@/lib/countries';
+import { UN_COUNTRIES, getCountryByName } from '@/lib/countries';
 import { FlagImg } from '@/components/FlagImg';
 import { WizardShell, TwoTabPick, CardSelect } from '@/components/wizard';
 import { NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuButton, NeuInset, Emoji3D } from '@/components/neu';
@@ -41,6 +41,26 @@ import {
   MonogramMedallion, medallionTone, COMMITTEE_TYPE_LABEL, type CommitteeType,
 } from '@/components/CommitteeEditorModal';
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
+// THE SHARED COMMITTEE SET-UP SURFACE — the very same component /manage's
+// committee editor renders (23 Sep 2026, owner: "In the actual initial
+// conference set-up flow, literally add the exact same committee set-up. It
+// should always match."). Presentational plus a plain draft object; it never
+// touches the database, which is what lets the wizard use it before the
+// conference exists.
+import {
+  CommitteeIdentityPreview,
+  CommitteeSetupFields,
+  CommitteeTypeGlyph,
+  SetupPrimaryButton,
+  SetupGhostButton,
+  committeeSetupPreview,
+  committeeTypeAccent,
+  effectiveEmblem,
+  emptyCommitteeSetupDraft,
+  COMMITTEE_TYPES,
+  type CommitteeSetupDraft,
+  type Difficulty,
+} from '@/components/committeeSetupKit';
 
 
 // Mirrors settings' ensureRoleConfigs default set (source of truth there) —
@@ -143,29 +163,29 @@ const QUICK_COMMITTEES: { name: string; type: CommitteeType }[] = [
   { name: 'Crisis Committee', type: 'crisis' },
 ];
 
-const DIFFICULTIES = ['beginner', 'intermediate', 'advanced', 'expert'] as const;
-type Difficulty = (typeof DIFFICULTIES)[number];
+// DIFFICULTIES / Difficulty moved into @/components/committeeSetupKit with the
+// rest of the shared set-up vocabulary (23 Sep 2026); `Difficulty` is imported.
 
-// Declared in the order the full committee editor offers them, rather than read
-// off COMMITTEE_TYPE_LABEL's key order, so the pills cannot silently reshuffle.
-const COMMITTEE_TYPES: CommitteeType[] = ['general-assembly', 'specialised', 'crisis', 'custom'];
+// COMMITTEE_TYPES moved into @/components/committeeSetupKit (23 Sep 2026) with
+// the rest of the shared set-up vocabulary, and is imported above.
 
-/** A committee as collected by the wizard: the four things the organiser's own
- *  committees page shows on a card, and nothing else. Countries, seats, topics
- *  and chairs are the full editor's job at /manage/[slug]/committees.
+/** A committee as collected by the wizard: EVERYTHING the shared set-up surface
+ *  collects (name, acronym, topics, difficulty, seats, groups, delegation size,
+ *  emblem), plus the two things only the wizard needs — a local list key and the
+ *  committee type, which the editor takes from its own type picker.
  *
- *  EVERY field here is persisted by handleCreate's conference_committees
- *  insert. If you add one, add it there too. */
-interface DraftCommittee {
+ *  EVERY field here is persisted by handleCreate: the `conference_committees`
+ *  insert writes the committee, and the `committee_country_slots` insert right
+ *  after it writes the seats. If you add one, add it there too.
+ *
+ *  Chairs are deliberately absent: seating or inviting one needs a committee id,
+ *  and at this point in the wizard the committee does not exist. They stay in
+ *  the full editor's rail at /manage/[slug]/committees, and the step says so. */
+interface DraftCommittee extends CommitteeSetupDraft {
   /** Local list key only. The DB mints the real id. */
   key: string;
-  name: string;
-  /** '' when the organiser gave none and none could be derived. */
-  abbreviation: string;
   /** conference_committees.committee_type. */
   type: CommitteeType;
-  /** conference_committees.difficulty. */
-  difficulty: Difficulty;
 }
 
 /** Case/space-insensitive identity, so "unsc " and "UNSC" are one committee. */
@@ -181,8 +201,14 @@ function makeDraftCommittee(
 ): DraftCommittee {
   const trimmed = name.trim();
   return {
+    ...emptyCommitteeSetupDraft(),
     key: crypto.randomUUID(),
     name: trimmed,
+    // The wizard has always stored the derived acronym rather than leaving the
+    // column null, and Quick add relies on it. Only ever derived when the
+    // organiser left the field empty, so a short name they typed is never
+    // overwritten. Inside the set-up surface the field stays free-form, with
+    // the same suggestion behind it as the editor's; this normalises on SAVE.
     abbreviation: (abbreviation ?? '').trim() || deriveCommitteeAcronym(trimmed),
     type,
     difficulty,
@@ -315,7 +341,7 @@ function CommitteeEmblem({ committee, size }: { committee: DraftCommittee; size:
 
 /** The rank insignia with its level named underneath, the corner stamp from the
  *  organiser's committee card. */
-function DifficultyStamp({ level }: { level: Difficulty }) {
+function DifficultyStamp({ level }: { level: string }) {
   const accent = LEVEL_ACCENT[level] ?? NEU.muted;
   return (
     <span className="inline-flex flex-col items-center flex-shrink-0" style={{ gap: 4 }}>
@@ -441,17 +467,27 @@ function DraftCommitteeCard({
   );
 }
 
-/** The wizard's stand-in for CommitteeEditorModal.
+/** The wizard's committee set-up.
  *
- *  It CANNOT be that modal: at this point in the wizard there is no conference
- *  row, and every save path in the real editor writes to the database. So this
- *  collects the same four card-facing fields into local state and hands them
- *  back; handleCreate writes them with the conference_committees insert.
+ *  THE SAME SURFACE AS /manage's committee editor, not a copy of it: the body
+ *  is `CommitteeSetupFields`, shared with CommitteeEditorModal, so the two can
+ *  never drift (owner, 23 Sep 2026: "literally add the exact same committee
+ *  set-up. It should always match.").
+ *
+ *  Only the SHELL is the wizard's own, and only because it has to be: there is
+ *  no conference row yet, so nothing here can write to the database. It
+ *  collects the draft and hands it back; handleCreate writes it with the
+ *  conference_committees and committee_country_slots inserts after the review
+ *  screen.
  *
  *  Inline rather than a modal on purpose — a dialog over a wizard step is one
- *  layer too many, and an inline panel can never be clipped. */
+ *  layer too many, and an inline panel can never be clipped.
+ *
+ *  NO CHAIRS HERE, by design: seating or inviting a chair needs a committee id.
+ *  That stays in the editor's rail at /manage/[slug]/committees. */
 function CommitteeEditor({
   draft, isEdit, onChange, onSave, onCancel, error,
+  onUploadEmblem, emblemUploading, onUploadFlag,
 }: {
   draft: DraftCommittee;
   /** Editing a committee already on the list, rather than adding a new one. */
@@ -460,152 +496,117 @@ function CommitteeEditor({
   onSave: () => void;
   onCancel: () => void;
   error: string;
+  onUploadEmblem: () => void;
+  emblemUploading: boolean;
+  onUploadFlag: (file: File, kind: 'seat' | 'group') => Promise<string | null>;
 }) {
+  const preview = committeeSetupPreview(draft);
   return (
-    <NeuInset style={{ padding: '18px 20px', borderRadius: 20 }}>
-      <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
-        <p style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 800, color: NEU.ink }}>
-          {isEdit ? 'Edit committee' : 'New committee'}
-        </p>
+    <NeuInset style={{ padding: '16px 18px', borderRadius: 20 }}>
+      <div className="flex items-center justify-between gap-3" style={{ marginBottom: 10 }}>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 800, color: NEU.ink }}>
+            {isEdit ? 'Edit committee' : 'New committee'}
+          </p>
+          {/* The type as an icon beside a plain word, never a status pill. */}
+          <span
+            className="flex flex-shrink-0 items-center gap-1.5"
+            title="Committee type"
+            style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: committeeTypeAccent(draft.type) }}
+          >
+            <CommitteeTypeGlyph type={draft.type} />
+            {COMMITTEE_TYPE_LABEL[draft.type] ?? draft.type}
+          </span>
+        </div>
         <button
           type="button"
           onClick={onCancel}
           aria-label="Close the committee editor"
-          className="focus:outline-none"
+          title="Close"
+          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-[#1B3828]/[0.07] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
           style={{ background: 'none', border: 'none', color: NEU.muted, cursor: 'pointer' }}
         >
-          <X size={18} />
+          <X size={17} />
         </button>
       </div>
 
-      <div className="flex items-start gap-4">
-        <div className="flex-1 min-w-0 flex flex-col gap-4">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="flex-1 min-w-0">
-              <FieldLabel>Committee name</FieldLabel>
-              <input
-                type="text"
-                value={draft.name}
-                autoFocus
-                onChange={(e) => onChange({ ...draft, name: e.target.value })}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onSave(); } }}
-                placeholder="e.g. UN Human Rights Council"
-                style={{ ...bigInputStyle, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
-                onFocus={focusForest}
-                onBlur={blurClear}
-              />
-            </div>
-            <div style={{ width: 120, flexShrink: 0 }}>
-              <FieldLabel>Short name</FieldLabel>
-              <input
-                type="text"
-                value={draft.abbreviation}
-                onChange={(e) => onChange({ ...draft, abbreviation: e.target.value })}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onSave(); } }}
-                aria-label="Committee short name"
-                placeholder="UNHRC"
-                style={{ ...bigInputStyle, backgroundColor: NEU.surface, boxShadow: NEU.outSm, letterSpacing: '0.06em' }}
-                onFocus={focusForest}
-                onBlur={blurClear}
-              />
-            </div>
-          </div>
+      {/* The live identity, exactly as the chair masthead and every card will
+          state it once the conference exists. */}
+      <CommitteeIdentityPreview
+        src={preview.emblem}
+        primary={preview.primary}
+        secondary={preview.secondary}
+        placeholder="Untitled committee"
+        topic={draft.topics[0] ?? ''}
+        topicLabel="Topic:"
+        topicEmpty="No topic yet"
+        tone={medallionTone(draft.type)}
+        monogramText={preview.acronym || draft.name}
+      />
 
-          <div>
-            <FieldLabel>Type</FieldLabel>
-            <div className="flex flex-wrap gap-2">
-              {COMMITTEE_TYPES.map((t) => {
-                const active = draft.type === t;
-                return (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => onChange({ ...draft, type: t })}
-                    aria-pressed={active}
-                    className="focus:outline-none"
-                    style={{
-                      padding: '8px 14px', borderRadius: 9999,
-                      border: active ? `1.5px solid ${NEU.forest}` : '1.5px solid rgba(27,56,40,0.14)',
-                      backgroundColor: active ? NEU.surface : 'transparent',
-                      boxShadow: active ? NEU.outSm : 'none',
-                      color: active ? NEU.forest : NEU.inkSoft,
-                      fontFamily: OUTFIT, fontSize: 12, fontWeight: 700,
-                      cursor: 'pointer',
-                      transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, border-color 200ms ${EASE}`,
-                    }}
-                  >
-                    {COMMITTEE_TYPE_LABEL[t]}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div>
-            <FieldLabel>Difficulty</FieldLabel>
-            {/* The same MUN-level insignia the committee editor and the account
-                pages rank with, so the level means one thing everywhere. */}
-            <div className="flex gap-2">
-              {DIFFICULTIES.map((lvl) => {
-                const active = draft.difficulty === lvl;
-                const accent = LEVEL_ACCENT[lvl] ?? NEU.muted;
-                return (
-                  <button
-                    key={lvl}
-                    type="button"
-                    onClick={() => onChange({ ...draft, difficulty: lvl })}
-                    aria-pressed={active}
-                    className="flex-1 flex flex-col items-center gap-1 focus:outline-none"
-                    style={{
-                      padding: '9px 4px', borderRadius: 14,
-                      border: active ? `1.5px solid ${accent}` : '1.5px solid rgba(27,56,40,0.12)',
-                      backgroundColor: active ? `${accent}14` : 'transparent',
-                      cursor: 'pointer',
-                      transition: `background-color 200ms ${EASE}, border-color 200ms ${EASE}`,
-                    }}
-                  >
-                    <span
-                      className="flex items-center justify-center"
-                      style={{
-                        width: 26, height: 26, borderRadius: 9999,
-                        background: `linear-gradient(150deg, ${accent}22, ${accent}12)`,
-                        border: `1px solid ${accent}55`,
-                      }}
-                    >
-                      <LevelInsignia level={lvl} size={16} />
-                    </span>
-                    <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: active ? accent : NEU.inkSoft }}>
-                      {lvl.charAt(0).toUpperCase() + lvl.slice(1)}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* Live emblem preview, the same one the card and the full editor show. */}
-        <div className="hidden sm:flex flex-col items-center gap-2" style={{ width: 96, flexShrink: 0 }}>
-          <FieldLabel>Emblem</FieldLabel>
-          <CommitteeEmblem committee={draft} size={64} />
-          <span style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.inkSoft, textAlign: 'center', lineHeight: 1.35 }}>
-            Picked from the name
-          </span>
+      {/* TYPE. The editor asks this on a screen of its own before it opens; the
+          wizard asks it here, because the step is one inline panel. Switching
+          it re-labels the seats and turns the parliamentary group tools on and
+          off, exactly as choosing it up front does in the editor. */}
+      <div style={{ marginTop: 14 }}>
+        <FieldLabel>Type</FieldLabel>
+        <div className="flex flex-wrap gap-2">
+          {COMMITTEE_TYPES.map((t) => {
+            const active = draft.type === t;
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => onChange({ ...draft, type: t, presetRosterMode: null })}
+                aria-pressed={active}
+                className="flex items-center gap-1.5 focus:outline-none"
+                style={{
+                  padding: '8px 14px', borderRadius: 9999,
+                  border: active ? `1.5px solid ${NEU.forest}` : '1.5px solid rgba(27,56,40,0.14)',
+                  backgroundColor: active ? NEU.surface : 'transparent',
+                  boxShadow: active ? NEU.outSm : 'none',
+                  color: active ? NEU.forest : NEU.inkSoft,
+                  fontFamily: OUTFIT, fontSize: 12, fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, border-color 200ms ${EASE}`,
+                }}
+              >
+                <CommitteeTypeGlyph type={t} size={13} />
+                {COMMITTEE_TYPE_LABEL[t]}
+              </button>
+            );
+          })}
         </div>
       </div>
 
+      {/* Steps 1 and 2 — THE SHARED SURFACE. `selectedInline` because the
+          wizard has no docked rail to put the chosen seats in. */}
+      <CommitteeSetupFields
+        draft={draft}
+        onChange={(patch) => onChange({ ...draft, ...patch })}
+        committeeType={draft.type}
+        isEdit={isEdit}
+        nameInputId="wiz-committee-name"
+        onUploadEmblem={onUploadEmblem}
+        emblemUploading={emblemUploading}
+        onUploadFlag={onUploadFlag}
+        selectedInline
+        onSubmit={onSave}
+      />
+
       {error && <ErrorNote>{error}</ErrorNote>}
 
-      <div className="flex items-center justify-end gap-3" style={{ marginTop: 16 }}>
-        <SkipLink label="Cancel" onClick={onCancel} />
-        <NeuButton
-          onClick={onSave}
-          disabled={!draft.name.trim()}
-          icon={Check}
-          style={{ padding: '11px 22px', fontSize: 12.5 }}
-        >
-          {isEdit ? 'SAVE' : 'ADD COMMITTEE'}
-        </NeuButton>
+      <div className="mt-4 grid gap-2.5" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.6fr)' }}>
+        <SetupGhostButton label="Cancel" onClick={onCancel} />
+        <SetupPrimaryButton
+          label={isEdit ? 'Save committee' : 'Add committee'}
+          sub={draft.name.trim() ? null : 'Needs a committee name'}
+          state={draft.name.trim() ? 'ready' : 'blocked'}
+          onClick={() => {
+            if (!draft.name.trim()) { document.getElementById('wiz-committee-name')?.focus(); return; }
+            onSave();
+          }}
+        />
       </div>
     </NeuInset>
   );
@@ -777,6 +778,7 @@ export default function NewConferencePage() {
   const [committees, setCommittees] = useState<DraftCommittee[]>([]);
   const [editing, setEditing] = useState<{ draft: DraftCommittee; replacing: string | null } | null>(null);
   const [editorError, setEditorError] = useState('');
+  const [emblemUploading, setEmblemUploading] = useState(false);
 
   // Logo (mandatory) + banner (skippable). Assets upload to storage during
   // their step under a client-minted conference id, reused verbatim by the
@@ -791,6 +793,10 @@ export default function NewConferencePage() {
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoError, setLogoError] = useState('');
   const [logoCropFile, setLogoCropFile] = useState<File | null>(null);
+  // The committee emblem goes through the SAME drag-to-fit crop as the
+  // conference logo and as the full committee editor, so what lands in storage
+  // is always a flattened 512x512 transparent PNG.
+  const [emblemCropFile, setEmblemCropFile] = useState<File | null>(null);
   const [bannerUrl, setBannerUrl] = useState('');
   const [bannerUploading, setBannerUploading] = useState(false);
   const [bannerError, setBannerError] = useState('');
@@ -949,6 +955,31 @@ export default function NewConferencePage() {
     setStepError('');
   }
 
+  // ── Committee emblem + seat crest uploads ───────────────────────────────
+  // The conference id is minted client-side at mount, so an asset can be
+  // uploaded before the conference row exists — exactly how the logo and banner
+  // above already work. Same helper, same bucket, so the wizard and the
+  // committee editor upload a committee emblem the identical way.
+  async function handleCommitteeEmblemUpload(file: File) {
+    if (!session) { setEditorError('You must be signed in to upload an emblem.'); return; }
+    setEmblemUploading(true);
+    setEditorError('');
+    const supabase = getAuthedClient();
+    const res = await uploadConferenceAsset(supabase, 'committee-emblems', conferenceIdRef.current, file);
+    setEmblemUploading(false);
+    if (res.url === undefined) { setEditorError(res.error ?? 'Upload failed.'); return; }
+    setEditing((cur) => (cur ? { ...cur, draft: { ...cur.draft, logoUrl: res.url!, emblemManuallySet: true } } : cur));
+  }
+
+  async function handleSeatFlagUpload(file: File, kind: 'seat' | 'group'): Promise<string | null> {
+    if (!session) { setEditorError('You must be signed in to upload an image.'); return null; }
+    const supabase = getAuthedClient();
+    const res = await uploadConferenceAsset(supabase, kind === 'group' ? 'group-logos' : 'seat-logos', conferenceIdRef.current, file);
+    if (res.url === undefined) { setEditorError(res.error ?? 'Upload failed.'); return null; }
+    setEditorError('');
+    return res.url;
+  }
+
   async function handleBannerUpload(file: File) {
     if (!session) { setBannerError('You must be signed in to upload a banner.'); return; }
     setBannerUploading(true);
@@ -1088,35 +1119,40 @@ export default function NewConferencePage() {
       // cannot be written before the conference (conference_id is a FK), so a
       // failure is undone rather than shrugged off.
       //
-      // Name, abbreviation, type and difficulty all come from the wizard's own
-      // committee editor — every field DraftCommittee carries is written here,
-      // so nothing the organiser typed on step 7 is dropped. delegation_size
-      // takes its column default (1); `topics` stays empty, which the 1..3
-      // CHECK permits (array_length of an empty array is NULL, and a third of
-      // production rows already sit this way). The emblem is resolved by the
-      // same matcher CommitteeEditorModal auto-assigns with.
+      // EVERY field the shared set-up surface collects is written here (23 Sep
+      // 2026, when step 7 adopted it): name, abbreviation, type, difficulty,
+      // topics, delegation size, parliamentary groups and the emblem. Nothing
+      // the organiser filled in on step 7 is dropped. The emblem goes through
+      // `effectiveEmblem`, the one derivation the committee editor saves with
+      // too: their own pick or upload when they made one, otherwise whatever
+      // `matchPresetEmblem` resolves from the name and acronym.
       //
-      // total_slots is a PLACEHOLDER 1, not a claim. The truthful value here is
-      // 0 — no roster has been picked yet — but the column carries a
-      // `total_slots > 0` CHECK, so 0 is rejected outright; 1 is the smallest
-      // value the schema allows and the lowest already in production. The real
-      // number is minted by the country roster in the full editor
-      // (CommitteeEditorModal writes total_slots = roster.length), and nothing
-      // that matters counts this field: the dashboard's seat coverage sums
-      // committee_country_slots, so an empty committee cannot falsely tick
+      // total_slots mirrors the roster, exactly as CommitteeEditorModal writes
+      // it. A committee left with NO seats still has to say 1: the column
+      // carries a `total_slots > 0` CHECK, so 0 is rejected outright and 1 is
+      // the smallest the schema allows. It is a placeholder in that case and
+      // nothing that matters counts it — the dashboard's seat coverage sums
+      // `committee_country_slots`, so a seatless committee cannot falsely tick
       // "Add committees with enough seats".
-      const { error: committeesError } = await supabase.from('conference_committees').insert(
-        committees.map((c) => ({
-          conference_id: conferenceId,
-          name: c.name,
-          abbreviation: c.abbreviation || null,
-          committee_type: c.type,
-          difficulty: c.difficulty,
-          topics: [],
-          total_slots: 1,
-          logo_url: matchPresetEmblem(c.name, c.abbreviation),
-        }))
-      );
+      //
+      // `.select('id, name')` because the seats below need the minted ids.
+      const { data: createdCommittees, error: committeesError } = await supabase
+        .from('conference_committees')
+        .insert(
+          committees.map((c) => ({
+            conference_id: conferenceId,
+            name: c.name,
+            abbreviation: c.abbreviation || null,
+            committee_type: c.type,
+            difficulty: c.difficulty,
+            topics: c.topics,
+            total_slots: Math.max(1, c.roster.length),
+            delegation_size: c.doubleDelegation ? 2 : 1,
+            groups: c.type === 'custom' ? c.groups : [],
+            logo_url: effectiveEmblem(c),
+          }))
+        )
+        .select('id, name');
 
       if (committeesError) {
         // Roll the conference back so a failed creation leaves nothing behind.
@@ -1141,6 +1177,47 @@ export default function NewConferencePage() {
         conferenceIdRef.current = crypto.randomUUID();
         setError(friendlyError(committeesError, 'Could not save your committees.') + ' Nothing was created, please try again.');
         return;
+      }
+
+      // SEATS. The set-up surface collects a full roster now, so it has to land
+      // somewhere — a country list the organiser picked and then could not find
+      // would be worse than never offering the control. Matched back to the
+      // minted ids BY NAME rather than by position: names are unique across the
+      // wizard's list (`committeeKey` refuses a duplicate), and nothing
+      // promises an INSERT returns its rows in input order.
+      //
+      // Written exactly as CommitteeEditorModal's own create writes them, one
+      // for one. No live session is minted here and none ever was: the
+      // committees page mints and seats any room that has none the moment the
+      // organiser lands on it, which is where these committees go next.
+      //
+      // NOT a rollback path, unlike the committees above. The conference and
+      // its committees exist and are useful; a failed seat write is fixed in
+      // Manage → Committees in a few taps, and deleting a real conference over
+      // it would be far more destructive than the fault.
+      const slotRows = committees.flatMap((c) => {
+        const created = (createdCommittees ?? []).find((r) => committeeKey(r.name) === committeeKey(c.name));
+        if (!created) return [];
+        const size = c.doubleDelegation ? 2 : 1;
+        const isCustom = c.type === 'custom';
+        return c.roster.map((r) => ({
+          conference_committee_id: created.id,
+          country_code: getCountryByName(r.name)?.code ?? r.name,
+          country_name: r.name,
+          delegation_size: size,
+          importance: r.importance,
+          is_observer: !!r.isObserver,
+          logo_url: r.logoUrl ?? null,
+          group_id: isCustom ? (r.groupId && c.groups.some((g) => g.id === r.groupId) ? r.groupId : null) : null,
+        }));
+      });
+      if (slotRows.length > 0) {
+        const { error: slotsError } = await supabase
+          .from('committee_country_slots')
+          .insert(slotRows);
+        if (slotsError) {
+          console.error('Failed to seed committee seats:', slotsError.message);
+        }
       }
 
       // Created, intent and all. Straight to the dashboard — `submitting` stays
@@ -1527,80 +1604,24 @@ export default function NewConferencePage() {
                 sub="Delegates apply to a committee, so you need at least one. Add as many as you like, you can add more any time."
                 onBack={back}
               >
-                {/* Header row, the committees page's own: a count on the left,
-                    the single add action on the right. */}
-                <div className="flex items-center justify-between gap-3" style={{ marginBottom: 14 }}>
-                  <p
-                    style={{
-                      fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.12em',
-                      color: NEU.muted, textTransform: 'uppercase', fontVariantNumeric: 'tabular-nums',
-                    }}
-                  >
-                    {committees.length === 0
-                      ? 'Your committees'
-                      : `${committees.length} committee${committees.length === 1 ? '' : 's'}`}
-                  </p>
-                  <NeuButton
-                    onClick={openNewCommittee}
-                    icon={Plus}
-                    style={{ padding: '10px 18px', fontSize: 12 }}
-                  >
-                    ADD COMMITTEE
-                  </NeuButton>
-                </div>
-
-                {editing && (
-                  <div style={{ marginBottom: 16 }}>
-                    <CommitteeEditor
-                      draft={editing.draft}
-                      onChange={(next) => { setEditing({ ...editing, draft: next }); setEditorError(''); }}
-                      onSave={saveEditingCommittee}
-                      onCancel={() => { setEditing(null); setEditorError(''); }}
-                      isEdit={!!editing.replacing}
-                      error={editorError}
-                    />
-                  </div>
-                )}
-
-                {committees.length === 0 && !editing ? (
-                  /* Empty state, matching the one on the committees page. It
-                     stands down while the editor is open — the editor is then
-                     the thing to fill in, and two calls to action would fight. */
-                  <div
-                    className="flex flex-col items-center text-center"
-                    style={{
-                      padding: '38px 24px', borderRadius: 20,
-                      border: '1.5px dashed rgba(27,56,40,0.24)',
-                      backgroundColor: 'color-mix(in srgb, var(--gv-surface) 60%, transparent)',
-                    }}
-                  >
-                    <span
-                      className="flex items-center justify-center"
-                      style={{
-                        width: 56, height: 56, borderRadius: 9999, marginBottom: 14,
-                        background: 'linear-gradient(150deg, color-mix(in srgb, var(--gv-main) 12%, transparent), color-mix(in srgb, var(--gv-main) 5%, transparent))',
-                        border: '1.5px solid color-mix(in srgb, var(--gv-main) 18%, transparent)',
-                      }}
-                    >
-                      <Building2 size={24} style={{ color: NEU.forest }} />
-                    </span>
-                    <p style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 800, color: NEU.ink }}>
-                      No committees yet
-                    </p>
-                    <p
-                      style={{
-                        fontFamily: OUTFIT, fontSize: 13.5, color: NEU.inkSoft,
-                        lineHeight: 1.55, marginTop: 6, maxWidth: 340,
-                      }}
-                    >
-                      Committees are where delegates debate. Add your first one, or tap a common committee below.
-                    </p>
-                    <div style={{ marginTop: 16 }}>
-                      <NeuButton onClick={openNewCommittee} icon={Plus} style={{ padding: '11px 22px', fontSize: 12.5 }}>
-                        ADD YOUR FIRST COMMITTEE
-                      </NeuButton>
-                    </div>
-                  </div>
+                {/* ONE BIG PLUS (owner, 23 Sep 2026: "Just have one big plus and
+                    the ability for organisers to set up committees"). The
+                    committees already added are cards; the plus is the last tile
+                    in the same grid, the same size, so there is exactly one way
+                    in and the ADD COMMITTEE button, the header count and the
+                    separate empty state are all gone. */}
+                {editing ? (
+                  <CommitteeEditor
+                    draft={editing.draft}
+                    onChange={(next) => { setEditing({ ...editing, draft: next }); setEditorError(''); }}
+                    onSave={saveEditingCommittee}
+                    onCancel={() => { setEditing(null); setEditorError(''); }}
+                    isEdit={!!editing.replacing}
+                    error={editorError}
+                    onUploadEmblem={() => document.getElementById('wiz-committee-emblem')?.click()}
+                    emblemUploading={emblemUploading}
+                    onUploadFlag={handleSeatFlagUpload}
+                  />
                 ) : (
                   <div
                     className="grid gap-3.5 items-stretch"
@@ -1616,8 +1637,53 @@ export default function NewConferencePage() {
                         onRemove={() => removeCommittee(c.key)}
                       />
                     ))}
+                    <button
+                      type="button"
+                      onClick={openNewCommittee}
+                      className="flex flex-col items-center justify-center gap-2 focus:outline-none"
+                      style={{
+                        minHeight: 176, borderRadius: 22,
+                        border: '1.5px dashed rgba(27,56,40,0.26)',
+                        backgroundColor: 'color-mix(in srgb, var(--gv-surface) 55%, transparent)',
+                        color: NEU.forest, cursor: 'pointer',
+                        transition: `background-color 220ms ${EASE}, border-color 220ms ${EASE}`,
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = NEU.forest; e.currentTarget.style.backgroundColor = 'color-mix(in srgb, var(--gv-surface) 90%, transparent)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(27,56,40,0.26)'; e.currentTarget.style.backgroundColor = 'color-mix(in srgb, var(--gv-surface) 55%, transparent)'; }}
+                    >
+                      <span
+                        className="flex items-center justify-center"
+                        style={{
+                          width: 54, height: 54, borderRadius: 9999,
+                          background: 'linear-gradient(150deg, color-mix(in srgb, var(--gv-main) 14%, transparent), color-mix(in srgb, var(--gv-main) 6%, transparent))',
+                          border: '1.5px solid color-mix(in srgb, var(--gv-main) 20%, transparent)',
+                        }}
+                      >
+                        <Plus size={26} strokeWidth={2.6} />
+                      </span>
+                      <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800 }}>
+                        {committees.length === 0 ? 'Add your first committee' : 'Add a committee'}
+                      </span>
+                    </button>
                   </div>
                 )}
+
+                {/* The file picker the emblem tile inside the set-up surface
+                    opens. Lives out here so it survives the panel re-rendering. */}
+                <input
+                  id="wiz-committee-emblem"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/svg+xml"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = '';
+                    if (!f) return;
+                    if (f.size > 5 * 1024 * 1024) { setEditorError('Emblem must be under 5MB.'); return; }
+                    setEditorError('');
+                    setEmblemCropFile(f);
+                  }}
+                />
 
                 {/* One-tap common committees. Secondary to the cards now: they
                     are a shortcut to a first committee, not the step itself.
@@ -1671,8 +1737,8 @@ export default function NewConferencePage() {
                     textAlign: 'center', marginTop: 18, padding: '0 8px',
                   }}
                 >
-                  Countries, seats, topics and chairs come later in
-                  Manage&nbsp;→&nbsp;Committees, where this same list is waiting for you.
+                  Chairs come later in Manage&nbsp;→&nbsp;Committees, where this
+                  same list is waiting for you. Everything else is right here.
                 </p>
 
                 {stepError && <ErrorNote>{stepError}</ErrorNote>}
@@ -2034,6 +2100,22 @@ export default function NewConferencePage() {
           onSave={(blob) => {
             setLogoCropFile(null);
             handleLogoUpload(new File([blob], 'logo.png', { type: 'image/png' }));
+          }}
+        />
+      )}
+
+      {/* Committee emblems ship transparent and render bare everywhere they
+          appear, so the crop preview must not sit them on a white disc — the
+          ring of disc showing around the artwork reads as a white outline baked
+          into the file. Same `bare` the committee editor passes. */}
+      {emblemCropFile && (
+        <LogoCropModal
+          file={emblemCropFile}
+          bare
+          onCancel={() => setEmblemCropFile(null)}
+          onSave={(blob) => {
+            setEmblemCropFile(null);
+            handleCommitteeEmblemUpload(new File([blob], 'emblem.png', { type: 'image/png' }));
           }}
         />
       )}
