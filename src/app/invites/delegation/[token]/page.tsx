@@ -195,8 +195,8 @@ export default function DelegationInvitePage() {
     case 'invalid':
       icon = TriangleAlert;
       tone = '#8B2020';
-      title = 'This invite is not valid';
-      body = <>{view.message} Ask your head delegate for a new link.</>;
+      title = /expired/i.test(view.message) ? 'This invite has expired' : 'This invite is not valid';
+      body = <>Ask your head delegate for a new link.</>;
       actions = secondary('Browse conferences', '/conferences/explore');
       break;
     case 'error':
