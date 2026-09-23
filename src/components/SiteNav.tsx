@@ -2,17 +2,18 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
-import { Globe, FileClock, Languages } from 'lucide-react';
+import { Globe, Languages } from 'lucide-react';
 import LanguageRequestDialog from '@/components/LanguageRequestDialog';
 import { isSessionsPath } from '@/lib/sessionRoutes';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
 import AuthLink from '@/components/auth/AuthLink';
 import { useCredits } from '@/hooks/useCredits';
 import { CreditCoin } from '@/components/CreditCoin';
-import { useDraftCount, draftResumeHref } from '@/hooks/useDraftCount';
+import ActivityNotices from '@/components/profile/ActivityNotices';
+import { useMyActivity, useOpenSeenAt, markActivitySeen, isVisibleActivity } from '@/lib/myActivity';
 
 const NAV_LINKS_CONFIG = [
   { en: 'SESSIONS',    es: 'SESIONES',     fr: 'SESSIONS',        ar: 'الجلسات',    href: '/sessions' },
@@ -62,7 +63,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
   const [showLangMenu, setShowLangMenu] = useState(false);
   const langMenuRef = useRef<HTMLDivElement>(null);
 
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, session, signOut, loading: authLoading } = useAuth();
   const { language, setLanguage } = useLanguage();
   const { balance: creditBalance, loading: creditsLoading } = useCredits();
   // The hamburger sheet is where a phone user looks first, and the avatar menu
@@ -72,7 +73,24 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
   // Mirrors the dropdown's treatment: one gold-washed row PER draft, tagged
   // UNFINISHED and linking straight back into that application's wizard —
   // never an aggregate row, and never something that reads like attendance.
-  const { count: draftCount, drafts } = useDraftCount(menuOpen);
+  //
+  // Since 23 Sep 2026 that block is the same "Needs your attention" section as
+  // the avatar menu (src/lib/myActivity.ts, components/profile/ActivityNotices),
+  // drafts included, and opening the sheet stamps news as seen just as the menu does.
+  const activityUid = authLoading ? null : user?.id ?? null;
+  const { items: activity } = useMyActivity(activityUid, session?.access_token ?? null, { maxAgeMs: menuOpen ? 60_000 : Infinity });
+  const sheetSeenAt = useOpenSeenAt(activityUid);
+  const sheetStamped = useRef(false);
+  useEffect(() => {
+    if (!menuOpen) { sheetStamped.current = false; return; }
+    if (!activityUid || sheetStamped.current) return;
+    sheetStamped.current = true;
+    markActivitySeen(activityUid);
+  }, [menuOpen, activityUid]);
+  const sheetAttention = useMemo(
+    () => (activity ?? []).filter((i) => isVisibleActivity(i, sheetSeenAt)),
+    [activity, sheetSeenAt],
+  );
   const t = useT();
   const navLinks = NAV_LINKS_CONFIG.map(l => ({ label: l[language], href: l.href }));
 
@@ -561,66 +579,9 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
                 </p>
               </div>
 
-              {drafts.length > 0 && (
-                <>
-                  <div className="flex items-center gap-2 px-4 pb-1">
-                    <p
-                      className="flex-1"
-                      style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '0.1em', color: '#8A6614', fontFamily: "'Outfit', sans-serif" }}
-                    >
-                      YOUR CONFERENCES
-                    </p>
-                    {draftCount !== null && draftCount > 0 && (
-                      <span
-                        className="flex items-center justify-center rounded-full"
-                        style={{
-                          minWidth: 18, height: 18, padding: '0 5px', fontSize: 10, fontWeight: 700,
-                          fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums',
-                          backgroundColor: 'rgba(182,135,31,0.22)',
-                          color: '#8A6614',
-                        }}
-                      >
-                        {draftCount}
-                      </span>
-                    )}
-                  </div>
-                  {drafts.slice(0, 3).map((d) => (
-                    <Link
-                      key={d.id}
-                      href={draftResumeHref(d)}
-                      onClick={() => setMenuOpen(false)}
-                      className="flex items-center gap-2 focus:outline-none"
-                      style={{
-                        // 44px tall — the tap-target floor, and what the
-                        // maxHeight arithmetic above budgets per row.
-                        minHeight: '44px',
-                        padding: '10px 16px',
-                        margin: '0 0 4px',
-                        borderRadius: '10px',
-                        backgroundColor: 'rgba(182, 135, 31, 0.12)',
-                        textDecoration: 'none',
-                      }}
-                    >
-                      <FileClock size={16} strokeWidth={2.2} style={{ color: '#8A6614', flexShrink: 0 }} />
-                      <span
-                        className="truncate"
-                        style={{ fontSize: '13px', fontWeight: 800, color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}
-                      >
-                        {d.acronym || d.fullName}
-                      </span>
-                      <span
-                        className="shrink-0"
-                        style={{
-                          marginLeft: 'auto', fontSize: '9px', fontWeight: 800, letterSpacing: '0.06em',
-                          textTransform: 'uppercase', color: '#8A6614', fontFamily: "'Outfit', sans-serif",
-                        }}
-                      >
-                        Unfinished
-                      </span>
-                    </Link>
-                  ))}
-                </>
-              )}
+              {/* Needs your attention: invitations, payments, replies, drafts and
+                  organiser work, each row a link to where it is done. */}
+              <ActivityNotices items={sheetAttention} variant="sheet" onNavigate={() => setMenuOpen(false)} />
 
               <Link
                 href="/account/unlimited"

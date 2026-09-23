@@ -22,12 +22,20 @@
  * the shared `ProfileDropdown` (hover-open, click-toggle, portaled panel), and
  * nothing at all while signed out, so each bar keeps its own Sign in button.
  *
+ * THE ATTENTION BADGE (23 Sep 2026). A small round mark on the avatar's top
+ * corner with the number of things waiting on this person (src/lib/myActivity.ts
+ * plus any live room from useLiveRooms), as plain numerals, 9+ past nine. Rust
+ * when anything is actionable, gold when it is only news (a new allocation).
+ * Hidden at zero. One read per page load; the menu re-reads when it opens.
+ *
  * Never mount this on /chair, /delegate, /advisor or /voting.
  */
 
 import { useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import ProfileDropdown from '@/components/ProfileDropdown';
+import { useMyActivity } from '@/lib/myActivity';
+import { useLiveRooms } from '@/lib/liveRooms';
 
 const OUTFIT = "'Outfit', sans-serif";
 
@@ -141,10 +149,19 @@ export default function ProfileAvatarMenu({
   tone?: ProfileAvatarTone;
   panelStyle?: React.CSSProperties;
 }) {
-  const { user, profile } = useAuth();
+  const { user, profile, session, loading } = useAuth();
+  const uid = loading ? null : user?.id ?? null;
+  const token = session?.access_token ?? null;
+  const { items, count: activityCount } = useMyActivity(uid, token);
+  const { entries: live } = useLiveRooms(uid, token);
   if (!user) return null;
+  const liveCount = live?.length ?? 0;
+  const count = activityCount + liveCount;
+  const actionable = liveCount > 0 || (items ?? []).some((i) => i.action);
   const name = profile?.display_name || null;
-  const label = `Account menu${name ? `, ${name}` : ''}`;
+  const waiting = count > 0 ? `, ${count} ${count === 1 ? 'thing needs' : 'things need'} your attention` : '';
+  const label = `Account menu${name ? `, ${name}` : ''}${waiting}`;
+  const badge = Math.max(16, Math.round(size * 0.34));
   const offset = tone === 'dark' ? 'focus-visible:ring-offset-[#1B3828]' : 'focus-visible:ring-offset-[#EDE7D8]';
 
   return (
@@ -157,10 +174,33 @@ export default function ProfileAvatarMenu({
           aria-label={label}
           aria-expanded={open}
           title={name ?? user.email ?? undefined}
-          className={`flex flex-shrink-0 items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 ${offset} active:scale-[0.96] hover:brightness-[1.04]`}
+          className={`relative flex flex-shrink-0 items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 ${offset} active:scale-[0.96] hover:brightness-[1.04]`}
           style={{ width: size, height: size, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', transitionProperty: 'transform, filter', transitionDuration: '150ms' }}
         >
           <ProfileAvatar url={profile?.avatar_url} name={name} email={profile?.email ?? user.email} size={size} tone={tone} />
+          {count > 0 && (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute flex items-center justify-center rounded-full"
+              style={{
+                top: 0,
+                right: 0,
+                minWidth: badge,
+                height: badge,
+                padding: '0 3px',
+                backgroundColor: actionable ? '#8B2020' : '#B6871F',
+                color: actionable ? '#FFF6EC' : '#1B3828',
+                boxShadow: `0 0 0 2px ${tone === 'dark' ? '#1B3828' : '#EDE7D8'}`,
+                fontFamily: OUTFIT,
+                fontWeight: 700,
+                fontSize: Math.round(badge * 0.62),
+                fontVariantNumeric: 'tabular-nums',
+                lineHeight: 1,
+              }}
+            >
+              {count > 9 ? '9+' : count}
+            </span>
+          )}
         </button>
       )}
     />

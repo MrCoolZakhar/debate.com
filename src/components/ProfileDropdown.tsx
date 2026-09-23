@@ -32,6 +32,18 @@
  * The order is deliberate. An invitation has somebody waiting on it and takes
  * one click to resolve; a draft is your own unfinished work with nobody
  * blocked behind it; neither is a conference you are actually attending yet.
+ *
+ * NEEDS YOUR ATTENTION (23 Sep 2026) SUPERSEDES THE TWO SECTIONS ABOVE
+ * Owner: "a little notification on the profile dropdown whenever there is any
+ * activity ... and make sure when there is any action to be taken that it leads
+ * them to it." Invitations (chair, co-organiser, imported place), drafts, money
+ * due, a rejected payment proof, an unread secretariat reply, a new allocation
+ * and, for organisers, applications / proofs / messages / aid requests waiting
+ * now come from ONE read, `my_attention_items()` (src/lib/myActivity.ts), and
+ * render as the first section of the menu (components/profile/ActivityNotices).
+ * The invitation and draft rows were therefore taken OUT of "YOUR CONFERENCES"
+ * so nothing is listed twice. The avatar (ProfileAvatarMenu) carries the count.
+ * Opening the menu stamps informational items (a new allocation) as seen.
  */
 
 import Link from 'next/link';
@@ -39,12 +51,12 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { compareStartDate, hasConcluded } from '@/lib/conferenceDates';
-import { User, FileText, FileClock, CalendarDays, Sparkles, LogOut, ArrowRight, Ticket, Plus } from 'lucide-react';
+import { User, FileText, CalendarDays, Sparkles, LogOut, ArrowRight, Plus } from 'lucide-react';
 import { CreditCoin } from '@/components/CreditCoin';
 import { createPortal } from 'react-dom';
-import { useDraftCount, draftResumeHref } from '@/hooks/useDraftCount';
 import LiveNowMenuSection from '@/components/liveRooms/LiveNowMenuSection';
-import { usePendingInvites, inviteAcceptHref } from '@/hooks/usePendingInvites';
+import ActivityNotices from '@/components/profile/ActivityNotices';
+import { useMyActivity, useOpenSeenAt, markActivitySeen, isVisibleActivity } from '@/lib/myActivity';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { invoiceDueCents, isInvoicePayable, type InvoiceStatus } from '@/lib/invoices';
 import { CircleFlag } from '@/components/CircleFlag';
@@ -124,13 +136,32 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
   const [confsLoading, setConfsLoading] = useState(false);
   const confsFetched = useRef(false);
 
-  const { user, profile, session, signOut } = useAuth();
+  const { user, profile, session, signOut, loading: authLoading } = useAuth();
 
-  // Half-finished applications. Fetched lazily on first open, exactly like the
-  // conference list below; they are omitted entirely when there are none.
-  const { count: draftCount, drafts } = useDraftCount(open);
-  // Pending imported-delegate invitations, same lazy-on-open shape.
-  const { count: inviteCount, invites } = usePendingInvites(open);
+  // Needs your attention (src/lib/myActivity.ts). Read once per page load by the
+  // avatar badge; re-read here when the menu opens on an answer over a minute old.
+  const uid = authLoading ? null : user?.id ?? null;
+  const { items: activity } = useMyActivity(uid, session?.access_token ?? null, { maxAgeMs: open ? 60_000 : Infinity });
+  // The seen stamp in force for THIS opening: informational items newer than it
+  // show while the menu is open, and opening moves the stamp to now, so they
+  // stop counting on the avatar and are gone the next time.
+  const openSeenAt = useOpenSeenAt(uid);
+  const stampedOpen = useRef(false);
+  useEffect(() => {
+    if (!open) { stampedOpen.current = false; return; }
+    // Once per opening (StrictMode re-runs effects; a second stamp would hide
+    // the new items during the very opening that is meant to show them).
+    if (!uid || stampedOpen.current) return;
+    stampedOpen.current = true;
+    markActivitySeen(uid);
+  }, [open, uid]);
+  const attention = useMemo(
+    () => (activity ?? []).filter((i) => isVisibleActivity(i, openSeenAt)),
+    [activity, openSeenAt],
+  );
+  /** Something of the person's own is in flight (a draft, an imported place),
+   *  so an empty conference list should still point at "All conferences". */
+  const hasOwnPending = attention.some((i) => i.kind === 'draft' || i.kind === 'import_invite');
 
   useEffect(() => {
     function handleMouseDown(e: MouseEvent) {
@@ -476,6 +507,14 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
               (src/components/liveRooms). Nothing while there is none. */}
           <LiveNowMenuSection onNavigate={() => setOpen(false)} />
 
+          {/* Needs your attention: every row goes straight to where it is done. */}
+          {attention.length > 0 && (
+            <>
+              <ActivityNotices items={attention} onNavigate={() => setOpen(false)} />
+              <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
+            </>
+          )}
+
           {/* Menu rows */}
           <div className="py-1">
             {([
@@ -555,12 +594,12 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
             ) : null}
           </div>
 
-          {/* Your conferences, lazily fetched. Pending invitations head the list,
-              then unfinished drafts, see the file header. It renders once the fetch
+          {/* Your conferences, lazily fetched. Invitations and drafts live in
+              Needs your attention above, see the file header. It renders once the fetch
               has resolved even when the result is EMPTY, because the section header
               carries the + that starts a conference and somebody with none yet is
               exactly who needs it. Still hidden while the fetch is unresolved. */}
-          {(confsLoading || invites.length > 0 || drafts.length > 0 || myConfs !== null) && (
+          {(confsLoading || myConfs !== null) && (
             <>
               <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
               <div className="pt-2.5 pb-1">
@@ -571,37 +610,6 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                   >
                     YOUR CONFERENCES
                   </p>
-                  {/* Invitations count first, forest rather than gold. */}
-                  {inviteCount !== null && inviteCount > 0 && (
-                    <span
-                      className="flex-shrink-0 flex items-center justify-center rounded-full"
-                      style={{
-                        minWidth: 18, height: 18, padding: '0 5px', fontSize: 10, fontWeight: 700,
-                        fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums',
-                        backgroundColor: 'rgba(61,122,82,0.16)',
-                        color: '#2A5A3C',
-                      }}
-                      title={inviteCount === 1 ? '1 invitation waiting' : `${inviteCount} invitations waiting`}
-                    >
-                      {inviteCount}
-                    </span>
-                  )}
-                  {/* The old row's count badge, kept — it just moved onto the
-                      section that now holds the drafts. */}
-                  {draftCount !== null && draftCount > 0 && (
-                    <span
-                      className="flex-shrink-0 flex items-center justify-center rounded-full"
-                      style={{
-                        minWidth: 18, height: 18, padding: '0 5px', fontSize: 10, fontWeight: 700,
-                        fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums',
-                        backgroundColor: 'rgba(182,135,31,0.16)',
-                        color: '#8A6614',
-                      }}
-                      title={draftCount === 1 ? '1 unfinished application' : `${draftCount} unfinished applications`}
-                    >
-                      {draftCount}
-                    </span>
-                  )}
                   {/* Start a conference. Last in the row so the two counts stay
                       where they were, and the only create affordance in this menu.
                       The section above it now renders once the list has loaded even
@@ -625,103 +633,6 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                     <Plus size={12} strokeWidth={3} />
                   </Link>
                 </div>
-
-                {/* ── Pending invitations, ahead of even the drafts. Forest
-                    wash + INVITED tag: somebody is waiting on these. ── */}
-                {invites.slice(0, 3).map((i) => (
-                  <Link
-                    key={i.id}
-                    href={inviteAcceptHref(i)}
-                    onClick={() => setOpen(false)}
-                    className="flex items-center gap-2.5 px-4 py-2 transition-colors"
-                    style={{ textDecoration: 'none', backgroundColor: 'rgba(61,122,82,0.09)' }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(61,122,82,0.17)'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(61,122,82,0.09)'; }}
-                    title={`You were invited to ${i.acronym || i.fullName} as a ${i.role.replace(/-/g, ' ')}`}
-                  >
-                    <span
-                      style={{
-                        width: '24px', height: '24px', borderRadius: '50%',
-                        backgroundColor: '#FFFEFA', border: '0.5px solid rgba(61,122,82,0.45)',
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        overflow: 'hidden', flexShrink: 0,
-                      }}
-                    >
-                      {i.logoUrl ? (
-                        <img
-                          src={i.logoUrl}
-                          alt=""
-                          style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '2px' }}
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                        />
-                      ) : (
-                        <Ticket size={11} strokeWidth={2.4} style={{ color: '#2A5A3C' }} />
-                      )}
-                    </span>
-                    <span
-                      className="flex-1 truncate font-semibold"
-                      style={{ color: '#1C1410', fontSize: '12px', letterSpacing: '0.03em', fontFamily: "'Outfit', sans-serif" }}
-                    >
-                      {i.acronym || i.fullName}
-                    </span>
-                    <span
-                      className="font-bold uppercase shrink-0 inline-flex items-center gap-1"
-                      style={{ color: '#2A5A3C', fontSize: '9px', letterSpacing: '0.06em', fontFamily: "'Outfit', sans-serif" }}
-                    >
-                      <Ticket size={10} strokeWidth={2.6} />
-                      INVITED
-                    </span>
-                  </Link>
-                ))}
-
-                {/* ── Unfinished drafts, after any invitations. Gold wash +
-                    UNFINISHED tag so they never read as a conference this
-                    person is going to. ── */}
-                {drafts.slice(0, 3).map((d) => (
-                  <Link
-                    key={d.id}
-                    href={draftResumeHref(d)}
-                    onClick={() => setOpen(false)}
-                    className="flex items-center gap-2.5 px-4 py-2 transition-colors"
-                    style={{ textDecoration: 'none', backgroundColor: 'rgba(182,135,31,0.08)' }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(182,135,31,0.17)'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(182,135,31,0.08)'; }}
-                    title={`Finish your ${d.acronym || d.fullName} application`}
-                  >
-                    <span
-                      style={{
-                        width: '24px', height: '24px', borderRadius: '50%',
-                        backgroundColor: '#FFFEFA', border: '0.5px solid rgba(182,135,31,0.5)',
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        overflow: 'hidden', flexShrink: 0,
-                      }}
-                    >
-                      {d.logoUrl ? (
-                        <img
-                          src={d.logoUrl}
-                          alt=""
-                          style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '2px' }}
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                        />
-                      ) : (
-                        <FileClock size={11} strokeWidth={2.4} style={{ color: '#8A6614' }} />
-                      )}
-                    </span>
-                    <span
-                      className="flex-1 truncate font-semibold"
-                      style={{ color: '#1C1410', fontSize: '12px', letterSpacing: '0.03em', fontFamily: "'Outfit', sans-serif" }}
-                    >
-                      {d.acronym || d.fullName}
-                    </span>
-                    <span
-                      className="font-bold uppercase shrink-0 inline-flex items-center gap-1"
-                      style={{ color: '#8A6614', fontSize: '9px', letterSpacing: '0.06em', fontFamily: "'Outfit', sans-serif" }}
-                    >
-                      <FileClock size={10} strokeWidth={2.6} />
-                      DRAFT
-                    </span>
-                  </Link>
-                ))}
 
                 {confsLoading ? (
                   /* Skeleton rows while the batched fetch is in flight */
@@ -819,7 +730,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
 
                     {/* With nothing to list, "All conferences" points at an empty
                         page. Send them where the + goes instead. */}
-                    {(myConfs ?? []).length === 0 && invites.length === 0 && drafts.length === 0 ? (
+                    {(myConfs ?? []).length === 0 && !hasOwnPending ? (
                       <Link
                         href="/conferences/new"
                         onClick={() => setOpen(false)}
