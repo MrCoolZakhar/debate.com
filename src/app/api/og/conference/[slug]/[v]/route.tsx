@@ -59,14 +59,31 @@ interface ConfCard {
    this image accompanies, and a private conference whose owner shares the link
    should get the same card the tags promise rather than a mismatched generic
    one. If the metadata side ever starts gating on `is_public`, gate here too. */
+const CARD_COLUMNS =
+  'full_name, acronym, banner_url, logo_url, city, country, start_date, end_date';
+
 async function loadConference(slug: string): Promise<ConfCard | null> {
   try {
     const { data } = await supabase
       .from('conferences')
-      .select('full_name, acronym, banner_url, logo_url, city, country, start_date, end_date')
+      .select(CARD_COLUMNS)
       .eq('slug', slug)
       .maybeSingle();
-    return (data as ConfCard) ?? null;
+    if (data) return data as ConfCard;
+
+    /* A slug that no longer exists is very often one the conference has been
+       RENAMED off (`conferences_reslug_on_rename`). The page itself 308s, but
+       a card URL is not a page: WhatsApp, iMessage and Facebook cached this
+       exact image URL when the link was first pasted and never revalidate, so
+       a rename would turn every already-shared preview into the generic card.
+       Follow the forwarding address instead. */
+    const { data: alias } = await supabase
+      .from('conference_slug_aliases')
+      .select(`conferences(${CARD_COLUMNS})`)
+      .eq('slug', slug)
+      .maybeSingle();
+    const conf = (alias as { conferences?: ConfCard | null } | null)?.conferences;
+    return conf ?? null;
   } catch {
     return null;
   }

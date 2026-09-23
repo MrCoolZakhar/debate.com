@@ -39,9 +39,30 @@ import type { getAuthedClient } from '@/lib/supabase-auth';
  * never rewritten afterwards, so a TBD conference that later picks dates keeps
  * its yearless slug.
  *
+ * ── A RENAME RE-MINTS THE SLUG, IN THE DATABASE ───────────────────────────
+ * This module runs at CREATION. A later rename is handled by the trigger
+ * `conferences_reslug_on_rename()` (migration
+ * `conference_slug_aliases_and_reslug_on_rename`), because the name is
+ * editable from the organiser settings autosave, from the admin console's
+ * `admin_update_conference` RPC and from hand-written SQL, and because the
+ * forwarding address has to be written in the same transaction as the slug it
+ * replaces.
+ *
+ * ⚠️  `conference_slug_ladder(acronym, full_name, year)` in the database is a
+ *     PORT of `conferenceSlugLadder()` below. Change one, change the other.
+ *     Parity is checkable in one query — it must return no rows:
+ *
+ *       select slug, conference_slug_ladder(acronym, full_name,
+ *                conference_slug_year(start_date, end_date, dates_tbd))
+ *       from conferences;
+ *
+ *     compared against this file's output for the same rows.
+ *
  * ── EXISTING CONFERENCES ARE NOT TOUCHED ──────────────────────────────────
- * This runs at creation only. Every slug already in the DB stays exactly as it
- * is, and `/conferences/<old-long-slug>` keeps resolving forever.
+ * Nothing re-slugs a conference that has not been renamed. Every slug already
+ * in the DB stays exactly as it is, and once a rename does move a slug, the
+ * old one keeps resolving forever through `conference_slug_aliases`
+ * (`/conferences/<old>` and `/manage/<old>` 308 in `src/middleware.ts`).
  *
  * ── UNIQUENESS ────────────────────────────────────────────────────────────
  * `conferences.slug` carries a real UNIQUE constraint (`conferences_slug_key`),
@@ -149,6 +170,12 @@ export function conferenceSlugLadder({ acronym, fullName, year }: SlugInput): st
   } else {
     const yy = String(year % 100).padStart(2, '0');
     if (acr) {
+      // The organiser already wrote the edition into the acronym ("NMUN 2026",
+      // "Omni MUNC'26"). Appending the year again mints `nmun20262026`, which
+      // is how a live conference ended up on the bare `nmun`. Try the acronym
+      // on its own first in that case; the year rungs still follow, so a
+      // collision falls through exactly as before.
+      if (acr.endsWith(String(year)) || (acr.length > yy.length && acr.endsWith(yy))) push(acr);
       push(`${acr}${year}`);
       push(`${acr}${yy}`);
     }
@@ -199,9 +226,17 @@ export function isSlugTakenError(err: { code?: string; message?: string } | null
 
 /**
  * The ordered list of slugs to attempt, freed of everything already in the DB.
- * One SELECT. Always returns at least one entry — the legacy random slug is
+ * Two SELECTs. Always returns at least one entry — the legacy random slug is
  * appended (twice, in case of an astronomically unlucky collision) so the
  * caller always has something to insert.
+ *
+ * `conference_slug_aliases` is filtered as well as `conferences`. An alias is
+ * a LIVE URL — a slug some conference used to answer to and still 308s from —
+ * so minting it for a new conference would silently re-point somebody else's
+ * printed link. The database enforces the same rule
+ * (`conference_slug_alias_guard`), raising 23505 with "slug" in the message so
+ * `isSlugTakenError` sends the caller to the next rung; this pre-filter only
+ * keeps the common case to a single insert.
  */
 export async function conferenceSlugAttempts(
   supabase: AuthedClient,
@@ -211,16 +246,19 @@ export async function conferenceSlugAttempts(
   let free = ladder;
 
   if (ladder.length) {
-    const { data, error } = await supabase
-      .from('conferences')
-      .select('slug')
-      .in('slug', ladder);
-    if (!error && data) {
-      const taken = new Set((data as { slug: string }[]).map(r => r.slug));
-      free = ladder.filter(s => !taken.has(s));
+    const taken = new Set<string>();
+    const [live, aliases] = await Promise.all([
+      supabase.from('conferences').select('slug').in('slug', ladder),
+      supabase.from('conference_slug_aliases').select('slug').in('slug', ladder),
+    ]);
+    for (const res of [live, aliases]) {
+      if (!res.error && res.data) {
+        for (const r of res.data as { slug: string }[]) taken.add(r.slug);
+      }
+      // On error we keep that table's rows unfiltered: the 23505 retry still
+      // converges, it just costs an extra insert or two.
     }
-    // On error we keep the unfiltered ladder: the 23505 retry below still
-    // converges, it just costs an extra insert or two.
+    free = ladder.filter(s => !taken.has(s));
   }
 
   return [...free, legacyRandomSlug(input.fullName), legacyRandomSlug(input.fullName)];

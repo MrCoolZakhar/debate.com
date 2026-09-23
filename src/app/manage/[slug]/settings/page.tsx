@@ -23,6 +23,7 @@ import { useScrollLock } from '@/hooks/useScrollLock';
 import { LogoDisc } from '@/components/LogoDisc';
 import { LogoCropModal } from '@/components/LogoCropModal';
 import { safeStorageKey } from '@/lib/storageKey';
+import { notify } from '@/lib/sessionNotifications';
 import { DatePicker } from '@/components/DatePicker';
 import { sendOrganizerInvite, listPendingOrganizerInvites, revokeOrganizerInvite, type OrganizerInviteRow } from '@/lib/organizerInvites';
 import {
@@ -2855,6 +2856,16 @@ export default function SettingsPage() {
       detailsBaseline.current = detailsSnap();
       setDetailsSaving(false);
       setDetailsSaved(true);
+      setTimeout(() => setDetailsSaved(false), 2500);
+      // Say what happened: the address bar is about to change under them.
+      notify({
+        key: 'conference-slug-moved',
+        kind: 'info',
+        level: 'ok',
+        title: 'Your conference link changed',
+        body: `It is now gavelling.com/conferences/${newSlug}. The old link still works and sends people here.`,
+        ttlMs: 12_000,
+      });
       // Tell IndexNow the page moved, naming both ends so the old URL is
       // recrawled and the 308 is seen. Best effort, exactly like publish.
       if (conference.is_public) {
