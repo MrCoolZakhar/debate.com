@@ -213,6 +213,38 @@ const ALWAYS_SEND_EVENTS = new Set([
   'import_claim_reminder_1', 'import_claim_reminder_2', 'import_claim_reminder_3',
 ]);
 
+// ── Events whose first template row starts ON ───────────────────────────────
+// `email_templates.enabled` defaults to false in the database, so a template
+// an organiser writes in the composer is saved switched OFF, and
+// queueEventEmail answers 'off' for it: zero outbox rows, silently.
+//
+// KenyaMUN, 23 Sep 2026: the secretariat wrote their own "SESSION CODES" email,
+// scheduled the delegate release across all seven committees, and 286 allocated
+// delegates would have been given no join code at all, because the row that
+// copy lived in had never been switched on. The owner's answer: this one starts
+// on for every new conference.
+//
+// WHY ONLY THIS EVENT, and not every event in the registry. Almost everything
+// here is `defaultDelivery: 'immediate'` and fires from a call site an organiser
+// passes through in the ordinary run of the job (accepting an application,
+// allocating a seat, marking a payment). Starting those on by default would
+// send a half-written draft the moment it was saved, to real people, with no
+// second action to reconsider at. `session_join_invite` is 'manual': nothing
+// queues it except an explicit SEND TO PARTICIPANTS, or a delegate release time
+// the organiser chose. Enabling it by default therefore cannot cause a send
+// nobody asked for; it can only make the send they did ask for actually happen.
+//
+// `session_chair_invite` is the obvious neighbour (also manual, also a release
+// event) and is deliberately NOT here: the owner asked for the delegate one.
+// Adding it is a one-line change with the same reasoning.
+export const DEFAULT_ENABLED_EVENTS = new Set<string>(['session_join_invite']);
+
+/** Whether a NEWLY CREATED template row for this event should start enabled.
+ *  Ad-hoc templates (no event key) always start off, as before. */
+export function newTemplateStartsEnabled(eventKey: string | null | undefined): boolean {
+  return !!eventKey && DEFAULT_ENABLED_EVENTS.has(eventKey);
+}
+
 /** True if this recipient should receive an email in `category` given their
  *  notification preferences. THE one place a notify_email_* column is read at
  *  send time — `recipientAllowsEvent` (registry events) and the ad-hoc sender

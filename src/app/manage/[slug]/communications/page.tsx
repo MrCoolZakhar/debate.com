@@ -20,7 +20,7 @@ import {
   type EmailTokenContext, type EmailTokenKey,
 } from '@/lib/emailTokens';
 import { TOKEN_IDENTITY } from '@/components/email/tokenKit';
-import { EVENT_REGISTRY, queueEventEmail, getEventLabel, notifyIfNeeded, turnOnDefaultEmail, type EventDef, type EventKey } from '@/lib/emailEvents';
+import { EVENT_REGISTRY, queueEventEmail, getEventLabel, notifyIfNeeded, turnOnDefaultEmail, newTemplateStartsEnabled, type EventDef, type EventKey } from '@/lib/emailEvents';
 import { EASE, NEU, NEU_GRADIENTS, Emoji3D, NeuIconDisc, type NeuGradient } from '@/components/neu';
 import {
   SOFT, GREEN_INK, RED,
@@ -2751,6 +2751,15 @@ function CommunicationsPageInner() {
     const { data, error } = await supabase.from('email_templates').insert({
       conference_id: conference.id,
       event_key: builderEventKey,
+      // `enabled` defaults to false in the database, which is right for almost
+      // every event and wrong for the session join invite: an organiser who
+      // writes that email has, by writing it, said they want delegates to get
+      // their join code, and nothing sends it without a further explicit
+      // action anyway. See DEFAULT_ENABLED_EVENTS in @/lib/emailEvents for why
+      // this is one key and not the whole registry. Only on CREATE — an
+      // existing row's on/off state is the organiser's, and the update branch
+      // above never touches it.
+      enabled: newTemplateStartsEnabled(builderEventKey),
       ...payload,
     }).select('id').single();
     if (error) { if (!opts.silent) setBuilderError(friendlyError(error, "Couldn't save this email. Please try again.")); return null; }
