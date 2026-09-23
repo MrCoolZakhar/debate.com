@@ -9,6 +9,7 @@ import SetupReminderGate from '@/components/SetupReminderGate';
 import CompleteBasicsGate from '@/components/CompleteBasicsGate';
 import LiveRoomsGate from '@/components/liveRooms/LiveRoomsGate';
 import AuthModalHost from '@/components/auth/AuthModal';
+import { DOM_TRANSLATION_GUARD } from '@/lib/domTranslationGuard';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://gavelling.com'),
@@ -105,6 +106,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="h-full">
       <head>
+        <script dangerouslySetInnerHTML={{ __html: DOM_TRANSLATION_GUARD }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         {/* DELIBERATE: only Playfair Display (italic) and Noto Sans Arabic are

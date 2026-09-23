@@ -38,19 +38,19 @@ export function allocationSendMessage(result: QueueEventEmailResult, attempted: 
   const queued = result.queued ?? 0;
   switch (result.outcome) {
     case 'off':
-      return { kind: 'err', msg: 'Allocation emails are switched off for this conference — turn them back on under Communications.' };
+      return { kind: 'err', msg: 'Allocation emails are switched off for this conference. Turn them back on under Communications.' };
     case 'unconfigured':
       return { kind: 'err', msg: 'The allocation email could not be turned on automatically. Open Communications and enable it.' };
     case 'no-recipients':
       return { kind: 'err', msg: 'No delegates to email.' };
     default:
       if (queued === 0) {
-        return { kind: 'err', msg: 'Nobody was emailed — every delegate selected has turned off application emails.' };
+        return { kind: 'err', msg: 'Nobody was emailed. Every delegate selected has turned off application emails.' };
       }
       return {
         kind: 'ok',
         msg: queued < attempted
-          ? `Emailed ${queued} of ${attempted} delegates — the rest have turned off application emails.`
+          ? `Emailed ${queued} of ${attempted} delegates. The rest have turned off application emails.`
           : `Allocation email sent to ${queued} delegate${queued === 1 ? '' : 's'}.`,
       };
   }
@@ -463,7 +463,7 @@ function AllocationPicker({
               Choose who to email
             </h2>
             <p className="text-xs mt-0.5" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
-              Each delegate gets their own committee and country. Re-sending is allowed — a delegate can be emailed more than once.
+              Each delegate gets their own committee and country. Re-sending is allowed. A delegate can be emailed more than once.
             </p>
           </div>
           <button onClick={onClose} className="focus:outline-none flex-shrink-0" style={{ color: NEU.muted, background: 'none', border: 'none', cursor: 'pointer', lineHeight: 0 }} aria-label="Close">

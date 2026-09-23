@@ -2984,8 +2984,8 @@ function CommunicationsPageInner() {
       setBuilderError(result.skippedUnresolved > 0
         ? `Nothing was sent. ${result.skippedUnresolved} recipient${result.skippedUnresolved === 1 ? ' is' : 's are'} missing ${result.unresolvedFields.map(unresolvedFieldLabel).join(', ')}, which this email uses.`
         : result.optedOut > 0
-        ? `Nothing was sent — every matched recipient (${result.optedOut}) has opted out of marketing emails.`
-        : 'Nothing was sent — no eligible recipients.');
+        ? `Nothing was sent. Every matched recipient (${result.optedOut}) has opted out of marketing emails.`
+        : 'Nothing was sent. No eligible recipients.');
       setSending(false);
       setSendConfirmOpen(false);
       return;
@@ -3048,7 +3048,7 @@ function CommunicationsPageInner() {
       image: OTTER_INTRO,
       text: (
         <>
-          This is <strong>Communications</strong> — every email your conference sends, and every
+          This is <strong>Communications</strong>, every email your conference sends, and every
           message it gets back. The <TourGreen>inbox</TourGreen> is first, because people waiting
           on a reply come before anything else; under it sit what needs{' '}
           <TourGreen>a look</TourGreen> and what is <TourGreen>going out soon</TourGreen>, and
@@ -3063,8 +3063,8 @@ function CommunicationsPageInner() {
       before: () => { setView('landing'); setSelectedRequestId(null); },
       text: (
         <>
-          <TourGold>Coming up</TourGold> is what the system is about to do — emails draining,
-          scheduled releases, reminders that are due — plus the occasional gold suggestion when
+          <TourGold>Coming up</TourGold> is what the system is about to do: emails draining,
+          scheduled releases, reminders that are due, plus the occasional gold suggestion when
           something is waiting on you. Each card has one action; dismiss what you do not need.
         </>
       ),
@@ -3076,7 +3076,7 @@ function CommunicationsPageInner() {
       before: () => { setView('landing'); },
       text: (
         <>
-          <TourGreen>Sent</TourGreen> is the full record — emails you wrote yourself AND the
+          <TourGreen>Sent</TourGreen> is the full record, emails you wrote yourself AND the
           automatic ones the platform sent for you, with delivered/failed per recipient. Hit{' '}
           <TourGold>NEW EMAIL</TourGold> to pick a template or start blank, write with a live
           preview beside you, and choose exactly who gets it, all on one screen. The{' '}
@@ -3107,8 +3107,8 @@ function CommunicationsPageInner() {
       before: () => { setView('automatic'); },
       text: (
         <>
-          <TourGold>Automatic emails</TourGold> send themselves. Each is tied to a moment — an
-          application accepted, a payment received, an allocation released — so people hear from
+          <TourGold>Automatic emails</TourGold> send themselves. Each is tied to a moment: an
+          application accepted, a payment received, an allocation released, so people hear from
           you the second it happens. Turn one <TourGreen>on</TourGreen> and our default copy goes
           out; draft your own and it sends instead. Hundreds of emails you never write again.
         </>
@@ -3121,7 +3121,7 @@ function CommunicationsPageInner() {
       text: (
         <>
           That is the whole system. Turn a couple of <TourGreen>automatic emails</TourGreen> on
-          and your conference starts writing its own. Come back any time — the tour lives under{' '}
+          and your conference starts writing its own. Come back any time. The tour lives under{' '}
           <strong>Take the tour</strong> in the header 🎉
         </>
       ),
@@ -3257,7 +3257,7 @@ function CommunicationsPageInner() {
         headline: `${failedTotal} email${failedTotal === 1 ? '' : 's'} never arrived`,
         sub: failedTotal === 1
           ? 'One recipient did not receive their email. Open the send below to see who, and why.'
-          : 'Those recipients did not receive their email. Open the sends below to see who, and why — a bad address is the usual cause and is fixable on the application.',
+          : 'Those recipients did not receive their email. Open the sends below to see who, and why. A bad address is the usual cause and is fixable on the application.',
         icon: AlertTriangle,
         pulse: false,
         action: null,
@@ -3270,7 +3270,7 @@ function CommunicationsPageInner() {
         tone: 'live',
         eyebrow: 'SENDING NOW',
         headline: `${drainingCount} email${drainingCount === 1 ? '' : 's'} on the way`,
-        sub: 'Queued and draining. A large send takes a few minutes to work through — you can leave this page.',
+        sub: 'Queued and draining. A large send takes a few minutes to work through. You can leave this page.',
         icon: Zap,
         pulse: true,
         action: null,
@@ -3324,7 +3324,7 @@ function CommunicationsPageInner() {
         headline: enabledCount > 0
           ? `${enabledCount + alwaysOnCount} emails are ready to send themselves`
           : 'Gavelling is already writing to your delegates',
-        sub: `Chair invites, organiser invites and account invites always send${enabledCount > 0 ? `, and you have ${enabledCount} more switched on` : ''}. They go out the moment an application lands, a place is offered or a fee clears — you do not have to write them.`,
+        sub: `Chair invites, organiser invites and account invites always send${enabledCount > 0 ? `, and you have ${enabledCount} more switched on` : ''}. They go out the moment an application lands, a place is offered or a fee clears. You do not have to write them.`,
         icon: Bell,
         pulse: false,
         action: { label: 'SEE WHAT SENDS', onClick: () => setView('automatic') },
@@ -4000,9 +4000,9 @@ function CommunicationsPageInner() {
                         : !template
                           ? { text: 'Not set up', color: SOFT }
                           : template.enabled && hasDraft
-                            ? { text: 'On — sends your draft', color: GREEN_INK }
+                            ? { text: 'On: sends your draft', color: GREEN_INK }
                             : template.enabled
-                              ? { text: 'On — sends our default', color: GOLD_INK }
+                              ? { text: 'On: sends our default', color: GOLD_INK }
                               : { text: 'Off', color: SOFT };
                     return (
                       <div key={ev.key} className="rounded-2xl px-4 py-3" style={PANEL}>
@@ -5066,7 +5066,7 @@ function CommunicationsPageInner() {
                   {eventDef?.description}
                 </p>
                 <p className="text-xs mt-2" style={{ color: GOLD_INK, fontFamily: OUTFIT, textWrap: 'pretty' }}>
-                  Its audience is fixed by the event — turn it on from Automatic emails once you&apos;re happy with the draft.
+                  Its audience is fixed by the event. Turn it on from Automatic emails once you&apos;re happy with the draft.
                 </p>
               </div>
               <div className="flex-shrink-0" style={{ minWidth: 220 }}>

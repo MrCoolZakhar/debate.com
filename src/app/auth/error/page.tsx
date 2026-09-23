@@ -34,7 +34,7 @@ const COPY: Record<string, { title: string; body: string }> = {
      leaving them to conclude their registration failed. */
   expired: {
     title: 'This link has already been used',
-    body: 'Email links expire quickly and only work once — and your mail provider may well have opened it before you did. If this was a sign-up confirmation, your account is most likely active already: sign in below and you are in.',
+    body: 'Email links expire quickly and only work once, and your mail provider may well have opened it before you did. If this was a sign-up confirmation, your account is most likely active already: sign in below and you are in.',
   },
   invalid: {
     title: 'This link has already been used',

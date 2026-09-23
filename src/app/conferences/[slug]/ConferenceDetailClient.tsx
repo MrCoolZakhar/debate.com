@@ -2110,7 +2110,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     <SectionCard className="!py-3 !px-5 mb-6">
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-[13px]" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif" }}>
-                          Payment cancelled — you can try again anytime.
+                          Payment cancelled. You can try again anytime.
                         </p>
                         <button
                           onClick={() => setPaymentReturn(null)}

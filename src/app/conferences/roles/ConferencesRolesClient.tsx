@@ -822,7 +822,7 @@ function ComingSoonScreen() {
               <span style={{ color: INK, fontWeight: 700 }}>secretariat</span>, and{' '}
               <span style={{ color: INK, fontWeight: 700 }}>staff</span>{' '}
               opportunities across conferences will live. We&rsquo;re putting the
-              finishing touches on it — check back soon.
+              finishing touches on it. Check back soon.
             </p>
 
             {/* Category glyph chips — a quiet preview of what's coming */}

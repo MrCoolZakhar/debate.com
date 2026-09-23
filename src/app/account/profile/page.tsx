@@ -15,6 +15,7 @@ import { ConfirmModal } from '@/components/ConfirmModal';
 import { DatePicker } from '@/components/DatePicker';
 import Portal from '@/components/Portal';
 import Loader from '@/components/Loader';
+import { plainOrFallback } from '@/lib/friendlyError';
 
 interface ReviewableConference {
   id: string;
@@ -443,9 +444,9 @@ export default function ProfilePage() {
         }
         if (body?.reason === 'sole_owner') {
           setSoleOwnerConferences(body.conferences ?? []);
-          setDeleteError(body.message ?? 'You are the sole owner of one or more conferences. Transfer or archive them first.');
+          setDeleteError(plainOrFallback(body.message, 'You are the sole owner of one or more conferences. Transfer or archive them first.'));
         } else {
-          setDeleteError(body?.message ?? 'Could not delete your account. Please try again.');
+          setDeleteError(plainOrFallback(body?.message, 'Could not delete your account. Please try again.'));
         }
         setDeleting(false);
         return;
@@ -454,9 +455,9 @@ export default function ProfilePage() {
       if (result && result.ok === false) {
         if (result.reason === 'sole_owner') {
           setSoleOwnerConferences(result.conferences ?? []);
-          setDeleteError(result.message ?? 'You are the sole owner of one or more conferences. Transfer or archive them first.');
+          setDeleteError(plainOrFallback(result.message, 'You are the sole owner of one or more conferences. Transfer or archive them first.'));
         } else {
-          setDeleteError(result.message ?? 'Could not delete your account. Please try again.');
+          setDeleteError(plainOrFallback(result.message, 'Could not delete your account. Please try again.'));
         }
         setDeleting(false);
         return;

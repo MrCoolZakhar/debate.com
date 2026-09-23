@@ -302,7 +302,7 @@ async function stripeProvider(args: CreateCheckoutArgs): Promise<PaymentResult> 
   }
   const result = data as { ok?: boolean; url?: string; error?: string; covered?: boolean; message?: string } | null;
   if (result?.ok && result.covered) {
-    return { status: 'recorded', message: result.message || "Your delegation's financial aid covered these spots — nothing to pay." };
+    return { status: 'recorded', message: result.message || "Your delegation's financial aid covered these spots, so there is nothing to pay." };
   }
   if (!result?.ok || !result.url) {
     return { status: 'error', message: result?.error || 'Could not start checkout. Please try again.' };

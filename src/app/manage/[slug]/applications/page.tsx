@@ -3601,7 +3601,7 @@ export default function ApplicationsPage() {
       if (result.outcome === 'off') {
         setActionError(`Payment emails are turned off for this conference, so nothing was sent.${skipNote}`);
       } else if ((result.queued ?? 0) === 0) {
-        setActionError(`No reminder was queued — everyone left has turned payment emails off.${skipNote}`);
+        setActionError(`No reminder was queued. Everyone left has turned payment emails off.${skipNote}`);
       } else {
         setFlashMsg(`Payment reminder queued for ${result.queued}.${skipNote}`);
         clearSelection();
@@ -3666,7 +3666,7 @@ export default function ApplicationsPage() {
       if (result.queued === 0) {
         setComposeError(result.skippedUnresolved > 0
           ? `Nothing was queued.${missingNote} Assign them first, or take those placeholders out of the message.`
-          : `Nothing was queued — everyone selected has opted out of these emails.`);
+          : `Nothing was queued. Everyone selected has opted out of these emails.`);
         return;
       }
       setComposeOpen(false);
@@ -4114,7 +4114,7 @@ export default function ApplicationsPage() {
           (not a user-applied filter), so they're left out of this count too. */}
       {listView === 'people' && !draftsView && !loading && filtered.length < defaultScopeCount && (
         <p className="mb-3" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.muted }}>
-          Showing {filtered.length} of {defaultScopeCount} — filters active
+          Showing {filtered.length} of {defaultScopeCount}, filters active
         </p>
       )}
 
@@ -4740,7 +4740,7 @@ export default function ApplicationsPage() {
               <span onClick={e => e.stopPropagation()}>
                 <InfoHint
                   label="About in-progress applications"
-                  text="Started but not submitted. You can see who is working on one and nudge them, but not what they have written — an unsubmitted application stays private until they send it. Not counted in your totals."
+                  text="Started but not submitted. You can see who is working on one and nudge them, but not what they have written. An unsubmitted application stays private until they send it. Not counted in your totals."
                 />
               </span>
             </button>

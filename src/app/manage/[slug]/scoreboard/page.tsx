@@ -358,7 +358,7 @@ export default function ScoreboardPage() {
               </p>
               <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: SOFT }}>
                 {data!.unlinked.map((u) => committeeDisplayName(u.name, u.abbreviation)).join(', ')}
-                {' — '}no live session is linked to {data!.unlinked.length === 1 ? 'this committee' : 'these committees'} yet.
+                {'. '}No live session is linked to {data!.unlinked.length === 1 ? 'this committee' : 'these committees'} yet.
               </p>
             </NeuCard>
           )}

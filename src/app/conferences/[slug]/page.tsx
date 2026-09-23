@@ -154,7 +154,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const description = rawDesc
     ? (rawDesc.length > 200 ? `${rawDesc.slice(0, 197).trimEnd()}…` : rawDesc)
     : bits
-      ? `Model UN conference — ${bits}. Apply on Gavelling.`
+      ? `Model UN conference, ${bits}. Apply on Gavelling.`
       : 'A Model UN conference on Gavelling. Apply now.';
   /* The share card is RENDERED, not the raw banner.
    
@@ -224,7 +224,7 @@ function eventSchema(
     '@type': 'Event',
     name,
     ...(conf.acronym ? { alternateName: [conf.acronym, conf.full_name].filter(Boolean) } : {}),
-    description: rawDesc || `${name} — a Model UN conference on Gavelling.`,
+    description: rawDesc || `${name}, a Model UN conference on Gavelling.`,
     /* Each committee as a subEvent. Names and topics are the long-tail queries
        ("SISMUN SOCHUM", "crisis committee Bangalore") and they render on a tab
        the crawler never reaches, so structured data is the only place they can

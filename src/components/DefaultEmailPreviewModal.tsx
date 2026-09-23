@@ -102,7 +102,7 @@ export default function DefaultEmailPreviewModal({
           </button>
         </div>
         <p className="text-xs mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-          This is what sends today — draft a template from this list to override it.
+          This is what sends today. Draft a template from this list to override it.
         </p>
 
         <div className="flex items-center gap-3 mb-3">

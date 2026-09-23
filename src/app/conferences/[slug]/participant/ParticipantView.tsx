@@ -188,7 +188,7 @@ export default function ParticipantView({
             You&apos;re the organizer
           </p>
           <p className="text-[13.5px] mb-5 max-w-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.6 }}>
-            You run this conference — there&apos;s nothing to apply for here. Manage applications,
+            You run this conference. There&apos;s nothing to apply for here. Manage applications,
             committees and your public page from the organizer dashboard.
           </p>
           <Link

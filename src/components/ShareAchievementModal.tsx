@@ -86,7 +86,7 @@ export function ShareAchievementModal({
 
   const headline = hasAward ? 'An award for the record 🏆' : 'Another one for the record 🎉';
   const subline = hasAward
-    ? 'Silverware on the shelf — let the world see it.'
+    ? 'Silverware on the shelf. Let the world see it.'
     : 'Your Model UN journey just grew. Share the moment.';
 
   // Share plumbing ──────────────────────────────────────────────────────────
@@ -94,7 +94,7 @@ export function ShareAchievementModal({
     const bits = [`I just added ${entry.conference_name}`];
     if (entry.committee) bits.push(` (${entry.committee})`);
     bits.push(' to my Model UN CV');
-    if (hasAward) bits.push(` — ${award}! 🏆`);
+    if (hasAward) bits.push(`, ${award}! 🏆`);
     else bits.push(' on Gavelling! 🎉');
     return bits.join('');
   })();

@@ -77,7 +77,7 @@ interface RoleSlide {
 const ROLE_SLIDES: RoleSlide[] = [
   {
     role: 'Secretariat',
-    blurb: 'The machine behind the weekend: run applications, allocations, delegations and communications from one place — the whole show, zero fees.',
+    blurb: 'The machine behind the weekend: run applications, allocations, delegations and communications from one place. The whole show, zero fees.',
     image: '/roles/secretariat.webp',
     imageAlt: 'Secretariat staff coordinating a conference',
     primary: { label: 'See open roles', href: '/conferences/roles' },
@@ -729,8 +729,8 @@ export default function VariantStagefront({
             <p style={{ fontFamily: SANS, fontSize: 'clamp(16px, 1.15vw, 20px)', lineHeight: 1.7, color: INK_70, margin: '20px 0 0 0', maxWidth: '760px' }}>
               Model United Nations, or <strong style={{ color: INK }}>MUN</strong>, is an academic
               simulation of the real United Nations. Students step into the shoes of diplomats,
-              each representing a country, and debate the world&rsquo;s biggest challenges — from
-              climate change to global security — in committees modelled on the UN&rsquo;s own.
+              each representing a country, and debate the world&rsquo;s biggest challenges, from
+              climate change to global security, in committees modelled on the UN&rsquo;s own.
               It&rsquo;s part debate, part public speaking, part teamwork, and one of the best ways
               to sharpen the skills that carry into university and beyond.
             </p>
@@ -747,10 +747,10 @@ export default function VariantStagefront({
             </h3>
             <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '14px', maxWidth: '760px' }}>
               {[
-                ['Pick a committee', 'Conferences run committees — the Security Council, historical crises, specialised agencies and more — each with its own topic and pace.'],
+                ['Pick a committee', 'Conferences run committees: the Security Council, historical crises, specialised agencies and more, each with its own topic and pace.'],
                 ['Represent a country', 'You’re assigned a country (or a character) and speak, vote and negotiate on its behalf throughout the weekend.'],
                 ['Debate and negotiate', 'Delegates make speeches, form blocs, and hammer out compromises through moderated and unmoderated caucuses.'],
-                ['Draft resolutions', 'Working together, committees write and amend resolutions, then vote — the heart of every MUN session.'],
+                ['Draft resolutions', 'Working together, committees write and amend resolutions, then vote: the heart of every MUN session.'],
               ].map(([term, desc]) => (
                 <li key={term} className="flex items-start gap-3.5">
                   <span
@@ -866,7 +866,7 @@ export default function VariantStagefront({
               }}
             >
               {stats
-                ? `${stats.total_conferences} conferences across every continent. From The Hague to Singapore, Tokyo to New York — find your next destination.`
+                ? `${stats.total_conferences} conferences across every continent. From The Hague to Singapore, Tokyo to New York. Find your next destination.`
                 : 'From The Hague to Singapore, Tokyo to New York. Explore conferences on every continent and find your next destination.'}
             </p>
             <Link
@@ -1090,7 +1090,7 @@ function HeroSearchBar({ conferences }: { conferences: LabConference[] }) {
               className="block px-4 py-3.5"
               style={{ fontFamily: SANS, fontSize: 13.5, color: INK_55, textDecoration: 'none' }}
             >
-              No conferences match &ldquo;{q}&rdquo; — <span style={{ color: FOREST, fontWeight: 700 }}>browse all &rarr;</span>
+              No conferences match &ldquo;{q}&rdquo;. <span style={{ color: FOREST, fontWeight: 700 }}>browse all &rarr;</span>
             </Link>
           )}
         </div>

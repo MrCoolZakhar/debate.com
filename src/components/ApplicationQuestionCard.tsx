@@ -67,7 +67,7 @@ export function focusQuestion(questionId: string): void {
  *  applicant nothing about what to actually do. */
 function errorMessage(q: CustomQuestion): string {
   switch (q.type) {
-    case 'paragraph': return 'Please answer this one — a few sentences is enough.';
+    case 'paragraph': return 'Please answer this one: a few sentences is enough.';
     case 'number': return 'Please enter a number.';
     case 'date': return 'Please pick a date.';
     case 'checkboxes': return 'Please pick at least one.';

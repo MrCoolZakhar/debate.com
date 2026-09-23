@@ -722,7 +722,7 @@ function FeedbackEmpty({ committeeLabel }: { committeeLabel: string }) {
         </p>
         <p className="text-xs mt-1" style={{ color: SOFT, fontFamily: OUTFIT, lineHeight: 1.5 }}>
           Commenters rate each speech and leave private notes from the feedback dock in their console.
-          Ratings and notes land here the moment they are saved — no action needed from you.
+          Ratings and notes land here the moment they are saved. No action needed from you.
         </p>
       </div>
     </NeuInset>
@@ -988,7 +988,7 @@ function DocumentsRecap({
                   <p className="text-[11px] mt-1.5" style={{ color: SOFT, fontFamily: OUTFIT }}>
                     {(d.content ?? '').trim()
                       ? 'Text is below.'
-                      : 'No file was uploaded with this resolution — the chair recorded it by title and sponsors.'}
+                      : 'No file was uploaded with this resolution. The chair recorded it by title and sponsors.'}
                   </p>
                 )}
               </div>
@@ -1074,7 +1074,7 @@ function DocumentsRecap({
                                attached" is the ORDINARY case here. It is worded
                                as a plain fact, never as an error. */
                             <p className="text-[11px] mt-1.5" style={{ color: SOFT, fontFamily: OUTFIT }}>
-                              Tabled by title and sponsors — no file or text attached.
+                              Tabled by title and sponsors. No file or text attached.
                             </p>
                           )}
                         </div>
@@ -1234,7 +1234,7 @@ export function RecapModal({
       <RailTab
         side={side} icon={Radio} label="Overview" active={tab === 'overview'}
         onClick={() => setTab('overview')}
-        title="What this room has done — speeches, time, motions, top and quietest delegation"
+        title="What this room has done: speeches, time, motions, top and quietest delegation"
       />
       <RailTab
         side={side} icon={FileText} label="Documents" count={data.documents.length}
@@ -1244,7 +1244,7 @@ export function RecapModal({
       <RailTab
         side={side} icon={Trophy} label="Scoreboard" active={tab === 'scoreboard'}
         onClick={openScoreboardTab}
-        title="The full delegate performance table — the same one the chairs score from"
+        title="The full delegate performance table, the same one the chairs score from"
       />
       <RailTab
         side={side} icon={MessageSquareText} label="Chair feedback" count={data.feedback.length}
@@ -1254,7 +1254,7 @@ export function RecapModal({
       <RailTab
         side={side} icon={Users} label="Attendance" count={votingTotal}
         active={tab === 'attendance'} onClick={() => setTab('attendance')}
-        title="The roll — present, present & voting, absent, and each delegation's speaking time"
+        title="The roll: present, present & voting, absent, and each delegation's speaking time"
       />
       <RailTab
         side={side} icon={Medal} label="Awards" active={tab === 'awards'}
@@ -1265,7 +1265,7 @@ export function RecapModal({
         <RailTab
           side={side} icon={Megaphone} label="Broadcast"
           onClick={() => onBroadcast(data)}
-          title="Send a message to this committee — opens the broadcast composer"
+          title="Send a message to this committee. Opens the broadcast composer"
         />
       )}
     </>
@@ -1315,7 +1315,7 @@ export function RecapModal({
             <StatTile
               icon={Mic} emoji="Studio microphone" gradient={NEU_GRADIENTS.forest}
               value={String(speeches)} label="Speeches given"
-              title="Logged speeches only — motions, rights of reply and manual point adjustments share the same ledger but are not speeches"
+              title="Logged speeches only. Motions, rights of reply and manual point adjustments share the same ledger but are not speeches"
             />
             <StatTile icon={Clock} emoji="Stopwatch" gradient={NEU_GRADIENTS.sage} value={fmtSpeakingTotal(totalSpeakingSeconds)} label="Total speaking time" />
             <StatTile
@@ -1664,7 +1664,7 @@ export function RosterBody({ data }: { data: LiveCommittee }) {
                     {/* Name = the delegation's country (delegates join by nation; no personal name is stored) */}
                     <p className="text-sm font-extrabold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{d.country}</p>
                     <p className="text-[11px] truncate" style={{ color: SOFT, fontFamily: OUTFIT }}>
-                      {d.isObserver ? 'Observer — not part of the voting body' : `Represents ${d.country}`}
+                      {d.isObserver ? 'Observer, not part of the voting body' : `Represents ${d.country}`}
                     </p>
                   </div>
                   <span

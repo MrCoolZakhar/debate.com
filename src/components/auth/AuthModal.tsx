@@ -48,6 +48,7 @@ import {
   KIT_CSS, OUTFIT, TermsLine, TextButton,
 } from './authModalKit';
 import AuthQuestionnaire from './AuthQuestionnaire';
+import { friendlyError } from '@/lib/friendlyError';
 
 type Step =
   | 'email'
@@ -89,7 +90,7 @@ function friendlyAuthError(raw: string): string {
   if (m.includes('already confirmed')) return 'This email is already confirmed. Go back and log in.';
   if (m.includes('password') && m.includes('at least')) return 'Your password needs at least 8 characters.';
   if (m.includes('failed to fetch') || m.includes('network')) return 'We could not reach Gavelling. Check your connection and try again.';
-  return raw;
+  return friendlyError(raw, 'Something went wrong. Please try again.');
 }
 
 // ── Host: mounted once in the root layout ───────────────────────────────────

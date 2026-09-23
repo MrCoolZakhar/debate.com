@@ -142,7 +142,7 @@ export default function PledgeInvoicingCard({
           className="text-[13px] rounded-xl px-4 py-3"
           style={{ color: '#2A5A3C', fontFamily: OUTFIT, backgroundColor: 'rgba(61,122,82,0.1)', border: '1px solid rgba(61,122,82,0.24)', lineHeight: 1.6 }}
         >
-          Delegation aid approved — {formatFee(delegationAid.granted_amount ?? 0, currency)} applied across your delegation&apos;s spots.
+          Delegation aid approved. {formatFee(delegationAid.granted_amount ?? 0, currency)} applied across your delegation&apos;s spots.
         </p>
       ) : (
         <p

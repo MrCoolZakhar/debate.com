@@ -311,8 +311,8 @@ export function UnmoderatedBody({ caucus }: { caucus: CaucusJson }) {
       </NeuInset>
       <p className="text-[11px] mt-2" style={{ color: SOFT, fontFamily: OUTFIT }}>
         {cow
-          ? 'A formal sitting of the whole committee — the chair keeps the floor, but no speakers list runs.'
-          : 'The floor is informal — no speakers list runs during an unmod.'}
+          ? 'A formal sitting of the whole committee. The chair keeps the floor, but no speakers list runs.'
+          : 'The floor is informal. No speakers list runs during an unmod.'}
       </p>
     </div>
   );
@@ -505,7 +505,7 @@ export function VotingBody({ data }: { data: LiveCommittee }) {
       {/* The honest gap, stated on the card. */}
       <p className="text-[11px] mt-2 flex items-start gap-1.5" style={{ color: SOFT, fontFamily: OUTFIT }}>
         <Users size={12} style={{ flexShrink: 0, marginBlockStart: 2 }} />
-        <span>Ballots are cast on the chair&apos;s voting screen and are not stored — only the verdict reaches this page.</span>
+        <span>Ballots are cast on the chair&apos;s voting screen and are not stored. Only the verdict reaches this page.</span>
       </p>
     </div>
   );

@@ -50,7 +50,7 @@ import {
 } from '@/components/neu';
 import { themeCssVars, type ConferenceTheme } from '@/lib/theme';
 import { getGateState, roleLabel, statusPriority } from '../participant/shared';
-import { friendlyError } from '@/lib/friendlyError';
+import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import AidRequestModal from '../participant/AidRequestModal';
 import DelegationCreditsCard from '../participant/DelegationCreditsCard';
 import PledgeInvoicingCard from '../participant/PledgeInvoicingCard';
@@ -1200,7 +1200,7 @@ function AddSpotsPanel({
         <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, color: NEU.ink, margin: 0 }}>Add Delegation Spots</p>
       </div>
       <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, margin: 0, lineHeight: 1.5 }}>
-        Pledge more spots for your delegation — each becomes a payable invoice above.
+        Pledge more spots for your delegation. Each becomes a payable invoice above.
       </p>
       <div className="flex items-center gap-2">
         <input
@@ -1234,7 +1234,7 @@ function AddSpotsPanel({
         </button>
       </div>
       {justAdded && !error && (
-        <Note tone="green">{`Added ${justAdded} spot${justAdded === 1 ? '' : 's'} — check the invoices above.`}</Note>
+        <Note tone="green">{`Added ${justAdded} spot${justAdded === 1 ? '' : 's'}. Check the invoices above.`}</Note>
       )}
       {error && <Note tone="red">{error}</Note>}
     </NeuCard>
@@ -1887,7 +1887,7 @@ function PayInvoiceAndActions({
       reportBlocked('start card payment', new Error(result.message ?? 'checkout returned no url'), {
         kind: 'role_fee', invoiceId: roleFeeInvoice.id,
       });
-      setPayError(result.message ?? 'Something went wrong. Please try again.');
+      setPayError(plainOrFallback(result.message, "We couldn't open the payment page. Please try again."));
     }
   }
 
@@ -1930,7 +1930,7 @@ function PayInvoiceAndActions({
       reportBlocked('start card payment', new Error(result.message ?? 'checkout returned no url'), {
         kind: 'invoice', invoiceId,
       });
-      setGenericPayError(prev => ({ ...prev, [invoiceId]: result.message ?? 'Something went wrong. Please try again.' }));
+      setGenericPayError(prev => ({ ...prev, [invoiceId]: plainOrFallback(result.message, "We couldn't open the payment page. Please try again.") }));
     }
   }
 
@@ -1961,7 +1961,7 @@ function PayInvoiceAndActions({
       reportBlocked('start card payment', new Error(result.message ?? 'checkout returned no url'), {
         kind: 'invoices', invoiceCount: selectedInvoices.length,
       });
-      setSelectedPayError(result.message ?? 'Something went wrong. Please try again.');
+      setSelectedPayError(plainOrFallback(result.message, "We couldn't open the payment page. Please try again."));
     }
   }
 
@@ -2062,7 +2062,7 @@ function PayInvoiceAndActions({
                       <span style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.ink, fontWeight: 800 }}>{invoiceLabel(roleFeeInvoice!)}</span>
                       <span style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.ink, fontWeight: 800 }}>{centsToFee(0, currency)}</span>
                     </div>
-                    <Note tone="green">Nothing to pay — this spot is covered.</Note>
+                    <Note tone="green">Nothing to pay. This spot is covered.</Note>
                   </div>
                 ) : (
                 <>
@@ -2326,7 +2326,7 @@ function PayInvoiceAndActions({
               </div>
               {aidRequest.status === 'pending' && <Note tone="amber">Your request is under review.</Note>}
               {aidRequest.status === 'approved' && (
-                <Note tone="green">Approved — {formatFee(aidRequest.granted_amount ?? 0, currency)} applied.</Note>
+                <Note tone="green">Approved. {formatFee(aidRequest.granted_amount ?? 0, currency)} applied.</Note>
               )}
               {aidRequest.status === 'denied' && <Note tone="muted">Not approved this time.</Note>}
             </NeuCard>

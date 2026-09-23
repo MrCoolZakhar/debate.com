@@ -318,7 +318,7 @@ function QueueFlag({
     el.style.transform = 'scale(1)';
     el.style.zIndex = '0';
   };
-  const label = `${country} — ${position === 1 ? 'next to speak' : `number ${position} in the queue`}`;
+  const label = `${country}, ${position === 1 ? 'next to speak' : `number ${position} in the queue`}`;
 
   const art = <DelegationMark country={country} size={UP_NEXT_FLAG} />;
   if (!onOpen) {
@@ -439,7 +439,7 @@ function QueueOverflow({
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
-        title={`${rest.length} more waiting — open the rest of the list`}
+        title={`${rest.length} more waiting. Open the rest of the list`}
         onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
         className="font-extrabold flex-shrink-0 focus:outline-none active:scale-[0.94]"
         style={{
@@ -460,7 +460,7 @@ function QueueOverflow({
           <div
             ref={popRef}
             role="dialog"
-            aria-label={`${label} — the rest of the queue`}
+            aria-label={`${label}, the rest of the queue`}
             onClick={(e) => e.stopPropagation()}
             style={{
               position: 'fixed', top: pos.top, left: pos.left, width: 236,
@@ -512,7 +512,7 @@ function QueueOverflow({
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setOpen(false); onOpen(country); }}
                     className="flex items-center gap-2 w-full text-left focus:outline-none"
-                    title={`${country} — open their performance card`}
+                    title={`${country}, open their performance card`}
                     style={{
                       border: 'none', background: 'transparent', cursor: 'pointer',
                       padding: '3px 4px', borderRadius: 8,
@@ -1162,7 +1162,7 @@ export function CommitteeCard({
           <div className="flex flex-col items-end flex-shrink-0" style={{ paddingBlockStart: 3, maxWidth: '52%' }}>
             <span
               className="inline-flex items-center gap-1.5"
-              title="Whether this room has shown a sign of life recently — a chair action, a logged speech or a chat message"
+              title="Whether this room has shown a sign of life recently, a chair action, a logged speech or a chat message"
             >
               <span
                 className={`rounded-full flex-shrink-0${meta.pulse ? ' animate-pulse' : ''}`}
@@ -1401,7 +1401,7 @@ export function CommitteeCard({
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
-            title={`${facts.present} of ${facts.total} delegations present — open the roll. Observers are excluded from this count, as they are on the dais.`}
+            title={`${facts.present} of ${facts.total} delegations present. Open the roll. Observers are excluded from this count, as they are on the dais.`}
           >
             {/* The word "present" lived here and cost ~46px, which is what
                 pushed the whole strip onto a second line at 1280 and made the
@@ -1425,7 +1425,7 @@ export function CommitteeCard({
           <Chip
             muted={facts.drs === 0}
             title={facts.drs > 0
-              ? `Open the ${facts.drs} draft resolution${facts.drs === 1 ? '' : 's'} in this committee${facts.drsPassed ? ` — ${facts.drsPassed} passed` : ''}${facts.drsFailed ? ` — ${facts.drsFailed} failed` : ''}`
+              ? `Open the ${facts.drs} draft resolution${facts.drs === 1 ? '' : 's'} in this committee${facts.drsPassed ? `, ${facts.drsPassed} passed` : ''}${facts.drsFailed ? `, ${facts.drsFailed} failed` : ''}`
               : 'No draft resolutions in this committee yet'}
             onClick={facts.drs > 0 ? () => onOpenDocuments(data, 'draft-resolution') : undefined}
           >
@@ -1462,7 +1462,7 @@ export function CommitteeCard({
         }}
         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.045)'; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-        title="Open the per-committee scoreboard — the same delegate performance detail the chairs see"
+        title="Open the per-committee scoreboard, the same delegate performance detail the chairs see"
       >
         <Trophy size={14} style={{ flexShrink: 0 }} />
         <span className="font-bold" style={{ fontSize: 13 }}>Points &amp; performance</span>

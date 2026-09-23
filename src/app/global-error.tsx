@@ -60,7 +60,7 @@ export default function GlobalError({
               Gavelling hit a snag
             </h1>
             <p style={{ color: '#9A8A78', fontSize: 14, lineHeight: 1.7, margin: '0 0 24px' }}>
-              The page couldn&apos;t load. The team has been alerted automatically — please try again in a moment.
+              The page couldn&apos;t load. The team has been alerted automatically. Please try again in a moment.
             </p>
 
             <button
