@@ -34,6 +34,8 @@ import { hasExploredEmails } from '@/lib/emailsExplored';
 import { getConferenceIntent, intentRank } from '@/lib/conferenceIntent';
 import { useConferenceMoney } from '@/lib/conferenceMoney';
 import RevenueReadout from '@/components/conferences/RevenueReadout';
+import { fetchDelegatePrices, TBD_PRICE, type DelegatePrice } from '@/lib/publicFees';
+import { supabase } from '@/lib/supabase';
 import { ShareLinkRow, ShareHero } from '@/components/conferences/ShareConferenceLink';
 import { DASH_CSS, UnallocatedBadge, useDialSize } from '@/components/conferences/dashboardLayout';
 import { useScrollLock } from '@/hooks/useScrollLock';
@@ -1112,6 +1114,15 @@ export default function DashboardPage() {
 
   // Money card: the payments ledger, never payment_status x fee.
   const { money } = useConferenceMoney(session?.access_token, conference?.id);
+  const [delegatePrice, setDelegatePrice] = useState<DelegatePrice>(TBD_PRICE);
+  useEffect(() => {
+    if (!conference?.id) return;
+    let alive = true;
+    fetchDelegatePrices(supabase, [{ id: conference.id, fee_currency: conference.fee_currency }])
+      .then(m => { if (alive) setDelegatePrice(m.get(conference.id) ?? TBD_PRICE); })
+      .catch(() => { /* stays TBD: the read-out then says no fee, as before */ });
+    return () => { alive = false; };
+  }, [conference?.id, conference?.fee_currency]);
 
   // Recent-activity feed: recent applications + allocations, expanded into
   // per-timestamp events (submitted / paid / checked-in / resubmitted /
@@ -1363,7 +1374,12 @@ export default function DashboardPage() {
   // the Math.max stays purely as a defensive floor against transient races.
   const allocated = Math.min(dash.allocated, acceptedApps);
   const unallocated = Math.max(0, acceptedApps - allocated);
-  const fee = conference.fee_amount ?? 0;
+  // The delegate price from the delegate role config (the same rule as the
+  // public page, src/lib/publicFees.ts), never conferences.fee_amount, which is
+  // a stale denormalised column: NMUN 2026 read 0 GBP there while its delegate
+  // fee was a 150 INR phase, so the dashboard said "No delegate fee set".
+  const fee = delegatePrice.kind === 'paid' ? delegatePrice.amount : 0;
+  const feeCurrency = delegatePrice.kind === 'paid' ? delegatePrice.currency : (conference.fee_currency ?? 'USD');
 
   // Applied and accepted per role (delegates, faculty advisors, observers,
   // chairs), against the expected head count. The definitions are written at
@@ -1669,7 +1685,7 @@ export default function DashboardPage() {
         <div className="flex items-center gap-3 min-w-0 flex-wrap">
           <RevenueReadout
             fee={fee}
-            currency={conference.fee_currency}
+            currency={feeCurrency}
             money={money}
             href={`/manage/${slug}/financials`}
           />
