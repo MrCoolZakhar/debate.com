@@ -176,7 +176,9 @@ export function TimelineEntry({
   // Blue when Gavelling wrote the entry from a conference the person attended;
   // grey when they typed it themselves.
   const verifiedEntry = entry.source === 'gavelling_verified';
-  const displayAwards = (entry.entry_type === 'delegate' || isDelegation)
+  // Chairs can be awarded too (Best Chair, Best Dais, custom), shown exactly
+  // like delegate awards.
+  const displayAwards = (entry.entry_type === 'delegate' || entry.entry_type === 'chair' || isDelegation)
     ? (entry.awards.length > 0 ? entry.awards : (entry.award && entry.award !== 'None' ? [entry.award] : []))
     : [];
 
@@ -324,11 +326,17 @@ export function TimelineEntry({
             </div>
           )}
 
-          {/* Chair — just the committee (acronym) */}
-          {entry.entry_type === 'chair' && entry.committee && (
+          {/* Chair — the committee (acronym), then the dais position when set */}
+          {entry.entry_type === 'chair' && (entry.committee || entry.allocation) && (
             <div className="flex items-center gap-2 flex-wrap mt-2.5 text-[15px]" style={{ color: '#1B3828', fontFamily: OUTFIT, fontWeight: 700 }}>
-              <CommitteeLogo committee={entry.committee} size={22} />
-              <span>{committeeLabel(entry.committee)}</span>
+              {entry.committee && <CommitteeLogo committee={entry.committee} size={22} />}
+              {entry.committee && <span>{committeeLabel(entry.committee)}</span>}
+              {entry.committee && entry.allocation && (
+                <span aria-hidden style={{ color: '#B6A88E', fontWeight: 500 }}>—</span>
+              )}
+              {entry.allocation && (
+                <span style={{ color: '#5C5140', fontWeight: 600 }}>{entry.allocation}</span>
+              )}
             </div>
           )}
 

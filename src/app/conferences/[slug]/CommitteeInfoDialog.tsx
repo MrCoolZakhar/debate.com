@@ -14,6 +14,7 @@ import ProfileLink from '@/components/ProfileLink';
 import { DifficultyTile } from '@/components/DifficultyTile';
 import { truncateAtWord } from '@/components/TruncatedTopic';
 import { useScrollLock } from '@/hooks/useScrollLock';
+import { chairTitleLabel } from '@/lib/chairTitles';
 
 const FONT = "'Outfit', sans-serif";
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI'];
@@ -24,6 +25,8 @@ export const CARD_TOPIC_MAX = 120;
 export interface DaisChair {
   name: string;
   avatar_url: string | null;
+  /** Display-only title (src/lib/chairTitles.ts): Chair, Vice Chair, ... Absent = none. */
+  title?: string | null;
 }
 
 /**
@@ -67,6 +70,7 @@ export function CommitteeDais({
             {row.map((ch, i) => {
               const idx = start + i;
               const uid = linkable ? (chairIds ?? [])[idx] : null;
+              const title = chairTitleLabel(ch.title);
               const inner = (
                 <>
                   <PersonAvatar name={ch.name} url={ch.avatar_url} px={avatar} />
@@ -76,6 +80,14 @@ export function CommitteeDais({
                   >
                     {ch.name}
                   </span>
+                  {title && (
+                    <span
+                      className="mt-0.5 leading-tight"
+                      style={{ color: 'var(--gv-on-surface)', opacity: 0.7, fontFamily: FONT, fontSize: nameSize - 1.5, fontWeight: 500 }}
+                    >
+                      {title}
+                    </span>
+                  )}
                 </>
               );
               const cls = 'flex flex-col items-center text-center';

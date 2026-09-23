@@ -44,7 +44,7 @@ export function CVSummaryRow({
   const type = ENTRY_TYPE_MAP[entry.entry_type] ?? ENTRY_TYPE_MAP.delegate;
   const detail =
     entry.entry_type === 'delegate' ? [entry.allocation, entry.committee].filter(Boolean).join(' · ')
-    : entry.entry_type === 'chair' ? entry.committee
+    : entry.entry_type === 'chair' ? [entry.allocation, entry.committee].filter(Boolean).join(' · ')
     : entry.allocation;
 
   return (

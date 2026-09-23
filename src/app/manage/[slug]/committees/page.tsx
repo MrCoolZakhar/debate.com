@@ -28,6 +28,8 @@ import { NEU, NEU_GRADIENTS, OUTFIT, NeuButton, NeuCard, NeuInset, NeuPill } fro
 import ProfileLink from '@/components/ProfileLink';
 import Portal from '@/components/Portal';
 import { ChairCodeChip, loadOpenDaisChairCodes } from './ChairCodeChip';
+import { ChairTitleChips } from '@/components/conferences/ChairTitlePicker';
+import { chairTitleLabel, type ChairTitle } from '@/lib/chairTitles';
 import { friendlyError, UserFacingError } from '@/lib/friendlyError';
 import {
   CommitteeEditorModal,
@@ -43,6 +45,8 @@ import {
 interface DisplayChair {
   name: string;
   avatar_url: string | null;
+  /** Display-only title from the trigger (src/lib/chairTitles.ts); absent on old rows. */
+  title?: string | null;
 }
 
 interface CommitteeRow {
@@ -411,8 +415,8 @@ function CompactSendButton({ releasedAt, busy, onSend }: {
 // conference_chair_invites rows and never reach display_chairs, which is what
 // the public conference page prints.
 type DaisMember =
-  | { kind: 'chair'; key: string; name: string; avatarUrl: string | null; userId: string | null; index: number }
-  | { kind: 'invite'; key: string; name: string; avatarUrl: string | null; invite: PendingChairInvite };
+  | { kind: 'chair'; key: string; name: string; avatarUrl: string | null; userId: string | null; index: number; title: string | null }
+  | { kind: 'invite'; key: string; name: string; avatarUrl: string | null; invite: PendingChairInvite; title: string | null };
 
 /** Merges the seated dais and this committee's pending invites into one
  *  ordered row. `linkable` is the usual index-alignment guard: display_chairs
@@ -430,6 +434,7 @@ function buildDaisMembers(
     avatarUrl: ch.avatar_url,
     userId: linkable ? (chairIds[i] ?? null) : null,
     index: i,
+    title: chairTitleLabel(ch.title),
   }));
   const pending: DaisMember[] = invites.map(inv => ({
     kind: 'invite',
@@ -437,6 +442,7 @@ function buildDaisMembers(
     name: pendingInviteName(inv),
     avatarUrl: inv.profiles?.avatar_url ?? null,
     invite: inv,
+    title: chairTitleLabel(inv.title),
   }));
   return [...seated, ...pending];
 }
@@ -636,9 +642,10 @@ function DaisRow({ members, size, showNames, onAdd, onRemoveChair, onResendInvit
     <>
       <div className={`flex flex-wrap items-start ${showNames ? 'justify-center gap-x-1 gap-y-2' : 'gap-1.5'}`}>
         {shown.map(m => {
+          const who = m.title ? `${m.name} (${m.title})` : m.name;
           const label = m.kind === 'invite'
-            ? `${m.name}, invite pending. Open to resend or remove.`
-            : `${m.name}, open to view or remove.`;
+            ? `${who}, invite pending. Open to resend or remove.`
+            : `${who}, open to view or remove.`;
           return (
             <button
               key={m.key}
@@ -661,14 +668,21 @@ function DaisRow({ members, size, showNames, onAdd, onRemoveChair, onResendInvit
                 <span
                   style={{
                     marginTop: 4, fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700,
-                    lineHeight: '12px', minHeight: 24, width: '100%', textAlign: 'center',
+                    lineHeight: '12px', minHeight: m.title ? 12 : 24, width: '100%', textAlign: 'center',
                     color: m.kind === 'invite' ? '#7A5A10' : '#4A3F33',
                     overflow: 'hidden', display: '-webkit-box',
-                    WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                    // A title takes the second of the two lines, so the slot
+                    // height (and the card's one-line budget) is unchanged.
+                    WebkitLineClamp: m.title ? 1 : 2, WebkitBoxOrient: 'vertical',
                     overflowWrap: 'anywhere',
                   }}
                 >
                   {m.name}
+                </span>
+              )}
+              {showNames && m.title && (
+                <span style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 600, lineHeight: '12px', height: 12, width: '100%', textAlign: 'center', color: '#6B5F52', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {m.title}
                 </span>
               )}
             </button>
@@ -778,7 +792,10 @@ function DaisRow({ members, size, showNames, onAdd, onRemoveChair, onResendInvit
                 style={{ border: 'none', background: undefined, cursor: 'pointer' }}
               >
                 <DaisAvatar member={m} size={22} />
-                <span className="min-w-0 flex-1 truncate" style={{ fontSize: 12, fontWeight: 700, color: m.kind === 'invite' ? '#7A5A10' : '#1C1410' }}>{m.name}</span>
+                <span className="min-w-0 flex-1 truncate" style={{ fontSize: 12, fontWeight: 700, color: m.kind === 'invite' ? '#7A5A10' : '#1C1410' }}>
+                  {m.name}
+                  {m.title && <span style={{ fontWeight: 500, color: '#6B5F52' }}> · {m.title}</span>}
+                </span>
                 {m.kind === 'invite' && <Clock size={11} strokeWidth={2.4} aria-label="Invite pending" style={{ color: '#7A5A10', flexShrink: 0 }} />}
               </button>
             ))}
@@ -807,7 +824,7 @@ function DaisRow({ members, size, showNames, onAdd, onRemoveChair, onResendInvit
                   {open.name}
                 </span>
                 <span style={{ display: 'block', fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', color: open.kind === 'invite' ? '#7A5A10' : '#6B5F52', marginTop: 1 }}>
-                  {open.kind === 'invite' ? 'INVITE PENDING' : 'ON THE DAIS'}
+                  {open.title ? `${open.title.toUpperCase()} · ` : ''}{open.kind === 'invite' ? 'INVITE PENDING' : 'ON THE DAIS'}
                 </span>
               </span>
             </div>
@@ -894,6 +911,7 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
   const { confirm, modal: confirmModal } = useConfirmModal();
   const [applicants, setApplicants] = useState<ChairApplicant[] | null>(null);
   const [email, setEmail] = useState('');
+  const [inviteTitle, setInviteTitle] = useState<ChairTitle | null>(null);
   const [inviting, setInviting] = useState(false);
   const [error, setError] = useState('');
   // Its own component, its own useAuth() — so its own stable token. See the
@@ -939,6 +957,7 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
         committeeId: committee.id,
         committeeName: committee.name,
         email: em,
+        title: inviteTitle,
       });
       if (!result.ok) {
         setError(result.error ?? 'Could not invite that chair.');
@@ -1089,8 +1108,12 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
               {inviting ? 'INVITING…' : 'INVITE'}
             </button>
           </div>
+          <p className="text-[11px] mt-3 mb-1.5" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", fontWeight: 600 }}>
+            Title on the dais <span style={{ fontWeight: 400, color: '#9A8A78' }}>(optional, display only)</span>
+          </p>
+          <ChairTitleChips value={inviteTitle} onChange={setInviteTitle} disabled={inviting} />
           <p className="text-[11px] mt-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.45 }}>
-            They must already have a Gavelling account. They&apos;ll get an email to accept before joining this dais.
+            We&apos;ll email them an invite. If they don&apos;t have a Gavelling account yet, they can make one from the email. They join this dais when they accept.
           </p>
           {error && <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{error}</p>}
         </div>

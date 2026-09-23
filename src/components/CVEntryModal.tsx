@@ -29,7 +29,7 @@ import Portal from '@/components/Portal';
 import { friendlyError } from '@/lib/friendlyError';
 import { viewBox, useReposition } from '@/lib/visualViewport';
 import {
-  Eyebrow, Pill, LevelBadge, LEVEL_ACCENT, AwardArtwork, AWARD_LIST, isCustomAward,
+  Eyebrow, Pill, LevelBadge, LEVEL_ACCENT, AwardArtwork, AWARD_LIST, CHAIR_AWARD_LIST, DAIS_POSITIONS, isCustomAward,
   monogramFor, OUTFIT, MONO,
 } from '@/app/account/accountUi';
 import { useScrollLock } from '@/hooks/useScrollLock';
@@ -596,6 +596,11 @@ export function CVEntryModal({
     // for those types.
     (existing && (existing.entry_type === 'secretariat' || existing.entry_type === 'other' || existing.entry_type === 'faculty-advisor')) ? existing.allocation : '',
   );
+  // A chair entry's dais position (Chair, Vice Chair, ...), optional, also
+  // stored in the `allocation` column (unused for chairs before).
+  const [daisPosition, setDaisPosition]     = useState(
+    existing && existing.entry_type === 'chair' ? existing.allocation : '',
+  );
   const [expertiseLevel, setExpertiseLevel] = useState(existing?.expertise_level ?? '');
   const [eventDate, setEventDate]           = useState(existing?.event_date ?? '');
   const [awards, setAwards]                 = useState<string[]>(existing?.awards ?? []);
@@ -615,8 +620,12 @@ export function CVEntryModal({
   // Faculty advisors record DELEGATION awards — the awards section shows, but
   // scoped to custom free-text honours only (no individual-delegate presets).
   const isDelegationAwards = entryType === 'faculty-advisor';
-  const showPresetAwards = entryType === 'delegate';
-  const showAwards     = entryType === 'delegate' || entryType === 'faculty-advisor';
+  // Delegates and chairs pick from presets (their own lists) plus custom
+  // honours; faculty advisors add custom delegation awards only.
+  const isChairAwards  = entryType === 'chair';
+  const showPresetAwards = entryType === 'delegate' || isChairAwards;
+  const presetAwards: readonly string[] = isChairAwards ? CHAIR_AWARD_LIST : AWARD_LIST;
+  const showAwards     = entryType === 'delegate' || entryType === 'faculty-advisor' || isChairAwards;
   const showExpertise  = entryType === 'delegate';
   const showRoleTitle  = entryType === 'secretariat' || entryType === 'other' || entryType === 'faculty-advisor';
 
@@ -754,7 +763,7 @@ export function CVEntryModal({
   // The custom, free-text "special" honours the delegate typed in (anything not
   // in the AWARD_LIST presets). They live in the same `awards` array and render
   // in the green special tier.
-  const customAwards = awards.filter((a) => isCustomAward(a));
+  const customAwards = awards.filter((a) => isCustomAward(a, presetAwards));
 
   function addSpecialAward() {
     const name = specialDraft.trim();
@@ -880,7 +889,10 @@ export function CVEntryModal({
 
     // Map per-type fields onto the shared columns.
     const committeeVal  = showCommittee ? committee : '';
-    const allocationVal = showAllocation ? allocation : (showRoleTitle ? roleTitle : '');
+    const allocationVal = showAllocation ? allocation
+      : showRoleTitle ? roleTitle
+      : entryType === 'chair' ? daisPosition.trim()
+      : '';
     const awardsVal     = showAwards ? awards : [];
 
     const payload = {
@@ -1154,6 +1166,48 @@ export function CVEntryModal({
             </Field>
           )}
 
+          {/* Dais position — chair only, optional */}
+          {entryType === 'chair' && (
+            <Field label="Dais position (optional)">
+              <input
+                type="text"
+                disabled={isVerified}
+                value={daisPosition}
+                maxLength={60}
+                onChange={(e) => setDaisPosition(e.target.value)}
+                placeholder="e.g. Vice Chair"
+                className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+                style={{ ...inputStyle, opacity: isVerified ? 0.55 : 1, cursor: isVerified ? 'not-allowed' : 'text' }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+              />
+              {!isVerified && (
+                <div className="flex gap-1.5 flex-wrap mt-2">
+                  {DAIS_POSITIONS.map((pos) => {
+                    const on = daisPosition.trim().toLowerCase() === pos.toLowerCase();
+                    return (
+                      <button
+                        key={pos}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => setDaisPosition(on ? '' : pos)}
+                        className="rounded-full px-2.5 py-1 text-[11px] font-semibold focus:outline-none"
+                        style={{
+                          border: on ? '1px solid #1B3828' : '1px solid #DDD4C0',
+                          backgroundColor: on ? '#1B3828' : 'transparent',
+                          color: on ? '#EED98A' : '#6B5F52',
+                          fontFamily: OUTFIT, cursor: 'pointer',
+                        }}
+                      >
+                        {pos}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </Field>
+          )}
+
           {/* Allocation — delegate only */}
           {showAllocation && (
             <Field label="Country / Portfolio / Allocation">
@@ -1226,8 +1280,9 @@ export function CVEntryModal({
             </div>
           )}
 
-          {/* Awards — delegate (individual presets + custom) OR faculty advisor
-              (custom DELEGATION awards only; chairs/secretariat award, not awarded) */}
+          {/* Awards — delegate (individual presets + custom), chair (chair
+              presets + custom: Best Chair, Best Dais, ...) OR faculty advisor
+              (custom DELEGATION awards only). Secretariat / other: none. */}
           {showAwards && (
             <div>
               <label className="block text-[13px] font-semibold mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
@@ -1238,7 +1293,7 @@ export function CVEntryModal({
               </label>
               {showPresetAwards && (
               <div className="flex gap-2 flex-wrap">
-                {AWARD_LIST.map((name) => {
+                {presetAwards.map((name) => {
                   const active = awards.includes(name);
                   return (
                     <button
@@ -1286,7 +1341,7 @@ export function CVEntryModal({
                     value={specialDraft}
                     onChange={(e) => setSpecialDraft(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSpecialAward(); } }}
-                    placeholder={isDelegationAwards ? 'e.g. Best Delegation, Outstanding Delegation' : 'e.g. Best Speaker, Spirit of the Committee'}
+                    placeholder={isDelegationAwards ? 'e.g. Best Delegation, Outstanding Delegation' : isChairAwards ? 'e.g. Best Crisis Director, Chair of the Year' : 'e.g. Best Speaker, Spirit of the Committee'}
                     className="flex-1 rounded-xl px-4 py-2.5 text-sm focus:outline-none"
                     style={inputStyle}
                     onFocus={(e) => { e.currentTarget.style.borderColor = '#2A5A3C'; }}

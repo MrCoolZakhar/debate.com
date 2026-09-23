@@ -6,6 +6,7 @@
 import type { getAuthedClient } from '@/lib/supabase-auth';
 import { queueChairInviteEmail } from '@/lib/emailEvents';
 import { friendlyError } from '@/lib/friendlyError';
+import type { ChairTitle } from '@/lib/chairTitles';
 
 export interface SendChairInviteArgs {
   conferenceId: string;
@@ -15,6 +16,9 @@ export interface SendChairInviteArgs {
   /** Full name for the invitee. Used when they have no account yet; once they
    *  join, their own profile name takes over. */
   name?: string;
+  /** Display-only title (src/lib/chairTitles.ts). Null/undefined = no title,
+   *  and on a resend of a pending invite it keeps the title already stored. */
+  title?: ChairTitle | null;
 }
 
 export interface SendChairInviteResult {
@@ -74,6 +78,7 @@ export async function sendChairInvite(
     p_committee_id: args.committeeId,
     p_email: args.email.trim(),
     p_name: args.name?.trim() || null,
+    p_title: args.title || null,
   });
   if (error) return { ok: false, error: friendlyError(error, 'Could not invite that chair.') };
 
@@ -106,6 +111,8 @@ export interface PendingChairInvite {
   committee_id: string;
   email: string;
   invited_name: string | null;
+  /** Display-only title the chair will carry once they accept (chairTitles.ts). */
+  title?: string | null;
   /** Joined profile, present only when the invitee already has an account. */
   profiles: { display_name: string; avatar_url: string | null } | null;
 }
@@ -124,7 +131,7 @@ export async function fetchPendingChairInvites(
 ): Promise<PendingChairInvite[]> {
   const { data, error } = await supabase
     .from('conference_chair_invites')
-    .select('id, committee_id, email, invited_name, profiles (display_name, avatar_url)')
+    .select('id, committee_id, email, invited_name, title, profiles (display_name, avatar_url)')
     .eq('conference_id', conferenceId)
     .eq('status', 'pending');
   // A failed read is NOT "no pending invites": an RLS refusal, an expired token
@@ -185,4 +192,40 @@ export async function revokeChairInvite(
     .eq('status', 'pending')
     .select('id');
   return !error && (data ?? []).length > 0;
+}
+
+/** Change a PENDING invite's display title (null = no title). Row-counted, so a
+ *  refused or raced write (the invite was accepted meanwhile) reports false. */
+export async function setChairInviteTitle(
+  supabase: ReturnType<typeof getAuthedClient>,
+  inviteId: string,
+  title: ChairTitle | null
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('conference_chair_invites')
+    .update({ title })
+    .eq('id', inviteId)
+    .eq('status', 'pending')
+    .select('id');
+  return !error && (data ?? []).length > 0;
+}
+
+/** Change a SEATED chair's display title (null = no title). Goes through the
+ *  organiser-gated `set_committee_chair_title` RPC, which edits one key of
+ *  `conference_committees.chair_titles` atomically; the display_chairs trigger
+ *  then carries it to the public page. */
+export async function setCommitteeChairTitle(
+  supabase: ReturnType<typeof getAuthedClient>,
+  committeeId: string,
+  userId: string,
+  title: ChairTitle | null
+): Promise<{ ok: boolean; error?: string }> {
+  const { data, error } = await supabase.rpc('set_committee_chair_title', {
+    p_committee_id: committeeId,
+    p_user_id: userId,
+    p_title: title,
+  });
+  if (error) return { ok: false, error: friendlyError(error, 'Could not change that title. Try again.') };
+  const r = data as { ok: boolean; error?: string } | null;
+  return r?.ok ? { ok: true } : { ok: false, error: r?.error ?? 'Could not change that title. Try again.' };
 }

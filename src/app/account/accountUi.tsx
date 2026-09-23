@@ -5,7 +5,7 @@
 // Outfit eyebrows, Outfit for UI text, lucide icons only.
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Medal, Award, Info, X, Star, Trophy, Handshake, Megaphone, ScrollText, Users, type LucideIcon } from 'lucide-react';
+import { Medal, Award, Info, X, Star, Trophy, Handshake, Megaphone, ScrollText, Users, Gavel, type LucideIcon } from 'lucide-react';
 import { EXPERIENCE_BANDS } from '@/lib/munExperience';
 import Portal from '@/components/Portal';
 import { CONFERENCE_COMMITTEE_PRESETS } from '@/components/ConferenceRosterPicker';
@@ -631,9 +631,24 @@ export const AWARD_LIST = [
   'Best Position Paper',
 ] as const;
 
-/** True when an award is a custom, free-text honour (not one of the presets). */
-export function isCustomAward(name: string): boolean {
-  return !AWARD_LIST.some((a) => a.toLowerCase() === name.trim().toLowerCase());
+// Chairs are occasionally awarded too (a secretariat's Best Chair, a dais
+// prize). Same `awards` column and chips as delegate awards; only the preset
+// list differs. Custom free-text honours work exactly as for delegates.
+export const CHAIR_AWARD_LIST = [
+  'Best Chair',
+  'Best Dais',
+  'Outstanding Chair',
+  'Honourable Mention',
+] as const;
+
+/** Dais positions a chair entry can record (stored in `allocation`). Free text
+ *  is allowed; these are the suggestions. */
+export const DAIS_POSITIONS = ['Chair', 'Vice Chair', 'Co-Chair', 'Rapporteur', 'Director'] as const;
+
+/** True when an award is a custom, free-text honour (not one of the presets).
+ *  `presets` defaults to the delegate list; pass CHAIR_AWARD_LIST for a chair. */
+export function isCustomAward(name: string, presets: readonly string[] = AWARD_LIST): boolean {
+  return !presets.some((a) => a.toLowerCase() === name.trim().toLowerCase());
 }
 
 export function awardSlug(name: string): string {
@@ -659,7 +674,7 @@ const AWARD_TIER_STYLE: Record<AwardTier, { bg: string; border: string; text: st
 
 export function awardTier(name: string): AwardTier {
   const n = name.toLowerCase();
-  if (/best delegate|diplomacy/.test(n)) return 'gold';
+  if (/best delegate|diplomacy|best chair|best dais/.test(n)) return 'gold';
   if (/outstanding|honou?rable mention/.test(n)) return 'silver';
   if (/verbal commendation|position paper/.test(n)) return 'bronze';
   return 'special'; // custom free-text honour → green
@@ -677,6 +692,7 @@ function awardIcon(name: string): LucideIcon {
   if (/honou?rable mention/.test(n)) return Award;    // silver (ribbon)
   if (/verbal commendation/.test(n)) return Megaphone; // bronze
   if (/position paper/.test(n)) return ScrollText;    // bronze
+  if (/\bchair|\bdais/.test(n)) return Gavel;         // chair honours (Best Chair, Best Dais)
   return Star;                                        // custom / special (green)
 }
 

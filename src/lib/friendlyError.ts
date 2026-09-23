@@ -16,6 +16,8 @@
  *  is harmless dead weight, but a CHECK with no entry here is a raw
  *  constraint name away from reaching a user. */
 const CONSTRAINT_MESSAGES: Record<string, string> = {
+  conference_chair_invites_title_check: "Pick one of the listed chair titles, or no title.",
+  conference_committees_chair_titles_check: "Pick one of the listed chair titles, or no title.",
   conferences_tbd_not_public: "Add your conference dates before publishing. A conference with dates to be decided stays private.",
   conferences_external_payment_url_https: "Payment links must start with https://",
   conferences_external_payment_note_len: "The payment note can be at most 500 characters.",

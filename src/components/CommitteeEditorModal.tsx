@@ -43,9 +43,13 @@ import {
   findChairInviteRoleConflict,
   resendChairInvite,
   revokeChairInvite,
+  setChairInviteTitle,
+  setCommitteeChairTitle,
   pendingInviteName,
   type PendingChairInvite,
 } from '@/lib/chairInvites';
+import { ChairTitleChips, ChairTitleSelect } from '@/components/conferences/ChairTitlePicker';
+import type { ChairTitle } from '@/lib/chairTitles';
 import { queueEventEmail } from '@/lib/emailEvents';
 import { friendlyError } from '@/lib/friendlyError';
 import { normaliseCommitteeLanguage, DEFAULT_COMMITTEE_LANGUAGE } from '@/lib/committeeLanguage';
@@ -295,7 +299,7 @@ export async function mintConferenceSession(
 // the existing chair flow: the create_chair_invite RPC via sendChairInvite, and
 // the chair_user_ids append the committees page assigns with.
 
-interface DisplayChair { name: string; avatar_url: string | null }
+interface DisplayChair { name: string; avatar_url: string | null; title?: string | null }
 interface ChairApplicant {
   id: string;
   user_id: string;
@@ -323,6 +327,9 @@ function ChairsDock({ conferenceId, committeeId, committeeName, embedded = false
   const [expanded, setExpanded] = useState(false);
   const [applicants, setApplicants] = useState<ChairApplicant[] | null>(null);
   const [email, setEmail] = useState('');
+  // Display-only title for the next invite (src/lib/chairTitles.ts).
+  const [inviteTitle, setInviteTitle] = useState<ChairTitle | null>(null);
+  const [titleBusy, setTitleBusy] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
   const [err, setErr] = useState('');
@@ -345,7 +352,7 @@ function ChairsDock({ conferenceId, committeeId, committeeName, embedded = false
       // one dais, and it does not receive the conference's committee list.
       supabase
         .from('conference_chair_invites')
-        .select('id, committee_id, email, invited_name, profiles (display_name, avatar_url)')
+        .select('id, committee_id, email, invited_name, title, profiles (display_name, avatar_url)')
         .eq('committee_id', committeeId)
         .eq('status', 'pending'),
     ]);
@@ -383,6 +390,32 @@ function ChairsDock({ conferenceId, committeeId, committeeName, embedded = false
     setNote(`Invite to ${label} removed.`);
   }
 
+  // Titles are labels only (no permission). Optimistic, then put back on a
+  // refused write. A seated chair's title goes through the organiser-gated
+  // RPC; a pending invite's title is a row-counted update of the invite.
+  async function changeChairTitle(index: number, title: ChairTitle | null) {
+    const userId = chairIds.length === (chairs ?? []).length ? chairIds[index] : undefined;
+    if (!session || !userId || !chairs || titleBusy) return;
+    const prev = chairs;
+    setErr(''); setNote(''); setTitleBusy(userId);
+    setChairs(chairs.map((c, i) => (i === index ? { ...c, title } : c)));
+    const res = await setCommitteeChairTitle(getAuthedClient(session.access_token), committeeId, userId, title);
+    setTitleBusy(null);
+    if (!res.ok) { setChairs(prev); setErr(res.error ?? 'Could not change that title. Try again.'); }
+  }
+
+  async function changeInviteTitle(inv: PendingChairInvite, title: ChairTitle | null) {
+    if (!session || titleBusy) return;
+    setErr(''); setNote(''); setTitleBusy(inv.id);
+    setInvites(prev => prev.map(i => (i.id === inv.id ? { ...i, title } : i)));
+    const ok = await setChairInviteTitle(getAuthedClient(session.access_token), inv.id, title);
+    setTitleBusy(null);
+    if (!ok) {
+      setInvites(prev => prev.map(i => (i.id === inv.id ? { ...i, title: inv.title ?? null } : i)));
+      setErr(`Could not change the title for ${pendingInviteName(inv)}. They may have just accepted; reopen this committee to see.`);
+    }
+  }
+
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
@@ -404,10 +437,11 @@ function ChairsDock({ conferenceId, committeeId, committeeName, embedded = false
   async function doSend(em: string) {
     if (!session) return;
     const supabase = getAuthedClient(session.access_token);
-    const res = await sendChairInvite(supabase, { conferenceId, committeeId, committeeName, email: em });
+    const res = await sendChairInvite(supabase, { conferenceId, committeeId, committeeName, email: em, title: inviteTitle });
     if (!res.ok) { setErr(res.error ?? 'Could not invite that chair.'); return; }
     setNote(`Invited ${res.invitedName ?? em}.`);
     setEmail('');
+    setInviteTitle(null);
     load();
   }
 
@@ -492,7 +526,15 @@ function ChairsDock({ conferenceId, committeeId, committeeName, embedded = false
               ) : (
                 <span className="flex items-center justify-center flex-shrink-0" style={{ width: 28, height: 28, borderRadius: '9999px', backgroundColor: '#1B3828', color: '#EED98A', fontSize: 11, fontWeight: 700, fontFamily: OUTFIT }}>{c.name.charAt(0)}</span>
               )}
-              <span className="text-[12.5px] truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{c.name}</span>
+              <span className="text-[12.5px] truncate min-w-0 flex-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{c.name}</span>
+              {chairIds.length === chairs.length && (
+                <ChairTitleSelect
+                  value={c.title}
+                  label={`Title for ${c.name}`}
+                  disabled={titleBusy !== null}
+                  onChange={(t) => changeChairTitle(i, t)}
+                />
+              )}
             </div>
           ))
         )}
@@ -522,6 +564,12 @@ function ChairsDock({ conferenceId, committeeId, committeeName, embedded = false
                     <span className="text-[12px] truncate" style={{ display: 'block', color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }} title={inv.email}>{label}</span>
                     <span style={{ display: 'block', fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.12em', color: '#7A5A10' }}>PENDING</span>
                   </span>
+                  <ChairTitleSelect
+                    value={inv.title}
+                    label={`Title for ${label}`}
+                    disabled={titleBusy !== null}
+                    onChange={(t) => changeInviteTitle(inv, t)}
+                  />
                   <button
                     onClick={() => handleResend(inv)}
                     disabled={busy}
@@ -586,6 +634,13 @@ function ChairsDock({ conferenceId, committeeId, committeeName, embedded = false
                   <Mail size={13} />
                 </button>
               </div>
+              <p style={{ margin: '8px 0 5px 0', fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: '#6B5F52' }}>
+                Title on the dais <span style={{ fontWeight: 400, color: '#9A8A78' }}>(optional, display only)</span>
+              </p>
+              <ChairTitleChips value={inviteTitle} onChange={setInviteTitle} disabled={busy} />
+              <p className="text-[10.5px] mt-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.45 }}>
+                We&apos;ll email them an invite. No Gavelling account yet? They can make one from the email.
+              </p>
             </div>
             {/* Accepted applicants to seat */}
             <div>
