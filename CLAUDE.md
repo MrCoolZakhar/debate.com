@@ -109,6 +109,7 @@ long invoice list hit them in production:
 - No hreflang until real, indexable, self-canonical locale URLs exist; the languages are a client-side preference.
 - Every sitemap URL must be reachable by a plain server-rendered `<a href>` from another sitemap page: the homepage's crawl nav (conferences + hubs), `/conferences/explore`'s directory, `/blog`, and `FooterLegal` (Explore Conferences, MUN Guides on every public footer). A client-rendered list is not a link.
 - `www.gavelling.com` must 308 to `https://gavelling.com` at the Vercel domain level with a valid certificate.
+- **The footer is information links only** (owner, 23 Sep 2026, after this regressed repeatedly): Explore conferences, the map, roles, List your conference, MUN guides, the session tools, About, Contact, and the legal strip. **Never a list of conferences and never a per-conference link in any footer.** Conference pages are crawled from `/conferences/explore`, which server-renders a real `<a>` for every public conference and is itself in the sitemap and linked from every footer, so the crawl rule above holds without a directory under every page. If a crawl gap appears, fix it on `/conferences/explore`.
 
 There is **no third-party analytics or tracking** by policy (`/privacy`). The admin console (`/admin`, DB-gated by `is_platform_admin()`) is the only platform observability surface.
 

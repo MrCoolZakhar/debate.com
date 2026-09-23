@@ -4,30 +4,13 @@ import Link from 'next/link';
 import StagefrontClient from './conferences/StagefrontClient';
 import { supabase } from '@/lib/supabase';
 
-// The landing composition fetches its conferences CLIENT-side (useEffect), so
-// the server-rendered HTML a crawler receives contains no conference links at
-// all. That left every /conferences/[slug] page reachable only through
-// /conferences/explore — a deep, thin link graph, and the reason Search Console
-// reports public conferences as "Discovered – currently not indexed" with
-// "Referring page: None detected". This server-rendered index gives every public
-// conference a real, crawlable <a> from the site's highest-authority page.
-// Revalidates hourly so newly published conferences are linked without a deploy.
-export const revalidate = 3600;
-
-async function publicConferences(): Promise<{ slug: string; full_name: string; acronym: string | null }[]> {
-  try {
-    const { data } = await supabase
-      .from('conferences')
-      .select('slug, full_name, acronym')
-      .eq('is_public', true)
-      .order('start_date', { ascending: true })
-      .limit(200);
-    return (data ?? []).filter((c): c is { slug: string; full_name: string; acronym: string | null } => !!c?.slug);
-  } catch {
-    return [];
-  }
-}
-
+// RULE (owner, 23 Sep 2026, after this regressed repeatedly): the site footer
+// lists INFORMATION links only. Never a list of conferences, and never a
+// per-conference link. Conference pages are crawled from /conferences/explore,
+// which server-renders a real <a> for every public conference and is itself
+// linked from the footer and the sitemap, so the crawl path in CLAUDE.md §4
+// holds without putting a directory under every page. If a crawl gap ever
+// appears again, fix it on /conferences/explore, not here.
 export const metadata: Metadata = pageMetadata({
   // The root page shares the root layout's segment, so the `%s | Gavelling`
   // title template does NOT apply here — the brand must be inline.
@@ -49,6 +32,7 @@ const HUB_LINKS: { href: string; label: string }[] = [
   { href: '/conferences/explore', label: 'Explore conferences' },
   { href: '/conferences/map', label: 'Conference map' },
   { href: '/conferences/roles', label: 'Chair and staff roles' },
+  { href: '/conferences/new', label: 'List your conference' },
   { href: '/blog', label: 'MUN guides' },
   { href: '/sessions', label: 'Committee session software' },
   { href: '/create', label: 'Create a committee' },
@@ -94,9 +78,7 @@ const websiteSchema = {
   },
 };
 
-export default async function HomePage() {
-  const conferences = await publicConferences();
-
+export default function HomePage() {
   return (
     <>
       <script
@@ -109,64 +91,10 @@ export default async function HomePage() {
       />
       <StagefrontClient />
 
-      {/* Crawlable conference index. Visually quiet by design — this is a real
-          directory footer for readers AND the crawl path to every conference
-          page. Deliberately server-rendered (never behind the client fetch) and
-          never `display:none`/`hidden`, which Google discounts as cloaking. */}
-      {conferences.length > 0 && (
-        <nav
-          aria-label="All conferences on Gavelling"
-          style={{ borderTop: '1px solid rgba(221,212,192,0.7)', backgroundColor: '#FAF8F3' }}
-        >
-          <div className="mx-auto w-full max-w-6xl px-5 py-7">
-            {/* Collapsed behind a disclosure, not removed. These links ARE the
-                crawl path: everything above renders client-side, so without
-                them the conference pages have no server-rendered route in.
-                <details> keeps every one of them in the delivered HTML, one
-                hop from the homepage, and Google indexes accordion content
-                normally — this is not the `display:none` cloaking case the
-                earlier note warned about, because the markup honestly
-                declares itself a disclosure widget.
-                It also stops the homepage ending in a wall of names that
-                only grows. */}
-            <details>
-              <summary
-                className="focus:outline-none"
-                style={{
-                  fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 700,
-                  letterSpacing: '0.1em', textTransform: 'uppercase', color: '#9A8A78',
-                  cursor: 'pointer', listStyle: 'none',
-                }}
-              >
-                Browse all {conferences.length} conferences
-              </summary>
-            <ul className="flex flex-wrap gap-x-4 gap-y-2 mt-4" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-              {conferences.map(c => (
-                <li key={c.slug}>
-                  <Link
-                    href={`/conferences/${c.slug}`}
-                    style={{ fontFamily: "'Outfit', sans-serif", fontSize: 13, color: '#5C5140', textDecoration: 'none' }}
-                  >
-                    {c.full_name || c.acronym}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            </details>
-            <Link
-              href="/conferences/explore"
-              className="inline-block mt-5"
-              style={{ fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 700, color: '#1B3828', textDecoration: 'none' }}
-            >
-              Explore all Model UN conferences →
-            </Link>
-          </div>
-        </nav>
-      )}
       <nav aria-label="Gavelling" style={{ backgroundColor: '#FAF8F3' }}>
         <ul
           className="mx-auto w-full max-w-6xl px-5 pb-7 flex flex-wrap gap-x-5 gap-y-2"
-          style={{ listStyle: 'none', margin: '0 auto', paddingTop: conferences.length > 0 ? 0 : 28 }}
+          style={{ listStyle: 'none', margin: '0 auto', paddingTop: 28 }}
         >
           {HUB_LINKS.map((l) => (
             <li key={l.href}>
