@@ -370,6 +370,14 @@ unsubscribe link in the footer is doing real work and must never be removed
 from a broadcast. Treat "everyone" as including strangers, and write it
 accordingly.
 
+**Pre-registrant credit campaign (23 Sep 2026).** cron `prereg-credit-campaign` (every 10 min) runs
+`queue_prereg_credit_campaign()`: it waits until no "A thank you, and one change from us" row is pending
+or held, then queues at most `120 - rows inserted in the last 10 min` (cap 100) emails per run from
+`email_campaign_templates` (`prereg_credits_1` "Your 2 Gavelling credits are waiting", `prereg_credits_2`
+"Still yours" 7 days later) to `pre_registrations` addresses with no account and not opted out, logged
+once per address and stage in `prereg_campaign_sends`. CALLING IT SENDS once the broadcast is done. Stop:
+`select cron.unschedule('prereg-credit-campaign');`
+
 ### STOP ALL EMAIL
 
 ```sql
