@@ -754,7 +754,7 @@ export default function VariantStagefront({
             </p>
             <p style={{ fontFamily: SANS, fontSize: 'clamp(16px, 1.15vw, 20px)', lineHeight: 1.7, color: INK_70, margin: '18px 0 0 0', maxWidth: '760px' }}>
               At a conference, delegates research their country&rsquo;s position, deliver speeches,
-              negotiate with allies and rivals, and work together to draft <strong style={{ color: INK }}>resolutions</strong> —
+              negotiate with allies and rivals, and work together to draft <strong style={{ color: INK }}>resolutions</strong>:
               the written proposals a committee votes on. A chairperson keeps the debate flowing,
               and awards recognise the delegates who lead the room. No experience is needed to
               start: everyone gives their first speech eventually.
