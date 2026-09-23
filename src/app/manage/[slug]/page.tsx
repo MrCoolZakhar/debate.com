@@ -26,7 +26,7 @@ import Portal from '@/components/Portal';
 import DecorativeBleed from '@/components/DecorativeBleed';
 import ParticipantsChart, { toCumulativeSeries } from '@/components/conferences/ParticipantsChart';
 import ApplicantsDial from '@/components/conferences/ApplicantsDial';
-import { inviteAcceptanceByRole, INVITE_ROLE_LABEL, type ChairInviteRow } from '@/components/conferences/InviteAcceptance';
+import { applicationsByRole, INVITE_ROLE_LABEL, type ChairInviteRow } from '@/components/conferences/InviteAcceptance';
 import TrafficSourcesCard from '@/components/conferences/TrafficSourcesCard';
 import { BENTO_BORDER, BENTO_WASH_FOREST } from '@/components/conferences/bento';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
@@ -345,7 +345,7 @@ interface AppRow {
 // The old PipelineCell / "Delegates" pipeline card and the Applications +
 // Accepted stat tiles were deleted here, not misplaced: the rewritten
 // ApplicantsDial printed Applications / Accepted / Assigned / Paid in its key
-// (it shows invites accepted per role since 23 Sep 2026), so those cards were the same four numbers a third
+// (it shows applied and accepted per role against the expected head count since 23 Sep 2026), so those cards were the same four numbers a third
 // and fourth time. Removing them is most of what bought the single screen.
 
 // ── Dashboard data shape ───────────────────────────────────────────────────
@@ -1365,17 +1365,17 @@ export default function DashboardPage() {
   const unallocated = Math.max(0, acceptedApps - allocated);
   const fee = conference.fee_amount ?? 0;
 
-  // Invite acceptance per role (delegates, faculty advisors, observers,
-  // chairs). The definition of "accepted" is written at the top of
-  // src/components/conferences/InviteAcceptance.ts. They feed the dial: one
-  // segment per role (accepted), the centre accepted of invited, the key each
-  // role's accepted / invited. Chairs deep-link to the committees page, where
-  // chairs are invited; the other roles to the applications table.
-  const dialStages = inviteAcceptanceByRole(dash.apps, dash.chairInvites).map(r => ({
+  // Applied and accepted per role (delegates, faculty advisors, observers,
+  // chairs), against the expected head count. The definitions are written at
+  // the top of src/components/conferences/InviteAcceptance.ts. They feed the
+  // dial: per role a solid accepted band and a tinted pending band, the centre
+  // applied of expected. Chairs deep-link to the committees page, where chairs
+  // are invited; the other roles to the applications table.
+  const dialStages = applicationsByRole(dash.apps, dash.chairInvites).map(r => ({
     key: r.key,
     label: INVITE_ROLE_LABEL[r.key],
-    value: r.accepted,
-    of: r.invited,
+    applied: r.applied,
+    accepted: r.accepted,
     href: r.key === 'chairs' ? `/manage/${slug}/committees` : `/manage/${slug}/applications`,
   }));
 
@@ -1797,21 +1797,22 @@ export default function DashboardPage() {
 
         </div>
 
-        {/* Invites accepted, per role, on the original applicants dial (owner,
-            23 Sep 2026: "It should look the same, but the data should just be
-            different"). The red "to assign" badge beside the heading, one quiet
-            footer line. */}
+        {/* Applicants against target, per role, on the original applicants dial
+            (owner, 23 Sep 2026: applied against the expected head count, with
+            accepted inside it). The red "to assign" badge beside the heading,
+            one quiet footer line. */}
         <div className="gv-dash-dial gv-dash-cell">
         <NeuCard className="flex flex-col" style={{ padding: '13px 16px 12px', border: BENTO_BORDER, height: '100%' }}>
           <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginBottom: 6, minHeight: 28 }}>
             <h2 className="truncate" style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>
-              Invites accepted
+              Applicants against target
             </h2>
             <UnallocatedBadge count={unallocated} href={`/manage/${slug}/assignment`} />
           </div>
           <div ref={dialCardRef} className="flex items-center" style={{ flex: 1, minHeight: 0 }}>
             <ApplicantsDial
               stages={dialStages}
+              expected={expectedDelegates}
               size={dialSize}
               onNavigate={(href) => router.push(href)}
             />
@@ -1821,14 +1822,14 @@ export default function DashboardPage() {
               {societies} delegation{societies === 1 ? '' : 's'} · {committeeCount} committee{committeeCount === 1 ? '' : 's'}
             </span>
             <Link
-              href={`/manage/${slug}/applications`}
+              href={expectedDelegates > 0 ? `/manage/${slug}/applications` : `/manage/${slug}/settings?tab=conference`}
               className="inline-flex items-center gap-1.5 flex-shrink-0 transition-opacity hover:opacity-70 focus:outline-none"
               style={{
                 fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em',
                 color: NEU.deepGold, textDecoration: 'none',
               }}
             >
-              REVIEW APPLICATIONS
+              {expectedDelegates > 0 ? 'REVIEW APPLICATIONS' : 'SET AN EXPECTED HEAD COUNT'}
               <ArrowRight size={12} />
             </Link>
           </div>

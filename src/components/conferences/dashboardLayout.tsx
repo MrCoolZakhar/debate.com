@@ -51,8 +51,8 @@ export const DASH_CSS = `
 `;
 
 /**
- * The dial's diameter: whatever the card's width leaves beside the 172 px key
- * (roles read "accepted / invited", so it is wider than the old 150),
+ * The dial's diameter: whatever the card's width leaves beside the 196 px key
+ * (roles read "applied · N accepted", so it is wider than the old 150),
  * never more than 200 and never so tall that the chart row starves on a short
  * window. Measured, not guessed, because the middle column is a fraction.
  */
@@ -64,7 +64,7 @@ export function useDialSize(): [(el: HTMLElement | null) => void, number] {
   useEffect(() => {
     if (!el) return;
     const read = () => {
-      const byWidth = el.clientWidth - 22 - 172 - 10;
+      const byWidth = el.clientWidth - 22 - 196 - 10;
       const byHeight = window.innerHeight * 0.25;
       const next = Math.round(Math.max(120, Math.min(200, byWidth, byHeight)));
       setSize(prev => (prev === next ? prev : next));
