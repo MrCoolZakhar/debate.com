@@ -15,6 +15,7 @@ import {
   type PendingChairInvite,
 } from '@/lib/chairInvites';
 import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
+import type { EmailTokenContext } from '@/lib/emailTokens';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { notifyErr, notifyOk, clearErr, clearOk } from '@/lib/appNotify';
 import { useConfirmModal } from '@/components/ConfirmModal';
@@ -1224,6 +1225,28 @@ export default function CommitteesPage() {
     return Array.from(new Set(((data ?? []) as { application_id: string }[]).map(a => a.application_id)));
   }
 
+  // Merge fields a release invite needs that the recipient's own application
+  // cannot supply.
+  //
+  // A DELEGATE's application carries its allocated committee, so only the
+  // session code has to be handed in. A CHAIR's does not: `applications.role =
+  // 'chair'` rows have no `assigned_committee_id` (all seven of KenyaMUN's do
+  // not), and queueEventEmail resolves {{committee}} from that column, so a
+  // chair invite sent without this renders the marker instead of the room.
+  // Production carries one: "Your session details for ⚠committee⚠", sent
+  // 6 Sep 2026. session_chair_invite is in UNRESOLVED_HOLD_EXEMPT, so the
+  // merge-field guard let it through rather than holding it back — which is
+  // the right call for an access email, and the reason this has to be fixed
+  // here at the call site instead.
+  function releaseExtraCtx(
+    eventKey: 'session_chair_invite' | 'session_join_invite',
+    c: Committee,
+  ): EmailTokenContext {
+    return eventKey === 'session_chair_invite'
+      ? { committee: c.abbreviation || c.name, session_code: c.session_code }
+      : { session_code: c.session_code };
+  }
+
   // Writes one or both release columns to every committee in `targets`,
   // verified. Any change first clears a previously scheduled invite for that
   // committee/event (a fresh future value, an immediate past value, or
@@ -1233,11 +1256,28 @@ export default function CommitteesPage() {
   // or past value never pre-queues (immediate sending is the Send Now
   // actions' job).
   async function saveReleaseTimestamp(
-    fields: ('released_to_chairs_at' | 'released_to_delegates_at')[],
+    fieldsAsked: ('released_to_chairs_at' | 'released_to_delegates_at')[],
     targets: Committee[],
     isoValue: string | null,
   ): Promise<boolean> {
     if (!session || !conference || targets.length === 0) return false;
+    // THE DAIS FOLLOWS THE FLOOR (owner, 23 Sep 2026: "chair invites should
+    // also be sent at the same times delegate invites go out"). Setting,
+    // moving or clearing a delegate release carries the chair release with it,
+    // so the room's own dais is never the one party left without a code.
+    //
+    // The escape hatch is the one the UI already has: SESSION RELEASE →
+    // "Chairs and delegates receive session codes at the same time". Off, the
+    // organiser gets two pickers and has said, in as many words, that the two
+    // times differ — so this leaves them alone. No new setting, and nothing to
+    // decide for an organiser who never opened that tab (the column defaults
+    // to true). Held until `releaseSettingsLoaded` so the default is never
+    // mistaken for a fetched `true`.
+    const fields = releaseSettingsLoaded && releaseSameTime
+      && fieldsAsked.includes('released_to_delegates_at')
+      && !fieldsAsked.includes('released_to_chairs_at')
+      ? [...fieldsAsked, 'released_to_chairs_at' as const]
+      : fieldsAsked;
     const supabase = getAuthedClient(session.access_token);
     const ids = targets.map(t => t.id);
     const patch: Record<string, string | null> = {};
@@ -1269,8 +1309,7 @@ export default function CommitteesPage() {
         if (applicationIds.length === 0) continue;
         await clearStaleScheduled(supabase, conference.id, eventKey, applicationIds);
         if (isFuture) {
-          const extraCtx = eventKey === 'session_join_invite' ? { session_code: t.session_code } : undefined;
-          const result = await queueEventEmail(supabase, conference.id, eventKey, applicationIds, extraCtx, { sendAfter: isoValue! });
+          const result = await queueEventEmail(supabase, conference.id, eventKey, applicationIds, releaseExtraCtx(eventKey, t), { sendAfter: isoValue! });
           notifyIfNeeded(result, pushDraftNotice);
           if (result.outcome === 'off') {
             offLabels.add(eventKey === 'session_join_invite' ? 'the delegate join email' : 'the chair session email');
@@ -1284,15 +1323,57 @@ export default function CommitteesPage() {
     return true;
   }
 
+  /** True when the dais is meant to be released with the floor — the SESSION
+   *  RELEASE toggle, only once it has actually been read. */
+  const chairsFollowDelegates = () => releaseSettingsLoaded && releaseSameTime;
+
+  /** Sends the chair invite for these committees at the same instant as the
+   *  delegate one, and stamps the matching release column. Used by the two
+   *  SEND NOW paths; the scheduled path does it through `fields` instead.
+   *  Never throws: the delegate send it rides along with must stand whatever
+   *  happens here, exactly as the existing catch around it intends. Returns
+   *  how many chair applications were written to, for the flash copy. */
+  async function releaseChairsWith(
+    supabase: ReturnType<typeof getAuthedClient>,
+    targets: Committee[],
+    releasedAt: string,
+  ): Promise<number> {
+    if (!conference || targets.length === 0) return 0;
+    let queued = 0;
+    const stamped: string[] = [];
+    for (const t of targets) {
+      const appIds = await releaseRecipientIds(supabase, t.id, t.chair_user_ids ?? [], 'session_chair_invite');
+      if (appIds.length === 0) continue;
+      // A release time set earlier may already have a row waiting for it. It
+      // is the same email to the same people, so the scheduled copy goes
+      // before the immediate one is queued: sending now must never mean
+      // sending twice.
+      await clearStaleScheduled(supabase, conference.id, 'session_chair_invite', appIds);
+      const result = await queueEventEmail(supabase, conference.id, 'session_chair_invite', appIds, releaseExtraCtx('session_chair_invite', t));
+      notifyIfNeeded(result, pushDraftNotice);
+      queued += result.queued ?? 0;
+      stamped.push(t.id);
+    }
+    if (stamped.length > 0) {
+      const { error } = await supabase.from('conference_committees').update({ released_to_chairs_at: releasedAt }).in('id', stamped);
+      if (!error) setCommittees(prev => prev.map(c => (stamped.includes(c.id) ? { ...c, released_to_chairs_at: releasedAt } : c)));
+    }
+    return queued;
+  }
+
   // Sibling of handleSendToChairs (below): stamps released_to_delegates_at =
   // now() on one committee and queues session_join_invite immediately to
-  // every allocated delegate's application.
+  // every allocated delegate's application. With the SESSION RELEASE toggle on
+  // (its default), the committee's chairs are released in the same breath.
   async function handleSendToParticipants(c: Committee) {
     if (!session || !conference) return;
     const status = releaseStatus(c.released_to_delegates_at);
+    const withChairs = chairsFollowDelegates();
     const { confirmed } = await confirm({
       title: status === 'released' ? 'Resend to participants?' : 'Send to participants?',
-      body: 'This notifies every delegate allocated to this committee.',
+      body: withChairs
+        ? 'This notifies every delegate allocated to this committee, and its chairs at the same time.'
+        : 'This notifies every delegate allocated to this committee.',
       confirmLabel: status === 'released' ? 'Resend' : 'Send',
     });
     if (!confirmed) return;
@@ -1320,9 +1401,13 @@ export default function CommitteesPage() {
           .not('application_id', 'is', null);
         const appIds = Array.from(new Set(((allocRows ?? []) as { application_id: string }[]).map(a => a.application_id)));
         if (appIds.length > 0) {
-          const result = await queueEventEmail(supabase, conference.id, 'session_join_invite', appIds, { session_code: c.session_code });
+          // Same rule as the chair side below: a scheduled copy of this email
+          // for these delegates is dropped before the immediate one replaces it.
+          await clearStaleScheduled(supabase, conference.id, 'session_join_invite', appIds);
+          const result = await queueEventEmail(supabase, conference.id, 'session_join_invite', appIds, releaseExtraCtx('session_join_invite', c));
           notifyIfNeeded(result, pushDraftNotice);
         }
+        if (withChairs) await releaseChairsWith(supabase, [c], releasedAt);
       } catch {
         setActionError('Released to participants, but the invite emails could not be queued.');
       }
@@ -1332,9 +1417,12 @@ export default function CommitteesPage() {
   // Bulk variant of handleSendToParticipants, every committee at once.
   async function handleSendAllToParticipants() {
     if (!session || !conference || committees.length === 0 || sendingAllToParticipants) return;
+    const withChairs = chairsFollowDelegates();
     const { confirmed } = await confirm({
       title: 'Send all committee sessions to participants?',
-      body: 'This notifies every delegate allocated across every committee.',
+      body: withChairs
+        ? 'This notifies every delegate allocated across every committee, and every dais at the same time.'
+        : 'This notifies every delegate allocated across every committee.',
       confirmLabel: 'Send All',
     });
     if (!confirmed) return;
@@ -1373,9 +1461,11 @@ export default function CommitteesPage() {
         for (const c of committees) {
           const appIds = Array.from(appIdsByCommittee.get(c.id) ?? []);
           if (appIds.length === 0) continue;
-          const result = await queueEventEmail(supabase, conference.id, 'session_join_invite', appIds, { session_code: c.session_code });
+          await clearStaleScheduled(supabase, conference.id, 'session_join_invite', appIds);
+          const result = await queueEventEmail(supabase, conference.id, 'session_join_invite', appIds, releaseExtraCtx('session_join_invite', c));
           notifyIfNeeded(result, pushDraftNotice);
         }
+        if (withChairs) await releaseChairsWith(supabase, committees, releasedAt);
       } catch {
         setActionError('Released to all participants, but the invite emails could not be queued.');
       }
@@ -1766,7 +1856,8 @@ export default function CommitteesPage() {
             .in('user_id', chairIds);
           const appIds = ((chairApps ?? []) as { id: string }[]).map(a => a.id);
           if (appIds.length > 0) {
-            const result = await queueEventEmail(supabase, conference.id, 'session_chair_invite', appIds);
+            await clearStaleScheduled(supabase, conference.id, 'session_chair_invite', appIds);
+            const result = await queueEventEmail(supabase, conference.id, 'session_chair_invite', appIds, releaseExtraCtx('session_chair_invite', c));
             notifyIfNeeded(result, pushDraftNotice);
           }
         }

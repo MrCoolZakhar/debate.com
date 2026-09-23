@@ -234,10 +234,12 @@ const ALWAYS_SEND_EVENTS = new Set([
 // the organiser chose. Enabling it by default therefore cannot cause a send
 // nobody asked for; it can only make the send they did ask for actually happen.
 //
-// `session_chair_invite` is the obvious neighbour (also manual, also a release
-// event) and is deliberately NOT here: the owner asked for the delegate one.
-// Adding it is a one-line change with the same reasoning.
-export const DEFAULT_ENABLED_EVENTS = new Set<string>(['session_join_invite']);
+// `session_chair_invite` is here for exactly the same reason (owner, 23 Sep
+// 2026: "chair invites should also be sent at the same times delegate invites
+// go out"). It is 'manual' too, it is queued by the same two release paths, and
+// a dais that never gets its codes is the same failure as a delegation that
+// never gets its codes. Everything else in the registry stays default-off.
+export const DEFAULT_ENABLED_EVENTS = new Set<string>(['session_join_invite', 'session_chair_invite']);
 
 /** Whether a NEWLY CREATED template row for this event should start enabled.
  *  Ad-hoc templates (no event key) always start off, as before. */
