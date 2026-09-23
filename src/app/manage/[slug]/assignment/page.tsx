@@ -1047,7 +1047,7 @@ function PointsInfo() {
             </span>
             {row('Committee preference  +50 / +30 / +15', 'Their 1st choice committee scores 50, 2nd choice 30, 3rd choice 15.')}
             {row('Exact country pick  +25', 'Added when the open seat is the exact country they asked for in that preference.')}
-            {row('Experience fit  +20 / 0 / −15 / −30', 'An exact match between their experience level and the committee difficulty adds 20. One level apart scores 0. Two apart subtracts 15, three apart 30 — the same either way round, so an expert in a beginner committee is penalised exactly like a beginner in an expert one. Scores 0 if their level or the committee difficulty is unset.')}
+            {row('Experience fit  +20 / 0 / −15 / −30', 'An exact match between their experience level and the committee difficulty adds 20. One level apart scores 0. Two apart subtracts 15, three apart 30, the same either way round, so an expert in a beginner committee is penalised exactly like a beginner in an expert one. Scores 0 if their level or the committee difficulty is unset.')}
             {row('Committee fill  up to +12', 'Emptier committees score higher (12 x share still open), nudging suggestions to where seats are needed.')}
             {row('Seat importance  up to +18', 'An open high-importance seat adds 18, medium 10, low 4, standard 0, so higher-priority seats fill first and delegates with no preferences still slot into where they are most needed.')}
             {row('Delegation coherence  +35 / −30', 'Completing a valid double delegation (their society already holds the country’s other seat) adds 35; placing them where a societymate is already seated but not as a pair subtracts 30 to spread the delegation. Cross-society double seats are never suggested.')}
@@ -1370,7 +1370,7 @@ async function insertSocietyBlockAllocation(
   const existing = committee.conference_allocations.filter(a => a.country_code === slot.country_code);
   if (existing.length > 0) {
     return slot.delegation_size >= 2
-      ? 'One seat in this country is already taken — a delegation can only take a fully open country.'
+      ? 'One seat in this country is already taken. A delegation can only take a fully open country.'
       : 'This country is already allocated in this committee.';
   }
   if (slot.delegation_size < 2) {
@@ -1387,7 +1387,7 @@ async function insertSocietyBlockAllocation(
       .eq('seat', 1)
       .eq('society_id', society.id);
     if (rollbackErr) {
-      return `${err2} The first seat could not be rolled back automatically — check ${slot.country_name} manually.`;
+      return `${err2} The first seat could not be rolled back automatically. Check ${slot.country_name} manually.`;
     }
     return err2;
   }
@@ -2154,7 +2154,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
             <span className="text-xs" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
               Email them their committee and country now
               {!conference?.allocation_email_auto && (
-                <span style={{ color: NEU.muted }}> — allocation emails are on manual release</span>
+                <span style={{ color: NEU.muted }}> (allocation emails are on manual release)</span>
               )}
             </span>
           </label>
@@ -2234,7 +2234,7 @@ function DelegationConflictModal({
     <>
       {slot.country_name}&apos;s other seat in {committeeLabels(committee).big} belongs to{' '}
       <strong style={{ color: NEU.ink, fontWeight: 800 }}>{siblingName}</strong>, and {appName} belongs to{' '}
-      <strong style={{ color: NEU.ink, fontWeight: 800 }}>{incomingDelegationName}</strong> — a different delegation.
+      <strong style={{ color: NEU.ink, fontWeight: 800 }}>{incomingDelegationName}</strong>, a different delegation.
     </>
   ) : (
     <>
@@ -2264,7 +2264,7 @@ function DelegationConflictModal({
     const { error: delErr } = await supabase.from('conference_allocations').delete().eq('id', sibling.id);
     if (delErr) {
       setBusy(null);
-      onResolved(`${appName} allocated to ${slot.country_name} (seat ${seat}) in ${committee.abbreviation ?? committee.name}, but the other seat holder could not be removed automatically — deallocate them manually.`);
+      onResolved(`${appName} allocated to ${slot.country_name} (seat ${seat}) in ${committee.abbreviation ?? committee.name}, but the other seat holder could not be removed automatically. Deallocate them manually.`);
       return;
     }
     if (sibling.application_id) {
@@ -2303,7 +2303,7 @@ function DelegationConflictModal({
       .select('id');
     setBusy(null);
     if (socErr || !data || data.length !== 1) {
-      onResolved(`${appName} allocated to ${slot.country_name} (seat ${seat}) in ${committee.abbreviation ?? committee.name}, but could not be added to ${siblingName} — set their delegation manually.`);
+      onResolved(`${appName} allocated to ${slot.country_name} (seat ${seat}) in ${committee.abbreviation ?? committee.name}, but could not be added to ${siblingName}. Set their delegation manually.`);
       return;
     }
     onResolved(`${appName} added to ${siblingName} and allocated to ${slot.country_name} (seat ${seat}) in ${committee.abbreviation ?? committee.name}.`);
@@ -2333,7 +2333,7 @@ function DelegationConflictModal({
       .select('id');
     setBusy(null);
     if (socErr || !data || data.length !== 1) {
-      onResolved(`${appName} allocated to ${slot.country_name} (seat ${seat}) in ${committee.abbreviation ?? committee.name}, but ${siblingHolderName} could not be added to ${incomingDelegationName} — set their delegation manually.`);
+      onResolved(`${appName} allocated to ${slot.country_name} (seat ${seat}) in ${committee.abbreviation ?? committee.name}, but ${siblingHolderName} could not be added to ${incomingDelegationName}. Set their delegation manually.`);
       return;
     }
     onResolved(`${siblingHolderName} added to ${incomingDelegationName} and ${appName} allocated to ${slot.country_name} (seat ${seat}) in ${committee.abbreviation ?? committee.name}.`);
@@ -2907,7 +2907,7 @@ function CommitteeOverviewModal({
           {slots.flatMap(slot => {
             const rows = byCountry.get(slot.country_code) ?? [];
             const bySeat = new Map(rows.map(r => [r.seat, r]));
-            const seatLabel = (seatNum: number) => (slot.delegation_size >= 2 ? ` — SEAT ${seatNum}` : '');
+            const seatLabel = (seatNum: number) => (slot.delegation_size >= 2 ? `, SEAT ${seatNum}` : '');
 
             return Array.from({ length: slot.delegation_size }, (_, i) => i + 1).map(seatNum => {
               const alloc = bySeat.get(seatNum) ?? null;
@@ -4089,7 +4089,7 @@ export default function AssignmentPage() {
       await refreshConferenceQuiet();
       showFlash('ok', next
         ? 'Allocation emails will now send automatically as you seat delegates.'
-        : 'Allocation emails are on manual release — nobody is emailed until you send.');
+        : 'Allocation emails are on manual release. Nobody is emailed until you send.');
     })().catch(() => {
       showFlash('err', 'Could not change how allocation emails are sent.');
     }).finally(() => setPendingAuto(null));
@@ -4110,7 +4110,7 @@ export default function AssignmentPage() {
     const { confirmed } = await confirm({
       title: `Email ${ids.length} delegate${ids.length === 1 ? '' : 's'}?`,
       body: alreadySent > 0
-        ? `Each one is sent their own committee and country. ${alreadySent} of them ${alreadySent === 1 ? 'has' : 'have'} already had this email — they will get it again.`
+        ? `Each one is sent their own committee and country. ${alreadySent} of them ${alreadySent === 1 ? 'has' : 'have'} already had this email. They will get it again.`
         : 'Each one is sent their own committee and country.',
       confirmLabel: 'Send',
     });

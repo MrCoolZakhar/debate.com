@@ -220,7 +220,7 @@ export function cardWarnings(lc: LiveCommittee, now: number): CardWarning[] {
       if (Number.isFinite(mins) && mins > STUCK_RESUME_MINUTES) {
         out.push({
           id: 'stuck-resume', tone: 'red',
-          text: `${firstName(s.resumingChair)} claimed the resume ${fmtSpan(mins)} ago and it never completed — no chair can resume this room`,
+          text: `${firstName(s.resumingChair)} claimed the resume ${fmtSpan(mins)} ago and it never completed. No chair can resume this room`,
         });
       }
     }

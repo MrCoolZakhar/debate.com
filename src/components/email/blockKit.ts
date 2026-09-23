@@ -63,7 +63,7 @@ export const STARTERS: Starter[] = [
     shape: ['h', 't', 'b'],
     blocks: [
       { type: 'paragraph', content: 'Something to announce', variant: 'heading' },
-      { type: 'paragraph', content: 'Hi {{first_name}} — write the news here.' },
+      { type: 'paragraph', content: 'Hi {{first_name}}, write the news here.' },
       { type: 'button', label: 'Read more', destination: 'conference_page' },
     ],
   },
@@ -75,7 +75,7 @@ export const STARTERS: Starter[] = [
     shape: ['h', 't', 's'],
     blocks: [
       { type: 'paragraph', content: 'A quick reminder', variant: 'heading' },
-      { type: 'paragraph', content: 'Hi {{first_name}} — here is what still needs doing.' },
+      { type: 'paragraph', content: 'Hi {{first_name}}, here is what still needs doing.' },
       { type: 'paragraph', content: 'If you have already done this, ignore this email.', variant: 'small' },
     ],
   },

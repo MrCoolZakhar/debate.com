@@ -586,8 +586,8 @@ function DaisRow({ members, size, showNames, onAdd, onRemoveChair, onResendInvit
       <div className={`flex flex-wrap items-start ${showNames ? 'justify-center gap-x-1 gap-y-2' : 'gap-1.5'}`}>
         {members.map(m => {
           const label = m.kind === 'invite'
-            ? `${m.name} — invite pending. Open to resend or remove.`
-            : `${m.name} — open to view or remove.`;
+            ? `${m.name}, invite pending. Open to resend or remove.`
+            : `${m.name}, open to view or remove.`;
           return (
             <button
               key={m.key}

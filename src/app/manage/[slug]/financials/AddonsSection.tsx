@@ -154,7 +154,7 @@ export default function AddonsSection({ conference }: { conference: Conference }
     if (!session || busyIds.has(a.id) || a.id.startsWith('temp-')) return;
     const { confirmed } = await confirm({
       title: `Delete ${a.label}?`,
-      body: 'Existing invoices for this add-on are unaffected — this only stops it from being offered to new applicants.',
+      body: 'Existing invoices for this add-on are unaffected. This only stops it from being offered to new applicants.',
       confirmLabel: 'Delete',
       danger: true,
     });
@@ -191,7 +191,7 @@ export default function AddonsSection({ conference }: { conference: Conference }
             Add-ons
           </h2>
           <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted }}>
-            Optional extras applicants can pay for from their invoices — never required, never gates acceptance.
+            Optional extras applicants can pay for from their invoices. Never required, never gates acceptance.
           </p>
         </div>
       </div>

@@ -219,7 +219,7 @@ export function buildBroadcastRows(input: {
   }));
 }
 
-const EXPIRED_SESSION = 'Your session has expired — refresh the page and sign in again.';
+const EXPIRED_SESSION = 'Your session has expired. Refresh the page and sign in again.';
 
 /** Insert the fan-out. Returns an error string, or null on success. */
 export async function sendBroadcast(
@@ -601,8 +601,8 @@ export function BroadcastComposer({
                     disabled={sending}
                     rows={3}
                     placeholder={kind === 'actionable'
-                      ? 'Tell the dais why — e.g. "Lunch break, please suspend and return at 14:00."'
-                      : 'e.g. "Photos in the main hall at 15:30 — delegates in formal dress."'}
+                      ? 'Tell the dais why, e.g. "Lunch break, please suspend and return at 14:00."'
+                      : 'e.g. "Photos in the main hall at 15:30, delegates in formal dress."'}
                     className="w-full mt-2 focus:outline-none"
                     style={{
                       padding: '12px 14px',
@@ -644,7 +644,7 @@ export function BroadcastComposer({
                             {imageName || 'Attached image'}
                           </span>
                           <span className="block text-[11px]" style={{ color: NEU.green, fontFamily: OUTFIT }}>
-                            Uploaded — delegates and chairs will see it with the message
+                            Uploaded. Delegates and chairs will see it with the message
                           </span>
                         </span>
                         <button
@@ -849,7 +849,7 @@ export function BroadcastComposer({
                         </p>
                         <p className="text-xs mt-1.5" style={{ color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.5 }}>
                           {selectedTargets.map((t) => t.label).join(', ')} will be adjourned {delayLabel}. An ended
-                          committee cannot be resumed, and its session is deleted about an hour later — speakers
+                          committee cannot be resumed, and its session is deleted about an hour later. Speakers
                           lists, documents, chat and feedback go with it.
                         </p>
                         <label
@@ -887,7 +887,7 @@ export function BroadcastComposer({
           >
             <p className="text-xs" style={{ color: count === 0 ? NEU.amber : NEU.muted, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
               {count === 0
-                ? 'No committees selected — nothing to send'
+                ? 'No committees selected: nothing to send'
                 : `Reaches ${count} of ${targets.length} committee${targets.length === 1 ? '' : 's'}`}
             </p>
             <div className="flex items-center gap-2.5">
@@ -1031,7 +1031,7 @@ export function RecentBroadcasts({
                 <span
                   className="text-[10px] font-bold uppercase flex-shrink-0"
                   style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.06em' }}
-                  title={g.kind === 'actionable' ? 'Already delivered to the dais — deleting the row would not undo it' : 'Expired'}
+                  title={g.kind === 'actionable' ? 'Already delivered to the dais. Deleting the row would not undo it' : 'Expired'}
                 >
                   {g.kind === 'actionable' ? 'Delivered' : 'Expired'}
                 </span>

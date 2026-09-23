@@ -493,7 +493,7 @@ export function fallbackCard(): React.ReactElement {
       backdrop={null}
       logo={null}
       headline="Gavelling"
-      subhead="Model UN conferences, applications and committee software — in one place."
+      subhead="Model UN conferences, applications and committee software, all in one place."
       chips={[{ label: 'gavelling.com' }]}
     />
   );

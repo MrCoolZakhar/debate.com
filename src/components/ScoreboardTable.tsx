@@ -806,7 +806,7 @@ export function CommitteeScoreboardBody({
   return (
     <>
       <p className="text-[12.5px] mb-4" style={{ color: SOFT, fontFamily: OUTFIT, maxWidth: 620 }}>
-        Exactly what the chairs of this committee see from the dais — objective points, speeches,
+        Exactly what the chairs of this committee see from the dais: objective points, speeches,
         factor ratings and written notes. Read-only: only chairs award points.
         {/* DOUBLE DELEGATION, STATED RATHER THAN SILENTLY MISCOUNTED.
             Every row below is one DELEGATION, because that is the only unit the

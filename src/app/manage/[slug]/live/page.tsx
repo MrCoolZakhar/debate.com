@@ -499,7 +499,7 @@ export default function LiveStatusPage() {
 
       setRows(assembled);
       setLoadError(failures.length > 0
-        ? `Partly loaded — ${failures.join(', ')} could not be read. Those figures may be wrong.`
+        ? `Partly loaded: ${failures.join(', ')} could not be read. Those figures may be wrong.`
         : null);
       setLastRefreshed(Date.now());
     } catch (e) {
@@ -852,7 +852,7 @@ export default function LiveStatusPage() {
             The floor could not be loaded
           </p>
           <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT }}>
-            Nothing is being hidden — this page has never had a successful read this session.
+            Nothing is being hidden. This page has never had a successful read this session.
           </p>
         </NeuCard>
       ) : rows === null ? (

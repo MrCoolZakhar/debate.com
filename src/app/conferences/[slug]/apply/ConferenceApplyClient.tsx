@@ -571,7 +571,7 @@ function CountryChip({
       onClick={taken ? undefined : onClick}
       disabled={taken}
       aria-pressed={selected}
-      title={taken ? `${name} — already taken` : name}
+      title={taken ? `${name}, already taken` : name}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onPointerDown={() => setPressed(true)}
@@ -3431,7 +3431,7 @@ function ConferenceApplyInner() {
         title={!showSociety ? 'A little background' : isInvoicingRole ? 'Your delegation' : 'How are you applying?'}
         sub={
           !showSociety
-            ? 'As an observer, no delegation information is required — just continue.'
+            ? 'As an observer, no delegation information is required. Just continue.'
             : isInvoicingRole
             ? 'Which society or high school are you representing?'
             : 'Are you applying independently or as part of a high school / society?'
@@ -3686,7 +3686,7 @@ function ConferenceApplyInner() {
         extraChrome={wizardExtraChrome}
         onBack={() => setStep(s => s - 1)}
         title="Paying for delegation spots?"
-        sub="Separate from your own registration fee — this only covers spots for your delegates."
+        sub="Separate from your own registration fee. This only covers spots for your delegates."
       >
         <TwoTabPick
           value={pledgeValue}
@@ -3980,7 +3980,7 @@ function ConferenceApplyInner() {
         {committees.length === 0 ? (
           <NeuInset style={{ padding: 20 }}>
             <p style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.muted, textAlign: 'center' }}>
-              This conference hasn&apos;t published its committees yet. You can still submit — the organisers will assign you.
+              This conference hasn&apos;t published its committees yet. You can still submit. The organisers will assign you.
             </p>
           </NeuInset>
         ) : committeesOnly ? (
@@ -4343,7 +4343,7 @@ function ConferenceApplyInner() {
                 {matchesCv
                   ? (cvDerived.nextLabel
                       ? `This matches your MUN CV (${cvEntryCount} conference${cvEntryCount === 1 ? '' : 's'} → ${cvDerived.label}). Add ${cvDerived.remaining} more to reach ${cvDerived.nextLabel}.`
-                      : `This matches your MUN CV — ${cvDerived.label}, the top rank. Nicely done.`)
+                      : `This matches your MUN CV, ${cvDerived.label}, the top rank. Nicely done.`)
                   : `Your MUN CV suggests ${cvDerived.label} (${cvEntryCount} conference${cvEntryCount === 1 ? '' : 's'}). Import to match, or keep your choice.`}
               </p>
 
@@ -4897,7 +4897,7 @@ function ConferenceApplyInner() {
                     <ol className="flex flex-col gap-1">
                       {preferences.map((p, i) => (
                         <li key={i} style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.ink }}>
-                          {i + 1}. {p.committeeName}{p.countryName ? ` — ${p.countryName}` : ''}
+                          {i + 1}. {p.committeeName}{p.countryName ? `, ${p.countryName}` : ''}
                         </li>
                       ))}
                     </ol>
@@ -5132,7 +5132,7 @@ function ConferenceApplyInner() {
                   image="/onboarding/globe-01.jpg"
                   eyebrow="GO UNLIMITED"
                   title="Gavelling Unlimited"
-                  hoverText="Apply to unlimited conferences with no per-application credits — one subscription covers it all."
+                  hoverText="Apply to unlimited conferences with no per-application credits. One subscription covers it all."
                   accent="var(--gv-accent)"
                 >
                   <div className="flex items-center gap-1.5 mb-3">
@@ -5209,7 +5209,7 @@ function ConferenceApplyInner() {
                   Withdraw this application?
                 </p>
                 <p className="text-xs mb-3" style={{ color: 'color-mix(in srgb, var(--gv-on-bg) 72%, transparent)', fontFamily: OUTFIT, lineHeight: 1.6 }}>
-                  Your application to {conference ? conferenceAcronymLabel(conference) : 'this conference'} will be cancelled and removed from your conferences. Any Gavelling credit you spent is refunded. This can&apos;t be undone — you&apos;d need to apply again.
+                  Your application to {conference ? conferenceAcronymLabel(conference) : 'this conference'} will be cancelled and removed from your conferences. Any Gavelling credit you spent is refunded. This can&apos;t be undone. You&apos;d need to apply again.
                 </p>
                 {withdrawError && (
                   <p className="text-xs mb-3" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
@@ -5954,7 +5954,7 @@ function ConferenceApplyInner() {
               fontWeight: 500, color: NEU.inkSoft, lineHeight: 1.5,
             }}
           >
-            Your progress saves automatically — you can close this and pick it up later.
+            Your progress saves automatically. You can close this and pick it up later.
             {conference ? ` The ${conferenceAcronymLabel(conference)} team can see your answers before you submit.` : ' The organising team can see your answers before you submit.'}
           </p>
         )}

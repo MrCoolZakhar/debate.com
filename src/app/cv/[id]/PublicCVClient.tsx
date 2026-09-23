@@ -154,7 +154,7 @@ export default function PublicCVClient({ profile, entries }: { profile: PublicPr
             POWERED BY GAVELLING
           </p>
           <p className="text-sm mb-4 max-w-md" style={{ color: '#5C5140', fontFamily: OUTFIT, lineHeight: 1.6, margin: '0 0 16px' }}>
-            Keep your own verified Model UN record — conferences, committees, and awards, beautifully typeset.
+            Keep your own verified Model UN record. Conferences, committees, and awards, beautifully typeset.
           </p>
           <Link
             href="/"

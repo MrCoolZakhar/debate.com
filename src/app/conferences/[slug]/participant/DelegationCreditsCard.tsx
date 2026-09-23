@@ -112,7 +112,7 @@ export default function DelegationCreditsCard({ societyId }: { societyId: string
         {balanceLoading || balance === null ? '—' : balance}
       </p>
       <p className="text-xs mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.6 }}>
-        Each credit lets one of your delegates apply to a conference without spending their own — unused credits never expire.
+        Each credit lets one of your delegates apply to a conference without spending their own. Unused credits never expire.
       </p>
 
       {confirming && (

@@ -897,8 +897,8 @@ const SB_COPY = {
     tune3: 'Ranking blend decides how much those quality ratings move the headline number.',
     blendInfo: 'The headline score is the objective point total blended with the 0–100 quality score from Commenter ratings. At 0% the ranking is pure points; at 100% it is pure quality.',
     blendNow: (n: number) => n === 0
-      ? 'Currently 0% — quality ratings are recorded but do not move the ranking.'
-      : `Currently ${n}% — quality ratings carry ${n}% of the headline score.`,
+      ? 'Currently 0%. Quality ratings are recorded but do not move the ranking.'
+      : `Currently ${n}%. Quality ratings carry ${n}% of the headline score.`,
     coHead: 'Commenters write the feedback',
     coBody: 'One chair is the Moderator and holds the gavel (the committee creator by default; any chair can take it from the gavel chip at the top-right of the session). Every other chair on the same chair code is a Commenter, and their centre column becomes the feedback dock below.',
     coBody2: 'They type a private note on whoever holds the floor and rate them on your quality factors. Notes surface under that speech in the scoreboard drill-in and in the CSV export; the ratings feed the quality score.',
@@ -978,8 +978,8 @@ const SB_COPY = {
     tune3: 'مزج الترتيب يحدّد مقدار تأثير تلك التقييمات في الرقم النهائي.',
     blendInfo: 'الرقم النهائي هو مزيج من مجموع النقاط الموضوعي ودرجة الجودة من 0 إلى 100 المستمدة من تقييمات المعلّقين. عند 0% يكون الترتيب بالنقاط فقط، وعند 100% بالجودة فقط.',
     blendNow: (n: number) => n === 0
-      ? 'القيمة الحالية 0% — تُسجَّل تقييمات الجودة لكنها لا تؤثر في الترتيب.'
-      : `القيمة الحالية ${n}% — تشكّل تقييمات الجودة ${n}% من الرقم النهائي.`,
+      ? 'القيمة الحالية 0%. تُسجَّل تقييمات الجودة لكنها لا تؤثر في الترتيب.'
+      : `القيمة الحالية ${n}%. تشكّل تقييمات الجودة ${n}% من الرقم النهائي.`,
     coHead: 'المعلّقون يكتبون الملاحظات',
     coBody: 'رئيس واحد هو المشرف ويمسك المطرقة (منشئ اللجنة افتراضياً، ويمكن لأي رئيس أخذها من شارة المطرقة في أعلى يمين الجلسة). أما بقية الرؤساء على رمز الرئاسة نفسه فهم معلّقون، ويتحوّل عمودهم الأوسط إلى لوحة الملاحظات أدناه.',
     coBody2: 'يكتبون ملاحظة خاصة عن صاحب الكلمة ويقيّمونه وفق عوامل الجودة لديك. تظهر الملاحظات تحت ذلك الخطاب في لوحة النقاط وفي ملف CSV، وتغذّي التقييمات درجة الجودة.',

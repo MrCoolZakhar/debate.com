@@ -559,7 +559,7 @@ function useImageUpload(conferenceId: string, accessToken: string | null) {
   const upload = useCallback(async (file: File): Promise<string | null> => {
     if (!EMAIL_IMAGE_TYPES.includes(file.type)) { setError('Attach a JPEG, PNG, WebP or GIF.'); return null; }
     if (file.size > 5 * 1024 * 1024) { setError('Image must be under 5MB.'); return null; }
-    if (!accessToken) { setError('Your session has expired — refresh the page and try again.'); return null; }
+    if (!accessToken) { setError('Your session has expired. Refresh the page and try again.'); return null; }
     setUploading(true);
     setError(null);
     const supabase = getAuthedClient(accessToken);
@@ -1044,7 +1044,7 @@ export default function EmailComposer({
     const images = blocks.filter((b): b is ImageBlock & { _id: string } => b.type === 'image');
     const buttons = blocks.filter((b): b is ButtonBlock & { _id: string } => b.type === 'button');
     return [
-      { ok: subject.trim().length > 0, label: 'Subject line written', fix: 'People see this first — write one.' },
+      { ok: subject.trim().length > 0, label: 'Subject line written', fix: 'People see this first. Write one.' },
       { ok: paragraphs.length > 0, label: 'Something to say', fix: 'Add at least one block of text.' },
       { ok: buttons.every(b => b.label.trim()), label: 'Every button is labelled', fix: 'A button with no words renders as "Learn more".' },
       { ok: images.every(b => b.url && b.alt.trim()), label: 'Pictures described', fix: 'Alt text is what people on slow connections and screen readers get.' },
@@ -1459,8 +1459,8 @@ export default function EmailComposer({
           onClick={e => { e.stopPropagation(); setSelectedId(block._id); }}
           role="button"
           tabIndex={-1}
-          aria-label={`Drag to move — block ${index + 1} of ${blocks.length}`}
-          title={`Drag to move — block ${index + 1} of ${blocks.length}`}
+          aria-label={`Drag to move: block ${index + 1} of ${blocks.length}`}
+          title={`Drag to move: block ${index + 1} of ${blocks.length}`}
           className="absolute inline-flex items-center justify-center"
           style={{
             // -28, measured: blockFrame's own `margin: 0 -10px` already hangs
@@ -1814,7 +1814,7 @@ export default function EmailComposer({
 
       {selected?.type === 'paragraph' && (
         <>
-          <PanelTitle hint="Three sizes, nothing else — the email's own theme handles the rest.">TEXT</PanelTitle>
+          <PanelTitle hint="Three sizes, nothing else. The email's own theme handles the rest.">TEXT</PanelTitle>
           <FieldLabel>SIZE</FieldLabel>
           <div className="flex flex-col gap-1.5 mb-4">
             {VARIANT_META.map(v => {
@@ -2093,7 +2093,7 @@ export default function EmailComposer({
             onKeyUp={e => refreshSubjectSuggest(e.currentTarget.value, e.currentTarget.selectionStart ?? 0)}
             onBlur={() => { if (suggest?.target === 'subject') setSuggest(null); }}
             onFocus={() => { setActiveTarget('subject'); setSelectedId(null); }}
-            placeholder="Write the subject line — this is the bit they see first"
+            placeholder="Write the subject line. This is the bit they see first"
             className="w-full focus:outline-none"
             style={{
               fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 800, color: INK,
@@ -2548,7 +2548,7 @@ function ImageProperties({
 
   return (
     <>
-      <PanelTitle hint="Anything up to 5MB — JPEG, PNG, WebP or GIF.">PICTURE</PanelTitle>
+      <PanelTitle hint="Anything up to 5MB: JPEG, PNG, WebP or GIF.">PICTURE</PanelTitle>
       <input
         ref={fileRef}
         type="file"
@@ -2606,7 +2606,7 @@ function ImageProperties({
         {block.url && !block.alt.trim() && (
           <p className="mt-1.5 flex items-start gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: AMBER_INK, lineHeight: 1.5, textWrap: 'pretty' }}>
             <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: 2 }} />
-            Some people never see the picture — this is what they read instead.
+            Some people never see the picture. This is what they read instead.
           </p>
         )}
       </div>

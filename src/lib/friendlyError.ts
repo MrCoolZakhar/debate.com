@@ -107,6 +107,21 @@ export function constraintMessage(name: string): string | null {
   return CONSTRAINT_MESSAGES[name] ?? null;
 }
 
+/** For a message that already came back as plain text from our OWN edge
+ *  function or RPC result (not a caught error object). Usually written for
+ *  a person already, but a Stripe or Postgres string can still leak through
+ *  one of those. Returns the message as-is when it is a short, human-looking
+ *  string, otherwise the fallback (and logs the raw message so it is not
+ *  lost). */
+export function plainOrFallback(message: unknown, fallback: string): string {
+  if (typeof message === 'string' && message.length > 0 && message.length <= 240 && !looksTechnical(message)) {
+    return message;
+  }
+  // eslint-disable-next-line no-console
+  console.error('[plainOrFallback]', message);
+  return fallback;
+}
+
 /** Loose shape covering PostgrestError, StorageError, FunctionsHttpError and
  *  a plain Error — every property optional, read defensively. */
 interface ErrorLike {
@@ -184,6 +199,16 @@ export function friendlyError(error: unknown, fallback: string = DEFAULT_FALLBAC
   // d. Permission.
   if (code === '42501' || /row-level security/.test(message)) {
     return "You don't have permission to do that. If you think you should, ask the conference owner.";
+  }
+
+  // d2. Our own payment-gate triggers raise a plain sentence under SQLSTATE
+  // 23514 (check_violation) with no named constraint — e.g. "Applications
+  // cannot open yet. Choose how you get paid first..." Trust it once it
+  // clears looksTechnical. A genuine CHECK violation always says "violates
+  // check constraint", which looksTechnical already catches, so those still
+  // fall through to the generic sentence below.
+  if (code === '23514' && !constraintMatch && !looksTechnical(message)) {
+    return message;
   }
 
   // e. By SQLSTATE.

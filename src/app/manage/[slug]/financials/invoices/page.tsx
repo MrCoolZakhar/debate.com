@@ -493,7 +493,7 @@ export default function FinancialsInvoicesPage() {
     if (!session || txBusyIds.has(batch.id)) return;
     const { confirmed } = await confirm({
       title: 'Reject this payment?',
-      body: 'The invoices stay exactly as they are, unpaid — the payer will need to submit a new payment.',
+      body: 'The invoices stay exactly as they are, unpaid. The payer will need to submit a new payment.',
       confirmLabel: 'Reject payment',
       danger: true,
     });
@@ -812,7 +812,7 @@ export default function FinancialsInvoicesPage() {
             <NeuInset className="flex flex-col items-center text-center px-6 py-14">
               <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Receipt} emoji="Receipt" size={44} />
               <h2 className="mt-4" style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, color: NEU.ink }}>No invoices yet</h2>
-              <p className="mt-1 max-w-sm" style={mutedCaption}>Invoices appear here once applicants owe something — registration, the application fee, or an add-on.</p>
+              <p className="mt-1 max-w-sm" style={mutedCaption}>Invoices appear here once applicants owe something: registration, the application fee, or an add-on.</p>
             </NeuInset>
           ) : filteredInvoices.length === 0 ? (
             <NeuInset small className="text-center px-6 py-8">

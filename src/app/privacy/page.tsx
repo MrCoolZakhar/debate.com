@@ -7,7 +7,7 @@ import { COMPANY, PLACE_OF_REGISTRATION } from '@/lib/companyDetails';
 export const metadata: Metadata = pageMetadata({
   title: 'Privacy Policy',
   description:
-    'How GAVELLING LTD collects, uses, shares and protects personal data across Gavelling Sessions and Gavelling Conferences — including your UK GDPR rights.',
+    'How GAVELLING LTD collects, uses, shares and protects personal data across Gavelling Sessions and Gavelling Conferences, including your UK GDPR rights.',
   path: '/privacy',
 });
 
@@ -91,8 +91,8 @@ export default function PrivacyPage() {
         </p>
         <p>
           In this policy, &quot;we&quot;, &quot;us&quot; and &quot;our&quot; mean {COMPANY.name}.
-          For most of the data described here, {COMPANY.name} is the <strong>data controller</strong>{' '}
-          — the organisation that decides what is collected and why. Section 02 explains the one
+          For most of the data described here, {COMPANY.name} is the <strong>data controller</strong>,{' '}
+          the organisation that decides what is collected and why. Section 02 explains the one
           important exception.
         </p>
         <p>
@@ -107,25 +107,25 @@ export default function PrivacyPage() {
       </LegalSection>
 
       {/* ─────────────────────────────────────────────────────────── 02 */}
-      <LegalSection n={2} title="Who controls your data — us, or the conference organiser">
+      <LegalSection n={2} title="Who controls your data: us, or the conference organiser">
         <p>This split matters, because it changes who you ask when you want something done.</p>
         <ul className="list-disc ps-5 mt-2 space-y-1">
           <li>
             <strong>Your account is ours.</strong> Your login, profile, MUN CV, saved preferences
-            and any payments you make to us — {COMPANY.name} is the controller. Ask us.
+            and any payments you make to us. {COMPANY.name} is the controller. Ask us.
           </li>
           <li>
             <strong>A conference&apos;s applicant data is theirs.</strong> When you apply to a
             conference listed on Gavelling, the <strong>organiser is the controller</strong> of
             your application: the answers to their custom questions, your committee and country
             preferences, your position papers, your allocation, and their notes on you. We act as
-            their <strong>processor</strong> — we store and move that data on their documented
+            their <strong>processor</strong>. We store and move that data on their documented
             instructions and do not use it for our own purposes.
           </li>
         </ul>
         <p className="mt-3">
           So if you want an application deleted, corrected, or explained, contact the organising
-          team of that conference first — they are the ones who decide. <strong>Email us anyway
+          team of that conference first. They are the ones who decide. <strong>Email us anyway
           if you get stuck.</strong> We will help you find the right contact, and we will act on a
           valid instruction from the organiser without dragging it out. This mirrors section 7 of
           our <Link href="/terms" style={LINK}>Terms of Service</Link>.
@@ -142,20 +142,20 @@ export default function PrivacyPage() {
         <div className="space-y-3 mt-4">
           <Disclosure
             eyebrow="Product one"
-            title="Sessions — running a live committee"
+            title="Sessions, running a live committee"
           >
             <p>
               A chair creates a session and gets a 6-character code; delegates join with it. There
               is no account needed to join a session. What gets stored while it runs:
             </p>
             <ul className="list-disc ps-5 mt-2 space-y-1">
-              <li><strong>Committee details</strong> — name, topic, settings, and the session code.</li>
-              <li><strong>Names</strong> — the delegate names and country assignments entered by the chair, and the name each chair or faculty advisor types when joining. These are often a country or a placeholder rather than a real name.</li>
-              <li><strong>Chat messages</strong> — between chairs, delegates and advisors in that session.</li>
-              <li><strong>Documents</strong> — working papers and draft resolutions submitted to the committee.</li>
-              <li><strong>Motions and votes</strong> — what was raised, and how the committee voted.</li>
-              <li><strong>Speaking history</strong> — who spoke, in what order, and for how long.</li>
-              <li><strong>Feedback nudges</strong> — the optional emoji feedback advisors send delegates.</li>
+              <li><strong>Committee details</strong>: name, topic, settings, and the session code.</li>
+              <li><strong>Names</strong>: the delegate names and country assignments entered by the chair, and the name each chair or faculty advisor types when joining. These are often a country or a placeholder rather than a real name.</li>
+              <li><strong>Chat messages</strong>: between chairs, delegates and advisors in that session.</li>
+              <li><strong>Documents</strong>: working papers and draft resolutions submitted to the committee.</li>
+              <li><strong>Motions and votes</strong>: what was raised, and how the committee voted.</li>
+              <li><strong>Speaking history</strong>: who spoke, in what order, and for how long.</li>
+              <li><strong>Feedback nudges</strong>: the optional emoji feedback advisors send delegates.</li>
             </ul>
             <p className="mt-3">
               <strong>All of it is deleted 72 hours after the session ends.</strong> Some state
@@ -165,17 +165,17 @@ export default function PrivacyPage() {
 
           <Disclosure
             eyebrow="Product two"
-            title="Conferences — accounts, applications and payments"
+            title="Conferences, accounts, applications and payments"
           >
             <p>This is the part with real accounts, so there is more of it.</p>
             <ul className="list-disc ps-5 mt-2 space-y-1">
-              <li><strong>Account</strong> — your name, email address and password. Passwords are handled by Supabase Auth and stored hashed; we never see your password.</li>
-              <li><strong>Profile</strong> — date of birth, nationality, education level, MUN experience level, profile photo, and a short bio. You choose how much of this to fill in.</li>
-              <li><strong>Applications</strong> — committee and country preferences, position papers, and your answers to whatever custom questions the organiser wrote. The organiser controls these (section 02).</li>
-              <li><strong>Delegations and societies</strong> — which delegation or MUN society you belong to, and your role in it.</li>
-              <li><strong>Awards and MUN CV</strong> — the conferences, committees, allocations and awards on your record. <strong>Read section 16 before you add to it: your CV is a public page.</strong></li>
-              <li><strong>Payments</strong> — what you bought, when, how much, and whether it succeeded. <strong>We do not store your full card details</strong> — Stripe handles the card and we keep only the record.</li>
-              <li><strong>Email preferences</strong> — which kinds of email you have opted into or out of.</li>
+              <li><strong>Account</strong>: your name, email address and password. Passwords are handled by Supabase Auth and stored hashed; we never see your password.</li>
+              <li><strong>Profile</strong>: date of birth, nationality, education level, MUN experience level, profile photo, and a short bio. You choose how much of this to fill in.</li>
+              <li><strong>Applications</strong>: committee and country preferences, position papers, and your answers to whatever custom questions the organiser wrote. The organiser controls these (section 02).</li>
+              <li><strong>Delegations and societies</strong>: which delegation or MUN society you belong to, and your role in it.</li>
+              <li><strong>Awards and MUN CV</strong>: the conferences, committees, allocations and awards on your record. <strong>Read section 16 before you add to it: your CV is a public page.</strong></li>
+              <li><strong>Payments</strong>: what you bought, when, how much, and whether it succeeded. <strong>We do not store your full card details.</strong> Stripe handles the card and we keep only the record.</li>
+              <li><strong>Email preferences</strong>: which kinds of email you have opted into or out of.</li>
             </ul>
           </Disclosure>
 
@@ -184,8 +184,8 @@ export default function PrivacyPage() {
             title="Technical data we collect automatically"
           >
             <ul className="list-disc ps-5 mt-2 space-y-1">
-              <li><strong>Server logs</strong> — our hosting and database providers record standard things like IP address, browser type and timestamps. We do not use these to build profiles or to advertise to you.</li>
-              <li><strong>Crash reports</strong> — when a page breaks in your browser we send ourselves the error message, the technical stack trace, and the address of the page you were on, so we can fix it fast. We do not attach your name to it, but a page address can include a session code.</li>
+              <li><strong>Server logs</strong>: our hosting and database providers record standard things like IP address, browser type and timestamps. We do not use these to build profiles or to advertise to you.</li>
+              <li><strong>Crash reports</strong>: when a page breaks in your browser we send ourselves the error message, the technical stack trace, and the address of the page you were on, so we can fix it fast. We do not attach your name to it, but a page address can include a session code.</li>
               <li><strong>Conference page visits</strong>: when you open a conference&apos;s public page, we add one to an anonymous daily count for that conference, grouped by where the visit came from: Google, another search engine, social media, email, a direct link, Gavelling itself, or another website (for which we keep only the website&apos;s name, never the page address). We use no cookies for this and store no IP address, no browser details and nothing that identifies you. The conference&apos;s organisers see these counts so they can tell where their applicants come from.</li>
             </ul>
             <p className="mt-3">
@@ -201,68 +201,68 @@ export default function PrivacyPage() {
       {/* ─────────────────────────────────────────────────────────── 04 */}
       <LegalSection n={4} title="Why we use it, and our lawful basis">
         <p>
-          UK GDPR says we need a legal reason — a &quot;lawful basis&quot; — for every purpose. Here is
+          UK GDPR says we need a legal reason, a &quot;lawful basis&quot;, for every purpose. Here is
           ours, purpose by purpose.
         </p>
 
         <div className="mt-4">
           <SpecRow
             label="Running committee sessions"
-            tag="Contract — Art 6(1)(b)"
+            tag="Contract, Art 6(1)(b)"
             note="Showing the speakers list, timers, motions, documents and chat to everyone in the room is the service you asked for."
           />
           <SpecRow
             label="Creating and running your account"
-            tag="Contract — Art 6(1)(b)"
+            tag="Contract, Art 6(1)(b)"
             note="Signing you in, showing your profile, your conferences and your CV."
           />
           <SpecRow
             label="Handling conference applications and allocations"
-            tag="Processor — on the organiser's instructions"
+            tag="Processor, on the organiser's instructions"
             note="The organiser is the controller here and sets their own lawful basis; we process on their behalf. See section 02."
           />
           <SpecRow
             label="Taking payments, credits and subscriptions"
-            tag="Contract — Art 6(1)(b)"
+            tag="Contract, Art 6(1)(b)"
             note="Processing what you buy and giving you access to it."
           />
           <SpecRow
             label="Service emails you cannot turn off"
-            tag="Contract — Art 6(1)(b)"
+            tag="Contract, Art 6(1)(b)"
             note="Password resets, payment receipts, application status. These are part of the service, not marketing."
           />
           <SpecRow
             label="Keeping financial and accounting records"
-            tag="Legal obligation — Art 6(1)(c)"
+            tag="Legal obligation, Art 6(1)(c)"
             note="UK tax and company law requires us to keep records of what we were paid."
           />
           <SpecRow
             label="Responding to legal requests and court orders"
-            tag="Legal obligation — Art 6(1)(c)"
+            tag="Legal obligation, Art 6(1)(c)"
           />
           <SpecRow
             label="Security, abuse and fraud prevention"
-            tag="Legitimate interests — Art 6(1)(f)"
+            tag="Legitimate interests, Art 6(1)(f)"
             note="Our interest: keeping the platform, and the many under-18s on it, safe from abuse, impersonation, spam and fraudulent payments. We think you would expect us to do this."
           />
           <SpecRow
             label="Crash diagnostics and bug fixing"
-            tag="Legitimate interests — Art 6(1)(f)"
+            tag="Legitimate interests, Art 6(1)(f)"
             note="Our interest: a live committee session cannot wait for a fix, so we want to know the moment something breaks."
           />
           <SpecRow
             label="Improving the product"
-            tag="Legitimate interests — Art 6(1)(f)"
+            tag="Legitimate interests, Art 6(1)(f)"
             note="Our interest: understanding which features are actually used, so we build the right things. We use aggregate patterns, not individual profiling."
           />
           <SpecRow
             label="Answering your support messages"
-            tag="Legitimate interests — Art 6(1)(f)"
+            tag="Legitimate interests, Art 6(1)(f)"
             note="Our interest: replying to a person who has contacted us for help."
           />
           <SpecRow
             label="Marketing and announcement emails"
-            tag="Consent — Art 6(1)(a)"
+            tag="Consent, Art 6(1)(a)"
             note="Opt in, and opt out whenever you like. See section 12."
           />
           {/* NOT consent. This row used to read "Consent — Art 6(1)(a) …
@@ -275,19 +275,19 @@ export default function PrivacyPage() {
               ever built, this becomes a genuine consent row again. */}
           <SpecRow
             label="Publishing your MUN CV as a public page"
-            tag="Contract — Art 6(1)(b)"
+            tag="Contract, Art 6(1)(b)"
             note="Every account has a public CV page and there is currently no way to turn it off. Read section 16 before you add anything to it."
           />
           <SpecRow
             label="Optional (non-essential) cookies and storage"
-            tag="Consent — Art 6(1)(a) and PECR"
+            tag="Consent, Art 6(1)(a) and PECR"
             note="Essential storage that makes the app work does not need consent; anything beyond it does."
           />
         </div>
 
         <p className="mt-4">
           Where we rely on <strong>legitimate interests</strong>, we have weighed our interest
-          against your rights and freedoms. You can object to any of it — see section 07 — and we
+          against your rights and freedoms. You can object to any of it, see section 07, and we
           will stop unless we have compelling grounds not to.
         </p>
       </LegalSection>
@@ -295,7 +295,7 @@ export default function PrivacyPage() {
       {/* ─────────────────────────────────────────────────────────── 05 */}
       <LegalSection n={5} title="Special category data">
         <p>
-          &quot;Special category&quot; data is the extra-sensitive kind under Article 9 — health,
+          &quot;Special category&quot; data is the extra-sensitive kind under Article 9, health,
           race or ethnic origin, religious or philosophical beliefs, political opinions, trade
           union membership, sex life or sexual orientation, genetic and biometric data.
         </p>
@@ -307,8 +307,8 @@ export default function PrivacyPage() {
         <p>
           The one risk is free text. Bios, position papers, application answers, chat messages and
           CV descriptions are boxes you can type anything into. <strong>Please do not put health
-          details, religious or political beliefs, or anything similarly sensitive into them</strong>{' '}
-          — not about yourself, and definitely not about anyone else. If you do, we will hold it
+          details, religious or political beliefs, or anything similarly sensitive into them</strong>,{' '}
+          not about yourself, and definitely not about anyone else. If you do, we will hold it
           simply because you typed it, and we would rather you did not.
         </p>
         <p>
@@ -340,12 +340,12 @@ export default function PrivacyPage() {
           <strong>If you are a parent, guardian or teacher</strong> and you want a young person&apos;s
           data removed, email{' '}
           <a href={`mailto:${CONTACT_EMAIL}`} style={LINK}>{CONTACT_EMAIL}</a>. You do not need to
-          quote legislation at us or explain yourself at length — tell us the account email or the
+          quote legislation at us or explain yourself at length. Tell us the account email or the
           session code and we will sort it out. If the data sits with a conference organiser we
           will tell you who they are and help you reach them.
         </p>
         <p>
-          If you are under 13 and have made an account anyway, that is alright — just email us, or
+          If you are under 13 and have made an account anyway, that is alright, just email us, or
           ask an adult to, and we will delete it. Nobody is in trouble.
         </p>
       </LegalSection>
@@ -372,7 +372,7 @@ export default function PrivacyPage() {
           />
           <RightRow
             name="Erasure"
-            what="Have your data deleted — the 'right to be forgotten'."
+            what="Have your data deleted, the 'right to be forgotten'."
             how={<>Delete your account in <Link href="/account/profile" style={LINK}>Account → Profile</Link>, which removes your profile, CV and preferences. Or email us. We may keep the minimum required for tax and accounting records (section 10).</>}
           />
           <RightRow
@@ -387,7 +387,7 @@ export default function PrivacyPage() {
           />
           <RightRow
             name="Objection"
-            what="Object to processing we base on legitimate interests, and object to direct marketing at any time — marketing objections are absolute, we must stop."
+            what="Object to processing we base on legitimate interests, and object to direct marketing at any time. Marketing objections are absolute, we must stop."
             how={<>Email us, or switch the relevant emails off in <Link href="/account/profile" style={LINK}>Account → Profile</Link>.</>}
           />
           <RightRow
@@ -398,7 +398,7 @@ export default function PrivacyPage() {
           <RightRow
             name="Not being subject to solely automated decisions"
             what="You have the right not to be subject to a decision based only on automated processing that has a legal or similarly significant effect on you."
-            how="We do not make decisions that way — see section 15 — but you can always ask a human to look again."
+            how="We do not make decisions that way, see section 15, but you can always ask a human to look again."
           />
         </div>
 
@@ -411,8 +411,8 @@ export default function PrivacyPage() {
           the first month. We may need to check who you are before handing over personal data.
         </p>
         <p>
-          For anything a conference organiser controls — your application, allocation or their
-          notes — the organiser has to make the decision. Contact them first, and copy us in if you
+          For anything a conference organiser controls, your application, allocation or their
+          notes, the organiser has to make the decision. Contact them first, and copy us in if you
           would like us to chase it.
         </p>
       </LegalSection>
@@ -424,10 +424,10 @@ export default function PrivacyPage() {
           service providers who process it on our instructions:
         </p>
         <ul className="list-disc ps-5 mt-2 space-y-1">
-          <li><strong>Supabase</strong> — database, authentication, file storage and server-side functions. Most of what Gavelling stores lives here.</li>
-          <li><strong>Vercel</strong> — hosting and content delivery for the website itself.</li>
-          <li><strong>Stripe</strong> — payment processing. Card details go to Stripe, not to us.</li>
-          <li><strong>Resend</strong> — sending transactional and announcement emails.</li>
+          <li><strong>Supabase</strong>: database, authentication, file storage and server-side functions. Most of what Gavelling stores lives here.</li>
+          <li><strong>Vercel</strong>: hosting and content delivery for the website itself.</li>
+          <li><strong>Stripe</strong>: payment processing. Card details go to Stripe, not to us.</li>
+          <li><strong>Resend</strong>: sending transactional and announcement emails.</li>
           <li><strong>GIPHY</strong>: the GIFs in session chat and on vote results. When you search for a GIF, the search goes from our server to GIPHY, so GIPHY never learns who searched. But the GIF images themselves load from GIPHY&apos;s servers in your browser, so when a GIF is on your screen GIPHY receives your IP address and browser details, as any website you load an image from does. No page address is sent with it. This happens when someone in your committee sends a GIF in chat, and on a chair&apos;s screen when a vote result is shown. A chair can turn chat off for a session.</li>
         </ul>
         <p className="mt-3">
@@ -438,15 +438,15 @@ export default function PrivacyPage() {
         </p>
         <p>
           We may also disclose data where the law requires it, or where it is necessary to protect
-          the rights and safety of our users — particularly the young people using the platform.
+          the rights and safety of our users, particularly the young people using the platform.
         </p>
       </LegalSection>
 
       {/* ─────────────────────────────────────────────────────────── 09 */}
       <LegalSection n={9} title="Sending data outside the UK">
         <p>
-          Our infrastructure providers — <strong>Supabase</strong>, <strong>Vercel</strong> and{' '}
-          <strong>Stripe</strong> — are US-based, and our database is hosted in a US region. That
+          Our infrastructure providers, <strong>Supabase</strong>, <strong>Vercel</strong> and{' '}
+          <strong>Stripe</strong>, are US-based, and our database is hosted in a US region. That
           makes these <strong>restricted transfers</strong> under UK data protection law, so they
           need a safeguard.
         </p>
@@ -517,10 +517,10 @@ export default function PrivacyPage() {
           Gavelling leans on your browser&apos;s <code>localStorage</code> more than on cookies.
           Either way, here is the honest split.
         </p>
-        <p className="mt-2"><strong>Essential — the app does not work without these:</strong></p>
+        <p className="mt-2"><strong>Essential, the app does not work without these:</strong></p>
         <ul className="list-disc ps-5 mt-2 space-y-1">
           <li><strong>Authentication tokens</strong> stored by Supabase Auth, so you stay signed in between page loads.</li>
-          <li><strong>Session and committee state</strong> — the code you last joined, your committee settings, chat read counts, and the local copy of the committee the app renders from.</li>
+          <li><strong>Session and committee state</strong>: the code you last joined, your committee settings, chat read counts, and the local copy of the committee the app renders from.</li>
           <li><strong>Preferences</strong> such as your language choice.</li>
           <li>Strictly necessary cookies our hosting provider sets for infrastructure and security.</li>
         </ul>
@@ -547,8 +547,8 @@ export default function PrivacyPage() {
       {/* ─────────────────────────────────────────────────────────── 12 */}
       <LegalSection n={12} title="Emails you get from us">
         <ul className="list-disc ps-5 mt-2 space-y-1">
-          <li><strong>Service emails</strong> — password resets, payment receipts, application updates, and messages from a conference you applied to about that conference. These are part of the service, so you cannot switch them off while you have an account.</li>
-          <li><strong>Announcements and marketing</strong> — these go only to people who have opted in, and every one of them can be turned off in <Link href="/account/profile" style={LINK}>Account → Profile</Link>. Organisers sending a broadcast through Gavelling cannot reach anyone who has opted out; we exclude them automatically.</li>
+          <li><strong>Service emails</strong>: password resets, payment receipts, application updates, and messages from a conference you applied to about that conference. These are part of the service, so you cannot switch them off while you have an account.</li>
+          <li><strong>Announcements and marketing</strong>: these go only to people who have opted in, and every one of them can be turned off in <Link href="/account/profile" style={LINK}>Account → Profile</Link>. Organisers sending a broadcast through Gavelling cannot reach anyone who has opted out; we exclude them automatically.</li>
         </ul>
         <p className="mt-3">
           Emails are delivered by Resend on our behalf. We never sell your email address or pass it
@@ -561,11 +561,11 @@ export default function PrivacyPage() {
         <p>Concretely, and without overselling it:</p>
         <ul className="list-disc ps-5 mt-2 space-y-1">
           <li>Everything travels over <strong>encrypted connections (HTTPS/TLS)</strong>.</li>
-          <li>Data is protected at the database layer by <strong>row-level security policies</strong>, so a request can only reach the rows it is entitled to — not just the screens the app chooses to show.</li>
+          <li>Data is protected at the database layer by <strong>row-level security policies</strong>, so a request can only reach the rows it is entitled to, not just the screens the app chooses to show.</li>
           <li><strong>Passwords are hashed</strong> by Supabase Auth. We cannot see them, and neither can anyone who reads our database.</li>
           <li><strong>Card details never reach us.</strong> Stripe takes them directly.</li>
           <li>Access to production data is limited to the people who need it to run the service.</li>
-          <li>Session codes act as access keys — share a code only with the people who should be in that committee.</li>
+          <li>Session codes act as access keys. Share a code only with the people who should be in that committee.</li>
         </ul>
         <p className="mt-3">
           We are a small team and we hold no security certifications. No service on the internet can
@@ -584,7 +584,7 @@ export default function PrivacyPage() {
         </p>
         <p>
           Where a breach is likely to result in a <strong>high risk</strong> to you, we will tell
-          you directly and without undue delay — what happened, what data was involved, what we are
+          you directly and without undue delay, what happened, what data was involved, what we are
           doing about it, and what you should do. Where a conference organiser is the controller, we
           will notify them so they can meet their own obligations.
         </p>
@@ -605,7 +605,7 @@ export default function PrivacyPage() {
         </p>
         <p>
           If you think an allocation decision was made unfairly, raise it with the conference
-          organiser — it was their call, not an algorithm&apos;s.
+          organiser. It was their call, not an algorithm&apos;s.
         </p>
       </LegalSection>
 
@@ -615,24 +615,24 @@ export default function PrivacyPage() {
           Every account has an MUN CV, and it is a{' '}
           <strong>public page</strong> at <code>gavelling.com/cv/your-name-1a2b3c4d</code>.{' '}
           <strong>Anyone who has that address can open it without signing in and without an
-          account.</strong> It is public from the moment your account exists — you do not have to
+          account.</strong> It is public from the moment your account exists. You do not have to
           publish it, and there is nothing to switch on.
         </p>
         <p>
           <strong>There is currently no way to make it private.</strong> We have no visibility
           setting, no unlisted mode and no opt-out. If that matters to you, the practical control
-          you have is what you put on it — see below.
+          you have is what you put on it, see below.
         </p>
         <p>
           <strong>What a visitor sees:</strong> your display name, profile photo, nationality,
-          education level, MUN experience level, bio, and the CV entries on your record —
+          education level, MUN experience level, bio, and the CV entries on your record,
           conference names, committees, allocations, awards, dates, and any photos or descriptions
           you added to an entry. <strong>Your email address is not on the page</strong>, and
           neither is your date of birth, your applications, or anything you have paid.
         </p>
         <p>
           <strong>Who ends up looking at it.</strong> Your name links to this page throughout the
-          organiser tools — so the organisers of any conference you apply to, and the leaders of a
+          organiser tools, so the organisers of any conference you apply to, and the leaders of a
           delegation you belong to, can open it while they are reviewing you. Beyond that, it is
           the link you choose to share. We do not submit CVs to search engines, but we also do not
           block crawlers from them, so a CV linked to from a public page can be indexed. Once a
@@ -659,8 +659,8 @@ export default function PrivacyPage() {
           effective date at the top of the page.
         </p>
         <p>
-          For anything <strong>significant</strong> — a new purpose, a new category of data, a new
-          provider handling your data — we will tell you properly in the app or by email before it
+          For anything <strong>significant</strong>, a new purpose, a new category of data, a new
+          provider handling your data, we will tell you properly in the app or by email before it
           takes effect, rather than quietly editing this page. If a change relies on your consent,
           we will ask you for it.
         </p>
@@ -669,7 +669,7 @@ export default function PrivacyPage() {
       {/* ─────────────────────────────────────────────────────────── 18 */}
       <LegalSection n={18} title="Complaints and contact">
         <p>
-          If you are unhappy with how we have handled your data, tell us first — we would like the
+          If you are unhappy with how we have handled your data, tell us first. We would like the
           chance to put it right, and it is usually the fastest route.
         </p>
         <p className="mt-2">
@@ -681,7 +681,7 @@ export default function PrivacyPage() {
         <p className="mt-3">
           You also have the right to complain to the UK&apos;s data protection regulator, the{' '}
           <strong>Information Commissioner&apos;s Office (ICO)</strong>. You can do that{' '}
-          <strong>whether or not you come to us first</strong> — you do not need our permission and
+          <strong>whether or not you come to us first</strong>. You do not need our permission and
           you do not have to wait for our reply.
         </p>
         <ul className="list-disc ps-5 mt-2 space-y-1">

@@ -1186,7 +1186,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
             >
               <strong style={{ fontWeight: 800 }}>View only.</strong>{' '}
               Your organizer role can see every financial detail here but cannot change any of
-              them — fees, add-ons, vouchers, payout settings and invoice status are all locked.
+              them: fees, add-ons, vouchers, payout settings and invoice status are all locked.
             </p>
           </div>
         )}

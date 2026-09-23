@@ -173,7 +173,7 @@ function DraftLandingInner() {
     }
     if (result.ok) { setState('discarded'); return; }
     if (result.reason === 'unauthenticated') {
-      setDiscardError('Please sign in again — your session has expired.');
+      setDiscardError('Please sign in again. Your session has expired.');
       return;
     }
     // 'not_found' also covers a token that belongs to somebody else's draft:
@@ -248,7 +248,7 @@ function DraftLandingInner() {
         <div className="rounded-2xl px-4 py-3 mb-5" style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
           <p className="text-sm" style={{ color: stopState === 'error' ? DANGER : NEU.ink, fontFamily: OUTFIT, lineHeight: 1.5 }}>
             {stopState === 'working' && 'Turning these reminders off…'}
-            {stopState === 'done' && 'Done — we will not email you about this unfinished application again. Your saved answers are untouched.'}
+            {stopState === 'done' && 'Done. We will not email you about this unfinished application again. Your saved answers are untouched.'}
             {stopState === 'already' && 'Reminders for this draft were already off. Nothing to change, and your saved answers are untouched.'}
             {stopState === 'error' && 'We could not turn these reminders off just now. Please try the link again.'}
           </p>

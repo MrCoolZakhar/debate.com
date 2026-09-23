@@ -104,7 +104,7 @@ export default function FinancialsHistoryPage() {
             Transaction history
           </h2>
           <p style={mutedCaption}>
-            Every payment recorded against this conference&apos;s invoices, newest first — the money log.
+            Every payment recorded against this conference&apos;s invoices, newest first. The money log.
           </p>
         </div>
       </div>
@@ -132,7 +132,7 @@ export default function FinancialsHistoryPage() {
             No transactions yet
           </p>
           <p className="mt-1 max-w-sm" style={{ ...mutedCaption, fontSize: 11.5 }}>
-            Payments appear here — checkout, manual mark-paid, waivers, and refunds — as a detailed chronological log.
+            Payments appear here as a detailed chronological log: checkout, manual mark-paid, waivers, and refunds.
           </p>
         </NeuInset>
       ) : filtered.length === 0 ? (

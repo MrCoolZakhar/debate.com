@@ -396,7 +396,7 @@ export default function FinancialsSettingsPage() {
                   Onboard payments
                 </p>
                 <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: 'rgba(250,248,243,0.68)', lineHeight: 1.5 }}>
-                  Choose how you get paid — takes about a minute, and applications can&apos;t open until it&apos;s done.
+                  Choose how you get paid. It takes about a minute, and applications can&apos;t open until it&apos;s done.
                 </p>
               </div>
               <NeuButton gradient={NEU_GRADIENTS.gold} onClick={() => setWizardStep(1)}>
@@ -439,7 +439,7 @@ export default function FinancialsSettingsPage() {
               <p style={stepLabelStyle}>Step 2 of 3</p>
               {!payoutStripeSupported && (
                 <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, lineHeight: 1.5 }}>
-                  Stripe isn&apos;t available for {payoutCountryName} yet — continue with manual payments.
+                  Stripe isn&apos;t available for {payoutCountryName} yet. Continue with manual payments.
                 </p>
               )}
               <div className={`grid grid-cols-1 ${payoutStripeSupported ? 'md:grid-cols-2' : ''} gap-4 items-stretch`}>
@@ -456,7 +456,7 @@ export default function FinancialsSettingsPage() {
                       </p>
                     </div>
                     <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.ink, lineHeight: 1.6 }}>
-                      Payments are processed automatically and marked paid on Gavelling instantly. Money lands directly in your own bank account — no manual tracking.
+                      Payments are processed automatically and marked paid on Gavelling instantly. Money lands directly in your own bank account, with no manual tracking.
                     </p>
                     <p style={mutedCaption}>
                       Stripe&apos;s standard processing fee applies, since your conference is the merchant of record. Gavelling charges nothing.
@@ -475,7 +475,7 @@ export default function FinancialsSettingsPage() {
                     </p>
                   </div>
                   <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.ink, lineHeight: 1.6 }}>
-                    A payment link is optional — paste one and delegates are redirected to it to pay, or just leave instructions and mark each payment as received yourself.
+                    A payment link is optional. Paste one and delegates are redirected to it to pay, or just leave instructions and mark each payment as received yourself.
                   </p>
                   <p style={mutedCaption}>
                     No processing fee, but everything is tracked manually.
@@ -497,7 +497,7 @@ export default function FinancialsSettingsPage() {
                 Set up manual payments
               </p>
               <p style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: '#EED98A', backgroundColor: '#1B3828', borderRadius: 10, padding: '10px 12px', lineHeight: 1.5 }}>
-                Running a free conference? Write &quot;This conference is free&quot; in the instructions — you still need a method set before applications can open.
+                Running a free conference? Write &quot;This conference is free&quot; in the instructions. You still need a method set before applications can open.
               </p>
               {manualFormFields}
               <div className="flex items-center justify-between">
@@ -598,7 +598,7 @@ export default function FinancialsSettingsPage() {
                   Onboard payments
                 </p>
                 <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: 'rgba(250,248,243,0.68)', lineHeight: 1.5 }}>
-                  Choose how you get paid — switch between Stripe and manual any time, each keeps its own setup ready.
+                  Choose how you get paid. Switch between Stripe and manual any time, and each keeps its own setup ready.
                 </p>
               </div>
             </div>
@@ -653,7 +653,7 @@ export default function FinancialsSettingsPage() {
 
           {payoutCountry && !payoutStripeSupported && (
             <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, lineHeight: 1.5 }}>
-              Stripe isn&apos;t available for {payoutCountryName} — using manual payments.
+              Stripe isn&apos;t available for {payoutCountryName}, so you&apos;re using manual payments.
             </p>
           )}
 
@@ -669,7 +669,7 @@ export default function FinancialsSettingsPage() {
               >
                 {connectStatus === 'complete' ? (
                   <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.ink, lineHeight: 1.6 }}>
-                    Stripe connected — delegate payments go directly to your Stripe account.
+                    Stripe connected. Delegate payments go directly to your Stripe account.
                   </p>
                 ) : connectStatus === 'pending' ? (
                   <>
@@ -683,7 +683,7 @@ export default function FinancialsSettingsPage() {
                       </p>
                     ) : (
                       <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.ink, lineHeight: 1.6 }}>
-                        Finish your Stripe onboarding — Stripe still needs a few details before payouts can start.
+                        Finish your Stripe onboarding. Stripe still needs a few details before payouts can start.
                       </p>
                     )}
                     {connectError && (
@@ -721,7 +721,7 @@ export default function FinancialsSettingsPage() {
                 ) : (
                   <>
                     <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.ink, lineHeight: 1.6 }}>
-                      Payments are processed automatically and marked paid on Gavelling instantly. Money lands directly in your own bank account — no manual tracking.
+                      Payments are processed automatically and marked paid on Gavelling instantly. Money lands directly in your own bank account, with no manual tracking.
                     </p>
                     <p style={mutedCaption}>
                       Stripe&apos;s standard processing fee applies, since your conference is the merchant of record. Gavelling charges nothing.
@@ -754,13 +754,13 @@ export default function FinancialsSettingsPage() {
               title="Manual Payments"
             >
               <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.ink, lineHeight: 1.6 }}>
-                A payment link is optional — paste one below and delegates are redirected to it to pay, or just leave instructions and mark each payment as received yourself from the Financials or Applications screens.
+                A payment link is optional. Paste one below and delegates are redirected to it to pay, or just leave instructions and mark each payment as received yourself from the Financials or Applications screens.
               </p>
               <p style={mutedCaption}>
                 No processing fee, but everything is tracked manually.
               </p>
               <p style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: '#EED98A', backgroundColor: '#1B3828', borderRadius: 10, padding: '10px 12px', lineHeight: 1.5 }}>
-                Running a free conference? Choose Manual and write &quot;This conference is free&quot; in the instructions — you still need a method set before applications can open.
+                Running a free conference? Choose Manual and write &quot;This conference is free&quot; in the instructions. You still need a method set before applications can open.
               </p>
               {manualFormFields}
               <NeuButton

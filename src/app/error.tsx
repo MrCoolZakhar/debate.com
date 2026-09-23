@@ -58,7 +58,7 @@ export default function Error({
           Something went wrong
         </h2>
         <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.7 }}>
-          This part of the page failed to load. We&apos;ve logged it automatically — try again, or head back to safety.
+          This part of the page failed to load. We&apos;ve logged it automatically. Try again, or head back to safety.
         </p>
 
         <div className="flex items-center justify-center gap-2.5 flex-wrap">

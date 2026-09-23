@@ -1389,7 +1389,7 @@ export default function NewConferencePage() {
                       <ErrorNote>{acronymError}</ErrorNote>
                     ) : (
                       <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, marginTop: 8 }}>
-                        Suggested from your conference name. Use whatever your conference actually goes by — &ldquo;MODEL NATO GERMANY&rdquo; is as valid as &ldquo;TEIMUN&rdquo;. The edition year is added automatically.
+                        Suggested from your conference name. Use whatever your conference actually goes by. &ldquo;MODEL NATO GERMANY&rdquo; is as valid as &ldquo;TEIMUN&rdquo;. The edition year is added automatically.
                       </p>
                     )}
                   </div>
@@ -1537,7 +1537,7 @@ export default function NewConferencePage() {
                         Dates are to be decided
                       </span>
                       <span className="block text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                        Set them any time later. A TBD conference stays private (no public link) until you add dates — you can still open applications.
+                        Set them any time later. A TBD conference stays private (no public link) until you add dates. You can still open applications.
                       </span>
                     </span>
                   </button>

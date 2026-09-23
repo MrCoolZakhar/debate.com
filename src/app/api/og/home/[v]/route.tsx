@@ -56,7 +56,7 @@ export async function GET(
       // rather than as branding. The headline's job is to say what the site is
       // for; the brand row says whose it is.
       headline="Find your next MUN"
-      subhead="Conferences, applications and committee software — all in one place."
+      subhead="Conferences, applications and committee software, all in one place."
       chips={chips}
     />,
   );

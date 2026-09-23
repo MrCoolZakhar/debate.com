@@ -6,7 +6,7 @@ import { COMPANY, PLACE_OF_REGISTRATION } from '@/lib/companyDetails';
 
 export const metadata: Metadata = pageMetadata({
   title: 'Terms of Service',
-  description: 'The terms governing your use of Gavelling — the Model UN conference and committee platform operated by GAVELLING LTD.',
+  description: 'The terms governing your use of Gavelling, the Model UN conference and committee platform operated by GAVELLING LTD.',
   path: '/terms',
 });
 
@@ -25,7 +25,7 @@ export default function TermsPage() {
       intro={
         <>
           <p>
-            These terms cover both parts of Gavelling — <strong>Sessions</strong> (running a live committee) and{' '}
+            These terms cover both parts of Gavelling, <strong>Sessions</strong> (running a live committee) and{' '}
             <strong>Conferences</strong> (listing, applying to and attending a conference). The sections below apply to
             everyone; <Link href="#by-role" style={A}>section 5</Link> sets out what changes depending on whether you are
             a delegate, a chair, or the person organising.
@@ -97,7 +97,7 @@ export default function TermsPage() {
       {/* ── The role-specific terms ─────────────────────────────────────────── */}
       <LegalSection n={5} title="What applies to you" id="by-role">
         <p>
-          Gavelling is used by very different people — a delegate joining one committee, and a secretariat running a
+          Gavelling is used by very different people, a delegate joining one committee, and a secretariat running a
           conference for a thousand, are doing quite different things. Open the panel that matches you.
         </p>
 
@@ -105,11 +105,11 @@ export default function TermsPage() {
           <Disclosure eyebrow="Sessions" title="If you're a delegate, chair or faculty advisor in a session" defaultOpen>
             <ul className={UL}>
               <li>
-                No account is needed. You join with a <strong>6-character session code</strong> from your chair — treat
+                No account is needed. You join with a <strong>6-character session code</strong> from your chair. Treat
                 that code like a key, and only share it with people meant to be in the committee.
               </li>
               <li>
-                What you enter is <strong>visible to others in the session</strong> — your name, country, speeches
+                What you enter is <strong>visible to others in the session</strong>: your name, country, speeches
                 logged, chat messages, and any documents you submit. Don&apos;t put anything private in them.
               </li>
               <li>
@@ -134,7 +134,7 @@ export default function TermsPage() {
                 responsible for how you run it.
               </li>
               <li>
-                You&apos;re responsible for the details you enter about other people — delegate names and country
+                You&apos;re responsible for the details you enter about other people, delegate names and country
                 assignments in particular. Enter only what the committee needs.
               </li>
               <li>
@@ -146,7 +146,7 @@ export default function TermsPage() {
                 code gets out.
               </li>
               <li>
-                Sessions are automatically deleted 72 hours after they end. Export anything you need to keep — we
+                Sessions are automatically deleted 72 hours after they end. Export anything you need to keep. We
                 can&apos;t recover it afterwards.
               </li>
             </ul>
@@ -159,7 +159,7 @@ export default function TermsPage() {
             </p>
             <ul className={UL}>
               <li>
-                Your application — including your answers, preferences and any documents — is sent to that
+                Your application, including your answers, preferences and any documents, is sent to that
                 conference&apos;s organising team, who decide on it.
               </li>
               <li>
@@ -171,7 +171,7 @@ export default function TermsPage() {
               <li>
                 Your MUN CV is yours, and it is <strong>public</strong>. Every account has one, at{' '}
                 <code>gavelling.com/cv/…</code>, and anyone with that address can read it without signing in.
-                There is currently no way to make it private or unpublish it — what you control is what you
+                There is currently no way to make it private or unpublish it. What you control is what you
                 put on it. Delete an entry and it leaves the page straight away; delete your account and the
                 page goes with it. See section 16 of the{' '}
                 <Link href="/privacy" style={A}>Privacy Policy</Link> for exactly what a visitor sees.
@@ -185,12 +185,12 @@ export default function TermsPage() {
 
           <Disclosure eyebrow="Conferences" title="If you're organising a conference">
             <p>
-              Organisers get access to other people&apos;s personal data — often minors&apos; — so more is expected of
+              Organisers get access to other people&apos;s personal data, often minors&apos;, so more is expected of
               you. By running a conference on Gavelling you agree that:
             </p>
             <ul className={UL}>
               <li>
-                You&apos;ll describe your conference <strong>honestly</strong> — dates, location, format, fees, and what
+                You&apos;ll describe your conference <strong>honestly</strong>: dates, location, format, fees, and what
                 a fee does and doesn&apos;t cover.
               </li>
               <li>
@@ -205,7 +205,7 @@ export default function TermsPage() {
               </li>
               <li>
                 <strong>Safeguarding is yours.</strong> You are responsible for the duty of care owed to attendees,
-                especially under-18s — including any checks, supervision, insurance and permissions your jurisdiction
+                especially under-18s, including any checks, supervision, insurance and permissions your jurisdiction
                 requires.
               </li>
               <li>You&apos;re responsible for any taxes due on the fees you charge.</li>
@@ -224,12 +224,12 @@ export default function TermsPage() {
 
       <LegalSection n={6} title="Your content">
         <p>
-          You keep ownership of what you create — position papers, working papers, resolutions, messages, conference
+          You keep ownership of what you create, position papers, working papers, resolutions, messages, conference
           descriptions and profile information.
         </p>
         <p>
           You give us permission to host, store, copy and display that content <strong>only so we can run the platform
-          for you</strong> — showing your paper to your chair, or your application to the organiser you applied to. That
+          for you</strong>, showing your paper to your chair, or your application to the organiser you applied to. That
           permission ends when you delete the content, apart from copies that sit briefly in routine backups.
         </p>
         <p>You confirm you have the right to upload what you upload, and that it doesn&apos;t infringe anyone else&apos;s rights.</p>
@@ -255,9 +255,9 @@ export default function TermsPage() {
         <ul className={UL}>
           <li>Some features are free; others need credits or a paid subscription. Prices are shown before you buy.</li>
           <li>Payments are processed by <strong>Stripe</strong>. We don&apos;t receive or store full card details.</li>
-          <li>Subscriptions renew automatically until cancelled. Cancel any time — it takes effect at the end of the current billing period.</li>
+          <li>Subscriptions renew automatically until cancelled. Cancel any time. It takes effect at the end of the current billing period.</li>
           <li>Credits are for use on the platform. They have no cash value and aren&apos;t transferable or refundable for money.</li>
-          <li>Delegate fees charged by a conference belong to that organiser, not to us — see section 5.</li>
+          <li>Delegate fees charged by a conference belong to that organiser, not to us. See section 5.</li>
         </ul>
         <p>
           <strong>Cancelling.</strong> As a consumer in the UK or EU you normally have 14 days to cancel a digital
@@ -268,7 +268,7 @@ export default function TermsPage() {
 
       <LegalSection n={9} title="Our intellectual property">
         <p>
-          The platform — its software, design, branding and the content we create — belongs to {COMPANY.name} and its
+          The platform, its software, design, branding and the content we create, belongs to {COMPANY.name} and its
           licensors. These terms let you use the service; they don&apos;t transfer ownership. Please don&apos;t copy our
           branding or pass the platform off as your own product.
         </p>
@@ -289,13 +289,13 @@ export default function TermsPage() {
           never be interrupted. Maintenance, updates or failures at our providers can affect access, and the service is
           provided &quot;as is&quot; so far as the law allows.
         </p>
-        <p>Keep your own copies of anything important — session data is deleted on the schedule in our Privacy Policy.</p>
+        <p>Keep your own copies of anything important. Session data is deleted on the schedule in our Privacy Policy.</p>
       </LegalSection>
 
       <LegalSection n={12} title="Our liability">
         <p>
           Nothing here limits our liability for death or personal injury caused by our negligence, for fraud, or for
-          anything else that can&apos;t lawfully be excluded — including your statutory rights as a consumer.
+          anything else that can&apos;t lawfully be excluded, including your statutory rights as a consumer.
         </p>
         <p>Beyond that, we&apos;re not liable for:</p>
         <ul className={UL}>
@@ -317,7 +317,7 @@ export default function TermsPage() {
         </p>
         <p>
           If we close your account without good reason, we&apos;ll refund any unused paid period. Sections that should
-          naturally survive — including 6, 9, 12 and 16 — carry on applying afterwards.
+          naturally survive, including 6, 9, 12 and 16, carry on applying afterwards.
         </p>
       </LegalSection>
 
@@ -333,7 +333,7 @@ export default function TermsPage() {
         <p>
           If something has gone wrong, email <a href={`mailto:${CONTACT_EMAIL}`} style={A}>{CONTACT_EMAIL}</a> and
           we&apos;ll try to put it right. For anything about your personal data see{' '}
-          <Link href="/privacy#your-rights" style={A}>Your Rights</Link> — you can also complain to the UK Information
+          <Link href="/privacy#your-rights" style={A}>Your Rights</Link>. You can also complain to the UK Information
           Commissioner&apos;s Office at <span style={{ fontWeight: 600 }}>ico.org.uk</span>.
         </p>
       </LegalSection>

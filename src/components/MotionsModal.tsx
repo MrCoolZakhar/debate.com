@@ -364,7 +364,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries, optional
 }
 
 const optionalProposerPlaceholder = (language: string) =>
-  language === 'ar' ? 'اختياري — اتركه فارغًا' : language === 'fr' ? 'Facultatif — laisser vide' : language === 'es' ? 'Opcional — dejar en blanco' : 'Optional — leave blank';
+  language === 'ar' ? 'اختياري: اتركه فارغًا' : language === 'fr' ? 'Facultatif : laisser vide' : language === 'es' ? 'Opcional: dejar en blanco' : 'Optional: leave blank';
 
 // ── Raise Motion Form ─────────────────────────────────────────────────────────
 function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion, belowQuorum = false, isViewOnly = false, floorFull = false }: {

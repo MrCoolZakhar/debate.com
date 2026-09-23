@@ -169,17 +169,17 @@ function page(o: { state: PageState; email?: string; token?: string }): string {
       break;
     case 'marketing':
       body = `<p>We will not send you announcements or reminders any more.</p>
-              <p>You will still hear from us about <strong>your own registrations</strong> — an application decision, a fee that becomes due, your committee allocation, a study guide your chairs publish. Those are the emails people are sorry to have missed.</p>`;
+              <p>You will still hear from us about <strong>your own registrations</strong>: an application decision, a fee that becomes due, your committee allocation, a study guide your chairs publish. Those are the emails people are sorry to have missed.</p>`;
       actions = form('Actually, stop everything', 'all', 'btn-quiet') + form('Undo', 'resubscribe', 'btn-quiet');
       break;
     case 'all':
-      body = `<p><strong>You will no longer receive any email from Gavelling</strong> — including about conferences you have applied to, decisions on those applications, and fees that become due.</p>
+      body = `<p><strong>You will no longer receive any email from Gavelling</strong>, including about conferences you have applied to, decisions on those applications, and fees that become due.</p>
               <p>If you only wanted the announcements to stop, keep the essentials instead.</p>`;
-      actions = form('Keep essential emails only', 'marketing', 'btn') + form('Undo — resubscribe me', 'resubscribe', 'btn-quiet');
+      actions = form('Keep essential emails only', 'marketing', 'btn') + form('Undo: resubscribe me', 'resubscribe', 'btn-quiet');
       break;
     default:
       body = `<p>Choose what you would like to stop. Nothing has changed yet.</p>
-              <p><strong>Essential emails</strong> are about your own registrations — an application decision, a fee that becomes due, your committee allocation. Most people who unsubscribe from a conference platform still want those.</p>`;
+              <p><strong>Essential emails</strong> are about your own registrations: an application decision, a fee that becomes due, your committee allocation. Most people who unsubscribe from a conference platform still want those.</p>`;
       actions = form('Keep essential emails only', 'marketing', 'btn') + form('Stop everything', 'all', 'btn-quiet');
       break;
   }
@@ -230,7 +230,7 @@ function page(o: { state: PageState; email?: string; token?: string }): string {
   ${body}
   <div class="actions">${actions}</div>
   <div class="foot">
-    Account and security email — password resets and address confirmations — is not affected by this,
+    Account and security email, such as password resets and address confirmations, is not affected by this,
     because it does not go through our mailing system.
     <br><br>
     GAVELLING LTD · Registered in England &amp; Wales no. 17337652 ·
