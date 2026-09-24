@@ -34,6 +34,7 @@ import { BENTO_BORDER, BENTO_WASH_FOREST } from '@/components/conferences/bento'
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
 import { hasExploredEmails } from '@/lib/emailsExplored';
 import { getConferenceIntent, intentRank } from '@/lib/conferenceIntent';
+import { outstandingPledgedSpots } from '@/lib/pledgedSpots';
 import { useConferenceMoney } from '@/lib/conferenceMoney';
 import RevenueReadout from '@/components/conferences/RevenueReadout';
 import { fetchDelegatePrices, TBD_PRICE, type DelegatePrice } from '@/lib/publicFees';
@@ -1353,6 +1354,10 @@ export default function DashboardPage() {
   ).length;
   const delegateApps = dash.apps.filter(a => a.role === 'delegate' || a.role === 'head-delegate').length;
   const societies = new Set(dash.apps.map(a => a.society_id).filter(Boolean)).size;
+  // People a delegation has pledged to bring who have no application row yet,
+  // net of anyone already registered under that delegation, so a spot is never
+  // counted twice (src/lib/pledgedSpots.ts). They join the dial's headline.
+  const pledgedSpots = outstandingPledgedSpots(dash.apps);
   const committeeCount = dash.committees.length;
   // A dais counts as handled once a chair is ASSIGNED (chair_user_ids) or
   // INVITED (a pending conference_chair_invites row). Chasing an organiser about
@@ -1840,6 +1845,7 @@ export default function DashboardPage() {
             <ApplicantsDial
               stages={dialStages}
               expected={expectedDelegates}
+              pledged={pledgedSpots}
               size={dialSize}
               onNavigate={(href) => router.push(href)}
             />

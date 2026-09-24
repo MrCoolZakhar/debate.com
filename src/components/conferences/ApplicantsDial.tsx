@@ -16,6 +16,13 @@
 // colour, so both "applied" and "accepted" read. Roles are disjoint (a person
 // holds one role row), so the bands honestly share one ring. The track left
 // over is the gap to the expected head count.
+//
+// Pledged spots (24 Sep 2026, owner: "this should be pledged number like before"):
+// delegation spots paid for or promised that nobody has registered against yet
+// (src/lib/pledgedSpots.ts, already netted off against the delegation's members)
+// are people coming too. They join the headline, draw a gold band after the roles
+// and get their own key row. They are never folded into a role band: they have
+// not applied, so they can never read as accepted.
 
 import { OUTFIT } from '@/components/neu';
 import { FUNNEL_RAMP } from './ParticipantsChart';
@@ -26,6 +33,8 @@ const MUTED = '#6B5F52';
 const TRACK = '#E7E1D1';
 /** The card surface the pending tint is mixed towards. */
 const SURFACE = '#F0EBDD';
+/** Pledged spots are gold, never a colour from the role ramp. */
+const PLEDGED = '#C79A2E';
 
 export interface DialStage {
   key: string;
@@ -43,6 +52,8 @@ export interface ApplicantsDialProps {
   stages: DialStage[];
   /** Expected head count; 0 or less = not set. */
   expected: number;
+  /** Outstanding pledged delegation spots (outstandingPledgedSpots). */
+  pledged?: number;
   size?: number;
   onNavigate?: (href: string) => void;
 }
@@ -67,9 +78,12 @@ function arcPath(cx: number, cy: number, r: number, from: number, to: number) {
 }
 
 export default function ApplicantsDial({
-  stages, expected, size = 236, onNavigate,
+  stages, expected, pledged = 0, size = 236, onNavigate,
 }: ApplicantsDialProps) {
-  const applied = stages.reduce((n, s) => n + Math.max(0, s.applied), 0);
+  const registered = stages.reduce((n, s) => n + Math.max(0, s.applied), 0);
+  const pledgedHeads = Math.max(0, Math.round(pledged));
+  /* The headline is everybody coming: people on the list plus pledged spots. */
+  const applied = registered + pledgedHeads;
   const accepted = stages.reduce((n, s) => n + Math.max(0, Math.min(s.accepted, s.applied)), 0);
   const target = Math.max(expected, 0);
   const colorOf = (i: number) => FUNNEL_RAMP[Math.min(i, FUNNEL_RAMP.length - 1)] as string;
@@ -91,6 +105,7 @@ export default function ApplicantsDial({
     if (acc > 0) bands.push({ key: `${s.key}-acc`, label: s.label, value: acc, color, title: `${s.label}: ${acc.toLocaleString()} accepted` });
     if (pending > 0) bands.push({ key: `${s.key}-pend`, label: s.label, value: pending, color: tint(color, 0.58), title: `${s.label}: ${pending.toLocaleString()} still pending` });
   });
+  if (pledgedHeads > 0) bands.push({ key: 'pledged', label: 'Pledged spots', value: pledgedHeads, color: PLEDGED, title: `Pledged spots: ${pledgedHeads.toLocaleString()} not registered yet` });
   let cursor = 0;
   const arcs = bands.map((b) => {
     const from = cursor;
@@ -107,7 +122,7 @@ export default function ApplicantsDial({
           width={size}
           height={size}
           role="img"
-          aria-label={`${applied} applied${target > 0 ? ` of ${target} expected` : ''}, ${accepted} accepted. ${stages
+          aria-label={`${applied} applicants${target > 0 ? ` of ${target} expected` : ''}${pledgedHeads > 0 ? `, ${registered} registered and ${pledgedHeads} pledged delegation spots` : ''}, ${accepted} accepted. ${stages
             .map((s) => `${s.label} ${s.applied} applied, ${s.accepted} accepted`)
             .join('. ')}.`}
         >
@@ -156,7 +171,7 @@ export default function ApplicantsDial({
               fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: MUTED,
             }}
           >
-            Applied
+            {pledgedHeads > 0 ? 'Applicants' : 'Applied'}
           </span>
           <span
             style={{
@@ -164,7 +179,9 @@ export default function ApplicantsDial({
               fontWeight: 700, color: MUTED, fontVariantNumeric: 'tabular-nums',
             }}
           >
-            {accepted.toLocaleString()} accepted
+            {pledgedHeads > 0
+              ? `${registered.toLocaleString()} registered · ${pledgedHeads.toLocaleString()} pledged`
+              : `${accepted.toLocaleString()} accepted`}
           </span>
         </div>
       </div>
@@ -222,6 +239,20 @@ export default function ApplicantsDial({
             </li>
           );
         })}
+        {pledgedHeads > 0 && (
+          <li title="Delegation spots pledged that nobody has registered against yet">
+            <span style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '3px 4px', minHeight: 26 }}>
+              <span aria-hidden style={{ width: 9, height: 9, borderRadius: 3, flexShrink: 0, background: PLEDGED }} />
+              <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: INK_70, minWidth: 0 }}>
+                Pledged spots
+              </span>
+              <span style={{ marginInlineStart: 'auto', fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, color: INK, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {pledgedHeads.toLocaleString()}
+                <span style={{ fontSize: 11, fontWeight: 700, color: MUTED }}> not registered yet</span>
+              </span>
+            </span>
+          </li>
+        )}
       </ul>
     </div>
   );
