@@ -31,7 +31,7 @@ export default function ConferenceBridge() {
           <p className="cb-body">{t('sl_conf_body')}</p>
         </div>
         <div className="cb-act">
-          <Link href="/organisers" className="cb-cta">{t('sl_conf_cta')}</Link>
+          <Link href="/conferences/new" className="cb-cta">{t('sl_conf_cta')}</Link>
           <span className="cb-free">{t('sl_conf_free')}</span>
         </div>
       </div>

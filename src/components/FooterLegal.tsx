@@ -83,10 +83,16 @@ export default function FooterLegal({
           MUN Guides
         </Link>
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
-        {/* The organiser landing page (server-rendered, in the sitemap). An
-            information link, as the footer rule allows (CLAUDE.md §4). */}
-        <Link href="/organisers" className={hubLink}>
+        {/* "List your conference" goes straight into the creation wizard (owner,
+            25 Sep 2026). "For organisers" keeps the organiser landing page
+            (server-rendered, in the sitemap) reachable by a plain link, which the
+            crawl rule needs (CLAUDE.md §4). */}
+        <Link href="/conferences/new" className={hubLink}>
           List your conference
+        </Link>
+        <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
+        <Link href="/organisers" className={hubLink}>
+          For organisers
         </Link>
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
         {/* The session tools, a plain server-rendered way in to both from

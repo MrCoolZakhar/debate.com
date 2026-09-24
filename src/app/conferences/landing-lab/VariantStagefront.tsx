@@ -75,7 +75,7 @@ const ROLE_SLIDES: RoleSlide[] = [
     image: '/roles/secretariat.webp',
     imageAlt: 'Secretariat staff coordinating a conference',
     primary: { label: 'See open roles', href: '/conferences/roles' },
-    secondary: { label: 'List your conference', href: '/organisers' },
+    secondary: { label: 'List your conference', href: '/conferences/new' },
   },
   {
     role: 'Chairs',
@@ -377,7 +377,8 @@ export default function VariantStagefront({
               <div className="flex flex-col gap-3" style={{ marginTop: '32px', maxWidth: 'clamp(460px, 40vw, 640px)' }}>
                 <HeroSearchBar conferences={conferences} />
                 <div className="flex justify-end">
-                  <HeroTextLink href="/organisers" label="Organising one? List it free" />
+                  {/* Straight into creating (owner, 25 Sep 2026: the /organisers page in between "adds nothing"). */}
+                  <HeroTextLink href="/conferences/new" label="Organising one? List it free" />
                 </div>
               </div>
             </div>
