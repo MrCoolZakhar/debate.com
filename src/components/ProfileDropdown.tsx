@@ -503,7 +503,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
               </div>
             )}
             <div className="min-w-0">
-              <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
+              <p className="text-sm font-bold truncate" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                 {profile?.display_name ?? user.email?.split('@')[0]}
               </p>
               <p className="text-xs truncate mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
@@ -541,7 +541,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                   key={item.href}
                   href={item.href}
                   onClick={() => setOpen(false)}
-                  className="flex items-center gap-2.5 px-4 py-2 font-semibold transition-colors"
+                  className="flex items-center gap-2.5 px-4 py-2 font-bold transition-colors"
                   style={{
                     color: '#1C1410',
                     fontFamily: "var(--font-brand), sans-serif",
@@ -562,7 +562,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
               <Link
                 href="/account/unlimited"
                 onClick={() => setOpen(false)}
-                className="flex items-center gap-2.5 px-4 py-2 font-semibold transition-colors"
+                className="flex items-center gap-2.5 px-4 py-2 font-bold transition-colors"
                 style={{
                   color: '#1B3828',
                   fontFamily: "var(--font-brand), sans-serif",
@@ -581,7 +581,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
               <Link
                 href="/account/unlimited"
                 onClick={() => setOpen(false)}
-                className="flex items-center gap-2.5 px-4 py-2 font-semibold transition-colors"
+                className="flex items-center gap-2.5 px-4 py-2 font-bold transition-colors"
                 style={{
                   color: '#1C1410',
                   fontFamily: "var(--font-brand), sans-serif",
@@ -695,7 +695,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                           )}
                         </span>
                         <span
-                          className="flex-1 truncate font-semibold"
+                          className="flex-1 truncate font-bold"
                           style={{ color: '#1C1410', fontSize: '12px', letterSpacing: '0.03em', fontFamily: "var(--font-brand), sans-serif" }}
                         >
                           {conferenceAcronymLabel({ acronym: conf.acronym, start_date: conf.start_date })}
@@ -715,7 +715,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                         )}
                         {conf.standing?.kind === 'allocated' ? (
                           <span
-                            className="inline-flex min-w-0 max-w-[55%] shrink items-center gap-1.5 font-semibold"
+                            className="inline-flex min-w-0 max-w-[55%] shrink items-center gap-1.5 font-bold"
                             style={{ color: '#1B3828', fontSize: '11px', fontFamily: "var(--font-brand), sans-serif" }}
                             title={`${conf.standing.countryName ?? ''}${conf.standing.committee ? ` · ${conf.standing.committee}` : ''}`}
                           >
@@ -744,7 +744,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                       <Link
                         href="/conferences/new"
                         onClick={() => setOpen(false)}
-                        className="flex items-center gap-2.5 px-4 py-2 font-semibold transition-colors"
+                        className="flex items-center gap-2.5 px-4 py-2 font-bold transition-colors"
                         style={{ color: '#1B3828', fontSize: '11px', letterSpacing: '0.05em', fontFamily: "var(--font-brand), sans-serif", textDecoration: 'none' }}
                         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
@@ -756,7 +756,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                       <Link
                         href="/my-conferences"
                         onClick={() => setOpen(false)}
-                        className="flex items-center gap-2.5 px-4 py-2 font-semibold transition-colors"
+                        className="flex items-center gap-2.5 px-4 py-2 font-bold transition-colors"
                         style={{ color: '#1B3828', fontSize: '11px', letterSpacing: '0.05em', fontFamily: "var(--font-brand), sans-serif", textDecoration: 'none' }}
                         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
@@ -776,7 +776,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
           {/* Sign out */}
           <button
             onClick={handleSignOut}
-            className="flex items-center gap-2.5 w-full text-left px-4 py-2.5 my-1 font-semibold transition-colors focus:outline-none"
+            className="flex items-center gap-2.5 w-full text-left px-4 py-2.5 my-1 font-bold transition-colors focus:outline-none"
             style={{
               color: '#8B2020',
               fontFamily: "var(--font-brand), sans-serif",

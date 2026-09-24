@@ -35,7 +35,7 @@ export default function LiveNowMenuSection({ onNavigate }: { onNavigate: () => v
             <div key={e.key} className="flex items-center gap-2.5 px-4 py-1.5">
               <EntryMark item={e} size={28} />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold" style={{ color: LR.ink, fontSize: 12.5, lineHeight: 1.25 }}>{title}</p>
+                <p className="truncate font-bold" style={{ color: LR.ink, fontSize: 12.5, lineHeight: 1.25 }}>{title}</p>
                 <p className="truncate" title={sub} style={{ color: LR.inkSoft, fontSize: 11, lineHeight: 1.3 }}>{sub}</p>
               </div>
               <a
