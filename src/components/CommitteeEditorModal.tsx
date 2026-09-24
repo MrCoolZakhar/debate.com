@@ -16,6 +16,7 @@ import { getCountryByName } from '@/lib/countries';
 import { type RosterEntry } from '@/components/ConferenceRosterPicker';
 import {
   CommitteeIdentityPreview,
+  EmblemChangeButton,
   CommitteeSetupFields,
   CommitteeSeatsStep,
   CommitteeMetaControls,
@@ -1404,6 +1405,18 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
                   topicEmpty="No topic yet"
                   tone={medallionTone(effectiveType)}
                   monogramText={previewAcronym || name}
+                  emblemAction={
+                    <EmblemChangeButton
+                      value={previewEmblem}
+                      onPick={(logo) => patchDraft({ logoUrl: logo, emblemManuallySet: true })}
+                      onUpload={() => document.getElementById('committee-emblem-upload')?.click()}
+                      onReset={() => patchDraft({ emblemManuallySet: false })}
+                      uploading={logoUploading}
+                      canReset={draft.emblemManuallySet && !logoUploading}
+                      tone={medallionTone(effectiveType)}
+                      monogramText={previewAcronym || name}
+                    />
+                  }
                 />
               </div>
               <CommitteeMetaControls draft={draft} onChange={patchDraft} idPrefix="ced-name" />
@@ -1412,7 +1425,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
             {/* Step 1 from the SHARED set-up surface, the same component the
                 creation wizard renders, so the two can never drift. Difficulty
                 and Language are drawn above (metaElsewhere), the emblem folds
-                (foldEmblem). */}
+                (foldEmblem: "Change emblem" sits under the header's emblem). */}
             <CommitteeSetupFields
               draft={draft}
               onChange={patchDraft}

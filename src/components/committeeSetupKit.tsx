@@ -113,7 +113,7 @@ export function SetupStep({ step, title, id, aside }: { step: number; title: str
 // ── The live committee identity ──────────────────────────────────────────────
 // The /create preview, with the conference editor's type-toned monogram as the
 // fallback so nothing about crisis / custom committees is lost.
-export function CommitteeIdentityPreview({ src, primary, secondary, placeholder, topic, topicLabel, topicEmpty, tone, monogramText }: {
+export function CommitteeIdentityPreview({ src, primary, secondary, placeholder, topic, topicLabel, topicEmpty, tone, monogramText, emblemAction }: {
   src: string | null;
   primary: string;
   secondary: string | null;
@@ -124,12 +124,13 @@ export function CommitteeIdentityPreview({ src, primary, secondary, placeholder,
   tone: MedallionTone;
   /** Initials for the fallback seal when there is no emblem. */
   monogramText: string;
+  /** Drawn right under the emblem (the committee editor's "Change emblem",
+   *  24 Sep 2026, owner: "right below the emblem itself, saving a lot of space"). */
+  emblemAction?: ReactNode;
 }) {
   const hasName = !!primary;
   const shown = primary || placeholder;
-  return (
-    <div aria-hidden className="flex flex-shrink-0 items-center gap-4">
-      {src ? (
+  const medallion = src ? (
         <span
           key={src}
           className="relative flex flex-shrink-0 items-center justify-center rounded-full bg-white"
@@ -145,9 +146,19 @@ export function CommitteeIdentityPreview({ src, primary, secondary, placeholder,
         /* No name yet → MonogramMedallion's own em-dash, never initials of the
            placeholder ("Untitled committee" used to read UNTITL). */
         <MonogramMedallion text={monogramText} tone={tone} size={84} />
+      );
+  return (
+    <div className="flex flex-shrink-0 items-center gap-4">
+      {emblemAction ? (
+        <div className="flex flex-shrink-0 flex-col items-center gap-1.5">
+          <span aria-hidden className="flex">{medallion}</span>
+          {emblemAction}
+        </div>
+      ) : (
+        <span aria-hidden className="flex flex-shrink-0">{medallion}</span>
       )}
 
-      <div className="min-w-0 flex-1">
+      <div aria-hidden className="min-w-0 flex-1">
         <p
           className="truncate"
           title={shown}
@@ -858,13 +869,13 @@ export function CommitteeMetaControls({ draft, onChange, idPrefix }: {
   );
 }
 
-// ── The emblem, folded ───────────────────────────────────────────────────────
-// (23 Sep 2026, owner: "collapse the change emblem; only when clicked, give the
-// two options: select from the presets or upload your own".) One row: the
-// current emblem small, "Change emblem", a chevron. Opened, two choices: Presets
-// (the same EmblemPicker swatches, with Auto) and Upload your own (the caller's
-// own file picker, straight away). Same writes as the unfolded picker.
-function EmblemDisclosure({ value, onPick, onUpload, onReset, uploading, canReset, tone, monogramText }: {
+// ── "Change emblem", under the emblem itself ────────────────────────────────
+// (24 Sep 2026, owner: "the change emblem should be right below the emblem itself,
+// saving a lot of space".) A small pill under the header medallion; pressing it opens
+// a panel through Portal (never clipped by the editor's scroller) with the same three
+// choices the folded row had: Choose a preset (the EmblemPicker swatches), Upload your
+// own, Automatic. Same writes as before.
+export function EmblemChangeButton({ value, onPick, onUpload, onReset, uploading, canReset, tone, monogramText }: {
   value: string | null;
   onPick: (logo: string) => void;
   onUpload?: () => void;
@@ -875,94 +886,115 @@ function EmblemDisclosure({ value, onPick, onUpload, onReset, uploading, canRese
   monogramText: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [showPresets, setShowPresets] = useState(false);
+  const [pos, setPos] = useState<{ left: number; top: number; width: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
-  const choice = (active: boolean) =>
-    `inline-flex items-center gap-1.5 rounded-[10px] px-3 py-1.5 transition-[background-color,color,transform] duration-150 active:scale-[0.97] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828] ${active ? '' : 'hover:bg-[#1B3828]/[0.06]'}`;
+
+  const place = useCallback(() => {
+    const el = btnRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const vb = viewBox();
+    const width = Math.min(360, vb.right - vb.left - 16);
+    const left = Math.min(Math.max(vb.left + 8, r.left + r.width / 2 - 28), vb.right - width - 8);
+    setPos({ left, width, top: r.bottom + 6 });
+  }, []);
+  useReposition(open, place);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    // Escape folds the panel only (the editor's own Escape is a document capture listener).
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      setOpen(false);
+      btnRef.current?.focus();
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('pointerdown', onDown, true);
+      window.removeEventListener('keydown', onKey, true);
+    };
+  }, [open]);
+
+  const choice = 'inline-flex items-center gap-1.5 rounded-[10px] px-3 py-1.5 transition-[background-color,transform] duration-150 hover:bg-[#1B3828]/[0.06] active:scale-[0.97] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]';
   return (
-    <div>
+    <>
       <button
+        ref={btnRef}
         type="button"
-        onClick={() => { setOpen((o) => !o); if (open) setShowPresets(false); }}
+        onClick={() => { if (open) setOpen(false); else { place(); setOpen(true); } }}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
-        className="inline-flex items-center gap-2.5 rounded-[14px] py-1.5 ps-1.5 pe-3 transition-[background-color,transform] duration-150 hover:bg-[#1B3828]/[0.05] active:scale-[0.98] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
-        style={{ boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.14)', backgroundColor: 'rgba(255,255,255,0.55)' }}
+        className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 transition-[background-color,transform] duration-150 hover:bg-[#1B3828]/[0.07] active:scale-[0.97] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
+        style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, color: C.forest, boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.16)', backgroundColor: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}
       >
-        {value ? (
-          <span className="flex flex-shrink-0 items-center justify-center rounded-full bg-white" style={{ width: 30, height: 30, boxShadow: '0 1px 2px rgba(27,56,40,0.10), inset 0 0 0 1px rgba(0,0,0,0.07)' }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={value} alt="" draggable={false} decoding="async" className="block h-full w-full object-contain" style={{ padding: 4 }} />
-          </span>
-        ) : (
-          <MonogramMedallion text={monogramText || '—'} tone={tone} size={30} />
-        )}
-        <span style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 800, color: C.forest }}>
-          {uploading ? 'Uploading…' : 'Change emblem'}
-        </span>
         {uploading
-          ? <Loader2 size={14} strokeWidth={2.4} className="animate-spin" style={{ color: C.inkSoft }} aria-hidden />
-          : <ChevronDown size={15} strokeWidth={2.4} aria-hidden style={{ color: C.inkSoft, transform: open ? 'rotate(180deg)' : undefined, transition: 'transform 150ms' }} />}
+          ? <Loader2 size={12} strokeWidth={2.4} className="animate-spin" aria-hidden />
+          : <ImagePlus size={12} strokeWidth={2.4} aria-hidden />}
+        {uploading ? 'Uploading…' : 'Change emblem'}
       </button>
-      {open && (
-        <div id={panelId} className="mt-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowPresets((v) => !v)}
-              aria-pressed={showPresets}
-              className={choice(showPresets)}
-              style={{
-                fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800,
-                color: showPresets ? C.gold : C.forest,
-                backgroundColor: showPresets ? C.forest : 'transparent',
-                boxShadow: showPresets ? undefined : 'inset 0 0 0 1px rgba(27,56,40,0.18)',
-              }}
-            >
-              <Landmark size={13} strokeWidth={2.3} aria-hidden />
-              Choose a preset
-            </button>
-            {onUpload && (
-              <button
-                type="button"
-                onClick={() => { if (!uploading) onUpload(); }}
-                disabled={uploading}
-                className={choice(false)}
-                style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: C.forest, boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.18)' }}
-              >
-                {uploading ? <Loader2 size={13} strokeWidth={2.4} className="animate-spin" aria-hidden /> : <ImagePlus size={13} strokeWidth={2.3} aria-hidden />}
-                Upload your own
-              </button>
-            )}
-            {canReset && !showPresets && (
-              <button
-                type="button"
-                onClick={onReset}
-                title="Go back to the emblem Gavelling picks from the committee name"
-                className={choice(false)}
-                style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: C.inkSoft }}
-              >
-                <RotateCcw size={13} strokeWidth={2.3} aria-hidden />
-                Automatic
-              </button>
-            )}
-          </div>
-          {showPresets && (
-            <div className="mt-2">
-              <EmblemPicker
-                value={value}
-                onPick={onPick}
-                onReset={onReset}
-                uploading={uploading}
-                canReset={canReset}
-                tone={tone}
-                monogramText={monogramText}
-              />
+      {open && pos && (
+        <Portal>
+          <div
+            ref={panelRef}
+            id={panelId}
+            role="dialog"
+            aria-label="Change emblem"
+            className="fixed rounded-[16px] p-3"
+            style={{ left: pos.left, top: pos.top, width: pos.width, zIndex: 1300, backgroundColor: C.surface, boxShadow: SHADOW.card + ', inset 0 0 0 1px rgba(27,56,40,0.10)' }}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              {onUpload && (
+                <button
+                  type="button"
+                  onClick={() => { if (!uploading) { setOpen(false); onUpload(); } }}
+                  disabled={uploading}
+                  className={choice}
+                  style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: C.forest, boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.18)' }}
+                >
+                  <ImagePlus size={13} strokeWidth={2.3} aria-hidden />
+                  Upload your own
+                </button>
+              )}
+              {canReset && (
+                <button
+                  type="button"
+                  onClick={() => { onReset(); setOpen(false); }}
+                  title="Go back to the emblem Gavelling picks from the committee name"
+                  className={choice}
+                  style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: C.inkSoft }}
+                >
+                  <RotateCcw size={13} strokeWidth={2.3} aria-hidden />
+                  Automatic
+                </button>
+              )}
             </div>
-          )}
-        </div>
+            <p className="mb-1.5 mt-3 flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.inkSoft }}>
+              <Landmark size={12} strokeWidth={2.3} aria-hidden />
+              Presets
+            </p>
+            <EmblemPicker
+              value={value}
+              onPick={(logo) => { onPick(logo); setOpen(false); }}
+              onReset={() => { onReset(); setOpen(false); }}
+              uploading={uploading}
+              canReset={canReset}
+              tone={tone}
+              monogramText={monogramText}
+            />
+          </div>
+        </Portal>
       )}
-    </div>
+    </>
   );
 }
 
@@ -1176,20 +1208,10 @@ export function CommitteeSetupFields({
           </div>
           )}
 
-          <div>
-            <SetupLabel aside={onUploadEmblem && !foldEmblem ? 'or upload your own' : undefined}>Emblem</SetupLabel>
-            {foldEmblem ? (
-              <EmblemDisclosure
-                value={emblem}
-                onPick={(logo) => onChange({ logoUrl: logo, emblemManuallySet: true })}
-                onUpload={onUploadEmblem}
-                onReset={() => onChange({ emblemManuallySet: false })}
-                uploading={emblemUploading}
-                canReset={draft.emblemManuallySet && !emblemUploading}
-                tone={medallionTone(committeeType)}
-                monogramText={draft.abbreviation || draft.name}
-              />
-            ) : (
+          {/* foldEmblem: the committee editor draws "Change emblem" under the header's
+              emblem instead (EmblemChangeButton), so no emblem row here. */}
+          {!foldEmblem && <div>
+            <SetupLabel aside={onUploadEmblem ? 'or upload your own' : undefined}>Emblem</SetupLabel>
             <EmblemPicker
               value={emblem}
               onPick={(logo) => onChange({ logoUrl: logo, emblemManuallySet: true })}
@@ -1200,8 +1222,7 @@ export function CommitteeSetupFields({
               tone={medallionTone(committeeType)}
               monogramText={draft.abbreviation || draft.name}
             />
-            )}
-          </div>
+          </div>}
         </div>
       </section>
 

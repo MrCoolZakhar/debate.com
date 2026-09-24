@@ -26,6 +26,26 @@ export const COMMITTEE_LANGUAGES = [
   'Italian',
   'Turkish',
   'Japanese',
+  // Languages MUN committees are run in outside the UN six (24 Sep 2026, owner: "add any
+  // that you can find verified has committees in it. Definitely missing Hindi, Urdu,
+  // Slovak, Polish and Bahasa"): national-language committees at Indian, Pakistani,
+  // Indonesian, Malaysian, Bangladeshi and Central / Eastern European conferences.
+  'Hindi',
+  'Urdu',
+  'Bengali',
+  'Bahasa Indonesia',
+  'Bahasa Melayu',
+  'Korean',
+  'Vietnamese',
+  'Thai',
+  'Polish',
+  'Slovak',
+  'Czech',
+  'Hungarian',
+  'Romanian',
+  'Ukrainian',
+  'Greek',
+  'Dutch',
 ] as const;
 
 /** What a new committee starts on. */
@@ -49,7 +69,10 @@ export function isListedCommitteeLanguage(v: string | null | undefined): boolean
 const LANGUAGE_CODES: Record<string, string> = {
   english: 'EN', spanish: 'ES', french: 'FR', arabic: 'AR', chinese: 'ZH',
   russian: 'RU', portuguese: 'PT', german: 'DE', italian: 'IT', turkish: 'TR',
-  japanese: 'JA',
+  japanese: 'JA', hindi: 'HI', urdu: 'UR', bengali: 'BN', 'bahasa indonesia': 'ID',
+  'bahasa melayu': 'MS', korean: 'KO', vietnamese: 'VI', thai: 'TH', polish: 'PL',
+  slovak: 'SK', czech: 'CS', hungarian: 'HU', romanian: 'RO', ukrainian: 'UK',
+  greek: 'EL', dutch: 'NL',
 };
 
 /** The flag (ISO 3166 code, for CircleFlag) that stands for a listed language.
@@ -58,7 +81,10 @@ const LANGUAGE_CODES: Record<string, string> = {
 const LANGUAGE_FLAGS: Record<string, string> = {
   english: 'GB', spanish: 'ES', french: 'FR', arabic: 'SA', chinese: 'CN',
   russian: 'RU', portuguese: 'PT', german: 'DE', italian: 'IT', turkish: 'TR',
-  japanese: 'JP',
+  japanese: 'JP', hindi: 'IN', urdu: 'PK', bengali: 'BD', 'bahasa indonesia': 'ID',
+  'bahasa melayu': 'MY', korean: 'KR', vietnamese: 'VN', thai: 'TH', polish: 'PL',
+  slovak: 'SK', czech: 'CZ', hungarian: 'HU', romanian: 'RO', ukrainian: 'UA',
+  greek: 'GR', dutch: 'NL',
 };
 
 export function committeeLanguageFlag(name: string | null | undefined): string | null {
