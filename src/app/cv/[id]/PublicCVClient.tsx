@@ -12,11 +12,9 @@ import ProfileAvatarMenu from '@/components/ProfileAvatar';
 export interface PublicProfile {
   id: string;
   display_name: string | null;
+  /** Null when the owner hides it (profiles.cv_hide_nationality). */
   nationality: string | null;
-  education_level: string | null;
-  mun_experience_level: string | null;
   avatar_url: string | null;
-  bio: string | null;
 }
 
 // Data is resolved server-side (see page.tsx) and passed in as props, so the

@@ -7,7 +7,7 @@
 // renders a read-only CV (public view).
 
 import { useState } from 'react';
-import { Plus, Landmark } from 'lucide-react';
+import { Plus, Landmark, Eye, EyeOff } from 'lucide-react';
 import { Emoji3D, NEU } from '@/components/neu';
 import { committeeDisplayName } from '@/lib/presetNames';
 import { conferenceAcronymLabel, editionYear } from '@/lib/conferenceLabels';
@@ -155,13 +155,17 @@ function CommitteeLogo({ committee, size = 18 }: { committee: string; size?: num
 export function TimelineEntry({
   entry,
   onEdit,
+  onTogglePrivate,
   isLast,
 }: {
   entry: CVEntry;
   /** Provided on the private CV (opens the editor); omitted → read-only. */
   onEdit?: () => void;
+  /** Owner view only: hide / show this entry on the public CV. */
+  onTogglePrivate?: () => void;
   isLast: boolean;
 }) {
+  const hidden = !!entry.is_private;
   const [hovered, setHovered] = useState(false);
   const type = ENTRY_TYPE_MAP[entry.entry_type] ?? ENTRY_TYPE_MAP.delegate;
   const editable = !!onEdit;
@@ -263,6 +267,31 @@ export function TimelineEntry({
             <Emoji3D name={type.emoji} size={20} fallback={type.Icon} fallbackColor={type.accent} />
           </span>
 
+          {/* Owner only: show / hide this entry on the public CV. Its own
+              button, so it never opens the editor underneath. */}
+          {onTogglePrivate && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onTogglePrivate(); }}
+              onKeyDown={(e) => e.stopPropagation()}
+              aria-pressed={hidden}
+              aria-label={hidden ? `Show ${entry.conference_name} on your public CV` : `Hide ${entry.conference_name} from your public CV`}
+              title={hidden ? 'Hidden from your public CV. Click to show it.' : 'On your public CV. Click to hide it.'}
+              className="absolute flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
+              style={{
+                top: '-12px', right: '56px', width: '34px', height: '34px', borderRadius: '9999px',
+                background: hidden ? '#1B3828' : NEU.surface,
+                color: hidden ? '#EED98A' : '#5C5140',
+                border: '2px solid #FAF8F3',
+                boxShadow: NEU.outSm,
+                cursor: 'pointer',
+                transition: 'background-color 180ms ease, color 180ms ease',
+              }}
+            >
+              {hidden ? <EyeOff size={16} strokeWidth={2.3} /> : <Eye size={16} strokeWidth={2.3} />}
+            </button>
+          )}
+
           {/* Role chip */}
           <div className="flex items-center gap-3 mb-2 pr-9">
             <span
@@ -315,6 +344,15 @@ export function TimelineEntry({
                 {disp.secondary && (
                   <p className="mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, fontSize: '11.5px', fontWeight: 500, margin: '2px 0 0 0', lineHeight: 1.3 }}>
                     {disp.secondary}
+                  </p>
+                )}
+                {hidden && onTogglePrivate && (
+                  <p
+                    className="inline-flex items-center gap-1.5"
+                    style={{ color: '#5C5140', fontFamily: OUTFIT, fontSize: '12px', fontWeight: 700, margin: '6px 0 0 0' }}
+                  >
+                    <EyeOff size={13} strokeWidth={2.3} aria-hidden />
+                    Hidden from your public CV
                   </p>
                 )}
               </>

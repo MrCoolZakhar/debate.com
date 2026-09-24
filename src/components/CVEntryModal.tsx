@@ -55,6 +55,9 @@ export interface CVEntry {
    *  ("Gavelling record", no seal); manual = self-reported. */
   source: 'gavelling_verified' | 'gavelling_attended' | 'manual';
   created_at: string;
+  /** Hidden from the public CV (/cv/[id]). The owner and organisers of a
+   *  conference the owner applied to still read it (RLS cv_entry_visible). */
+  is_private?: boolean;
 }
 
 /** One item in applications.experience_entries (chair/secretariat MUN

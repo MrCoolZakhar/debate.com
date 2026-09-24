@@ -11,6 +11,8 @@ import { ShareAchievementModal } from '@/components/ShareAchievementModal';
 import Loader from '@/components/Loader';
 import { Eyebrow, GlassCard, OUTFIT, MONO, T } from '../accountUi';
 import { TimelineEntry, CVStatsRow } from './CVTimeline';
+import CVPrivacyPanel, { type CvPrivacy } from './CVPrivacyPanel';
+import { friendlyError } from '@/lib/friendlyError';
 
 // ── Page ───────────────────────────────────────────────────────────────────
 
@@ -23,13 +25,18 @@ export default function CVPage() {
   const [copied, setCopied]         = useState(false);
   // Spotify-Wrapped celebration — set only when a NEW entry is added.
   const [shareEntry, setShareEntry] = useState<CVEntry | null>(null);
+  // Who can see the CV (profiles.cv_private / cv_hide_nationality). Enforced by
+  // get_public_cv() and the mun_cv_entries SELECT policy, never by this page.
+  const [privacy, setPrivacy] = useState<CvPrivacy>({ cvPrivate: false, hideNationality: false });
+  const [privSaving, setPrivSaving] = useState(false);
+  const [privError, setPrivError] = useState<string | null>(null);
 
   const fetchEntries = useCallback(async () => {
     if (!user || !session) return;
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('mun_cv_entries')
-      .select('id, entry_type, conference_name, committee, allocation, expertise_level, award, awards, photos, description, logo_url, conference_id, event_date, source, created_at')
+      .select('id, entry_type, conference_name, committee, allocation, expertise_level, award, awards, photos, description, logo_url, conference_id, event_date, source, created_at, is_private')
       .eq('user_id', user.id);
     const rows = ((data as CVEntry[]) ?? []).map((r) => ({
       ...r,
@@ -55,6 +62,60 @@ export default function CVPage() {
     if (authLoading) return;
     fetchEntries();
   }, [authLoading, fetchEntries]);
+
+  useEffect(() => {
+    if (authLoading || !user || !session) return;
+    let cancelled = false;
+    getAuthedClient(session.access_token)
+      .from('profiles')
+      .select('cv_private, cv_hide_nationality')
+      .eq('id', user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        setPrivacy({ cvPrivate: !!data.cv_private, hideNationality: !!data.cv_hide_nationality });
+      });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, user?.id, session?.access_token]);
+
+  // Optimistic, then checked: supabase-js resolves with no error on a refused
+  // or zero-row update, so the rows are counted and the old value comes back
+  // when nothing landed.
+  const changePrivacy = useCallback(async (patch: Partial<CvPrivacy>) => {
+    if (!user || !session) return;
+    const before = privacy;
+    const next = { ...privacy, ...patch };
+    setPrivacy(next);
+    setPrivSaving(true);
+    setPrivError(null);
+    const { data, error } = await getAuthedClient(session.access_token)
+      .from('profiles')
+      .update({ cv_private: next.cvPrivate, cv_hide_nationality: next.hideNationality })
+      .eq('id', user.id)
+      .select('id');
+    setPrivSaving(false);
+    if (error || !data || data.length === 0) {
+      setPrivacy(before);
+      setPrivError(friendlyError(error, 'Could not save who can see your CV. Try again.'));
+    }
+  }, [user, session, privacy]);
+
+  const toggleEntryPrivate = useCallback(async (entry: CVEntry) => {
+    if (!session) return;
+    const nextVal = !entry.is_private;
+    setPrivError(null);
+    setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, is_private: nextVal } : e)));
+    const { data, error } = await getAuthedClient(session.access_token)
+      .from('mun_cv_entries')
+      .update({ is_private: nextVal })
+      .eq('id', entry.id)
+      .select('id');
+    if (error || !data || data.length === 0) {
+      setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, is_private: !nextVal } : e)));
+      setPrivError(friendlyError(error, `Could not ${nextVal ? 'hide' : 'show'} ${entry.conference_name}. Try again.`));
+    }
+  }, [session]);
 
   const handleDelete = useCallback(async (id: string) => {
     if (!session || !user) return;
@@ -135,39 +196,15 @@ export default function CVPage() {
           <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: 0 }}>
             Your Model UN conference history: typeset, verified, and yours.
           </p>
-          {/* Said HERE, at the point it matters — the moment before somebody
-              types something into their CV — and not only in section 16 of the
-              privacy policy. Every account's CV is a public page and there is
-              no visibility setting to find, so the only honest thing to do is
-              tell people plainly and link them to the page as a stranger sees
-              it. If an opt-out is ever built, this line changes with it. */}
-          <p
-            className="mt-2 max-w-md"
-            style={{ fontSize: T.caption, color: '#6E5F4E', fontFamily: OUTFIT, margin: '8px 0 0', lineHeight: 1.6 }}
-          >
-            <strong style={{ color: '#5C5140', fontWeight: 800 }}>This page is public.</strong>{' '}
-            Anyone with the link can read it without signing in, and conference organisers see it
-            when they review your applications. There is no way to make it private yet, so add
-            only what you are happy for a stranger to read.{' '}
-            {publicHref && (
-              <a
-                href={publicHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3, display: 'inline-block', paddingBlock: 6 }}
-              >
-                See what visitors see
-              </a>
-            )}
-          </p>
         </div>
 
         <div className="flex items-center gap-2.5 flex-shrink-0 w-full sm:w-auto">
           {/* Share — copies a public read-only link to this CV */}
           <button
             onClick={handleShare}
-            aria-label="Copy a public link to your CV"
-            title={copied ? 'Link copied' : 'Share your CV'}
+            disabled={privacy.cvPrivate}
+            aria-label={privacy.cvPrivate ? 'Your CV is private, so there is no public link to share' : 'Copy a public link to your CV'}
+            title={privacy.cvPrivate ? 'Your CV is private. Make it public to share it.' : copied ? 'Link copied' : 'Share your CV'}
             className="inline-flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-full focus:outline-none"
             style={{
               height: '48px',
@@ -180,7 +217,8 @@ export default function CVPage() {
               fontWeight: 800,
               fontSize: T.body,
               letterSpacing: '0.02em',
-              cursor: 'pointer',
+              cursor: privacy.cvPrivate ? 'not-allowed' : 'pointer',
+              opacity: privacy.cvPrivate ? 0.5 : 1,
               transition: 'transform 160ms cubic-bezier(0.22,1,0.36,1)',
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
@@ -216,6 +254,15 @@ export default function CVPage() {
           </button>
         </div>
       </div>
+
+      <CVPrivacyPanel
+        value={privacy}
+        onChange={changePrivacy}
+        saving={privSaving}
+        error={privError}
+        publicHref={publicHref}
+        hiddenCount={entries.filter((e) => e.is_private).length}
+      />
 
       {/* Stats row — three showcase counts + the rank insignia. */}
       <CVStatsRow entries={entries} />
@@ -263,6 +310,7 @@ export default function CVPage() {
               entry={entry}
               isLast={i === entries.length - 1}
               onEdit={() => { setModalEntry(entry); setModalOpen(true); }}
+              onTogglePrivate={() => toggleEntryPrivate(entry)}
             />
           ))}
         </div>

@@ -11,7 +11,7 @@ export const metadata: Metadata = pageMetadata({
   path: '/privacy',
 });
 
-const EFFECTIVE_DATE = 'August 3, 2026';
+const EFFECTIVE_DATE = 'September 24, 2026';
 const CONTACT_EMAIL = 'wearegavelling@gmail.com';
 
 const OUTFIT = "'Outfit', sans-serif";
@@ -271,12 +271,14 @@ export default function PrivacyPage() {
               it exists and there is no setting to turn it off. Consent that
               cannot be refused or withdrawn is not consent, so the row states
               the same Contract basis the "Creating and running your account"
-              row above already asserts for showing your CV. If an opt-out is
-              ever built, this becomes a genuine consent row again. */}
+              row above already asserts for showing your CV. Since 24 Sep 2026
+              the owner can make the CV (or single entries) private, but it is
+              still public by default, so the basis stays Contract with a way
+              to object, not opt-in consent. */}
           <SpecRow
             label="Publishing your MUN CV as a public page"
             tag="Contract, Art 6(1)(b)"
-            note="Every account has a public CV page and there is currently no way to turn it off. Read section 16 before you add anything to it."
+            note="Every account has a CV page that is public by default. You can make it private, hide single conferences or hide your nationality at any time. See section 16."
           />
           <SpecRow
             label="Optional (non-essential) cookies and storage"
@@ -610,22 +612,25 @@ export default function PrivacyPage() {
       </LegalSection>
 
       {/* ─────────────────────────────────────────────────────────── 16 */}
-      <LegalSection n={16} title="Your MUN CV is public">
+      <LegalSection n={16} title="Your MUN CV is public unless you make it private">
         <p>
           Every account has an MUN CV, and it is a{' '}
           <strong>public page</strong> at <code>gavelling.com/cv/your-name-1a2b3c4d</code>.{' '}
           <strong>Anyone who has that address can open it without signing in and without an
-          account.</strong> It is public from the moment your account exists. You do not have to
-          publish it, and there is nothing to switch on.
+          account.</strong> It is public from the moment your account exists, until you change
+          that.
         </p>
         <p>
-          <strong>There is currently no way to make it private.</strong> We have no visibility
-          setting, no unlisted mode and no opt-out. If that matters to you, the practical control
-          you have is what you put on it, see below.
+          <strong>You decide what is on it.</strong> In{' '}
+          <Link href="/account/cv" style={LINK}>Account → MUN CV</Link> you can make the whole CV
+          private (the address then shows nothing to anyone), hide a single conference with the eye
+          on its card, or hide your nationality. The change takes effect immediately. Private
+          entries are kept off the public page and cannot be read by other visitors at all, not only
+          hidden from view.
         </p>
         <p>
-          <strong>What a visitor sees:</strong> your display name, profile photo, nationality,
-          education level, MUN experience level, bio, and the CV entries on your record,
+          <strong>What a visitor sees:</strong> your display name, profile photo, nationality
+          (unless you hide it), and the CV entries you have not hidden:
           conference names, committees, allocations, awards, dates, and any photos or descriptions
           you added to an entry. <strong>Your email address is not on the page</strong>, and
           neither is your date of birth, your applications, or anything you have paid.
@@ -635,20 +640,21 @@ export default function PrivacyPage() {
           organiser tools, so the organisers of any conference you apply to, and the leaders of a
           delegation you belong to, can open it while they are reviewing you. Beyond that, it is
           the link you choose to share. We do not submit CVs to search engines, but we also do not
-          block crawlers from them, so a CV linked to from a public page can be indexed. Once a
+          block crawlers from them, so a CV linked to from a public page can be indexed. The
+          organisers of a conference you apply to always see your full record, private entries
+          included, because they need it to review your application. Once a
           link is out in the world you cannot control who passes it on.
         </p>
         <p>
-          <strong>To take something down:</strong> delete the individual entry in{' '}
+          <strong>To take something down:</strong> hide or delete the individual entry in{' '}
           <Link href="/account/cv" style={LINK}>Account → MUN CV</Link> and it disappears from the
           public page immediately. Emptying your CV leaves a page with your name and photo on it
           and nothing else; deleting your account removes the page entirely. A copy somebody has
           already saved is out of our hands either way.
         </p>
         <p>
-          If you are under 18, read this section again before you add anything. Nothing on
-          Gavelling works less well if your CV stays empty, and an empty CV is the only version of
-          &quot;private&quot; we can offer you today.
+          If you are under 18, read this section again before you add anything, and consider
+          making your CV private. Nothing on Gavelling works less well if it is.
         </p>
       </LegalSection>
 

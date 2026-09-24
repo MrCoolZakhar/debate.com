@@ -10,7 +10,7 @@ export const metadata: Metadata = pageMetadata({
   path: '/terms',
 });
 
-const EFFECTIVE_DATE = 'August 3, 2026';
+const EFFECTIVE_DATE = 'September 24, 2026';
 const CONTACT_EMAIL = 'wearegavelling@gmail.com';
 
 const A = { color: '#1B3828', fontWeight: 700 } as const;
@@ -169,10 +169,11 @@ export default function TermsPage() {
               </li>
               <li>You can hold one active application per conference, and you can withdraw it at any time.</li>
               <li>
-                Your MUN CV is yours, and it is <strong>public</strong>. Every account has one, at{' '}
+                Your MUN CV is yours, and it is <strong>public by default</strong>. Every account has one, at{' '}
                 <code>gavelling.com/cv/…</code>, and anyone with that address can read it without signing in.
-                There is currently no way to make it private or unpublish it. What you control is what you
-                put on it. Delete an entry and it leaves the page straight away; delete your account and the
+                You can make it private, hide single conferences or hide your nationality in Account → MUN CV,
+                and the change is immediate. Organisers of conferences you apply to still see your full record.
+                Delete an entry and it leaves the page straight away; delete your account and the
                 page goes with it. See section 16 of the{' '}
                 <Link href="/privacy" style={A}>Privacy Policy</Link> for exactly what a visitor sees.
               </li>
