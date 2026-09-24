@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_LOGO } from '@/lib/seo';
 import StagefrontClient from './conferences/StagefrontClient';
-import { fetchListedConferences, fetchJobStats, fetchPlatformStats } from '@/lib/listedConferences';
+import { fetchListedConferences, fetchPlatformStats } from '@/lib/listedConferences';
+import { articles } from './blog/posts';
+import type { HomeGuide } from './conferences/landing-lab/HomeSections';
 
-// The cards, the trust counts and the job-board figures are read here, on the
+// The cards and the trust counts are read here, on the
 // server, so they are real in the HTML (they used to render "—" until a
 // client fetch landed). Ten minutes is fresh enough for a front page and keeps
 // it a cached page rather than a query per visit.
@@ -74,11 +76,30 @@ const websiteSchema = {
   },
 };
 
+// "Learn MUN" on the homepage: the evergreen beginner guides, in this order.
+// Slugs from src/app/blog/posts.ts; one that is renamed or removed there is
+// simply skipped. The job board section (and its fetchJobStats() read) is off
+// the page until the job board launches (24 Sep 2026).
+const HOME_GUIDE_SLUGS = [
+  'mun-for-beginners',
+  'mun-position-paper-guide',
+  'mun-rules-of-procedure',
+  'mun-opening-speech',
+  'mun-resolution-writing',
+  'mun-delegate-tips',
+];
+
+const homeGuides: HomeGuide[] = HOME_GUIDE_SLUGS.flatMap(slug => {
+  const a = articles.find(p => p.slug === slug);
+  return a
+    ? [{ slug: a.slug, title: a.title, description: a.description, readingMinutes: a.readingMinutes, photo: a.photo }]
+    : [];
+});
+
 export default async function HomePage() {
-  const [conferences, stats, jobStats] = await Promise.all([
+  const [conferences, stats] = await Promise.all([
     fetchListedConferences(),
     fetchPlatformStats(),
-    fetchJobStats(),
   ]);
   return (
     <>
@@ -90,7 +111,7 @@ export default async function HomePage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
       />
-      <StagefrontClient conferences={conferences} stats={stats} jobStats={jobStats} />
+      <StagefrontClient conferences={conferences} stats={stats} guides={homeGuides} />
     </>
   );
 }

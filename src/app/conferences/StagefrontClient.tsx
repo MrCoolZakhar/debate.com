@@ -3,12 +3,13 @@
 // Production conferences landing: the owner-approved "Stagefront" composition,
 // rendered by `/`. The data is read on the SERVER (src/app/page.tsx through
 // src/lib/listedConferences.ts) and handed in as props, so the conference
-// cards, the trust counts and the job-board figures are real numbers in the
+// cards, the trust counts and the Learn MUN guides are real in the
 // HTML a crawler receives. They used to be fetched here after mount, which
 // left "—" in every count of the server render. The component still lives in
 // the landing-lab/ directory for history.
 
-import VariantStagefront, { type JobStats } from './landing-lab/VariantStagefront';
+import VariantStagefront from './landing-lab/VariantStagefront';
+import type { HomeGuide } from './landing-lab/HomeSections';
 import type { LabConference } from './landing-lab/shared';
 
 export interface PlatformStats {
@@ -20,11 +21,11 @@ export interface PlatformStats {
 export default function StagefrontClient({
   conferences,
   stats,
-  jobStats,
+  guides,
 }: {
   conferences: LabConference[];
   stats: PlatformStats | null;
-  jobStats: JobStats | null;
+  guides: HomeGuide[];
 }) {
-  return <VariantStagefront conferences={conferences} ratings={{}} stats={stats} jobStats={jobStats} />;
+  return <VariantStagefront conferences={conferences} ratings={{}} stats={stats} guides={guides} />;
 }

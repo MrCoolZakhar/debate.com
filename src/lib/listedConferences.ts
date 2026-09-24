@@ -111,7 +111,9 @@ export function isUpcoming(c: { start_date: string | null; end_date: string | nu
 
 export interface JobStats { open: number; hiring: number; chairing: number }
 
-/** The job-board figures on the homepage (open postings only). */
+/** The job-board figures on the homepage (open postings only).
+ *  Unused since 24 Sep 2026: the homepage job board is hidden until the job
+ *  board launches. Kept so it can be read again from src/app/page.tsx. */
 export async function fetchJobStats(): Promise<JobStats | null> {
   try {
     const { data, error } = await supabase

@@ -7,13 +7,16 @@
 // the hero zone: everything below sits on clean cream / ivory slabs so each
 // section reads as its own distinct band.
 //
-// Composition, top to bottom:
+// Composition, top to bottom (24 Sep 2026):
 //   1. Hero, headline left, "up next" card rail right         , DARK (theatre photo)
-//   2. "Find your seat" role carousel + circuit-in-numbers strip, CREAM
-//   3. "Opportunities beyond delegating" job board             , CREAM (no panel)
+//   2. Sessions: laptop | "Start a session" | phone            , CREAM (HomeSections.tsx)
+//   3. "Find your seat" role carousel + circuit-in-numbers strip, CREAM
 //   4. "Conferences near you", three cards chosen by IP country , IVORY
-//   5. The production globe section, verbatim                  , FOREST
-//   6. Ivory footer (design rule)
+//   5. "What is Model UN?" card beside "What is Gavelling?"    , CREAM (HomeSections.tsx)
+//   6. "Learn MUN": six guides from the blog                   , IVORY (HomeSections.tsx)
+//   7. The production globe section, verbatim                  , FOREST
+//   8. Ivory footer (design rule)
+// The job board is hidden until it launches (see the comment where it was).
 //
 // The hero rail + the near-you row reuse the SHARED ConferenceCard
 // (../ConferenceCard), the same definition the explore directory renders;
@@ -40,20 +43,11 @@ import {
   isConcluded, pickHeadliner,
   LabFooter,
 } from './shared';
-
-// Light-on-dark tokens for the hero zone.
-const IVORY_55 = 'rgba(237,231,216,0.55)';
+import { SessionsSection, AboutCards, LearnMunSection, type HomeGuide } from './HomeSections';
 
 // Ink-on-cream tokens for the light slabs.
 const INK = '#1C1410';
-const INK_70 = '#4A4238';
 const INK_55 = '#6B5F52';
-
-export interface JobStats {
-  open: number;
-  hiring: number;
-  chairing: number;
-}
 
 // "Find your seat" role carousel, one slide per way to be on the circuit.
 // Recovered from the pre-neumorphic build (photo card, forest scrim, gold
@@ -147,15 +141,15 @@ const FEATURED_SLUGS = [
 export default function VariantStagefront({
   conferences,
   stats,
-  jobStats,
+  guides = [],
 }: {
   conferences: LabConference[];
   ratings: Record<string, RatingSummary>; // accepted for caller compatibility (season ledger removed)
   /** Platform-wide totals (all conferences, not just the published ones the
    *  cards are drawn from). Null until the RPC lands. */
   stats?: { total_conferences: number; published_conferences: number; countries: number } | null;
-  /** Open job-board figures, read on the server so the numbers are in the HTML. */
-  jobStats?: JobStats | null;
+  /** The "Learn MUN" guides, picked from the blog manifest on the server. */
+  guides?: HomeGuide[];
 }) {
   const router = useRouter();
   const headliner = useMemo(() => pickHeadliner(conferences), [conferences]);
@@ -263,15 +257,6 @@ export default function VariantStagefront({
       ? `Coming up in ${geo.country}.`
       : `Nothing open in ${geo.country} right now. These are the nearest.`;
 
-  // The logo row: real public conferences with a logo, verified ones first,
-  // upcoming before past. Plain links, so they are in the server HTML.
-  const logoRow = useMemo(() => {
-    const withLogo = conferences.filter(c => c.logo_url);
-    const score = (c: LabConference) => (c.is_verified ? 0 : 2) + (isConcluded(c) ? 1 : 0);
-    return [...withLogo].sort((a, b) => score(a) - score(b) || (a.start_date ?? '').localeCompare(b.start_date ?? '')).slice(0, 12);
-  }, [conferences]);
-
-  // Job-board figures come from the server (page.tsx), so they are real in the HTML.
   const goTo = (slug: string) => router.push(`/conferences/${slug}`);
 
   return (
@@ -307,7 +292,7 @@ export default function VariantStagefront({
             Sized to EXACTLY one viewport. 100svh keeps the whole hero inside the
             small (chrome-visible) viewport on mobile so nothing is clipped; the
             backdrop covers the full screen and the fade-to-cream lands on the
-            hero's bottom edge, where the cream job board begins. Everything —
+            hero's bottom edge, where the cream Sessions section begins. Everything —
             headline, subcopy, CTAs and the three cards, fits with no scroll. */}
         <section
           className="relative"
@@ -443,6 +428,10 @@ export default function VariantStagefront({
           </div>
         </section>
 
+        {/* ── Running a committee: laptop | Start a session | phone. Second
+            on the page by the owner's instruction (24 Sep 2026). ─────────── */}
+        <SessionsSection />
+
         {/* ── Find your seat, role carousel, cream ──────────────────────────
             The photo carousel is back (recovered from the pre-neumorphic
             build): center-focus slides, dimmed side-peek neighbors, circular
@@ -517,161 +506,13 @@ export default function VariantStagefront({
           </div>
         </section>
 
-        {/* ── Conferences on Gavelling: a logo row of real public conferences,
-            each a plain link to its page (in the server HTML). ─────────────── */}
-        {logoRow.length > 0 && (
-          <section
-            className="px-6 md:px-14"
-            aria-labelledby="sf-logos-heading"
-            style={{ backgroundColor: CREAM, paddingTop: '8px', paddingBottom: '48px' }}
-          >
-            <h2
-              id="sf-logos-heading"
-              style={{ fontFamily: SANS, fontWeight: 700, fontSize: 'clamp(12px, 0.8vw, 14px)', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 22px 0', textAlign: 'center' }}
-            >
-              Conferences on Gavelling
-            </h2>
-            <ul
-              className="mx-auto flex flex-wrap items-start justify-center gap-x-6 gap-y-5 sm:gap-x-9"
-              style={{ listStyle: 'none', margin: '0 auto', padding: 0, maxWidth: '1180px' }}
-            >
-              {logoRow.map(c => (
-                <li key={c.id}>
-                  <Link
-                    href={`/conferences/${c.slug}`}
-                    className="group flex flex-col items-center gap-2 focus:outline-none"
-                    style={{ textDecoration: 'none', width: '84px' }}
-                    title={c.full_name}
-                  >
-                    <span
-                      className="flex items-center justify-center overflow-hidden rounded-full transition-transform duration-200 group-hover:-translate-y-0.5"
-                      style={{ width: 56, height: 56, backgroundColor: '#FFFFFF', boxShadow: '0 4px 12px rgba(27,56,40,0.12), 0 0 0 1px rgba(27,56,40,0.06)' }}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={c.logo_url!} alt="" width={56} height={56} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    </span>
-                    <span
-                      className="text-center"
-                      style={{ fontFamily: SANS, fontSize: '12px', fontWeight: 700, lineHeight: 1.25, color: INK_70, maxWidth: '84px', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
-                    >
-                      {landingConfTitle(c)}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {/* ── Opportunities beyond delegating, job board, cream, no panel ──── */}
-        <section
-          className="relative px-6 md:px-14 xl:px-20"
-          style={{ backgroundColor: CREAM, paddingTop: 'clamp(64px, 5.5vw, 100px)', paddingBottom: 'clamp(72px, 6vw, 110px)' }}
-        >
-          <div className="mx-auto flex flex-col lg:flex-row lg:items-center gap-10 lg:gap-16" style={{ maxWidth: '1720px' }}>
-            <div className="lg:w-[40%] lg:flex-shrink-0" style={{ position: 'relative', zIndex: 2 }}>
-              <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 14px 0' }}>
-                The job board
-              </p>
-              <h2
-                style={{
-                  fontFamily: SANS,
-                  fontWeight: 900,
-                  fontSize: 'clamp(30px, 3.6vw, 62px)',
-                  lineHeight: 1.02,
-                  letterSpacing: '-0.02em',
-                  color: INK,
-                  margin: 0,
-                }}
-              >
-                Opportunities beyond delegating.
-              </h2>
-              <p style={{ fontFamily: SANS, fontSize: 'clamp(15px, 1.05vw, 18px)', lineHeight: 1.65, color: INK_70, margin: '18px 0 0 0', maxWidth: 'clamp(420px, 30vw, 520px)' }}>
-                The best seat in the room isn&rsquo;t always behind a placard. Conferences on
-                Gavelling hire chairs, secretariat and staff every season, and your MUN CV
-                is the application.
-              </p>
-              <Link
-                href="/conferences/roles"
-                className="inline-flex items-center gap-2.5"
-                style={{
-                  marginTop: '28px',
-                  fontFamily: SANS,
-                  fontSize: '14px',
-                  fontWeight: 800,
-                  letterSpacing: '0.06em',
-                  color: PALE_GOLD,
-                  backgroundColor: FOREST,
-                  padding: '14px 26px',
-                  borderRadius: '9999px',
-                  textDecoration: 'none',
-                  boxShadow: '0 14px 30px rgba(27,56,40,0.22)',
-                  transition: 'transform 180ms ease, background-color 180ms ease',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.backgroundColor = '#2A5A3C'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.backgroundColor = FOREST; }}
-              >
-                SEE OPEN ROLES <ArrowRight size={16} strokeWidth={2.5} />
-              </Link>
-            </div>
-
-            <div className="lg:flex-1 lg:min-w-0" style={{ position: 'relative' }}>
-              {/*
-                Job-board photo: the secretariat/staff image (/public/roles/
-                secretariat.webp) — deliberately DIFFERENT from the hero
-                backdrop (/landing/podium-speaker.jpg) so the section reads as
-                the people running the conference, not the delegate on the floor.
-              */}
-              <div
-                className="relative overflow-hidden rounded-3xl"
-                style={{ border: '1px solid rgba(27,56,40,0.14)', boxShadow: '0 30px 60px rgba(27,56,40,0.18)', aspectRatio: '3 / 2' }}
-              >
-                <Image
-                  src="/roles/secretariat.webp"
-                  alt="Secretariat and staff coordinating a conference behind the scenes"
-                  fill
-                  sizes="(min-width: 1024px) 50vw, 100vw"
-                  style={{ objectFit: 'cover' }}
-                />
-              </div>
-
-              {/* Live stat ledger, the approved forest ledger straddling the
-                  photo's left edge: one dark rounded block, three stacked cells
-                  (a row of three on mobile), big pale-gold numerals. */}
-              <div
-                className="lg:absolute lg:-left-12 lg:bottom-14 mt-5 lg:mt-0 grid grid-cols-3 lg:grid-cols-1 gap-px overflow-hidden rounded-2xl"
-                style={{
-                  border: '1px solid rgba(27,56,40,0.9)',
-                  backgroundColor: 'rgba(27,56,40,0.9)',
-                  boxShadow: '0 20px 50px rgba(27,56,40,0.28)',
-                  maxWidth: '460px',
-                }}
-              >
-                {[
-                  { n: jobStats ? String(jobStats.open) : '—', label: 'Open roles', sub: 'accepting applications now' },
-                  { n: jobStats ? String(jobStats.hiring) : '—', label: 'Conferences hiring', sub: 'across the circuit' },
-                  { n: jobStats ? String(jobStats.chairing) : '—', label: 'Chair seats', sub: 'daises looking for a gavel' },
-                ].map(stat => (
-                  <div
-                    key={stat.label}
-                    className="px-5 py-4"
-                    style={{ backgroundColor: FOREST }}
-                  >
-                    <p style={{ fontFamily: SANS, fontWeight: 900, fontVariantNumeric: 'tabular-nums', fontSize: 'clamp(26px, 1.8vw, 34px)', lineHeight: 1, color: PALE_GOLD, margin: 0 }}>
-                      {stat.n}
-                    </p>
-                    <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '9.5px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(237,231,216,0.9)', margin: '7px 0 0 0' }}>
-                      {stat.label}
-                    </p>
-                    <p style={{ fontFamily: SANS, fontSize: '11.5px', color: IVORY_55, margin: '3px 0 0 0' }}>
-                      {stat.sub}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
+        {/* The job board ("Opportunities beyond delegating") was here. Removed
+            24 Sep 2026 until the job board launches (owner: "we might readd
+            later"). To bring it back: restore this section from git history
+            (commit before 24 Sep 2026) and read fetchJobStats() in
+            src/lib/listedConferences.ts again in src/app/page.tsx. The
+            "Conferences on Gavelling" logo row that sat above it was removed
+            for good the same day. */}
 
         {/* ── Conferences near you: always three cards (src/lib/nearbyConferences.ts) ── */}
         {nearby.picks.length > 0 && (
@@ -722,74 +563,11 @@ export default function VariantStagefront({
           </section>
         )}
 
-        {/* ── "What is Model UN?" — beginner-friendly SEO explainer, cream ──── */}
-        <section
-          className="px-6 md:px-14"
-          style={{ backgroundColor: CREAM, paddingTop: 'clamp(64px, 6vw, 104px)', paddingBottom: 'clamp(64px, 6vw, 104px)' }}
-        >
-          <div className="mx-auto" style={{ maxWidth: '980px' }}>
-            <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: 'clamp(12px, 0.8vw, 14px)', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 10px 0' }}>
-              New to the circuit?
-            </p>
-            <h2
-              style={{
-                fontFamily: SANS,
-                fontWeight: 900,
-                fontSize: 'clamp(28px, 3.4vw, 54px)',
-                lineHeight: 1.03,
-                letterSpacing: '-0.02em',
-                color: INK,
-                margin: 0,
-              }}
-            >
-              What is Model United Nations?
-            </h2>
-            <p style={{ fontFamily: SANS, fontSize: 'clamp(16px, 1.15vw, 20px)', lineHeight: 1.7, color: INK_70, margin: '20px 0 0 0', maxWidth: '760px' }}>
-              Model United Nations, or <strong style={{ color: INK }}>MUN</strong>, is an academic
-              simulation of the real United Nations. Students step into the shoes of diplomats,
-              each representing a country, and debate the world&rsquo;s biggest challenges, from
-              climate change to global security, in committees modelled on the UN&rsquo;s own.
-              It&rsquo;s part debate, part public speaking, part teamwork, and one of the best ways
-              to sharpen the skills that carry into university and beyond.
-            </p>
-            <p style={{ fontFamily: SANS, fontSize: 'clamp(16px, 1.15vw, 20px)', lineHeight: 1.7, color: INK_70, margin: '18px 0 0 0', maxWidth: '760px' }}>
-              At a conference, delegates research their country&rsquo;s position, deliver speeches,
-              negotiate with allies and rivals, and work together to draft <strong style={{ color: INK }}>resolutions</strong>:
-              the written proposals a committee votes on. A chairperson keeps the debate flowing,
-              and awards recognise the delegates who lead the room. No experience is needed to
-              start: everyone gives their first speech eventually.
-            </p>
+        {/* ── "What is Model UN?" (the SEO explainer, text unchanged) beside
+            "What is Gavelling?", then the guides from the blog ─────────── */}
+        <AboutCards />
 
-            <h3 style={{ fontFamily: SANS, fontWeight: 800, fontSize: 'clamp(19px, 1.5vw, 26px)', letterSpacing: '-0.01em', color: FOREST, margin: 'clamp(32px, 3vw, 48px) 0 16px 0' }}>
-              How a Model UN conference works
-            </h3>
-            <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '14px', maxWidth: '760px' }}>
-              {[
-                ['Pick a committee', 'Conferences run committees: the Security Council, historical crises, specialised agencies and more, each with its own topic and pace.'],
-                ['Represent a country', 'You’re assigned a country (or a character) and speak, vote and negotiate on its behalf throughout the weekend.'],
-                ['Debate and negotiate', 'Delegates make speeches, form blocs, and hammer out compromises through moderated and unmoderated caucuses.'],
-                ['Draft resolutions', 'Working together, committees write and amend resolutions, then vote: the heart of every MUN session.'],
-              ].map(([term, desc]) => (
-                <li key={term} className="flex items-start gap-3.5">
-                  <span
-                    aria-hidden="true"
-                    className="flex-shrink-0"
-                    style={{ width: 10, height: 10, marginTop: 9, borderRadius: 9999, backgroundColor: GOLD, boxShadow: '0 0 0 4px rgba(184,148,58,0.16)' }}
-                  />
-                  <p style={{ fontFamily: SANS, fontSize: 'clamp(15px, 1.05vw, 18px)', lineHeight: 1.6, color: INK_70, margin: 0 }}>
-                    <strong style={{ color: INK }}>{term}.</strong>{' '}{desc}
-                  </p>
-                </li>
-              ))}
-            </ul>
-
-            <p style={{ fontFamily: SANS, fontSize: 'clamp(15px, 1.05vw, 18px)', lineHeight: 1.7, color: INK_55, margin: 'clamp(28px, 2.5vw, 40px) 0 0 0', maxWidth: '760px' }}>
-              Whether you&rsquo;re a total beginner looking for your first conference or a seasoned
-              delegate chasing the next gavel, Gavelling helps you find the right room. Browse
-              conferences above and apply in minutes.
-            </p>
-          </div>
-        </section>
+        <LearnMunSection guides={guides} />
 
         {/* ── Section: MUN Across the Globe, copied verbatim from production ── */}
         <section
