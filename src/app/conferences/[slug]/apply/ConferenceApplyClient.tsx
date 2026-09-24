@@ -1208,6 +1208,17 @@ function ConferenceApplyInner() {
   const isPreferenceRole = (roleConfig?.preference_mode ?? 'none') !== 'none';
   const isObserver = role === 'observer';
   const isInvoicingRole = role === 'head-delegate' || role === 'faculty-advisor';
+  // Editing a saved application never re-picks, re-checks or re-creates the
+  // delegation: it is part of what was already submitted, and
+  // resubmit_application ignores society_id / is_independent outright. Exactly
+  // the condition fetchAll prefills edit mode on, so the step that shows the
+  // saved delegation and the load that filled it can never disagree.
+  const delegationLocked = isEditMode && !!existingApp
+    && (existingApp.status === 'submitted' || existingApp.status === 'rejected');
+  /** The saved delegation's name, once the societies list has loaded. */
+  const lockedSocietyName = existingApp?.society_id
+    ? (societies.find(s => s.id === existingApp.society_id)?.name ?? null)
+    : null;
   // Chairs, observers, secretariat and staff are never part of a
   // society/delegation — the Independent/With-a-society step has nothing to
   // ask them.
@@ -2725,6 +2736,14 @@ function ConferenceApplyInner() {
 
   function handleContinue() {
     if (currentStepKind === 'society') {
+      // Editing a saved application: the delegation is not being chosen here,
+      // so none of the checks below apply to it. The "already applied" check
+      // in particular would refuse the applicant their OWN delegation.
+      if (delegationLocked) {
+        setSocietyError('');
+        advanceStep();
+        return;
+      }
       if (!isObserver && !isIndependent && !societyInput.trim()) {
         setSocietyError('Please enter your society name.');
         return;
@@ -3151,53 +3170,12 @@ function ConferenceApplyInner() {
     const supabase = getAuthedClient(session.access_token);
 
     try {
-      let societyId: string | null = null;
-      if (!isIndependent && !isObserver && societyInput.trim()) {
-        if (selectedSocietyId) {
-          societyId = selectedSocietyId;
-        } else if (isInvoicingRole) {
-          const normalized = societyInput.trim().toLowerCase();
-          // FATAL, both halves. supabase-js RESOLVES on a PostgREST/RLS error,
-          // so an unchecked result reads as success: the lookup would fall
-          // through to the insert and trip the unique index, and a failed
-          // insert would leave societyId null, filing a head delegate as an
-          // independent applicant with a delegation that does not exist and
-          // changing who gets invoiced. Neither may pass silently.
-          const { data: existingSoc, error: socLookupError } = await supabase
-            .from('societies')
-            .select('id')
-            .eq('conference_id', conference!.id)
-            .eq('name_normalized', normalized)
-            .maybeSingle();
-          if (socLookupError) {
-            reportBlocked('resolve delegation', socLookupError, { conferenceSlug: slug, role });
-            throw new UserFacingError('We could not look up your delegation. Please try again.');
-          }
-
-          if (existingSoc) {
-            societyId = (existingSoc as { id: string }).id;
-          } else {
-            const { data: newSoc, error: socInsertError } = await supabase
-              .from('societies')
-              .insert(societyInsertRow(conference!.id, societyInput, newDelegation))
-              .select('id')
-              .single();
-            if (socInsertError) {
-              reportBlocked('create delegation', socInsertError, { conferenceSlug: slug, role });
-              throw new UserFacingError('We could not create your delegation. Please try again.');
-            }
-            societyId = (newSoc as { id: string } | null)?.id ?? null;
-            if (!societyId) {
-              reportBlocked('create delegation', new Error('insert returned no row'), { conferenceSlug: slug, role });
-              throw new UserFacingError('We could not create your delegation. Please try again.');
-            }
-          }
-        }
-      }
-
+      // NO DELEGATION WORK HERE. An edit never resolves or creates a society:
+      // the delegation is part of the saved application, the step shows it
+      // read-only, and resubmit_application ignores society_id and
+      // is_independent even if they were sent. Sending them anyway would only
+      // describe an intent the server refuses, so they are left out entirely.
       const updates: Record<string, unknown> = {
-        is_independent: isIndependent,
-        society_id: societyId,
         is_head_delegate: role === 'head-delegate',
         experience_level: experienceLevel || null,
         custom_answers: customAnswers,
@@ -3555,6 +3533,51 @@ function ConferenceApplyInner() {
   }
 
   function renderStep2() {
+    // ── Editing a saved application: the delegation is SHOWN, not chosen. ──
+    // No Independent/With-a-delegation choice, no search field, no
+    // suggestions, no "Matched to" adoption, no create flow. Continue skips
+    // every delegation check (handleContinue), and handleResubmit sends no
+    // society_id at all. An observer's step already asks nothing, so it keeps
+    // the ordinary one below.
+    if (delegationLocked && !isObserver) {
+      const withDelegation = !existingApp!.is_independent;
+      return (
+        <WizardShell
+          step={step}
+          total={totalSteps}
+          labels={stepLabels}
+          minBodyHeight={STEP_MIN_BODY}
+          extraChrome={wizardExtraChrome}
+          onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
+          title={withDelegation ? 'Your delegation' : 'How you are applying'}
+          sub="This is saved with your application."
+        >
+          {/* Read only, so not a button and no hover state: the lock and the
+              line beneath say why, rather than a disabled-looking field. */}
+          <NeuInset className="p-4" small>
+            <p
+              className="flex items-center gap-1.5"
+              style={{
+                fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.15em',
+                textTransform: 'uppercase', color: NEU.muted, marginBottom: 3,
+              }}
+            >
+              <Lock size={11} strokeWidth={2.6} style={{ color: NEU.muted, flexShrink: 0 }} aria-hidden />
+              {withDelegation ? 'Delegation' : 'Applying as'}
+            </p>
+            <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13.5, color: NEU.ink, overflowWrap: 'anywhere' }}>
+              {withDelegation ? (lockedSocietyName ?? 'Your saved delegation') : 'Independent'}
+            </p>
+          </NeuInset>
+          <p className="mt-2" style={{ fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.45, color: NEU.inkSoft }}>
+            To change this, withdraw this application and apply again.
+          </p>
+
+          <WizardFooter onNext={handleContinue} nextLabel="Continue" primary />
+        </WizardShell>
+      );
+    }
+
     const showSociety = !isObserver;
     const takenMsg = 'This delegation has already applied. Ask its head delegate or faculty advisor to invite you.';
     // "Create this delegation" (canOfferCreate, computed with the hooks):
@@ -5000,7 +5023,16 @@ function ConferenceApplyInner() {
    */
   function renderStepOverview() {
     const questions = questionsOf(normalizeBlocks(roleConfig?.custom_questions ?? []));
-    const societyLabel = isObserver ? null : isIndependent ? 'Independent' : (societyInput.trim() || '—');
+    // Locked (editing a saved application): read the delegation back from the
+    // application itself, never from the picker state the step no longer
+    // shows. The dash fallback below belongs to the fresh flow, where the
+    // field can still legitimately be empty; a saved application always has
+    // an answer, so the locked path never reaches it.
+    const societyLabel = isObserver
+      ? null
+      : delegationLocked
+      ? (existingApp!.is_independent ? 'Independent' : (lockedSocietyName ?? 'Your saved delegation'))
+      : isIndependent ? 'Independent' : (societyInput.trim() || '—');
     const isTrialPlan = financeProfile.subscription_plan === 'unlimited_trial';
     const tierLabel = isTrialPlan ? 'Free trial' : hasUnlimited ? 'Unlimited' : 'Free';
     const costLabel = isExemptRole
