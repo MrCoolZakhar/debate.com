@@ -4302,13 +4302,13 @@ export default function ApplicationsPage() {
                             the anchor stays shrinkable and the <p> still
                             truncates exactly as it did unwrapped. */}
                         <ProfileLink userId={app.user_id} name={name} nested style={{ display: 'block', minWidth: 0, maxWidth: '100%' }}>
-                          <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 19.5, fontWeight: 800, color: NEU.ink, maxWidth: '100%', letterSpacing: '-0.01em' }}>
+                          <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 19.5, fontWeight: 800, color: NEU.ink, maxWidth: '100%', letterSpacing: '-0.01em', lineHeight: 1.2 }}>
                             {name}{age !== null ? `, ${age}` : ''}
                           </p>
                         </ProfileLink>
                         {!app.user_id && <NotRegisteredChip />}
                       </div>
-                      {email && <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.muted, marginTop: 2, fontWeight: 500 }}>{email}</p>}
+                      {email && <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.muted, marginTop: 2, fontWeight: 500 }}>{email}</p>}
 
                       {app.societies?.name && (() => {
                         // The delegation as its own identity: a round initials
@@ -4349,7 +4349,7 @@ export default function ApplicationsPage() {
                         {nationality && (
                           <span className="inline-flex items-center gap-1.5" style={factStyle} title={nationality}>
                             <CountryFlag name={nationality} size={15} />
-                            <span className="truncate" style={{ maxWidth: 140 }}>{nationality}</span>
+                            <span>{nationality}</span>
                           </span>
                         )}
                       </div>
@@ -4419,7 +4419,7 @@ export default function ApplicationsPage() {
                             {disp.primary}
                           </p>
                           {disp.secondary && (
-                            <p className="truncate" title={disp.secondary} style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.muted, marginTop: 2 }}>
+                            <p className="[overflow-wrap:anywhere]" title={disp.secondary} style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.muted, marginTop: 2, lineHeight: 1.3 }}>
                               {disp.secondary}
                             </p>
                           )}
@@ -4820,7 +4820,7 @@ export default function ApplicationsPage() {
                             : (name.trim().charAt(0).toUpperCase() || '?')}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: NEU.inkSoft }}>
+                          <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: NEU.inkSoft }}>
                             {name}
                           </p>
                           {/* Role, country, contact. The whole permitted set,
@@ -4848,7 +4848,7 @@ export default function ApplicationsPage() {
                               <>
                                 <span aria-hidden>·</span>
                                 <span
-                                  className="inline-flex items-center gap-1 truncate"
+                                  className="inline-flex items-center gap-1 min-w-0"
                                   style={{ fontWeight: d.society_id ? 700 : 500 }}
                                   title={d.society_id
                                     ? `Delegation: ${d.society_name}`
@@ -4860,7 +4860,7 @@ export default function ApplicationsPage() {
                                     style={{ flexShrink: 0, color: d.society_id ? NEU.deepGold : NEU.muted }}
                                     aria-hidden
                                   />
-                                  <span className="truncate">{d.society_name}</span>
+                                  <span className="[overflow-wrap:anywhere]">{d.society_name}</span>
                                   {!d.society_id && <span style={{ opacity: 0.7 }}>(typed)</span>}
                                 </span>
                               </>
@@ -4868,7 +4868,7 @@ export default function ApplicationsPage() {
                             {email && (
                               <>
                                 <span aria-hidden>·</span>
-                                <span className="truncate">{email}</span>
+                                <span className="[overflow-wrap:anywhere]">{email}</span>
                               </>
                             )}
                           </span>

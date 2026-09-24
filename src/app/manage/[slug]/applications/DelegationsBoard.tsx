@@ -663,7 +663,7 @@ function MemberLine<M extends DelegationMemberLite>({ m, owes, removing, disable
         <MemberAvatar name={name} url={m.profiles?.avatar_url ?? null} size={34} />
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5 min-w-0">
-            <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 800, color: NEU.ink }}>{name}</span>
+            <span className="min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 800, color: NEU.ink, lineHeight: 1.25 }}>{name}</span>
             {(m.is_head_delegate || m.role === 'head-delegate') && (
               <Crown size={13} strokeWidth={2.4} style={{ color: NEU.deepGold, flexShrink: 0 }} aria-label="Head delegate" />
             )}

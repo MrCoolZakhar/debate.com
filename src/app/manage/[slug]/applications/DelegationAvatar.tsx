@@ -132,14 +132,14 @@ export function DelegationIdentity({
     facts.push(
       <span key="c" className="inline-flex items-center gap-1.5 min-w-0" title={`Based in ${place.label}`}>
         {place.code && <span className="inline-flex items-center flex-shrink-0" style={{ lineHeight: 0 }}><FlagImg code={place.code} size={15} /></span>}
-        <span className="truncate">{place.label}</span>
+        <span className="[overflow-wrap:anywhere]">{place.label}</span>
       </span>,
     );
   } else if (country) {
     facts.push(
       <span key="c" className="inline-flex items-center gap-1.5 min-w-0" title={`Most members are from ${country}`}>
         <RectFlag country={country} size={15} />
-        <span className="truncate">{country}</span>
+        <span className="[overflow-wrap:anywhere]">{country}</span>
       </span>,
     );
   }
@@ -147,11 +147,11 @@ export function DelegationIdentity({
     <span className="flex items-center gap-3 min-w-0">
       <DelegationAvatar name={name} size={size} logoUrl={logoUrl} />
       <span className="min-w-0 flex-1 block">
-        <span className="block truncate" title={name} style={{ fontFamily: OUTFIT, fontSize: nameSize ?? Math.max(14, Math.round(size * 0.31)), fontWeight: 800, color: ink, lineHeight: 1.2 }}>
+        <span className="block [overflow-wrap:anywhere]" title={name} style={{ fontFamily: OUTFIT, fontSize: nameSize ?? Math.max(14, Math.round(size * 0.31)), fontWeight: 800, color: ink, lineHeight: 1.2 }}>
           {name}
         </span>
         {facts.length > 0 && (
-          <span className="flex items-center gap-2 min-w-0" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: soft, marginTop: 2 }}>
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: soft, marginTop: 2 }}>
             {facts.map((f, i) => (
               <span key={i} className="inline-flex items-center gap-2 min-w-0">
                 {i > 0 && <span aria-hidden>·</span>}
@@ -161,9 +161,9 @@ export function DelegationIdentity({
           </span>
         )}
         {lead !== undefined && (
-          <span className="flex items-center gap-1.5 min-w-0" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: soft, marginTop: 2 }}>
+          <span className="flex items-start gap-1.5 min-w-0" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: soft, marginTop: 2 }}>
             <Crown size={12} strokeWidth={2.4} style={{ color: lead ? GOLD_DEEP : soft, flexShrink: 0 }} aria-hidden />
-            <span className="truncate">{lead ? `${leadRole ?? 'Head delegate'}: ${lead}` : 'No head delegate yet'}</span>
+            <span className="[overflow-wrap:anywhere]">{lead ? `${leadRole ?? 'Head delegate'}: ${lead}` : 'No head delegate yet'}</span>
           </span>
         )}
       </span>
