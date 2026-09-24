@@ -1464,10 +1464,19 @@ function TextInput({ id, value, onChange, onEnter, placeholder, autoFocus, icon,
 
 export default function JoinPage() {
   return (
+    // The fallback is all the RAW HTML this page has (useSearchParams keeps the
+    // form client-side), so it carries the page's h1 and a real sentence for
+    // crawlers (npm run check:indexability: an h1 and 250+ characters).
     <Suspense fallback={
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4" style={{ backgroundColor: C.page }}>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center" style={{ backgroundColor: C.page }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/gavel-mark.png" alt="" className="h-16 w-16 animate-pulse object-contain" />
+        <h1 style={{ fontFamily: OUTFIT, fontSize: 22, fontWeight: 800, color: C.ink, margin: 0 }}>Join a MUN session</h1>
+        <p style={{ fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.55, color: C.inkSoft, maxWidth: '34em', margin: 0 }}>
+          Enter the session code your chair shares to join a Model UN committee on Gavelling. Delegates pick
+          their seat and follow the speakers list, raise motions, submit papers and vote from their own phone.
+          Chairs use the chair code to run the room, and faculty advisors can follow their students.
+        </p>
       </div>
     }>
       <JoinPageInner />
