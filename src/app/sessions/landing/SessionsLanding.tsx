@@ -6,9 +6,8 @@
 //      every language, Start Committee as the one big action and a smaller
 //      code field under it, the chair's laptop and a delegate's phone on the
 //      right as still images (the owner removed the live ticking clock).
-//   2. RoleShowcase: Chairs / Delegates / Faculty advisors tabs, each showing
-//      REAL screenshots of a session (public/sessions/*.png, captured from a
-//      throwaway room; see public/sessions/clips.json).
+//   2. RoleCards: three photo cards, Chairs / Delegates / Faculty advisors (25 Sep 2026;
+//      they replaced RoleShowcase's tabs of session screenshots, at the owner's request).
 //   3. ConferenceBridge: running a whole conference, with one committee drawn
 //      by the organiser's real live status card (static demo data).
 //
@@ -22,7 +21,7 @@ import { useRouter } from 'next/navigation';
 import SiteNav from '@/components/SiteNav';
 import FooterLegal from '@/components/FooterLegal';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
-import RoleShowcase from './RoleShowcase';
+import RoleCards from './RoleCards';
 import ConferenceBridge from './ConferenceBridge';
 import { BRAND, INK, INK_SOFT, FOREST, GOLD_TEXT, BRONZE, HAIR } from './tokens';
 
@@ -162,7 +161,7 @@ export default function SessionsLanding() {
         </section>
 
         {/* ── 2. One room, three seats ─────────────────────────────────────── */}
-        <RoleShowcase />
+        <RoleCards />
 
         {/* ── 3. Running a whole conference ────────────────────────────────── */}
         <ConferenceBridge />

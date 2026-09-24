@@ -22,7 +22,12 @@ const NAV_LINKS_CONFIG = [
   // "Start Session": `kicker` is the small word stacked above the label.
   { en: 'Session',     es: 'Sesión',       fr: 'Session',         ar: 'جلسة',       href: '/sessions',
     kicker: { en: 'Start', es: 'Iniciar', fr: 'Lancer', ar: 'ابدأ' } },
-  { en: 'Conferences', es: 'Conferencias', fr: 'Conférences',     ar: 'المؤتمرات',  href: '/conferences/explore' },
+  // "Explore Conferences", stacked like "Start Session" (owner, 25 Sep 2026).
+  { en: 'Conferences', es: 'Conferencias', fr: 'Conférences',     ar: 'المؤتمرات',  href: '/conferences/explore',
+    kicker: { en: 'Explore', es: 'Explorar', fr: 'Explorer', ar: 'استكشف' } },
+  // HOME sits in the middle of the pill and is the lit item on the landing page
+  // the moment someone opens it (owner, 25 Sep 2026).
+  { en: 'Home',        es: 'Inicio',       fr: 'Accueil',         ar: 'الرئيسية',   href: '/' },
   { en: 'About us',    es: 'Nosotros',     fr: 'Qui sommes-nous', ar: 'من نحن',     href: '/about' },
   { en: 'Contact',     es: 'Contáctanos',  fr: 'Contact',         ar: 'تواصل معنا', href: '/contact' },
 ];
@@ -199,7 +204,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
     UPDATE 24 Sep 2026 (owner: "the nav pill now doesn't move with the page as it
     scrolls, fix"): the pill is FIXED again, at the same 72px band it sits in at scroll
     top, z-40. The collisions below are handled at the sticky bars instead: on desktop
-    (md+, the only widths the pill exists at) every sticky bar on a page with this nav
+    (lg+, the only widths the pill exists at: five items since 25 Sep 2026 need 1024px, so 768 to 1023 use the phone menu) every sticky bar on a page with this nav
     sticks at 84px or lower (conference page tabs and rail, explore filters; roles and
     account already did). A NEW sticky bar on a page with SiteNav must do the same.
 
@@ -216,7 +221,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
   */
   const desktopPill = (
     <div
-      className="hidden md:flex fixed top-0 left-1/2 -translate-x-1/2 items-center pointer-events-none"
+      className="hidden lg:flex fixed top-0 left-1/2 -translate-x-1/2 items-center pointer-events-none"
       style={{ zIndex: 40, height: 72 }}
     >
         <div
@@ -239,12 +244,16 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
                 href={link.href}
                 onMouseEnter={() => setHovered(link.label)}
                 onMouseLeave={() => setHovered(null)}
+                aria-current={active ? 'page' : undefined}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
                   position: 'relative',
-                  padding: '8px 16px',
-                  fontSize: '13.5px',
+                  // Five items since 25 Sep 2026 (HOME in the middle): never wrap a
+                  // label, and tighten the padding on narrower desktops.
+                  whiteSpace: 'nowrap',
+                  padding: '8px clamp(9px, 1.15vw, 16px)',
+                  fontSize: 'clamp(12px, 0.95vw, 13.5px)',
                   fontWeight: active ? 900 : 800,
                   letterSpacing: '0.04em',
                   textTransform: 'uppercase',
@@ -357,7 +366,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
 
           {/* Language toggle (desktop only — mobile keeps its own toggle in the hamburger menu) */}
           {!hideLanguage && (
-          <div className="hidden md:block relative" ref={langMenuRef}>
+          <div className="hidden lg:block relative" ref={langMenuRef}>
             <div className="relative" suppressHydrationWarning>
               <button
                 onClick={() => setShowLangMenu((v) => !v)}
@@ -420,7 +429,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
         </div>
 
         {/* Desktop right actions */}
-        <div className="hidden md:flex items-center gap-3">
+        <div className="hidden lg:flex items-center gap-3">
 
           {/* Credit chip */}
           {user && (
@@ -476,11 +485,11 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
         </div>
 
         {/* Mobile: avatar (signed in) + hamburger */}
-        <div className="md:hidden flex items-center gap-2">
+        <div className="lg:hidden flex items-center gap-2">
         {user && <ProfileAvatarMenu size={56} />}
         <button
           // 44x44: the tap-target floor. This button only ever renders on a
-          // phone (the wrapper is md:hidden), so desktop is untouched.
+          // phone (the wrapper is lg:hidden), so desktop is untouched.
           className="flex flex-col justify-center items-center w-11 h-11 gap-1.5"
           onClick={() => setMenuOpen((v) => !v)}
           aria-label={menuOpen ? 'Close menu' : 'Open menu'}
@@ -516,7 +525,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
           floating logo/hamburger would sit on top of its first item (SESSIONS).
           Pin it just below the 72px nav bar so every tab is visible. */}
       <div
-        className={`md:hidden overflow-hidden transition-[max-height] duration-300 ${overlay ? 'absolute left-0 right-0 z-40' : 'relative z-20'}`}
+        className={`lg:hidden overflow-hidden transition-[max-height] duration-300 ${overlay ? 'absolute left-0 right-0 z-40' : 'relative z-20'}`}
         style={{
           top: overlay ? '72px' : undefined,
           // Measured, never guessed — see the sheetMax effect above.
