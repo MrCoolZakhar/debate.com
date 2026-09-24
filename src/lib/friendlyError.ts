@@ -11,6 +11,8 @@
 // through to the generic "one of the values isn't allowed" message, which is
 // safe but says nothing about which value or why.
 
+import { reportUserError } from './reportCrash';
+
 /** A database CHECK a user can plausibly trigger, and the sentence for it.
  *  Keep this list matched to the live schema: a name that no longer exists
  *  is harmless dead weight, but a CHECK with no entry here is a raw
@@ -129,6 +131,11 @@ export function plainOrFallback(message: unknown, fallback: string): string {
   }
   // eslint-disable-next-line no-console
   console.error('[plainOrFallback]', message);
+  try {
+    reportUserError({ shown: fallback, raw: String(message ?? ''), code: null, branch: 'plain_fallback', expected: false });
+  } catch {
+    /* a report must never change what the user is told */
+  }
   return fallback;
 }
 
@@ -171,13 +178,27 @@ function looksTechnical(msg: string): boolean {
   return /relation "|constraint|violates|column "|function |syntax|null value|uuid|jsonb|PGRST|duplicate key/i.test(msg);
 }
 
+/** Every sentence friendlyError shows is reported to Gavelling, along with the
+ *  raw error behind it and which branch produced it. Expected ones (a rule
+ *  refusing someone exactly as designed) are recorded and never emailed; the
+ *  rules for what is worth an email live in the alert-crash edge function, not
+ *  here. Returns the sentence unchanged, always. */
+function say(sentence: string, branch: string, expected: boolean, message: string, code: string): string {
+  try {
+    reportUserError({ shown: sentence, raw: message, code: code || null, branch, expected });
+  } catch {
+    /* a report must never change what the user is told */
+  }
+  return sentence;
+}
+
 export function friendlyError(error: unknown, fallback: string = DEFAULT_FALLBACK): string {
   // eslint-disable-next-line no-console
   console.error('[friendlyError]', error);
 
   // A message we wrote ourselves, for a person, at the point it was thrown.
   // Nothing generic below can improve on it.
-  if (error instanceof UserFacingError) return error.message;
+  if (error instanceof UserFacingError) return say(error.message, 'user_facing', true, error.message, '');
 
   const message = extractMessage(error);
   const code = extractCode(error);
@@ -186,29 +207,29 @@ export function friendlyError(error: unknown, fallback: string = DEFAULT_FALLBAC
   const constraintMatch = message.match(/constraint "([^"]+)"/);
   if (constraintMatch) {
     const known = CONSTRAINT_MESSAGES[constraintMatch[1]];
-    if (known) return known;
+    if (known) return say(known, 'constraint', false, message, code);
   }
 
   // a2. Supabase Auth (GoTrue) errors: code first, then message text for
   // older clients that send no code at all.
   for (const entry of AUTH_MESSAGES) {
-    if (code && entry.codes.includes(code)) return entry.message;
-    if (entry.pattern && entry.pattern.test(message)) return entry.message;
+    if (code && entry.codes.includes(code)) return say(entry.message, 'auth', true, message, code);
+    if (entry.pattern && entry.pattern.test(message)) return say(entry.message, 'auth', true, message, code);
   }
 
   // b. Network.
   if (/Failed to fetch|NetworkError|Load failed/.test(message)) {
-    return "We couldn't reach Gavelling. Check your connection and try again.";
+    return say("We couldn't reach Gavelling. Check your connection and try again.", 'network', true, message, code);
   }
 
   // c. Session.
   if (code === 'PGRST301' || /JWT/.test(message)) {
-    return 'Your session has expired. Please refresh the page and sign in again.';
+    return say('Your session has expired. Please refresh the page and sign in again.', 'session', false, message, code);
   }
 
   // d. Permission.
   if (code === '42501' || /row-level security/.test(message)) {
-    return "You don't have permission to do that. If you think you should, ask the conference owner.";
+    return say("You don't have permission to do that. If you think you should, ask the conference owner.", 'permission', false, message, code);
   }
 
   // d2. Our own payment-gate triggers raise a plain sentence under SQLSTATE
@@ -218,23 +239,23 @@ export function friendlyError(error: unknown, fallback: string = DEFAULT_FALLBAC
   // check constraint", which looksTechnical already catches, so those still
   // fall through to the generic sentence below.
   if (code === '23514' && !constraintMatch && !looksTechnical(message)) {
-    return message;
+    return say(message, 'trigger_check', true, message, code);
   }
 
   // e. By SQLSTATE.
-  if (code && CODE_MESSAGES[code]) return CODE_MESSAGES[code];
+  if (code && CODE_MESSAGES[code]) return say(CODE_MESSAGES[code], 'sqlstate', false, message, code);
 
   // e2. Our own trigger refusals, by hint.
   const hint = isErrorLike(error) && typeof error.hint === 'string' ? error.hint : '';
-  if (hint && HINT_MESSAGES[hint]) return HINT_MESSAGES[hint];
+  if (hint && HINT_MESSAGES[hint]) return say(HINT_MESSAGES[hint], 'trigger_hint', true, message, code);
 
   // f. Our own trigger messages: written for people already, but only trust
   // them once they clear looksTechnical — a RAISE EXCEPTION can still quote
   // a relation or column name back at the user.
   if (code === 'P0001' && message && !looksTechnical(message)) {
-    return message;
+    return say(message, 'trigger_message', true, message, code);
   }
 
   // g. Nothing safe to say more specifically.
-  return fallback;
+  return say(fallback, 'fallback', false, message, code);
 }

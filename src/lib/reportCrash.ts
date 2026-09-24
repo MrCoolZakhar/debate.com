@@ -27,6 +27,34 @@
 
 const ALERT_ENDPOINT = `${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''}/functions/v1/alert-crash`;
 
+// AuthProvider keeps this current (on load, on every auth change and on every
+// token refresh) so a report can say WHO hit the error instead of naming an
+// anonymous page. The token is only ever sent to our own alert-crash function,
+// which verifies it server-side; it is never stored and never sent anywhere else.
+let reportAccessToken: string | null = null;
+
+export function setReportIdentity(token: string | null): void {
+  reportAccessToken = token;
+}
+
+/** A per-tab id so the server can dedupe a SIGNED-OUT visitor hitting the same
+ *  error repeatedly. Random and meaningless on its own: it identifies nobody,
+ *  it just distinguishes one browser session from another. */
+function visitorId(): string | null {
+  try {
+    const existing = sessionStorage.getItem('gv-report-visitor');
+    if (existing) return existing;
+    const id =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `v-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+    sessionStorage.setItem('gv-report-visitor', id);
+    return id;
+  } catch {
+    return null; // storage blocked (private mode, embedded frame) — dedupe on the server side only
+  }
+}
+
 // A chunk that 404s because the deployment it belonged to has been replaced.
 // Nothing is wrong with the code — the visitor is simply holding a page from an
 // older build, and every deploy creates a window where this can happen.
@@ -83,11 +111,25 @@ type Report = {
   stack: string | null;
   digest: string | null;
   url: string;
-  /** 'render' = an error boundary caught a throw; 'blocked' = a user action failed. */
-  kind: 'render' | 'blocked';
+  /** 'render' = an error boundary caught a throw; 'blocked' = a user action
+   *  failed; 'user_error' = a sentence friendlyError put in front of someone. */
+  kind: 'render' | 'blocked' | 'user_error';
   boundary?: Boundary;
   /** For 'blocked': the thing the user was trying to do, e.g. 'submit application'. */
   action?: string;
+  /** The untranslated error we caught, before it was turned into a sentence. */
+  raw?: string | null;
+  /** The sentence the user actually read. */
+  shown?: string | null;
+  /** SQLSTATE or auth code, when the error carried one. */
+  code?: string | null;
+  /** Which friendlyError branch produced the sentence, e.g. 'constraint'. */
+  branch?: string | null;
+  /** True when this is a rule working as designed (a closed window, a wrong
+   *  password), so the server records it and never emails it. */
+  expected?: boolean;
+  /** Per-tab id, so a signed-out visitor can be deduped. */
+  visitor?: string | null;
 };
 
 /**
@@ -104,10 +146,14 @@ function send(report: Report): void {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return;
 
   try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    // Only when someone is signed in: alert-crash verifies it and names them.
+    if (reportAccessToken) headers.Authorization = `Bearer ${reportAccessToken}`;
+
     void fetch(ALERT_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(report),
+      headers,
+      body: JSON.stringify({ ...report, visitor: visitorId() }),
       // The user may navigate away or reload immediately; keepalive lets the
       // report finish even as the page is torn down.
       keepalive: true,
@@ -189,5 +235,59 @@ export function reportBlocked(
     url: window.location.href,
     kind: 'blocked',
     action,
+    raw: detail,
   });
+}
+
+/** How long the same sentence, on the same page, stays quiet after one report. */
+const USER_ERROR_QUIET_MS = 10 * 60 * 1000;
+const recentUserErrors = new Map<string, number>();
+
+/**
+ * Report a sentence friendlyError put in front of a person.
+ *
+ * Every user-facing error goes through here, including the ones that are a rule
+ * working exactly as designed (a closed application window, a wrong password).
+ * Those carry `expected: true`, and the server records them without emailing —
+ * they are the baseline that makes a real fault visible, and they are also the
+ * cheapest way to find a rule that refuses more people than it should.
+ *
+ * Best-effort in the strictest sense: it cannot throw, it awaits nothing, and it
+ * runs after the sentence has already been returned to the caller, so no user
+ * ever waits on it.
+ */
+export function reportUserError(input: {
+  shown: string;
+  raw: string;
+  code: string | null;
+  branch: string;
+  expected: boolean;
+}): void {
+  try {
+    if (typeof window === 'undefined') return;
+
+    // A component that re-renders on every keystroke can surface the same
+    // sentence dozens of times in a row. The server dedupes too; this just
+    // stops us making the requests at all.
+    const key = `${input.branch}|${input.raw}|${window.location.pathname}`;
+    const now = Date.now();
+    const last = recentUserErrors.get(key);
+    if (last != null && now - last < USER_ERROR_QUIET_MS) return;
+    recentUserErrors.set(key, now);
+
+    send({
+      message: input.raw || input.shown,
+      stack: null,
+      digest: null,
+      url: window.location.href,
+      kind: 'user_error',
+      shown: input.shown,
+      raw: input.raw,
+      code: input.code,
+      branch: input.branch,
+      expected: input.expected,
+    });
+  } catch {
+    /* reporting an error must never become one */
+  }
 }

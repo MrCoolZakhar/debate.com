@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabaseAuthClient } from '@/lib/supabase-auth';
+import { setReportIdentity } from '@/lib/reportCrash';
 
 interface Profile {
   id: string;
@@ -60,6 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       resolved = true;
       clearTimeout(failsafe);
       setSession(session);
+      setReportIdentity(session?.access_token ?? null);
       setUser(session?.user ?? null);
       if (session?.user) fetchProfile(session.user.id);
       setLoading(false);
@@ -69,6 +71,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       (_event, session) => {
         resolved = true;
         setSession(session);
+        // Also fires on every token refresh, so error reports never carry a stale token.
+        setReportIdentity(session?.access_token ?? null);
         setUser(session?.user ?? null);
         // Never await the profile fetch here: a slow/hung profiles read must not keep
         // the whole app gated behind authLoading.
@@ -118,6 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {}
     setUser(null);
     setSession(null);
+    setReportIdentity(null);
     setProfile(null);
   }
 
