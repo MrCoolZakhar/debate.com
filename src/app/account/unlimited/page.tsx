@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Sparkles, Ticket, Crown, Infinity as InfinityIcon, Check, Loader2, Minus, Plus, ArrowLeft } from 'lucide-react';
+import { Ticket, Crown, Infinity as InfinityIcon, Check, Loader2, Minus, Plus, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useCredits } from '@/hooks/useCredits';
 import { CreditCoin } from '@/components/CreditCoin';
-import { extractFunctionErrorMessage, unlimitedPricing, creditPricing, proPricing } from '@/lib/payments';
+import { extractFunctionErrorMessage, unlimitedPricing, creditPricing } from '@/lib/payments';
 import { formatFee } from '@/lib/finance';
 import { forgetUnlimitedStatus } from '@/lib/unlimitedStatus';
 import { Eyebrow, GlassCard, T } from '../accountUi';
@@ -112,12 +112,6 @@ const FREE_FEATURES: PlanFeature[] = [
   { text: 'Pay per application with Gavelling credits' },
 ];
 
-const PRO_FEATURES: PlanFeature[] = [
-  { text: '1 Gavelling credit every month' },
-  { text: 'Archive of past conferences', comingSoon: true },
-  { text: 'Upcoming conferences tools', comingSoon: true },
-];
-
 const UNLIMITED_FEATURES: PlanFeature[] = [
   { text: 'Unlimited Gavelling credits. Never think about it' },
   { text: 'Your MUN historical statistics', comingSoon: true },
@@ -131,7 +125,7 @@ const UNLIMITED_FEATURES: PlanFeature[] = [
 function UnlimitedPurchaseButtons({
   busy, price, purchaseError, onMonthly, onYearly,
 }: {
-  busy: 'monthly' | 'yearly' | 'pro' | null;
+  busy: 'monthly' | 'yearly' | null;
   price: { monthly: number; yearly: number; currency: string };
   purchaseError: string;
   onMonthly: () => void;
@@ -165,7 +159,7 @@ function UnlimitedPurchaseButtons({
 }
 
 export default function UnlimitedPage() {
-  const { user, session, profile, loading: authLoading } = useAuth();
+  const { user, session, loading: authLoading } = useAuth();
   const router = useRouter();
 
   // ── "Buy credits mid-apply, come back" round trip ─────────────────────────
@@ -272,8 +266,8 @@ export default function UnlimitedPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, session?.access_token]);
 
-  // ── Purchase surface: Unlimited is flat everywhere; Pro still prices by
-  // the buyer's country (proPricing below), so the geo lookup stays. ──
+  // ── Purchase surface: Unlimited prices flat everywhere now, but the geo
+  // lookup stays — it still rides along on the Stripe checkout calls below. ──
   const [geoCountry, setGeoCountry] = useState<string | null>(null);
   useEffect(() => {
     fetch('/api/geo')
@@ -283,9 +277,8 @@ export default function UnlimitedPage() {
   }, []);
   const price = unlimitedPricing(geoCountry);
 
-  const [busy, setBusy] = useState<'monthly' | 'yearly' | 'pro' | null>(null);
+  const [busy, setBusy] = useState<'monthly' | 'yearly' | null>(null);
   const [purchaseError, setPurchaseError] = useState('');
-  const proPrice = proPricing(geoCountry);
 
   const [portalBusy, setPortalBusy] = useState(false);
   const [portalError, setPortalError] = useState('');
@@ -327,33 +320,6 @@ export default function UnlimitedPage() {
     }
     const { data, error } = await supabase.functions.invoke('create-subscription-checkout', {
       body: { plan, ...(geoCountry ? { country: geoCountry } : {}) },
-    });
-    if (error) {
-      setBusy(null);
-      setPurchaseError(await extractFunctionErrorMessage(error));
-      return;
-    }
-    const result = data as { ok?: boolean; url?: string; error?: string } | null;
-    if (!result?.ok || !result.url) {
-      setBusy(null);
-      setPurchaseError(result?.error || 'Could not start checkout. Please try again.');
-      return;
-    }
-    window.location.assign(result.url);
-  }
-
-  async function startProCheckout() {
-    if (busy) return;
-    setBusy('pro');
-    setPurchaseError('');
-    const supabase = await getFreshAuthedClient();
-    if (!supabase) {
-      setBusy(null);
-      setPurchaseError('Your session has expired, please refresh and sign in again.');
-      return;
-    }
-    const { data, error } = await supabase.functions.invoke('create-credit-checkout', {
-      body: { kind: 'pro_monthly', ...(geoCountry ? { country: geoCountry } : {}) },
     });
     if (error) {
       setBusy(null);
@@ -565,9 +531,12 @@ export default function UnlimitedPage() {
     );
   }
 
-  const balance = profile?.points_balance ?? 0;
   const active = !!subscription;
   const isUnlimitedPlan = !!subscription && subscription.plan.startsWith('unlimited');
+  // Pro's card was removed in prompt 48 (nobody has ever bought it), but this
+  // stays so a legacy or future pro_monthly row is still a recognised,
+  // read-only state rather than something the page has to rediscover how to
+  // handle whenever Pro's card comes back.
   const isProPlan = subscription?.plan === 'pro_monthly';
 
   return (
@@ -590,7 +559,7 @@ export default function UnlimitedPage() {
         Credits &amp; Subscription
       </h1>
       <p className="text-sm mb-8" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6, maxWidth: 560 }}>
-        Gavelling credits cover applying to conferences. Buy them as you go, get one free every month with Pro, or go Unlimited and never think about it.
+        Gavelling credits cover applying to conferences. Buy them as you go, or go Unlimited and never think about it.
       </p>
 
       {returnBannerVisible && (
@@ -697,7 +666,9 @@ export default function UnlimitedPage() {
         </div>
       </GlassCard>
 
-      {/* Free / Pro / Unlimited tiers */}
+      {/* Free / Unlimited tiers. Pro's card was removed in prompt 48 (Christian:
+          Unlimited is the only plan until Pro carries real value); the grid
+          stays lg:grid-cols-3 rather than being redesigned around two cards. */}
       <Eyebrow className="mb-3">Plans</Eyebrow>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-3 items-stretch">
         {/* FREE card, quieter */}
@@ -716,66 +687,6 @@ export default function UnlimitedPage() {
 
           <div className="mt-6">
             {!active && <NeuPill>CURRENT PLAN</NeuPill>}
-          </div>
-        </NeuCard>
-
-        {/* PRO card */}
-        <NeuCard style={{ padding: '26px 24px', display: 'flex', flexDirection: 'column' }}>
-          <CreditCoin size={44} title="Gavelling credit" />
-          <h2 className="font-black text-lg mt-4 mb-1" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-            Gavelling Pro
-          </h2>
-          <p className="mb-5" style={{ fontSize: T.body, color: NEU.inkSoft, fontFamily: OUTFIT, lineHeight: 1.6 }}>
-            {formatFee(proPrice.monthly, proPrice.currency)}/mo. One credit every month, plus archive and upcoming tools.
-          </p>
-
-          <div className="flex flex-col gap-3.5 flex-1">
-            {PRO_FEATURES.map(f => <PlanFeatureRow key={f.text} feature={f} accent="forest" />)}
-          </div>
-
-          <div className="mt-6">
-            {isProPlan ? (
-              <div className="flex flex-col gap-2 items-start">
-                <NeuPill active gradient={NEU_GRADIENTS.green}>
-                  <Check size={11} strokeWidth={2.6} /> ACTIVE
-                </NeuPill>
-                <button
-                  type="button"
-                  onClick={handleManageSubscription}
-                  disabled={portalBusy}
-                  className="text-xs font-semibold focus:outline-none"
-                  style={{
-                    color: NEU.muted, fontFamily: OUTFIT, background: 'none', border: 'none', padding: 0,
-                    textDecoration: 'underline', cursor: portalBusy ? 'default' : 'pointer',
-                  }}
-                  onMouseEnter={(e) => { if (!portalBusy) (e.currentTarget as HTMLElement).style.color = NEU.forest; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.muted; }}
-                >
-                  {portalBusy ? 'OPENING…' : 'MANAGE SUBSCRIPTION'}
-                </button>
-                {portalError && (
-                  <p style={{ fontSize: T.caption, color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
-                    {portalError}
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2.5">
-                <NeuButton
-                  gradient={NEU_GRADIENTS.amber}
-                  disabled={busy !== null}
-                  onClick={startProCheckout}
-                  style={{ width: '100%' }}
-                >
-                  {busy === 'pro' ? 'STARTING CHECKOUT…' : `${formatFee(proPrice.monthly, proPrice.currency)} A MONTH`}
-                </NeuButton>
-                {purchaseError && (
-                  <p style={{ fontSize: T.caption, color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
-                    {purchaseError}
-                  </p>
-                )}
-              </div>
-            )}
           </div>
         </NeuCard>
 
@@ -879,10 +790,11 @@ export default function UnlimitedPage() {
             ) : !subscription && lapsedSubscription?.plan.startsWith('unlimited') ? (
               // Lapsed Unlimited (trial or paid): expire_subscriptions runs
               // hourly now, so this is a real, common state to land on, not
-              // an edge case. A lapsed pro_monthly doesn't hit this branch —
-              // Pro has its own card with its own single purchase button
-              // above, mixing its copy into the Unlimited card would be
-              // confusing next to these two Unlimited-specific buttons.
+              // an edge case. A lapsed pro_monthly doesn't hit this branch,
+              // since Pro's card was removed in prompt 48; it falls through
+              // to the plain purchase buttons below like a never-subscribed
+              // visitor, which is correct since Pro cannot be bought again
+              // yet either.
               <div className="flex flex-col gap-2.5 items-start" style={{ width: '100%' }}>
                 <NeuPill active gradient={ENDED_GRADIENT}>
                   <Minus size={11} strokeWidth={2.6} /> ENDED
@@ -987,22 +899,6 @@ export default function UnlimitedPage() {
           </p>
         )}
       </GlassCard>
-
-      {/* Points balance, compact — points/rewards are not launched yet */}
-      <div
-        className="flex items-center gap-3 rounded-2xl px-4 py-3"
-        style={{ backgroundColor: 'rgba(237,231,216,0.5)', border: '1px solid rgba(221,212,192,0.7)' }}
-      >
-        <Sparkles size={16} strokeWidth={2} style={{ color: NEU.muted, flexShrink: 0 }} />
-        <div>
-          <p className="text-sm font-semibold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-            Gavelling Points: {balance}
-          </p>
-          <p style={{ fontSize: T.caption, color: NEU.inkSoft, fontFamily: OUTFIT }}>
-            Rewards are coming soon.
-          </p>
-        </div>
-      </div>
     </div>
   );
 }

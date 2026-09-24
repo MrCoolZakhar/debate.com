@@ -12,9 +12,9 @@
 //   2. Approve / Return (with a note) / Edit slate per committee;
 //   3. the delegation standings, tallied from committee honours with
 //      AWARD_WEIGHT, and the Best Delegation style awards handed out from them;
-//   4. Publish: one RPC that flips rows to published, writes a verified MUN CV
-//      entry per recipient with an account and mints Gavelling Points at a
-//      paid conference. Idempotent, so a late addition can be published again.
+//   4. Publish: one RPC that flips rows to published and writes a verified
+//      MUN CV entry per recipient with an account. Idempotent, so a late
+//      addition can be published again.
 //
 // All vocabulary comes from src/lib/awards.ts; all writes go through
 // src/lib/awardsService.ts. Nothing here talks to conference_awards directly.
@@ -412,12 +412,6 @@ export default function AwardsPage() {
   );
   const publishedRows = useMemo(() => awards.filter((r) => r.status === 'published'), [awards]);
 
-  const isPaid = useMemo(
-    () => (conference?.fee_amount ?? 0) > 0
-      || roleFees.some((r) => (r.role === 'delegate' || r.role === 'head-delegate') && (r.fee_amount ?? 0) > 0),
-    [conference?.fee_amount, roleFees],
-  );
-
   const societyByAllocation = useMemo(() => {
     const m: Record<string, { societyId: string; societyName: string }> = {};
     for (const a of allocations) {
@@ -600,7 +594,7 @@ export default function AwardsPage() {
     setBusy(null);
     setNotice({
       kind: 'ok',
-      text: `Published ${result.awards} award${result.awards === 1 ? '' : 's'}: ${result.cv_entries} new MUN CV entr${result.cv_entries === 1 ? 'y' : 'ies'}, ${result.points_rows} points credit${result.points_rows === 1 ? '' : 's'}`
+      text: `Published ${result.awards} award${result.awards === 1 ? '' : 's'}: ${result.cv_entries} new MUN CV entr${result.cv_entries === 1 ? 'y' : 'ies'}`
         + (mail.queued > 0 ? `, ${mail.queued} email${mail.queued === 1 ? '' : 's'} queued.` : mail.outcome === 'unconfigured' ? '. No emails: the "Award received" email is not turned on under Communications.' : '.'),
     });
     await Promise.all([load({ quiet: true }), refreshConferenceQuiet()]);
@@ -730,8 +724,7 @@ export default function AwardsPage() {
               </div>
               <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: SOFT, marginBlockEnd: 14 }}>
                 Every recipient with a Gavelling account now carries this on their MUN CV.
-                {isPaid ? ' Gavelling Points were minted for each honour.' : ' No points were minted: this is a free conference.'}
-                {publishResult && ` Last publish: ${publishResult.awards} awards, ${publishResult.cv_entries} new CV entries, ${publishResult.points_rows} points credits.`}
+                {publishResult && ` Last publish: ${publishResult.awards} awards, ${publishResult.cv_entries} new CV entries.`}
               </p>
               <HonourRoll rows={publishedRows} config={config} committees={committees} allocationById={allocationById} committeeLabel={committeeLabel} />
               {publishable.length > 0 && (
@@ -997,11 +990,6 @@ export default function AwardsPage() {
           <ul style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.ink, display: 'flex', flexDirection: 'column', gap: 6, paddingInlineStart: 18, marginBlockEnd: 12 }}>
             <li>{publishCount} award{publishCount === 1 ? '' : 's'} across {publishCommittees} committee{publishCommittees === 1 ? '' : 's'}{publishable.some((r) => r.society_id) ? ' plus delegation awards' : ''}.</li>
             <li>{publishRecipients} recipient{publishRecipients === 1 ? '' : 's'} with a Gavelling account will get a verified MUN CV entry.</li>
-            <li>
-              {isPaid
-                ? 'This is a paid conference, so Gavelling Points are minted for every recipient with an account.'
-                : 'This is a free conference (no delegate fee), so no Gavelling Points are minted.'}
-            </li>
             <li>Each recipient is emailed if the &quot;Award received&quot; email is turned on.</li>
           </ul>
           {!config.requireApproval && stateCounts.submitted + stateCounts.open + stateCounts.returned > 0 && (

@@ -7,8 +7,9 @@
 // Writes that change a slate's lifecycle (submit / withdraw / approve /
 // return / publish) go through SECURITY DEFINER RPCs because the stamps live
 // on `conference_committees`, which chairs cannot update, and because
-// publishing fans out into `mun_cv_entries` and `points_ledger`, which no
-// client may write for another user. Nominations themselves are plain rows
+// publishing fans out into `mun_cv_entries`, which no client may write for
+// another user. Gavelling Points were retired in prompt 48: publishing no
+// longer writes points_ledger. Nominations themselves are plain rows
 // guarded by RLS: chairs of the committee while the slate is unlocked,
 // organisers always.
 // ============================================================
@@ -182,7 +183,6 @@ export const returnSlate = (s: SupabaseClient, committeeId: string, note: string
 export interface PublishResult {
   awards: number;
   cv_entries: number;
-  points_rows: number;
 }
 
 export async function publishAwards(
@@ -192,7 +192,7 @@ export async function publishAwards(
   const { data, error } = await supabase.rpc('publish_conference_awards', { p_conference: conferenceId });
   if (error) return { result: null, error: friendlyAwardError(error.message) };
   const r = (data ?? {}) as Partial<PublishResult>;
-  return { result: { awards: r.awards ?? 0, cv_entries: r.cv_entries ?? 0, points_rows: r.points_rows ?? 0 }, error: null };
+  return { result: { awards: r.awards ?? 0, cv_entries: r.cv_entries ?? 0 }, error: null };
 }
 
 // ── Config ──────────────────────────────────────────────────────────────────

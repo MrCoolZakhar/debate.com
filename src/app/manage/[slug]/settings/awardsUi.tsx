@@ -175,12 +175,6 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function clampInt(raw: string, min: number, max: number, fallback: number): number {
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.max(min, Math.min(max, Math.round(n)));
-}
-
 // ── Deadline helpers ────────────────────────────────────────────────────────
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
@@ -324,7 +318,6 @@ export function AwardsSettings({ conference, onSaved }: {
   const [newTier, setNewTier] = useState<AwardTier>('special');
   const [newScope, setNewScope] = useState<'committee' | 'conference'>('committee');
   const [newPerCommittee, setNewPerCommittee] = useState(1);
-  const [newPoints, setNewPoints] = useState(20);
   const [newError, setNewError] = useState<string | null>(null);
 
   const addCustom = () => {
@@ -343,7 +336,7 @@ export function AwardsSettings({ conference, onSaved }: {
         tier: newTier,
         scope: newScope,
         perCommittee: newScope === 'committee' ? newPerCommittee : 0,
-        points: newPoints,
+        points: 0,
         enabled: true,
         builtin: false,
         description: '',
@@ -353,7 +346,6 @@ export function AwardsSettings({ conference, onSaved }: {
     setNewTier('special');
     setNewScope('committee');
     setNewPerCommittee(1);
-    setNewPoints(20);
     setNewError(null);
   };
 
@@ -401,7 +393,7 @@ export function AwardsSettings({ conference, onSaved }: {
             ['You set the categories', 'Which honours exist, how many each committee gives, and what they are worth.'],
             ['Chairs nominate', 'From their conference page after the last session, with the session scoreboard beside them as evidence.'],
             ['The secretariat reviews', 'Each committee slate is checked and approved at Awards. Slates can be returned with a note.'],
-            ['Publish', 'The certificates list goes out, every recipient gets a verified MUN CV entry, and Gavelling Points are minted at paid conferences.'],
+            ['Publish', 'The certificates list goes out, and every recipient gets a verified MUN CV entry.'],
           ].map(([title, body], i) => (
             <li key={title} className="flex items-start gap-3 rounded-xl" style={{ padding: '10px 12px', backgroundColor: '#FAF8F3', border: '1px solid #EDE7D8' }}>
               <span
@@ -504,20 +496,6 @@ export function AwardsSettings({ conference, onSaved }: {
                     </span>
                   )}
 
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min={0}
-                      max={1000}
-                      value={t.points}
-                      aria-label="Points"
-                      onChange={(e) => patchType(t.key, { points: clampInt(e.target.value, 0, 1000, t.points) })}
-                      className="focus:outline-none tabular-nums"
-                      style={{ ...inputStyle, width: 74, textAlign: 'right' }}
-                    />
-                    <FieldLabel>points</FieldLabel>
-                  </label>
-
                   {!t.builtin && (
                     <button
                       type="button"
@@ -565,18 +543,6 @@ export function AwardsSettings({ conference, onSaved }: {
                 ))}
               </select>
             </label>
-            <label className="flex flex-col gap-1">
-              <FieldLabel>Points</FieldLabel>
-              <input
-                type="number"
-                min={0}
-                max={1000}
-                value={newPoints}
-                onChange={(e) => setNewPoints(clampInt(e.target.value, 0, 1000, newPoints))}
-                className="focus:outline-none tabular-nums"
-                style={inputStyle}
-              />
-            </label>
           </div>
           <div className="flex flex-wrap items-end gap-4 mt-3">
             <div className="flex flex-col gap-1" style={{ minWidth: 260 }}>
@@ -613,11 +579,6 @@ export function AwardsSettings({ conference, onSaved }: {
             <p role="alert" className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{newError}</p>
           )}
         </div>
-
-        {/* e. Points note */}
-        <p className="text-xs mt-4" style={{ color: '#5B4F42', fontFamily: OUTFIT, lineHeight: 1.5 }}>
-          Points only mint at paid conferences (any delegate role with a fee). Free conferences still write the verified MUN CV entry.
-        </p>
       </div>
 
       {/* ── d. Ratification ── */}

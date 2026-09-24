@@ -83,21 +83,6 @@ export function isStripeCountrySupported(code: string | null | undefined): boole
   return !!code && STRIPE_CONNECT_COUNTRIES.has(code.toUpperCase());
 }
 
-/** ISO-2 codes charged Gavelling Unlimited's region A price (EU/EEA +
- *  Switzerland, UK, US, Middle East). Everyone else pays region B. Mirrors
- *  create-subscription-checkout v2, which prices by the BUYER's location and
- *  is the pricing authority — this list is DISPLAY ONLY. */
-export const UNLIMITED_REGION_A = new Set<string>([
-  // EU 27
-  'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR',
-  'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK',
-  'SI', 'ES', 'SE',
-  // Rest of EEA + Switzerland, UK, US
-  'NO', 'IS', 'LI', 'CH', 'GB', 'US',
-  // Middle East
-  'AE', 'SA', 'QA', 'KW', 'BH', 'OM', 'IL', 'JO', 'LB', 'IQ', 'TR', 'EG',
-]);
-
 /** Gavelling Unlimited is USD 3/month or USD 30/year everywhere. No regional
  *  split: this is display only, and create-subscription-checkout v9 is the
  *  real price, a flat 300 or 3000 cents with no region lookup of its own, so
@@ -125,13 +110,14 @@ export function creditPricing(_countryCode: string | null): { each: number; curr
   return { each: 1, currency: 'USD' };
 }
 
-/** Gavelling Pro (1 credit/month + archive & upcoming tools) pricing for
- *  display purposes only — create-credit-checkout recomputes and enforces
- *  the real price. Mirrors unlimitedPricing's region split. */
-export function proPricing(countryCode: string | null): { monthly: number; currency: string } {
-  const code = countryCode?.toUpperCase();
-  const isRegionA = !code || UNLIMITED_REGION_A.has(code);
-  return isRegionA ? { monthly: 3, currency: 'USD' } : { monthly: 1.5, currency: 'USD' };
+/** Pro is not on sale today (its card was removed in prompt 48) and it is
+ *  priced flat when it returns, $2 a month or $20 a year; the yearly option
+ *  does not exist server-side yet, because what a year of Pro grants has not
+ *  been decided. Note that create-credit-checkout still charges the OLD
+ *  regional Pro price, so nothing may sell Pro until that function is
+ *  redeployed. */
+export function proPricing(_countryCode: string | null): { monthly: number; yearly: number; currency: string } {
+  return { monthly: 2, yearly: 20, currency: 'USD' };
 }
 
 /** Whether checkout for this conference goes through live Stripe. Organizer

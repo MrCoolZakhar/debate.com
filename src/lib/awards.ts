@@ -23,10 +23,11 @@
 //   conference_committees.awards_*   the per-committee slate lifecycle stamps
 //                                    (submitted / approved / return note)
 //   conferences.awards_published_at  the ceremony moment
-//   publish_conference_awards()      SQL: flips rows to published, mints ONE
-//                                    gavelling_verified MUN CV entry per
-//                                    recipient per conference, and a
-//                                    points_ledger credit for paid conferences
+//   publish_conference_awards()      SQL: flips rows to published and mints
+//                                    ONE gavelling_verified MUN CV entry per
+//                                    recipient per conference. Gavelling
+//                                    Points were retired in prompt 48: this
+//                                    no longer writes points_ledger.
 //
 // Chairs nominate from their conference page (ChairParticipant → AwardsCard)
 // with the session scoreboard beside them as evidence. The secretariat
@@ -37,7 +38,9 @@
 // RULES
 // - `award_type` keys are stable identifiers; labels are what people see.
 //   Never rename a key (it is what the CV pipeline and points fallback match).
-// - DEFAULT_AWARD_TYPES points MUST match award_points_for() in the database.
+// - `points` on each type is inert since prompt 48: award_points_for() was
+//   dropped from the database and nothing credits it any more. Left in the
+//   shape (never read for crediting) so a stored config still parses.
 // - Anonymous (standalone) sessions never show award UI (PRD rule 8). Gate on
 //   `session_origin === 'conference'` before linking here from a session.
 // ============================================================
@@ -56,7 +59,8 @@ export interface AwardTypeConfig {
   scope: AwardScope;
   /** How many of this award each committee gives (committee scope only). */
   perCommittee: number;
-  /** Gavelling Points minted per recipient at a paid conference. */
+  /** Inert since prompt 48 (Gavelling Points retired): kept only so a
+   *  stored config still parses, never read for crediting. */
   points: number;
   enabled: boolean;
   builtin: boolean;
