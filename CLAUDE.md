@@ -42,9 +42,9 @@ Design consequences: mobile-first on every delegate and applicant surface; the c
 | Mechanism | Where |
 |---|---|
 | **Credits**: 1 credit = 1 application (delegate, head-delegate, faculty-advisor, observer; chairs exempt). Bought via `create-credit-checkout`; refunded on rejection. Welcome credit + one-time modal on signup (`CreditsWelcomeGate`). | `src/lib/payments.ts`, `src/hooks/useCredits.ts`, `ConferenceApplyClient.tsx` |
-| **Subscriptions**: Unlimited (unlimited credits), Pro. Regional pricing A/B. Whether someone is on Unlimited is `my_unlimited_status()` (a personal `unlimited_*` subscription, active or trialing, not past `current_period_end`), read client-side through `useUnlimitedStatus()` (`src/lib/unlimitedStatus.ts`). `profiles.unlimited_status` is DEAD: nothing ever wrote it (every profile read `none` while 129 subscriptions were live); never read it. | `src/app/account/unlimited/page.tsx`, `payments.ts` |
+| **Subscriptions**: Unlimited (unlimited credits): USD 3 a month or USD 30 a year, the same price everywhere, no regions. Pro is hidden from the UI and not sold. Whether someone is on Unlimited is `my_unlimited_status()` (a personal `unlimited_*` subscription, active or trialing, not past `current_period_end`), read client-side through `useUnlimitedStatus()` (`src/lib/unlimitedStatus.ts`). `profiles.unlimited_status` is DEAD: nothing ever wrote it (every profile read `none` while 129 subscriptions were live); never read it. | `src/app/account/unlimited/page.tsx`, `payments.ts` |
 | **Conference fees**: **there is NO platform fee** (owner, 23 Sep 2026; Stripe Connect is unavailable in many countries, so manual payment is a first-class path, not a fallback). Card payments are direct charges on the organiser's Stripe Connect account (or, for `platform_collects` conferences, the platform account) with no `application_fee_amount`; the participant pays exactly the invoice amount, recomputed server-side in the `create-checkout` edge function. `PLATFORM_FEE_RATE` / `PROCESSING_RATE` in `src/lib/finance.ts` are legacy: `computeCheckout` still computes a `serviceFee`, but no screen shows it and nothing charges it. Do not wire them back in. Manual payments with proof review sit beside Stripe. | `src/lib/finance.ts`, `manage/[slug]/financials/*` |
-| **Gavelling Points**: earned (welcome bonus, awards at paid conferences), stored in `profiles.points_balance` via the `points_ledger` trigger. Spending is not built. | `points_ledger`, `publish_conference_awards()` |
+| **Gavelling Points (retired 23 Sep 2026)**: no longer earned or shown. The welcome-points trigger, `grant_welcome_points()`, `award_points_for()` and the points block in `publish_conference_awards()` were dropped. `points_ledger` and `profiles.points_balance` are kept as history only; never write them and never build on them. | `points_ledger` (history only) |
 
 **Money shown to anyone is the payments ledger, never `payment_status`** (19 Sep 2026). `conference_money_summary(conference, detail)` (`src/lib/conferenceMoney.ts`) is the one definition used by the dashboard money card, Financials and /admin: *received* = succeeded Stripe payments (money that came in through Gavelling), *offline* = succeeded manual payments (organiser mark-paid / approved proof), shown apart and never added, *outstanding* = open invoice balances of accepted participants. `payment_status = 'paid'` is an access flag: free registrations (chairs) are stamped paid on arrival and pledge-covered members are paid with no money of their own, so never multiply it by a fee. The daily report and `admin_platform_metrics` use the same split.
 
@@ -81,7 +81,7 @@ service role / cron:
   most one per invoice per 7 days (`payment_reminder_log`), respects `notify_email_payments` /
   `notify_email_reminders`, the global opt-out, failed addresses, `conference_payments_ready()`,
   and stands down for 7 days after the organiser's own `queue_payment_reminder_emails()`
-  (template `payment_available`). **Scheduled 24 Sep 2026: cron `payment-reminders` 11:15 UTC daily.** Preview inserts nothing (90 payers across 9
+  (template `payment_available`). **PAUSED 24 Sep 2026 and it stays off: cron `payment-reminders` (11:15 UTC) is `active = false`.** Its one run, on 24 Sep, emailed 92 payers across 8 conferences, none of which had turned any reminder on. Payment reminders are the organiser's choice: the opt-in `payment_available` recurring reminder (cron `payment-reminder-drain`, `queue_payment_reminder_emails()`). Never re-enable or re-schedule this job. Preview inserts nothing (90 payers across 9
   conferences on 23 Sep 2026).
 - **`queue_claim_reminders(p_preview default TRUE, p_limit)`**: imported / invited applicants
   with no account. Upcoming conference: "Your place is waiting" (Committee + Representing facts
@@ -104,13 +104,16 @@ service role / cron:
 - **Imported applications attach by VERIFIED email only** (`auth.users.email_confirmed_at`, never
   `profiles.email`): the profile-insert trigger, a trigger on `auth.users` when an address is
   confirmed (`claim_imported_on_email_confirmed`), and `claim_my_imported_applications()` once per
-  browser session from `ProfileDropdown` (`src/lib/importClaim.ts`). **A claim never costs a
-  credit (24 Sep 2026):** the organiser created the application, so `claim_imported_for` and
-  `claim_import_invite` (the invite link) record a `claim_free` hold (no lot) instead of taking
-  one of the claimant's credits, and `_credit_consume_core` re-issues `claim_free` when a claimed
-  import is reinstated after a rejection. 8 credits taken by claims on 23 Sep were given back
-  (the holds became `claim_free`). About 294 older claim-looking charges (imported application,
-  charged well after it was submitted) were NOT touched: the owner's call.
+  browser session from `ProfileDropdown` (`src/lib/importClaim.ts`). **A claim takes a credit if the
+  claimant has one, and never blocks (24 Sep 2026, owner's rule).** `claim_imported_for` and
+  `claim_import_invite` (the invite link) call `_credit_consume_core`: a claimant who holds a
+  credit (usually their free welcome credit) spends it. Only when that answers `need_credit` do
+  they record a `claim_free` hold (no lot), so a claimant with no credit is attached anyway and
+  never sees a paywall. Errors go to `claim_billing_errors` and never block a claim.
+  `_credit_consume_core` re-issues `claim_free` when a claimed import that once held one is
+  reinstated after a rejection. The 16 claims refunded early on 24 Sep were re-charged under this
+  rule (11 from their own credit, 4 covered by Unlimited, 1 `claim_free`). About 294 older
+  claim-looking charges were not touched: the owner's call. Never change claims to "always free".
 - **`close_undecided_after_conference()`**, cron `close-undecided-after-conference` 02:20 UTC:
   applications still `submitted` the day after a conference's last day (its timezone) become
   `withdrawn` (the credit gate refunds the credit), recorded in `application_auto_closures`. No
@@ -234,12 +237,12 @@ Gavelling mirrors that exactly. Read `src/lib/awards.ts` (the vocabulary and con
 | Chair nominates, with the session scoreboard as evidence | the chair's conference page, `participant/AwardsCard.tsx` (`/conferences/[slug]/role/chair`) | `conference_awards` rows, `status = 'nominated'` |
 | Chair submits / withdraws | same card → `submit_committee_awards` / `withdraw_committee_awards` | `conference_committees.awards_submitted_*` |
 | Secretariat approves / returns with a note / edits / assigns delegation awards | `manage/[slug]/awards/AwardsConsole.tsx` (unrendered; the route redirects to Settings) | `awards_approved_*`, `awards_return_note`, rows → `approved` |
-| Publish (the ceremony) | same page → `publish_conference_awards()` | rows → `published`; one `gavelling_verified` `mun_cv_entries` row per recipient per conference; `points_ledger` at paid conferences; `conferences.awards_published_at` |
+| Publish (the ceremony) | same page → `publish_conference_awards()` | rows → `published`; one `gavelling_verified` `mun_cv_entries` row per recipient per conference; `conferences.awards_published_at` |
 | Delegate sees it | `participant/MyAwardsCard.tsx`, `/account/cv`, public honour roll `/conferences/[slug]/awards` | RLS: only `published` rows are readable outside the dais and the organising team |
 
 Rules:
 - **Awards only on conference-linked sessions.** The live session signposts (`ScoreboardPanel` header, the End View card) only when `committee.sessionOrigin === 'conference'`. No award UI in anonymous sessions, ever.
-- `award_type` keys are stable identifiers; labels are presentation. `DEFAULT_AWARD_TYPES` points must match `award_points_for()` in the database.
+- `award_type` keys are stable identifiers; labels are presentation. `DEFAULT_AWARD_TYPES` point values are unused: points are retired and `award_points_for()` no longer exists.
 - Nothing about a nomination is visible to a delegate before `publish`. Do not add a read path that bypasses the `conference_awards` RLS.
 - The chair's decision is qualitative; the scoreboard is evidence. "Suggest from the record" fills empty slots and is always editable.
 - `CONFERENCES_PRD.md` rule 11 ("ratings and award badges are not in scope") is about badges on directory cards, not this feature; Part 7 of the same PRD mandates it.
