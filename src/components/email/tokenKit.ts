@@ -63,6 +63,8 @@ export const TOKEN_IDENTITY: Record<EmailTokenKey, TokenIdentity> = {
   draft_link: { emoji: 'Link', glyph: '🔗', icon: Link2, short: 'Draft link', family: 'link', becomes: 'A private link back to their unfinished application.' },
   draft_stop_link: { emoji: 'Stop sign', glyph: '🛑', icon: Ban, short: 'Stop link', family: 'link', becomes: 'A one-click way for them to turn these reminders off.' },
   invited_by: { emoji: 'Bust in silhouette', glyph: '🧑', icon: UserRound, short: 'Who invited', family: 'person', becomes: 'The organizer who sent the invitation.' },
+  co_delegate: { emoji: 'Busts in silhouette', glyph: '🧑‍🤝‍🧑', icon: Users, short: 'Co-delegate', family: 'person', becomes: 'On a double delegation, the other delegate sharing their seat.' },
+  co_delegate_email: { emoji: 'Envelope', glyph: '✉️', icon: Mail, short: 'Co-delegate email', family: 'person', becomes: "On a double delegation, the co-delegate's email address." },
 };
 
 export const TOKEN_FAMILY_LABEL: Record<TokenFamily, string> = {

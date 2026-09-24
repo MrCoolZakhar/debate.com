@@ -39,6 +39,14 @@ function Qr({ text, size }: { text: string; size: number }) {
   );
 }
 
+function readAnswer(code: string): 'yes' | 'no' | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const v = localStorage.getItem(storageKey(code));
+    return v === 'yes' || v === 'no' ? v : null;
+  } catch { return null; /* storage unavailable: ask */ }
+}
+
 export default function RollCallJoinPanel({ code, onPresent, compact = false }: {
   code: string;
   /** Opens the full-screen SessionCodePresenter, growing from the pressed button. */
@@ -47,23 +55,18 @@ export default function RollCallJoinPanel({ code, onPresent, compact = false }: 
   compact?: boolean;
 }) {
   const t = useT();
-  const [answer, setAnswer] = useState<'yes' | 'no' | null>(null);
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    try {
-      const v = localStorage.getItem(storageKey(code));
-      setAnswer(v === 'yes' || v === 'no' ? v : null);
-    } catch { /* storage unavailable: ask */ }
-    setReady(true);
-  }, [code]);
+  // The remembered answer is read in the initial state (the chair page renders this only
+  // on the client, after the room loaded); a different room code re-reads it during render.
+  const [stored, setStored] = useState(() => ({ code, answer: readAnswer(code) }));
+  if (stored.code !== code) setStored({ code, answer: readAnswer(code) });
+  const answer = stored.code === code ? stored.answer : readAnswer(code);
   const choose = (v: 'yes' | 'no' | null) => {
-    setAnswer(v);
+    setStored({ code, answer: v });
     try {
       if (v) localStorage.setItem(storageKey(code), v); else localStorage.removeItem(storageKey(code));
     } catch { /* not remembered, still works */ }
   };
 
-  if (!ready) return null;
   const joinUrl = `https://${JOIN_HOST}/join?code=${encodeURIComponent(code)}`;
   const card: React.CSSProperties = {
     backgroundColor: '#F6F1E6', border: '1px solid #DDD4C0', borderRadius: 22,

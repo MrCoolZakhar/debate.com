@@ -322,12 +322,19 @@ export function AllocationEmailBar({
   const unsent = targets.filter(t => !t.sent);
   const sentCount = targets.length - unsent.length;
 
-  useEffect(() => {
-    if (!openWithUnsent || targets.length === 0) return;
+  // Arriving from the dashboard opens the picker once, as soon as the
+  // targets are loaded. Adjusted during render (not in an effect), then the
+  // parent is told in an effect so it can clear its flag.
+  const [openedFromDashboard, setOpenedFromDashboard] = useState(false);
+  if (openWithUnsent && !openedFromDashboard && targets.length > 0) {
+    setOpenedFromDashboard(true);
     setInitialPicked(targets.filter(t => !t.sent).map(t => t.applicationId));
     setPickerOpen(true);
-    onOpenedWithUnsent?.();
-  }, [openWithUnsent, targets, onOpenedWithUnsent]);
+  }
+  if (!openWithUnsent && openedFromDashboard) setOpenedFromDashboard(false);
+  useEffect(() => {
+    if (openWithUnsent && openedFromDashboard) onOpenedWithUnsent?.();
+  }, [openWithUnsent, openedFromDashboard, onOpenedWithUnsent]);
 
   return (
     <>

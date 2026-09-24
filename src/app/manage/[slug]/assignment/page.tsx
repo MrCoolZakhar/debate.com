@@ -4102,7 +4102,9 @@ export default function AssignmentPage() {
   // nothing for delegates already seated; those stay "waiting" until the
   // organiser presses SEND → All new.
   function handleTurnOnAllocTemplate() {
-    if (!session || !conference || turningOnAllocTemplate) return;
+    // Only reachable from the "Switched off" state, i.e. an existing row with
+    // enabled = false, so turnOnDefaultEmail flips that row and inserts nothing.
+    if (!session || !conference || turningOnAllocTemplate || allocTemplateEnabled !== false) return;
     setTurningOnAllocTemplate(true);
     const supabase = getAuthedClient(session.access_token);
     turnOnDefaultEmail(supabase, conference.id, 'allocation_assigned')
@@ -4134,7 +4136,10 @@ export default function AssignmentPage() {
       // switched off under Communications is exactly the SISMUN conflict (the
       // bar said "Sending automatically" and nothing went out). Turning
       // automatic on turns the email on too. It queues nothing by itself.
-      if (next && allocTemplateEnabled !== true) {
+      // Only an EXPLICIT off row is flipped: a missing row already sends our
+      // default copy (eventOnWhenMissing), and must stay missing rather than
+      // become a row with empty content.
+      if (next && allocTemplateEnabled === false) {
         const res = await turnOnDefaultEmail(supabase, conferenceId, 'allocation_assigned');
         if (res.ok) setAllocTemplateEnabled(true);
       }

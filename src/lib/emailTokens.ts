@@ -29,6 +29,12 @@ export const EMAIL_TOKEN_KEYS = [
   // queue_invite_reminders RPC, which is the only thing that reads
   // conference_chair_invites.invited_by / conference_organizer_invites.invited_by.
   'invited_by',
+  // Double delegations only (allocation_assigned facts, co_delegate_assigned).
+  // The other seat holder of the same committee + country, and their address.
+  // co_delegate_assigned is queued by the notify_co_delegate_on_allocation_sent
+  // trigger, which substitutes these itself.
+  'co_delegate',
+  'co_delegate_email',
 ] as const;
 
 export type EmailTokenKey = (typeof EMAIL_TOKEN_KEYS)[number];
@@ -50,6 +56,8 @@ export const EMAIL_TOKEN_LABELS: Record<EmailTokenKey, string> = {
   draft_stop_link: 'Stop Reminders Link',
   award: 'Award',
   invited_by: 'Invited By',
+  co_delegate: 'Co-delegate',
+  co_delegate_email: 'Co-delegate Email',
 };
 
 export type EmailTokenContext = Partial<Record<EmailTokenKey, string | null>>;

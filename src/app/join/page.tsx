@@ -26,8 +26,8 @@ import { useState, useEffect, useRef, Suspense, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  AlertCircle, ArrowRight, BadgeCheck, CheckCircle2, Eye, Flag, Gavel, Globe2, KeyRound,
-  Loader2, Lock, LogIn, Mail, MessageSquareText, Plus, Radio, RotateCw, Sparkles, UserRound, Users,
+  AlertCircle, ArrowRight, BadgeCheck, CheckCircle2, Eye, Gavel, Globe2, KeyRound,
+  Loader2, Lock, LogIn, Mail, MessageSquareText, Plus, RotateCw, UserRound, Users,
 } from 'lucide-react';
 import { getCommitteeRosterByCode, addChairName, updateCommitteeHeadChairInDB } from '@/lib/committeeService';
 import { getGavelDeviceId } from '@/lib/gavelDevice';
@@ -45,8 +45,9 @@ import { getCountryDisplayName } from '@/lib/countries';
 import { supabase, supabase as anonSupabase } from '@/lib/supabase';
 import { PRESET_LOGOS, deriveCommitteeAcronym, committeeDisplayName, matchPresetEmblem } from '@/lib/presetNames';
 import { CircleFlag } from '@/components/CircleFlag';
+import { DEFAULT_EMBLEM } from '@/components/CommitteeIdentityBadge';
 import {
-  BrandPanel, C, Chip, Eyebrow, FieldLabel, GhostAction, JoinCard, MessageRail, OUTFIT,
+  BrandPanel, type BrandRoom, C, Chip, Eyebrow, FieldLabel, GhostAction, JoinCard, MessageRail, OUTFIT,
   PageBackdrop, PrimaryAction, RoleTile,
 } from './joinUi';
 import JoinSeatPicker, { type JoinSeatRow } from './JoinSeatPicker';
@@ -596,36 +597,82 @@ function JoinPageInner() {
   const showRoleFlow = !!foundCommittee && (!isConferenceSession || openPath) && !checkingConference;
   const signedInName = (profile?.display_name || user?.email || '').trim();
 
-  // ── Conference identity for the brand panel ────────────────────────────────
+  // ── The room, for the brand panel ──────────────────────────────────────────
+  // Everything here comes from the lookup that already ran (the roster read and the
+  // conference_committees row); the panel costs no extra request. A snapshot, taken
+  // when the code resolved.
   const conf = conferenceCommittee?.conferences ?? null;
-  const conferenceBrand = foundCommittee && isConferenceSession
-    ? {
-        eyebrow: t('join_conf_eyebrow'),
-        name: conf?.full_name ?? foundCommittee.name,
-        committee: conferenceCommittee
-          ? [conf ? conferenceAcronymLabel(conf) : '', conferenceCommittee.name].filter(Boolean).join(' · ')
-          : null,
-        logoUrl: conf?.logo_url ?? null,
-      }
-    : null;
+  const brandRoom: BrandRoom | null = (() => {
+    if (!foundCommittee || checkingConference) return null;
+    const c = foundCommittee;
+    const acronym = conferenceCommittee?.abbreviation || deriveCommitteeAcronym(c.name) || c.name;
+    // committeeDisplayName would collapse a long name to the acronym; here the
+    // acronym is already the headline, so the spelled line is the full name.
+    const spelled = c.name.trim();
+    const confAcr = conf ? conferenceAcronymLabel(conf) : '';
+    // The acronym label already carries the edition year ("LIMUN 2027"), so a year the
+    // organiser typed into the full name is not said twice.
+    const confYear = confAcr.match(/\b(\d{4})\b/)?.[1];
+    const confFull = (conf?.full_name ?? '').trim().replace(confYear ? new RegExp(`\\s*${confYear}\\s*$`) : /$^/, '');
+    const here = c.delegates.filter((d) => d.status !== 'absent');
+    const state: BrandRoom['state'] = c.endedAt
+      ? { label: t('join_room_ended'), tone: 'ended' }
+      : c.suspendedAt || c.phase === 'adjourned'
+      ? { label: t('join_room_suspended'), tone: 'paused' }
+      : c.phase === 'pre-session'
+      ? (here.length > 0 ? { label: t('join_room_roll_call'), tone: 'waiting' } : { label: t('join_room_not_started'), tone: 'waiting' })
+      : c.phase === 'voting'
+      ? { label: t('join_room_voting'), tone: 'live' }
+      : { label: t('join_room_in_session'), tone: 'live' };
+    const chairs = (c.chairNames ?? []).map((n) => n.trim()).filter(Boolean);
+    let chairList = chairs.join(', ');
+    try { chairList = new Intl.ListFormat(language, { type: 'conjunction' }).format(chairs); } catch { /* keep the comma list */ }
+    const topic = (c.topic ?? '').trim();
+    return {
+      acronym,
+      spelled: spelled && spelled.toLowerCase() !== acronym.toLowerCase() ? spelled : null,
+      topic: topic && topic.toUpperCase() !== 'TBD' ? topic : null,
+      emblemUrl: conferenceCommittee?.logo_url
+        || matchPresetEmblem(c.name, conferenceCommittee?.abbreviation)
+        || PRESET_LOGOS[c.name]
+        || conf?.logo_url
+        || DEFAULT_EMBLEM,
+      conference: isConferenceSession && conf
+        ? { label: [confAcr, confFull].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' · '), logoUrl: conf.logo_url ?? null }
+        : null,
+      state,
+      present: {
+        count: here.length,
+        ofLabel: t('join_room_present', { total: c.delegates.length }),
+        seats: here.map((d) => ({ country: d.country, logoUrl: d.logoUrl ?? null })),
+      },
+      dais: chairs.length > 0 ? { label: t('join_room_dais'), names: chairList } : null,
+    };
+  })();
 
   // ── Code field status ───────────────────────────────────────────────────────
   const codeStatus: 'idle' | 'busy' | 'found' | 'error' =
     lookingUp ? 'busy' : error && !foundCommittee ? 'error' : foundCommittee ? 'found' : 'idle';
 
   const signInFooter = user ? (
-    <div className="flex items-center gap-2.5">
-      <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: 'rgba(238,217,138,0.16)', color: C.gold }}>
-        <BadgeCheck size={16} strokeWidth={2.4} />
-      </span>
-      <span className="min-w-0 truncate" style={{ fontFamily: OUTFIT, fontSize: 13, color: 'rgba(237,231,216,0.86)' }}>
+    <div className="flex items-center gap-2.5" style={{ opacity: 0.82 }}>
+      {profile?.avatar_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={profile.avatar_url} alt="" className="h-6 w-6 flex-shrink-0 rounded-full object-cover" />
+      ) : (
+        <span aria-hidden className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: C.forestLift, color: C.gold, fontFamily: OUTFIT, fontSize: 10, fontWeight: 800 }}>
+          {(signedInName[0] ?? '?').toUpperCase()}
+        </span>
+      )}
+      <span className="min-w-0 truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: 'rgba(237,231,216,0.86)' }}>
         {t('join_signed_in_as', { name: signedInName })}
       </span>
     </div>
   ) : (
-    <div className="rounded-2xl p-4" style={{ backgroundColor: 'rgba(0,0,0,0.16)', boxShadow: 'inset 0 0 0 1px rgba(238,217,138,0.14)' }}>
+    <div className="pt-5" style={{ borderTop: '1px solid rgba(238,217,138,0.16)' }}>
       <p style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: C.page }}>{t('join_signin_prompt')}</p>
-      <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.5, color: 'rgba(237,231,216,0.74)', textWrap: 'pretty' }}>{t('join_signin_why')}</p>
+      {/* Narrow on purpose: the phone mockup takes the panel's bottom inline-end corner. */}
+      <p className="mt-1 max-w-[230px]" style={{ fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.5, color: 'rgba(237,231,216,0.74)', textWrap: 'pretty' }}>{t('join_signin_why')}</p>
       <div className="mt-3">
         <GhostAction tone="gold" onClick={goSignIn} icon={<LogIn size={15} strokeWidth={2.4} />}>{t('join_signin_cta')}</GhostAction>
       </div>
@@ -692,12 +739,7 @@ function JoinPageInner() {
               title={t('join_hero_title')}
               accent={t('join_hero_accent')}
               sub={t('join_hero_sub')}
-              conference={conferenceBrand}
-              bullets={[
-                { icon: <Flag size={13} strokeWidth={2.6} />, text: t('join_bullet_flags') },
-                { icon: <Radio size={13} strokeWidth={2.6} />, text: t('join_bullet_live') },
-                { icon: <Sparkles size={13} strokeWidth={2.6} />, text: t('join_bullet_signin') },
-              ]}
+              room={brandRoom}
               footer={signInFooter}
             />
           </div>
@@ -821,13 +863,15 @@ function JoinPageInner() {
                       ) : null}
 
                       {/* Signed out on a committee with reserved seats: say so first, then let
-                          the visitor point at their country to see who it is held for. */}
+                          the visitor point at their country to see who it is held for. Sign in stays
+                          on it: invited chairs, advisors and organisers need it here too. */}
                       {canPointReserved && (
                         <NoticeCard
                           tone="forest"
                           icon={<Lock size={18} strokeWidth={2.4} />}
                           title={t('join_conf_reserved_title')}
                           body={t('join_conf_reserved_body')}
+                          action={<GhostAction onClick={goSignIn} icon={<LogIn size={15} strokeWidth={2.4} />}>{t('join_signin_cta')}</GhostAction>}
                         />
                       )}
 

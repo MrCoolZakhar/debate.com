@@ -20,7 +20,7 @@ import {
   type EmailTokenContext, type EmailTokenKey,
 } from '@/lib/emailTokens';
 import { TOKEN_IDENTITY } from '@/components/email/tokenKit';
-import { EVENT_REGISTRY, queueEventEmail, getEventLabel, notifyIfNeeded, turnOnDefaultEmail, newTemplateStartsEnabled, hasDraftContent, type EventDef, type EventKey } from '@/lib/emailEvents';
+import { EVENT_REGISTRY, queueEventEmail, getEventLabel, notifyIfNeeded, turnOnDefaultEmail, turnOffDefaultEmail, eventOnWhenMissing, newTemplateStartsEnabled, hasDraftContent, type EventDef, type EventKey } from '@/lib/emailEvents';
 import { EASE, NEU, NEU_GRADIENTS, Emoji3D, NeuIconDisc, type NeuGradient } from '@/components/neu';
 import {
   SOFT, GREEN_INK, RED,
@@ -249,7 +249,8 @@ interface InboxRequest {
 interface InboxMessage {
   id: string;
   request_id: string;
-  sender_user_id: string;
+  /** NULL for a /contact form message: the typed address is not an identity. */
+  sender_user_id: string | null;
   is_organizer: boolean;
   body: string;
   created_at: string;
@@ -583,6 +584,7 @@ const EVENT_STAGE: Record<EventKey, Stage> = {
   fee_waived: 'Payment',
   pledge_received: 'Payment',
   allocation_assigned: 'Allocation',
+  co_delegate_assigned: 'Allocation',
   allocation_changed: 'Allocation',
   allocation_removed: 'Allocation',
   delegation_swap: 'Allocation',
@@ -2812,9 +2814,19 @@ function CommunicationsPageInner() {
       if (togglingEventKeys.has(ev.key)) return;
       setTogglingEventKeys(s => new Set(s).add(ev.key));
       const supabase = getAuthedClient(session.access_token);
+      // An essential confirmation with no row is already ON (it sends our
+      // default), so the press means OFF: write the explicit off row.
+      const turningOff = eventOnWhenMissing(ev.key);
       (async () => {
-        const res = await turnOnDefaultEmail(supabase, conference.id, ev.key);
-        if (!res.ok) throw new UserFacingError(res.error ?? 'Could not turn this on.');
+        const res = turningOff
+          ? await turnOffDefaultEmail(supabase, conference.id, ev.key)
+          : await turnOnDefaultEmail(supabase, conference.id, ev.key);
+        if (!res.ok) throw new UserFacingError(res.error ?? (turningOff ? 'Could not turn this off.' : 'Could not turn this on.'));
+        if (turningOff && ev.key === 'allocation_assigned' && conference.allocation_email_auto !== false) {
+          const { error: autoErr } = await supabase
+            .from('conferences').update({ allocation_email_auto: false }).eq('id', conference.id);
+          if (!autoErr) void refreshConferenceQuiet();
+        }
         void loadTemplates();
       })()
         .catch((e: unknown) => {
@@ -4001,7 +4013,7 @@ function CommunicationsPageInner() {
             const evs = (EVENT_REGISTRY as readonly EventDef[]).filter(e => EVENT_STAGE[e.key as EventKey] === stage);
             if (evs.length === 0) return null;
             const meta = STAGE_META[stage];
-            const onCount = evs.filter(e => e.functional || templatesByEvent.get(e.key)?.enabled).length;
+            const onCount = evs.filter(e => { const t = templatesByEvent.get(e.key); return e.functional || (t ? t.enabled : eventOnWhenMissing(e.key)); }).length;
             return (
               <div key={stage} className="mb-9">
                 <div className="flex items-center gap-3 mb-3">
@@ -4044,9 +4056,11 @@ function CommunicationsPageInner() {
                     const state = ev.functional
                       ? { text: 'Always sends', color: GREEN_INK }
                       : togglingStub
-                        ? { text: 'Turning on…', color: GOLD_INK }
+                        ? { text: eventOnWhenMissing(ev.key) && !template ? 'Turning off…' : 'Turning on…', color: GOLD_INK }
                         : !template
-                          ? { text: 'Not set up', color: SOFT }
+                          ? eventOnWhenMissing(ev.key)
+                            ? { text: 'On: sends our default', color: GOLD_INK }
+                            : { text: 'Not set up', color: SOFT }
                           : template.enabled && hasDraft
                             ? { text: 'On: sends your draft', color: GREEN_INK }
                             : template.enabled
@@ -4094,7 +4108,7 @@ function CommunicationsPageInner() {
                           <div className="flex items-center gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
                             {!ev.functional && (
                               <PillToggle
-                                value={template?.enabled ?? false}
+                                value={template ? template.enabled : eventOnWhenMissing(ev.key)}
                                 onChange={togglingStub ? () => {} : () => handleToggleEnabled(ev, template)}
                               />
                             )}
@@ -4396,7 +4410,10 @@ function CommunicationsPageInner() {
                   <div className="flex flex-col gap-3 mt-4" style={{ maxHeight: 440, overflowY: 'auto' }}>
                     {selectedMessages.map(m => {
                       const mine = m.is_organizer;
-                      const senderName = mine ? 'You' : (inboxProfiles.get(m.sender_user_id)?.display_name ?? 'Participant');
+                      const contactLabel = (selectedRequest.metadata as { sender_label?: string; contact_email?: string } | null);
+                      const senderName = mine ? 'You'
+                        : m.sender_user_id ? (inboxProfiles.get(m.sender_user_id)?.display_name ?? 'Participant')
+                        : `${contactLabel?.sender_label ?? contactLabel?.contact_email ?? 'Contact form'} (unverified)`;
                       return (
                         <div key={m.id} className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
                           {/* Sender label → that participant's public MUN CV. Only for

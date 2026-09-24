@@ -3256,12 +3256,21 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // ── A room stuck in `voting` with no ballot (src/lib/votingPhaseUnload.ts) ────
   // /voting/[code] puts the room into `voting`; a Moderator who closed that tab without
   // "Back to Session" left every delegate phone on "Vote in progress" for good. On load the
-  // Moderator's device checks, once: row says `voting`, no document has an open vote_state,
+  // Moderator's device checks, once: row said `voting` at first load and still does, no document has an open vote_state,
   // and no voting tab on THIS device is alive, then the room goes back to its remembered
   // phase through the same RPC ("Back to Session"). The new phase arrives by realtime.
+  // Only a room that was ALREADY `voting` when this page first loaded is a candidate: a
+  // later transition into `voting` is a voting tab opening right now (its alive stamp may
+  // not have landed yet, and its roll call has not started), never a stale room.
   const votingReleaseRef = useRef(false);
+  const firstPhaseRef = useRef<{ id: string; phase: string } | null>(null);
+  useEffect(() => {
+    // Declared before the release effect, so it has recorded the first phase by the time that runs.
+    if (committee && firstPhaseRef.current?.id !== committee.id) firstPhaseRef.current = { id: committee.id, phase: committee.phase };
+  }, [committee?.id, committee?.phase]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (votingReleaseRef.current || !committee || accessState !== 'allowed') return;
+    if (firstPhaseRef.current?.phase !== 'voting') return;
     if (committee.phase !== 'voting' || committee.endedAt || committee.suspendedAt) return;
     if (deviceLock.kicked || !gavelRoleOf(committee).isModerator) return;
     if (votingTabAliveRecently(committee.code)) return;

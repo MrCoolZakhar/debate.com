@@ -11,7 +11,8 @@
 //      open, calls `set_committee_voting_phase(false)` with a keepalive fetch
 //      (`leaveVotingPhaseKeepalive`): supabase-js does not use keepalive, so a normal RPC
 //      would be cancelled with the page.
-//   2. The chair page, on load, as the Moderator, when the row says `voting` and no
+//   2. The chair page, on load, as the Moderator, when the row ALREADY said `voting` at its
+//      first load (never a later transition into voting: that is a voting tab opening) and no
 //      document has an open vote_state, restores the remembered phase itself. It stands
 //      down while a voting tab on this device reported itself alive in the last 45 s
 //      (`markVotingTabAlive` / `votingTabAliveRecently`), so opening the chair page in a
@@ -24,6 +25,12 @@
 
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase';
 
+// LIMITATION: this is a cross-origin POST with custom headers (apikey, x-session-code,
+// x-chair-suffix, JSON), so it needs a CORS preflight, and some browsers refuse or drop a
+// keepalive request that needs one (older Safari and Firefox especially). There is no
+// no-preflight variant: navigator.sendBeacon cannot set headers, and the RPC needs them.
+// So this is best effort only; the chair page's release on its next load (a room that was
+// already `voting` when it first loaded, no open vote, no live voting tab) is the backstop.
 export function leaveVotingPhaseKeepalive(committeeId: string, code: string, chairSuffix?: string): void {
   try {
     const headers: Record<string, string> = {

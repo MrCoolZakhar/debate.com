@@ -184,6 +184,23 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
       VIEW_CONFERENCE_BUTTON,
     ],
   },
+  // Queued by the notify_co_delegate_on_allocation_sent trigger in the
+  // database, which carries a SQL mirror of this copy (like draft_reminder):
+  // change one, change the other.
+  co_delegate_assigned: {
+    subject: 'Your co-delegate for {{conference_name}}',
+    blocks: [
+      { type: 'paragraph', variant: 'heading', content: 'Meet your co-delegate' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\n{{co_delegate}} will represent {{country}} in {{committee}} with you. You share one seat, one position paper and one placard in the live session.' },
+      { type: 'facts', items: [
+        { label: 'Your co-delegate', value: '{{co_delegate}} ({{co_delegate_email}})' },
+        { label: 'Committee', value: '{{committee}}', iconFrom: 'committee' },
+        { label: 'Representing', value: '{{country}}', iconFrom: 'country' },
+      ] },
+      { type: 'paragraph', content: 'Say hello before the conference and split the research. Your delegate page on Gavelling shows them too.' },
+      VIEW_CONFERENCE_BUTTON,
+    ],
+  },
   allocation_changed: {
     subject: 'Your committee allocation has changed: {{conference_name}}',
     blocks: [

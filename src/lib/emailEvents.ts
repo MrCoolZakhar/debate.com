@@ -46,6 +46,7 @@ export const EVENT_REGISTRY = [
   { key: 'aid_approved', label: 'Financial Aid Approved', description: "Sent when a delegate's financial aid request is approved.", defaultDelivery: 'immediate' },
   { key: 'aid_denied', label: 'Financial Aid Denied', description: "Sent when a delegate's financial aid request is denied.", defaultDelivery: 'immediate' },
   { key: 'allocation_assigned', label: 'Allocation Assigned', description: 'Sent when a delegate is allocated a committee and country.', defaultDelivery: 'immediate' },
+  { key: 'co_delegate_assigned', label: 'Co-delegate assigned', description: "Double delegations only. Sent to a delegate who was already told their seat when their co-delegate's allocation is announced later, naming the co-delegate and their email address so the two can prepare together. Once per pair. If both are announced together, each allocation email already names the other and this does not send.", defaultDelivery: 'immediate' },
   { key: 'allocation_changed', label: 'Allocation Changed', description: "Sent when a delegate's allocation changes.", defaultDelivery: 'immediate' },
   { key: 'allocation_removed', label: 'Allocation Removed', description: "Sent when a delegate's allocation is removed.", defaultDelivery: 'manual' },
   { key: 'pledge_received', label: 'Pledge Received', description: 'Sent when a pledge is marked received.', defaultDelivery: 'immediate' },
@@ -129,6 +130,7 @@ export const NOTIFICATION_CATEGORY: Record<EventKey, NotificationCategory> = {
   aid_approved: 'applications',
   aid_denied: 'applications',
   allocation_assigned: 'applications',
+  co_delegate_assigned: 'applications',
   allocation_changed: 'applications',
   allocation_removed: 'applications',
   pledge_received: 'applications',
@@ -241,10 +243,43 @@ const ALWAYS_SEND_EVENTS = new Set([
 // never gets its codes. Everything else in the registry stays default-off.
 export const DEFAULT_ENABLED_EVENTS = new Set<string>(['session_join_invite', 'session_chair_invite']);
 
+// ── Essential confirmations: ON unless an organiser turned them off ─────────
+// Owner, 24 Sep 2026: "there should be a confirmation email when someone
+// submits an application. By default I hope allocation emails are turned on."
+// Before this, a conference with NO template row for these events sent nothing
+// ('unconfigured'), and ~245 of 274 conferences had no row, so most applicants
+// never got a receipt. These five are the answers a participant is waiting on.
+//
+// Rules, all three load-bearing:
+// • A MISSING row means ON. queueEventEmail writes the stub (enabled, empty,
+//   so our default copy sends) the first time the event fires, exactly the
+//   self-heal allocation_assigned already had, so the outbox keeps its
+//   template_id and Communications shows it as sent. Nothing is backfilled:
+//   rows are only created by a real event, so no conference's "Explore
+//   emails" stage or checkmark moves on a migration.
+// • A row with enabled=false is the organiser's explicit OFF and is honoured
+//   (SISMUN's allocation email, LIMUN's application receipt, ...).
+// • Only FUTURE events send. Nothing here queues anyone already waiting:
+//   queueEventEmail only ever addresses the ids its caller passes at the
+//   moment of the action, and no cron sends these events.
+export const ESSENTIAL_DEFAULT_ON_EVENTS = new Set<string>([
+  'application_received', 'application_accepted', 'application_rejected',
+  'allocation_assigned', 'payment_received',
+  // The double-delegation partner notice (see queueCoDelegateAssigned).
+  'co_delegate_assigned',
+]);
+
+/** Whether an event with NO template row still sends (our default copy). */
+export function eventOnWhenMissing(eventKey: string | null | undefined): boolean {
+  return !!eventKey && ESSENTIAL_DEFAULT_ON_EVENTS.has(eventKey);
+}
+
 /** Whether a NEWLY CREATED template row for this event should start enabled.
- *  Ad-hoc templates (no event key) always start off, as before. */
+ *  Ad-hoc templates (no event key) always start off, as before. An essential
+ *  event starts on because its absence already meant ON: an organiser who
+ *  starts drafting their own receipt must not silently switch receipts off. */
 export function newTemplateStartsEnabled(eventKey: string | null | undefined): boolean {
-  return !!eventKey && DEFAULT_ENABLED_EVENTS.has(eventKey);
+  return !!eventKey && (DEFAULT_ENABLED_EVENTS.has(eventKey) || ESSENTIAL_DEFAULT_ON_EVENTS.has(eventKey));
 }
 
 /** True if this recipient should receive an email in `category` given their
@@ -496,7 +531,21 @@ export async function queueEventEmail(
     .eq('event_key', eventKey)
     .maybeSingle();
 
-  const template = templateData as TemplateRow | null;
+  let template = templateData as TemplateRow | null;
+  // Essential confirmations: a missing row means ON (see
+  // ESSENTIAL_DEFAULT_ON_EVENTS). Write the stub, then read it back whatever
+  // the insert said: a concurrent first send may have written it already
+  // (unique on conference_id + event_key).
+  if (!template && eventOnWhenMissing(eventKey)) {
+    await turnOnDefaultEmail(supabase, conferenceId, eventKey);
+    const { data: healed } = await supabase
+      .from('email_templates')
+      .select('id, subject, body, body_blocks, enabled')
+      .eq('conference_id', conferenceId)
+      .eq('event_key', eventKey)
+      .maybeSingle();
+    template = healed as TemplateRow | null;
+  }
   if (!template) return { outcome: 'unconfigured', drafted: false, eventKey, eventLabel };
   if (!template.enabled) return { outcome: 'off', drafted: false, eventKey, eventLabel };
 
@@ -551,6 +600,12 @@ export async function queueEventEmail(
     return art.kind === 'logo' ? art.url : null;
   };
 
+  // Double delegations: who shares each recipient's seat. Allocation emails
+  // only; one RPC for the whole send (organisers and the service role only).
+  const coDelegates = eventKey === 'allocation_assigned'
+    ? await loadCoDelegates(supabase, conferenceId, recipients.map(r => r.id))
+    : new Map<string, CoDelegateInfo>();
+
   const renderConf: EmailRenderConference = {
     slug: conference?.slug ?? '',
     acronym: conference?.acronym ?? '',
@@ -599,6 +654,11 @@ export async function queueEventEmail(
       fee: resolveFeeToken(app.role, roleConfigs, conference),
       ...extraCtx,
     };
+    const coDelegate = coDelegates.get(app.id);
+    if (coDelegate?.partnerName || coDelegate?.partnerEmail) {
+      ctx.co_delegate = coDelegate.partnerName ?? coDelegate.partnerEmail;
+      ctx.co_delegate_email = coDelegate.partnerEmail;
+    }
 
     // Body: the chosen copy, and our default the moment it renders to nothing.
     let bodyBlocks = blocks;
@@ -608,6 +668,11 @@ export async function queueEventEmail(
       bodyBlocks = defaultBlocks;
       body = resolveTokens(defaultFlat, ctx);
       isDefault = true;
+    }
+    // A double-delegation seat: the co-delegate row, in their words or ours.
+    if (coDelegate && coDelegate.capacity >= 2) {
+      bodyBlocks = withCoDelegateFact(bodyBlocks, coDelegate);
+      body = resolveTokens(flattenBlocksToPlainText(bodyBlocks, renderConf), ctx);
     }
     // Subject: the same rule, independently. A drafted body with a blank
     // subject line keeps the body and borrows our subject.
@@ -702,6 +767,58 @@ export async function queueEventEmail(
   };
 }
 
+// ── Double delegations: the co-delegate row ─────────────────────────────────
+// Owner, 24 Sep 2026: "when they get an allocation, they should be able to see
+// the name and email of their double delegate". Sharing the partner's email
+// with their co-delegate is exactly what was asked for; it goes only to the
+// other holder of the same seat. Read through allocation_co_delegates (SECURITY
+// DEFINER, organisers of the conference and the service role only).
+
+export interface CoDelegateInfo {
+  capacity: number;
+  partnerName: string | null;
+  partnerEmail: string | null;
+}
+
+async function loadCoDelegates(
+  supabase: ReturnType<typeof getAuthedClient>,
+  conferenceId: string,
+  applicationIds: string[],
+): Promise<Map<string, CoDelegateInfo>> {
+  const out = new Map<string, CoDelegateInfo>();
+  if (applicationIds.length === 0) return out;
+  try {
+    const { data, error } = await supabase.rpc('allocation_co_delegates', {
+      p_conference: conferenceId, p_application_ids: applicationIds,
+    });
+    if (error) { console.warn('[queueEventEmail] co-delegate read failed:', error.message); return out; }
+    for (const r of (data ?? []) as { application_id: string; capacity: number; partner_name: string | null; partner_email: string | null }[]) {
+      out.set(r.application_id, { capacity: r.capacity ?? 1, partnerName: r.partner_name, partnerEmail: r.partner_email });
+    }
+  } catch (e) {
+    console.warn('[queueEventEmail] co-delegate read threw:', e);
+  }
+  return out;
+}
+
+/** Adds "Your co-delegate" to the email's facts panel (the first one, or a new
+ *  panel before the first button when the organiser's draft has none). Values
+ *  are literal text, never tokens, so a name can never read as a merge field. */
+export function withCoDelegateFact(blocks: EmailBlock[], info: CoDelegateInfo): EmailBlock[] {
+  const value = info.partnerName || info.partnerEmail
+    ? [info.partnerName, info.partnerEmail ? (info.partnerName ? `(${info.partnerEmail})` : info.partnerEmail) : null].filter(Boolean).join(' ')
+    : "Not assigned yet. We'll email you when they are.";
+  const item = { label: 'Your co-delegate', value: value.replace(/\{\{|\}\}/g, '') };
+  const i = blocks.findIndex(b => b.type === 'facts');
+  if (i >= 0) {
+    const facts = blocks[i] as Extract<EmailBlock, { type: 'facts' }>;
+    return blocks.map((b, j) => (j === i ? { ...facts, items: [...facts.items, item] } : b));
+  }
+  const panel: EmailBlock = { type: 'facts', items: [item] };
+  const btn = blocks.findIndex(b => b.type === 'button');
+  return btn >= 0 ? [...blocks.slice(0, btn), panel, ...blocks.slice(btn)] : [...blocks, panel];
+}
+
 // ── Turn-on-default helper ───────────────────────────────────────────────────
 // Creates (or re-enables) a conference's stub template for an event so
 // queueEventEmail's "enabled + undrafted" default-send path activates,
@@ -742,6 +859,38 @@ export async function turnOnDefaultEmail(
     ...(event?.recurring ? { recurring_enabled: true, recurring_interval_days: 3, recurring_max_sends: 3 } : {}),
   });
   return { ok: !error, error: error ? friendlyError(error, 'Could not turn this on.') : undefined };
+}
+
+/** Turning OFF an event that has no row yet but is on by default
+ *  (eventOnWhenMissing): writes the explicit OFF row. An existing row is just
+ *  flipped off. Never deletes, never touches content. */
+export async function turnOffDefaultEmail(
+  supabase: ReturnType<typeof getAuthedClient>,
+  conferenceId: string,
+  eventKey: string
+): Promise<{ ok: boolean; error?: string }> {
+  const event = (EVENT_REGISTRY as readonly EventDef[]).find(e => e.key === eventKey);
+  const { data: existing } = await supabase
+    .from('email_templates')
+    .select('id')
+    .eq('conference_id', conferenceId)
+    .eq('event_key', eventKey)
+    .maybeSingle();
+  if (existing) {
+    const { error } = await supabase.from('email_templates').update({ enabled: false }).eq('id', (existing as { id: string }).id);
+    return { ok: !error, error: error ? friendlyError(error, 'Could not turn this off.') : undefined };
+  }
+  const { error } = await supabase.from('email_templates').insert({
+    conference_id: conferenceId,
+    event_key: eventKey,
+    name: event?.label ?? eventKey,
+    subject: '',
+    body: '',
+    body_blocks: [],
+    enabled: false,
+    delivery: event?.defaultDelivery ?? 'immediate',
+  });
+  return { ok: !error, error: error ? friendlyError(error, 'Could not turn this off.') : undefined };
 }
 
 // ── Chair invite email ──────────────────────────────────────────────────────

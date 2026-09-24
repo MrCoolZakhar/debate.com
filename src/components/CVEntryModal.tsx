@@ -572,6 +572,11 @@ export function CVEntryModal({
   // Modal: the account page behind must not scroll while this is open.
   useScrollLock(true);
   const isVerified = existing?.source === 'gavelling_verified';
+  // Anything Gavelling wrote (the blue seal, or the attended record) certifies
+  // its conference, committee, allocation and awards: the database keeps those
+  // columns as they are, so they are not editable here either. Only a verified
+  // award entry is undeletable; an attended record can be removed.
+  const isLocked = !!existing && existing.source !== 'manual';
   const [deleting, setDeleting] = useState(false);
   // Enter/exit motion: play a brief reverse animation before really unmounting.
   const [closing, setClosing] = useState(false);
@@ -644,7 +649,7 @@ export function CVEntryModal({
 
   useEffect(() => {
     const q = conferenceName.trim();
-    if (isVerified || suppressSuggest.current || q.length < 2) {
+    if (isLocked || suppressSuggest.current || q.length < 2) {
       setSuggestions([]);
       return;
     }
@@ -690,7 +695,7 @@ export function CVEntryModal({
     }, 250);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conferenceName, isVerified, userId]);
+  }, [conferenceName, isLocked, userId]);
 
   function pickSuggestion(s: ConferenceSuggestion) {
     suppressSuggest.current = true;
@@ -710,7 +715,7 @@ export function CVEntryModal({
    * edition. Only fills in a logo when one is not already set.
    */
   async function resolveConferenceLogo(): Promise<string | null> {
-    if (logoUrl || isVerified) return logoUrl;
+    if (logoUrl || isLocked) return logoUrl;
     const name = conferenceName.trim();
     if (name.length < 2) return null;
     // Strip a trailing edition year / ordinal so "LIMUN 2023" resolves against
@@ -1017,7 +1022,7 @@ export function CVEntryModal({
                   <button
                     key={t.key}
                     type="button"
-                    disabled={isVerified}
+                    disabled={isLocked}
                     onClick={() => setEntryType(t.key)}
                     className="flex flex-col items-center justify-center gap-2 rounded-2xl py-3 focus:outline-none transition-all"
                     style={{
@@ -1028,8 +1033,8 @@ export function CVEntryModal({
                       boxShadow: active
                         ? `0 4px 12px ${t.accent}2E`
                         : 'inset 2px 2px 5px rgba(27,56,40,0.08), inset -2px -2px 5px rgba(255,255,255,0.7)',
-                      cursor: isVerified ? 'not-allowed' : 'pointer',
-                      opacity: isVerified && !active ? 0.5 : 1,
+                      cursor: isLocked ? 'not-allowed' : 'pointer',
+                      opacity: isLocked && !active ? 0.5 : 1,
                     }}
                   >
                     <Emoji3D
@@ -1054,7 +1059,7 @@ export function CVEntryModal({
               Conference Name
             </label>
             <div ref={suggestAnchorRef} className="flex items-center gap-2.5">
-              {isVerified ? (
+              {isLocked ? (
                 logoUrl && <LogoDisc src={logoUrl} size={40} fallbackText={monogramFor(conferenceName)} />
               ) : (
                 <>
@@ -1086,7 +1091,7 @@ export function CVEntryModal({
               <input
                 type="text"
                 required
-                disabled={isVerified}
+                disabled={isLocked}
                 value={conferenceName}
                 onChange={(e) => {
                   suppressSuggest.current = false;
@@ -1095,12 +1100,12 @@ export function CVEntryModal({
                 }}
                 placeholder="e.g. Harvard WorldMUN 2026"
                 className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
-                style={{ ...inputStyle, opacity: isVerified ? 0.55 : 1, cursor: isVerified ? 'not-allowed' : 'text' }}
+                style={{ ...inputStyle, opacity: isLocked ? 0.55 : 1, cursor: isLocked ? 'not-allowed' : 'text' }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; setTimeout(() => setSuggestOpen(false), 150); }}
               />
             </div>
-            {isVerified && (
+            {isLocked && (
               <p className="mt-1.5 text-[12px]" style={{ color: '#7A6E5E', fontFamily: OUTFIT, margin: '6px 0 0 0', lineHeight: 1.4 }}>
                 Written by Gavelling from a conference you attended. It cannot be edited.
               </p>
@@ -1163,7 +1168,7 @@ export function CVEntryModal({
               <CommitteeAutocomplete
                 value={committee}
                 onChange={setCommittee}
-                disabled={isVerified}
+                disabled={isLocked}
                 placeholder={entryType === 'chair' ? 'e.g. UN Security Council' : 'e.g. UN Security Council'}
               />
             </Field>
@@ -1174,17 +1179,17 @@ export function CVEntryModal({
             <Field label="Dais position (optional)">
               <input
                 type="text"
-                disabled={isVerified}
+                disabled={isLocked}
                 value={daisPosition}
                 maxLength={60}
                 onChange={(e) => setDaisPosition(e.target.value)}
                 placeholder="e.g. Vice Chair"
                 className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
-                style={{ ...inputStyle, opacity: isVerified ? 0.55 : 1, cursor: isVerified ? 'not-allowed' : 'text' }}
+                style={{ ...inputStyle, opacity: isLocked ? 0.55 : 1, cursor: isLocked ? 'not-allowed' : 'text' }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
               />
-              {!isVerified && (
+              {!isLocked && (
                 <div className="flex gap-1.5 flex-wrap mt-2">
                   {DAIS_POSITIONS.map((pos) => {
                     const on = daisPosition.trim().toLowerCase() === pos.toLowerCase();
@@ -1214,7 +1219,7 @@ export function CVEntryModal({
           {/* Allocation — delegate only */}
           {showAllocation && (
             <Field label="Country / Portfolio / Allocation">
-              <AllocationAutocomplete value={allocation} onChange={setAllocation} disabled={isVerified} />
+              <AllocationAutocomplete value={allocation} onChange={setAllocation} disabled={isLocked} />
             </Field>
           )}
 
@@ -1229,7 +1234,7 @@ export function CVEntryModal({
               <input
                 type="text"
                 required
-                disabled={isVerified}
+                disabled={isLocked}
                 value={roleTitle}
                 onChange={(e) => setRoleTitle(e.target.value)}
                 placeholder={
@@ -1238,7 +1243,7 @@ export function CVEntryModal({
                   'e.g. Press Corps, Photographer, Tech Team, Volunteer'
                 }
                 className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
-                style={{ ...inputStyle, opacity: isVerified ? 0.55 : 1, cursor: isVerified ? 'not-allowed' : 'text' }}
+                style={{ ...inputStyle, opacity: isLocked ? 0.55 : 1, cursor: isLocked ? 'not-allowed' : 'text' }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
               />
@@ -1303,13 +1308,14 @@ export function CVEntryModal({
                       key={name}
                       type="button"
                       onClick={() => toggleAward(name)}
+                      disabled={isLocked}
                       className="inline-flex items-center gap-1.5 rounded-full pl-1 pr-3 py-1 text-[11px] font-semibold focus:outline-none transition-all"
                       style={{
                         border: active ? '1px solid rgba(182,135,31,0.55)' : '1px solid #DDD4C0',
                         backgroundColor: active ? 'rgba(238,217,138,0.28)' : 'transparent',
                         color: active ? '#7A5A20' : '#9A8A78',
                         fontFamily: OUTFIT,
-                        cursor: 'pointer',
+                        cursor: isLocked ? 'not-allowed' : 'pointer',
                       }}
                     >
                       <AwardArtwork name={name} size={20} />
@@ -1338,6 +1344,7 @@ export function CVEntryModal({
                     Add a delegation award
                   </label>
                 )}
+                {!isLocked && (
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -1366,6 +1373,7 @@ export function CVEntryModal({
                     ADD
                   </button>
                 </div>
+                )}
                 {customAwards.length > 0 && (
                   <div className="flex gap-2 flex-wrap mt-2.5">
                     {customAwards.map((a) => (
@@ -1376,7 +1384,7 @@ export function CVEntryModal({
                       >
                         <AwardArtwork name={a} size={18} delegation={isDelegationAwards} />
                         {a}
-                        <button
+                        {!isLocked && <button
                           type="button"
                           onClick={() => removeAward(a)}
                           aria-label={`Remove ${a}`}
@@ -1384,7 +1392,7 @@ export function CVEntryModal({
                           style={{ width: '15px', height: '15px', borderRadius: '9999px', background: 'rgba(27,56,40,0.12)', border: 'none', color: '#1B3828', cursor: 'pointer', marginLeft: '2px' }}
                         >
                           <X size={9} strokeWidth={3} />
-                        </button>
+                        </button>}
                       </span>
                     ))}
                   </div>

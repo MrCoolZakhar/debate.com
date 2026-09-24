@@ -44,20 +44,23 @@ function isOverdue(iso: string): boolean {
 }
 
 export function useOpenBalances(userId: string | null, conferenceId?: string | null) {
-  const [rows, setRows] = useState<OpenBalance[] | null>(null);
+  // Rows are kept with the key they were read for, so signing out (no user)
+  // reads as null without a synchronous setState in the effect.
+  const key = userId ? `${userId}|${conferenceId ?? ''}` : null;
+  const [loaded, setLoaded] = useState<{ key: string; rows: OpenBalance[] } | null>(null);
   useEffect(() => {
-    if (!userId) { setRows(null); return; }
+    if (!key) return;
     let cancelled = false;
     (async () => {
       const client = await getFreshAuthedClient();
       if (!client || cancelled) return;
       const { data, error } = await client.rpc('my_open_balances', { p_conference: conferenceId ?? null });
       if (cancelled) return;
-      setRows(error ? [] : ((data as OpenBalance[] | null) ?? []));
+      setLoaded({ key, rows: error ? [] : ((data as OpenBalance[] | null) ?? []) });
     })();
     return () => { cancelled = true; };
-  }, [userId, conferenceId]);
-  return rows;
+  }, [key, conferenceId]);
+  return key && loaded?.key === key ? loaded.rows : null;
 }
 
 function BalanceRow({ b, showConference }: { b: OpenBalance; showConference: boolean }) {

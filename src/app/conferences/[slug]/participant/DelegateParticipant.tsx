@@ -4,6 +4,7 @@
 // applications. This whole tree sits inside the spine's PayGate.
 
 import AllocationCard from './AllocationCard';
+import CoDelegateCard from './CoDelegateCard';
 import StudyGuideCard from './StudyGuideCard';
 import PositionPaperCard from './PositionPaperCard';
 import DelegationPlacard from './DelegationPlacard';
@@ -33,6 +34,9 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
         myAllocation={myAllocation}
         conferenceStartDate={conferenceStartDate}
       />
+
+      {/* Double delegations only: the co-delegate and what the two share. */}
+      <CoDelegateCard conferenceId={conferenceId} myAllocation={myAllocation} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <StudyGuideCard committeeId={myAllocation?.conference_committee_id ?? null} />

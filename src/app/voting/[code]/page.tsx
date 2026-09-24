@@ -438,6 +438,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const [voteStates, setVoteStates] = useState<Record<string, VoteStateV1>>({});
   /** Synchronous mirror, so two taps inside one render still chain their seq numbers. */
   const voteStatesRef = useRef<Record<string, VoteStateV1>>({});
+  /** True once vote_state has been read from the DB at least once. Until then "no open vote"
+   *  is unknown, so the pagehide release must not fire (it could end a ballot in progress). */
+  const voteStatesLoadedRef = useRef(false);
   /** Highest seq this device wrote per document that the DB has not echoed back yet. */
   const pendingSeqRef = useRef<Record<string, number>>({});
   /** Writes are serialised: a later ballot can never land before an earlier one. */
@@ -647,6 +650,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         }
       }
       voteStatesRef.current = merged;
+      voteStatesLoadedRef.current = true;
       setVoteStates(merged);
     };
 
@@ -845,6 +849,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     if (committee.endedAt) return;
     enteredVotingRef.current = true;
     const id = committee.id;
+    // Stamp BEFORE entering: a chair tab on this device that sees the phase flip to
+    // `voting` must find this tab alive, or it would hand the room straight back.
+    markVotingTabAlive(committee.code, true);
     void setVotingPhase(id, true, committee.code, committee.dbChairJoinSuffix ?? undefined).then((r) => {
       if (r.ok) {
         setPhaseNotice(null);
@@ -890,7 +897,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     const onHide = () => {
       const c = leaveCtxRef.current;
       markVotingTabAlive(code, false);
-      if (c.mod && !c.open && !c.ended && c.id) leaveVotingPhaseKeepalive(c.id, c.code, c.suffix);
+      // Only once the vote states were read: before that an open ballot looks like none.
+      if (c.mod && !c.open && !c.ended && c.id && voteStatesLoadedRef.current) leaveVotingPhaseKeepalive(c.id, c.code, c.suffix);
     };
     const onShow = (e: PageTransitionEvent) => { if (e.persisted) { stamp(); setReenterTick((n) => n + 1); } };
     window.addEventListener('pagehide', onHide);
@@ -901,7 +909,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       window.removeEventListener('pageshow', onShow);
       markVotingTabAlive(code, false);
     };
-  }, [committee?.code]);
+  // Re-run when this device becomes the Moderator (access granted, gavel here), so the
+  // first stamp is not lost to the access check still being in flight.
+  }, [committee?.code, accessGranted, isViewOnly]);
 
   // "Vote" goes straight to the roll call when there is exactly ONE paper to vote on (owner,
   // 17 Sep 2026): a draft resolution that is introduced and has no stored vote state at all

@@ -13,7 +13,7 @@ import AuthLink from '@/components/auth/AuthLink';
 import { useCredits } from '@/hooks/useCredits';
 import { CreditCoin } from '@/components/CreditCoin';
 import ActivityNotices from '@/components/profile/ActivityNotices';
-import { useMyActivity, useOpenSeenAt, markActivitySeen, isVisibleActivity } from '@/lib/myActivity';
+import { useMyActivity, useOpenSeenState, markActivitySeen, isVisibleActivity } from '@/lib/myActivity';
 
 const NAV_LINKS_CONFIG = [
   { en: 'SESSIONS',    es: 'SESIONES',     fr: 'SESSIONS',        ar: 'الجلسات',    href: '/sessions' },
@@ -78,18 +78,19 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
   // the avatar menu (src/lib/myActivity.ts, components/profile/ActivityNotices),
   // drafts included, and opening the sheet stamps news as seen just as the menu does.
   const activityUid = authLoading ? null : user?.id ?? null;
-  const { items: activity } = useMyActivity(activityUid, session?.access_token ?? null, { maxAgeMs: menuOpen ? 60_000 : Infinity });
-  const sheetSeenAt = useOpenSeenAt(activityUid);
+  const activityToken = session?.access_token ?? null;
+  const { items: activity } = useMyActivity(activityUid, activityToken, { maxAgeMs: menuOpen ? 60_000 : Infinity });
+  const sheetSeen = useOpenSeenState(activityUid);
   const sheetStamped = useRef(false);
   useEffect(() => {
     if (!menuOpen) { sheetStamped.current = false; return; }
-    if (!activityUid || sheetStamped.current) return;
+    if (!activityUid || sheetStamped.current || !activity) return;
     sheetStamped.current = true;
-    markActivitySeen(activityUid);
-  }, [menuOpen, activityUid]);
+    markActivitySeen(activityUid, activityToken);
+  }, [menuOpen, activityUid, activity, activityToken]);
   const sheetAttention = useMemo(
-    () => (activity ?? []).filter((i) => isVisibleActivity(i, sheetSeenAt)),
-    [activity, sheetSeenAt],
+    () => (activity ?? []).filter((i) => isVisibleActivity(i, sheetSeen)),
+    [activity, sheetSeen],
   );
   const t = useT();
   const navLinks = NAV_LINKS_CONFIG.map(l => ({ label: l[language], href: l.href }));

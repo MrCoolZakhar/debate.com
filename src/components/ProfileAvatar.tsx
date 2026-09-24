@@ -22,19 +22,25 @@
  * the shared `ProfileDropdown` (hover-open, click-toggle, portaled panel), and
  * nothing at all while signed out, so each bar keeps its own Sign in button.
  *
- * THE ATTENTION BADGE (23 Sep 2026). A small round mark on the avatar's top
- * corner with the number of things waiting on this person (src/lib/myActivity.ts
- * plus any live room from useLiveRooms), as plain numerals, 9+ past nine. Rust
- * when anything is actionable, gold when it is only news (a new allocation).
- * Hidden at zero. One read per page load; the menu re-reads when it opens.
+ * THE ATTENTION BADGES (24 Sep 2026, owner: "RED for messages or drafts,
+ * ORANGE for new applications, invites, accepted, allocated, any
+ * notification"). Two counts from src/lib/myActivity.ts, as plain numerals,
+ * 9+ past nine, each hidden at zero:
+ *   RED    on the top corner: unread messages + unfinished application drafts.
+ *   ORANGE: new applications (organiser), invites, accepted, allocated,
+ *          payment due, reviews waiting, live rooms. On the top corner when it
+ *          is the only one; on the BOTTOM corner beside the red one when both.
+ * The accessible name lists both. The informational part clears once seen
+ * (opening the menu, or the applications page for new applications).
  *
  * Never mount this on /chair, /delegate, /advisor or /voting.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import ProfileDropdown from '@/components/ProfileDropdown';
-import { useMyActivity } from '@/lib/myActivity';
+import { useMyActivity, markActivityKeySeen, activityWeight } from '@/lib/myActivity';
 import { useLiveRooms } from '@/lib/liveRooms';
 
 const OUTFIT = "'Outfit', sans-serif";
@@ -139,6 +145,50 @@ export function ProfileAvatar({
   );
 }
 
+const RED_BG = '#C81E1E';
+const RED_INK = '#FFFFFF';
+const ORANGE_BG = '#EA6A12';
+const ORANGE_INK = '#1C1410';
+
+/** One round counter on the avatar's edge. Plain numerals, 9+ past nine. */
+function Counter({ n, bg, ink, size, ring, place }: {
+  n: number; bg: string; ink: string; size: number; ring: string; place: 'top' | 'bottom';
+}) {
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute flex items-center justify-center rounded-full"
+      style={{
+        ...(place === 'top' ? { top: 0 } : { bottom: 0 }),
+        right: 0,
+        minWidth: size,
+        height: size,
+        padding: '0 3px',
+        backgroundColor: bg,
+        color: ink,
+        boxShadow: `0 0 0 2px ${ring}`,
+        fontFamily: OUTFIT,
+        fontWeight: 700,
+        fontSize: Math.round(size * 0.62),
+        fontVariantNumeric: 'tabular-nums',
+        lineHeight: 1,
+      }}
+    >
+      {n > 9 ? '9+' : n}
+    </span>
+  );
+}
+
+const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** The avatar badges' accessible text, e.g. ", 2 messages or drafts, 5 new notifications". */
+export function attentionLabel(red: number, orange: number): string {
+  const parts: string[] = [];
+  if (red > 0) parts.push(count(red, 'unread message or draft', 'unread messages or drafts'));
+  if (orange > 0) parts.push(count(orange, 'new notification', 'new notifications'));
+  return parts.length ? `, ${parts.join(', ')}` : '';
+}
+
 /** The signed-in user's avatar as the account-menu trigger. Renders nothing while signed out. */
 export default function ProfileAvatarMenu({
   size = 40,
@@ -152,16 +202,29 @@ export default function ProfileAvatarMenu({
   const { user, profile, session, loading } = useAuth();
   const uid = loading ? null : user?.id ?? null;
   const token = session?.access_token ?? null;
-  const { items, count: activityCount } = useMyActivity(uid, token);
+  const { items, counts, seen } = useMyActivity(uid, token);
   const { entries: live } = useLiveRooms(uid, token);
+
+  // Opening a conference's applications page counts as seeing its new ones.
+  const pathname = usePathname();
+  const appsSlug = /^\/manage\/([^/]+)\/applications(?:\/|$)/.exec(pathname ?? '')?.[1] ?? null;
+  const appsItem = appsSlug && items
+    ? items.find((i) => i.kind === 'org_applications' && i.href.startsWith(`/manage/${appsSlug}/`)) ?? null
+    : null;
+  const appsKey = appsItem && activityWeight(appsItem, seen) > 0 ? appsItem.seenKey : null;
+  useEffect(() => {
+    if (uid && appsKey) markActivityKeySeen(uid, appsKey, token);
+    // token is read at call time only
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uid, appsKey]);
+
   if (!user) return null;
-  const liveCount = live?.length ?? 0;
-  const count = activityCount + liveCount;
-  const actionable = liveCount > 0 || (items ?? []).some((i) => i.action);
+  const red = counts.red;
+  const orange = counts.orange + (live?.length ?? 0);
   const name = profile?.display_name || null;
-  const waiting = count > 0 ? `, ${count} ${count === 1 ? 'thing needs' : 'things need'} your attention` : '';
-  const label = `Account menu${name ? `, ${name}` : ''}${waiting}`;
+  const label = `Account menu${name ? `, ${name}` : ''}${attentionLabel(red, orange)}`;
   const badge = Math.max(16, Math.round(size * 0.34));
+  const ring = tone === 'dark' ? '#1B3828' : '#EDE7D8';
   const offset = tone === 'dark' ? 'focus-visible:ring-offset-[#1B3828]' : 'focus-visible:ring-offset-[#EDE7D8]';
 
   return (
@@ -178,28 +241,17 @@ export default function ProfileAvatarMenu({
           style={{ width: size, height: size, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', transitionProperty: 'transform, filter', transitionDuration: '150ms' }}
         >
           <ProfileAvatar url={profile?.avatar_url} name={name} email={profile?.email ?? user.email} size={size} tone={tone} />
-          {count > 0 && (
-            <span
-              aria-hidden
-              className="pointer-events-none absolute flex items-center justify-center rounded-full"
-              style={{
-                top: 0,
-                right: 0,
-                minWidth: badge,
-                height: badge,
-                padding: '0 3px',
-                backgroundColor: actionable ? '#8B2020' : '#B6871F',
-                color: actionable ? '#FFF6EC' : '#1B3828',
-                boxShadow: `0 0 0 2px ${tone === 'dark' ? '#1B3828' : '#EDE7D8'}`,
-                fontFamily: OUTFIT,
-                fontWeight: 700,
-                fontSize: Math.round(badge * 0.62),
-                fontVariantNumeric: 'tabular-nums',
-                lineHeight: 1,
-              }}
-            >
-              {count > 9 ? '9+' : count}
-            </span>
+          {red > 0 && <Counter n={red} bg={RED_BG} ink={RED_INK} size={badge} ring={ring} place="top" />}
+          {orange > 0 && (
+            <Counter
+              n={orange}
+              bg={ORANGE_BG}
+              ink={ORANGE_INK}
+              // Beside a red counter it is a size smaller, so red still reads first.
+              size={red > 0 ? Math.max(14, Math.round(badge * 0.84)) : badge}
+              ring={ring}
+              place={red > 0 ? 'bottom' : 'top'}
+            />
           )}
         </button>
       )}

@@ -21,7 +21,9 @@
 // that outlives a hover.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { CSSProperties, ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
+import { Gavel } from 'lucide-react';
+import { CircleFlag } from '@/components/CircleFlag';
 
 export const OUTFIT = "'Outfit', sans-serif";
 export const PLAYFAIR = "'Playfair Display', serif";
@@ -248,134 +250,253 @@ export function RoleTile({ icon, label, desc, active, onClick }: {
 
 // ── Brand panel ──────────────────────────────────────────────────────────────
 // The colour on the page. On a phone it is a short band above the card; from
-// `lg` it is a tall sticky panel beside it. When the code belongs to a
-// conference the panel wears that conference's artwork and name instead of the
-// house lockup — the one place the conference theme is allowed to take over.
-export function BrandPanel({
-  title, accent, sub, bullets, conference, footer,
-}: {
+// `lg` it is a tall sticky panel beside it.
+//
+// Redesigned 24 Sep 2026 (owner: "looks way too AI generated"). No eyebrow, no
+// icon-tile bullets, no sticker art. Before a code resolves it is one big line
+// and one short sentence. Once a code resolves it leads with the ROOM: the
+// committee's round emblem, its acronym huge with the spelled name small under
+// it, the topic, then plain facts read from the lookup that already happened
+// (state, delegations present as numerals and round flags, who is on the dais).
+// A conference room adds one small line on top: the conference's round logo and
+// its name. The only ornament is a faint emboss of the Gavelling mark.
+
+export interface BrandRoom {
+  acronym: string;
+  /** The spelled-out name, only when it differs from the acronym. */
+  spelled: string | null;
+  topic: string | null;
+  emblemUrl: string | null;
+  /** Conference rooms only: "LIMUN 2027 · London International Model United Nations". */
+  conference: { label: string; logoUrl: string | null } | null;
+  state: { label: string; tone: 'live' | 'waiting' | 'paused' | 'ended' };
+  present: { count: number; ofLabel: string; seats: { country: string; logoUrl: string | null }[] };
+  dais: { label: string; names: string } | null;
+}
+
+// The delegate view on a phone, tilted, transparent PNG-style webp (1080 x 1350; the
+// phone itself spans x 182..842, y 97..1238). From lg it overlaps the panel's bottom
+// inline-end corner and hangs out over the empty page below it; the panel keeps that
+// corner free (lg bottom padding). Below lg it is not drawn, and a <picture> with a
+// media source means a phone never downloads it either.
+const PHONE_SRC = '/join/phone-delegate.webp';
+const PHONE_W = 240;
+const PHONE_H = 300;
+// Only where the sticky panel plus the phone's overhang fit a laptop screen.
+const PHONE_MEDIA = '(min-width: 1024px) and (min-height: 760px)';
+const PHONE_CSS = `.gv-join-phone{display:none}@media ${PHONE_MEDIA}{.gv-join-phone{display:block}.gv-phone-room{padding-bottom:124px}}`;
+const BLANK_GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+/** Decorative: the card beside it is the real interface. */
+function PhoneMockup() {
+  return (
+    <picture
+      className="gv-join-phone pointer-events-none absolute z-10"
+      style={{ insetInlineEnd: -66, bottom: -92, width: PHONE_W, height: PHONE_H }}
+    >
+      <source media={PHONE_MEDIA} srcSet={PHONE_SRC} />
+      <img
+        src={BLANK_GIF}
+        alt=""
+        width={PHONE_W}
+        height={PHONE_H}
+        loading="eager"
+        decoding="async"
+        className="h-full w-full object-contain"
+        style={{ filter: 'drop-shadow(0 18px 22px rgba(27,56,40,0.30)) drop-shadow(0 4px 6px rgba(27,56,40,0.22))' }}
+      />
+    </picture>
+  );
+}
+
+const STATE_DOT: Record<BrandRoom['state']['tone'], string> = {
+  live: '#7FD39A',
+  waiting: C.gold,
+  paused: '#E8B27A',
+  ended: 'rgba(237,231,216,0.45)',
+};
+
+function RoomEmblem({ url, acronym, size }: { url: string | null; acronym: string; size: number }) {
+  const [failed, setFailed] = useState<string | null>(null);
+  const src = url && failed !== url ? url : null;
+  return (
+    <span
+      className="flex flex-shrink-0 items-center justify-center overflow-hidden rounded-full"
+      style={{
+        width: size, height: size,
+        backgroundColor: src ? '#FFFDF8' : C.forestLift,
+        // Neumorphic lift on forest, with a solid gold edge rather than a glow.
+        boxShadow: `inset 0 0 0 2px ${C.gold}, inset 0 -3px 6px rgba(27,56,40,0.18), 0 10px 22px rgba(0,0,0,0.30)`,
+      }}
+    >
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" onError={() => setFailed(src)} style={{ width: '68%', height: '68%', objectFit: 'contain' }} />
+      ) : (
+        <span style={{ fontFamily: OUTFIT, fontSize: size * (acronym.length > 4 ? 0.2 : 0.26), fontWeight: 900, color: C.gold, letterSpacing: '0.02em' }}>
+          {acronym.slice(0, 6).toUpperCase()}
+        </span>
+      )}
+    </span>
+  );
+}
+
+const SOFT = 'rgba(237,231,216,0.74)';
+const FLAGS_SHOWN = 7;
+
+export function BrandPanel({ title, accent, sub, room, footer }: {
   title: string;
   accent: string;
   sub: string;
-  bullets: { icon: ReactNode; text: string }[];
-  conference: { name: string; committee: string | null; logoUrl: string | null; eyebrow: string } | null;
+  room: BrandRoom | null;
   footer?: ReactNode;
 }) {
   return (
+    <div className="relative">
+    <style>{PHONE_CSS}</style>
     <section
       className="relative overflow-hidden"
       style={{
         borderRadius: 28,
         backgroundColor: C.forest,
-        backgroundImage:
-          'radial-gradient(520px 320px at 88% 0%, rgba(238,217,138,0.20) 0%, rgba(238,217,138,0) 62%),' +
-          'radial-gradient(420px 320px at 0% 100%, rgba(61,122,82,0.45) 0%, rgba(61,122,82,0) 65%)',
-        boxShadow: SHADOW.panel,
+        backgroundImage: 'radial-gradient(420px 320px at 0% 100%, rgba(61,122,82,0.40) 0%, rgba(61,122,82,0) 65%)',
+        boxShadow: `${SHADOW.panel}, inset 0 0 0 1px rgba(238,217,138,0.16)`,
         color: C.page,
       }}
     >
-      {/* The brand mark: gavel + laurel, the existing art, floated large and
-          soft-edged so it reads as a watermark rather than a sticker. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute"
-        style={{ insetInlineEnd: -34, top: -26, width: 176, height: 176, opacity: 0.38 }}
-      >
-        <span
-          className="absolute"
-          style={{
-            inset: -30,
-            background: 'radial-gradient(circle at 50% 45%, rgba(238,217,138,0.28) 0%, rgba(238,217,138,0) 68%)',
-          }}
-        />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/gavel-mark.png"
-          alt=""
-          className="absolute inset-0 h-full w-full object-contain"
-          style={{ filter: 'drop-shadow(0 10px 22px rgba(0,0,0,0.35))' }}
-        />
-      </div>
-
-      <div className="relative px-6 py-7 sm:px-8 sm:py-9">
-        {conference ? (
-          <div className="flex items-center gap-3.5">
+      {/* lg:pb keeps the bottom inline-end corner free for the phone. */}
+      <div className="relative px-6 py-7 sm:px-8 sm:py-9 gv-phone-room">
+        {room ? <RoomBrand room={room} /> : (
+          <h1
+            style={{
+              fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1,
+              fontSize: 'clamp(34px, 7vw, 52px)', margin: 0, textWrap: 'balance',
+            }}
+          >
+            {title}
             <span
-              className="flex flex-shrink-0 items-center justify-center overflow-hidden"
-              style={{
-                width: 54, height: 54, borderRadius: 16, backgroundColor: 'rgba(237,231,216,0.94)',
-                boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.10), 0 6px 14px rgba(0,0,0,0.28)',
-              }}
+              className="block"
+              style={{ fontFamily: PLAYFAIR, fontStyle: 'italic', fontWeight: 400, color: C.gold, letterSpacing: '0', marginTop: 4 }}
             >
-              {conference.logoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={conference.logoUrl} alt="" className="h-full w-full object-contain" style={{ padding: 3 }} />
-              ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src="/gavel-mark.png" alt="" className="h-full w-full object-contain" style={{ padding: 8 }} />
-              )}
+              {accent}
             </span>
-            <div className="min-w-0">
-              <Eyebrow tone="gold">{conference.eyebrow}</Eyebrow>
-              <p
-                className="mt-1"
-                style={{ fontFamily: OUTFIT, fontSize: 19, fontWeight: 800, letterSpacing: '-0.015em', lineHeight: 1.2, textWrap: 'balance' }}
-              >
-                {conference.name}
-              </p>
-              {conference.committee && (
-                <p style={{ fontFamily: OUTFIT, fontSize: 13, color: 'rgba(237,231,216,0.72)', marginTop: 2 }}>
-                  {conference.committee}
-                </p>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="max-w-[300px]">
-            <h1
-              style={{
-                fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '-0.025em', lineHeight: 1.02,
-                fontSize: 'clamp(30px, 6vw, 42px)', margin: 0, textWrap: 'balance',
-              }}
-            >
-              {title}
-              <span
-                className="block"
-                style={{ fontFamily: PLAYFAIR, fontStyle: 'italic', fontWeight: 400, color: C.gold, letterSpacing: '0', marginTop: 2 }}
-              >
-                {accent}
-              </span>
-            </h1>
-            <p
-              className="mt-3"
-              style={{ fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.55, color: 'rgba(237,231,216,0.80)', textWrap: 'pretty' }}
-            >
-              {sub}
-            </p>
-          </div>
+          </h1>
+        )}
+        {!room && (
+          <p className="mt-4 max-w-[300px]" style={{ fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.55, color: SOFT, textWrap: 'pretty' }}>
+            {sub}
+          </p>
         )}
 
-        {bullets.length > 0 && (
-          <ul className="mt-6 hidden space-y-3 lg:block">
-            {bullets.map((b, i) => (
-              <li key={i} className="flex items-start gap-2.5">
-                <span
-                  className="mt-[1px] flex flex-shrink-0 items-center justify-center"
-                  style={{ width: 24, height: 24, borderRadius: 8, backgroundColor: 'rgba(238,217,138,0.14)', color: C.gold }}
-                >
-                  {b.icon}
-                </span>
-                <span style={{ fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.5, color: 'rgba(237,231,216,0.86)', textWrap: 'pretty' }}>
-                  {b.text}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {footer && <div className="mt-6 hidden lg:block">{footer}</div>}
+        {footer && <div className="mt-7 hidden lg:block">{footer}</div>}
       </div>
     </section>
+    <PhoneMockup />
+    </div>
+  );
+}
+
+function RoomBrand({ room }: { room: BrandRoom }) {
+  const extra = room.present.seats.length - FLAGS_SHOWN;
+  return (
+    <div>
+      {room.conference && (
+        <div className="mb-4 flex min-w-0 items-center gap-2.5">
+          {room.conference.logoUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={room.conference.logoUrl}
+              alt=""
+              className="flex-shrink-0 rounded-full object-contain"
+              style={{ width: 26, height: 26, backgroundColor: '#FFFDF8', padding: 2, boxShadow: `inset 0 0 0 1px rgba(0,0,0,0.08)` }}
+            />
+          )}
+          <p className="min-w-0 line-clamp-2" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, lineHeight: 1.35, color: SOFT, textWrap: 'balance' }} title={room.conference.label}>
+            {room.conference.label}
+          </p>
+        </div>
+      )}
+
+      {/* Phone: emblem beside the name. lg: emblem above, the acronym at full size. */}
+      <div className="flex items-center gap-4 lg:gap-5">
+        <span className="lg:hidden"><RoomEmblem url={room.emblemUrl} acronym={room.acronym} size={56} /></span>
+        <span className="hidden lg:block"><RoomEmblem url={room.emblemUrl} acronym={room.acronym} size={76} /></span>
+        <div className="min-w-0">
+          <h1
+            className="truncate"
+            style={{
+              fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '-0.035em', lineHeight: 0.98, margin: 0,
+              fontSize: room.acronym.length > 8 ? 'clamp(28px, 7vw, 40px)' : 'clamp(38px, 10vw, 64px)',
+            }}
+          >
+            {room.acronym}
+          </h1>
+          {room.spelled && (
+            <p className="mt-1.5" style={{ fontFamily: OUTFIT, fontSize: 13.5, lineHeight: 1.35, color: SOFT, textWrap: 'balance' }}>
+              {room.spelled}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {room.topic && (
+        <p
+          className="mt-4 truncate"
+          title={room.topic}
+          style={{ fontFamily: PLAYFAIR, fontStyle: 'italic', fontSize: 16, lineHeight: 1.35, color: C.gold }}
+        >
+          {room.topic}
+        </p>
+      )}
+
+      {/* The facts. Plain type, no pills, no tiles. */}
+      <div className="mt-5 flex items-center gap-2 lg:mt-6" style={{ fontFamily: OUTFIT }}>
+        <span aria-hidden className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: STATE_DOT[room.state.tone] }} />
+        <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.01em', color: C.page }}>{room.state.label}</span>
+        {/* Phone: the count shares the state's line. */}
+        <span className="lg:hidden" style={{ fontSize: 13, color: SOFT }}>
+          <span aria-hidden> · </span>
+          <span style={{ fontWeight: 700, color: C.page, fontVariantNumeric: 'tabular-nums' }}>{room.present.count}</span> {room.present.ofLabel}
+        </span>
+      </div>
+
+      <div className="mt-4 hidden lg:block">
+        <p style={{ fontFamily: OUTFIT, color: SOFT, fontSize: 14 }}>
+          <span style={{ fontSize: 44, fontWeight: 800, color: C.page, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+            {room.present.count}
+          </span>
+          <span className="ms-2">{room.present.ofLabel}</span>
+        </p>
+        {room.present.seats.length > 0 && (
+          <div className="mt-3 flex items-center">
+            {room.present.seats.slice(0, FLAGS_SHOWN).map((s, i) => (
+              <CircleFlag
+                key={s.country}
+                country={s.country}
+                logoUrl={s.logoUrl}
+                size={30}
+                title={s.country}
+                decorative
+                style={{ marginInlineStart: i === 0 ? 0 : -8, boxShadow: `0 0 0 2px ${C.forest}` }}
+              />
+            ))}
+            {extra > 0 && (
+              <span className="ms-2" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: SOFT, fontVariantNumeric: 'tabular-nums' }}>
+                +{extra}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {room.dais && (
+        <p className="mt-5 hidden items-center gap-2 lg:flex" style={{ fontFamily: OUTFIT, fontSize: 13.5, color: SOFT }}>
+          <Gavel aria-hidden size={15} strokeWidth={2.2} style={{ color: C.gold, flexShrink: 0 }} />
+          <span className="sr-only">{room.dais.label}: </span>
+          <span className="min-w-0 truncate" title={room.dais.names} style={{ color: C.page, fontWeight: 600 }}>{room.dais.names}</span>
+        </p>
+      )}
+    </div>
   );
 }
 

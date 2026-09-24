@@ -29,7 +29,9 @@ import {
   loadApplyDraft, saveApplyDraft, discardApplyDraft,
   saveApplyDraftOnTeardown, resyncDraftRevision,
   draftHasContent, newDraftClientId, fingerprintDraft,
+  draftWorthResumePrompt, markApplyCheckoutRoundTrip, consumeApplyCheckoutRoundTrip,
 } from '@/lib/applyDraft';
+import ResumeDraftDialog from './ResumeDraftDialog';
 import {
   type GuestApplyAnswers,
   saveGuestDraft, loadGuestDraft, clearGuestDraft,
@@ -1386,6 +1388,14 @@ function ConferenceApplyInner() {
    *  an explicit click, exactly like /drafts/[token]: deleting somebody's
    *  half-written application must never be one stray tap away. */
   const [discardArmed, setDiscardArmed] = useState(false);
+  /** "Application in progress": a saved draft past step 1 was found on
+   *  arrival. Nothing is restored (and nothing autosaves) until the applicant
+   *  picks Continue or Start again (ResumeDraftDialog.tsx). */
+  const [resumePrompt, setResumePrompt] = useState<
+    | { kind: 'server'; row: ApplyDraftRow }
+    | { kind: 'guest'; answers: GuestApplyAnswers; step: number; savedAt: number }
+    | null
+  >(null);
   const [discarding, setDiscarding] = useState(false);
   const [discardError, setDiscardError] = useState('');
 
@@ -1612,54 +1622,119 @@ function ConferenceApplyInner() {
       const row = await loadApplyDraft(getAuthedClient(session.access_token), conference.id, user.id, role);
       if (cancelled) { draftLoadStartedRef.current = false; return; }
       if (row) {
-        const a = row.answers;
-        setIsIndependent(a.isIndependent);
-        setSocietyInput(a.societyInput);
-        setSelectedSocietyId(a.selectedSocietyId);
-        setNewDelegation(normalizeNewDelegation(a.newDelegation));
-        reapplyDelegationParam();
-        if (a.invitedSocietyId) setInvitedSocietyId(a.invitedSocietyId);
-        if (a.inviteSocietyName) setInviteSocietyName(a.inviteSocietyName);
-        if (a.delegationInviteToken) draftInviteTokenRef.current = a.delegationInviteToken;
-        setWillPledgeSpots(a.willPledgeSpots);
-        setSpotsPledged(a.spotsPledged);
-        setWillPledgeAdvisors(a.willPledgeAdvisors);
-        setAdvisorsPledged(a.advisorsPledged);
-        setPreferences(a.preferences);
-        setExperienceEntries(a.experienceEntries ?? []);
-        setExperienceLevel(a.experienceLevel);
-        setCustomAnswers(a.customAnswers);
-        setQuestionPage(a.questionPage);
-        // The voucher CODE is restored; the resolved discount deliberately is
-        // not (it may have expired or been revoked meanwhile) — the applicant
-        // re-applies it on Overview and validation runs again.
-        setVoucherCode(a.voucherCode);
-
-        // CLAMP THE STEP. The step sequence is derived per role and per
-        // conference config, so an organiser turning custom questions off
-        // between save and resume SHORTENS it. Restoring the saved number
-        // blind would leave `step` past the end of stepSequence, and the
-        // wizard would render the wrong stage under a "Step 6 of 5" rail
-        // with a back button walking through phantom steps.
-        const restoredStep = Math.min(Math.max(1, Math.trunc(row.step) || 1), totalSteps);
-        setStep(restoredStep);
-
-        draftRevisionRef.current = row.revision;
-        draftTokenRef.current = row.discardToken;
-        draftExistsRef.current = true;
-        setHasDraft(true);
-        // Treat what we just restored as already-saved, so simply resuming
-        // does not immediately burn a revision (which would hand a spurious
-        // conflict to a second tab that had not been touched).
-        draftFingerprintRef.current = fingerprintDraft(a, restoredStep);
-        // A credits round trip may have just topped up their balance.
-        refreshCredits();
+        // Past step 1, ask first (unless this is the checkout round trip
+        // coming straight back). draftReady stays false until they choose.
+        if (draftWorthResumePrompt(row.step) && !consumeApplyCheckoutRoundTrip(slug, role)) {
+          setResumePrompt({ kind: 'server', row });
+          return;
+        }
+        restoreServerDraft(row);
       }
       setDraftReady(true);
     })();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditMode, authLoading, loading, session?.access_token, conference?.id, user?.id, role, existingApp, totalSteps]);
+
+  /** Puts a server draft back into the form and takes over its bookkeeping:
+   *  what the resume always did, now also run by the prompt's Continue. */
+  function restoreServerDraft(row: ApplyDraftRow) {
+    const a = row.answers;
+    setIsIndependent(a.isIndependent);
+    setSocietyInput(a.societyInput);
+    setSelectedSocietyId(a.selectedSocietyId);
+    setNewDelegation(normalizeNewDelegation(a.newDelegation));
+    reapplyDelegationParam();
+    if (a.invitedSocietyId) setInvitedSocietyId(a.invitedSocietyId);
+    if (a.inviteSocietyName) setInviteSocietyName(a.inviteSocietyName);
+    if (a.delegationInviteToken) draftInviteTokenRef.current = a.delegationInviteToken;
+    setWillPledgeSpots(a.willPledgeSpots);
+    setSpotsPledged(a.spotsPledged);
+    setWillPledgeAdvisors(a.willPledgeAdvisors);
+    setAdvisorsPledged(a.advisorsPledged);
+    setPreferences(a.preferences);
+    setExperienceEntries(a.experienceEntries ?? []);
+    setExperienceLevel(a.experienceLevel);
+    setCustomAnswers(a.customAnswers);
+    setQuestionPage(a.questionPage);
+    // The voucher CODE is restored; the resolved discount deliberately is
+    // not (it may have expired or been revoked meanwhile) — the applicant
+    // re-applies it on Overview and validation runs again.
+    setVoucherCode(a.voucherCode);
+
+    // CLAMP THE STEP. The step sequence is derived per role and per
+    // conference config, so an organiser turning custom questions off
+    // between save and resume SHORTENS it. Restoring the saved number
+    // blind would leave `step` past the end of stepSequence, and the
+    // wizard would render the wrong stage under a "Step 6 of 5" rail
+    // with a back button walking through phantom steps.
+    const restoredStep = Math.min(Math.max(1, Math.trunc(row.step) || 1), totalSteps);
+    setStep(restoredStep);
+
+    draftRevisionRef.current = row.revision;
+    draftTokenRef.current = row.discardToken;
+    draftExistsRef.current = true;
+    setHasDraft(true);
+    // Treat what we just restored as already-saved, so simply resuming
+    // does not immediately burn a revision (which would hand a spurious
+    // conflict to a second tab that had not been touched).
+    draftFingerprintRef.current = fingerprintDraft(a, restoredStep);
+    // A credits round trip may have just topped up their balance.
+    refreshCredits();
+  }
+
+  /** Continue in the "Application in progress" prompt. */
+  function handleResumeContinue() {
+    const p = resumePrompt;
+    if (!p) return;
+    if (p.kind === 'server') {
+      restoreServerDraft(p.row);
+      setDraftReady(true);
+    } else {
+      applyGuestAnswers(p.answers, p.step);
+    }
+    setResumePrompt(null);
+  }
+
+  /** Start again in the prompt (already confirmed inline). Clears the saved
+   *  draft through the same RPC every other discard uses, then leaves the
+   *  form on step 1 with only the account basics. Resolves to a sentence
+   *  when the draft could not be cleared, so the dialog can say so. */
+  async function handleResumeStartAgain(): Promise<string | null> {
+    const p = resumePrompt;
+    if (!p) return null;
+    if (p.kind === 'guest') {
+      clearGuestDraft(slug, role);
+      setResumePrompt(null);
+      return null;
+    }
+    if (!conference || !user) return 'Something went wrong. Please refresh the page and try again.';
+    const failed = 'We could not clear your saved answers. Please try again.';
+    let deleted = false;
+    try {
+      const supabase = await getFreshAuthedClient();
+      if (!supabase) return 'Your session has expired. Please refresh and sign in again.';
+      deleted = await discardApplyDraft(supabase, {
+        conferenceId: conference.id,
+        userId: user.id,
+        role,
+        token: p.row.discardToken,
+      });
+    } catch (err) {
+      return friendlyError(err, failed);
+    }
+    if (!deleted) return failed;
+    clearGuestDraft(slug, role);
+    draftRevisionRef.current = 0;
+    draftTokenRef.current = null;
+    draftExistsRef.current = false;
+    setHasDraft(false);
+    draftFingerprintRef.current = null;
+    notifyDraftsChanged();
+    setResumePrompt(null);
+    setDraftReady(true);
+    return null;
+  }
 
   // ── Debounced save on any tracked answer change.
   useEffect(() => {
@@ -1750,27 +1825,30 @@ function ConferenceApplyInner() {
   };
   const guestDraftFingerprint = JSON.stringify({ answers: guestDraftAnswers, step });
 
+  /** Guest autosave stays off while the resume prompt is open, or the empty
+   *  form behind it would overwrite the draft being offered. */
+  const guestAutosaveOn = guestDraftEnabled && resumePrompt === null;
   const guestDraftStateRef = useRef<{ answers: GuestApplyAnswers; step: number } | null>(null);
   const guestDraftEnabledRef = useRef(false);
   useEffect(() => {
     guestDraftStateRef.current = { answers: guestDraftAnswers, step };
     // Belt-and-braces, same reasoning as the server draft above: never write
     // in preview under any circumstance.
-    guestDraftEnabledRef.current = guestDraftEnabled && !previewing;
+    guestDraftEnabledRef.current = guestAutosaveOn && !previewing;
   });
 
   // ── Debounced save, same cadence as the server draft.
   useEffect(() => {
-    if (!guestDraftEnabled) return;
+    if (!guestAutosaveOn) return;
     const t = setTimeout(() => { saveGuestDraft(slug, role, guestDraftAnswers, step); }, DRAFT_DEBOUNCE_MS);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [guestDraftFingerprint, guestDraftEnabled, slug, role]);
+  }, [guestDraftFingerprint, guestAutosaveOn, slug, role]);
 
   // ── Flush on teardown. A plain localStorage write is synchronous and
   // survives pagehide on its own — no keepalive fetch trick needed here.
   useEffect(() => {
-    if (!guestDraftEnabled) return;
+    if (!guestAutosaveOn) return;
     const onPageHide = () => {
       if (!guestDraftEnabledRef.current) return;
       const snap = guestDraftStateRef.current;
@@ -1779,7 +1857,7 @@ function ConferenceApplyInner() {
     };
     window.addEventListener('pagehide', onPageHide);
     return () => window.removeEventListener('pagehide', onPageHide);
-  }, [guestDraftEnabled, slug, role]);
+  }, [guestAutosaveOn, slug, role]);
 
   /** Applies a saved set of guest (or adopted) answers exactly the way the
    *  server draft's own resume does, including the same step clamp. Shared by
@@ -1822,7 +1900,14 @@ function ConferenceApplyInner() {
     if (guestDraftOfferCheckedRef.current) return;
     guestDraftOfferCheckedRef.current = true;
     const row = loadGuestDraft(slug, role);
-    if (row) setGuestDraftOffer({ answers: row.answers, step: row.step });
+    if (!row) return;
+    // Past step 1: the "Application in progress" prompt. On step 1: the
+    // quieter card below, as before.
+    if (draftWorthResumePrompt(row.step)) {
+      setResumePrompt({ kind: 'guest', answers: row.answers, step: row.step, savedAt: row.savedAt });
+    } else {
+      setGuestDraftOffer({ answers: row.answers, step: row.step });
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guestDraftEnabled, slug, role]);
 
@@ -3227,6 +3312,8 @@ function ConferenceApplyInner() {
    * applicant from going to buy a credit.
    */
   async function flushDraftBeforeCheckout() {
+    // Coming back from checkout is not a new visit: skip the resume prompt once.
+    markApplyCheckoutRoundTrip(slug, role);
     try { await saveDraftNow(); } catch { /* best effort, never block checkout */ }
   }
 
@@ -5981,6 +6068,23 @@ function ConferenceApplyInner() {
             </div>
           </div>
         )}
+
+        {resumePrompt && (() => {
+          const savedStep = resumePrompt.kind === 'server' ? resumePrompt.row.step : resumePrompt.step;
+          const shown = Math.min(Math.max(1, Math.trunc(savedStep) || 1), totalSteps);
+          const savedAtRaw = resumePrompt.kind === 'server' ? resumePrompt.row.updatedAt : resumePrompt.savedAt;
+          const savedAt = savedAtRaw != null ? new Date(savedAtRaw) : null;
+          return (
+            <ResumeDraftDialog
+              step={shown}
+              totalSteps={totalSteps}
+              stepLabel={stepLabels[shown - 1]}
+              savedAt={savedAt && !Number.isNaN(savedAt.getTime()) ? savedAt : null}
+              onContinue={handleResumeContinue}
+              onStartAgain={handleResumeStartAgain}
+            />
+          );
+        })()}
 
         {/* The rare collision: an account already has a server draft AND this
             browser has a guest draft from before signing in. Neither is

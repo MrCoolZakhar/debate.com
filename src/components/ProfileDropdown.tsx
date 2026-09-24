@@ -56,7 +56,7 @@ import { CreditCoin } from '@/components/CreditCoin';
 import { createPortal } from 'react-dom';
 import LiveNowMenuSection from '@/components/liveRooms/LiveNowMenuSection';
 import ActivityNotices from '@/components/profile/ActivityNotices';
-import { useMyActivity, useOpenSeenAt, markActivitySeen, isVisibleActivity } from '@/lib/myActivity';
+import { useMyActivity, useOpenSeenState, markActivitySeen, isVisibleActivity } from '@/lib/myActivity';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { invoiceDueCents, isInvoicePayable, type InvoiceStatus } from '@/lib/invoices';
 import { CircleFlag } from '@/components/CircleFlag';
@@ -149,23 +149,25 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
   // Needs your attention (src/lib/myActivity.ts). Read once per page load by the
   // avatar badge; re-read here when the menu opens on an answer over a minute old.
   const uid = authLoading ? null : user?.id ?? null;
-  const { items: activity } = useMyActivity(uid, session?.access_token ?? null, { maxAgeMs: open ? 60_000 : Infinity });
-  // The seen stamp in force for THIS opening: informational items newer than it
-  // show while the menu is open, and opening moves the stamp to now, so they
-  // stop counting on the avatar and are gone the next time.
-  const openSeenAt = useOpenSeenAt(uid);
+  const activityToken = session?.access_token ?? null;
+  const { items: activity } = useMyActivity(uid, activityToken, { maxAgeMs: open ? 60_000 : Infinity });
+  // Opening marks every informational item on screen as seen (accepted,
+  // allocated, new applications): they stay listed for THIS opening, stop
+  // counting on the avatar at once and are gone the next time.
+  const openSeen = useOpenSeenState(uid);
   const stampedOpen = useRef(false);
   useEffect(() => {
     if (!open) { stampedOpen.current = false; return; }
     // Once per opening (StrictMode re-runs effects; a second stamp would hide
     // the new items during the very opening that is meant to show them).
-    if (!uid || stampedOpen.current) return;
+    // Waits for the first answer, so what is marked is what is on screen.
+    if (!uid || stampedOpen.current || !activity) return;
     stampedOpen.current = true;
-    markActivitySeen(uid);
-  }, [open, uid]);
+    markActivitySeen(uid, activityToken);
+  }, [open, uid, activity, activityToken]);
   const attention = useMemo(
-    () => (activity ?? []).filter((i) => isVisibleActivity(i, openSeenAt)),
-    [activity, openSeenAt],
+    () => (activity ?? []).filter((i) => isVisibleActivity(i, openSeen)),
+    [activity, openSeen],
   );
   /** Something of the person's own is in flight (a draft, an imported place),
    *  so an empty conference list should still point at "All conferences". */

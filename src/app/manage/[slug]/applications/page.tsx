@@ -1766,6 +1766,9 @@ export default function ApplicationsPage() {
   // application_surcharges.gates_acceptance. Fetched with the applications list.
   const [gatingInvoices, setGatingInvoices] = useState<{ application_id: string | null; society_id: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
+  // A page of the paged load failed: the list on screen is incomplete, and
+  // the organiser must be told so rather than shown a partial list as whole.
+  const [loadIncomplete, setLoadIncomplete] = useState(false);
   // Empty role set = no constraint, so a fresh page shows every role
   // (including chairs) in both the row list and the stat scope.
   // Seeded from the URL on first render (?status=…, ?payment=…) so a deep link
@@ -2000,6 +2003,14 @@ export default function ApplicationsPage() {
 
     if (seq !== loadSeq.current) return; // stale response, a newer load superseded this one
 
+    const incomplete = !!appRes.error || !!gatingRes.error;
+    setLoadIncomplete(incomplete);
+    if (appRes.error && opts?.silent) {
+      // A background reconcile that could not read every page must not
+      // replace the complete list already on screen with a shorter one.
+      setLoading(false);
+      return;
+    }
     const raw = (appRes.data ?? []) as unknown as Application[];
     // NEVER `setApplications(raw)`. A snapshot taken before a local write must
     // not be allowed to revert that write on screen — see the pendingPatches
@@ -4026,6 +4037,21 @@ export default function ApplicationsPage() {
           </button>
         </div>
       </div>
+
+      {loadIncomplete && (
+        <div role="alert" className="mb-4 flex items-center gap-3 flex-wrap" style={{ padding: '10px 14px', borderRadius: 12, backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.35)' }}>
+          <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: '#8B2020' }}>
+            Some applications could not load. Refresh to try again.
+          </span>
+          <button
+            onClick={() => { void loadApplications(); }}
+            className="focus:outline-none"
+            style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', color: '#8B2020', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px' }}
+          >
+            REFRESH
+          </button>
+        </div>
+      )}
 
       <DraftNoticeList
         notices={draftNotices}

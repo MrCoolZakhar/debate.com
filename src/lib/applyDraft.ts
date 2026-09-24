@@ -94,6 +94,9 @@ export interface ApplyDraftRow {
   discardToken: string;
   /** The tab that last wrote this row (see `saveApplyDraftOnTeardown`). */
   clientId: string | null;
+  /** When the row was last written (ISO), for the "Application in progress"
+   *  prompt. Null when the read did not carry it. */
+  updatedAt: string | null;
 }
 
 /** What `save_application_draft` returns, normalised. */
@@ -193,7 +196,7 @@ export async function loadApplyDraft(
 ): Promise<ApplyDraftRow | null> {
   const { data, error } = await client
     .from('application_drafts')
-    .select('answers, step, revision, discard_token, client_id')
+    .select('answers, step, revision, discard_token, client_id, updated_at')
     .eq('conference_id', conferenceId)
     .eq('user_id', userId)
     .eq('role', role)
@@ -206,6 +209,7 @@ export async function loadApplyDraft(
     revision: number | string | null;
     discard_token: string;
     client_id: string | null;
+    updated_at?: string | null;
   };
   if (!row.answers || typeof row.answers !== 'object') return null;
 
@@ -215,6 +219,7 @@ export async function loadApplyDraft(
     revision: Number(row.revision ?? 0) || 0,
     discardToken: row.discard_token,
     clientId: row.client_id,
+    updatedAt: row.updated_at ?? null,
   };
 }
 
@@ -399,4 +404,40 @@ export async function discardApplyDraft(
   const { data, error } = await client.rpc('discard_application_draft', { p_token: token });
   if (error) return false;
   return !!(data as { ok?: boolean } | null)?.ok;
+}
+
+/**
+ * THE RESUME PROMPT. Opening the apply page on a saved draft that got past
+ * step 1 asks "Application in progress: continue or start again?" instead of
+ * dropping the applicant on a later step unannounced. A draft still on step 1
+ * restores silently: there is no "part of the application" to skip to.
+ */
+export function draftWorthResumePrompt(step: number): boolean {
+  return (Math.trunc(step) || 1) > 1;
+}
+
+/**
+ * A credits / Unlimited checkout leaves the page and comes straight back to
+ * it. That round trip is not a new visit, so it must land back where the
+ * applicant was without asking. Marked just before leaving, consumed once on
+ * return, per tab (sessionStorage), and only honoured for 30 minutes.
+ */
+const CHECKOUT_MARK_TTL_MS = 30 * 60 * 1000;
+function checkoutMarkKey(slug: string, role: string): string {
+  return `gavelling-apply-checkout:${slug}:${role}`;
+}
+export function markApplyCheckoutRoundTrip(slug: string, role: string): void {
+  try { window.sessionStorage.setItem(checkoutMarkKey(slug, role), String(Date.now())); } catch { /* storage off */ }
+}
+export function consumeApplyCheckoutRoundTrip(slug: string, role: string): boolean {
+  try {
+    const key = checkoutMarkKey(slug, role);
+    const raw = window.sessionStorage.getItem(key);
+    if (!raw) return false;
+    window.sessionStorage.removeItem(key);
+    const at = Number(raw);
+    return Number.isFinite(at) && Date.now() - at < CHECKOUT_MARK_TTL_MS;
+  } catch {
+    return false;
+  }
 }

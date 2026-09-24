@@ -29,10 +29,15 @@ export default function UntoldSeatsRow({ conferenceId, slug }: { conferenceId: s
     if (!token) return;
     let cancelled = false;
     (async () => {
+      // EXACTLY the Assignment picker's targets (allocationTargets in
+      // assignment/page.tsx): seats of this conference's committees, reached
+      // through the committee, that belong to an application, not yet sent.
+      // Same rows, so SEND opens with these people ticked and the row clears
+      // once their emails are queued.
       const { count: n, error } = await getAuthedClient(token)
         .from('conference_allocations')
-        .select('id', { count: 'exact', head: true })
-        .eq('conference_id', conferenceId)
+        .select('id, conference_committees!inner(conference_id)', { count: 'exact', head: true })
+        .eq('conference_committees.conference_id', conferenceId)
         .not('application_id', 'is', null)
         .eq('allocation_sent', false);
       if (!cancelled && !error) setCount(n ?? 0);

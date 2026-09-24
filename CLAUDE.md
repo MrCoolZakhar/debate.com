@@ -81,18 +81,36 @@ service role / cron:
   most one per invoice per 7 days (`payment_reminder_log`), respects `notify_email_payments` /
   `notify_email_reminders`, the global opt-out, failed addresses, `conference_payments_ready()`,
   and stands down for 7 days after the organiser's own `queue_payment_reminder_emails()`
-  (template `payment_available`). **NOT SCHEDULED.** Preview inserts nothing (90 payers across 9
+  (template `payment_available`). **Scheduled 24 Sep 2026: cron `payment-reminders` 11:15 UTC daily.** Preview inserts nothing (90 payers across 9
   conferences on 23 Sep 2026).
 - **`queue_claim_reminders(p_preview default TRUE, p_limit)`**: imported / invited applicants
   with no account. Upcoming conference: "Your place is waiting" (Committee + Representing facts
   when allocated), at most 3, a week apart. Finished conference: "We know, it's over", accepted
-  and beyond only, within a year, ONCE ever. Link `/invites/import/<claim_token>`; skips anyone
+  and beyond only, within a year, ONCE ever PER PERSON (`lower(email)`, not per application, since
+  24 Sep 2026). Link `/invites/import/<claim_token>`; skips anyone
   with an account, opted-out or failed addresses, and anyone emailed in the last 7 days
-  (`claim_reminder_log`). **NOT SCHEDULED.** Preview: 165 (69 upcoming, 96 past) on 23 Sep 2026.
+  (`claim_reminder_log`). Skips test / demo conferences (`conference_is_test(slug, full_name,
+  is_demo)`, the SQL twin of `isTestConference` in `src/lib/publicConferences.ts`: change both) and
+  dead drafts (never published, `is_public` false AND `published_at` null, and already started; note
+  this also skips a real conference run privately, e.g. MUJMUN 13.0, 36 people).
+  **Scheduled 24 Sep 2026: cron `claim-reminders` 11:30 UTC daily.** Preview: 165 (69 upcoming, 96 past) on 23 Sep 2026; 137 (69 upcoming, 68 past) after the 24 Sep changes.
+- **"Failed address" means the ADDRESS failed, never its batch (24 Sep 2026).** Every sender
+  (payment, claim, prereg) asks `email_address_failed(email)`: true when the address is unsendable on
+  its face (`email_address_is_unsendable`: malformed, non-ASCII, or a reserved placeholder domain
+  `example.*`, `*.test`, `*.invalid`, `*.localhost`) or has a failed outbox row whose error is
+  address-level (`outbox_error_is_address_level`: "Invalid recipient address…", "No recipient
+  email…", a bounce). "Resend batch error…" rows are collateral and do not count; before this, 127
+  innocent addresses caught in poisoned batches were silently excluded from every reminder.
 - **Imported applications attach by VERIFIED email only** (`auth.users.email_confirmed_at`, never
   `profiles.email`): the profile-insert trigger, a trigger on `auth.users` when an address is
   confirmed (`claim_imported_on_email_confirmed`), and `claim_my_imported_applications()` once per
-  browser session from `ProfileDropdown` (`src/lib/importClaim.ts`).
+  browser session from `ProfileDropdown` (`src/lib/importClaim.ts`). **A claim never costs a
+  credit (24 Sep 2026):** the organiser created the application, so `claim_imported_for` and
+  `claim_import_invite` (the invite link) record a `claim_free` hold (no lot) instead of taking
+  one of the claimant's credits, and `_credit_consume_core` re-issues `claim_free` when a claimed
+  import is reinstated after a rejection. 8 credits taken by claims on 23 Sep were given back
+  (the holds became `claim_free`). About 294 older claim-looking charges (imported application,
+  charged well after it was submitted) were NOT touched: the owner's call.
 - **`close_undecided_after_conference()`**, cron `close-undecided-after-conference` 02:20 UTC:
   applications still `submitted` the day after a conference's last day (its timezone) become
   `withdrawn` (the credit gate refunds the credit), recorded in `application_auto_closures`. No
@@ -104,7 +122,19 @@ service role / cron:
   `gavelling_verified`). Deleting one leaves a tombstone (`cv_attended_dismissals`) so it never
   comes back. Backfill wrote 177 across 23 conferences. `mun_cv_entries_guard_source` stops a
   client from writing any source but `manual` (the owner RLS policy used to allow forging the
-  seal).
+  seal), and on a row that is not `manual` it silently keeps what the entry certifies
+  (conference_name, conference_id, session_committee_id, committee, allocation, award, awards,
+  entry_type, user_id): the owner may still delete it and edit description, photos, logo, date
+  and expertise (`CVEntryModal` locks the same fields). `publish_conference_awards` overwrites an
+  upgraded entry's awards with exactly the person's published awards at that conference, and its
+  committee / allocation / conference name with the official ones.
+- **`profiles` column grants (24 Sep 2026).** `authenticated` may UPDATE only display_name,
+  nationality, date_of_birth, avatar_url, bio, mun_experience_level, education_level,
+  mun_countries, conference_countries, the five notify_email_* switches, welcome_token_seen and
+  setup_reminder_seen_at; anon nothing. email, stripe_customer_id, is_ambassador, unlimited_*,
+  points_balance, is_demo, pre_registered are written only by SECURITY DEFINER code or the service
+  role. `profiles.email` follows `auth.users.email` through the trigger
+  `sync_profile_email_from_auth`. A new client write to another column needs a GRANT first.
 
 **Stripe's own limits are the thing that breaks a big bill, and they live only in
 the edge function.** `create-checkout` (v18, 8 Sep 2026; not in git, read it with
@@ -386,6 +416,25 @@ src/components/ neu.tsx (design tokens), DatePicker, Portal, SiteNav, Scoreboard
 
 **Cron-only edge functions carry a DB-held secret (24 Sep 2026).** The anon key is public, so an edge function that sends must not trust it. `public.internal_secrets` (RLS on, no policies, no grants to anon / authenticated / service_role) holds `cron_edge_secret`; `verify_internal_secret(name, value)` (SECURITY DEFINER, EXECUTE for service_role only) checks it. pg_cron puts it in an `x-cron-secret` header built by a subselect in the job command (`'x-cron-secret', (select value from public.internal_secrets where name = 'cron_edge_secret')`), and the function verifies it with its service-role client, failing closed (403). Applied to `send-setup-nudges` v14 (cron `organiser-setup-nudges`): the live run and `dryRun` need the header, and `previewTo` is honoured only for exactly petizakhar@gmail.com (it used to email any address: an open relay). Rotate by updating the row; nothing else changes. `send-emails` is deliberately NOT gated: the app kicks it from browsers after queueing (`triggerEmailDelivery`, 8 call sites), it reads no request body and only drains rows already queued. `preview-setup-nudges` is a 410 stub and `send-setup-nudges-v2` only ever writes to the owner.
 
+**Essential confirmations are ON unless an organiser turned them off (24 Sep 2026).**
+`ESSENTIAL_DEFAULT_ON_EVENTS` in `emailEvents.ts` (application_received, application_accepted,
+application_rejected, allocation_assigned, payment_received, co_delegate_assigned): a MISSING
+`email_templates` row means ON. `queueEventEmail` writes the enabled stub the first time the event
+fires (so outbox rows keep their template_id), Communications shows it as "On: sends our default" and
+its toggle writes an explicit OFF row (`turnOffDefaultEmail`). Nothing was backfilled (enabled rows
+count toward the "Explore emails" checkmark stage), rows that exist with `enabled = false` are
+honoured, and only future events send.
+
+**Double delegations (24 Sep 2026).** The allocation email adds a "Your co-delegate" facts row (name +
+email, or "Not assigned yet") for a seat of capacity 2 (`allocation_co_delegates`, organisers +
+service role). When a partner is announced AFTER the first holder was told, the AFTER UPDATE trigger
+`conference_allocations_co_delegate_notice` (`notify_co_delegate_on_allocation_sent`, fires on
+allocation_sent false→true) emails the first holder `co_delegate_assigned`, once per pair
+(`co_delegate_notices`), honouring an explicit OFF template and `notify_email_applications`; its copy is
+a SQL mirror of `defaultEmails.ts`. Participant side: `participant/CoDelegateCard.tsx` via
+`my_co_delegates(conference)` (caller's own seats only). Sharing the partner's email with their
+co-delegate is the owner's decision.
+
 **Allocation emails have two switches, and the template's OFF wins (23 Sep 2026).**
 `conferences.allocation_email_auto` (Assignment → "Sending automatically" / "Manual
 release") decides WHEN `allocation_assigned` is raised; the `email_templates` row's
@@ -420,7 +469,17 @@ or held, then queues at most `120 - rows inserted in the last 10 min` (cap 100) 
 `email_campaign_templates` (`prereg_credits_1` "Your 2 Gavelling credits are waiting", `prereg_credits_2`
 "Still yours" 7 days later) to `pre_registrations` addresses with no account and not opted out, logged
 once per address and stage in `prereg_campaign_sends`. CALLING IT SENDS once the broadcast is done. Stop:
-`select cron.unschedule('prereg-credit-campaign');`
+`select cron.unschedule('prereg-credit-campaign');` Both stages skip `email_address_failed()` addresses
+(24 Sep 2026). On 23 Sep 22:50 one `…@example.com` pre-registrant 422'd a whole Resend batch of 100;
+the 99 real addresses were re-queued on 24 Sep (~03:50 UTC, `prereg_campaign_sends.outbox_id` and
+`queued_at` moved to the new rows, so stage 2 counts 7 days from the resend).
+
+**send-emails v17 (24 Sep 2026, Supabase version 18): one bad `to` can no longer sink a batch.** Before batching it fails,
+individually, any recipient that is malformed, non-ASCII or on a reserved placeholder domain
+(`example.*`, `*.example`, `*.test`, `*.invalid`, `*.localhost`), and if Resend still answers 422 for
+the batch it re-sends each row alone (600 ms apart, 100 s budget, a 429 or the budget hands the rest
+back to `pending`), so only the guilty row fails. Every address-level error text starts with
+"Invalid recipient address", which is what `outbox_error_is_address_level()` keys on: keep it.
 
 ### STOP ALL EMAIL
 
@@ -484,8 +543,13 @@ closing it does. Inbox rows show "Waiting 3 h". A `/contact` message that names 
 conference (acronym as a whole word, full name or slug) the sender's ACCOUNT has
 applied to, and exactly one such conference, is also filed in that conference's
 inbox by the AFTER INSERT trigger `route_contact_submission_to_conference_t`
-(metadata `source: 'contact_form'`, first line says the address is unverified,
-the row shows "Contact form"). The team alert is unchanged. It inserts no email.
+(metadata `source: 'contact_form'`, `sender_label` = the typed address, first line
+says the address is unverified). The message's `sender_user_id` is NULL (24 Sep 2026;
+the column is nullable for this alone, and the insert policy still requires a real
+sender): the typed address is a label, never the account that owns it. Organisers
+see it as "<address> (unverified)"; the account owner still sees the thread and the
+reply but not the unverified message (read policy). The team alert is unchanged. It
+inserts no email.
 
 ### AGENTS NEVER CALL A LIVE SENDING FUNCTION TO TEST ANYTHING
 

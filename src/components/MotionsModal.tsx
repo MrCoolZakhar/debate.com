@@ -1501,7 +1501,13 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         {/* How long a suspended room is kept (src/lib/roomRetention.ts), said BEFORE the
             chair suspends: a standalone room with no resume is deleted after that. */}
         {isSuspend && (() => {
-          const until = roomKeptUntil(committee, serverNow());
+          // Someone holding the floor has their speech logged by this suspension (the same
+          // test as logFloorSpeech in floorSpeech.ts), which makes the room one that held
+          // debate (72 h, not 36 h). Room Order placeholders log nothing on a suspend.
+          const floorSpeech = !!committee.currentSpeaker
+            && !committee.currentSpeaker.delegateId?.startsWith('room-order-')
+            && !(committee.phase === 'moderated-caucus' && (committee.caucus?.purpose?.includes('Room Order') ?? false));
+          const until = roomKeptUntil(committee, serverNow(), floorSpeech);
           return until ? (
             <p className="text-base mb-12 max-w-lg" style={{ color: '#6A5A4A' }}>
               {t('motions_suspend_kept_until', { when: formatKeptUntil(until, language) })}
