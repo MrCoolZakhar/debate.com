@@ -516,7 +516,7 @@ export function StatRow({
                by the longest word here. Every 1px shaved off this gives ~3px
                back to the disc across both rails. */
             fontSize: 'clamp(6.5px, 1.85vw, 9px)', letterSpacing: '0.03em',
-            textTransform: 'uppercase', lineHeight: 1.18, marginTop: 2,
+            textTransform: 'uppercase', lineHeight: 1.18, marginTop: 2, overflowWrap: 'anywhere',
           }}
         >
           {label}

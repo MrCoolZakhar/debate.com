@@ -491,11 +491,11 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
           {/* Special debate control buttons, half size, red, stacked */}
           <div className="flex flex-col gap-1 self-stretch">
             <button type="button" onClick={() => setType('suspend-debate')}
-              className={`gv-lift px-2 flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'suspend-debate' ? 'bg-[#8B2020] border-red-700 text-white' : 'border-[#8B2020]/40 bg-[#8B2020]/20 text-[#8B2020] hover:bg-[#8B2020]/20'}`}>
+              className={`gv-lift px-2 py-0.5 min-h-[26px] leading-tight flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'suspend-debate' ? 'bg-[#8B2020] border-red-700 text-white' : 'border-[#8B2020]/40 bg-[#8B2020]/20 text-[#8B2020] hover:bg-[#8B2020]/20'}`}>
               {t('motions_suspend')}
             </button>
             <button type="button" onClick={() => setType('end-debate')}
-              className={`gv-lift px-2 flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'end-debate' ? 'bg-[#8B2020] border-red-700 text-white' : 'border-[#8B2020]/40 bg-[#8B2020]/20 text-[#8B2020] hover:bg-[#8B2020]/20'}`}>
+              className={`gv-lift px-2 py-0.5 min-h-[26px] leading-tight flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'end-debate' ? 'bg-[#8B2020] border-red-700 text-white' : 'border-[#8B2020]/40 bg-[#8B2020]/20 text-[#8B2020] hover:bg-[#8B2020]/20'}`}>
               {t('motions_end_debate')}
             </button>
           </div>

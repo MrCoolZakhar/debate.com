@@ -720,11 +720,13 @@ function JoinPageInner() {
               type="button"
               onClick={goSignIn}
               disabled={authLoading}
-              className="gv-lift inline-flex h-10 items-center gap-2 rounded-xl px-3.5 focus:outline-none active:scale-[0.96]"
+              aria-label={t('join_signin_cta')}
+              className="gv-lift inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl px-3.5 focus:outline-none active:scale-[0.96]"
               style={{ backgroundColor: C.forest, color: C.gold, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, letterSpacing: '0.02em', opacity: authLoading ? 0 : 1, transitionProperty: 'opacity, transform, box-shadow' }}
             >
               <LogIn size={15} strokeWidth={2.6} />
-              {t('join_signin_cta')}
+              {/* Icon only under 400px: "Se connecter" / "Iniciar sesión" pushed the bar off a 360px phone. */}
+              <span className="max-[399px]:hidden">{t('join_signin_cta')}</span>
             </button>
           )}
         </div>

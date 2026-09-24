@@ -75,8 +75,9 @@ const GOLD = '#EED98A';
  *  inline-end side. Wider screens get a wider drawer. */
 const DRAWER_W = 300;
 const DRAWER_W_2XL = 380;
-const RIBBON_W = 76;
-const RIBBON_W_ON = 84;
+// 80 / 88 (was 76 / 84, 24 Sep 2026): es 'Abstención' and fr 'Abstention' were cut at the label's end.
+const RIBBON_W = 80;
+const RIBBON_W_ON = 88;
 const TUCK = 24;
 const EASE = 'cubic-bezier(0.32,0.72,0,1)';
 const PRESS = 'transition-[background-color,color,box-shadow,transform] duration-150 active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100';
@@ -764,7 +765,7 @@ export function VotingRollCall({
                     >
                       <span aria-hidden className="gv-rc-stitch absolute pointer-events-none" style={{ top: 5, bottom: 5, insetInlineStart: 4, insetInlineEnd: 13, borderRadius: 7, border: `1px dashed ${on ? 'rgba(27,56,40,0.28)' : 'rgba(238,217,138,0.18)'}` }} />
                       <Icon aria-hidden size={21} strokeWidth={on ? 2.5 : 2.1} style={{ position: 'relative', flexShrink: 0 }} />
-                      <span aria-hidden className="relative block max-w-full text-center text-[10px] font-semibold leading-[1.15] line-clamp-2">{x.label}</span>
+                      <span aria-hidden className="relative block max-w-full text-center text-[9.5px] font-semibold leading-[1.15] line-clamp-2" style={{ overflowWrap: 'anywhere' }}>{x.label}</span>
                       {x.warn && (
                         <span aria-hidden className="absolute rounded-full" style={{ top: 9, insetInlineEnd: 18, width: 8, height: 8, backgroundColor: on ? '#8B2020' : '#F6B4B4', boxShadow: `0 0 0 2px ${on ? GOLD : FOREST}` }} />
                       )}

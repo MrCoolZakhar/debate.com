@@ -2929,7 +2929,7 @@ export const translations = {
     delegate_roll_call_label: 'ASISTENCIA',
     delegate_in_the_queue: 'EN LA FILA',
     delegate_stat_time_spoken: 'TIEMPO DE PALABRA',
-    delegate_stat_speeches_given: 'DISCURSOS PRONUNCIADOS',
+    delegate_stat_speeches_given: 'DISCURSOS',
     delegate_stat_messages_sent: 'MENSAJES ENVIADOS',
     delegate_moderated_caucus_label: 'CÁUCUS MODERADO',
     delegate_unmoderated_caucus_label: 'CÁUCUS NO MODERADO',
