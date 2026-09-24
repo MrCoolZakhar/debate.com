@@ -533,7 +533,9 @@ function JoinPageInner() {
       return;
     }
     if (mode === 'advisor') {
-      router.push(`/advisor/${foundCommittee.code}`);
+      // A standalone room: the advisor follows it on their board, which can hold many
+      // rooms (/advisor, add flow prefilled). The single-room view stays one tap away there.
+      router.push(`/advisor?add=${encodeURIComponent(foundCommittee.code)}`);
       return;
     }
     // delegate
@@ -592,7 +594,7 @@ function JoinPageInner() {
         : noArrow(t('join_btn_delegate')))
     : mode === 'delegate'
     ? noArrow(foundCommittee?.endedAt ? t('join_btn_delegate_ended') : t('join_btn_delegate'))
-    : mode === 'chair' ? noArrow(t('join_btn_chair')) : noArrow(t('join_btn_advisor'));
+    : mode === 'chair' ? noArrow(t('join_btn_chair')) : t('join_advisor_follow_btn');
 
   const showRoleFlow = !!foundCommittee && (!isConferenceSession || openPath) && !checkingConference;
   const signedInName = (profile?.display_name || user?.email || '').trim();
@@ -1144,6 +1146,26 @@ function JoinPageInner() {
                         <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.5, color: C.inkSoft, textWrap: 'pretty' }}>{t('join_advisor_note')}</p>
                       </div>
                     </div>
+                  )}
+
+                  {/* Conference code, no conference role here: anyone may still follow the room,
+                      read only, on their advisor board (owner, 24 Sep 2026). Verified advisors and
+                      organisers never see this; they keep the detailed /advisor/CODE view. */}
+                  {foundCommittee && isConferenceSession && !checkingConference && !authLoading && !hasVerifiedRole && (
+                    <Link
+                      href={`/advisor?add=${encodeURIComponent(foundCommittee.code)}`}
+                      className="group flex items-center gap-3 rounded-2xl px-3.5 py-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] active:scale-[0.99]"
+                      style={{ backgroundColor: 'rgba(27,56,40,0.04)', boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.10)', transitionProperty: 'background-color, transform', transitionDuration: '160ms' }}
+                    >
+                      <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: C.forest }}>
+                        <Eye size={17} strokeWidth={2.3} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 800, color: C.ink }}>{t('join_advisor_follow_title')}</span>
+                        <span className="block" style={{ fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.4, color: C.inkSoft, textWrap: 'pretty' }}>{t('join_advisor_follow_body')}</span>
+                      </span>
+                      <ArrowRight size={16} strokeWidth={2.4} color={C.forest} className="shrink-0 rtl:-scale-x-100" aria-hidden />
+                    </Link>
                   )}
                 </div>
               )}

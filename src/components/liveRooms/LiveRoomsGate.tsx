@@ -9,8 +9,9 @@
  *   chair     -> "Join as chair"     (/join?code=CODE&mode=chair, the verified chair path)
  *   delegate  -> "Join now"          (/delegate/CODE?country=NAME&locked=1, what /join builds
  *                                     for a verified allocated delegate: no picker, no typing)
- *   advisor   -> "Open advisor view" (/advisor/CODE; a faculty advisor with several live
- *                                     rooms gets them all in the list)
+ *   advisor   -> "Follow your delegation" (/advisor, the Faculty Advisor board): ONE
+ *                                     entry per conference however many rooms are live,
+ *                                     with how many of their students sit in them
  *
  * On /sessions it also offers the STANDALONE rejoin exactly as before (the
  * `gavelling-rejoin` blob, 18 hours, `gavelling-rejoin-dismissed`), with the room
@@ -38,7 +39,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { useBasicsGateBlocking } from '@/lib/basicsGateState';
 import { supabase } from '@/lib/supabase';
-import { chairIdentity, resolveEntryHref, useLiveRooms } from '@/lib/liveRooms';
+import { chairIdentity, entrySessionCodes, resolveEntryHref, useLiveRooms } from '@/lib/liveRooms';
 import LiveRoomsDialog, { PROMPT_ATTR, itemHref, type PromptItem, type StandaloneItem } from './LiveRoomsDialog';
 
 const EXCLUDED_PREFIXES = [
@@ -177,7 +178,7 @@ export default function LiveRoomsGate() {
   const items = useMemo<PromptItem[]>(() => {
     const live: PromptItem[] = (entries ?? []).filter((e) => itemHref(e) !== pathname);
     if (!onSessions || !standalone) return live;
-    const codes = new Set((entries ?? []).flatMap((e) => (e.role === 'organiser' ? [] : [e.room.sessionCode])));
+    const codes = new Set((entries ?? []).flatMap(entrySessionCodes));
     return codes.has(standalone.code.toUpperCase()) ? live : [...live, standalone];
   }, [entries, onSessions, standalone, pathname]);
 

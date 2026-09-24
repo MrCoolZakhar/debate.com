@@ -1,15 +1,17 @@
 'use client';
 
 import { openAuth } from '@/lib/authModal';
-import { use, useEffect, useState } from 'react';
+import { use, useEffect, useState, type ReactNode } from 'react';
 import FitToScreen from '@/components/FitToScreen';
 import CowDelegationBoard from '@/components/CowDelegationBoard';
 import Link from 'next/link';
+import { ArrowLeft, Eye, LogIn, Mic, MessageSquareOff, Pause, Plus, X } from 'lucide-react';
 import {
   getCommitteeByCodeWithRetry,
   sendMessage as sendMessageDB,
   caucusRemainingNow,
   moderatedCaucusRemainingNow,
+  speakerRemainingNow,
 } from '@/lib/committeeService';
 import { mergeMessagesById } from '@/lib/chatConversations';
 import { startSessionSync, rowFields, withCurrentSpeaker, withLists, type ConnectionState } from '@/lib/sessionSync';
@@ -19,34 +21,165 @@ import type { ConferenceAccess } from '@/lib/conferenceAccess';
 import { useSessionAccess } from '@/lib/useSessionAccess';
 import { getCommitteeFlags, motionNames } from '@/lib/committeeFlags';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
-import { Committee } from '@/lib/types';
+import type { CaucusState, Committee, SpeakerEntry } from '@/lib/types';
 import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
-import { SeatFlag, SeatArtProvider } from '@/components/SeatFlag';
-import { getCommitteeDisplayName } from '@/lib/presetNames';
-import { Emoji } from '@/components/Emoji';
-import { MajorityPie } from '@/components/RollCallPanel';
+import { SeatArtProvider } from '@/components/SeatFlag';
+import { SeatCircleFlag, SIDEBAR_MONOGRAM } from '@/components/CircleFlag';
+import { getCommitteeDisplayName, committeeDisplayName, deriveCommitteeAcronym } from '@/lib/presetNames';
+
+// ── Palette (CLAUDE.md §8) ───────────────────────────────────────────────────
+const FONT = "var(--font-brand), sans-serif";
+const K = {
+  page: '#EDE7D8',
+  surface: '#FAF8F3',
+  forest: '#1B3828',
+  forestLift: '#2A5A3C',
+  moss: '#3D7A52',
+  gold: '#EED98A',
+  goldDeep: '#B6871F',
+  amber: '#B8844A',
+  ink: '#1C1410',
+  inkSoft: '#544B3E',
+  ivory: '#EDE7D8',
+  line: 'rgba(61,122,82,0.35)',
+} as const;
+const CARD_SHADOW = '0 1px 2px rgba(27,56,40,0.06), 0 8px 22px rgba(27,56,40,0.08)';
+const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-1';
+const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
 function formatTime(seconds: number) {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
+  const safe = Math.max(0, Math.floor(seconds));
+  const m = Math.floor(safe / 60);
+  const s = safe % 60;
   return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
-function ordinal(n: number): string {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
 const NUDGE_KEYS = ['advisor_nudge_1', 'advisor_nudge_2', 'advisor_nudge_3', 'advisor_nudge_4', 'advisor_nudge_5'] as const;
 
+// ── The floor, derived from the committee row ───────────────────────────────
+// ONE place decides who holds the floor and which queue is "up next", so the left
+// panel and every delegation card can never disagree.
+//   - GSL (and every non-caucus phase): current_speaker + the GSL.
+//   - Moderated caucus / Tour de Table: caucus.currentSpeaker + the CAUCUS queue.
+//   - Unmoderated caucus / Consultation: no queue at all (the caucus clock is the state).
+// The caucus queue is deduped against the caucus floor speaker: the loader only removes
+// the current speaker from the GSL, so after a lists refetch the caucus speaker could
+// otherwise show up in "Up next" as well.
+type FloorKind = 'gsl' | 'moderated' | 'unmoderated';
+interface FloorModel {
+  kind: FloorKind;
+  speaker: { country: string; delegateId: string | null } | null;
+  queue: SpeakerEntry[];
+  /** The speaker clock anchor (current_speaker), only when it belongs to `speaker`. */
+  clock: { base: number; startedAt: string | null } | null;
+}
+
+function floorModel(c: Committee): FloorModel {
+  if (c.phase === 'moderated-caucus') {
+    const country = c.caucus?.currentSpeaker ?? null;
+    const row = c.currentSpeaker && country && c.currentSpeaker.country === country ? c.currentSpeaker : null;
+    const delegateId = row?.delegateId ?? (country ? c.delegates.find((d) => d.country === country)?.id ?? null : null);
+    const queue = (c.caucusQueue ?? []).filter((s) =>
+      !country || (s.country !== country && (!delegateId || s.delegateId !== delegateId)));
+    return {
+      kind: 'moderated',
+      speaker: country ? { country, delegateId } : null,
+      queue,
+      clock: row ? { base: c.speakerTimeRemaining, startedAt: c.speakerStartedAt } : null,
+    };
+  }
+  if (c.phase === 'unmoderated-caucus') {
+    return { kind: 'unmoderated', speaker: null, queue: [], clock: null };
+  }
+  const cs = c.currentSpeaker;
+  return {
+    kind: 'gsl',
+    speaker: cs ? { country: cs.country, delegateId: cs.delegateId } : null,
+    queue: cs ? c.speakersList.filter((s) => s.delegateId !== cs.delegateId) : c.speakersList,
+    clock: cs ? { base: c.speakerTimeRemaining, startedAt: c.speakerStartedAt } : null,
+  };
+}
+
+/** 'speaking', a 1-based place in the relevant queue, or null. */
+function placeOf(floor: FloorModel, delegate: Committee['delegates'][0]): 'speaking' | number | null {
+  const sp = floor.speaker;
+  if (sp && (sp.delegateId === delegate.id || (!sp.delegateId && sp.country === delegate.country))) return 'speaking';
+  const i = floor.queue.findIndex((s) => s.delegateId === delegate.id);
+  return i >= 0 ? i + 1 : null;
+}
+
+// ── Clocks: isolated, so only the digits re-render (RULES 3 and 6b) ─────────
+// Each reads the anchor on the database clock (serverNow, via the *RemainingNow
+// helpers). Nothing is written, and the page itself never re-renders per second.
+function useLiveSeconds(read: () => number, running: boolean, deps: unknown[]): number {
+  const [value, setValue] = useState(() => read());
+  useEffect(() => {
+    setValue(read());
+    if (!running) return;
+    const id = setInterval(() => setValue(read()), 500);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, ...deps]);
+  return value;
+}
+
+function SpeakerCountdown({ base, startedAt, size = 40 }: { base: number; startedAt: string | null; size?: number }) {
+  const t = useT();
+  const secs = useLiveSeconds(() => speakerRemainingNow(base, startedAt), !!startedAt, [base, startedAt]);
+  const low = secs <= 10;
+  return (
+    <div className="flex flex-col items-center" aria-live="off">
+      <span
+        className="font-black tabular-nums leading-none"
+        style={{ fontFamily: FONT, fontSize: size, color: low ? K.amber : K.ivory, letterSpacing: '-0.02em' }}
+        aria-label={t('advisor_room_time_left', { time: formatTime(secs) })}
+      >
+        {formatTime(secs)}
+      </span>
+      {!startedAt && (
+        <span className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold" style={{ color: 'rgba(238,217,138,0.7)' }}>
+          <Pause size={11} strokeWidth={2.6} aria-hidden /> {t('advisor_room_paused')}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function CaucusCountdown({ caucus, moderated, speakerBase, speakerStartedAt, children }: {
+  caucus: CaucusState | null;
+  moderated: boolean;
+  speakerBase: number;
+  speakerStartedAt: string | null;
+  children: (secs: number) => ReactNode;
+}) {
+  const anchor = caucus?.totalStartedAt ?? null;
+  const base = caucus?.remainingTime ?? null;
+  const secs = useLiveSeconds(() => {
+    if (base === null) return 0;
+    const pair = { remainingTime: base, totalStartedAt: anchor } as CaucusState;
+    return moderated
+      ? moderatedCaucusRemainingNow(pair, speakerBase, speakerStartedAt)
+      : caucusRemainingNow(pair);
+  }, !!anchor, [anchor, base, moderated, speakerBase, speakerStartedAt]);
+  return <>{children(secs)}</>;
+}
+
+// ── Delegation cards ─────────────────────────────────────────────────────────
+function statusWord(t: ReturnType<typeof useT>, status: Committee['delegates'][0]['status']) {
+  return status === 'present' ? t('delegate_status_present')
+    : status === 'present-voting' ? t('delegate_status_pv')
+    : t('delegate_status_absent');
+}
+
 function ExpandedDelegateCard({
   delegate,
   committee,
+  floor,
   onClose,
 }: {
   delegate: Committee['delegates'][0];
   committee: Committee;
+  floor: FloorModel;
   onClose: () => void;
 }) {
   const { language } = useLanguage();
@@ -60,38 +193,34 @@ function ExpandedDelegateCard({
   const chatDisabled = getCommitteeFlags(committee).disableChat;
   const [nudgeSent, setNudgeSent] = useState<string | null>(null);
 
-  const queueIndex = committee.speakersList.findIndex((s) => s.delegateId === delegate.id);
-  const isCurrentSpeaker = committee.currentSpeaker?.delegateId === delegate.id;
+  const place = placeOf(floor, delegate);
+  const inCaucus = floor.kind === 'moderated';
 
   const lastMotion = [...(committee.pendingMotions ?? [])].reverse().find(
     (m) => m.proposedBy === delegate.country &&
       (m.type as string) !== 'gsl-request' && (m.type as string) !== 'join-request'
   );
 
-  const statusLabel =
-    delegate.status === 'present' ? t('delegate_status_present') :
-    delegate.status === 'present-voting' ? t('delegate_status_pv') : t('delegate_status_absent');
-
   const statusColor =
-    delegate.status === 'present' ? '#3D7A52' :
-    delegate.status === 'present-voting' ? '#1B3828' :
-    '#9A8A78';
-
-  const flagEl = <SeatFlag seat={delegate} style={{ width: '96px', height: '68px', objectFit: 'cover', borderRadius: '10px', border: '1.5px solid rgba(28,20,16,0.10)' }} fallback={null} />;
+    delegate.status === 'present' ? K.moss :
+    delegate.status === 'present-voting' ? K.forest :
+    K.inkSoft;
 
   const handleNudge = (nudgeKey: string) => {
     if (chatDisabled) return;   // belt-and-braces: the buttons are not rendered either
-    const msg = t(nudgeKey as any);
+    const msg = t(nudgeKey as Parameters<typeof t>[0]);
     sendMessageDB(committee.id, 'Faculty Advisor', msg, committee.code, undefined, true, delegate.country);
     setNudgeSent(msg);
     setTimeout(() => setNudgeSent(null), 1500);
   };
 
   let queueDisplay: string;
-  if (isCurrentSpeaker) {
+  if (place === 'speaking') {
     queueDisplay = t('advisor_currently_speaking');
-  } else if (queueIndex >= 0) {
-    queueDisplay = t('advisor_next_up').replace('{n}', String(queueIndex + 1));
+  } else if (typeof place === 'number') {
+    queueDisplay = inCaucus
+      ? t('advisor_room_caucus_next', { n: place })
+      : t('advisor_next_up').replace('{n}', String(place));
   } else {
     queueDisplay = t('advisor_not_in_queue');
   }
@@ -115,66 +244,72 @@ function ExpandedDelegateCard({
 
   return (
     <div
-      className="relative bg-[#EDE7D8] border border-[#1B3828]/60 rounded-2xl p-6 flex flex-col gap-4 transition-all duration-200"
+      className="relative rounded-3xl p-5 sm:p-6 flex flex-col gap-4"
+      style={{ backgroundColor: K.surface, boxShadow: `inset 0 0 0 1.5px rgba(27,56,40,0.28), ${CARD_SHADOW}` }}
       onClick={(e) => e.stopPropagation()}
     >
       <button
+        type="button"
         onClick={onClose}
-        className="absolute top-3 right-3 text-[#9A8A78] hover:text-[#1C1410] text-xl leading-none"
-        aria-label="Close"
+        className={`absolute top-3 end-3 flex h-10 w-10 items-center justify-center rounded-full ${FOCUS}`}
+        style={{ color: K.inkSoft }}
+        aria-label={t('advisor_room_close')}
+        title={t('advisor_room_close')}
       >
-        ×
+        <X size={20} strokeWidth={2.2} />
       </button>
 
-      <div className="flex flex-col items-center gap-2 pt-2">
-        {flagEl}
-        <h2 className="text-3xl font-black text-center" style={{ color: '#1C1410' }}>{getCountryDisplayName(delegate.country, language)}</h2>
-        <span className="text-sm font-bold" style={{ color: statusColor }}>{statusLabel}</span>
+      <div className="flex flex-col items-center gap-2 pt-1">
+        <SeatCircleFlag seat={delegate} size={88} style={{ boxShadow: '0 4px 14px rgba(27,56,40,0.18)' }} loading="eager" />
+        <h2 className="text-[26px] sm:text-3xl font-black text-center leading-tight" style={{ color: K.ink, textWrap: 'balance' }}>
+          {getCountryDisplayName(delegate.country, language)}
+        </h2>
+        <span className="text-sm font-bold" style={{ color: statusColor }}>{statusWord(t, delegate.status)}</span>
       </div>
 
-      <div className="space-y-3 w-full">
-        <div className="bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3">
-          <p className="text-xs text-[#9A8A78] font-mono uppercase tracking-wider mb-1">{t('advisor_last_motion')}</p>
-          <p className="text-sm text-[#1C1410]">{motionDisplay}</p>
+      <dl className="grid w-full gap-2 sm:grid-cols-2">
+        <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(27,56,40,0.05)' }}>
+          <dt className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: K.inkSoft }}>{t('advisor_last_motion')}</dt>
+          <dd className="text-sm" style={{ color: K.ink }}>{motionDisplay}</dd>
         </div>
-
-        <div className="bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3">
-          <p className="text-xs text-[#9A8A78] font-mono uppercase tracking-wider mb-1">{t('advisor_queue_position')}</p>
-          <p className="text-sm text-[#1C1410]">{queueDisplay}</p>
+        <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(27,56,40,0.05)' }}>
+          <dt className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: K.inkSoft }}>
+            {inCaucus ? t('advisor_room_caucus_position') : t('advisor_queue_position')}
+          </dt>
+          <dd className="text-sm inline-flex items-center gap-1.5" style={{ color: K.ink }}>
+            {place === 'speaking' && <Mic size={14} strokeWidth={2.4} color={K.goldDeep} aria-hidden />}
+            {queueDisplay}
+          </dd>
         </div>
-      </div>
+      </dl>
 
       {/* Nudges are chat messages under the hood. When the Moderator disables chat the
           delegate can still receive them but has no way to answer, so the whole
           affordance is replaced by a short explanation. */}
       {chatDisabled ? (
-        <div className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9A8A78" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h9" />
-            <line x1="2" y1="2" x2="22" y2="22" />
-          </svg>
-          <p className="text-xs" style={{ color: '#9A8A78' }}>Nudges are off — the Moderator has disabled chat for this committee.</p>
+        <div className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl" style={{ backgroundColor: 'rgba(27,56,40,0.05)' }}>
+          <MessageSquareOff size={15} strokeWidth={2} color={K.inkSoft} className="shrink-0" aria-hidden />
+          <p className="text-xs" style={{ color: K.inkSoft }}>{t('advisor_room_nudges_off')}</p>
         </div>
       ) : (
       <div className="flex flex-col items-center">
-        <p className="text-xs font-mono uppercase tracking-wider mb-2" style={{ color: '#9A8A78' }}>{t('advisor_send_nudge')}</p>
+        <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: K.inkSoft }}>{t('advisor_send_nudge')}</p>
         <div className="flex gap-2 flex-wrap justify-center">
           {NUDGE_KEYS.map((nudgeKey) => (
             <button
               key={nudgeKey}
+              type="button"
               onClick={() => handleNudge(nudgeKey)}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold transition-colors focus:outline-none"
-              style={{ backgroundColor: 'transparent', border: '1px solid #DDD4C0', color: '#1B3828' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+              className={`min-h-[40px] px-3.5 py-2 rounded-xl text-[13px] font-bold transition-colors bg-[rgba(27,56,40,0.06)] text-[#1B3828] hover:bg-[#1B3828] hover:text-[#EED98A] active:scale-[0.97] ${FOCUS}`}
+              style={{ boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.14)' }}
             >
-              {t(nudgeKey as any)}
+              {t(nudgeKey)}
             </button>
           ))}
         </div>
-        {nudgeSent && (
-          <p className="text-xs font-semibold mt-2" style={{ color: '#1B3828' }}>{t('advisor_nudge_sent').replace('{msg}', nudgeSent ?? '')}</p>
-        )}
+        <p className="text-xs font-semibold mt-2 min-h-[16px]" style={{ color: K.forest }} aria-live="polite">
+          {nudgeSent ? t('advisor_nudge_sent').replace('{msg}', nudgeSent) : ''}
+        </p>
       </div>
       )}
     </div>
@@ -189,66 +324,65 @@ function CollapsedDelegateCard({
   onSelect: () => void;
 }) {
   const { language } = useLanguage();
-  const flagEl = <SeatFlag seat={delegate} style={{ width: '36px', height: '26px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)' }} fallback={null} />;
-
+  const name = getCountryDisplayName(delegate.country, language);
   return (
     <button
+      type="button"
       onClick={onSelect}
-      className="flex flex-col items-center gap-1 w-20 h-20 justify-center rounded-xl transition-all duration-200 shrink-0 focus:outline-none gv-lift"
-      style={{ backgroundColor: '#1B3828', border: '2px solid transparent' }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-      title={delegate.country}
+      className={`flex flex-col items-center gap-1.5 w-full py-3 px-1 rounded-2xl transition-colors hover:bg-[rgba(27,56,40,0.08)] ${FOCUS}`}
+      title={name}
     >
-      {flagEl}
-      <span className="text-[9px] truncate max-w-full px-1 leading-tight" style={{ color: '#EDE7D8' }}>{getCountryDisplayName(delegate.country, language)}</span>
+      <SeatCircleFlag seat={delegate} size={40} decorative />
+      <span className="text-[11px] font-semibold leading-tight text-center line-clamp-2 w-full" style={{ color: K.ink }}>{name}</span>
     </button>
   );
 }
 
-function NormalDelegateCard({ delegate, committee, onSelect }: { delegate: Committee['delegates'][0]; committee: Committee; onSelect: () => void }) {
+function NormalDelegateCard({ delegate, floor, onSelect }: { delegate: Committee['delegates'][0]; floor: FloorModel; onSelect: () => void }) {
   const { language } = useLanguage();
   const t = useT();
-  const queueIndex = committee.speakersList.findIndex((s) => s.delegateId === delegate.id);
-  const isCurrentSpeaker = committee.currentSpeaker?.delegateId === delegate.id;
-  const statusLabel =
-    delegate.status === 'present' ? 'P' :
-    delegate.status === 'present-voting' ? 'P+V' : 'A';
-
-  const statusLabelColor =
-    delegate.status === 'present' ? '#EED98A' :
-    delegate.status === 'present-voting' ? '#B8844A' :
-    'rgba(237,231,216,0.4)';
-
+  const place = placeOf(floor, delegate);
+  const absent = delegate.status === 'absent';
   return (
-    <div
-      className="rounded-xl transition-all duration-200 cursor-pointer"
-      style={{
-        backgroundColor: '#1B3828',
-        border: '2px solid transparent',
-      }}
+    <button
+      type="button"
       onClick={onSelect}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+      className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-start transition-[transform,box-shadow] hover:-translate-y-px active:scale-[0.99] ${FOCUS}`}
+      style={{
+        backgroundColor: K.surface,
+        boxShadow: place === 'speaking' ? `inset 0 0 0 2px ${K.goldDeep}, ${CARD_SHADOW}` : CARD_SHADOW,
+      }}
     >
-      <div className="flex items-center gap-3 px-3 py-3">
-        <SeatFlag
-          seat={delegate}
-          style={{ width: '32px', height: '22px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(28,20,16,0.15)', flexShrink: 0 }}
-          fallback={<div style={{ width: '32px', height: '22px', borderRadius: '4px', backgroundColor: 'rgba(255,255,255,0.1)', flexShrink: 0 }} />}
-        />
-        <span className="flex-1 text-sm font-bold truncate" style={{ color: '#EDE7D8' }}>{getCountryDisplayName(delegate.country, language)}</span>
-        {isCurrentSpeaker && (
-          <span className="text-[10px] font-black px-2 py-0.5 rounded-full shrink-0" style={{ backgroundColor: '#EED98A', color: '#1B3828' }}>{t('advisor_speaking_badge')}</span>
-        )}
-        {!isCurrentSpeaker && queueIndex >= 0 && (
-          <span className="text-xs font-medium shrink-0" style={{ color: 'rgba(237,231,216,0.7)' }}>{t('advisor_queue_position_display').replace('{n}', String(queueIndex + 1))}</span>
-        )}
-        <span className="text-xs font-black shrink-0" style={{ color: statusLabelColor }}>{statusLabel}</span>
+      <SeatCircleFlag seat={delegate} size={38} decorative />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[15px] font-bold" style={{ color: K.ink }}>{getCountryDisplayName(delegate.country, language)}</span>
+        <span className="block truncate text-xs" style={{ color: absent ? 'rgba(84,75,62,0.8)' : K.inkSoft }}>{statusWord(t, delegate.status)}</span>
+      </span>
+      {place === 'speaking' ? (
+        <span className="inline-flex shrink-0 items-center gap-1 text-xs font-bold" style={{ color: K.goldDeep }}>
+          <Mic size={14} strokeWidth={2.5} aria-hidden /> {t('advisor_room_speaking')}
+        </span>
+      ) : typeof place === 'number' ? (
+        <span className="shrink-0 text-sm font-black tabular-nums" style={{ color: K.forest }}>{t('advisor_room_queue_short', { n: place })}</span>
+      ) : null}
+    </button>
+  );
+}
+
+// ── Plain full-screen notices (access, errors) ───────────────────────────────
+function Notice({ title, body, children, role }: { title: string; body?: string; children?: ReactNode; role?: 'alert' }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center px-6" style={{ backgroundColor: K.page, fontFamily: FONT }}>
+      <div className="text-center max-w-sm" role={role}>
+        <h1 className="text-2xl font-black mb-2" style={{ color: K.forest, textWrap: 'balance' }}>{title}</h1>
+        {body && <p className="mb-6" style={{ color: K.inkSoft, textWrap: 'pretty' }}>{body}</p>}
+        <div className="flex flex-wrap items-center justify-center gap-2">{children}</div>
       </div>
     </div>
   );
 }
+const PRIMARY_BTN = `inline-flex items-center gap-2 font-bold text-[#EED98A] px-5 py-3 rounded-xl transition-colors active:scale-[0.97] ${FOCUS}`;
+const GHOST_BTN = `inline-flex items-center gap-2 font-bold px-5 py-3 rounded-xl transition-colors active:scale-[0.97] ${FOCUS}`;
 
 const isAdvisorAccessKind = (kind: ConferenceAccess['kind']) => kind === 'advisor' || kind === 'organizer';
 
@@ -265,34 +399,6 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
   // The initial room read failed (after its retries): an inline Retry, never "not found".
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
-
-  // Live seconds on the TOTAL caucus clock. This view used to render
-  // `caucus.remainingTime` raw, with no interval at all — but that field is only the value
-  // AT `caucus.totalStartedAt`, so the advisor watched a dead clock that jumped whenever a
-  // chair happened to write, and disagreed with both the chair and the delegates the rest of
-  // the time. Re-derived from the anchor each second (never decremented), so a backgrounded
-  // tab catches up on wake instead of drifting.
-  const [caucusSeconds, setCaucusSeconds] = useState(0);
-  const advisorCaucusAnchor = committee?.caucus?.totalStartedAt ?? null;
-  const advisorCaucusBase = committee?.caucus?.remainingTime ?? null;
-  // Moderated caucus: the total stops with the speaker clock (moderatedCaucusRemainingNow).
-  const advisorIsModerated = committee?.phase === 'moderated-caucus';
-  const advisorSpeakerBase = committee?.speakerTimeRemaining ?? 0;
-  const advisorSpeakerStartedAt = committee?.speakerStartedAt ?? null;
-  useEffect(() => {
-    const read = () => {
-      const pair = advisorCaucusBase === null
-        ? null
-        : ({ remainingTime: advisorCaucusBase, totalStartedAt: advisorCaucusAnchor } as Committee['caucus']);
-      return advisorIsModerated
-        ? moderatedCaucusRemainingNow(pair, advisorSpeakerBase, advisorSpeakerStartedAt)
-        : caucusRemainingNow(pair);
-    };
-    setCaucusSeconds(read());
-    if (!advisorCaucusAnchor) return;   // null anchor IS the paused signal
-    const id = setInterval(() => setCaucusSeconds(read()), 1000);
-    return () => clearInterval(id);
-  }, [advisorCaucusAnchor, advisorCaucusBase, advisorIsModerated, advisorSpeakerBase, advisorSpeakerStartedAt]);
 
   // Live / Reconnecting / Offline, fed by the session sync below (R-4).
   const [connection, setConnection] = useState<ConnectionState>('reconnecting');
@@ -359,45 +465,45 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
     return () => { cancelled = true; unsub?.(); };
   }, [code, loadAttempt]);
 
+  const upper = code.toUpperCase();
+  const followHref = `/advisor?add=${encodeURIComponent(upper)}`;
+
   if (accessState === 'signin') {
     return (
-      <div className="min-h-screen flex items-center justify-center px-6" style={{ backgroundColor: '#EDE7D8' }}>
-        <div className="text-center max-w-sm">
-          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>Sign in to view this session</h1>
-          <p className="mb-6" style={{ color: '#6A5A4A' }}>This is a conference session. Sign in to verify your access.</p>
-          <button type="button" onClick={() => openAuth()} className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>SIGN IN</button>
-        </div>
-      </div>
+      <Notice title={t('advisor_room_signin_title')} body={t('advisor_room_signin_body')}>
+        <button type="button" onClick={() => openAuth()} className={PRIMARY_BTN} style={{ backgroundColor: K.forest }}>
+          <LogIn size={17} strokeWidth={2.4} aria-hidden /> {t('advisor_room_signin_cta')}
+        </button>
+      </Notice>
     );
   }
 
   if (accessState === 'denied') {
+    // Anyone may follow a conference room by code, read only, on their board (owner,
+    // 24 Sep 2026). This detailed view (which can nudge) stays with the conference team.
     return (
-      <div className="min-h-screen flex items-center justify-center px-6" style={{ backgroundColor: '#EDE7D8' }}>
-        <div className="text-center max-w-sm">
-          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>Not associated with your account</h1>
-          <p className="mb-6" style={{ color: '#6A5A4A' }}>The advisor view is for advisors, observers, and organizers of this conference. Please contact your conference organisers.</p>
-          <Link href="/sessions" className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>BACK TO HOME</Link>
-        </div>
-      </div>
+      <Notice title={t('advisor_room_denied_title')} body={t('advisor_room_denied_body')}>
+        <Link href={followHref} className={PRIMARY_BTN} style={{ backgroundColor: K.forest }}>
+          <Plus size={17} strokeWidth={2.6} aria-hidden /> {t('advisor_room_follow')}
+        </Link>
+        <Link href="/sessions" className={GHOST_BTN} style={{ color: K.forest, backgroundColor: 'rgba(27,56,40,0.06)' }}>
+          {t('advisor_room_home')}
+        </Link>
+      </Notice>
     );
   }
 
   if (accessState === 'error') {
     return (
-      <div className="min-h-screen flex items-center justify-center px-6" style={{ backgroundColor: '#EDE7D8' }}>
-        <div className="text-center max-w-sm" role="alert">
-          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>{t('session_access_error_title')}</h1>
-          <p className="mb-6" style={{ color: '#6A5A4A' }}>{t('session_access_error_body')}</p>
-          <button onClick={advisorAccess.retry} className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>{t('delegate_seat_retry')}</button>
-        </div>
-      </div>
+      <Notice title={t('session_access_error_title')} body={t('session_access_error_body')} role="alert">
+        <button type="button" onClick={advisorAccess.retry} className={PRIMARY_BTN} style={{ backgroundColor: K.forest }}>{t('delegate_seat_retry')}</button>
+      </Notice>
     );
   }
 
   if (loading || authLoading || accessState === 'checking') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: '#EDE7D8' }}>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: K.page }}>
         <style>{`
           @keyframes gavel-strike {
             0%   { transform: rotate(-30deg); }
@@ -407,87 +513,84 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
             100% { transform: rotate(-30deg); }
           }
           .gavel-anim { animation: gavel-strike 1s ease-in-out infinite; transform-origin: 85% 85%; }
+          @media (prefers-reduced-motion: reduce) { .gavel-anim { animation: none; } }
         `}</style>
-        <svg className="gavel-anim" width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg className="gavel-anim" width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
           <rect x="38" y="38" width="8" height="28" rx="3" transform="rotate(-45 38 38)" fill="#1B3828" />
           <rect x="8" y="14" width="36" height="16" rx="5" transform="rotate(-45 8 14)" fill="#B6871F" />
           <rect x="10" y="16" width="36" height="7" rx="3" transform="rotate(-45 10 16)" fill="#6A5A4A" opacity="0.4" />
           <circle cx="56" cy="56" r="3" fill="#1B3828" opacity="0.5" />
         </svg>
-        <p className="text-[#9A8A78] text-sm font-mono tracking-widest">LOADING…</p>
+        <p className="text-sm font-semibold" style={{ color: K.inkSoft, fontFamily: FONT }}>{t('advisor_room_loading')}</p>
       </div>
     );
   }
 
   if (!committee && loadFailed) {
     return (
-      <div className="min-h-screen bg-[#F6F1E9] flex items-center justify-center px-6">
-        <div className="text-center max-w-sm" role="alert">
-          <p className="text-[#1C1410] text-xl font-bold mb-6">{t('session_load_failed')}</p>
-          <button
-            onClick={() => { setLoadFailed(false); setLoading(true); setLoadAttempt((n) => n + 1); }}
-            className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none"
-            style={{ backgroundColor: '#1B3828' }}
-          >
-            {t('delegate_seat_retry')}
-          </button>
-        </div>
-      </div>
+      <Notice title={t('session_load_failed')} role="alert">
+        <button
+          type="button"
+          onClick={() => { setLoadFailed(false); setLoading(true); setLoadAttempt((n) => n + 1); }}
+          className={PRIMARY_BTN}
+          style={{ backgroundColor: K.forest }}
+        >
+          {t('delegate_seat_retry')}
+        </button>
+      </Notice>
     );
   }
 
   if (!committee) {
     return (
-      <div className="min-h-screen bg-[#F6F1E9] flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-[#1C1410] text-xl font-bold mb-4">{t('advisor_not_found')}</p>
-          <Link href="/join" className="bg-[#1B3828] text-white px-6 py-3 rounded-xl font-semibold">{t('advisor_join_page')}</Link>
-        </div>
-      </div>
+      <Notice title={t('advisor_not_found')}>
+        <Link href="/join" className={PRIMARY_BTN} style={{ backgroundColor: K.forest }}>{t('advisor_join_page')}</Link>
+        <Link href="/advisor" className={GHOST_BTN} style={{ color: K.forest, backgroundColor: 'rgba(27,56,40,0.06)' }}>{t('advisor_room_back_board')}</Link>
+      </Notice>
     );
   }
+
+  const localizedName = getCommitteeDisplayName(committee.name, language);
+  const acronym = deriveCommitteeAcronym(committee.name);
+  const headline = committeeDisplayName(localizedName, acronym);
+  const showFullName = headline !== localizedName;
 
   const isAdjourned = committee.phase === 'adjourned' && !!committee.suspendedAt && !committee.endedAt;
 
   if (isAdjourned) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center text-center px-8" style={{ backgroundColor: '#EDE7D8' }}>
-        <div className="pointer-events-none fixed inset-0 z-0" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
-        <p className="text-xs font-mono font-bold tracking-widest mb-2 relative z-10" style={{ color: '#1B3828' }}>{getCommitteeDisplayName(committee.name, language)} · {committee.code}</p>
-        <h1 className="text-5xl font-black mb-4 tracking-wide relative z-10" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>{t('advisor_adjourned_title')}</h1>
-        <p className="text-lg relative z-10" style={{ color: '#6A5A4A' }}>{t('advisor_adjourned_desc')}</p>
-        <p className="text-xs mt-8 relative z-10" style={{ color: '#9A8A78' }}>{t('advisor_adjourned_esc')}</p>
+      <div className="min-h-screen flex flex-col items-center justify-center text-center px-8" style={{ backgroundColor: K.page, fontFamily: FONT }}>
+        <div className="pointer-events-none fixed inset-0 z-0" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
+        <p className="text-sm font-bold mb-2 relative z-10" style={{ color: K.forest }}>{headline} · <span className="tabular-nums">{committee.code}</span></p>
+        <h1 className="text-4xl sm:text-5xl font-black mb-4 relative z-10" style={{ color: K.forest, textWrap: 'balance' }}>{t('advisor_adjourned_title')}</h1>
+        <p className="text-lg relative z-10" style={{ color: K.inkSoft }}>{t('advisor_adjourned_desc')}</p>
+        <Link href="/advisor" className={`${GHOST_BTN} mt-8 relative z-10`} style={{ color: K.forest, backgroundColor: 'rgba(27,56,40,0.06)' }}>
+          <ArrowLeft size={16} strokeWidth={2.4} className="rtl:-scale-x-100" aria-hidden /> {t('advisor_room_back_board')}
+        </Link>
       </div>
     );
   }
 
   const present = committee.delegates.filter((d) => d.status !== 'absent').length;
-
-  const isModeratedCaucus = committee.phase === 'moderated-caucus';
-  const isUnmoderatedCaucus = committee.phase === 'unmoderated-caucus';
-  const isCaucus = isModeratedCaucus || isUnmoderatedCaucus;
+  const floor = floorModel(committee);
 
   // Same DB-backed resolver the delegate page uses, so a chair's rename shows here
   // too — including for Suspend / End Debate, which no caucus record ever carries.
   const advisorMotionNames = motionNames(committee, language);
+  const unmodLabel = committee.caucus?.motionLabel
+    || (committee.caucus?.isConsultation ? advisorMotionNames.consultation : advisorMotionNames.unmoderated);
   const advisorPhaseDisplay = (() => {
     // Prefer the chair's (possibly renamed) motion label, synced to every device via the caucus record.
     if (committee.phase === 'moderated-caucus') return committee.caucus?.motionLabel || advisorMotionNames.moderated;
-    if (committee.phase === 'unmoderated-caucus') return committee.caucus?.motionLabel || advisorMotionNames.unmoderated;
+    if (committee.phase === 'unmoderated-caucus') return unmodLabel;
+    if (committee.endedAt) return t('advisor_room_phase_ended');
+    if (committee.phase === 'pre-session') return t('advisor_room_phase_roll_call');
+    if (committee.phase === 'speakers-list') return t('advisor_room_phase_gsl');
+    if (committee.phase === 'voting') return t('advisor_room_phase_voting');
     return committee.phase.replace(/-/g, ' ');
   })();
 
-  const caucus = committee.caucus as {
-    type: string;
-    purpose?: string;
-    totalTime: number;
-    remainingTime: number;
-    speakingTime: number;
-    speakerTimeRemaining: number;
-    currentSpeaker: string | null;
-  } | null;
-
-  const displayQueue = isCaucus ? (committee.caucusQueue ?? []) : committee.speakersList;
+  const caucus = committee.caucus;
 
   const sortedDelegates = [...committee.delegates].sort((a, b) => compareCountryNames(a.country, b.country, language));
   const selectedDelegate = selectedCountry
@@ -497,153 +600,186 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
     ? sortedDelegates.filter((d) => d.country !== selectedCountry)
     : sortedDelegates;
 
+  const rule = { borderBottom: `1px solid ${K.line}` };
+  const eyebrow = 'text-[11px] font-bold uppercase tracking-[0.12em]';
+
   return (
     <FitToScreen>
     <SeatArtProvider delegates={committee.delegates}>
-    <div className="h-full w-full flex flex-col overflow-hidden" style={{ backgroundColor: '#EDE7D8' }}>
+    <div className="h-full w-full flex flex-col overflow-hidden" style={{ backgroundColor: K.page, fontFamily: FONT }}>
       <ConnectionPill state={connection} />
-      <div className="pointer-events-none fixed inset-0 z-0" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
+      <div className="pointer-events-none fixed inset-0 z-0" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
       {/* Header */}
-      <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-3 shrink-0 relative z-[2]">
-        <Link href="/sessions">
-          <img src="/GavellingLogo.png" alt="Gavelling" className="w-[150px] h-auto max-h-9 object-contain" onError={(e)=>{(e.target as HTMLImageElement).style.display="none"}} />
+      <header className="px-3 sm:px-4 h-12 flex items-center gap-2 sm:gap-3 shrink-0 relative z-[2]" style={{ backgroundColor: K.surface, boxShadow: '0 1px 0 rgba(27,56,40,0.10)' }}>
+        <Link
+          href="/advisor"
+          className={`inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-2 text-[13px] font-bold ${FOCUS}`}
+          style={{ color: K.forest }}
+        >
+          <ArrowLeft size={17} strokeWidth={2.4} className="rtl:-scale-x-100" aria-hidden />
+          <span className="hidden sm:inline">{t('advisor_room_back_board')}</span>
+          <span className="sm:hidden">{t('advisor_room_back_board_short')}</span>
         </Link>
         <span className="flex-1" />
-        <span className="text-xs px-2 py-1 bg-[#DDD4C0] text-[#6A5A4A] rounded-lg shrink-0">{t('advisor_readonly_badge')}</span>
-        <span className="text-xs font-mono bg-[#DDD4C0] text-[#1C1410] px-2.5 py-1 rounded-lg shrink-0">{committee.code}</span>
+        <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: K.inkSoft }} title={t('advisor_readonly_badge')}>
+          <Eye size={15} strokeWidth={2.2} aria-hidden /> {t('advisor_room_read_only')}
+        </span>
+        <span className="text-sm font-bold tabular-nums tracking-wider" style={{ color: K.ink }}>{committee.code}</span>
+        <Link
+          href={followHref}
+          className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-xl px-3 text-[13px] font-bold transition-colors bg-[#1B3828] text-[#EED98A] hover:bg-[#2A5A3C] ${FOCUS}`}
+        >
+          <Plus size={15} strokeWidth={2.6} aria-hidden />
+          <span className="hidden sm:inline">{t('advisor_room_follow')}</span>
+          <span className="sm:hidden">{t('advisor_room_follow_short')}</span>
+        </Link>
       </header>
 
-      {/* Stats bar removed — moved into left panel */}
-
       <div className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden relative z-[2]">
-        {/* Left: Current speaker + queue — forest green */}
-        <div className="w-full md:w-80 flex flex-col md:overflow-hidden md:shrink-0" style={{ backgroundColor: '#1B3828', borderRight: '1px solid #3D7A52' }}>
-          {/* Header — matches RollCallPanel style */}
-          <div className="px-4 pt-4 pb-3 shrink-0 relative z-10" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
-            <p className="text-lg font-black leading-tight truncate mb-0.5" style={{ color: '#EED98A' }}>{getCommitteeDisplayName(committee.name, language)}</p>
-            {committee.topic && (
-              <p className="text-xs leading-snug line-clamp-2 mb-2" style={{ color: 'rgba(238,217,138,0.55)' }}>
-                <span className="font-semibold" style={{ color: 'rgba(238,217,138,0.7)' }}>{t('advisor_topic_label')}</span>{committee.topic}
+        {/* Left: the room, the floor and the queue, forest */}
+        <div className="w-full md:w-80 flex flex-col md:overflow-hidden md:shrink-0" style={{ backgroundColor: K.forest }}>
+          <div className="px-4 pt-4 pb-3 shrink-0" style={rule}>
+            <p className="text-xl font-black leading-tight" style={{ color: K.gold }}>{headline}</p>
+            {showFullName && (
+              <p className="text-xs leading-snug mt-0.5" style={{ color: 'rgba(238,217,138,0.65)' }}>{localizedName}</p>
+            )}
+            {committee.topic && committee.topic !== 'TBD' && (
+              <p className="text-xs leading-snug line-clamp-2 mt-1.5" style={{ color: 'rgba(237,231,216,0.72)' }} title={committee.topic}>
+                <span className="font-bold" style={{ color: 'rgba(238,217,138,0.85)' }}>{t('advisor_topic_label')}</span>{committee.topic}
               </p>
             )}
-            {/* Pie charts — using MajorityPie component */}
-            <div className="flex items-center justify-between">
-              <div className="flex gap-1.5">
-                <MajorityPie arcFill={1} color="#2A5A3C" label={`${present}`} />
-                <MajorityPie arcFill={2/3} color="#B6871F" label={`${Math.ceil(present * 2 / 3)}`} />
-                <MajorityPie arcFill={0.5} color="#8A7A6A" label={`${Math.floor(present / 2) + 1}`} />
-              </div>
-              <span className="text-xs font-black capitalize px-2 py-1 rounded-lg" style={{ backgroundColor: 'rgba(238,217,138,0.12)', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif" }}>{advisorPhaseDisplay}</span>
-            </div>
-          </div>
-          {/* Now Speaking label */}
-          <div className="px-4 py-2.5 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
-            <p className="text-xs font-mono uppercase tracking-wider" style={{ color: 'rgba(238,217,138,0.5)' }}>
-              {isCaucus ? (caucus?.type === 'moderated' ? t('advisor_caucus_speaker') : t('advisor_caucus_label')) : t('advisor_now_speaking_gsl')}
-            </p>
-          </div>
-
-          {/* Moderated caucus — show caucus current speaker */}
-          {isModeratedCaucus && (
-            caucus?.currentSpeaker ? (
-              <div className="flex flex-col items-center px-4 py-5 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
-                <SeatFlag country={caucus.currentSpeaker} style={{ width: '80px', height: '58px', objectFit: 'cover', borderRadius: '8px', border: '1.5px solid rgba(238,217,138,0.2)' }} fallback={null} />
-                <h2 className="text-2xl font-black mt-3 mb-1 text-center" style={{ color: '#EDE7D8' }}>{caucus.currentSpeaker}</h2>
-                <div className="text-lg font-bold mt-1" style={{ color: 'rgba(238,217,138,0.7)' }}>
-                  {t('view_is_speaking')}
+            {/* Counts as plain type: present, two-thirds, simple majority (observers counted,
+                as in the chair's sidebar). */}
+            <div className="mt-3 flex items-end gap-4">
+              {[
+                { n: present, w: t('advisor_room_present') },
+                { n: Math.ceil(present * 2 / 3), w: t('advisor_room_two_thirds') },
+                { n: Math.floor(present / 2) + 1, w: t('advisor_room_majority') },
+              ].map(({ n, w }) => (
+                <div key={w} className="min-w-0">
+                  <p className="text-2xl font-black tabular-nums leading-none" style={{ color: K.ivory }}>{n}</p>
+                  <p className="text-[11px] leading-tight mt-1" style={{ color: 'rgba(237,231,216,0.66)' }}>{w}</p>
                 </div>
-                {caucus.purpose && (
-                  <p className="text-xs mt-3 text-center" style={{ color: 'rgba(238,217,138,0.5)' }}>{caucus.purpose}</p>
-                )}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center px-4 py-5 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
-                <p className="text-sm text-center" style={{ color: 'rgba(237,231,216,0.5)' }}>{t('advisor_no_speaker')}</p>
-                {caucus?.purpose && (
-                  <p className="text-xs mt-2 text-center" style={{ color: 'rgba(238,217,138,0.4)' }}>{caucus.purpose}</p>
-                )}
-              </div>
-            )
-          )}
+              ))}
+            </div>
+            <p className={`${eyebrow} mt-3`} style={{ color: K.gold }}>{advisorPhaseDisplay}</p>
+          </div>
 
-          {/* Unmoderated caucus — show countdown + purpose */}
-          {isUnmoderatedCaucus && (
-            <div className="flex flex-col items-center px-4 py-5 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
-              {/* caucusSeconds, not caucus.remainingTime — see the derivation above. */}
-              <div className="text-5xl font-black font-mono tabular-nums" style={{ color: caucusSeconds <= 30 ? '#B8844A' : '#EDE7D8' }}>
-                {formatTime(caucusSeconds)}
-              </div>
-              <p className="text-xs mt-2 font-mono uppercase tracking-wider" style={{ color: 'rgba(238,217,138,0.5)' }}>
-                {committee.caucus?.motionLabel ||
-                 (caucus?.type === 'consultation' ? advisorMotionNames.consultation :
-                 caucus?.type === 'tour' ? advisorMotionNames.tour :
-                 advisorMotionNames.unmoderated)}
-              </p>
+          {/* The floor */}
+          {floor.kind === 'unmoderated' ? (
+            <div className="flex flex-col items-center px-4 py-5 shrink-0" style={rule}>
+              <CaucusCountdown caucus={caucus} moderated={false} speakerBase={0} speakerStartedAt={null}>
+                {(secs) => (
+                  <span className="text-5xl font-black tabular-nums leading-none" style={{ color: secs <= 30 ? K.amber : K.ivory }}>
+                    {formatTime(secs)}
+                  </span>
+                )}
+              </CaucusCountdown>
               {caucus?.purpose && (
-                <p className="text-sm mt-3 text-center" style={{ color: 'rgba(237,231,216,0.7)' }}>{caucus.purpose}</p>
+                <p className="text-sm mt-3 text-center" style={{ color: 'rgba(237,231,216,0.78)' }}>{caucus.purpose}</p>
               )}
-              {committee.caucus?.isConsultation && (
+              {caucus?.isConsultation && (
                 <div className="w-full mt-4">
                   <CowDelegationBoard committee={committee} />
                 </div>
               )}
             </div>
-          )}
-
-          {/* GSL — show currentSpeaker */}
-          {!isCaucus && (
-            committee.currentSpeaker ? (
-              <div className="flex flex-col items-center px-4 py-5 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
-                <SeatFlag country={committee.currentSpeaker.country} style={{ width: '80px', height: '58px', objectFit: 'cover', borderRadius: '8px', border: '1.5px solid rgba(238,217,138,0.2)' }} fallback={null} />
-                <h2 className="text-2xl font-black mt-3 mb-1 text-center" style={{ color: '#EDE7D8' }}>{getCountryDisplayName(committee.currentSpeaker.country, language)}</h2>
-                <div className="text-lg font-bold mt-1" style={{ color: 'rgba(238,217,138,0.7)' }}>
-                  {t('view_is_speaking')}
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center px-4 py-5 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
-                <p className="text-sm text-center" style={{ color: 'rgba(237,231,216,0.5)' }}>{t('advisor_no_current_speaker')}</p>
-              </div>
-            )
+          ) : (
+            <div className="flex flex-col items-center px-4 py-5 shrink-0" style={rule}>
+              <p className={`${eyebrow} mb-3`} style={{ color: 'rgba(238,217,138,0.7)' }}>
+                {floor.kind === 'moderated' ? t('advisor_caucus_speaker') : t('advisor_room_on_floor')}
+              </p>
+              {floor.speaker ? (
+                <>
+                  <SeatCircleFlag
+                    country={floor.speaker.country}
+                    size={88}
+                    ring={false}
+                    fallback="initials"
+                    monogramColors={SIDEBAR_MONOGRAM}
+                    style={{ boxShadow: `0 0 0 3px ${K.gold}, 0 6px 18px rgba(0,0,0,0.25)` }}
+                    loading="eager"
+                  />
+                  <h2 className="text-2xl font-black mt-3 text-center leading-tight" style={{ color: K.ivory, textWrap: 'balance' }}>
+                    {getCountryDisplayName(floor.speaker.country, language)}
+                  </h2>
+                  <p className="text-sm font-semibold mt-0.5 mb-3 inline-flex items-center gap-1.5" style={{ color: 'rgba(238,217,138,0.8)' }}>
+                    <Mic size={14} strokeWidth={2.4} aria-hidden /> {t('view_is_speaking')}
+                  </p>
+                  {floor.clock && <SpeakerCountdown base={floor.clock.base} startedAt={floor.clock.startedAt} />}
+                </>
+              ) : (
+                <p className="text-sm text-center" style={{ color: 'rgba(237,231,216,0.66)' }}>
+                  {floor.kind === 'moderated' ? t('advisor_no_speaker') : t('advisor_no_current_speaker')}
+                </p>
+              )}
+              {floor.kind === 'moderated' && (
+                <>
+                  <CaucusCountdown
+                    caucus={caucus}
+                    moderated
+                    speakerBase={committee.speakerTimeRemaining}
+                    speakerStartedAt={committee.speakerStartedAt}
+                  >
+                    {(secs) => (
+                      <p className="text-xs font-semibold tabular-nums mt-3" style={{ color: 'rgba(237,231,216,0.75)' }}>
+                        {t('advisor_room_caucus_left', { time: formatTime(secs) })}
+                      </p>
+                    )}
+                  </CaucusCountdown>
+                  {caucus?.purpose && (
+                    <p className="text-xs mt-2 text-center" style={{ color: 'rgba(238,217,138,0.66)' }}>{caucus.purpose}</p>
+                  )}
+                </>
+              )}
+            </div>
           )}
 
           {/* Queue */}
-          <div className="flex-1 overflow-y-auto">
-            <div className="px-4 py-2 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
-              <p className="text-xs font-mono uppercase tracking-wider" style={{ color: 'rgba(238,217,138,0.5)' }}>
-                {t('advisor_up_next').replace('{n}', String(displayQueue.length))}
+          <div className="md:flex-1 md:overflow-y-auto">
+            {floor.kind === 'unmoderated' ? (
+              <p className="px-4 py-4 text-sm leading-snug" style={{ color: 'rgba(237,231,216,0.72)' }}>
+                {caucus?.isConsultation ? t('advisor_room_no_queue_consult') : t('advisor_room_no_queue')}
               </p>
-            </div>
-            {displayQueue.length === 0 ? (
-              <div className="px-4 py-4 text-xs" style={{ color: 'rgba(237,231,216,0.4)' }}>{t('advisor_no_speakers_queued')}</div>
             ) : (
-              displayQueue.map((s, i) => {
-                return (
-                  <div key={s.delegateId} className="flex items-center gap-3 px-4 py-2.5" style={{ borderBottom: '1px solid rgba(61,122,82,0.2)' }}>
-                    <span className="text-xs font-mono w-5 shrink-0" style={{ color: 'rgba(238,217,138,0.5)' }}>{i + 1}</span>
-                    <SeatFlag country={s.country} style={{ width: '24px', height: '17px', objectFit: 'cover', borderRadius: '3px', border: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }} fallback={null} />
-                    <span className="text-sm flex-1 truncate font-semibold" style={{ color: '#EDE7D8' }}>{getCountryDisplayName(s.country, language)}</span>
-                  </div>
-                );
-              })
+              <>
+                <div className="px-4 py-2.5" style={rule}>
+                  <p className={eyebrow} style={{ color: 'rgba(238,217,138,0.7)' }}>
+                    {t('advisor_up_next').replace('{n}', String(floor.queue.length))}
+                  </p>
+                </div>
+                {floor.queue.length === 0 ? (
+                  <div className="px-4 py-4 text-sm" style={{ color: 'rgba(237,231,216,0.6)' }}>{t('advisor_no_speakers_queued')}</div>
+                ) : (
+                  <ol>
+                    {floor.queue.map((s, i) => (
+                      <li key={s.delegateId} className="flex items-center gap-3 px-4 py-2" style={{ borderBottom: '1px solid rgba(61,122,82,0.2)' }}>
+                        <span className="text-sm font-bold tabular-nums w-5 shrink-0 text-end" style={{ color: 'rgba(238,217,138,0.75)' }}>{i + 1}</span>
+                        <SeatCircleFlag country={s.country} size={28} ring={false} fallback="initials" monogramColors={SIDEBAR_MONOGRAM} decorative />
+                        <span className="text-[15px] flex-1 truncate font-semibold" style={{ color: K.ivory }}>{getCountryDisplayName(s.country, language)}</span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </>
             )}
           </div>
         </div>
 
-        {/* Right: All delegates grid */}
-        <main className="flex-1 overflow-y-auto p-4">
+        {/* Right: every delegation */}
+        <main className="md:flex-1 md:overflow-y-auto p-4">
           {selectedCountry === null ? (
             <>
-              <div className="mb-4 text-center">
-                <h2 className="text-2xl font-black tracking-wide" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>{t('advisor_all_delegates')}</h2>
-                <p className="text-sm mt-1" style={{ color: '#9A8A78' }}>{t('advisor_click_to_expand')}</p>
+              <div className="mb-4">
+                <h2 className="text-2xl font-black" style={{ color: K.ink }}>{t('advisor_room_all_delegations')}</h2>
+                <p className="text-sm mt-0.5" style={{ color: K.inkSoft }}>{t('advisor_room_tap_hint')}</p>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
                 {sortedDelegates.map((d) => (
                   <NormalDelegateCard
                     key={d.id}
                     delegate={d}
-                    committee={committee}
+                    floor={floor}
                     onSelect={() => setSelectedCountry(d.country)}
                   />
                 ))}
@@ -651,21 +787,22 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
             </>
           ) : (
             <div className="flex flex-col lg:flex-row gap-4">
-              <div className="w-full lg:w-1/2 lg:shrink-0 transition-all duration-200">
+              <div className="w-full lg:w-1/2 lg:shrink-0">
                 {selectedDelegate && (
                   <ExpandedDelegateCard
                     delegate={selectedDelegate}
                     committee={committee}
+                    floor={floor}
                     onClose={() => setSelectedCountry(null)}
                   />
                 )}
               </div>
 
-              <div className="flex-1 overflow-y-auto">
-                <p className="text-xs font-mono uppercase tracking-wider mb-3" style={{ color: '#1B3828', fontWeight: 700 }}>
-                  {t('advisor_other_delegates').replace('{n}', String(otherDelegates.length))}
+              <div className="flex-1 min-w-0">
+                <p className={`${eyebrow} mb-2`} style={{ color: K.forest }}>
+                  {t('advisor_room_other_delegations')} <span className="tabular-nums">{otherDelegates.length}</span>
                 </p>
-                <div className="grid gap-2 grid-cols-3 sm:grid-cols-5">
+                <div className="grid gap-1 grid-cols-3 sm:grid-cols-5">
                   {otherDelegates.map((d) => (
                     <CollapsedDelegateCard
                       key={d.id}

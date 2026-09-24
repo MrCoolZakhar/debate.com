@@ -14,7 +14,10 @@
 //   delegate  : per room with a conference_allocations row for the caller
 //               (lowest seat of a double delegation), with the allocated country
 //   advisor   : per live room of a conference where the caller has an accepted /
-//               assigned faculty-advisor application
+//               assigned / checked-in faculty-advisor application, with
+//               `students_in_room` (seats of the caller's society in that room).
+//               GROUPED HERE into ONE entry per conference ("Follow your
+//               delegation" -> /advisor, the Faculty Advisor board), 24 Sep 2026.
 //
 // Shared by the prompt (`LiveRoomsGate`, root layout) and the profile menu's
 // "Live now" section: one read per page load per account, re-read by the menu
@@ -67,11 +70,34 @@ export interface LiveConferenceInfo {
   inSessionCount: number;
 }
 
+/** A faculty advisor's conference with at least one live room: one entry, not one per room. */
+export interface LiveAdvisorInfo {
+  conferenceId: string;
+  conferenceName: string;
+  conferenceAcronym: string | null;
+  conferenceLogoUrl: string | null;
+  conferenceCountry: string | null;
+  conferenceSlug: string | null;
+  /** Live rooms of the conference. */
+  liveCount: number;
+  /** Seats of the advisor's own delegation (with a student) that sit in those live rooms. */
+  studentsLive: number;
+  /** The live rooms' session codes, so the standalone rejoin is not offered twice. */
+  sessionCodes: string[];
+}
+
 export type LiveEntry =
   | { role: 'organiser'; key: string; conference: LiveConferenceInfo }
   | { role: 'chair'; key: string; room: LiveRoomInfo }
   | { role: 'delegate'; key: string; room: LiveRoomInfo; countryName: string; countryCode: string | null; seat: number | null }
-  | { role: 'advisor'; key: string; room: LiveRoomInfo };
+  | { role: 'advisor'; key: string; conference: LiveAdvisorInfo };
+
+/** The session codes an entry stands for (none for an organiser). */
+export function entrySessionCodes(e: LiveEntry): string[] {
+  if (e.role === 'organiser') return [];
+  if (e.role === 'advisor') return e.conference.sessionCodes;
+  return [e.room.sessionCode];
+}
 
 type Row = Record<string, unknown>;
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null);
@@ -106,7 +132,9 @@ function roomFrom(r: Row): LiveRoomInfo | null {
   };
 }
 
-function entryFrom(r: Row): LiveEntry | null {
+type ParsedRow = LiveEntry | { role: 'advisor-room'; room: LiveRoomInfo; conferenceId: string; students: number };
+
+function entryFrom(r: Row): ParsedRow | null {
   const role = r.role;
   if (role === 'organiser') {
     const slug = str(r.conference_slug);
@@ -129,7 +157,12 @@ function entryFrom(r: Row): LiveEntry | null {
   const room = roomFrom(r);
   if (!room) return null;
   if (role === 'chair') return { role, key: `c:${room.sessionCode}`, room };
-  if (role === 'advisor') return { role, key: `a:${room.sessionCode}`, room };
+  if (role === 'advisor') {
+    // Grouped into one entry per conference by `groupAdvisorRows`. A row from
+    // before `conference_id` existed groups by the conference's slug / name.
+    const conferenceId = str(r.conference_id) ?? room.conferenceSlug ?? room.conferenceName;
+    return { role: 'advisor-room', room, conferenceId, students: num(r.students_in_room) };
+  }
   if (role === 'delegate') {
     const countryName = str(r.country_name);
     if (!countryName) return null;
@@ -140,6 +173,43 @@ function entryFrom(r: Row): LiveEntry | null {
     };
   }
   return null;
+}
+
+/**
+ * The advisor rows come one per live room; the prompt and the menu show ONE entry
+ * per conference, in the place of its first room, linking to the advisor board.
+ */
+function groupAdvisorRows(parsed: ParsedRow[]): LiveEntry[] {
+  const out: LiveEntry[] = [];
+  const byConf = new Map<string, Extract<LiveEntry, { role: 'advisor' }>>();
+  for (const p of parsed) {
+    if (p.role !== 'advisor-room') { out.push(p); continue; }
+    const existing = byConf.get(p.conferenceId);
+    if (existing) {
+      existing.conference.liveCount += 1;
+      existing.conference.studentsLive += p.students;
+      existing.conference.sessionCodes.push(p.room.sessionCode);
+      continue;
+    }
+    const entry: Extract<LiveEntry, { role: 'advisor' }> = {
+      role: 'advisor',
+      key: `a:${p.conferenceId}`,
+      conference: {
+        conferenceId: p.conferenceId,
+        conferenceName: p.room.conferenceName,
+        conferenceAcronym: p.room.conferenceAcronym,
+        conferenceLogoUrl: p.room.conferenceLogoUrl,
+        conferenceCountry: p.room.conferenceCountry,
+        conferenceSlug: p.room.conferenceSlug,
+        liveCount: 1,
+        studentsLive: p.students,
+        sessionCodes: [p.room.sessionCode],
+      },
+    };
+    byConf.set(p.conferenceId, entry);
+    out.push(entry);
+  }
+  return out;
 }
 
 /** Where each entry goes: exactly the path the join page takes after verification. */
@@ -156,7 +226,8 @@ export function liveEntryHref(e: LiveEntry): string {
       // the allocation's country NAME, locked.
       return `/delegate/${e.room.sessionCode}?country=${encodeURIComponent(e.countryName)}&locked=1`;
     case 'advisor':
-      return `/advisor/${e.room.sessionCode}`;
+      // The Faculty Advisor board: the whole delegation, every room, no code typed.
+      return '/advisor';
   }
 }
 
@@ -259,7 +330,7 @@ export async function fetchMyLiveRooms(accessToken: string): Promise<LiveEntry[]
   try {
     const { data, error } = await getAuthedClient(accessToken).rpc('my_live_rooms');
     if (error || !Array.isArray(data)) return null;
-    return (data as Row[]).map(entryFrom).filter((e): e is LiveEntry => !!e);
+    return groupAdvisorRows((data as Row[]).map(entryFrom).filter((e): e is ParsedRow => !!e));
   } catch {
     return null;
   }

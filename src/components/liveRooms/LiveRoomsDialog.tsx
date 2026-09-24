@@ -8,6 +8,8 @@
  * One entry = a full card in the role's own shape. Several = a compact list in
  * priority order (organiser, chair, delegate, advisor, then the standalone
  * rejoin on /sessions). No chair code is ever shown: only the session code.
+ * A faculty advisor gets ONE entry per conference ("Follow your delegation",
+ * /advisor), never one per room.
  */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -64,13 +66,14 @@ type T = ReturnType<typeof useT>;
 type Status = 'live' | 'ready' | 'suspended';
 
 function roomOf(item: PromptItem): LiveRoomInfo | null {
-  return item.role === 'chair' || item.role === 'delegate' || item.role === 'advisor' ? item.room : null;
+  return item.role === 'chair' || item.role === 'delegate' ? item.room : null;
 }
 
 export function emblemFor(item: PromptItem): string {
   const room = roomOf(item);
   if (room) return room.committeeLogoUrl || matchPresetEmblem(room.committeeName, room.committeeAbbreviation) || DEFAULT_EMBLEM;
   if (item.role === 'standalone') return matchPresetEmblem(item.name) || DEFAULT_EMBLEM;
+  if (item.role === 'advisor') return item.conference.conferenceLogoUrl || DEFAULT_EMBLEM;
   return DEFAULT_EMBLEM;
 }
 
@@ -97,7 +100,7 @@ export function actionLabel(item: PromptItem, t: T, long: boolean, presentChairs
       ? (long ? t('srp_join_cochair') : t('srp_menu_join'))
       : (long ? t('srp_start_session') : t('srp_menu_start'));
     case 'delegate': return t('srp_menu_join');
-    case 'advisor': return long ? t('srp_adv_open') : t('srp_menu_join');
+    case 'advisor': return long ? t('advconf_live_open') : t('srp_menu_open');
     case 'standalone': return t('srp_rejoin');
   }
 }
@@ -297,7 +300,7 @@ export default function LiveRoomsDialog({ items, displayName, avatarUrl, showAva
 
   const firstName = displayName.split(/\s+/)[0] ?? '';
   const single = items.length === 1 ? items[0] : null;
-  const withName = (key: 'srp_conf_title' | 'srp_org_title' | 'srp_deleg_title' | 'srp_adv_title', anon: 'srp_conf_title_anon' | 'srp_org_title_anon' | 'srp_deleg_title_anon' | 'srp_adv_title_anon') =>
+  const withName = (key: 'srp_conf_title' | 'srp_org_title' | 'srp_deleg_title' | 'advconf_live_title', anon: 'srp_conf_title_anon' | 'srp_org_title_anon' | 'srp_deleg_title_anon' | 'advconf_live_title_anon') =>
     firstName ? t(key).replace('{name}', firstName) : t(anon);
 
   let eyebrow = t('srp_live_eyebrow');
@@ -307,7 +310,7 @@ export default function LiveRoomsDialog({ items, displayName, avatarUrl, showAva
       case 'organiser': eyebrow = t('srp_org_eyebrow'); title = withName('srp_org_title', 'srp_org_title_anon'); break;
       case 'chair': eyebrow = t('srp_conf_eyebrow'); title = withName('srp_conf_title', 'srp_conf_title_anon'); break;
       case 'delegate': eyebrow = t('srp_conf_eyebrow'); title = withName('srp_deleg_title', 'srp_deleg_title_anon'); break;
-      case 'advisor': eyebrow = t('srp_adv_eyebrow'); title = withName('srp_adv_title', 'srp_adv_title_anon'); break;
+      case 'advisor': eyebrow = t('srp_adv_eyebrow'); title = withName('advconf_live_title', 'advconf_live_title_anon'); break;
       case 'standalone': eyebrow = t('srp_rejoin_eyebrow'); title = t('srp_rejoin_title'); break;
     }
   }
@@ -463,6 +466,38 @@ function SingleCard({ item, t, primaryRef, onGo, onClose, onForget }: ViewProps 
         </div>
       </div>
     );
+  } else if (item.role === 'advisor') {
+    // One card per conference: the advisor board follows every room at once.
+    const c = item.conference;
+    const primary = c.conferenceAcronym || c.conferenceName;
+    note = t('advconf_live_note');
+    hero = (
+      <div className="srp-hero">
+        <div className="relative shrink-0" style={{ width: 104, height: 104 }}>
+          <Emblem src={c.conferenceLogoUrl} label={primary} size={104} />
+          {c.conferenceCountry && (
+            <CircleFlag country={c.conferenceCountry} title={c.conferenceCountry} size={40} ring={false}
+              className="absolute" style={{ position: 'absolute', insetInlineEnd: -8, bottom: -6, boxShadow: BADGE_RING }} />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="srp-acronym" style={{ color: LR.forest }}>{primary}</p>
+          {primary !== c.conferenceName && <p style={{ fontSize: 13.5, color: LR.inkSoft, lineHeight: 1.3, marginTop: 2 }}>{c.conferenceName}</p>}
+          <div className="mt-3 flex items-end gap-6">
+            {c.studentsLive > 0 && (
+              <div>
+                <p className="srp-num" style={{ color: '#2F7A4A' }}>{c.studentsLive}</p>
+                <p style={{ fontSize: 12.5, color: LR.inkSoft, fontWeight: 600 }}>{t('advconf_live_students_label')}</p>
+              </div>
+            )}
+            <div>
+              <p className="srp-num">{c.liveCount}</p>
+              <p style={{ fontSize: 12.5, color: LR.inkSoft, fontWeight: 600 }}>{t('advconf_live_rooms_label')}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   } else if (item.role === 'delegate') {
     const r = item.room;
     const { primary } = committeeNames(r.committeeName, r.committeeAbbreviation);
@@ -490,14 +525,14 @@ function SingleCard({ item, t, primaryRef, onGo, onClose, onForget }: ViewProps 
         </div>
       </div>
     );
-  } else if (item.role === 'chair' || item.role === 'advisor') {
+  } else if (item.role === 'chair') {
     const r = item.room;
     const { primary, secondary } = committeeNames(r.committeeName, r.committeeAbbreviation);
     const conferenceLabel = r.conferenceAcronym || r.conferenceName;
     code = r.sessionCode;
     topic = r.topic;
-    note = item.role === 'chair' ? t('srp_conf_note') : t('srp_adv_note');
-    if (item.role === 'chair') occupancy = <RoomOccupancy room={r} presence={presence} t={t} />;
+    note = t('srp_conf_note');
+    occupancy = <RoomOccupancy room={r} presence={presence} t={t} />;
     hero = (
       <div className="srp-hero">
         <div className="relative shrink-0" style={{ width: 104, height: 104 }}>
@@ -583,7 +618,7 @@ export function EntryMark({ item, size }: { item: PromptItem; size: number }) {
     return <CircleFlag code={item.countryCode} country={item.countryName} label={item.countryName} size={size} ring={false} decorative
       style={{ boxShadow: '0 0 0 1px rgba(27,56,40,0.12)' }} />;
   }
-  if (item.role === 'organiser') {
+  if (item.role === 'organiser' || item.role === 'advisor') {
     return <Emblem src={item.conference.conferenceLogoUrl} label={item.conference.conferenceAcronym || item.conference.conferenceName} size={size} />;
   }
   const label = item.role === 'standalone' ? item.name : item.room.committeeName;
@@ -597,6 +632,16 @@ export function entryLines(item: PromptItem, t: T): { title: string; sub: string
     return {
       title: c.conferenceAcronym || c.conferenceName,
       sub: t('srp_org_rows').replace('{live}', String(c.liveCount)).replace('{session}', String(c.inSessionCount)),
+      code: null,
+    };
+  }
+  if (item.role === 'advisor') {
+    const c = item.conference;
+    const rooms = c.liveCount === 1 ? t('advconf_live_rooms_one') : t('advconf_live_rooms_many', { n: c.liveCount });
+    const students = c.studentsLive === 1 ? t('advconf_live_students_one') : t('advconf_live_students_many', { n: c.studentsLive });
+    return {
+      title: c.conferenceAcronym || c.conferenceName,
+      sub: c.studentsLive > 0 ? `${students} · ${rooms}` : `${roleWord(item, t)} · ${rooms}`,
       code: null,
     };
   }

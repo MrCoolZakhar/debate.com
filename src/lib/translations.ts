@@ -1,7 +1,14 @@
+import { advisorBoardTranslations } from './translationsAdvisorBoard';
+import { advisorRoomTranslations } from './translationsAdvisorRoom';
+import { advisorConfTranslations } from './translationsAdvisorConf';
+
 export type Language = 'en' | 'es' | 'fr' | 'ar';
 
 export const translations = {
   en: {
+    ...advisorBoardTranslations.en,
+    ...advisorRoomTranslations.en,
+    ...advisorConfTranslations.en,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
     session_loading: 'LOADING…',
     session_signin_title: 'Sign in to join this session',
@@ -1701,6 +1708,9 @@ export const translations = {
     promo_conf_new_tab: 'opens in a new tab',
   },
   es: {
+    ...advisorBoardTranslations.es,
+    ...advisorRoomTranslations.es,
+    ...advisorConfTranslations.es,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
     session_loading: 'CARGANDO…',
     session_signin_title: 'Inicia sesión para entrar a esta sesión',
@@ -3399,6 +3409,9 @@ export const translations = {
     promo_conf_new_tab: 'se abre en una pestaña nueva',
   },
   fr: {
+    ...advisorBoardTranslations.fr,
+    ...advisorRoomTranslations.fr,
+    ...advisorConfTranslations.fr,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
     session_loading: 'CHARGEMENT…',
     session_signin_title: 'Connectez-vous pour rejoindre cette session',
@@ -5097,6 +5110,9 @@ export const translations = {
     promo_conf_new_tab: 's’ouvre dans un nouvel onglet',
   },
   ar: {
+    ...advisorBoardTranslations.ar,
+    ...advisorRoomTranslations.ar,
+    ...advisorConfTranslations.ar,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
     session_loading: 'جارٍ التحميل…',
     session_signin_title: 'سجّل الدخول للانضمام إلى هذه الجلسة',

@@ -4,6 +4,7 @@
  * "Live now" in the profile menu (ProfileDropdown): every conference room of this
  * account that is live right now, the same entries and the same destinations as
  * the pop-up (LiveRoomsGate), so dismissing the pop-up never loses the way in.
+ * A faculty advisor's rooms are ONE row per conference, to the advisor board.
  * Renders nothing while there is none. Re-reads `my_live_rooms()` when the menu
  * opens and the cached answer is more than a minute old.
  */
