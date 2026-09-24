@@ -131,7 +131,7 @@ export default function AvatarStack({
             borderRadius: '50%',
             backgroundColor: 'rgba(27,56,40,0.10)',
             color: '#1B3828',
-            fontFamily: "'Outfit', sans-serif",
+            fontFamily: "var(--font-brand), sans-serif",
             fontWeight: 900,
             fontSize: Math.round(size * 0.36),
             lineHeight: 1,

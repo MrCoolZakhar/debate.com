@@ -103,10 +103,10 @@ export default function ConferenceFocusCards({ cards }: { cards: FocusCard[] }) 
               pointerEvents: 'none',
             }}
           >
-            <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '13px', color: '#EDE7D8', marginBottom: '4px', lineHeight: 1.3 }}>
+            <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '13px', color: '#EDE7D8', marginBottom: '4px', lineHeight: 1.3 }}>
               {card.full_name}
             </p>
-            <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontSize: '10px', color: 'rgba(237,231,216,0.7)', letterSpacing: '0.01em', fontVariantNumeric: 'tabular-nums' }}>
+            <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, fontSize: '10px', color: 'rgba(237,231,216,0.7)', letterSpacing: '0.01em', fontVariantNumeric: 'tabular-nums' }}>
               {formatDate(card.start_date)} · {card.city}, {card.country}
             </p>
           </div>

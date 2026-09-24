@@ -365,7 +365,7 @@ export function LogoCropModal({
         style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: `min(${stage + 40}px, 94vw)`, boxShadow: '0 24px 64px rgba(27,56,40,0.28)' }}
       >
         <div className="flex items-center justify-between mb-3">
-          <p className="text-base font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+          <p className="text-base font-bold" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>
             Position your {noun}
           </p>
           <button
@@ -453,7 +453,7 @@ export function LogoCropModal({
                 disabled={!fits}
                 className="rounded-full px-4 py-1.5 text-[12px] font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
                 style={{
-                  fontFamily: "'Outfit', sans-serif",
+                  fontFamily: "var(--font-brand), sans-serif",
                   border: `1.5px solid ${active ? '#1B3828' : '#DDD4C0'}`,
                   backgroundColor: active ? '#1B3828' : 'transparent',
                   color: active ? '#EED98A' : '#4A3F33',
@@ -470,7 +470,7 @@ export function LogoCropModal({
 
         <p
           className="flex items-center justify-center gap-1.5 text-[12px]"
-          style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", fontWeight: 500, margin: '10px 0 0 0', textAlign: 'center' }}
+          style={{ color: '#6B5F52', fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, margin: '10px 0 0 0', textAlign: 'center' }}
         >
           <Move size={12} strokeWidth={2.2} style={{ flexShrink: 0 }} />
           Drag to move. What is inside the circle is what people see.
@@ -513,7 +513,7 @@ export function LogoCropModal({
           </button>
           <span
             className="text-[12px] text-right"
-            style={{ color: '#4A3F33', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', width: '42px', flexShrink: 0 }}
+            style={{ color: '#4A3F33', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', width: '42px', flexShrink: 0 }}
           >
             {zoomPct}%
           </span>
@@ -523,7 +523,7 @@ export function LogoCropModal({
           <button
             onClick={() => { if (!saving) onCancel(); }}
             className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none"
-            style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", cursor: 'pointer' }}
+            style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "var(--font-brand), sans-serif", cursor: 'pointer' }}
           >
             CANCEL
           </button>
@@ -534,7 +534,7 @@ export function LogoCropModal({
             style={{
               backgroundColor: saving || !natural ? '#DDD4C0' : '#1B3828',
               color: saving || !natural ? '#9A8A78' : '#EED98A',
-              fontFamily: "'Outfit', sans-serif",
+              fontFamily: "var(--font-brand), sans-serif",
               border: 'none',
               cursor: saving || !natural ? 'default' : 'pointer',
             }}

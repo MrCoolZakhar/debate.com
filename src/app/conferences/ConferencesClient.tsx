@@ -114,7 +114,7 @@ function FeaturedSection() {
           <span
             style={{
               display: 'block',
-              fontFamily: "'Outfit', sans-serif",
+              fontFamily: "var(--font-brand), sans-serif",
               fontWeight: 900,
               fontSize: 'clamp(52px, 7vw, 96px)',
               color: '#1C1410',
@@ -126,7 +126,7 @@ function FeaturedSection() {
           <span
             style={{
               display: 'block',
-              fontFamily: "'Outfit', sans-serif",
+              fontFamily: "var(--font-brand), sans-serif",
               fontWeight: 900,
               fontSize: 'clamp(52px, 7vw, 96px)',
               color: '#1B3828',
@@ -161,7 +161,7 @@ function FeaturedSection() {
                 borderRadius: '14px',
                 border: `1.5px solid ${searchFocused ? '#1B3828' : '#DDD4C0'}`,
                 backgroundColor: 'rgba(250,248,243,0.92)',
-                fontFamily: "'Outfit', sans-serif",
+                fontFamily: "var(--font-brand), sans-serif",
                 fontSize: '14px',
                 color: '#1C1410',
                 outline: 'none',
@@ -189,7 +189,7 @@ function FeaturedSection() {
                 }}
               >
                 {searchLoading ? (
-                  <div style={{ padding: '12px', fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontSize: '11px', color: '#9A8A78' }}>
+                  <div style={{ padding: '12px', fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, fontSize: '11px', color: '#9A8A78' }}>
                     Searching...
                   </div>
                 ) : (
@@ -210,10 +210,10 @@ function FeaturedSection() {
                       onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                     >
-                      <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: '13px', fontWeight: 700, color: '#1C1410', margin: 0 }}>
+                      <p style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: '13px', fontWeight: 700, color: '#1C1410', margin: 0 }}>
                         {result.full_name}
                       </p>
-                      <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, letterSpacing: '0.01em', fontVariantNumeric: 'tabular-nums', fontSize: '10px', color: '#9A8A78', margin: '2px 0 0 0' }}>
+                      <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, letterSpacing: '0.01em', fontVariantNumeric: 'tabular-nums', fontSize: '10px', color: '#9A8A78', margin: '2px 0 0 0' }}>
                         {result.city}, {result.country} · {formatDateRange(result.start_date, result.end_date)}
                       </p>
                     </div>
@@ -231,7 +231,7 @@ function FeaturedSection() {
               color: '#EED98A',
               borderRadius: '14px',
               padding: '14px 28px',
-              fontFamily: "'Outfit', sans-serif",
+              fontFamily: "var(--font-brand), sans-serif",
               fontWeight: 800,
               fontSize: '13px',
               letterSpacing: '0.08em',
@@ -271,17 +271,17 @@ function OrganiserSection() {
       <div className="relative flex flex-col md:flex-row gap-12 md:gap-16 items-start">
         {/* Left */}
         <div style={{ maxWidth: '400px' }}>
-          <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, lineHeight: 1.05 }}>
+          <h2 style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 900, lineHeight: 1.05 }}>
             <span className="block text-white" style={{ fontSize: 'clamp(32px, 4vw, 52px)' }}>Run your conference.</span>
             <span className="block" style={{ fontSize: 'clamp(32px, 4vw, 52px)', color: '#EED98A' }}>Fee-free.</span>
           </h2>
-          <p className="mt-4 mb-8 text-sm leading-relaxed" style={{ color: 'rgba(237,231,216,0.7)', maxWidth: '400px', fontFamily: "'Outfit', sans-serif" }}>
+          <p className="mt-4 mb-8 text-sm leading-relaxed" style={{ color: 'rgba(237,231,216,0.7)', maxWidth: '400px', fontFamily: "var(--font-brand), sans-serif" }}>
             Zero platform fees for organisers. Gavelling handles registration, allocations, document management, session integration, and automated communications.
           </p>
           <Link
             href="/my-conferences"
             className="inline-block rounded-2xl py-4 px-8 font-bold text-sm tracking-widest transition-colors focus:outline-none"
-            style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', textDecoration: 'none' }}
+            style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', textDecoration: 'none' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A'; }}
           >
@@ -296,8 +296,8 @@ function OrganiserSection() {
             return (
               <div key={card.title} className="rounded-xl p-5" style={{ backgroundColor: 'rgba(255,255,255,0.06)', border: '1px solid rgba(238,217,138,0.12)' }}>
                 <Icon size={20} color="#EED98A" style={{ marginBottom: '8px' }} />
-                <h3 className="font-semibold text-sm mb-1 text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>{card.title}</h3>
-                <p className="text-xs leading-relaxed" style={{ color: 'rgba(237,231,216,0.6)', fontFamily: "'Outfit', sans-serif" }}>{card.desc}</p>
+                <h3 className="font-semibold text-sm mb-1 text-white" style={{ fontFamily: "var(--font-brand), sans-serif" }}>{card.title}</h3>
+                <p className="text-xs leading-relaxed" style={{ color: 'rgba(237,231,216,0.6)', fontFamily: "var(--font-brand), sans-serif" }}>{card.desc}</p>
               </div>
             );
           })}
@@ -324,11 +324,11 @@ function RolesSection() {
       <div className="flex flex-col md:flex-row gap-12 md:gap-16 items-start">
         {/* Left */}
         <div style={{ maxWidth: '420px' }}>
-          <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, lineHeight: 1.05 }}>
+          <h2 style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 900, lineHeight: 1.05 }}>
             <span className="block" style={{ fontSize: 'clamp(28px, 3.5vw, 48px)', color: '#1C1410' }}>Looking to chair?</span>
             <span className="block" style={{ fontSize: 'clamp(28px, 3.5vw, 48px)', color: '#1B3828' }}>Find your next role.</span>
           </h2>
-          <p className="mt-4 mb-6 text-sm leading-relaxed" style={{ color: '#9A8A78', maxWidth: '420px', fontFamily: "'Outfit', sans-serif" }}>
+          <p className="mt-4 mb-6 text-sm leading-relaxed" style={{ color: '#9A8A78', maxWidth: '420px', fontFamily: "var(--font-brand), sans-serif" }}>
             Conferences post open positions for chairs, secretariat, and staff. Apply directly through your Gavelling profile. Your MUN CV travels with you.
           </p>
           <div className="flex flex-wrap gap-2 mb-8">
@@ -336,7 +336,7 @@ function RolesSection() {
               <span
                 key={pill}
                 className="px-3 py-1.5 rounded-full text-[10px]"
-                style={{ backgroundColor: 'rgba(27,56,40,0.07)', border: '1px solid rgba(27,56,40,0.15)', color: '#1B3828', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.1em' }}
+                style={{ backgroundColor: 'rgba(27,56,40,0.07)', border: '1px solid rgba(27,56,40,0.15)', color: '#1B3828', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.1em' }}
               >
                 {pill}
               </span>
@@ -345,7 +345,7 @@ function RolesSection() {
           <Link
             href="/conferences/roles"
             className="inline-block rounded-2xl py-4 px-8 font-bold text-sm tracking-widest transition-colors focus:outline-none"
-            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', textDecoration: 'none' }}
+            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', textDecoration: 'none' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
           >
@@ -357,10 +357,10 @@ function RolesSection() {
         <div className="flex-1 flex flex-col gap-4">
           {stats.map(stat => (
             <div key={stat.label} className="rounded-2xl p-5 flex items-center gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-              <span className="font-black text-3xl flex-shrink-0" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{stat.number}</span>
+              <span className="font-black text-3xl flex-shrink-0" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>{stat.number}</span>
               <div>
-                <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{stat.label}</p>
-                <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{stat.sub}</p>
+                <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>{stat.label}</p>
+                <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>{stat.sub}</p>
               </div>
             </div>
           ))}
@@ -451,7 +451,7 @@ function GlobeSection() {
               display: 'block',
               color: 'white',
               fontSize: 'clamp(48px, 5.5vw, 80px)',
-              fontFamily: "'Outfit', sans-serif",
+              fontFamily: "var(--font-brand), sans-serif",
               fontWeight: 900,
               lineHeight: 1.0,
             }}
@@ -463,7 +463,7 @@ function GlobeSection() {
               display: 'block',
               color: '#EED98A',
               fontSize: 'clamp(48px, 5.5vw, 80px)',
-              fontFamily: "'Outfit', sans-serif",
+              fontFamily: "var(--font-brand), sans-serif",
               fontWeight: 900,
               lineHeight: 1.0,
             }}
@@ -479,7 +479,7 @@ function GlobeSection() {
             lineHeight: 1.7,
             color: 'rgba(237,231,216,0.75)',
             maxWidth: 440,
-            fontFamily: "'Outfit', sans-serif",
+            fontFamily: "var(--font-brand), sans-serif",
           }}
         >
           From The Hague to Singapore, Tokyo to New York. Explore conferences on every continent and find your next destination.
@@ -491,7 +491,7 @@ function GlobeSection() {
             border: '1.5px solid rgba(238,217,138,0.4)',
             color: '#EED98A',
             backgroundColor: 'transparent',
-            fontFamily: "'Outfit', sans-serif",
+            fontFamily: "var(--font-brand), sans-serif",
             letterSpacing: '0.08em',
             textDecoration: 'none',
           }}

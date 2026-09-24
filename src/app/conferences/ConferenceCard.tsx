@@ -195,7 +195,7 @@ export function ConferenceCard({
             aria-hidden
             style={{
               position: 'absolute', right: '16px', top: '16px',
-              fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: '46px', lineHeight: 1,
+              fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: '46px', lineHeight: 1,
               color: 'rgba(238,217,138,0.13)', letterSpacing: '0.02em', userSelect: 'none',
             }}
           >
@@ -226,7 +226,7 @@ export function ConferenceCard({
           }}
         >
           <CalendarDays size={12} style={{ color: '#EED98A', flexShrink: 0 }} />
-          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em', fontSize: '11.5px', color: '#FAF8F3', whiteSpace: 'nowrap' }}>
+          <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em', fontSize: '11.5px', color: '#FAF8F3', whiteSpace: 'nowrap' }}>
             {formatDateRange(conf.start_date, conf.end_date)}
           </span>
         </span>
@@ -247,11 +247,11 @@ export function ConferenceCard({
       </div>
 
       {/* Lower zone: BIG acronym + edition year · facts row + APPLY */}
-      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '0 14px 12px' }}>
+      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '0 14px 12px', containerType: 'inline-size' }}>
         <h3
           style={{
-            fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: '27px', lineHeight: 1.05,
-            letterSpacing: '0.01em', color: '#FAF8F3', margin: 0, textShadow: '0 1px 12px rgba(0,0,0,0.5)',
+            fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: 'clamp(20px, 8.4cqw, 26px)', lineHeight: 1.05,
+            letterSpacing: '-0.012em', color: '#FAF8F3', margin: 0, textShadow: '0 1px 12px rgba(0,0,0,0.5)',
             display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0,
           }}
         >
@@ -265,7 +265,7 @@ export function ConferenceCard({
               <MapPin size={13} style={{ color: '#EED98A', flexShrink: 0 }} />
               <span
                 style={{
-                  fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontSize: '11.5px',
+                  fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, fontSize: '11.5px',
                   color: 'rgba(237,231,216,0.92)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                 }}
               >
@@ -275,7 +275,7 @@ export function ConferenceCard({
             {price.kind === 'tbd' ? (
               <span
                 style={{
-                  fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 700,
+                  fontFamily: "var(--font-brand), sans-serif", fontSize: '11px', fontWeight: 700,
                   letterSpacing: '0.08em', color: 'rgba(237,231,216,0.85)', backgroundColor: 'rgba(237,231,216,0.10)',
                   border: '1px solid rgba(237,231,216,0.28)', padding: '2px 9px', borderRadius: '9999px',
                 }}
@@ -285,7 +285,7 @@ export function ConferenceCard({
             ) : price.kind === 'free' ? (
               <span
                 style={{
-                  fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+                  fontFamily: "var(--font-brand), sans-serif", fontSize: '11px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
                   letterSpacing: '0.08em', color: '#BFEBD1', backgroundColor: 'rgba(42,90,60,0.55)',
                   border: '1px solid rgba(127,214,160,0.35)', padding: '2px 9px', borderRadius: '9999px',
                 }}
@@ -295,7 +295,7 @@ export function ConferenceCard({
             ) : (
               <span
                 style={{
-                  fontFamily: "'Outfit', sans-serif", fontSize: '11.5px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+                  fontFamily: "var(--font-brand), sans-serif", fontSize: '11.5px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
                   color: '#EED98A', backgroundColor: 'rgba(238,217,138,0.14)',
                   border: '1px solid rgba(238,217,138,0.32)', padding: '2px 9px', borderRadius: '9999px', whiteSpace: 'nowrap',
                 }}
@@ -306,7 +306,7 @@ export function ConferenceCard({
             {conf.expected_delegates > 0 && (
               <span className="flex items-center gap-1">
                 <Users size={13} style={{ color: 'rgba(237,231,216,0.66)', flexShrink: 0 }} />
-                <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '11.5px', color: 'rgba(237,231,216,0.8)' }}>
+                <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '11.5px', color: 'rgba(237,231,216,0.8)' }}>
                   {conf.expected_delegates.toLocaleString()}
                 </span>
               </span>
@@ -364,7 +364,7 @@ export function ConferenceCard({
               aria-hidden
               style={{
                 position: 'absolute', right: '14px', bottom: '-6px',
-                fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: heroCompact ? '30px' : compact ? '38px' : '52px', lineHeight: 1,
+                fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: heroCompact ? '30px' : compact ? '38px' : '52px', lineHeight: 1,
                 color: 'rgba(238,217,138,0.13)', letterSpacing: '0.02em', userSelect: 'none',
               }}
             >
@@ -384,7 +384,7 @@ export function ConferenceCard({
             }}
           >
             <CalendarDays size={dense ? 11 : 12} style={{ color: '#EED98A', flexShrink: 0 }} />
-            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em', fontSize: dense ? '10px' : '11.5px', color: '#FAF8F3', whiteSpace: 'nowrap' }}>
+            <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em', fontSize: dense ? '10px' : '11.5px', color: '#FAF8F3', whiteSpace: 'nowrap' }}>
               {dense ? formatDateRangeDense(conf.start_date, conf.end_date) : formatDateRange(conf.start_date, conf.end_date)}
             </span>
           </span>
@@ -394,7 +394,7 @@ export function ConferenceCard({
           <span
             className="absolute top-3 right-3"
             style={{
-              fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: dense ? '8.5px' : '9px', letterSpacing: dense ? '0.09em' : '0.12em',
+              fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: dense ? '8.5px' : '9px', letterSpacing: dense ? '0.09em' : '0.12em',
               color: '#FAF8F3', backgroundColor: 'rgba(20,36,27,0.45)',
               backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
               border: '1px solid rgba(250,248,243,0.18)',
@@ -423,19 +423,19 @@ export function ConferenceCard({
         }}
       >
         {price.kind === 'tbd' ? (
-          <span title="Price to be announced" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '14px', letterSpacing: '0.08em', color: '#5C4F44' }}>
+          <span title="Price to be announced" style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '14px', letterSpacing: '0.08em', color: '#5C4F44' }}>
             TBD
           </span>
         ) : price.kind === 'free' ? (
-          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '14px', letterSpacing: '0.08em', color: '#2A5A3C' }}>
+          <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '14px', letterSpacing: '0.08em', color: '#2A5A3C' }}>
             FREE
           </span>
         ) : (
           <>
-            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '14.5px', color: '#B6871F' }}>
+            <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '14.5px', color: '#B6871F' }}>
               {currencySymbol(price.currency)}
             </span>
-            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: '16.5px', color: '#1C1410' }}>
+            <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: '16.5px', color: '#1C1410' }}>
               {formatFeeAmountCompact(price.amount)}
             </span>
           </>
@@ -453,13 +453,13 @@ export function ConferenceCard({
         />
       </div>
 
-      <div className={`${padX} ${heroCompact ? 'pt-1 pb-2.5' : compact ? 'pt-2 pb-4' : 'pt-3 pb-5'}`}>
+      <div className={`${padX} ${heroCompact ? 'pt-1 pb-2.5' : compact ? 'pt-2 pb-4' : 'pt-3 pb-5'}`} style={{ containerType: 'inline-size' }}>
         {/* Acronym + edition year, the card's main heading */}
         <h3
           className={heroCompact ? 'mb-1.5' : compact ? 'mb-2' : 'mb-2.5'}
           style={{
-            color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums',
-            fontSize: dense ? '24px' : '30px', lineHeight: 1.05, letterSpacing: '0.01em',
+            color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+            fontSize: dense ? 'clamp(18px, 7.6cqw, 23px)' : 'clamp(21px, 9.2cqw, 29px)', lineHeight: 1.05, letterSpacing: '-0.012em',
             marginTop: dense ? '2px' : '4px',
             display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0,
           }}
@@ -470,7 +470,7 @@ export function ConferenceCard({
 
         {/* Location */}
         <div className={`flex items-center gap-1.5 ${heroCompact ? 'mb-1.5' : compact ? 'mb-3' : 'mb-4'}`}>
-          <span className="text-[13px]" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", fontWeight: 500 }}>
+          <span className="text-[13px]" style={{ color: '#6B5F52', fontFamily: "var(--font-brand), sans-serif", fontWeight: 500 }}>
             {conf.city}, {countryCode}
           </span>
         </div>
@@ -483,7 +483,7 @@ export function ConferenceCard({
           {conf.expected_delegates > 0 ? (
             <span
               className="flex items-center gap-1.5 text-[13px] px-2.5 py-1 rounded-full"
-              style={{ backgroundColor: 'rgba(27,56,40,0.06)', color: '#4A4238', fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
+              style={{ backgroundColor: 'rgba(27,56,40,0.06)', color: '#4A4238', fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
             >
               <Users size={13} style={{ color: '#9A8A78' }} />
               {conf.expected_delegates.toLocaleString()}
@@ -552,7 +552,7 @@ function ApplyButton({ applied = false, member = false }: { applied?: boolean; m
         onMouseLeave={() => setHover(false)}
         className="inline-flex items-center gap-1.5 cursor-pointer"
         style={{
-          fontFamily: "'Outfit', sans-serif",
+          fontFamily: "var(--font-brand), sans-serif",
           fontWeight: 800,
           fontSize: '10.5px',
           letterSpacing: '0.08em',
@@ -578,7 +578,7 @@ function ApplyButton({ applied = false, member = false }: { applied?: boolean; m
       <span
         className="inline-flex items-center gap-1.5"
         style={{
-          fontFamily: "'Outfit', sans-serif",
+          fontFamily: "var(--font-brand), sans-serif",
           fontWeight: 800,
           fontSize: '10.5px',
           letterSpacing: '0.08em',
@@ -602,7 +602,7 @@ function ApplyButton({ applied = false, member = false }: { applied?: boolean; m
       onMouseLeave={() => setHover(false)}
       className="inline-flex items-center gap-1.5 cursor-pointer"
       style={{
-        fontFamily: "'Outfit', sans-serif",
+        fontFamily: "var(--font-brand), sans-serif",
         fontWeight: 800,
         fontSize: '11px',
         letterSpacing: '0.08em',

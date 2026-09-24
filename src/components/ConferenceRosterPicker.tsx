@@ -148,7 +148,7 @@ function HoverInfo({ children, ariaLabel = 'What do these controls mean?' }: { c
               transform: pos.flip ? 'translateY(-100%)' : undefined,
               backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', borderRadius: 14,
               boxShadow: '0 12px 34px rgba(27,56,40,0.18), 0 2px 8px rgba(27,56,40,0.08)',
-              padding: '14px 15px', fontFamily: "'Outfit', sans-serif",
+              padding: '14px 15px', fontFamily: "var(--font-brand), sans-serif",
             }}
           >
             {children}
@@ -267,14 +267,14 @@ function fuzzyMatchCountry(raw: string): string | null {
 // ── Shared styles ─────────────────────────────────────────────────────────────
 const labelStyle: React.CSSProperties = {
   display: 'block', fontSize: 10.5, fontWeight: 700, color: '#6E5F4E',
-  fontFamily: "'Outfit', sans-serif", textTransform: 'uppercase',
+  fontFamily: "var(--font-brand), sans-serif", textTransform: 'uppercase',
   letterSpacing: '0.12em', marginBottom: 4,
 };
 
 const inputStyle: React.CSSProperties = {
   width: '100%', border: '1px solid #DDD4C0', borderRadius: 8, padding: '8px 12px',
   fontSize: 14, color: '#1C1410', backgroundColor: '#FAF8F3', outline: 'none',
-  fontFamily: "'Outfit', sans-serif",
+  fontFamily: "var(--font-brand), sans-serif",
 };
 
 // Anchors a typeahead dropdown at fixed viewport coordinates so it is never
@@ -386,9 +386,9 @@ export function ConferenceCommitteeNameInput({ value, onChange, onPresetSelect, 
               )}
               <span className="text-sm flex-1">{p.name}</span>
               {p.members.length > 0 && (
-                <span className="text-[10px] shrink-0" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>+{p.members.length}</span>
+                <span className="text-[10px] shrink-0" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums' }}>+{p.members.length}</span>
               )}
-              <span className="text-[10px] font-bold shrink-0" style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', color: '#1B3828' }}>{p.acronym}</span>
+              <span className="text-[10px] font-bold shrink-0" style={{ fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.06em', color: '#1B3828' }}>{p.acronym}</span>
               {i === 0 && <span className="text-[10px] shrink-0" style={{ color: '#9A8A78' }}>↵</span>}
             </button>
           ))}
@@ -477,11 +477,11 @@ const floatingPanelStyle: React.CSSProperties = {
   position: 'fixed', zIndex: 10000,
   backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', borderRadius: 12,
   boxShadow: '0 12px 34px rgba(27,56,40,0.18), 0 2px 8px rgba(27,56,40,0.08)',
-  fontFamily: "'Outfit', sans-serif",
+  fontFamily: "var(--font-brand), sans-serif",
 };
 
 const chipStyle: React.CSSProperties = { outline: 'none',
-  fontFamily: "'Outfit', sans-serif", fontSize: 10.5, fontWeight: 700, letterSpacing: '0.03em',
+  fontFamily: "var(--font-brand), sans-serif", fontSize: 10.5, fontWeight: 700, letterSpacing: '0.03em',
   padding: '3px 9px', borderRadius: 999, border: '1px solid #DDD4C0', backgroundColor: '#FFFDF8',
   color: '#1B3828', cursor: 'pointer', whiteSpace: 'nowrap', lineHeight: 1.3,
 };
@@ -506,9 +506,9 @@ div:last-child > .gv-rs-row { border-bottom-color:transparent; }
 .gv-rs-art:hover .gv-rs-art-x, .gv-rs-art-x:focus-visible { opacity:1; }
 .gv-rs-move { position:relative; }
 .gv-rs-move select { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
-.gv-rs-pill { display:inline-flex; align-items:center; gap:5px; padding:3px 8px 3px 6px; border-radius:999px; border:1px solid #DDD4C0; background:#FFFDF8; cursor:pointer; font-family:'Outfit',sans-serif; font-size:10.5px; font-weight:700; color:#1C1410; line-height:1.3; white-space:nowrap; max-width:100%; }
+.gv-rs-pill { display:inline-flex; align-items:center; gap:5px; padding:3px 8px 3px 6px; border-radius:999px; border:1px solid #DDD4C0; background:#FFFDF8; cursor:pointer; font-family:var(--font-brand), sans-serif; font-size:10.5px; font-weight:700; color:#1C1410; line-height:1.3; white-space:nowrap; max-width:100%; }
 .gv-rs-pill:hover, .gv-rs-pill:focus-visible { border-color:#1B3828; outline:none; }
-.gv-rs-menu-btn { display:flex; align-items:center; gap:7px; width:100%; text-align:left; padding:7px 10px; border-radius:8px; border:0; background:transparent; cursor:pointer; font-family:'Outfit',sans-serif; font-size:12px; font-weight:600; color:#1C1410; }
+.gv-rs-menu-btn { display:flex; align-items:center; gap:7px; width:100%; text-align:left; padding:7px 10px; border-radius:8px; border:0; background:transparent; cursor:pointer; font-family:var(--font-brand), sans-serif; font-size:12px; font-weight:600; color:#1C1410; }
 .gv-rs-menu-btn:hover, .gv-rs-menu-btn:focus-visible { background:rgba(27,56,40,0.06); outline:none; }
 .gv-rs-menu-btn.gv-rs-danger { color:#8B2020; }
 
@@ -884,10 +884,10 @@ export function ConferenceRosterSelected({
           {panel ? (
             /* /create's DelegationCount: the number big, the word beside it. */
             <>
-              <span aria-live="polite" style={{ fontSize: 34, fontWeight: 800, lineHeight: 1, letterSpacing: '-0.03em', color: '#1B3828', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
+              <span aria-live="polite" style={{ fontSize: 34, fontWeight: 800, lineHeight: 1, letterSpacing: '-0.03em', color: '#1B3828', fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums' }}>
                 {value.length}
               </span>
-              <span style={{ fontSize: 15, fontWeight: 800, color: '#1B3828', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: 15, fontWeight: 800, color: '#1B3828', fontFamily: "var(--font-brand), sans-serif", whiteSpace: 'nowrap' }}>
                 {value.length === 1 ? (isCustom ? 'seat' : isCharacter ? 'character' : 'country') : noun}
               </span>
             </>
@@ -895,7 +895,7 @@ export function ConferenceRosterSelected({
             <>
               <label style={{ ...labelStyle, marginBottom: 0, whiteSpace: 'nowrap' }}>{isCustom ? 'Selected seats' : isCharacter ? 'Selected characters' : 'Selected countries'}</label>
               {/* A count is plain typography, never a pill (CLAUDE.md §8). */}
-              <span style={{ fontSize: 12, fontWeight: 800, color: '#1B3828', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ fontSize: 12, fontWeight: 800, color: '#1B3828', fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums' }}>
                 {value.length}
               </span>
             </>
@@ -951,8 +951,8 @@ export function ConferenceRosterSelected({
               onClick={() => { onChange([]); setApplyFor(null); setChooser(null); }}
               className="text-xs font-bold uppercase tracking-wide transition-colors focus:outline-none"
               style={panel
-                ? { color: '#544B3E', fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 11, letterSpacing: '0.1em', whiteSpace: 'nowrap', padding: '6px 8px', borderRadius: 8 }
-                : { color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 9, whiteSpace: 'nowrap' }}
+                ? { color: '#544B3E', fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: 11, letterSpacing: '0.1em', whiteSpace: 'nowrap', padding: '6px 8px', borderRadius: 8 }
+                : { color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: 9, whiteSpace: 'nowrap' }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = panel ? '#544B3E' : '#9A8A78'; }}
             >
@@ -1007,7 +1007,7 @@ export function ConferenceRosterSelected({
               aria-label="Start from a preset"
               title="Append a parliament's groups"
               className="focus:outline-none"
-              style={{ fontFamily: "'Outfit', sans-serif", fontSize: 10.5, fontWeight: 600, color: '#6E5F4E', border: '1px solid #DDD4C0', borderRadius: 999, padding: '3px 8px', backgroundColor: '#FAF8F3', cursor: 'pointer', maxWidth: 150 }}
+              style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 10.5, fontWeight: 600, color: '#6E5F4E', border: '1px solid #DDD4C0', borderRadius: 999, padding: '3px 8px', backgroundColor: '#FAF8F3', cursor: 'pointer', maxWidth: 150 }}
             >
               <option value="">Start from a preset</option>
               {PARLIAMENT_PRESETS.map((p) => (
@@ -1016,7 +1016,7 @@ export function ConferenceRosterSelected({
             </select>
           </div>
           {groups.length === 0 && (
-            <p style={{ margin: 0, fontSize: 10.5, color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Add parties or benches, then drag seats under them.</p>
+            <p style={{ margin: 0, fontSize: 10.5, color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Add parties or benches, then drag seats under them.</p>
           )}
         </div>
       )}
@@ -1038,7 +1038,7 @@ export function ConferenceRosterSelected({
                 title={active ? 'Sorted. Click to restore added order' : `Sort by ${opt.key === 'az' ? 'name' : 'importance'}`}
                 className="inline-flex items-center gap-1 rounded-md px-2 py-1 transition-colors focus:outline-none"
                 style={{
-                  fontFamily: "'Outfit', sans-serif", fontSize: 9.5, fontWeight: 700,
+                  fontFamily: "var(--font-brand), sans-serif", fontSize: 9.5, fontWeight: 700,
                   textTransform: 'uppercase', letterSpacing: '0.05em',
                   color: active ? '#EED98A' : '#6E5F4E',
                   backgroundColor: active ? '#1B3828' : 'transparent',
@@ -1065,15 +1065,15 @@ export function ConferenceRosterSelected({
             <span className="flex items-center justify-center rounded-full" style={{ width: 48, height: 48, backgroundColor: 'rgba(27,56,40,0.07)', color: '#1B3828' }}>
               {isCharacter ? <Users size={22} strokeWidth={1.75} /> : <Globe size={22} strokeWidth={1.75} />}
             </span>
-            <p style={{ margin: 0, fontSize: 15.5, fontWeight: 800, color: '#1B3828', fontFamily: "'Outfit', sans-serif", textWrap: 'balance' }}>{`No ${noun} yet`}</p>
-            <p style={{ margin: 0, fontSize: 13, color: '#544B3E', maxWidth: 280, lineHeight: 1.5, fontFamily: "'Outfit', sans-serif", textWrap: 'pretty' }}>
+            <p style={{ margin: 0, fontSize: 15.5, fontWeight: 800, color: '#1B3828', fontFamily: "var(--font-brand), sans-serif", textWrap: 'balance' }}>{`No ${noun} yet`}</p>
+            <p style={{ margin: 0, fontSize: 13, color: '#544B3E', maxWidth: 280, lineHeight: 1.5, fontFamily: "var(--font-brand), sans-serif", textWrap: 'pretty' }}>
               {isCharacter ? 'Type or paste names on the left to add them.' : 'Search, pick a bundle, or paste a list on the left.'}
             </p>
           </div>
         ) : value.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full px-3 py-8">
-            <p className="text-xs font-bold uppercase text-center" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{`NO ${noun.toUpperCase()}`}</p>
-            <p className="text-xs text-center mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{isCharacter ? 'Type or paste names to add' : 'Search, use bundles, or paste'}</p>
+            <p className="text-xs font-bold uppercase text-center" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>{`NO ${noun.toUpperCase()}`}</p>
+            <p className="text-xs text-center mt-1" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>{isCharacter ? 'Type or paste names to add' : 'Search, use bundles, or paste'}</p>
           </div>
         ) : (
           sections.map((sec, sIdx) => {
@@ -1095,14 +1095,14 @@ export function ConferenceRosterSelected({
                   <div className="flex items-center gap-2" style={{ padding: '5px 4px 4px' }}>
                     <span style={{ width: 3, height: 14, borderRadius: 2, backgroundColor: g ? (g.color ?? '#1B3828') : '#C9BEA2', flexShrink: 0 }} />
                     {g?.logo_url && <CircleFlag logoUrl={g.logo_url} label={g.name} size={18} logoFit="contain" decorative />}
-                    <span className="truncate" style={{ fontFamily: "'Outfit', sans-serif", fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: g ? '#1B3828' : '#9A8A78' }}>
+                    <span className="truncate" style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: g ? '#1B3828' : '#9A8A78' }}>
                       {g ? g.name : 'Ungrouped'}
                     </span>
-                    <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 9.5, fontWeight: 700, color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}>{sec.rows.length}</span>
+                    <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 9.5, fontWeight: 700, color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}>{sec.rows.length}</span>
                   </div>
                 )}
                 {hasGroups && sec.rows.length === 0 && (
-                  <p style={{ margin: 0, padding: '4px 8px 6px', fontSize: 10.5, color: '#B3A794', fontFamily: "'Outfit', sans-serif", fontStyle: 'italic' }}>
+                  <p style={{ margin: 0, padding: '4px 8px 6px', fontSize: 10.5, color: '#B3A794', fontFamily: "var(--font-brand), sans-serif", fontStyle: 'italic' }}>
                     {isUngrouped ? 'Drop a seat here to ungroup it' : 'No seats yet. Drag seats here'}
                   </p>
                 )}
@@ -1151,10 +1151,10 @@ export function ConferenceRosterSelected({
                             onKeyDown={(e) => { if (e.key === 'Enter') commitRename(idx, editDraft); else if (e.key === 'Escape') setEditingIdx(null); }}
                             onBlur={() => commitRename(idx, editDraft)}
                             className="gv-rs-name flex-1 min-w-0 text-base sm:text-[13px] bg-transparent outline-none"
-                            style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", borderBottom: '1px solid #1B3828' }}
+                            style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", borderBottom: '1px solid #1B3828' }}
                           />
                         ) : (
-                          <span className="gv-rs-name flex-1 min-w-0 text-[13px] font-semibold truncate" title={row.name} style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                          <span className="gv-rs-name flex-1 min-w-0 text-[13px] font-semibold truncate" title={row.name} style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                             {row.name}
                           </span>
                         )}
@@ -1223,7 +1223,7 @@ export function ConferenceRosterSelected({
                           Hidden when no other seat can take one. */}
                       {applyFor?.idx === idx && applyTargets.length > 0 && (
                         <div className="flex items-center gap-1.5 flex-wrap" style={{ margin: '4px 0 6px', padding: '7px 9px', borderRadius: 10, backgroundColor: 'rgba(238,217,138,0.22)', border: '1px solid rgba(182,135,31,0.35)' }}>
-                          <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 600, color: '#1C1410', marginRight: 2 }}>Use this flag for other seats too?</span>
+                          <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 11, fontWeight: 600, color: '#1C1410', marginRight: 2 }}>Use this flag for other seats too?</span>
                           {applyGroupName && sameGroupCount > 0 && (
                             <button type="button" style={chipStyle} onClick={() => applyFlag((_, r) => r.groupId === applyRow?.groupId)} title={`Every seat in ${applyGroupName}`}>
                               Same group ({sameGroupCount})
@@ -1483,7 +1483,7 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
                 }}
                 placeholder={isCharacter ? 'Type a character or role name, press Enter…' : 'Search countries or type a name…'}
                 className="flex-1 min-w-0 bg-transparent px-3 py-2 text-base sm:text-sm focus:outline-none"
-                style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
+                style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}
               />
               {search.trim() && (isCharacter || available[0]) && (
                 <span className="text-xs px-2 shrink-0" style={{ color: '#9A8A78' }}>↵ {isCharacter ? search.trim() : available[0]?.name ?? search.trim()}</span>
@@ -1502,7 +1502,7 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = i === 0 ? 'rgba(27,56,40,0.07)' : 'transparent'; }}
                   >
                     <CircleFlag code={c.code} size={22} decorative />
-                    <span className="text-sm flex-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{c.name}</span>
+                    <span className="text-sm flex-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>{c.name}</span>
                     {i === 0 && <span className="text-xs" style={{ color: '#9A8A78' }}>↵</span>}
                   </button>
                 ))}
@@ -1515,7 +1515,7 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                   >
                     <span className="flex flex-shrink-0 items-center justify-center" style={{ width: 22, height: 22, color: '#1B3828' }}><Plus size={14} strokeWidth={2.6} /></span>
-                    <span className="text-sm flex-1" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{`Add "${search.trim()}"`}</span>
+                    <span className="text-sm flex-1" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>{`Add "${search.trim()}"`}</span>
                   </button>
                 )}
               </div>
@@ -1534,7 +1534,7 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
                   key={key}
                   onClick={() => addBundle(key)}
                   className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wide transition-all"
-                  style={{ backgroundColor: '#FAF8F3', color: '#1B3828', border: '1px solid #DDD4C0', fontFamily: "'Outfit', sans-serif" }}
+                  style={{ backgroundColor: '#FAF8F3', color: '#1B3828', border: '1px solid #DDD4C0', fontFamily: "var(--font-brand), sans-serif" }}
                   onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; el.style.borderColor = '#1B3828'; }}
                   onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#FAF8F3'; el.style.color = '#1B3828'; el.style.borderColor = '#DDD4C0'; }}
                 >
@@ -1555,7 +1555,7 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
         <div className="flex flex-col flex-1">
           <label style={labelStyle}>{isCharacter ? 'Paste Character List' : 'Paste Country List'}</label>
           {isCharacter && (
-            <p style={{ margin: '0 0 4px', fontSize: 10.5, color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            <p style={{ margin: '0 0 4px', fontSize: 10.5, color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
               One per line. Commas are kept, so &quot;Chairperson, Standing Committee&quot; stays one seat.
             </p>
           )}
@@ -1569,20 +1569,20 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
                reason the main step did not fit a 900px-tall viewport. */
             rows={compact ? 3 : 4}
             className="flex-1 rounded-xl px-3 py-2.5 text-sm resize-y focus:outline-none"
-            style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: "'Outfit', sans-serif", minHeight: compact ? 70 : 92, lineHeight: 1.55 }}
+            style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", minHeight: compact ? 70 : 92, lineHeight: 1.55 }}
           />
           <div className="flex items-center gap-2 mt-2">
             <button
               onClick={handlePaste}
               disabled={!pasteText.trim()}
               className="px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all disabled:opacity-30 disabled:cursor-not-allowed focus:outline-none"
-              style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}
+              style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif" }}
               onMouseEnter={(e) => { if (pasteText.trim()) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
             >
               {isCharacter ? 'Add All' : 'Auto-Match'}
             </button>
-            {pasteError && <p className="text-xs" style={{ color: '#7A5A10', fontFamily: "'Outfit', sans-serif" }}>{pasteError}</p>}
+            {pasteError && <p className="text-xs" style={{ color: '#7A5A10', fontFamily: "var(--font-brand), sans-serif" }}>{pasteError}</p>}
           </div>
         </div>
       </div>
@@ -1607,8 +1607,8 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
         >
           <div className="w-full max-w-md flex flex-col rounded-2xl shadow-2xl overflow-hidden" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', maxHeight: '78%' }}>
             <div className="px-6 py-4 shrink-0" style={{ borderBottom: '1px solid #DDD4C0' }}>
-              <h2 className="text-lg font-black uppercase tracking-wide" style={{ color: '#1B3828', letterSpacing: '0.04em', fontFamily: "'Outfit', sans-serif" }}>Review pasted list</h2>
-              <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{review.length} to add. Edit any custom names before confirming.</p>
+              <h2 className="text-lg font-black uppercase tracking-wide" style={{ color: '#1B3828', letterSpacing: '0.04em', fontFamily: "var(--font-brand), sans-serif" }}>Review pasted list</h2>
+              <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>{review.length} to add. Edit any custom names before confirming.</p>
             </div>
             <div className="flex-1 overflow-y-auto min-h-0">
               {review.map((r, idx) => {
@@ -1619,16 +1619,16 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
                       ? <CircleFlag code={found.code} size={24} decorative />
                       : <Globe size={18} strokeWidth={1.5} style={{ color: '#6E5F4E', flexShrink: 0 }} />}
                     {found ? (
-                      <span className="text-sm flex-1 truncate font-medium" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{r.name}</span>
+                      <span className="text-sm flex-1 truncate font-medium" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>{r.name}</span>
                     ) : (
                       <input
                         value={r.name}
                         onChange={(e) => setReview((prev) => prev ? prev.map((x, i) => i === idx ? { name: e.target.value, isCountry: !!getCountryByName(e.target.value.trim()) } : x) : prev)}
                         className="text-sm flex-1 bg-white rounded-lg px-2.5 py-1.5 focus:outline-none"
-                        style={{ border: '1px solid #C8BAA8', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
+                        style={{ border: '1px solid #C8BAA8', color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}
                       />
                     )}
-                    <span className="text-[10.5px] font-bold shrink-0" style={{ color: found ? '#1B3828' : '#7A5A10', fontFamily: "'Outfit', sans-serif" }}>
+                    <span className="text-[10.5px] font-bold shrink-0" style={{ color: found ? '#1B3828' : '#7A5A10', fontFamily: "var(--font-brand), sans-serif" }}>
                       {found ? 'Country' : 'Custom'}
                     </span>
                     <button onClick={() => setReview((prev) => prev ? prev.filter((_, i) => i !== idx) : prev)} className="text-sm shrink-0 focus:outline-none" style={{ color: '#9A8A78' }}>✕</button>
@@ -1637,8 +1637,8 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
               })}
             </div>
             <div className="flex items-center gap-3 px-6 py-4 shrink-0" style={{ borderTop: '1px solid #DDD4C0' }}>
-              <button onClick={() => setReview(null)} className="gv-lift px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-wide transition-colors focus:outline-none" style={{ color: '#6A5A4A', backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', fontFamily: "'Outfit', sans-serif" }}>Cancel</button>
-              <button onClick={commitReview} disabled={review.length === 0} className="gv-lift flex-1 py-3 rounded-xl font-black text-sm uppercase tracking-widest transition-all disabled:opacity-30 focus:outline-none" style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>
+              <button onClick={() => setReview(null)} className="gv-lift px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-wide transition-colors focus:outline-none" style={{ color: '#6A5A4A', backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', fontFamily: "var(--font-brand), sans-serif" }}>Cancel</button>
+              <button onClick={commitReview} disabled={review.length === 0} className="gv-lift flex-1 py-3 rounded-xl font-black text-sm uppercase tracking-widest transition-all disabled:opacity-30 focus:outline-none" style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif" }}>
                 Add {review.length}
               </button>
             </div>

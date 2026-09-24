@@ -19,7 +19,7 @@ import { NEU } from '@/components/neu';
 import Portal from '@/components/Portal';
 import { GLASS, glassFallbackCss } from '@/components/notifications/glass';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 const EASE = 'cubic-bezier(0.22,1,0.36,1)';
 const DISMISS_MS = 2200;
 const ANIM_MS = 240;

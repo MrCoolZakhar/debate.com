@@ -189,12 +189,14 @@ function page(o: { state: PageState; email?: string; token?: string }): string {
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>Email preferences · Gavelling</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400..900&display=swap" rel="stylesheet">
 <style>
   :root { color-scheme: light dark; }
   * { box-sizing: border-box; }
   body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
          padding:28px 20px; background:${BASE}; color:${INK};
-         font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+         font-family: 'Albert Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
   .card { width:100%; max-width:540px; background:${CARD}; border-radius:24px; padding:38px 34px;
           box-shadow: 0 18px 44px rgba(27,56,40,0.13), 0 2px 6px rgba(27,56,40,0.06); }
   .mark { width:46px; height:46px; border-radius:999px; background:${FOREST}; color:#EED98A;

@@ -7,7 +7,7 @@
 
 import { CHAIR_TITLE_OPTIONS, type ChairTitle } from '@/lib/chairTitles';
 
-const FONT = "'Outfit', sans-serif";
+const FONT = "var(--font-brand), sans-serif";
 
 export function ChairTitleChips({
   value,

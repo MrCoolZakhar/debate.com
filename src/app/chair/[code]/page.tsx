@@ -1546,7 +1546,7 @@ function DownloadRecordButton({ committee }: { committee: Committee }) {
         onClick={() => { void run(); }}
         disabled={state === 'busy'}
         className="inline-flex items-center gap-3 px-7 py-4 rounded-2xl font-black text-lg focus:outline-none gv-lift-dark disabled:opacity-70 disabled:cursor-wait"
-        style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}
+        style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.02em' }}
       >
         <FileSpreadsheet size={24} strokeWidth={2.2} aria-hidden="true" />
         {state === 'busy' ? t('session_record_busy') : t('session_record_download')}
@@ -1590,14 +1590,14 @@ function SessionEndedContent({ committee, hoursRemaining }: { committee: Committ
               <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
               <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
             </svg>
-            <span className="text-sm font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('chair_ended_awards_title')}</span>
+            <span className="text-sm font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>{t('chair_ended_awards_title')}</span>
           </div>
           <p className="text-sm leading-relaxed mb-4" style={{ color: '#6A5A4A' }}>{t('chair_ended_awards_body')}</p>
           <ChairAwardsCta
             code={committee.code}
             label={t('chair_ended_awards_cta')}
             className="inline-flex items-center px-5 py-2.5 rounded-xl text-sm font-black transition-colors focus:outline-none gv-lift-dark"
-            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}
+            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.04em' }}
           />
         </div>
       )}
@@ -4986,7 +4986,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           // (WWMMWW) truncate with an ellipsis instead of pushing the icons off the bar. The
           // full code is in the title and aria-label, and on the presenter.
           className="shrink min-w-0 max-w-[9.5rem] inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[#EDE7D8] hover:bg-[#E2DAC8] text-[#1C1410] transition-[background-color,transform] duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] active:scale-[0.96] ms-1 me-1"
-          style={{ fontFamily: "'Outfit', sans-serif", fontSize: 14, fontWeight: 800, letterSpacing: '0.08em' }}>
+          style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 14, fontWeight: 800, letterSpacing: '0.08em' }}>
           <Maximize2 size={13} strokeWidth={2.4} aria-hidden className="shrink-0" style={{ opacity: 0.6 }} />
           <span className="tabular-nums truncate min-w-0">{committee.code}</span>
         </button>
@@ -5014,7 +5014,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             code={committee.code}
             label={t('chair_ended_awards_cta')}
             className="text-[11px] font-bold px-2.5 py-1 rounded-lg shrink-0 gv-lift transition-colors"
-            style={{ backgroundColor: 'rgba(182,135,31,0.12)', color: '#8B5A20', border: '1px solid rgba(182,135,31,0.35)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.03em' }}
+            style={{ backgroundColor: 'rgba(182,135,31,0.12)', color: '#8B5A20', border: '1px solid rgba(182,135,31,0.35)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.03em' }}
           />
         )}
         <TopBarIconButton tutorial="tab-settings" onClick={() => setShowSettings(true)} label={t('chair_hdr_settings')}>
@@ -5047,12 +5047,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         <div className="flex border-b border-[#DDD4C0] bg-[#FAF8F3] shrink-0">
           <button onClick={() => setEndedTab('ended')}
             className="flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide"
-            style={{ color: endedTab === 'ended' ? '#1B3828' : '#9A8A78', borderBottomColor: endedTab === 'ended' ? '#1B3828' : 'transparent', fontFamily: "'Outfit', sans-serif" }}>
+            style={{ color: endedTab === 'ended' ? '#1B3828' : '#9A8A78', borderBottomColor: endedTab === 'ended' ? '#1B3828' : 'transparent', fontFamily: "var(--font-brand), sans-serif" }}>
             {t('session_end_view')}
           </button>
           <button onClick={() => setEndedTab('session')}
             className="flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide"
-            style={{ color: endedTab === 'session' ? '#1B3828' : '#9A8A78', borderBottomColor: endedTab === 'session' ? '#1B3828' : 'transparent', fontFamily: "'Outfit', sans-serif" }}>
+            style={{ color: endedTab === 'session' ? '#1B3828' : '#9A8A78', borderBottomColor: endedTab === 'session' ? '#1B3828' : 'transparent', fontFamily: "var(--font-brand), sans-serif" }}>
             {t('session_view')}
           </button>
         </div>
@@ -5062,23 +5062,23 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         <div className="flex border-b border-[#DDD4C0] bg-[#FAF8F3] shrink-0">
           <button onClick={() => setSuspendTab('suspend')}
             className={`flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide`}
-            style={{ color: suspendTab === 'suspend' ? '#1B3828' : '#9A8A78', borderBottomColor: suspendTab === 'suspend' ? '#1B3828' : 'transparent', fontFamily: "'Outfit', sans-serif" }}>
+            style={{ color: suspendTab === 'suspend' ? '#1B3828' : '#9A8A78', borderBottomColor: suspendTab === 'suspend' ? '#1B3828' : 'transparent', fontFamily: "var(--font-brand), sans-serif" }}>
             {t('session_suspend_view')}
           </button>
           <button onClick={() => setSuspendTab('session')}
             className={`flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide`}
-            style={{ color: suspendTab === 'session' ? '#1B3828' : '#9A8A78', borderBottomColor: suspendTab === 'session' ? '#1B3828' : 'transparent', fontFamily: "'Outfit', sans-serif" }}>
+            style={{ color: suspendTab === 'session' ? '#1B3828' : '#9A8A78', borderBottomColor: suspendTab === 'session' ? '#1B3828' : 'transparent', fontFamily: "var(--font-brand), sans-serif" }}>
             {t('session_session_view')}
           </button>
         </div>
       )}
       {sessionEnded && endedTab === 'session' && (
-        <div className="shrink-0 px-4 py-2 text-center text-sm font-bold" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52', color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>
+        <div className="shrink-0 px-4 py-2 text-center text-sm font-bold" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif" }}>
           {t('session_ended_banner')}
         </div>
       )}
       {!sessionEnded && sessionSuspended && suspendTab === 'session' && (
-        <div className="shrink-0 px-4 py-2 text-center text-sm font-bold" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52', color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>
+        <div className="shrink-0 px-4 py-2 text-center text-sm font-bold" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif" }}>
           {t('session_suspended_banner')}
         </div>
       )}
@@ -5137,7 +5137,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               && resumeClaimIsMine(committee.code, committee.suspendedAt));
             return (
               <>
-                <h1 className="text-6xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('session_suspended_title')}</h1>
+                <h1 className="text-6xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>{t('session_suspended_title')}</h1>
                 <p className={`text-xl ${suspendKeptUntil ? 'mb-3' : 'mb-12'}`} style={{ color: '#6A5A4A' }}>{t('session_suspended_desc')}</p>
                 {/* A standalone room nobody resumes is deleted (src/lib/roomRetention.ts). */}
                 {suspendKeptUntil && (
@@ -5159,7 +5159,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         onClick={handleTakeOverResume}
                         disabled={resumeBusy}
                         className="mt-5 px-6 py-3 rounded-xl font-black text-sm transition-colors focus:outline-none disabled:opacity-60 gv-lift-dark"
-                        style={{ backgroundColor: '#8B5A20', color: '#EDE7D8', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}>
+                        style={{ backgroundColor: '#8B5A20', color: '#EDE7D8', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.04em' }}>
                         {resumeBusy ? '…' : t('session_resume_takeover')}
                       </button>
                     )}
@@ -5168,7 +5168,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   <button
                     onClick={handleResumeClick}
                     disabled={resumeBusy}
-                    className="px-12 py-5 text-white text-xl font-black rounded-2xl transition-colors focus:outline-none disabled:opacity-70 disabled:cursor-wait gv-lift-dark" style={{ backgroundColor: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
+                    className="px-12 py-5 text-white text-xl font-black rounded-2xl transition-colors focus:outline-none disabled:opacity-70 disabled:cursor-wait gv-lift-dark" style={{ backgroundColor: '#1B3828', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.05em' }}
                     onMouseEnter={(e) => { if (!resumeBusy) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
                     {t('session_resume_btn')}

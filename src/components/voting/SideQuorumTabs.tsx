@@ -22,7 +22,7 @@
 import { Check, TriangleAlert } from 'lucide-react';
 import { useT } from '@/contexts/LanguageContext';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 const GAUGE_W = 52;
 const GAUGE_H = 30;
 const STROKE = 5;

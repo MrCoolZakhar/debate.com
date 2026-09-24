@@ -11,7 +11,7 @@ import { CircleFlag } from '@/components/CircleFlag';
 import { FlagImg } from '@/components/FlagImg';
 import { UN_COUNTRIES, getCountryByName } from '@/lib/countries';
 
-export const OUTFIT = "'Outfit', sans-serif";
+export const OUTFIT = "var(--font-brand), sans-serif";
 
 export const C = {
   forest: '#1B3828', forestMid: '#2A5A3C', forestLight: '#3D7A52',

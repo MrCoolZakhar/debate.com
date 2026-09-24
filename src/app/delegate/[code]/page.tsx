@@ -532,7 +532,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4">
-      <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('delegate_doc_submit_heading')}</h2>
+      <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>{t('delegate_doc_submit_heading')}</h2>
       {submitted && (
         <div className="rounded-xl p-3 text-sm font-semibold" style={{ backgroundColor: 'rgba(27,56,40,0.1)', border: '1px solid rgba(27,56,40,0.3)', color: '#1B3828' }}>
           {t('delegate_doc_submitted_success')}
@@ -546,7 +546,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
       <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4 space-y-4">
         {/* Type selector */}
         <div>
-          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{t('delegate_doc_type_label')}</label>
+          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>{t('delegate_doc_type_label')}</label>
           <div className="flex gap-2">
             {(['working-paper', 'draft-resolution'] as DocumentType[]).map((dt) => (
               <button key={dt} onClick={() => setDocType(dt)}
@@ -559,7 +559,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
 
         {/* Title */}
         <div>
-          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{t('delegate_doc_title_label')}</label>
+          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>{t('delegate_doc_title_label')}</label>
           <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
             placeholder={t('delegate_doc_title_placeholder')}
             className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 text-[#1C1410] text-sm focus:outline-none focus:border-[#1B3828]" />
@@ -567,7 +567,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
 
         {/* Co-sponsors */}
         <div>
-          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>
+          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>
             {sponsorLabel(committee, t('delegate_doc_sponsors_label'))} <span className="font-normal" style={{ color: '#9A8A78' }}>{t('delegate_doc_sponsors_auto')}</span>
           </label>
           <SponsorsInput committee={committee} myCountry={country} value={coSponsors} onChange={setCoSponsors} />
@@ -575,7 +575,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
 
         {/* Google Docs link — same `content` column the chair's form writes */}
         <div>
-          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>
+          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>
             {t('documents_google_docs_label')} <span className="font-normal" style={{ color: '#9A8A78' }}>({t('documents_google_docs_optional')})</span>
           </label>
           <input type="url" inputMode="url" value={link} onChange={(e) => setLink(e.target.value)}
@@ -586,7 +586,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
         {/* File — a real dropzone, not a text button. The old "+ Attach file"
             link read as if there were no upload here at all. */}
         <div>
-          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{t('delegate_doc_attachment_label')} <span className="font-normal" style={{ color: '#9A8A78' }}>{t('delegate_doc_attachment_optional')}</span></label>
+          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>{t('delegate_doc_attachment_label')} <span className="font-normal" style={{ color: '#9A8A78' }}>{t('delegate_doc_attachment_optional')}</span></label>
           {fileName || uploading ? (
             <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-3">
               <span className="text-sm text-[#1C1410] flex-1 truncate flex items-center gap-2">

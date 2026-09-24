@@ -11,7 +11,7 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { reportCrash, recoverFromStaleDeploy, isStaleDeployError } from '@/lib/reportCrash';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 export default function Error({
   error,

@@ -24,7 +24,7 @@ import { Check, Copy, X } from 'lucide-react';
 import { useT } from '@/contexts/LanguageContext';
 import { encodeQr } from '@/lib/qrCode';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
 const OPEN_MS = 320;
 const CLOSE_MS = 220;

@@ -18,7 +18,7 @@ import { ModalOverlay } from '@/components/CommitteeEditorModal';
 import type { PreviewCandidate } from '@/components/EmailComposer';
 import { friendlyError } from '@/lib/friendlyError';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 const BORDER = '#DDD4C0';
 const INK = '#1C1410';
 

@@ -20,7 +20,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { GLASS, glassFallbackCss, SPRING_BEZIER, SPRING_LINEAR } from './notifications/glass';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 const EASE = 'cubic-bezier(0.22,1,0.36,1)';
 
 /** Far longer than Toast.tsx's DISMISS_MS (2200ms) — long enough to read a

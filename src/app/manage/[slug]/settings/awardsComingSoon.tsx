@@ -17,7 +17,7 @@
 
 import { Trophy } from 'lucide-react';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 // What the finished tab will hold. Deliberately no date: this sets an
 // expectation, not a promise.

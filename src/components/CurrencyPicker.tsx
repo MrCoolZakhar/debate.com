@@ -38,7 +38,7 @@ import {
   type CurrencyOption,
 } from '@/lib/currencies';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 const EASE = 'cubic-bezier(0.22,1,0.36,1)';
 const INK = '#1C1410';
 /** NEU.inkSoft's resolved value. `muted` (#9A8A78) is a 3.15:1 wash and must

@@ -15,7 +15,7 @@ import { themeCssVars, type ConferenceTheme } from '@/lib/theme';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import SubmissionToast from '@/components/SubmissionToast';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 /** The conference fields this page reads. `conferences` is readable by anyone
  *  with the link (USING (true)), so the anon client is enough. */

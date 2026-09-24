@@ -18,7 +18,7 @@ import { DatePicker } from '@/components/DatePicker';
 import Loader from '@/components/Loader';
 import type { ParticipantApplication } from './types';
 
-const MONO = "'DM Mono', monospace";
+const MONO = "var(--font-brand), sans-serif";
 const PAGE_SIZE = 5;
 
 interface SwapMetadata {

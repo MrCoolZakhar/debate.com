@@ -34,7 +34,7 @@ import {
   type ConferenceTheme, GAVELLING_THEME, themeCssVars, themeWarnings,
 } from '@/lib/theme';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 type ThemeKey = 'main' | 'accent';
 

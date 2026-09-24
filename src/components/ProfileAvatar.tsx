@@ -43,7 +43,7 @@ import ProfileDropdown from '@/components/ProfileDropdown';
 import { useMyActivity, markActivityKeySeen, activityWeight } from '@/lib/myActivity';
 import { useLiveRooms } from '@/lib/liveRooms';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 /** 1 to 2 letters: first + last word of the display name, else the email's first letter. */
 export function profileInitials(name: string | null | undefined, email?: string | null): string {

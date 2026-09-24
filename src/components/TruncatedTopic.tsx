@@ -44,7 +44,7 @@ export function TruncatedTopic({ text, max = 75 }: { text: string; max?: number 
         aria-expanded={expanded}
         className="inline whitespace-nowrap rounded-sm align-baseline focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[color:var(--gv-main,#1B3828)]"
         style={{
-          fontFamily: "'Outfit', sans-serif",
+          fontFamily: "var(--font-brand), sans-serif",
           fontSize: '11.5px',
           fontWeight: 700,
           color: 'var(--gv-main, #1B3828)',

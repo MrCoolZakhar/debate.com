@@ -16,7 +16,7 @@ import { ArrowLeft, Globe2, CalendarCheck, KeyRound, MailCheck, RotateCw, Sparkl
 import type { SupabaseClient } from '@supabase/supabase-js';
 import DecorativeBleed from '@/components/DecorativeBleed';
 
-export const OUTFIT = "'Outfit', sans-serif";
+export const OUTFIT = "var(--font-brand), sans-serif";
 
 /**
  * Length of the email confirmation code. This MUST match Supabase's
@@ -913,7 +913,7 @@ export function CodeVerifyScreen({
           className="w-full rounded-xl px-4 py-3 transition-colors focus:outline-none"
           style={{
             ...inputStyle,
-            fontFamily: "'DM Mono', monospace",
+            fontFamily: "var(--font-brand), sans-serif",
             fontSize: '20px',
             letterSpacing: '0.4em',
             textAlign: 'center',

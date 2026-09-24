@@ -47,7 +47,7 @@ export const K = {
   tint: 'rgba(27,56,40,0.035)',
   danger: '#9B2C22',
   dangerTint: 'rgba(155,44,34,0.08)',
-  font: "'Outfit', sans-serif",
+  font: "var(--font-brand), sans-serif",
   ease: 'cubic-bezier(0.22,1,0.36,1)',
   out: 'inset 0 1px 0 rgba(255,255,255,0.75), 0 0 0 1px rgba(27,56,40,0.07), 6px 7px 18px rgba(27,56,40,0.17), 0 1px 2px rgba(27,56,40,0.06)',
   outSm: 'inset 0 1px 0 rgba(255,255,255,0.5), 0 1px 2px rgba(27,56,40,0.12), 0 3px 7px -2px rgba(27,56,40,0.17)',

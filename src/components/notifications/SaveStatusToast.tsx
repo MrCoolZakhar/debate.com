@@ -23,7 +23,7 @@ import {
   type WriteStatusState,
 } from '@/lib/writeStatus';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 export default function SaveStatusToast() {
   const t = useT();

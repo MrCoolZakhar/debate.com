@@ -77,7 +77,7 @@ const modalInputStyle: React.CSSProperties = {
   color: 'var(--gv-on-surface)',
   backgroundColor: 'var(--gv-surface)',
   outline: 'none',
-  fontFamily: "'Outfit', sans-serif",
+  fontFamily: "var(--font-brand), sans-serif",
 };
 
 const modalLabelStyle: React.CSSProperties = {
@@ -85,7 +85,7 @@ const modalLabelStyle: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 700,
   color: '#6E5F4E',
-  fontFamily: "'Outfit', sans-serif",
+  fontFamily: "var(--font-brand), sans-serif",
   letterSpacing: '0.01em',
   marginBottom: 4,
 };
@@ -309,7 +309,7 @@ function MinAgeChip({ minAge, maxAge }: { minAge: number | null; maxAge: number 
         backgroundColor: 'rgba(238,217,138,0.14)',
         border: '1px solid rgba(238,217,138,0.4)',
         color: 'var(--gv-on-main)',
-        fontFamily: "'Outfit', sans-serif",
+        fontFamily: "var(--font-brand), sans-serif",
         fontSize: '11px',
         fontWeight: 800,
         letterSpacing: '0.06em',
@@ -376,24 +376,24 @@ function ReviewCard({ review }: { review: ConferenceReview }) {
             style={{
               width: '30px', height: '30px', borderRadius: '9999px',
               backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)',
-              fontSize: '12px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
+              fontSize: '12px', fontWeight: 700, fontFamily: "var(--font-brand), sans-serif",
             }}
           >
             {(review.display_name ?? 'V').charAt(0).toUpperCase()}
           </span>
-          <span className="text-[13.5px] font-semibold truncate" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+          <span className="text-[13.5px] font-semibold truncate" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
             {review.display_name ?? 'Verified delegate'}
           </span>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
           <StarRow rating={review.rating} />
-          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: '10px', color: 'var(--gv-muted)', letterSpacing: '0.01em' }}>
+          <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: '10px', color: 'var(--gv-muted)', letterSpacing: '0.01em' }}>
             {fmtReviewDate(review.created_at)}
           </span>
         </div>
       </div>
       {review.review_text && (
-        <p className="text-[13.5px] mt-3" style={{ color: '#3B342C', fontFamily: "'Outfit', sans-serif", lineHeight: 1.75, margin: '12px 0 0 0' }}>
+        <p className="text-[13.5px] mt-3" style={{ color: '#3B342C', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.75, margin: '12px 0 0 0' }}>
           {review.review_text}
         </p>
       )}
@@ -411,7 +411,7 @@ function SortButton({ label, dir, onClick }: { label: string; dir: 'asc' | 'desc
         backgroundColor: active ? 'var(--gv-main)' : 'rgba(237,231,216,0.5)',
         color: active ? 'var(--gv-on-main)' : '#6B5F52',
         border: active ? '1px solid var(--gv-main)' : '1px solid color-mix(in srgb, var(--gv-border) 90%, transparent)',
-        fontFamily: "'Outfit', sans-serif",
+        fontFamily: "var(--font-brand), sans-serif",
         letterSpacing: '0.09em',
         whiteSpace: 'nowrap',
         cursor: 'pointer',
@@ -440,7 +440,7 @@ function TypeFilterButton({ mode, onClick }: { mode: 'ga' | 'crisis' | null; onC
         backgroundColor: active ? 'var(--gv-main)' : 'rgba(237,231,216,0.5)',
         color: active ? 'var(--gv-on-main)' : '#6B5F52',
         border: active ? '1px solid var(--gv-main)' : '1px solid color-mix(in srgb, var(--gv-border) 90%, transparent)',
-        fontFamily: "'Outfit', sans-serif",
+        fontFamily: "var(--font-brand), sans-serif",
         letterSpacing: '0.09em',
         whiteSpace: 'nowrap',
         cursor: 'pointer',
@@ -1362,12 +1362,12 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
         <SiteNav />
         <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
           <p className="text-xs font-mono tracking-widest mb-4" style={{ color: 'var(--gv-muted)' }}>404</p>
-          <h1 className="font-black text-2xl mb-2" style={{ color: 'var(--gv-on-bg)', fontFamily: "'Outfit', sans-serif" }}>Conference Not Found</h1>
-          <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>This conference may be private or doesn&apos;t exist.</p>
+          <h1 className="font-black text-2xl mb-2" style={{ color: 'var(--gv-on-bg)', fontFamily: "var(--font-brand), sans-serif" }}>Conference Not Found</h1>
+          <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>This conference may be private or doesn&apos;t exist.</p>
           <Link
             href="/conferences/explore"
             className="rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
-            style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
+            style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif" }}
           >
             EXPLORE CONFERENCES →
           </Link>
@@ -1524,7 +1524,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
           <div
             className="relative w-full text-center"
             style={{
-              backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif",
+              backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif",
               fontSize: 12, fontWeight: 800, letterSpacing: '0.08em',
               padding: '9px 16px', zIndex: 20,
             }}
@@ -1576,7 +1576,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 aria-hidden
                 style={{
                   position: 'absolute', right: '4%', bottom: '-24px',
-                  fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: 'clamp(120px, 18vw, 240px)', lineHeight: 1,
+                  fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: 'clamp(120px, 18vw, 240px)', lineHeight: 1,
                   color: 'rgba(238,217,138,0.07)', userSelect: 'none', pointerEvents: 'none',
                 }}
               >
@@ -1589,7 +1589,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
           <div className="absolute right-6 md:right-14 flex gap-2 z-10" style={{ top: '84px' }}>
             <span
               style={{
-                fontFamily: "'Outfit', sans-serif",
+                fontFamily: "var(--font-brand), sans-serif",
                 fontWeight: 700,
                 fontSize: '10px',
                 letterSpacing: '0.12em',
@@ -1643,16 +1643,16 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(16,28,21,0.28)'; el.style.borderColor = 'rgba(255,255,255,0.55)'; }}
                 >
                   <Plus size={20} strokeWidth={2.2} />
-                  <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.16em' }}>
+                  <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.16em' }}>
                     ADD LOGO
                   </span>
                 </button>
               ) : null}
               <div className="min-w-0">
-                <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11px', color: 'var(--gv-on-main)', letterSpacing: '0.14em', marginBottom: '6px' }}>
+                <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '11px', color: 'var(--gv-on-main)', letterSpacing: '0.14em', marginBottom: '6px' }}>
                   {conferenceAcronymLabel(conference)}
                 </p>
-                <h1 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, color: 'white', fontSize: 'clamp(26px, 4vw, 54px)', lineHeight: 1.05, marginBottom: '10px', textShadow: '0 2px 24px rgba(0,0,0,0.3)' }}>
+                <h1 style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 900, color: 'white', fontSize: 'clamp(26px, 4vw, 54px)', lineHeight: 1.05, marginBottom: '10px', textShadow: '0 2px 24px rgba(0,0,0,0.3)' }}>
                   {conferenceFullNameLabel(conference)}
                   {/* Inline after the last word, so it rides the final line of a wrapped title instead of dropping beneath it. */}
                   <VerifiedCheck verified={!!conference.is_verified} size={32} title="Verified conference" style={{ marginLeft: '0.3em', verticalAlign: '-0.08em', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.35))' }} />
@@ -1666,7 +1666,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         style={{ width: '20px', height: '14px', borderRadius: '3px', objectFit: 'cover', flexShrink: 0, boxShadow: '0 1px 3px rgba(0,0,0,0.4)' }}
                       />
                     )}
-                    <span style={{ fontSize: '14px', color: 'rgba(237,231,216,0.92)', fontFamily: "'Outfit', sans-serif", fontWeight: 500 }}>
+                    <span style={{ fontSize: '14px', color: 'rgba(237,231,216,0.92)', fontFamily: "var(--font-brand), sans-serif", fontWeight: 500 }}>
                       {/* City in full, country as its ISO code, the flag already
                           names the country, so the full name would repeat it. */}
                       {isOnline ? 'Online' : `${conference.city}, ${(countryObj?.code ?? conference.country).toUpperCase()}`}
@@ -1677,14 +1677,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   {!conference.dates_tbd && conference.start_date ? (
                     <>
                       <span aria-hidden style={{ color: 'rgba(238,217,138,0.5)', fontSize: '10px' }}>◆</span>
-                      <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em', fontSize: '12px', color: 'rgba(237,231,216,0.78)' }}>
+                      <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em', fontSize: '12px', color: 'rgba(237,231,216,0.78)' }}>
                         {formatDateRange(conference.start_date, conference.end_date)}
                       </span>
                     </>
                   ) : isOrganizerViewer ? (
                     <>
                       <span aria-hidden style={{ color: 'rgba(238,217,138,0.5)', fontSize: '10px' }}>◆</span>
-                      <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: '11px', letterSpacing: '0.06em', color: 'var(--gv-on-main)', backgroundColor: 'rgba(238,217,138,0.14)', border: '1px solid rgba(238,217,138,0.32)', padding: '2px 9px', borderRadius: '9999px' }}>
+                      <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontSize: '11px', letterSpacing: '0.06em', color: 'var(--gv-on-main)', backgroundColor: 'rgba(238,217,138,0.14)', border: '1px solid rgba(238,217,138,0.32)', padding: '2px 9px', borderRadius: '9999px' }}>
                         Dates: TBD
                       </span>
                     </>
@@ -1745,7 +1745,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     <p
                       className="hidden sm:block"
                       style={{
-                        fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9.5px',
+                        fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '9.5px',
                         letterSpacing: '0.14em', textTransform: 'uppercase', color: NEU.muted, margin: '0 0 3px 0',
                       }}
                     >
@@ -1753,7 +1753,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     </p>
                     <p
                       className="text-[12px] sm:text-[16px] font-extrabold leading-tight"
-                      style={{ color: NEU.ink, fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums', margin: 0 }}
+                      style={{ color: NEU.ink, fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums', margin: 0 }}
                     >
                       {cell.value}
                     </p>
@@ -1799,17 +1799,17 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     <Star size={17} strokeWidth={2} style={{ color: 'var(--gv-accent)', fill: 'var(--gv-accent)' }} />
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[14px] font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+                    <p className="text-[14px] font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>
                       How was {conferenceAcronymLabel(conference)}?
                     </p>
-                    <p className="text-[12px]" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", margin: '1px 0 0 0' }}>
+                    <p className="text-[12px]" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", margin: '1px 0 0 0' }}>
                       Leave a review to help future delegates.
                     </p>
                   </div>
                   <button
                     onClick={() => showTab('reviews')}
                     className="flex-shrink-0 rounded-xl py-2 px-4 text-[11px] font-bold focus:outline-none transition-colors gv-lift"
-                    style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', border: 'none', cursor: 'pointer' }}
+                    style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', border: 'none', cursor: 'pointer' }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
                   >
@@ -1899,7 +1899,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     />
                   )}
                   {conference.description ? (
-                    <p className="text-[15px]" style={{ color: '#3B342C', fontFamily: "'Outfit', sans-serif", whiteSpace: 'pre-wrap', lineHeight: 1.9 }}>
+                    <p className="text-[15px]" style={{ color: '#3B342C', fontFamily: "var(--font-brand), sans-serif", whiteSpace: 'pre-wrap', lineHeight: 1.9 }}>
                       {conference.description}
                     </p>
                   ) : (
@@ -1911,7 +1911,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         border: '1.5px dashed rgba(154,138,120,0.6)',
                         backgroundColor: 'rgba(237,231,216,0.25)',
                         color: 'var(--gv-muted)',
-                        fontFamily: "'Outfit', sans-serif",
+                        fontFamily: "var(--font-brand), sans-serif",
                         cursor: 'pointer',
                       }}
                       onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'var(--gv-main)'; el.style.color = 'var(--gv-main)'; el.style.backgroundColor = 'color-mix(in srgb, var(--gv-main) 4%, transparent)'; }}
@@ -1935,7 +1935,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       style={{ position: 'absolute', top: 12, right: 12 }}
                     />
                   )}
-                  <p className="mb-3" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: '0 0 12px 0' }}>
+                  <p className="mb-3" style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: '0 0 12px 0' }}>
                     ORGANISED BY
                   </p>
                   <div
@@ -1951,13 +1951,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       />
                     )}
                     <div className="min-w-0">
-                      <p className="font-semibold text-[15px]" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>{conference.full_name}</p>
-                      <p className="text-[11px] mt-0.5" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", fontWeight: 500, margin: 0 }}>{conferenceAcronymLabel(conference)}</p>
+                      <p className="font-semibold text-[15px]" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>{conference.full_name}</p>
+                      <p className="text-[11px] mt-0.5" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, margin: 0 }}>{conferenceAcronymLabel(conference)}</p>
                       {conference.contact_email && (
                         <a
                           href={`mailto:${conference.contact_email}`}
                           className="flex items-center gap-1.5 text-xs mt-1 transition-colors min-h-11 sm:min-h-0"
-                          style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", textDecoration: 'none', overflowWrap: 'anywhere' }}
+                          style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", textDecoration: 'none', overflowWrap: 'anywhere' }}
                           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-main)'; }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-muted)'; }}
                         >
@@ -2046,7 +2046,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
               {/* The Secretariat, trigger-maintained public roster */}
               {activeTab === 'overview' && (conference.display_secretariat?.length ?? 0) > 0 && (
                 <SectionCard className="mb-6">
-                  <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: '0 0 18px 0' }}>
+                  <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: '0 0 18px 0' }}>
                     THE SECRETARIAT
                   </p>
                   <div className="flex flex-wrap justify-center gap-x-7 gap-y-6">
@@ -2054,11 +2054,11 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       const inner = (
                         <>
                           <PersonAvatar name={m.name} url={m.avatar_url} px={72} />
-                          <span className="text-[13.5px] font-semibold mt-2.5 leading-tight" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+                          <span className="text-[13.5px] font-semibold mt-2.5 leading-tight" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
                             {m.name}
                           </span>
                           {m.title && (
-                            <span className="mt-1" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.1em', color: 'var(--gv-accent)', textTransform: 'uppercase' }}>
+                            <span className="mt-1" style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.1em', color: 'var(--gv-accent)', textTransform: 'uppercase' }}>
                               {m.title}
                             </span>
                           )}
@@ -2113,7 +2113,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   {paymentReturn === 'cancelled' && (
                     <SectionCard className="!py-3 !px-5 mb-6">
                       <div className="flex items-center justify-between gap-3">
-                        <p className="text-[13px]" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif" }}>
+                        <p className="text-[13px]" style={{ color: '#6B5F52', fontFamily: "var(--font-brand), sans-serif" }}>
                           Payment cancelled. You can try again anytime.
                         </p>
                         <button
@@ -2169,7 +2169,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
               {activeTab === 'reviews' && (
                 <div className="flex flex-col gap-6">
                   <SectionCard>
-                    <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: '0 0 14px 0' }}>
+                    <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: '0 0 14px 0' }}>
                       DELEGATE REVIEWS
                     </p>
                     {reviewCount === 0 ? (
@@ -2180,21 +2180,21 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         >
                           <Star size={22} strokeWidth={1.8} style={{ color: 'var(--gv-accent)' }} />
                         </div>
-                        <p className="text-[14px] font-semibold mb-1" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+                        <p className="text-[14px] font-semibold mb-1" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
                           No reviews yet
                         </p>
-                        <p className="text-[13px] max-w-[360px]" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
+                        <p className="text-[13px] max-w-[360px]" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.7 }}>
                           Reviews appear once delegates attend an edition of this conference.
                         </p>
                       </div>
                     ) : (
                       <div className="flex items-center gap-5">
-                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontVariantNumeric: 'tabular-nums', fontSize: '44px', color: 'var(--gv-on-surface)', lineHeight: 1 }}>
+                        <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 900, fontVariantNumeric: 'tabular-nums', fontSize: '44px', color: 'var(--gv-on-surface)', lineHeight: 1 }}>
                           {avgRating.toFixed(1)}
                         </span>
                         <div className="flex flex-col gap-1">
                           <StarRow rating={Math.round(avgRating)} size={16} />
-                          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: '10.5px', letterSpacing: '0.1em', color: 'var(--gv-muted)' }}>
+                          <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: '10.5px', letterSpacing: '0.1em', color: 'var(--gv-muted)' }}>
                             {reviewCount} {reviewCount === 1 ? 'REVIEW' : 'REVIEWS'}
                           </span>
                         </div>
@@ -2205,7 +2205,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   {/* Write a review, attendees only */}
                   {canReview && (
                     <SectionCard>
-                      <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: '0 0 12px 0' }}>
+                      <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: '0 0 12px 0' }}>
                         YOUR REVIEW
                       </p>
                       <div className="flex items-center gap-1.5 mb-4" onMouseLeave={() => setReviewHover(0)}>
@@ -2236,12 +2236,12 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         rows={4}
                         placeholder="What should future delegates know about this conference?"
                         className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"
-                        style={{ border: '1px solid var(--gv-border)', backgroundColor: 'rgba(237,231,216,0.25)', color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}
+                        style={{ border: '1px solid var(--gv-border)', backgroundColor: 'rgba(237,231,216,0.25)', color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.7 }}
                         onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--gv-main)'; }}
                         onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--gv-border)'; }}
                       />
                       {reviewError && (
-                        <p className="text-[12px] mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", margin: '8px 0 0 0' }}>
+                        <p className="text-[12px] mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", margin: '8px 0 0 0' }}>
                           {reviewError}
                         </p>
                       )}
@@ -2252,7 +2252,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         style={{
                           backgroundColor: reviewRating < 1 || reviewSubmitting ? 'var(--gv-border)' : 'var(--gv-main)',
                           color: reviewRating < 1 || reviewSubmitting ? 'var(--gv-muted)' : 'var(--gv-on-main)',
-                          fontFamily: "'Outfit', sans-serif",
+                          fontFamily: "var(--font-brand), sans-serif",
                           letterSpacing: '0.06em',
                           border: 'none',
                           cursor: reviewRating < 1 || reviewSubmitting ? 'default' : 'pointer',
@@ -2275,7 +2275,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     <div className="flex flex-col gap-3">
                       <div className="flex items-center gap-3 mt-1">
                         <span className="flex-1" style={{ height: '1px', backgroundColor: 'color-mix(in srgb, var(--gv-border) 90%, transparent)' }} />
-                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-muted)', whiteSpace: 'nowrap' }}>
+                        <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-muted)', whiteSpace: 'nowrap' }}>
                           FROM PREVIOUS EDITION{predAcronym ? ` · ${predAcronym.toUpperCase()}` : ''}
                         </span>
                         <span className="flex-1" style={{ height: '1px', backgroundColor: 'color-mix(in srgb, var(--gv-border) 90%, transparent)' }} />
@@ -2322,13 +2322,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     ) : isOrganizerViewer ? (
                       /* 1, Organizer/secretariat: manage affordances, never apply buttons */
                       <>
-                        <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-on-main)', margin: '0 0 8px 0' }}>
+                        <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-on-main)', margin: '0 0 8px 0' }}>
                           {(organizerRole ?? 'owner').toUpperCase()}
                         </p>
-                        <p className="font-bold text-base mb-1" style={{ color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif" }}>
+                        <p className="font-bold text-base mb-1" style={{ color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif" }}>
                           You run this conference
                         </p>
-                        <p className="text-xs mb-4" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 70%, transparent)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
+                        <p className="text-xs mb-4" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 70%, transparent)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.6 }}>
                           Manage applications, committees, and your public page.
                         </p>
                         {myApp && (
@@ -2336,10 +2336,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                             className="flex items-center justify-between rounded-xl px-3.5 py-2.5 mb-3"
                             style={{ backgroundColor: 'rgba(238,217,138,0.08)', border: '1px solid rgba(238,217,138,0.18)' }}
                           >
-                            <span className="text-[12px] font-semibold" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 90%, transparent)', fontFamily: "'Outfit', sans-serif" }}>
+                            <span className="text-[12px] font-semibold" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 90%, transparent)', fontFamily: "var(--font-brand), sans-serif" }}>
                               Also applied as {roleLabel(myApp.role)}
                             </span>
-                            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.1em', color: 'var(--gv-on-main)' }}>
+                            <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.1em', color: 'var(--gv-on-main)' }}>
                               {myApp.status.toUpperCase()}
                             </span>
                           </div>
@@ -2347,7 +2347,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         <Link
                           href={`/manage/${slug}`}
                           className="flex items-center justify-center gap-2 w-full rounded-xl py-3 font-bold text-sm transition-colors focus:outline-none"
-                          style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none' }}
+                          style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none' }}
                           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-accent)'; }}
                         >
@@ -2394,22 +2394,22 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         const payLabel = conference.financial_aid_enabled ? 'PAY AND REQUEST AID' : 'PAY';
                         return (
                           <>
-                            <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-on-main)', margin: '0 0 8px 0' }}>
+                            <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-on-main)', margin: '0 0 8px 0' }}>
                               YOUR APPLICATION
                             </p>
                             <div className="flex items-center justify-between gap-3 mb-1">
-                              <p className="font-bold text-base" style={{ color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+                              <p className="font-bold text-base" style={{ color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>
                                 {roleLabel(myApp.role)}
                               </p>
                               <span
                                 className="flex-shrink-0"
-                                style={{ backgroundColor: meta.bg, color: meta.color, fontFamily: "'Outfit', sans-serif", fontSize: '9px', fontWeight: 700, padding: '4px 10px', borderRadius: '9999px', letterSpacing: '0.1em' }}
+                                style={{ backgroundColor: meta.bg, color: meta.color, fontFamily: "var(--font-brand), sans-serif", fontSize: '9px', fontWeight: 700, padding: '4px 10px', borderRadius: '9999px', letterSpacing: '0.1em' }}
                               >
                                 {meta.label}
                               </span>
                             </div>
                             {meta.hint && (
-                              <p className="text-xs" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 70%, transparent)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6, margin: '4px 0 0 0' }}>
+                              <p className="text-xs" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 70%, transparent)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.6, margin: '4px 0 0 0' }}>
                                 {meta.hint}
                               </p>
                             )}
@@ -2417,7 +2417,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                               <Link
                                 href={`/conferences/${slug}/pay`}
                                 className="w-full flex items-center justify-center gap-2 rounded-xl py-3 mt-4 font-bold text-sm transition-colors focus:outline-none"
-                                style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none' }}
+                                style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.06em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none' }}
                                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
                                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-accent)'; }}
                               >
@@ -2430,10 +2430,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                 className="mt-4 rounded-xl px-4 py-3.5"
                                 style={{ backgroundColor: 'rgba(238,217,138,0.08)', border: '1px solid rgba(238,217,138,0.18)' }}
                               >
-                                <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: 'color-mix(in srgb, var(--gv-on-main) 75%, transparent)', margin: '0 0 6px 0' }}>
+                                <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: 'color-mix(in srgb, var(--gv-on-main) 75%, transparent)', margin: '0 0 6px 0' }}>
                                   YOUR ALLOCATION
                                 </p>
-                                <p className="text-[13.5px] font-bold" style={{ color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+                                <p className="text-[13.5px] font-bold" style={{ color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>
                                   {myAllocation.conference_committees?.name ?? 'Committee'}
                                 </p>
                                 <div className="flex items-center gap-2 mt-1.5">
@@ -2444,7 +2444,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                       style={{ width: '18px', height: '12px', borderRadius: '2px', objectFit: 'cover', flexShrink: 0, boxShadow: '0 1px 3px rgba(0,0,0,0.4)' }}
                                     />
                                   )}
-                                  <span className="text-[12.5px] font-semibold" style={{ color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif" }}>
+                                  <span className="text-[12.5px] font-semibold" style={{ color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif" }}>
                                     {myAllocation.country_name}
                                   </span>
                                 </div>
@@ -2461,7 +2461,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                 showTab('participant', myApp.role);
                               }}
                               className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 mt-3 font-bold text-xs transition-colors focus:outline-none"
-                              style={{ backgroundColor: 'rgba(238,217,138,0.08)', color: 'var(--gv-on-main)', border: '1px solid rgba(238,217,138,0.22)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', textDecoration: 'none' }}
+                              style={{ backgroundColor: 'rgba(238,217,138,0.08)', color: 'var(--gv-on-main)', border: '1px solid rgba(238,217,138,0.22)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.06em', textDecoration: 'none' }}
                               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.16)'; }}
                               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.08)'; }}
                             >
@@ -2474,10 +2474,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       /* 4, Signed out: one elegant APPLY NOW routing through sign-in */
                       <>
                         <div className="flex items-center justify-between gap-2 mb-1">
-                          <p className="font-bold text-base" style={{ color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>Ready to take the floor?</p>
+                          <p className="font-bold text-base" style={{ color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>Ready to take the floor?</p>
                           {(conference.min_age != null || conference.max_age != null) && <MinAgeChip minAge={conference.min_age} maxAge={conference.max_age} />}
                         </div>
-                        <p className="text-xs mb-4" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 70%, transparent)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
+                        <p className="text-xs mb-4" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 70%, transparent)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.6 }}>
                           {enabledRoles.length > 0 && !hasOpenRoles
                             ? 'Applications are currently closed.'
                             : 'Sign in with a free account to start your application.'}
@@ -2485,7 +2485,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         <button
                           onClick={() => openAuth()}
                           className="w-full rounded-xl py-3 font-bold text-sm focus:outline-none"
-                          style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', transition: `background-color 200ms ${EASE}, transform 160ms ${EASE}` }}
+                          style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', transition: `background-color 200ms ${EASE}, transform 160ms ${EASE}` }}
                           onMouseEnter={(e) => { const el = (e.currentTarget as HTMLElement); el.style.backgroundColor = 'white'; el.style.color = 'var(--gv-main)'; }}
                           onMouseLeave={(e) => { const el = (e.currentTarget as HTMLElement); el.style.backgroundColor = 'var(--gv-accent)'; el.style.color = 'var(--gv-on-accent)'; }}
                           onPointerDown={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(0.96)'; }}
@@ -2497,8 +2497,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       </>
                     ) : enabledRoles.length === 0 ? (
                       <>
-                        <p className="font-bold text-base" style={{ color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif" }}>No open applications</p>
-                        <p className="text-xs mt-1" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 70%, transparent)', fontFamily: "'Outfit', sans-serif" }}>
+                        <p className="font-bold text-base" style={{ color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif" }}>No open applications</p>
+                        <p className="text-xs mt-1" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 70%, transparent)', fontFamily: "var(--font-brand), sans-serif" }}>
                           Check back when applications open.
                         </p>
                       </>
@@ -2506,17 +2506,17 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       /* 3, Signed in, no involvement: one APPLY NOW revealing a role picker */
                       <>
                         <div className="flex items-center justify-between gap-2 mb-1">
-                          <p className="font-bold text-base" style={{ color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>Apply to this Conference</p>
+                          <p className="font-bold text-base" style={{ color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>Apply to this Conference</p>
                           {(conference.min_age != null || conference.max_age != null) && <MinAgeChip minAge={conference.min_age} maxAge={conference.max_age} />}
                         </div>
-                        <p className="text-xs mb-4" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 70%, transparent)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
+                        <p className="text-xs mb-4" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 70%, transparent)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.6 }}>
                           {hasOpenRoles ? 'Applications are open.' : 'Applications are currently closed.'}
                         </p>
                         <button
                           onClick={() => setRolePickerOpen(v => !v)}
                           aria-expanded={rolePickerOpen}
                           className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-sm focus:outline-none"
-                          style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', transition: `background-color 200ms ${EASE}, transform 160ms ${EASE}` }}
+                          style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', transition: `background-color 200ms ${EASE}, transform 160ms ${EASE}` }}
                           onMouseEnter={(e) => { const el = (e.currentTarget as HTMLElement); el.style.backgroundColor = 'white'; el.style.color = 'var(--gv-main)'; }}
                           onMouseLeave={(e) => { const el = (e.currentTarget as HTMLElement); el.style.backgroundColor = 'var(--gv-accent)'; el.style.color = 'var(--gv-on-accent)'; }}
                           onPointerDown={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(0.96)'; }}
@@ -2532,7 +2532,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         </button>
                         {rolePickerOpen && (
                           <div className="mt-3 flex flex-col gap-1.5">
-                            <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: 'color-mix(in srgb, var(--gv-on-main) 75%, transparent)', margin: '4px 0 2px 0' }}>
+                            <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: 'color-mix(in srgb, var(--gv-on-main) 75%, transparent)', margin: '4px 0 2px 0' }}>
                               CHOOSE YOUR ROLE
                             </p>
                             {enabledRoles.map(r => {
@@ -2564,12 +2564,12 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                   <span className="flex items-center gap-3 min-w-0">
                                     <RoleApplyGlyph role={r.role} size={30} />
                                     <span className="min-w-0">
-                                      <span className="block text-[13px] font-bold truncate" style={{ color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif" }}>
+                                      <span className="block text-[13px] font-bold truncate" style={{ color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif" }}>
                                         {roleLabel(r.role)}
                                       </span>
                                       <span
                                         className="block mt-0.5"
-                                        style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10px', letterSpacing: '0.08em', color: open ? 'var(--gv-on-main)' : 'color-mix(in srgb, var(--gv-on-main) 55%, transparent)' }}
+                                        style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10px', letterSpacing: '0.08em', color: open ? 'var(--gv-on-main)' : 'color-mix(in srgb, var(--gv-on-main) 55%, transparent)' }}
                                       >
                                         {open ? fee : reason}
                                       </span>
@@ -2601,15 +2601,15 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       {heroPrice === null ? (
                         <span aria-hidden style={{ display: 'block', height: '30px' }} />
                       ) : heroPrice.kind === 'tbd' ? (
-                        <span title="Price to be announced" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '30px', color: 'var(--gv-muted)', lineHeight: 1 }}>TBD</span>
+                        <span title="Price to be announced" style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 900, fontSize: '30px', color: 'var(--gv-muted)', lineHeight: 1 }}>TBD</span>
                       ) : heroPrice.kind === 'free' ? (
-                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '30px', color: 'var(--gv-main)', lineHeight: 1 }}>FREE</span>
+                        <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 900, fontSize: '30px', color: 'var(--gv-main)', lineHeight: 1 }}>FREE</span>
                       ) : (
-                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontVariantNumeric: 'tabular-nums', fontSize: '38px', color: 'var(--gv-on-surface)', lineHeight: 1 }}>
+                        <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 900, fontVariantNumeric: 'tabular-nums', fontSize: '38px', color: 'var(--gv-on-surface)', lineHeight: 1 }}>
                           {formatFeeCompact(heroPrice.amount, heroPrice.currency)}
                         </span>
                       )}
-                      <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: 'var(--gv-muted)', marginTop: '7px' }}>
+                      <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: 'var(--gv-muted)', marginTop: '7px' }}>
                         PER DELEGATE
                       </span>
                     </div>
@@ -2621,7 +2621,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                          was a hairline of text. 44px on a phone, unchanged
                          from `sm` up. */
                       className="mt-4 flex items-center gap-1.5 text-[11px] font-bold focus:outline-none transition-colors min-h-11 sm:min-h-0 px-2 -mx-2 sm:px-0 sm:mx-0"
-                      style={{ color: 'var(--gv-main)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em', background: 'none', border: 'none', cursor: 'pointer' }}
+                      style={{ color: 'var(--gv-main)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.12em', background: 'none', border: 'none', cursor: 'pointer' }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-accent)'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-main)'; }}
                     >
@@ -2648,20 +2648,20 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           return (
                             <div key={r.role} style={{ borderTop: i === 0 ? 'none' : '1px solid color-mix(in srgb, var(--gv-border) 40%, transparent)' }}>
                               <div className="flex items-center justify-between py-2">
-                                <span className="text-[13px] font-medium" style={{ color: '#4A4238', fontFamily: "'Outfit', sans-serif" }}>
+                                <span className="text-[13px] font-medium" style={{ color: '#4A4238', fontFamily: "var(--font-brand), sans-serif" }}>
                                   {capitalize(r.role.replace(/-/g, ' '))}
                                 </span>
-                                <span className="text-[13px] font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
+                                <span className="text-[13px] font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums' }}>
                                   {roleClosed ? 'Closed' : delegatePriceLabel(displayRolePrice(r, conference.fee_currency, now))}
                                 </span>
                               </div>
                               {opensAt && r.applications_open_at && (
-                                <p className="text-[11px] -mt-1 pb-1.5" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
+                                <p className="text-[11px] -mt-1 pb-1.5" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>
                                   Applications open {fmtWindowDate(r.applications_open_at)}
                                 </p>
                               )}
                               {roleClosed && r.applications_close_at && (
-                                <p className="text-[11px] -mt-1 pb-1.5" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+                                <p className="text-[11px] -mt-1 pb-1.5" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>
                                   Applications closed {fmtWindowDate(r.applications_close_at)}
                                 </p>
                               )}
@@ -2683,14 +2683,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                         <span className="flex items-center gap-1.5 min-w-0">
                                           <span
                                             className="text-[11.5px] font-semibold truncate"
-                                            style={{ color: isCurrent ? 'var(--gv-main)' : '#4A4238', fontFamily: "'Outfit', sans-serif" }}
+                                            style={{ color: isCurrent ? 'var(--gv-main)' : '#4A4238', fontFamily: "var(--font-brand), sans-serif" }}
                                           >
                                             {p.label || 'Phase'}
                                           </span>
                                           {isCurrent && (
                                             <span
                                               className="flex-shrink-0 text-[8.5px] font-bold px-1.5 py-0.5 rounded-full"
-                                              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em' }}
+                                              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.1em' }}
                                             >
                                               CURRENT
                                             </span>
@@ -2698,13 +2698,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                         </span>
                                         <span className="flex items-center gap-2 flex-shrink-0">
                                           {p.start_date && p.end_date && (
-                                            <span className="text-[10.5px]" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
+                                            <span className="text-[10.5px]" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>
                                               {fmtPhaseDate(p.start_date)} – {fmtPhaseDate(p.end_date)}
                                             </span>
                                           )}
                                           <span
                                             className="text-[11.5px] font-bold"
-                                            style={{ color: isCurrent ? 'var(--gv-main)' : 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}
+                                            style={{ color: isCurrent ? 'var(--gv-main)' : 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums' }}
                                           >
                                             {p.amount > 0 ? formatFeeCompact(p.amount, currency) : 'Free'}
                                           </span>
@@ -2850,13 +2850,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
                     {committees.length === 0 && !isOrganizerViewer ? (
                       <SectionCard>
-                        <p className="text-sm" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
+                        <p className="text-sm" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>
                           Committees will be announced soon.
                         </p>
                       </SectionCard>
                     ) : sortedCommittees.length === 0 && !isOrganizerViewer ? (
                       <SectionCard>
-                        <p className="text-sm" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
+                        <p className="text-sm" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>
                           No {sortDir === 'desc' ? 'crisis' : 'General Assembly'} committees at this conference.
                         </p>
                       </SectionCard>
@@ -2958,7 +2958,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                     className="absolute inline-flex items-center gap-1"
                                     title={`Working language: ${c.working_language}`}
                                     aria-label={`Working language: ${c.working_language}`}
-                                    style={{ top: isOrganizerViewer ? 50 : 16, left: 16, fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 700, color: '#6B5F52', letterSpacing: '0.06em' }}
+                                    style={{ top: isOrganizerViewer ? 50 : 16, left: 16, fontFamily: "var(--font-brand), sans-serif", fontSize: 11, fontWeight: 700, color: '#6B5F52', letterSpacing: '0.06em' }}
                                   >
                                     {committeeLanguageFlag(c.working_language)
                                       ? <CircleFlag code={committeeLanguageFlag(c.working_language)!} size={14} decorative />
@@ -3004,7 +3004,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                       }}
                                     >
                                       <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: GRAIN, backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.12 }} />
-                                      <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: monogram.length > 4 ? '13px' : '16px', fontWeight: 700, color: 'var(--gv-on-main)', letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums' }}>
+                                      <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: monogram.length > 4 ? '13px' : '16px', fontWeight: 700, color: 'var(--gv-on-main)', letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums' }}>
                                         {monogram}
                                       </span>
                                     </div>
@@ -3021,7 +3021,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                         {showAcr && (
                                           <p
                                             className="max-w-full truncate text-center"
-                                            style={{ margin: '16px 0 0 0', fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: 'var(--gv-accent)' }}
+                                            style={{ margin: '16px 0 0 0', fontFamily: "var(--font-brand), sans-serif", fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: 'var(--gv-accent)' }}
                                           >
                                             {acr!.toUpperCase()}
                                           </p>
@@ -3029,7 +3029,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                         {/* Name */}
                                         <h3
                                           className="text-center font-bold text-[15.5px] leading-snug"
-                                          style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: showAcr ? '3px 0 0 0' : '18px 0 0 0', minHeight: '2.6em' }}
+                                          style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif", margin: showAcr ? '3px 0 0 0' : '18px 0 0 0', minHeight: '2.6em' }}
                                         >
                                           {c.name}
                                         </h3>
@@ -3042,13 +3042,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                       corner (DifficultyTile, below the pencil
                                       block), so this row leads with the seats. */}
                                   <div className="flex items-center gap-2 mt-1.5">
-                                    <span className="text-[12px] font-semibold" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif" }}>
+                                    <span className="text-[12px] font-semibold" style={{ color: '#6B5F52', fontFamily: "var(--font-brand), sans-serif" }}>
                                       {!isCrisis && c.delegation_size >= 2 ? `${countryCapacity} countries · 2 delegates each` : `${countryCapacity} ${isCrisis ? 'roles' : 'seats'}`}
                                     </span>
                                     {isCrisis && (
                                       <>
                                         <span aria-hidden style={{ color: 'color-mix(in srgb, var(--gv-accent) 55%, transparent)', fontSize: '7px' }}>◆</span>
-                                        <span className="text-[10px] font-bold" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em' }}>
+                                        <span className="text-[10px] font-bold" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.12em' }}>
                                           CRISIS
                                         </span>
                                       </>
@@ -3062,11 +3062,11 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                         <div key={topic} className="flex items-start gap-2.5 py-1">
                                           <span
                                             className="flex-shrink-0 text-right"
-                                            style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '11px', color: 'var(--gv-accent)', width: '18px', lineHeight: '19px' }}
+                                            style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '11px', color: 'var(--gv-accent)', width: '18px', lineHeight: '19px' }}
                                           >
                                             {ROMAN[ti] ?? String(ti + 1)}.
                                           </span>
-                                          <span className="text-[12.5px] font-medium" style={{ color: '#2E2820', fontFamily: "'Outfit', sans-serif", lineHeight: 1.55 }}>
+                                          <span className="text-[12.5px] font-medium" style={{ color: '#2E2820', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.55 }}>
                                             {/* First 120 characters, cut at a word. One Show more per committee, below. */}
                                             <CardTopic text={topic} />
                                           </span>
@@ -3079,7 +3079,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                           aria-haspopup="dialog"
                                           className="mt-1.5 ml-[28px] rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[color:var(--gv-main)]"
                                           style={{
-                                            fontFamily: "'Outfit', sans-serif", fontSize: '11.5px', fontWeight: 700,
+                                            fontFamily: "var(--font-brand), sans-serif", fontSize: '11.5px', fontWeight: 700,
                                             color: 'var(--gv-main)', background: 'none', border: 'none', padding: 0, cursor: 'pointer',
                                             textDecoration: 'underline', textDecorationColor: 'color-mix(in srgb, var(--gv-main) 35%, transparent)', textUnderlineOffset: 3,
                                           }}
@@ -3105,12 +3105,12 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                   {showFill && (
                                   <div className="w-full mt-4">
                                     <div className="flex items-center justify-between mb-1.5">
-                                      <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '9.5px', letterSpacing: '0.08em', color: '#6B5F52' }}>
+                                      <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '9.5px', letterSpacing: '0.08em', color: '#6B5F52' }}>
                                         {hasDoubles
                                           ? `${countriesTaken}/${countryCapacity} · ${seatsTaken}/${seatCapacity} seats`
                                           : `${countriesTaken}/${countryCapacity} FILLED`}
                                       </span>
-                                      <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '9.5px', color: 'var(--gv-muted)' }}>
+                                      <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '9.5px', color: 'var(--gv-muted)' }}>
                                         {pct}%
                                       </span>
                                     </div>
@@ -3137,7 +3137,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                       backgroundColor: 'transparent',
                                       color: 'var(--gv-main)',
                                       border: '1.5px solid color-mix(in srgb, var(--gv-main) 35%, transparent)',
-                                      fontFamily: "'Outfit', sans-serif",
+                                      fontFamily: "var(--font-brand), sans-serif",
                                       letterSpacing: '0.1em',
                                       cursor: 'pointer',
                                     }}
@@ -3180,7 +3180,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                               >
                                 <Plus size={20} strokeWidth={2.2} />
                               </span>
-                              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11px', letterSpacing: '0.14em' }}>
+                              <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '11px', letterSpacing: '0.14em' }}>
                                 ADD COMMITTEE
                               </span>
                             </button>
@@ -3234,11 +3234,11 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                             <div className="px-6 pt-6 pb-4">
                               <div className="flex items-start justify-between gap-4">
                                 <div className="min-w-0">
-                                  <p className="font-bold text-[16px] leading-snug" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+                                  <p className="font-bold text-[16px] leading-snug" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>
                                     {c.name}
                                   </p>
                                   {showFill && (
-                                  <p className="mt-1" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10px', letterSpacing: '0.1em', color: 'var(--gv-muted)', margin: '4px 0 0 0' }}>
+                                  <p className="mt-1" style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10px', letterSpacing: '0.1em', color: 'var(--gv-muted)', margin: '4px 0 0 0' }}>
                                     {hasDoubles
                                       ? `${seatsTaken}/${seatCapacity} SEATS FILLED`
                                       : `${countriesTaken}/${countryCapacity} ${isCrisis ? 'ROLES' : 'SEATS'} FILLED`}
@@ -3264,7 +3264,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                             </div>
                             <div className="px-3 pb-4 overflow-y-auto" style={{ maxHeight: '54dvh' }}>
                               {slots.length === 0 ? (
-                                <p className="text-sm px-3 py-4" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
+                                <p className="text-sm px-3 py-4" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>
                                   The {isCrisis ? 'character' : 'country'} roster will be announced soon.
                                 </p>
                               ) : (
@@ -3285,7 +3285,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                     {header && (
                                       <div className="flex items-center gap-1.5 px-3 pt-3 pb-1">
                                         <span aria-hidden style={{ width: 7, height: 7, borderRadius: '9999px', backgroundColor: header.color ?? '#9A8A78', flexShrink: 0 }} />
-                                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.1em', color: '#9A8A78', textTransform: 'uppercase' }}>{header.name}</span>
+                                        <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.1em', color: '#9A8A78', textTransform: 'uppercase' }}>{header.name}</span>
                                       </div>
                                     )}
                                     <div
@@ -3310,14 +3310,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                       ) : (
                                         <span
                                           className="flex items-center justify-center flex-shrink-0"
-                                          style={{ width: '22px', height: '22px', borderRadius: '9999px', backgroundColor: 'color-mix(in srgb, var(--gv-main) 8%, transparent)', fontFamily: "'Outfit', sans-serif", fontSize: '8px', fontWeight: 700, letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums', color: 'var(--gv-main)' }}
+                                          style={{ width: '22px', height: '22px', borderRadius: '9999px', backgroundColor: 'color-mix(in srgb, var(--gv-main) 8%, transparent)', fontFamily: "var(--font-brand), sans-serif", fontSize: '8px', fontWeight: 700, letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums', color: 'var(--gv-main)' }}
                                         >
                                           {s.country_code.slice(0, 2)}
                                         </span>
                                       )}
                                       <span
                                         className="flex-1 text-[13px] font-medium truncate"
-                                        style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}
+                                        style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}
                                       >
                                         {s.country_name}
                                       </span>
@@ -3327,7 +3327,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                           <span
                                             key={`taken-${ti}`}
                                             className="flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full"
-                                            style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+                                            style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}
                                           >
                                             <Check size={10} strokeWidth={2.6} />
                                             TAKEN
@@ -3337,7 +3337,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                           <span
                                             key={`open-${oi}`}
                                             className="text-[9px] font-bold px-2 py-0.5 rounded-full"
-                                            style={{ backgroundColor: 'color-mix(in srgb, var(--gv-main-light) 10%, transparent)', color: 'var(--gv-main-mid)', border: '1px solid color-mix(in srgb, var(--gv-main-light) 25%, transparent)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+                                            style={{ backgroundColor: 'color-mix(in srgb, var(--gv-main-light) 10%, transparent)', color: 'var(--gv-main-mid)', border: '1px solid color-mix(in srgb, var(--gv-main-light) 25%, transparent)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}
                                           >
                                             OPEN
                                           </span>
@@ -3374,7 +3374,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
           <ModalOverlay onClose={() => { if (!assetUploading && !editSaving) setEditModal(null); }}>
             <div className="rounded-2xl p-6" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 'min(520px, 92vw)', maxHeight: MODAL_PANEL_MAX_HEIGHT, overflowY: 'auto' }}>
               <div className="flex items-center justify-between mb-4">
-                <p className="text-base font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>Conference Banner</p>
+                <p className="text-base font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>Conference Banner</p>
                 <button onClick={() => { if (!assetUploading && !editSaving) setEditModal(null); }} className="focus:outline-none" style={{ color: 'var(--gv-muted)', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close"><X size={18} /></button>
               </div>
               <div
@@ -3394,8 +3394,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   </div>
                 ) : (
                   <>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", marginBottom: 4 }}>Click to upload a banner</p>
-                    <p style={{ fontSize: 11, color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>Recommended 1200x630px · max 5MB</p>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif", marginBottom: 4 }}>Click to upload a banner</p>
+                    <p style={{ fontSize: 11, color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums' }}>Recommended 1200x630px · max 5MB</p>
                   </>
                 )}
               </div>
@@ -3406,7 +3406,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 style={{ display: 'none' }}
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAssetSelect('banners', f); e.target.value = ''; }}
               />
-              <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 600, color: '#7A6E5E', margin: '16px 0 8px 0' }}>
+              <p style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 12, fontWeight: 600, color: '#7A6E5E', margin: '16px 0 8px 0' }}>
                 Or pick a preset
               </p>
               <div className="flex flex-wrap gap-2">
@@ -3436,7 +3436,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   );
                 })}
               </div>
-              {editError && <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", margin: '12px 0 0 0' }}>{editError}</p>}
+              {editError && <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", margin: '12px 0 0 0' }}>{editError}</p>}
             </div>
           </ModalOverlay>
         )}
@@ -3445,7 +3445,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
           <ModalOverlay onClose={() => { if (!assetUploading && !editSaving) setEditModal(null); }}>
             <div className="rounded-2xl p-6" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 'min(420px, 92vw)' }}>
               <div className="flex items-center justify-between mb-4">
-                <p className="text-base font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>Conference Logo</p>
+                <p className="text-base font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>Conference Logo</p>
                 <button onClick={() => { if (!assetUploading && !editSaving) setEditModal(null); }} className="focus:outline-none" style={{ color: 'var(--gv-muted)', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close"><X size={18} /></button>
               </div>
               <div className="flex items-center gap-4">
@@ -3469,7 +3469,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     <Plus size={20} strokeWidth={2.2} style={{ color: 'var(--gv-muted)' }} />
                   )}
                 </div>
-                <p className="text-[12px]" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6, margin: 0 }}>
+                <p className="text-[12px]" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.6, margin: 0 }}>
                   Click the box to upload a new logo. Square, transparent PNG works best. Max 5MB.
                 </p>
               </div>
@@ -3487,7 +3487,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   setLogoCropFile(f);
                 }}
               />
-              {editError && <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", margin: '12px 0 0 0' }}>{editError}</p>}
+              {editError && <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", margin: '12px 0 0 0' }}>{editError}</p>}
             </div>
           </ModalOverlay>
         )}
@@ -3509,7 +3509,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
           <ModalOverlay onClose={() => { if (!editSaving) setEditModal(null); }}>
             <div className="rounded-2xl p-6" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 'min(560px, 92vw)' }}>
               <div className="flex items-center justify-between mb-4">
-                <p className="text-base font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>About the Conference</p>
+                <p className="text-base font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>About the Conference</p>
                 <button onClick={() => { if (!editSaving) setEditModal(null); }} className="focus:outline-none" style={{ color: 'var(--gv-muted)', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close"><X size={18} /></button>
               </div>
               <textarea
@@ -3518,14 +3518,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 rows={9}
                 placeholder="Tell delegates what your conference is about: history, venue, what makes it special..."
                 className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"
-                style={{ border: '1px solid var(--gv-border)', backgroundColor: 'rgba(237,231,216,0.25)', color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}
+                style={{ border: '1px solid var(--gv-border)', backgroundColor: 'rgba(237,231,216,0.25)', color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.7 }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--gv-main)'; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--gv-border)'; }}
               />
-              {editError && <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", margin: '8px 0 0 0' }}>{editError}</p>}
+              {editError && <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", margin: '8px 0 0 0' }}>{editError}</p>}
               <div className="flex gap-3 mt-5">
-                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none gv-lift" style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", cursor: 'pointer' }}>CANCEL</button>
-                <button onClick={handleSaveDescription} disabled={editSaving} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none gv-lift" style={{ backgroundColor: editSaving ? 'var(--gv-border)' : 'var(--gv-main)', color: editSaving ? 'var(--gv-muted)' : 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", border: 'none', cursor: editSaving ? 'default' : 'pointer' }}>{editSaving ? 'SAVING...' : 'SAVE'}</button>
+                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none gv-lift" style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: "var(--font-brand), sans-serif", cursor: 'pointer' }}>CANCEL</button>
+                <button onClick={handleSaveDescription} disabled={editSaving} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none gv-lift" style={{ backgroundColor: editSaving ? 'var(--gv-border)' : 'var(--gv-main)', color: editSaving ? 'var(--gv-muted)' : 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", border: 'none', cursor: editSaving ? 'default' : 'pointer' }}>{editSaving ? 'SAVING...' : 'SAVE'}</button>
               </div>
             </div>
           </ModalOverlay>
@@ -3535,7 +3535,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
           <ModalOverlay onClose={() => { if (!editSaving) setEditModal(null); }}>
             <div className="rounded-2xl p-6" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 'min(480px, 92vw)', maxHeight: MODAL_PANEL_MAX_HEIGHT, overflowY: 'auto' }}>
               <div className="flex items-center justify-between mb-4">
-                <p className="text-base font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>Contact &amp; Social Links</p>
+                <p className="text-base font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>Contact &amp; Social Links</p>
                 <button onClick={() => { if (!editSaving) setEditModal(null); }} className="focus:outline-none" style={{ color: 'var(--gv-muted)', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close"><X size={18} /></button>
               </div>
               <div className="flex flex-col gap-3.5">
@@ -3561,10 +3561,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   </div>
                 ))}
               </div>
-              {editError && <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", margin: '12px 0 0 0' }}>{editError}</p>}
+              {editError && <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", margin: '12px 0 0 0' }}>{editError}</p>}
               <div className="flex gap-3 mt-5">
-                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none gv-lift" style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", cursor: 'pointer' }}>CANCEL</button>
-                <button onClick={handleSaveAbout} disabled={editSaving} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none gv-lift" style={{ backgroundColor: editSaving ? 'var(--gv-border)' : 'var(--gv-main)', color: editSaving ? 'var(--gv-muted)' : 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", border: 'none', cursor: editSaving ? 'default' : 'pointer' }}>{editSaving ? 'SAVING...' : 'SAVE'}</button>
+                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none gv-lift" style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: "var(--font-brand), sans-serif", cursor: 'pointer' }}>CANCEL</button>
+                <button onClick={handleSaveAbout} disabled={editSaving} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none gv-lift" style={{ backgroundColor: editSaving ? 'var(--gv-border)' : 'var(--gv-main)', color: editSaving ? 'var(--gv-muted)' : 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", border: 'none', cursor: editSaving ? 'default' : 'pointer' }}>{editSaving ? 'SAVING...' : 'SAVE'}</button>
               </div>
             </div>
           </ModalOverlay>

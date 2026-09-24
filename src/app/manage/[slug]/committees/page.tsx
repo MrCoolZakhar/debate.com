@@ -105,7 +105,7 @@ function SortButton({ label, dir, onClick }: { label: string; dir: 'asc' | 'desc
         backgroundColor: active ? '#1B3828' : 'rgba(237,231,216,0.5)',
         color: active ? '#EED98A' : '#6B5F52',
         border: active ? '1px solid #1B3828' : '1px solid rgba(221,212,192,0.9)',
-        fontFamily: "'Outfit', sans-serif",
+        fontFamily: "var(--font-brand), sans-serif",
         letterSpacing: '0.09em',
         whiteSpace: 'nowrap',
         cursor: 'pointer',
@@ -994,10 +994,10 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
       <div className="rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 460, maxWidth: 'calc(100vw - 32px)', maxHeight: '80dvh', overflowY: 'auto' }}>
         <div className="flex items-start justify-between gap-3 mb-5">
           <div>
-            <p style={{ margin: 0, fontFamily: "'Outfit', sans-serif", fontSize: '9px', fontWeight: 700, letterSpacing: '0.16em', color: '#B6871F' }}>
+            <p style={{ margin: 0, fontFamily: "var(--font-brand), sans-serif", fontSize: '9px', fontWeight: 700, letterSpacing: '0.16em', color: '#B6871F' }}>
               ADD CHAIR
             </p>
-            <p className="font-bold text-[15px] mt-0.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            <p className="font-bold text-[15px] mt-0.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
               {committee.name}
             </p>
           </div>
@@ -1005,7 +1005,7 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
         </div>
 
         {/* Accepted chair applicants */}
-        <p style={{ margin: '0 0 8px 0', fontFamily: "'Outfit', sans-serif", fontSize: '10px', fontWeight: 700, letterSpacing: '0.12em', color: '#6B5F52' }}>
+        <p style={{ margin: '0 0 8px 0', fontFamily: "var(--font-brand), sans-serif", fontSize: '10px', fontWeight: 700, letterSpacing: '0.12em', color: '#6B5F52' }}>
           ACCEPTED CHAIR APPLICANTS
         </p>
         {applicants === null ? (
@@ -1013,7 +1013,7 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
             <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
           </div>
         ) : visible.length === 0 ? (
-          <p className="text-xs py-3 text-center rounded-xl" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", border: '1px dashed #DDD4C0', backgroundColor: 'rgba(237,231,216,0.3)' }}>
+          <p className="text-xs py-3 text-center rounded-xl" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", border: '1px dashed #DDD4C0', backgroundColor: 'rgba(237,231,216,0.3)' }}>
             No accepted chair applicants available.
           </p>
         ) : (
@@ -1039,20 +1039,20 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
                     ) : (
                       <span
                         className="flex items-center justify-center flex-shrink-0"
-                        style={{ width: 30, height: 30, borderRadius: '9999px', backgroundColor: '#1B3828', color: '#EED98A', fontSize: 12, fontWeight: 700, fontFamily: "'Outfit', sans-serif" }}
+                        style={{ width: 30, height: 30, borderRadius: '9999px', backgroundColor: '#1B3828', color: '#EED98A', fontSize: 12, fontWeight: 700, fontFamily: "var(--font-brand), sans-serif" }}
                       >
                         {name.charAt(0)}
                       </span>
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-semibold truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>{name}</p>
-                      <p className="text-[11px] truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", margin: 0 }}>{app.profiles?.email ?? ''}</p>
+                      <p className="text-[13px] font-semibold truncate" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>{name}</p>
+                      <p className="text-[11px] truncate" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>{app.profiles?.email ?? ''}</p>
                     </div>
                   </ProfileLink>
                   {app.assigned_committee_id && (
                     <span
                       className="px-2 py-0.5 rounded-full flex-shrink-0"
-                      style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.08em', fontFamily: "'Outfit', sans-serif", backgroundColor: 'rgba(238,217,138,0.35)', color: '#8A6614', fontVariantNumeric: 'tabular-nums' }}
+                      style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.08em', fontFamily: "var(--font-brand), sans-serif", backgroundColor: 'rgba(238,217,138,0.35)', color: '#8A6614', fontVariantNumeric: 'tabular-nums' }}
                     >
                       {assignedTo ? `ON ${(assignedTo.abbreviation ?? assignedTo.name).toUpperCase()}` : 'ASSIGNED'}
                     </span>
@@ -1063,7 +1063,7 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
                     style={{
                       backgroundColor: '#1B3828',
                       color: '#EED98A',
-                      fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', cursor: 'pointer',
+                      fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', cursor: 'pointer',
                     }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
@@ -1078,7 +1078,7 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
 
         {/* Invite by email */}
         <div className="mt-5 pt-5" style={{ borderTop: '1px solid #EDE7D8' }}>
-          <p style={{ margin: '0 0 8px 0', fontFamily: "'Outfit', sans-serif", fontSize: '10px', fontWeight: 700, letterSpacing: '0.12em', color: '#6B5F52' }}>
+          <p style={{ margin: '0 0 8px 0', fontFamily: "var(--font-brand), sans-serif", fontSize: '10px', fontWeight: 700, letterSpacing: '0.12em', color: '#6B5F52' }}>
             INVITE BY EMAIL
           </p>
           <div className="flex gap-2">
@@ -1091,7 +1091,7 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
               style={{
                 flex: 1, border: '1px solid #DDD4C0', borderRadius: 8, padding: '8px 12px',
                 fontSize: 13, color: '#1C1410', backgroundColor: '#FAF8F3', outline: 'none',
-                fontFamily: "'Outfit', sans-serif",
+                fontFamily: "var(--font-brand), sans-serif",
               }}
             />
             <button
@@ -1101,21 +1101,21 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
               style={{
                 backgroundColor: inviting || !email.trim() ? '#DDD4C0' : '#1B3828',
                 color: inviting || !email.trim() ? '#9A8A78' : '#EED98A',
-                fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', cursor: 'pointer',
+                fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', cursor: 'pointer',
                 whiteSpace: 'nowrap',
               }}
             >
               {inviting ? 'INVITING…' : 'INVITE'}
             </button>
           </div>
-          <p className="text-[11px] mt-3 mb-1.5" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", fontWeight: 600 }}>
+          <p className="text-[11px] mt-3 mb-1.5" style={{ color: '#6B5F52', fontFamily: "var(--font-brand), sans-serif", fontWeight: 600 }}>
             Title on the dais <span style={{ fontWeight: 400, color: '#9A8A78' }}>(optional, display only)</span>
           </p>
           <ChairTitleChips value={inviteTitle} onChange={setInviteTitle} disabled={inviting} />
-          <p className="text-[11px] mt-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.45 }}>
+          <p className="text-[11px] mt-2" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.45 }}>
             We&apos;ll email them an invite. If they don&apos;t have a Gavelling account yet, they can make one from the email. They join this dais when they accept.
           </p>
-          {error && <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{error}</p>}
+          {error && <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{error}</p>}
         </div>
       </div>
       {confirmModal}
@@ -2055,10 +2055,10 @@ export default function CommitteesPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <p className="text-xs mb-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>
+          <p className="text-xs mb-1" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>
             {conference.acronym} / Committees
           </p>
-          <h1 className="font-black text-2xl" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+          <h1 className="font-black text-2xl" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
             Committees
           </h1>
         </div>
@@ -2115,14 +2115,14 @@ export default function CommitteesPage() {
           >
             <Building2 size={24} style={{ color: '#1B3828' }} />
           </span>
-          <p className="font-bold text-lg mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>No committees yet</p>
-          <p className="text-sm mb-5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", maxWidth: 320 }}>
+          <p className="font-bold text-lg mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>No committees yet</p>
+          <p className="text-sm mb-5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", maxWidth: 320 }}>
             Committees are where delegates debate. Add your first one to give applicants somewhere to be assigned.
           </p>
           <button
             onClick={() => setShowAdd(true)}
             className="gv-lift flex items-center gap-2 rounded-xl py-2.5 px-5 font-bold text-sm focus:outline-none"
-            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
+            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.05em' }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
           >
@@ -2561,7 +2561,7 @@ export default function CommitteesPage() {
                         the roman numerals and the dais heading for the same
                         reason. */}
                     {c.abbreviation && (
-                      <p style={{ margin: '9px 0 0 0', fontFamily: "'Outfit', sans-serif", fontSize: '9.5px', fontWeight: 700, letterSpacing: '0.18em', color: '#7A5A10', fontVariantNumeric: 'tabular-nums' }}>
+                      <p style={{ margin: '9px 0 0 0', fontFamily: "var(--font-brand), sans-serif", fontSize: '9.5px', fontWeight: 700, letterSpacing: '0.18em', color: '#7A5A10', fontVariantNumeric: 'tabular-nums' }}>
                         {c.abbreviation.toUpperCase()}
                       </p>
                     )}
@@ -2570,14 +2570,14 @@ export default function CommitteesPage() {
                         two even lines rather than one full line and one orphan. */}
                     <h3
                       className="text-center font-bold text-[13px] leading-snug"
-                      style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: c.abbreviation ? '3px 0 0 0' : '10px 0 0 0', minHeight: '2.4em', textWrap: 'balance' }}
+                      style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", margin: c.abbreviation ? '3px 0 0 0' : '10px 0 0 0', minHeight: '2.4em', textWrap: 'balance' }}
                     >
                       {c.name}
                     </h3>
 
                     {/* Meta row — seats (the rank insignia moved to the corner) */}
                     <div className="flex flex-wrap items-center justify-center gap-1.5 mt-1">
-                      <span className="text-[11px] font-semibold" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
+                      <span className="text-[11px] font-semibold" style={{ color: '#6B5F52', fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums' }}>
                         {!isCrisis && c.delegation_size === 2
                           ? (isCustom ? `${seats} members × 2 seats` : `${seats} × 2 seats`)
                           : `${seats} ${isCrisis ? (seats === 1 ? 'role' : 'roles') : isCustom ? (seats === 1 ? 'member' : 'members') : (seats === 1 ? 'seat' : 'seats')}`}
@@ -2585,7 +2585,7 @@ export default function CommitteesPage() {
                       {isCrisis && (
                         <>
                           <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
-                          <span className="text-[9.5px] font-bold" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em' }}>
+                          <span className="text-[9.5px] font-bold" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.12em' }}>
                             CRISIS
                           </span>
                         </>
@@ -2593,7 +2593,7 @@ export default function CommitteesPage() {
                       {isCustom && (
                         <>
                           <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
-                          <span className="text-[9.5px] font-bold" style={{ color: '#7A5416', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em' }}>
+                          <span className="text-[9.5px] font-bold" style={{ color: '#7A5416', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.12em' }}>
                             CUSTOM
                           </span>
                         </>
@@ -2601,7 +2601,7 @@ export default function CommitteesPage() {
                       {c.working_language && (
                         <>
                           <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold" title="Working language" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif" }}>
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold" title="Working language" style={{ color: '#6B5F52', fontFamily: "var(--font-brand), sans-serif" }}>
                             {committeeLanguageFlag(c.working_language)
                               ? <CircleFlag code={committeeLanguageFlag(c.working_language)!} size={13} decorative />
                               : <Languages size={11} aria-hidden style={{ color: '#7A5A10' }} />}
@@ -2619,11 +2619,11 @@ export default function CommitteesPage() {
                           <div key={topic} className="flex items-start gap-2" style={{ padding: '1.5px 0' }}>
                             <span
                               className="flex-shrink-0 text-right"
-                              style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10px', color: '#7A5A10', width: '15px', lineHeight: '17px' }}
+                              style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10px', color: '#7A5A10', width: '15px', lineHeight: '17px' }}
                             >
                               {ROMAN[ti] ?? String(ti + 1)}.
                             </span>
-                            <span className="text-[11.5px] font-medium" style={{ color: '#2E2820', fontFamily: "'Outfit', sans-serif", lineHeight: 1.45, textWrap: 'pretty' }}>
+                            <span className="text-[11.5px] font-medium" style={{ color: '#2E2820', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.45, textWrap: 'pretty' }}>
                               {topic}
                             </span>
                           </div>
@@ -2727,7 +2727,7 @@ export default function CommitteesPage() {
                         minHeight: 40,
                         backgroundColor: 'transparent', color: '#1B3828',
                         border: '1.5px solid rgba(27,56,40,0.35)',
-                        fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em', cursor: 'pointer',
+                        fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.1em', cursor: 'pointer',
                       }}
                       onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; }}
                       onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.color = '#1B3828'; }}
@@ -2790,13 +2790,13 @@ export default function CommitteesPage() {
       {deleteTarget && (
         <ModalOverlay onClose={() => setDeleteTarget(null)}>
           <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 400 }}>
-            <p className="text-sm font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Delete &ldquo;{deleteTarget.name}&rdquo;?</p>
-            <p className="text-xs" style={{ color: '#6B5D4F', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
+            <p className="text-sm font-bold" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Delete &ldquo;{deleteTarget.name}&rdquo;?</p>
+            <p className="text-xs" style={{ color: '#6B5D4F', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.5 }}>
               This permanently removes the committee and its live session, including all delegates, documents, messages, country slots, and allocations. Applicants are kept but returned to unassigned. This cannot be undone.
             </p>
             <div className="flex gap-3 mt-1">
-              <button onClick={() => setDeleteTarget(null)} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}>CANCEL</button>
-              <button onClick={() => handleDeleteCommittee(deleteTarget)} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#FFFFFF', fontFamily: "'Outfit', sans-serif" }}>DELETE</button>
+              <button onClick={() => setDeleteTarget(null)} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "var(--font-brand), sans-serif" }}>CANCEL</button>
+              <button onClick={() => handleDeleteCommittee(deleteTarget)} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#FFFFFF', fontFamily: "var(--font-brand), sans-serif" }}>DELETE</button>
             </div>
           </div>
         </ModalOverlay>

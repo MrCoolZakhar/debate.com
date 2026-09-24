@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 
-export const OUTFIT = "'Outfit', sans-serif";
+export const OUTFIT = "var(--font-brand), sans-serif";
 
 export function SectionCard({ children, className = '', id }: { children: React.ReactNode; className?: string; id?: string }) {
   return (

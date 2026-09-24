@@ -31,7 +31,7 @@ export const metadata: Metadata = pageMetadata({
   ogTitle: 'Run your Model UN conference on Gavelling. Organisers pay nothing.',
 });
 
-const SANS = "'Outfit', sans-serif";
+const SANS = "var(--font-brand), sans-serif";
 const FOREST = '#1B3828';
 const GOLD = '#B6871F';
 const PALE_GOLD = '#EED98A';

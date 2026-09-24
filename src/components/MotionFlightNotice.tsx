@@ -35,7 +35,7 @@ export default function MotionFlightNotice({ committeeId, closed = false }: { co
           backgroundColor: notice.kind === 'fell' ? '#1B3828' : '#8B2020',
           color: notice.kind === 'fell' ? '#EED98A' : '#FAF8F3',
           boxShadow: '0 12px 32px rgba(27,56,40,0.28)',
-          fontFamily: "'Outfit', sans-serif",
+          fontFamily: "var(--font-brand), sans-serif",
         }}
       >
         <span className="min-w-0">{text}</span>

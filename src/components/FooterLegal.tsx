@@ -55,7 +55,7 @@ export default function FooterLegal({
   return (
     <div
       className={`mx-auto mt-6 flex w-full max-w-5xl flex-col items-center gap-1.5 border-t pt-5 text-center ${className}`}
-      style={{ borderColor: t.rule, fontFamily: "'Outfit', sans-serif" }}
+      style={{ borderColor: t.rule, fontFamily: "var(--font-brand), sans-serif" }}
     >
       <nav
         aria-label="Legal"

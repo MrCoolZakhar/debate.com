@@ -95,7 +95,7 @@ const INK = '#1C1410';
 const INK_SOFT = '#5C4E40';
 const FOREST = '#1B3828';
 const DONE = '#8B2020';
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 const two = (n: number) => String(n).padStart(2, '0');
 const clockText = (s: number) => `${two(Math.min(99, Math.floor(s / 60)))}:${two(s % 60)}`;

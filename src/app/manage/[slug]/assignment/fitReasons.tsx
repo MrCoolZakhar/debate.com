@@ -21,7 +21,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import Portal from '@/components/Portal';
 import { NEU } from '@/components/neu';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 /** Everything a reason sentence may need, already resolved by the caller. */
 export interface ReasonContext {

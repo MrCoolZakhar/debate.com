@@ -11,7 +11,7 @@ import { Gavel } from 'lucide-react';
 import { useT } from '@/contexts/LanguageContext';
 import { GLASS, glassFallbackCss } from './notifications/glass';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 export default function GavelDeviceBanner({ onUseThisDevice }: { onUseThisDevice: () => void }) {
   const t = useT();

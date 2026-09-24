@@ -58,7 +58,7 @@ function Pill({ tone, label }: { tone: PillTone; label: string }) {
   return (
     <span
       className="inline-flex items-center gap-1 h-[22px] ps-1.5 pe-2 rounded-full text-[11.5px] font-semibold leading-none whitespace-nowrap select-none"
-      style={{ backgroundColor: tone.bg, color: tone.fg, boxShadow: `inset 0 0 0 1px ${tone.ring}`, fontFamily: "'Outfit', sans-serif" }}
+      style={{ backgroundColor: tone.bg, color: tone.fg, boxShadow: `inset 0 0 0 1px ${tone.ring}`, fontFamily: "var(--font-brand), sans-serif" }}
     >
       <Icon size={12} strokeWidth={2.4} aria-hidden className="shrink-0" />
       {label}
@@ -517,7 +517,7 @@ function DocCard({ doc, committee, onRemove, onStartPresentation, requireApprova
 
           {/* Doc code below the thumbnail */}
           <span className="mt-1.5 text-center font-black"
-            style={{ fontSize: '11px', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.03em' }}>
+            style={{ fontSize: '11px', color: '#1B3828', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.03em' }}>
             {doc.docCode}
           </span>
         </div>
@@ -948,8 +948,8 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
           style={{ gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', boxShadow: '0 1px 0 rgba(28,20,16,0.08)' }}>
           <div className="flex items-center gap-2.5 min-w-0">
             <span className="shrink-0 h-7 px-2.5 rounded-lg flex items-center text-[14.5px] font-semibold tabular-nums"
-              style={{ color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.08)', fontFamily: "'Outfit', sans-serif" }}>{activeDoc.docCode}</span>
-            <span className="text-[17px] font-semibold truncate min-w-0" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }} title={activeDoc.title}>{activeDoc.title}</span>
+              style={{ color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.08)', fontFamily: "var(--font-brand), sans-serif" }}>{activeDoc.docCode}</span>
+            <span className="text-[17px] font-semibold truncate min-w-0" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }} title={activeDoc.title}>{activeDoc.title}</span>
           </div>
           <div className="flex items-center gap-2 min-w-0">
             <StageSwitcher
@@ -962,14 +962,14 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
               <button type="button" onClick={handleFinish} aria-expanded={finishAsk} aria-haspopup="dialog"
                 aria-label={t('documents_finish_title')} title={t('documents_finish_title')}
                 className="h-[46px] min-w-[54px] px-2 rounded-[12px] flex flex-col items-center justify-center gap-[3px] bg-[#EED98A] hover:bg-[#E6CD6E] text-[#1B3828] transition-[background-color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-                style={{ fontFamily: "'Outfit', sans-serif", boxShadow: '0 1px 2px rgba(27,56,40,0.16), 0 3px 8px rgba(27,56,40,0.10)' }}>
+                style={{ fontFamily: "var(--font-brand), sans-serif", boxShadow: '0 1px 2px rgba(27,56,40,0.16), 0 3px 8px rgba(27,56,40,0.10)' }}>
                 <CheckCheck size={19} strokeWidth={2.4} aria-hidden />
                 <span className="text-[10.5px] font-semibold leading-none">{t('documents_finish')}</span>
               </button>
               {finishAsk && (
                 <div role="dialog" aria-label={t('documents_finish_title')}
                   className="absolute top-[calc(100%+8px)] end-0 w-[280px] rounded-2xl p-4 bg-[#FFFDF8]"
-                  style={{ fontFamily: "'Outfit', sans-serif", boxShadow: '0 0 0 1px rgba(28,20,16,0.08), 0 2px 6px rgba(27,56,40,0.08), 0 16px 40px rgba(27,56,40,0.20)' }}>
+                  style={{ fontFamily: "var(--font-brand), sans-serif", boxShadow: '0 0 0 1px rgba(28,20,16,0.08), 0 2px 6px rgba(27,56,40,0.08), 0 16px 40px rgba(27,56,40,0.20)' }}>
                   <p className="text-[14px] font-semibold leading-snug" style={{ color: '#1C1410', textWrap: 'balance' }}>{t('documents_finish_confirm')}</p>
                   <p className="mt-1 text-[13px] leading-snug" style={{ color: '#5C4E40', textWrap: 'pretty' }}>
                     {activeDoc.type === 'working-paper' ? t('documents_finish_outcome_wp') : t('documents_finish_outcome_dr')}
@@ -1114,7 +1114,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
               {!isViewOnly && (
                 <div className="flex items-stretch gap-2 mt-2">
                   <button onClick={() => setShowForm(true)}
-                    className="flex-1 min-w-0 bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-[background-color,border-color,transform] duration-150 active:scale-[0.96] text-center focus:outline-none gv-lift" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                    className="flex-1 min-w-0 bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-[background-color,border-color,transform] duration-150 active:scale-[0.96] text-center focus:outline-none gv-lift" style={{ fontFamily: "var(--font-brand), sans-serif" }}>
                     + {t('documents_submit_new_doc', { doc: tabSingularName })}
                   </button>
                   {/* Vote: big icon, small word beneath (CLAUDE.md section 8). Opens the voting
@@ -1129,7 +1129,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
                     aria-label={t('documents_vote_title')}
                     aria-describedby={voteTip ? 'documents-no-dr-tip' : undefined}
                     className="shrink-0 w-[64px] rounded-2xl flex flex-col items-center justify-center gap-1 bg-[#EED98A] hover:bg-[#E6CD6E] text-[#1B3828] transition-[background-color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]/40 gv-lift"
-                    style={{ fontFamily: "'Outfit', sans-serif" }}
+                    style={{ fontFamily: "var(--font-brand), sans-serif" }}
                   >
                     <Vote size={22} strokeWidth={2.1} aria-hidden />
                     <span className="text-[11px] font-semibold leading-none">{t('documents_vote_btn')}</span>
@@ -1140,7 +1140,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
                 <Portal>
                   <div ref={voteTipRef} id="documents-no-dr-tip" role="status"
                     className="fixed z-[70] rounded-2xl px-4 py-3 bg-[#1B3828]"
-                    style={{ left: voteTip.left, top: voteTip.top, width: TIP_W, minHeight: TIP_H, fontFamily: "'Outfit', sans-serif", boxShadow: '0 2px 6px rgba(27,56,40,0.18), 0 16px 36px rgba(27,56,40,0.28)' }}>
+                    style={{ left: voteTip.left, top: voteTip.top, width: TIP_W, minHeight: TIP_H, fontFamily: "var(--font-brand), sans-serif", boxShadow: '0 2px 6px rgba(27,56,40,0.18), 0 16px 36px rgba(27,56,40,0.28)' }}>
                     <p className="text-[14px] font-semibold leading-snug text-[#EED98A]">
                       {t('documents_no_dr_title', { doc: docName(committee, 'draft-resolution', 'singular', t('documents_draft_resolution')) })}
                     </p>

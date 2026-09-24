@@ -1004,18 +1004,18 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
             <button onClick={() => { if (!acceptBlocked) onAccepted(m); }}
               disabled={acceptBlocked}
               title={acceptBlocked ? t('motions_saving') : undefined}
-              className={`gv-lift flex-1 bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${acceptBlocked ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
+              className={`gv-lift flex-1 bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${acceptBlocked ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.05em' }}>
               {isCustom ? clearFromFloorLabel(language) : t('motions_accept_btn')}
             </button>
             <button onClick={() => { if (!acceptBlocked) onRemove(m.id); }}
               disabled={acceptBlocked}
-              className={`gv-lift flex-1 bg-[#DDD4C0] hover:bg-red-950/40 hover:text-[#8B2020] text-[#6A5A4A] border border-[#DDD4C0] hover:border-[#8B2020]/40 py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${acceptBlocked ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
+              className={`gv-lift flex-1 bg-[#DDD4C0] hover:bg-red-950/40 hover:text-[#8B2020] text-[#6A5A4A] border border-[#DDD4C0] hover:border-[#8B2020]/40 py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${acceptBlocked ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.05em' }}>
               {t('motions_reject_btn')}
             </button>
             <button onClick={(e) => { e.stopPropagation(); if (!acceptBlocked) onEdit(m.id); }}
               disabled={acceptBlocked}
               title={acceptBlocked ? t('motions_saving') : t('motions_edit_label')}
-              className="disabled:opacity-40 disabled:cursor-not-allowed bg-[#B6871F]/20 hover:bg-[#B6871F]/40 border border-[#B6871F]/50 hover:border-[#B6871F] text-[#B6871F] py-2.5 px-4 rounded-xl font-bold text-sm transition-colors shrink-0 focus:outline-none gv-lift" style={{ fontFamily: "'DM Mono', monospace" }}>
+              className="disabled:opacity-40 disabled:cursor-not-allowed bg-[#B6871F]/20 hover:bg-[#B6871F]/40 border border-[#B6871F]/50 hover:border-[#B6871F] text-[#B6871F] py-2.5 px-4 rounded-xl font-bold text-sm transition-colors shrink-0 focus:outline-none gv-lift" style={{ fontFamily: "var(--font-brand), sans-serif" }}>
               {t('motions_edit_label')}
             </button>
           </div>
@@ -1024,11 +1024,11 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           // A Commenter sees the dais's decision buttons, disabled; a press explains the gavel.
           <div className="flex gap-2 mt-auto">
             <button type="button" aria-disabled onClick={onCommenterAttempt} title={t('commenter_only_hint')}
-              className="flex-1 bg-[#2A5A3C] text-white py-2.5 rounded-xl font-bold text-sm opacity-40 cursor-not-allowed focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
+              className="flex-1 bg-[#2A5A3C] text-white py-2.5 rounded-xl font-bold text-sm opacity-40 cursor-not-allowed focus:outline-none" style={{ fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.05em' }}>
               {isCustom ? clearFromFloorLabel(language) : t('motions_accept_btn')}
             </button>
             <button type="button" aria-disabled onClick={onCommenterAttempt} title={t('commenter_only_hint')}
-              className="flex-1 bg-[#DDD4C0] text-[#6A5A4A] border border-[#DDD4C0] py-2.5 rounded-xl font-bold text-sm opacity-40 cursor-not-allowed focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
+              className="flex-1 bg-[#DDD4C0] text-[#6A5A4A] border border-[#DDD4C0] py-2.5 rounded-xl font-bold text-sm opacity-40 cursor-not-allowed focus:outline-none" style={{ fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.05em' }}>
               {t('motions_reject_btn')}
             </button>
           </div>
@@ -1497,7 +1497,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         <p className="text-xs font-mono tracking-widest text-[#9A8A78] mb-6">
           {(typeMeta[specialVoteMotion.type]?.label ?? specialVoteMotion.type).toUpperCase()} · {specialVoteMotion.proposedBy === CHAIR_KEY ? chairDisplayName(language) : getCountryDisplayName(specialVoteMotion.proposedBy, language)}
         </p>
-        <h1 className={`text-4xl font-black tracking-wide ${isSuspend ? 'mb-4' : 'mb-14'}`} style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('motions_does_pass')}</h1>
+        <h1 className={`text-4xl font-black tracking-wide ${isSuspend ? 'mb-4' : 'mb-14'}`} style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>{t('motions_does_pass')}</h1>
         {/* How long a suspended room is kept (src/lib/roomRetention.ts), said BEFORE the
             chair suspends: a standalone room with no resume is deleted after that. */}
         {isSuspend && (() => {
@@ -1562,7 +1562,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               setSpecialVoteMotion(null);
               onClose();
             }}
-            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none gv-lift disabled:opacity-40 disabled:cursor-not-allowed" style={{ backgroundColor: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
+            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none gv-lift disabled:opacity-40 disabled:cursor-not-allowed" style={{ backgroundColor: '#1B3828', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.05em' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
             {t('motions_yes')}
@@ -1577,7 +1577,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               setSpecialVoteMotion(null);
               onClose();
             }}
-            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none gv-lift disabled:opacity-40 disabled:cursor-not-allowed" style={{ backgroundColor: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
+            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none gv-lift disabled:opacity-40 disabled:cursor-not-allowed" style={{ backgroundColor: '#8B2020', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.05em' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#7A1C1C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}>
             {t('motions_no')}

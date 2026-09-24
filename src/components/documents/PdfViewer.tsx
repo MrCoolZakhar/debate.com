@@ -460,7 +460,7 @@ export default function PdfViewer({
           className="pointer-events-auto flex items-center max-w-full overflow-x-auto rounded-full px-1.5 py-1 bg-[#1B3828]"
           style={{
             boxShadow: '0 1px 0 rgba(255,255,255,0.08) inset, 0 2px 6px rgba(27,56,40,0.22), 0 10px 24px rgba(27,56,40,0.22)',
-            fontFamily: "'Outfit', sans-serif",
+            fontFamily: "var(--font-brand), sans-serif",
             scrollbarWidth: 'none',
           }}
         >

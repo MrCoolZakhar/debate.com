@@ -142,7 +142,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                     borderBottom: active ? `2px solid ${accent}` : '2px solid transparent',
                     textDecoration: 'none',
                     letterSpacing: '0.05em',
-                    fontFamily: "'Outfit', sans-serif",
+                    fontFamily: "var(--font-brand), sans-serif",
                     whiteSpace: 'nowrap',
                     transition: 'color 150ms ease',
                   }}
@@ -154,7 +154,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                       className="inline-flex items-center justify-center rounded-full"
                       style={{
                         minWidth: 18, height: 18, padding: '0 5px', fontSize: 10, fontWeight: 700,
-                        fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums',
+                        fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums',
                         backgroundColor: 'rgba(182,135,31,0.16)', color: '#8A6614',
                       }}
                     >
@@ -177,7 +177,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                     borderBottom: confActive ? '2px solid #B6871F' : '2px solid transparent',
                     textDecoration: 'none',
                     letterSpacing: '0.05em',
-                    fontFamily: "'Outfit', sans-serif",
+                    fontFamily: "var(--font-brand), sans-serif",
                     whiteSpace: 'nowrap',
                     transition: 'color 150ms ease',
                   }}
@@ -230,7 +230,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                         backgroundColor: 'rgba(27,56,40,0.1)',
                         border: '2px solid #DDD4C0',
                         color: '#1B3828',
-                        fontFamily: "'Outfit', sans-serif",
+                        fontFamily: "var(--font-brand), sans-serif",
                       }}
                     >
                       {avatarInitial}
@@ -240,14 +240,14 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
 
                 <p
                   className="font-semibold text-sm text-center mt-3"
-                  style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
+                  style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}
                 >
                   {profile?.display_name ?? user.email?.split('@')[0] ?? ''}
                 </p>
 
                 <p
                   className="text-xs text-center mt-0.5"
-                  style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 500 }}
+                  style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", fontWeight: 500 }}
                 >
                   {profile?.email ?? user.email ?? ''}
                 </p>
@@ -260,7 +260,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                         backgroundColor: 'rgba(238,217,138,0.22)',
                         border: '1px solid rgba(182,135,31,0.4)',
                         color: '#B6871F',
-                        fontFamily: "'Outfit', sans-serif",
+                        fontFamily: "var(--font-brand), sans-serif",
                         fontWeight: 700,
                         fontSize: '11px',
                         letterSpacing: '0.12em',
@@ -275,7 +275,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
 
                 <p
                   className="px-3 mb-1.5"
-                  style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11px', letterSpacing: '0.14em', color: '#B6871F', textTransform: 'uppercase' }}
+                  style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '11px', letterSpacing: '0.14em', color: '#B6871F', textTransform: 'uppercase' }}
                 >
                   ACCOUNT
                 </p>
@@ -299,7 +299,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                             background: active ? activeBg : idleBg,
                             color: '#7A5A20',
                             textDecoration: 'none',
-                            fontFamily: "'Outfit', sans-serif",
+                            fontFamily: "var(--font-brand), sans-serif",
                             boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.55)',
                             transition: 'background 150ms ease, box-shadow 150ms ease',
                           }}
@@ -328,7 +328,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                           backgroundColor: active ? 'rgba(27,56,40,0.08)' : 'transparent',
                           color: active ? '#1B3828' : '#9A8A78',
                           textDecoration: 'none',
-                          fontFamily: "'Outfit', sans-serif",
+                          fontFamily: "var(--font-brand), sans-serif",
                           transition: 'background-color 150ms ease, color 150ms ease',
                         }}
                         onMouseEnter={(e) => {
@@ -351,7 +351,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                             className="flex-shrink-0 inline-flex items-center justify-center rounded-full"
                             style={{
                               minWidth: 18, height: 18, padding: '0 5px', fontSize: 10, fontWeight: 700,
-                              fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums',
+                              fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums',
                               backgroundColor: 'rgba(182,135,31,0.16)', color: '#8A6614',
                             }}
                           >
@@ -373,7 +373,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                     backgroundColor: 'transparent',
                     border: 'none',
                     cursor: 'pointer',
-                    fontFamily: "'Outfit', sans-serif",
+                    fontFamily: "var(--font-brand), sans-serif",
                     transition: 'background-color 150ms ease',
                   }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.06)'; }}
@@ -420,10 +420,10 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                       <CalendarCheck size={17} strokeWidth={2.5} style={{ color: '#FAF8F3' }} />
                     </span>
                     <span className="flex-1 min-w-0">
-                      <span className="block" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '11px', letterSpacing: '0.14em', color: '#B6871F', textTransform: 'uppercase' }}>
+                      <span className="block" style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '11px', letterSpacing: '0.14em', color: '#B6871F', textTransform: 'uppercase' }}>
                         YOUR HUB
                       </span>
-                      <span className="block" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '14px', color: '#7A5A20', letterSpacing: '0.01em' }}>
+                      <span className="block" style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '14px', color: '#7A5A20', letterSpacing: '0.01em' }}>
                         My Conferences
                       </span>
                     </span>

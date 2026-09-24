@@ -259,21 +259,21 @@ function StepHeader({ n, label, sub, complete, open, onClick, status = 'idle', h
     >
       <StepDisc n={n} complete={complete} />
       <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-1.5 font-semibold text-base" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+        <span className="flex items-center gap-1.5 font-semibold text-base" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
           {label}
           {hint && <InfoHint label={`About ${label}`} text={hint} />}
         </span>
-        <span className="block text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+        <span className="block text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
           {sub}
         </span>
       </span>
       {status === 'saving' && (
-        <span className="text-xs flex-shrink-0" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+        <span className="text-xs flex-shrink-0" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
           Saving...
         </span>
       )}
       {status === 'saved' && (
-        <span className="text-xs flex items-center gap-1 flex-shrink-0" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
+        <span className="text-xs flex items-center gap-1 flex-shrink-0" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>
           <Check size={12} strokeWidth={3} /> Saved
         </span>
       )}
@@ -386,7 +386,7 @@ const inputStyle: React.CSSProperties = {
   padding: '10px 14px',
   fontSize: '13px',
   color: '#1C1410',
-  fontFamily: "'Outfit', sans-serif",
+  fontFamily: "var(--font-brand), sans-serif",
   outline: 'none',
   transition: 'border-color 150ms ease',
   width: '100%',
@@ -500,7 +500,7 @@ function CopyFormMenu({ roles, onPick }: { roles: string[]; onPick: (role: strin
         ref={btnRef}
         onClick={() => setOpen(o => !o)}
         className="flex items-center gap-1.5 text-xs font-semibold focus:outline-none hover:underline"
-        style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}
+        style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}
       >
         <Copy size={13} /> COPY FORM TO ANOTHER ROLE…
       </button>
@@ -514,7 +514,7 @@ function CopyFormMenu({ roles, onPick }: { roles: string[]; onPick: (role: strin
               boxShadow: '0 12px 32px rgba(27,56,40,0.18)', padding: 6,
             }}
           >
-            <p className="px-2.5 pt-1 pb-1.5 text-[10px] font-bold" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em' }}>
+            <p className="px-2.5 pt-1 pb-1.5 text-[10px] font-bold" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.1em' }}>
               COPY TO
             </p>
             {roles.map(role => (
@@ -522,7 +522,7 @@ function CopyFormMenu({ roles, onPick }: { roles: string[]; onPick: (role: strin
                 key={role}
                 onClick={() => { setOpen(false); onPick(role); }}
                 className="w-full text-left px-2.5 py-2 rounded-lg text-sm focus:outline-none transition-colors"
-                style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", background: 'transparent' }}
+                style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", background: 'transparent' }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
               >
@@ -540,7 +540,7 @@ function CopyFormMenu({ roles, onPick }: { roles: string[]; onPick: (role: strin
 function AutoSaveStatus({ saving, saved }: { saving: boolean; saved: boolean }) {
   const text = saving ? 'Saving…' : saved ? 'Saved ✓' : 'Changes save automatically';
   return (
-    <p className="text-xs mt-2 flex items-center gap-1.5" style={{ color: saved ? '#3D7A52' : '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+    <p className="text-xs mt-2 flex items-center gap-1.5" style={{ color: saved ? '#3D7A52' : '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
       {saving && <span className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#9A8A78', borderTopColor: 'transparent' }} />}
       {text}
     </p>
@@ -3039,10 +3039,10 @@ export default function SettingsPage() {
     // and stays at 1080.
     <div className="px-4 sm:px-6 md:px-10 py-8" style={{ maxWidth: activeTab === 'organizers' ? '1400px' : '1080px' }}>
       {/* Header */}
-      <p className="text-xs mb-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>
+      <p className="text-xs mb-2" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>
         {view.acronym} / Settings
       </p>
-      <h1 className="font-black text-2xl mb-7" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+      <h1 className="font-black text-2xl mb-7" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
         Settings
       </h1>
 
@@ -3101,14 +3101,14 @@ export default function SettingsPage() {
                     <Icon size={16} strokeWidth={2.1} style={{ color: active ? '#EED98A' : '#6E5F4E' }} />
                   </span>
                   <span className="hidden md:flex flex-col min-w-0">
-                    <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '13.5px', fontWeight: 700, letterSpacing: '0.01em' }}>
+                    <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: '13.5px', fontWeight: 700, letterSpacing: '0.01em' }}>
                       {section.label}
                     </span>
-                    <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 500, color: active ? 'rgba(238,217,138,0.72)' : '#9A8A78', marginTop: '1px' }}>
+                    <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: '11px', fontWeight: 500, color: active ? 'rgba(238,217,138,0.72)' : '#9A8A78', marginTop: '1px' }}>
                       {section.hint}
                     </span>
                   </span>
-                  <span className="md:hidden" style={{ fontFamily: "'Outfit', sans-serif", fontSize: '13px', fontWeight: 700 }}>
+                  <span className="md:hidden" style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: '13px', fontWeight: 700 }}>
                     {section.label}
                   </span>
                 </button>
@@ -3148,10 +3148,10 @@ export default function SettingsPage() {
               <activeSection.icon size={20} strokeWidth={2.1} style={{ color: '#EED98A' }} />
             </span>
             <div className="min-w-0">
-              <h2 className="font-black text-lg leading-tight" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+              <h2 className="font-black text-lg leading-tight" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                 {activeSection.label}
               </h2>
-              <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+              <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                 {activeSection.hint}
               </p>
             </div>
@@ -3167,10 +3167,10 @@ export default function SettingsPage() {
         >
           <AlertTriangle size={18} style={{ color: '#8A6614', flexShrink: 0, marginTop: 1 }} />
           <div>
-            <p className="font-bold text-sm mb-1" style={{ color: '#6B4F12', fontFamily: "'Outfit', sans-serif" }}>
+            <p className="font-bold text-sm mb-1" style={{ color: '#6B4F12', fontFamily: "var(--font-brand), sans-serif" }}>
               Delegates cannot pay you yet
             </p>
-            <p className="text-sm" style={{ color: '#6B4F12', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
+            <p className="text-sm" style={{ color: '#6B4F12', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.6 }}>
               Your applications are open, but nothing on your financial setup gives delegates a way to pay. Finish it in{' '}
               <Link href={`/manage/${conference.slug}/financials/settings`} className="font-bold underline">
                 Financial Settings
@@ -3232,7 +3232,7 @@ export default function SettingsPage() {
                   >
                     <Emoji3D name={ROLE_EMOJI[role] ?? 'Bust in silhouette'} size={24} />
                   </span>
-                  <span className="inline-flex items-center gap-2 font-black" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontSize: '18px' }}>
+                  <span className="inline-flex items-center gap-2 font-black" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontSize: '18px' }}>
                     {roleLabel(role)}
                     <InfoHint label={`What a ${roleLabel(role)} is`} text={ROLE_BLURB[role] ?? ''} size={17} />
                   </span>
@@ -3240,7 +3240,7 @@ export default function SettingsPage() {
                     suppressHydrationWarning
                     className="font-bold"
                     style={{
-                      fontFamily: "'Outfit', sans-serif", fontSize: '10px', fontWeight: 800,
+                      fontFamily: "var(--font-brand), sans-serif", fontSize: '10px', fontWeight: 800,
                       letterSpacing: '0.1em', padding: '3px 9px', borderRadius: '999px',
                       backgroundColor: chip.bg, color: chip.fg,
                     }}
@@ -3255,7 +3255,7 @@ export default function SettingsPage() {
                       className="inline-flex items-center gap-1.5 rounded-[10px] focus:outline-none transition-colors gv-lift"
                       style={{
                         padding: '7px 12px',
-                        fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 800,
+                        fontFamily: "var(--font-brand), sans-serif", fontSize: '11px', fontWeight: 800,
                         letterSpacing: '0.06em',
                         color: '#1B3828', backgroundColor: 'transparent',
                         border: '1.5px solid #DDD4C0', cursor: 'pointer',
@@ -3273,7 +3273,7 @@ export default function SettingsPage() {
                       className="inline-flex items-center gap-1.5 rounded-[10px] focus:outline-none transition-colors"
                       style={{
                         padding: '7px 12px',
-                        fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 800,
+                        fontFamily: "var(--font-brand), sans-serif", fontSize: '11px', fontWeight: 800,
                         letterSpacing: '0.06em',
                         color: '#1B3828', backgroundColor: 'transparent',
                         border: '1.5px solid #DDD4C0', cursor: 'pointer',
@@ -3296,7 +3296,7 @@ export default function SettingsPage() {
                 {/* enforce_role_config_payment_gate raises for real, so a refused
                     toggle has to explain itself where the toggle is. */}
                 {roleConfigError && (
-                  <p className="text-xs mt-3 rounded-lg px-3 py-2" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}>
+                  <p className="text-xs mt-3 rounded-lg px-3 py-2" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif" }}>
                     {roleConfigError}
                   </p>
                 )}
@@ -3327,7 +3327,7 @@ export default function SettingsPage() {
                             the window actually turns over. */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
                           <div>
-                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                               Opens
                               <InfoHint
                                 label="About the opening time"
@@ -3345,7 +3345,7 @@ export default function SettingsPage() {
                           </div>
 
                           <div>
-                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                               Closes
                               <InfoHint
                                 label="About the closing time"
@@ -3365,23 +3365,23 @@ export default function SettingsPage() {
 
                           <div className="md:col-span-2">
                             {windowBackwards ? (
-                              <p className="text-xs rounded-lg px-3 py-2" suppressHydrationWarning style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}>
+                              <p className="text-xs rounded-lg px-3 py-2" suppressHydrationWarning style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif" }}>
                                 This window closes at or before it opens, so nobody can apply. Move one of the two.
                               </p>
                             ) : (
-                              <p className="text-xs" suppressHydrationWarning style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                              <p className="text-xs" suppressHydrationWarning style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                                 Times are in {localZoneLabel()}. Applicants see these in their own timezone.
                               </p>
                             )}
                             {(config.fee_phases ?? []).some(p => p.start_date && p.end_date) && (
-                              <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                              <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                                 With fee phases, applications open when the first price starts and close when the last price ends. Changing one moves the other.
                               </p>
                             )}
                             {timelineMsg?.role === role && timelineMsg.where === 'window' && (
                               timelineMsg.kind === 'info'
                                 ? <TimelineNotice text={timelineMsg.text} />
-                                : <p role="alert" className="text-xs rounded-lg px-3 py-2 mt-2" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}>{timelineMsg.text}</p>
+                                : <p role="alert" className="text-xs rounded-lg px-3 py-2 mt-2" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif" }}>{timelineMsg.text}</p>
                             )}
                             <TimelineWarning
                               config={config}
@@ -3391,7 +3391,7 @@ export default function SettingsPage() {
                             />
                           </div>
                           <div>
-                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                               Max accepted
                               <InfoHint
                                 label="About max accepted"
@@ -3414,7 +3414,7 @@ export default function SettingsPage() {
                         </div>
                         {/* Acceptance */}
                         <div className="mt-4">
-                          <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                          <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                             Acceptance
                             <InfoHint
                               label="About acceptance"
@@ -3437,7 +3437,7 @@ export default function SettingsPage() {
                                     backgroundColor: active ? '#1B3828' : 'transparent',
                                     color: active ? '#EED98A' : '#1C1410',
                                     border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                                    fontFamily: "'Outfit', sans-serif",
+                                    fontFamily: "var(--font-brand), sans-serif",
                                     letterSpacing: '0.06em',
                                   }}
                                 >
@@ -3449,7 +3449,7 @@ export default function SettingsPage() {
                         </div>
                         {/* Payment */}
                         <div className="mt-4">
-                          <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                          <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                             Payment
                             <InfoHint
                               label="About payment timing"
@@ -3469,7 +3469,7 @@ export default function SettingsPage() {
                                     backgroundColor: active ? '#1B3828' : 'transparent',
                                     color: active ? '#EED98A' : '#1C1410',
                                     border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                                    fontFamily: "'Outfit', sans-serif",
+                                    fontFamily: "var(--font-brand), sans-serif",
                                     letterSpacing: '0.06em',
                                   }}
                                 >
@@ -3478,21 +3478,21 @@ export default function SettingsPage() {
                               );
                             })}
                           </div>
-                          <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                          <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                             {PAYMENT_TIMING_OPTIONS.find(o => o.value === (config.payment_timing ?? 'anytime'))?.desc}
                           </p>
                         </div>
                         {/* Resubmission */}
                         <div className="mt-4 flex items-center justify-between gap-3">
                           <div>
-                            <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                            <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                               Allow resubmission
                               <InfoHint
                                 label="About resubmission"
                                 text="With this on, an applicant you have denied can reopen their form, change their answers and send it back for another look. Useful when denials are usually about a missing detail rather than a real no. With it off, a denial is final and they cannot apply again for this role."
                               />
                             </label>
-                            <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                            <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                               Let denied applicants edit and resubmit.
                             </p>
                           </div>
@@ -3511,10 +3511,10 @@ export default function SettingsPage() {
                           role === 'chair' ? (
                             <div className="mt-4 flex items-center justify-between gap-3">
                               <div>
-                                <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                                <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                                   Ask for their committee preference
                                 </label>
-                                <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                                <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                                   Chairs rank which committee they would like to chair, and you assign from their ranking.
                                 </p>
                               </div>
@@ -3526,14 +3526,14 @@ export default function SettingsPage() {
                             </div>
                           ) : (
                             <div className="mt-4">
-                              <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                              <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                                 Delegate preferences
                                 <InfoHint
                                   label="About delegate preferences"
                                   text="What a delegate is asked to rank on the application form, and therefore what your allocation has to work with. Ranking committee-and-country pairs gives the fullest picture and the best automatic allocation, but it is also the longest form to fill in. Committees only, or countries only, are shorter. None skips the step entirely and leaves every seat for you to assign by hand."
                                 />
                               </label>
-                              <p className="text-xs mt-0.5 mb-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                              <p className="text-xs mt-0.5 mb-2" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                                 Choose what delegates rank when they apply. The application form shows only the pickers you enable here.
                               </p>
                               <div className="grid grid-cols-1" style={{ gap: 8 }}>
@@ -3551,7 +3551,7 @@ export default function SettingsPage() {
                                         color: active ? '#EED98A' : '#1C1410',
                                         border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
                                         boxShadow: active ? '0 4px 12px rgba(27,56,40,0.2)' : 'none',
-                                        fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
+                                        fontFamily: "var(--font-brand), sans-serif", fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
                                         cursor: 'pointer',
                                       }}
                                     >
@@ -3568,7 +3568,7 @@ export default function SettingsPage() {
                                   );
                                 })}
                               </div>
-                              <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                              <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                                 {PREF_MODE_OPTIONS.find(o => o.value === (config.preference_mode ?? 'none'))?.desc}
                               </p>
                             </div>
@@ -3581,14 +3581,14 @@ export default function SettingsPage() {
                         {(role === 'chair' || role === 'secretariat') && (
                           <div className="mt-4 flex items-center justify-between gap-3">
                             <div>
-                              <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                              <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                                 Ask for MUN experience
                                 <InfoHint
                                   label="About MUN experience"
                                   text="Delegates and head delegates are not affected by this setting, on or off: their experience level feeds committee allocation directly, so it is never collected this way for them."
                                 />
                               </label>
-                              <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                              <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                                 Applicants list the conferences they have chaired or staffed, and can import them from their Gavelling MUN CV.
                               </p>
                             </div>
@@ -3614,7 +3614,7 @@ export default function SettingsPage() {
                       <div className="mt-5">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
                           <div>
-                            <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Fee</label>
+                            <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Fee</label>
                             <div className="flex gap-2">
                               <CurrencyPicker
                                 value={config.fee_currency}
@@ -3652,7 +3652,7 @@ export default function SettingsPage() {
                           return (
                             <div className="mt-4">
                               <div className="flex items-center justify-between mb-1.5 flex-wrap" style={{ gap: 8 }}>
-                                <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                                <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                                   Fee phases
                                   <InfoHint
                                     label="About fee phases"
@@ -3661,7 +3661,7 @@ export default function SettingsPage() {
                                 </label>
                                 <div className="flex items-center" style={{ gap: 12 }}>
                                   {copyPhasesNotice && (
-                                    <span className="text-[11px] font-bold" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
+                                    <span className="text-[11px] font-bold" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>
                                       {copyPhasesNotice} ✓
                                     </span>
                                   )}
@@ -3670,7 +3670,7 @@ export default function SettingsPage() {
                                       type="button"
                                       onClick={() => setCopyPhasesOpen(true)}
                                       className="text-[11px] font-bold focus:outline-none hover:underline inline-flex items-center gap-1.5"
-                                      style={{ color: '#7A6E5E', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', background: 'none', border: 'none', cursor: 'pointer' }}
+                                      style={{ color: '#7A6E5E', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', background: 'none', border: 'none', cursor: 'pointer' }}
                                     >
                                       <Copy size={12} strokeWidth={2.4} />
                                       COPY TO ANOTHER ROLE
@@ -3683,14 +3683,14 @@ export default function SettingsPage() {
                                       fee_phases: [...phases, { label: `Phase ${phases.length + 1}`, start_date: '', end_date: '', amount: config.fee_amount }],
                                     }, 'phases'); }}
                                     className="text-[11px] font-bold focus:outline-none hover:underline"
-                                    style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', background: 'none', border: 'none', opacity: hasInvalidPhase ? 0.45 : 1, cursor: hasInvalidPhase ? 'not-allowed' : 'pointer' }}
+                                    style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', background: 'none', border: 'none', opacity: hasInvalidPhase ? 0.45 : 1, cursor: hasInvalidPhase ? 'not-allowed' : 'pointer' }}
                                   >
                                     + ADD PHASE
                                   </button>
                                 </div>
                               </div>
                               {phases.length === 0 ? (
-                                <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.55 }}>
+                                <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.55 }}>
                                   Optional: charge different amounts by date, e.g. an Early Bird rate. When no phase covers today, the flat fee above applies.
                                 </p>
                               ) : (
@@ -3725,7 +3725,7 @@ export default function SettingsPage() {
                                           {isActive && (
                                             <span
                                               className="flex-shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                                              style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em' }}
+                                              style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.1em' }}
                                             >
                                               CURRENT
                                             </span>
@@ -3773,20 +3773,20 @@ export default function SettingsPage() {
                                         </button>
                                       </div>
                                       {invalid && (
-                                        <p className="text-xs mb-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+                                        <p className="text-xs mb-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>
                                           This fee phase is invalid. Please add dates.
                                         </p>
                                       )}
                                       </Fragment>
                                     );
                                   })}
-                                  <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                                  <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                                     Dates are inclusive and each price starts the day after the previous one ends. Applications open when the first price starts and close when the last one ends.
                                   </p>
                                   {timelineMsg?.role === role && timelineMsg.where === 'phases' && (
                                     timelineMsg.kind === 'info'
                                       ? <TimelineNotice text={timelineMsg.text} />
-                                      : <p role="alert" className="text-xs rounded-lg px-3 py-2 mt-2" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}>{timelineMsg.text}</p>
+                                      : <p role="alert" className="text-xs rounded-lg px-3 py-2 mt-2" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif" }}>{timelineMsg.text}</p>
                                   )}
                                   <TimelineWarning
                                     config={config}
@@ -3816,7 +3816,7 @@ export default function SettingsPage() {
                         <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
                           <CopyFormMenu roles={otherRoles} onPick={handleCopyFormTo} />
                           {copyNotice && (
-                            <p className="text-xs font-semibold" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
+                            <p className="text-xs font-semibold" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>
                               {copyNotice} ✓
                             </p>
                           )}
@@ -3825,7 +3825,7 @@ export default function SettingsPage() {
                           <p
                             role="alert"
                             className="text-xs mb-3 rounded-lg px-3 py-2"
-                            style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}
+                            style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif" }}
                           >
                             {blocksBlocked}
                           </p>
@@ -3845,7 +3845,7 @@ export default function SettingsPage() {
                     {openStep === 4 && (
                       <div className="mt-5">
                         <div className="mb-4">
-                          <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                          <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                             Message
                           </label>
                           <textarea
@@ -3864,7 +3864,7 @@ export default function SettingsPage() {
                           />
                           <p
                             className="text-xs mt-1"
-                            style={{ textAlign: 'right', fontFamily: "'Outfit', sans-serif", fontSize: 11.5, fontWeight: 600, color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}
+                            style={{ textAlign: 'right', fontFamily: "var(--font-brand), sans-serif", fontSize: 11.5, fontWeight: 600, color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}
                           >
                             {submissionMessageInput.length} / 280
                           </p>
@@ -3872,7 +3872,7 @@ export default function SettingsPage() {
 
                         <div className="flex gap-3 mb-2 flex-wrap">
                           <div className="flex-1" style={{ minWidth: 200 }}>
-                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                               Button text (optional)
                             </label>
                             <input
@@ -3891,7 +3891,7 @@ export default function SettingsPage() {
                             />
                           </div>
                           <div className="flex-1" style={{ minWidth: 200 }}>
-                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                               Button link (optional)
                             </label>
                             <input
@@ -3909,11 +3909,11 @@ export default function SettingsPage() {
                             />
                           </div>
                         </div>
-                        <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                        <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                           Add both to show a button, or leave both empty for a message with no button. The link must start with https://
                         </p>
                         {submissionLinkError && (
-                          <p role="alert" className="text-xs mt-1.5" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+                          <p role="alert" className="text-xs mt-1.5" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>
                             {submissionLinkError}
                           </p>
                         )}
@@ -3964,16 +3964,16 @@ export default function SettingsPage() {
                     >
                       <Lock size={24} strokeWidth={2.1} style={{ color: '#EED98A' }} />
                     </span>
-                    <p className="font-black text-lg mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", maxWidth: '420px' }}>
+                    <p className="font-black text-lg mb-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", maxWidth: '420px' }}>
                       Application opening is not available until Financial Onboarding is completed.
                     </p>
-                    <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", maxWidth: '440px', lineHeight: 1.6 }}>
+                    <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", maxWidth: '440px', lineHeight: 1.6 }}>
                       {paymentGateMessage(conference)}
                     </p>
                     <button
                       onClick={() => router.push(`/manage/${conference.slug}/financials/settings`)}
                       className="rounded-xl px-6 py-3 text-sm font-bold focus:outline-none transition-colors gv-lift"
-                      style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em', cursor: 'pointer' }}
+                      style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.04em', cursor: 'pointer' }}
                       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
                     >
@@ -4003,7 +4003,7 @@ export default function SettingsPage() {
                 className="inline-flex items-center gap-1.5 rounded-[10px] focus:outline-none transition-colors"
                 style={{
                   padding: '7px 12px',
-                  fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 800,
+                  fontFamily: "var(--font-brand), sans-serif", fontSize: '11px', fontWeight: 800,
                   letterSpacing: '0.06em',
                   color: '#1B3828', backgroundColor: 'transparent',
                   border: '1.5px solid #DDD4C0', cursor: 'pointer',
@@ -4021,7 +4021,7 @@ export default function SettingsPage() {
                 className="inline-flex items-center gap-1.5 rounded-[10px] focus:outline-none transition-colors gv-lift"
                 style={{
                   padding: '7px 12px',
-                  fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 800,
+                  fontFamily: "var(--font-brand), sans-serif", fontSize: '11px', fontWeight: 800,
                   letterSpacing: '0.06em',
                   color: '#1B3828', backgroundColor: 'transparent',
                   border: '1.5px solid #DDD4C0', cursor: 'pointer',
@@ -4060,8 +4060,8 @@ export default function SettingsPage() {
                   style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
                 >
                   <div>
-                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Show member counts</p>
-                    <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>How many delegates are in each committee.</p>
+                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Show member counts</p>
+                    <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>How many delegates are in each committee.</p>
                   </div>
                   <span className="flex items-center gap-2 flex-shrink-0">
                     {visibilitySavingKey === 'show_committee_counts' && (
@@ -4080,8 +4080,8 @@ export default function SettingsPage() {
                   style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
                 >
                   <div>
-                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Show taken countries</p>
-                    <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Which country slots are already allocated.</p>
+                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Show taken countries</p>
+                    <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Which country slots are already allocated.</p>
                   </div>
                   <span className="flex items-center gap-2 flex-shrink-0">
                     {visibilitySavingKey === 'show_taken_countries' && (
@@ -4100,8 +4100,8 @@ export default function SettingsPage() {
                   style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
                 >
                   <div>
-                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Show the committee list</p>
-                    <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Turn this off if your committees are not announced yet.</p>
+                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Show the committee list</p>
+                    <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Turn this off if your committees are not announced yet.</p>
                   </div>
                   <span className="flex items-center gap-2 flex-shrink-0">
                     {visibilitySavingKey === 'show_committees' && (
@@ -4116,7 +4116,7 @@ export default function SettingsPage() {
                   </span>
                 </div>
                 {visibilityError && (
-                  <p className="text-xs" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{visibilityError}</p>
+                  <p className="text-xs" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{visibilityError}</p>
                 )}
                 </div>
               </div>
@@ -4136,8 +4136,8 @@ export default function SettingsPage() {
             />
             {openConfSection === 2 && (
             <div className="mt-5">
-            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Banner</p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Recommended: 1200x630px. JPG, PNG or WebP. Max 5MB.</p>
+            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Conference Banner</p>
+            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Recommended: 1200x630px. JPG, PNG or WebP. Max 5MB.</p>
             <div
               style={{
                 border: '1.5px dashed #DDD4C0', borderRadius: 14, overflow: 'hidden',
@@ -4158,7 +4158,7 @@ export default function SettingsPage() {
                       position: 'absolute', top: 8, right: 8,
                       backgroundColor: 'rgba(27,56,40,0.85)', color: '#EDE7D8',
                       border: 'none', borderRadius: 8, padding: '4px 10px',
-                      fontSize: 11, fontFamily: "'Outfit', sans-serif", fontWeight: 700, cursor: 'pointer',
+                      fontSize: 11, fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, cursor: 'pointer',
                     }}
                   >
                     {bannerUploading ? 'UPLOADING...' : 'CHANGE'}
@@ -4167,12 +4167,12 @@ export default function SettingsPage() {
               ) : bannerUploading ? (
                 <div style={{ textAlign: 'center', padding: 24 }}>
                   <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin mx-auto mb-2" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-                  <p style={{ fontSize: 12, color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Uploading...</p>
+                  <p style={{ fontSize: 12, color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Uploading...</p>
                 </div>
               ) : (
                 <div style={{ textAlign: 'center', padding: 24 }}>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: '#1C1410', fontFamily: "'Outfit', sans-serif", marginBottom: 4 }}>Click to upload banner</p>
-                  <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Recommended: 1200x630px</p>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", marginBottom: 4 }}>Click to upload banner</p>
+                  <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Recommended: 1200x630px</p>
                 </div>
               )}
               <input
@@ -4186,7 +4186,7 @@ export default function SettingsPage() {
 
             {/* Preset picker, one click sets banner_url to a bundled photo */}
             <div style={{ marginTop: 14 }}>
-              <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 600, letterSpacing: '0.01em', color: '#7A6E5E', margin: '0 0 8px 0' }}>
+              <p style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 12, fontWeight: 600, letterSpacing: '0.01em', color: '#7A6E5E', margin: '0 0 8px 0' }}>
                 Or pick a preset
               </p>
               <div className="flex flex-wrap gap-2">
@@ -4218,13 +4218,13 @@ export default function SettingsPage() {
               </div>
             </div>
             {bannerError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{bannerError}</p>
+              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{bannerError}</p>
             )}
 
             <div className="my-5" style={{ borderTop: '1px solid #F0EDE6' }} />
 
-            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Logo</p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Square, transparent PNG recommended. Shown on your public page, directory cards and search. Max 5MB.</p>
+            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Conference Logo</p>
+            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Square, transparent PNG recommended. Shown on your public page, directory cards and search. Max 5MB.</p>
             <div className="flex items-center gap-5">
               <div
                 style={{
@@ -4242,14 +4242,14 @@ export default function SettingsPage() {
                 ) : view.logo_url ? (
                   <LogoDisc src={view.logo_url} alt="Logo" size={80} fallbackText={view.acronym?.slice(0, 3)} />
                 ) : (
-                  <span style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", textAlign: 'center', padding: '0 8px' }}>Click to upload</span>
+                  <span style={{ fontSize: 11, color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", textAlign: 'center', padding: '0 8px' }}>Click to upload</span>
                 )}
               </div>
               <div>
                 <button
                   onClick={() => { if (!logoUploading) document.getElementById('settings-logo-upload')?.click(); }}
                   className="rounded-xl py-2 px-4 font-bold text-xs tracking-widest transition-colors focus:outline-none gv-lift"
-                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em' }}
+                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.07em' }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
                 >
@@ -4271,7 +4271,7 @@ export default function SettingsPage() {
               />
             </div>
             {logoError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{logoError}</p>
+              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{logoError}</p>
             )}
             </div>
             )}
@@ -4287,11 +4287,11 @@ export default function SettingsPage() {
             />
             {openConfSection === 3 && (
             <div className="mt-5">
-            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Details</p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Core information shown on your public conference page and directory listing.</p>
+            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Conference Details</p>
+            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Core information shown on your public conference page and directory listing.</p>
 
             <div className="mb-4">
-              <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Full name</label>
+              <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Full name</label>
               <input
                 type="text"
                 value={fullName}
@@ -4304,7 +4304,7 @@ export default function SettingsPage() {
             </div>
 
             <div className="mb-4">
-              <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Acronym</label>
+              <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Acronym</label>
               <input
                 type="text"
                 value={acronym}
@@ -4319,16 +4319,16 @@ export default function SettingsPage() {
                 style={inputStyle}
               />
               {acronymError ? (
-                <p className="text-xs mt-1" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{acronymError}</p>
+                <p className="text-xs mt-1" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{acronymError}</p>
               ) : (
-                <p className="text-xs mt-1" suppressHydrationWarning style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                <p className="text-xs mt-1" suppressHydrationWarning style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                   Shown as <strong style={{ color: '#1C1410' }}>{conferenceAcronymLabel({ acronym, start_date: startDate || conference.start_date })}</strong>
                 </p>
               )}
             </div>
 
             <div className="mb-4">
-              <label className="block text-xs font-semibold mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Student level</label>
+              <label className="block text-xs font-semibold mb-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Student level</label>
               <div className="flex gap-2">
                 {([
                   { value: 'school', label: 'HIGH SCHOOL' },
@@ -4346,7 +4346,7 @@ export default function SettingsPage() {
                         backgroundColor: active ? '#1B3828' : 'transparent',
                         color: active ? '#EED98A' : '#9A8A78',
                         border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                        fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em',
+                        fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.07em',
                       }}
                     >
                       {opt.label}
@@ -4357,7 +4357,7 @@ export default function SettingsPage() {
             </div>
 
             <div className="mb-4">
-              <label className="block text-xs font-semibold mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Format</label>
+              <label className="block text-xs font-semibold mb-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Format</label>
               <div className="flex gap-2">
                 {([
                   { value: 'in-person', label: 'IN-PERSON' },
@@ -4375,7 +4375,7 @@ export default function SettingsPage() {
                         backgroundColor: active ? '#1B3828' : 'transparent',
                         color: active ? '#EED98A' : '#9A8A78',
                         border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                        fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em',
+                        fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.07em',
                       }}
                     >
                       {opt.label}
@@ -4400,7 +4400,7 @@ export default function SettingsPage() {
                 style={datesTbd ? { opacity: 0.4, pointerEvents: 'none' } : undefined}
               >
                 <div className="flex-1">
-                  <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Start date</label>
+                  <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Start date</label>
                   <DatePicker
                     value={startDate}
                     onChange={(iso) => {
@@ -4411,7 +4411,7 @@ export default function SettingsPage() {
                   />
                 </div>
                 <div className="flex-1">
-                  <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>End date</label>
+                  <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>End date</label>
                   <DatePicker
                     value={endDate}
                     min={startDate || undefined}
@@ -4449,10 +4449,10 @@ export default function SettingsPage() {
                   {datesTbd && <Check size={13} strokeWidth={3} color="#EED98A" />}
                 </span>
                 <span>
-                  <span className="block text-sm font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                  <span className="block text-sm font-semibold" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                     Dates are to be decided (TBD)
                   </span>
-                  <span className="block text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                  <span className="block text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                     A TBD conference stays private (no public link) until you add dates. Applications can still open.
                   </span>
                 </span>
@@ -4461,7 +4461,7 @@ export default function SettingsPage() {
 
             <div className="flex gap-3 mb-4">
               <div className="flex-1">
-                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>City</label>
+                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>City</label>
                 <input
                   type="text"
                   value={city}
@@ -4473,7 +4473,7 @@ export default function SettingsPage() {
                 />
               </div>
               <div className="flex-1">
-                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Country</label>
+                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Country</label>
                 <select
                   value={country}
                   onChange={(e) => setCountry(e.target.value)}
@@ -4488,7 +4488,7 @@ export default function SettingsPage() {
             </div>
 
             <div className="mb-5">
-              <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Expected delegates</label>
+              <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Expected delegates</label>
               <input
                 type="number"
                 min={0}
@@ -4502,8 +4502,8 @@ export default function SettingsPage() {
             </div>
 
             <div className="mb-5">
-              <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Description</p>
-              <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Shown on your public conference page.</p>
+              <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Description</p>
+              <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Shown on your public conference page.</p>
               <textarea
                 rows={6}
                 value={description}
@@ -4514,13 +4514,13 @@ export default function SettingsPage() {
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
               />
-              <div style={{ textAlign: 'right', marginTop: 6, fontFamily: "'Outfit', sans-serif", fontSize: 11.5, fontWeight: 600, color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}>
+              <div style={{ textAlign: 'right', marginTop: 6, fontFamily: "var(--font-brand), sans-serif", fontSize: 11.5, fontWeight: 600, color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}>
                 {description.length} / 1500
               </div>
             </div>
 
             <div className="mb-5">
-            <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
               <Emoji3D name="Birthday cake" size={20} />
               Age of participants
               <InfoHint
@@ -4528,12 +4528,12 @@ export default function SettingsPage() {
                 text="Both bounds are inclusive and both are measured on your conference's start date, not on the day someone applies, so a delegate who turns sixteen the week before still counts as sixteen. Leave either end empty for no limit at that end. Applicants outside the range are told before they fill anything in, rather than after."
               />
             </p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
               Checked against each applicant&apos;s date of birth, on the day your conference starts. Leave either box empty for no limit.
             </p>
             <div className="flex items-end flex-wrap" style={{ gap: 14 }}>
               <div style={{ width: '150px' }}>
-                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                   Minimum age
                 </label>
                 <input
@@ -4550,7 +4550,7 @@ export default function SettingsPage() {
                 />
               </div>
               <div style={{ width: '150px' }}>
-                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                   Maximum age
                 </label>
                 <input
@@ -4571,10 +4571,10 @@ export default function SettingsPage() {
               </div>
             </div>
             {minAgeError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{minAgeError}</p>
+              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{minAgeError}</p>
             )}
             {!minAgeError && (view.min_age != null || view.max_age != null) && (
-              <p className="text-xs mt-3" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
+              <p className="text-xs mt-3" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>
                 {view.min_age != null && view.max_age != null
                   ? `Applicants must be between ${view.min_age} and ${view.max_age} years old at the start of your conference.`
                   : view.min_age != null
@@ -4586,7 +4586,7 @@ export default function SettingsPage() {
 
             <AutoSaveStatus saving={detailsSaving} saved={detailsSaved} />
             {detailsError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{detailsError}</p>
+              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{detailsError}</p>
             )}
             </div>
             )}
@@ -4601,7 +4601,7 @@ export default function SettingsPage() {
             />
             {openConfSection === 4 && (
             <div className="mt-5">
-            <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
               <Emoji3D name="Counterclockwise arrows button" size={20} fallback={Users2} fallbackColor="#1B3828" />
               Delegation allocation swaps
               <InfoHint
@@ -4609,7 +4609,7 @@ export default function SettingsPage() {
                 text="Once you have allocated a delegation its seats, its head delegate and faculty advisor may want to move their own people between them, putting a stronger delegate onto a harder country, say. Off keeps every move with your team. Request lets them ask and you approve. Self-serve lets them rearrange inside their own delegation freely and notifies you; they can never take a seat from another delegation."
               />
             </p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
               Control whether delegation leaders can trade committee allocations within their own delegation.
             </p>
             <div className="flex items-center" style={{ gap: 8 }}>
@@ -4625,11 +4625,11 @@ export default function SettingsPage() {
                 <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
               )}
             </div>
-            <p className="text-xs mt-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            <p className="text-xs mt-2" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
               {SWAP_MODE_OPTIONS.find(o => o.value === swapMode)?.desc}
             </p>
             {swapModeError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{swapModeError}</p>
+              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{swapModeError}</p>
             )}
             </div>
             )}
@@ -4645,10 +4645,10 @@ export default function SettingsPage() {
             />
             {openConfSection === 5 && (
             <div className="mt-5">
-        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
           Partners
         </p>
-        <p className="text-sm mb-5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+        <p className="text-sm mb-5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
           Showcase partner conferences and sponsoring companies on your public page. A conference link only appears
           once that conference&apos;s team approves it; a company you add yourself appears straight away.
         </p>
@@ -4677,7 +4677,7 @@ export default function SettingsPage() {
                 }}
                 className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[11px] font-bold focus:outline-none transition-colors gv-lift"
                 style={{
-                  fontFamily: "'Outfit', sans-serif",
+                  fontFamily: "var(--font-brand), sans-serif",
                   letterSpacing: '0.08em',
                   backgroundColor: active ? '#1B3828' : 'transparent',
                   color: active ? '#EED98A' : '#6E5F4E',
@@ -4704,7 +4704,7 @@ export default function SettingsPage() {
                 <label
                   className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold"
                   style={{
-                    fontFamily: "'Outfit', sans-serif",
+                    fontFamily: "var(--font-brand), sans-serif",
                     letterSpacing: '0.06em',
                     color: '#1B3828',
                     border: '1.5px solid #DDD4C0',
@@ -4728,7 +4728,7 @@ export default function SettingsPage() {
                     }}
                   />
                 </label>
-                <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                   PNG or JPG, under 5MB. Optional.
                 </p>
               </div>
@@ -4763,7 +4763,7 @@ export default function SettingsPage() {
                 style={{
                   backgroundColor: companySaving || !companyName.trim() ? '#DDD4C0' : '#1B3828',
                   color: companySaving || !companyName.trim() ? '#9A8A78' : '#EED98A',
-                  fontFamily: "'Outfit', sans-serif",
+                  fontFamily: "var(--font-brand), sans-serif",
                   letterSpacing: '0.08em',
                   border: 'none',
                   cursor: companySaving || !companyName.trim() ? 'default' : 'pointer',
@@ -4780,7 +4780,7 @@ export default function SettingsPage() {
                   backgroundColor: 'transparent',
                   color: '#9A8A78',
                   border: 'none',
-                  fontFamily: "'Outfit', sans-serif",
+                  fontFamily: "var(--font-brand), sans-serif",
                   letterSpacing: '0.08em',
                   cursor: companySaving ? 'default' : 'pointer',
                 }}
@@ -4825,10 +4825,10 @@ export default function SettingsPage() {
                 >
                   <PartnerDisc logoUrl={c.logo_url} acronym={c.acronym} size={32} />
                   <span className="min-w-0">
-                    <span className="block font-bold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                    <span className="block font-bold text-sm truncate" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                       {conferenceAcronymLabel(c)}
                     </span>
-                    <span className="block text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                    <span className="block text-xs truncate" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                       {[c.city, c.country].filter(Boolean).join(', ') || c.full_name}
                     </span>
                   </span>
@@ -4842,12 +4842,12 @@ export default function SettingsPage() {
         {/* Linked partners */}
         <p
           className="text-xs font-bold mb-2"
-          style={{ color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}
+          style={{ color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.02em' }}
         >
           Linked partners
         </p>
         {partners.length === 0 ? (
-          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
             No partners added yet.
           </p>
         ) : (
@@ -4877,12 +4877,12 @@ export default function SettingsPage() {
                   <div className="flex-1 min-w-0">
                     <p
                       className="truncate"
-                      style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '14px', fontVariantNumeric: 'tabular-nums' }}
+                      style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '14px', fontVariantNumeric: 'tabular-nums' }}
                     >
                       {partnerLabel(link)}{!isCompany && year ? ` ${year}` : ''}
                     </p>
                     {subLine && (
-                      <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                      <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                         {subLine}
                       </p>
                     )}
@@ -4912,7 +4912,7 @@ export default function SettingsPage() {
                     style={{
                       fontSize: '10px',
                       letterSpacing: '0.08em',
-                      fontFamily: "'Outfit', sans-serif",
+                      fontFamily: "var(--font-brand), sans-serif",
                       backgroundColor: isCompany
                         ? 'rgba(182,135,31,0.14)'
                         : link.approved ? 'rgba(61,122,82,0.13)' : 'rgba(238,217,138,0.35)',
@@ -4928,7 +4928,7 @@ export default function SettingsPage() {
                       disabled={idx === 0}
                       aria-label="Move partner up"
                       className="text-xs focus:outline-none px-1 transition-colors"
-                      style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", background: 'transparent', border: 'none', cursor: idx === 0 ? 'default' : 'pointer', opacity: idx === 0 ? 0.3 : 1 }}
+                      style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", background: 'transparent', border: 'none', cursor: idx === 0 ? 'default' : 'pointer', opacity: idx === 0 ? 0.3 : 1 }}
                       onMouseEnter={(e) => { if (idx !== 0) (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
                     >
@@ -4939,7 +4939,7 @@ export default function SettingsPage() {
                       disabled={idx === partners.length - 1}
                       aria-label="Move partner down"
                       className="text-xs focus:outline-none px-1 transition-colors"
-                      style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", background: 'transparent', border: 'none', cursor: idx === partners.length - 1 ? 'default' : 'pointer', opacity: idx === partners.length - 1 ? 0.3 : 1 }}
+                      style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", background: 'transparent', border: 'none', cursor: idx === partners.length - 1 ? 'default' : 'pointer', opacity: idx === partners.length - 1 ? 0.3 : 1 }}
                       onMouseEnter={(e) => { if (idx !== partners.length - 1) (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
                     >
@@ -4952,7 +4952,7 @@ export default function SettingsPage() {
                     disabled={partnerBusy === link.id}
                     aria-label={`Remove ${partnerLabel(link)}`}
                     className="text-sm font-semibold focus:outline-none flex-shrink-0 px-1 transition-colors"
-                    style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", background: 'transparent', border: 'none', cursor: 'pointer', opacity: partnerBusy === link.id ? 0.4 : 1 }}
+                    style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", background: 'transparent', border: 'none', cursor: 'pointer', opacity: partnerBusy === link.id ? 0.4 : 1 }}
                   >
                     ✕
                   </button>
@@ -4960,7 +4960,7 @@ export default function SettingsPage() {
 
                 {isCompany && (
                   <div className="mt-2" style={{ paddingLeft: '52px' }}>
-                    <label className="block text-[10px] font-bold mb-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                    <label className="block text-[10px] font-bold mb-1" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                       Website
                     </label>
                     <input
@@ -4977,7 +4977,7 @@ export default function SettingsPage() {
                       onFocus={fgInput}
                     />
                     {partnerUrlWarnings[link.id] && (
-                      <p className="text-[10.5px] mt-1" style={{ color: '#B8844A', fontFamily: "'Outfit', sans-serif" }}>
+                      <p className="text-[10.5px] mt-1" style={{ color: '#B8844A', fontFamily: "var(--font-brand), sans-serif" }}>
                         Links must start with https:// to be secure.
                       </p>
                     )}
@@ -4994,7 +4994,7 @@ export default function SettingsPage() {
           <div className="mt-6 pt-6" style={{ borderTop: '1px solid #F0EDE6' }}>
             <p
               className="text-xs font-bold mb-2"
-              style={{ color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}
+              style={{ color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.02em' }}
             >
               Incoming partner requests
             </p>
@@ -5012,13 +5012,13 @@ export default function SettingsPage() {
                   >
                     <PartnerDisc logoUrl={claim.requester_logo_url} acronym={claim.requester_acronym} />
                     <div className="flex-1 min-w-0">
-                      <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', fontVariantNumeric: 'tabular-nums' }}>
+                      <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', fontVariantNumeric: 'tabular-nums' }}>
                         {claim.requester_acronym}{year ? ' · ' + year : ''}
                       </p>
-                      <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                      <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                         {claim.requester_full_name}
                       </p>
-                      <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                      <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                         {cityLine ? cityLine + ', ' : ''}wants to list {view.acronym} as a partner conference
                       </p>
                     </div>
@@ -5030,7 +5030,7 @@ export default function SettingsPage() {
                         style={{
                           backgroundColor: busy ? '#DDD4C0' : '#1B3828',
                           color: busy ? '#9A8A78' : '#EED98A',
-                          fontFamily: "'Outfit', sans-serif",
+                          fontFamily: "var(--font-brand), sans-serif",
                           letterSpacing: '0.06em',
                         }}
                         onMouseEnter={(e) => { if (!busy) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
@@ -5046,7 +5046,7 @@ export default function SettingsPage() {
                           backgroundColor: 'transparent',
                           color: '#8B2020',
                           border: '1px solid rgba(139,32,32,0.3)',
-                          fontFamily: "'Outfit', sans-serif",
+                          fontFamily: "var(--font-brand), sans-serif",
                           letterSpacing: '0.06em',
                         }}
                         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
@@ -5063,7 +5063,7 @@ export default function SettingsPage() {
         )}
 
         {partnerError && (
-          <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+          <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>
             {partnerError}
           </p>
         )}
@@ -5084,7 +5084,7 @@ export default function SettingsPage() {
             {openConfSection === 6 && (
             <div className="mt-5">
             <div className="mb-3">
-              <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Contact email</label>
+              <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Contact email</label>
               <input
                 type="email"
                 value={contactEmail}
@@ -5100,7 +5100,7 @@ export default function SettingsPage() {
                 }}
               />
               {contactEmailError && (
-                <p className="text-xs mt-1" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{contactEmailError}</p>
+                <p className="text-xs mt-1" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{contactEmailError}</p>
               )}
             </div>
             <div className="flex flex-col gap-3">
@@ -5112,7 +5112,7 @@ export default function SettingsPage() {
                 { label: 'Website URL', value: websiteUrl, setter: setWebsiteUrl },
               ] as { label: string; value: string; setter: (v: string) => void }[]).map(({ label, value, setter }) => (
                 <div key={label}>
-                  <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{label}</label>
+                  <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>{label}</label>
                   <input
                     type="url"
                     value={value}
@@ -5126,7 +5126,7 @@ export default function SettingsPage() {
               ))}
             </div>
             {visualError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{visualError}</p>
+              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{visualError}</p>
             )}
             </div>
             )}
@@ -5152,14 +5152,14 @@ export default function SettingsPage() {
               transition: 'box-shadow 400ms ease',
             }}
           >
-            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
               What you use Gavelling for
             </p>
             {/* One line, and it says exactly what the setting does. It is not a
                 permission, it turns nothing on or off, and it never hides a
                 priority — `financials` in particular gates both the checkmark
                 and publishing, so a hidden row would be a real bug. */}
-            <p className="text-sm mb-4" style={{ color: NEU.inkSoft, fontFamily: "'Outfit', sans-serif" }}>
+            <p className="text-sm mb-4" style={{ color: NEU.inkSoft, fontFamily: "var(--font-brand), sans-serif" }}>
               This only changes the order of the priorities on your dashboard. Nothing is switched on or off, and no work is hidden. Pick everything that applies.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 8 }}>
@@ -5178,7 +5178,7 @@ export default function SettingsPage() {
                       backgroundColor: on ? 'rgba(27,56,40,0.06)' : 'transparent',
                       border: on ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
                       boxShadow: on ? '0 4px 12px rgba(27,56,40,0.14)' : 'none',
-                      fontFamily: "'Outfit', sans-serif",
+                      fontFamily: "var(--font-brand), sans-serif",
                       cursor: 'pointer',
                       transition: 'background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease',
                     }}
@@ -5214,13 +5214,13 @@ export default function SettingsPage() {
                 plain build order. Worth saying, because an all-grey card
                 otherwise looks like nothing was saved. */}
             {intentKeys.length === 0 && (
-              <p className="text-xs mt-3" style={{ color: NEU.inkSoft, fontFamily: "'Outfit', sans-serif" }}>
+              <p className="text-xs mt-3" style={{ color: NEU.inkSoft, fontFamily: "var(--font-brand), sans-serif" }}>
                 Nothing picked. Your dashboard lists the priorities in the normal build order.
               </p>
             )}
             <AutoSaveStatus saving={intentSaving} saved={intentSaved} />
             {intentError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{intentError}</p>
+              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{intentError}</p>
             )}
           </div>
         </div>
@@ -5766,10 +5766,10 @@ export default function SettingsPage() {
       })()}
 
       {activeTab === 'privacy' && <><div style={cardStyle}>
-        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
           Privacy & Publishing
         </p>
-        <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+        <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
           Control who can see your view.
         </p>
 
@@ -5779,8 +5779,8 @@ export default function SettingsPage() {
           style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
         >
           <div>
-            <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Public listing</p>
-            <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Public listing</p>
+            <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
               Your conference appears on gavelling.com/conferences
             </p>
           </div>
@@ -5800,39 +5800,39 @@ export default function SettingsPage() {
         </div>
 
         {!view.is_public && (view.dates_tbd || !view.start_date) ? (
-          <p className="text-sm mt-3" style={{ color: '#B8844A', fontFamily: "'Outfit', sans-serif" }}>
+          <p className="text-sm mt-3" style={{ color: '#B8844A', fontFamily: "var(--font-brand), sans-serif" }}>
             Add conference dates to publish. TBD conferences stay private.
           </p>
         ) : (
-          <p className="text-sm mt-3" style={{ color: view.is_public ? '#1B3828' : '#B8844A', fontFamily: "'Outfit', sans-serif" }}>
+          <p className="text-sm mt-3" style={{ color: view.is_public ? '#1B3828' : '#B8844A', fontFamily: "var(--font-brand), sans-serif" }}>
             {view.is_public
               ? 'Your conference is publicly listed on Gavelling.'
               : 'Your conference is private. Only people with the direct link can find it.'}
           </p>
         )}
         {!view.is_public && paymentGateBlocks(view) && (
-          <p className="text-xs mt-2" style={{ color: '#B8844A', fontFamily: "'Outfit', sans-serif" }}>{paymentGateMessage(view)}</p>
+          <p className="text-xs mt-2" style={{ color: '#B8844A', fontFamily: "var(--font-brand), sans-serif" }}>{paymentGateMessage(view)}</p>
         )}
         {privacyError && (
-          <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{privacyError}</p>
+          <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{privacyError}</p>
         )}
 
         {/* Danger zone */}
         <div className="mt-6 pt-6" style={{ borderTop: '1px solid #F0EDE6' }}>
-          <p className="text-sm font-semibold mb-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+          <p className="text-sm font-semibold mb-3" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>
             Danger Zone
           </p>
           <button
             onClick={() => { if (!isOwner) { setDeleteError('Only the conference owner can delete this view.'); return; } setDeleteError(''); setConfirmingDelete(true); }}
             className="w-full rounded-xl py-2.5 font-semibold text-sm focus:outline-none transition-colors gv-lift"
-            style={{ border: '1px solid rgba(139,32,32,0.3)', color: '#8B2020', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
+            style={{ border: '1px solid rgba(139,32,32,0.3)', color: '#8B2020', backgroundColor: 'transparent', fontFamily: "var(--font-brand), sans-serif" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
           >
             DELETE CONFERENCE
           </button>
           {deleteError && (
-            <p className="text-sm mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{deleteError}</p>
+            <p className="text-sm mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{deleteError}</p>
           )}
 
           {confirmingDelete && (
@@ -5858,17 +5858,17 @@ export default function SettingsPage() {
 
       {/* ── Lineage card ── */}
       <div style={cardStyle}>
-        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
           Lineage
         </p>
-        <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+        <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
           Link editions of the same conference across years. Links only count once the previous edition&apos;s owner approves them.
         </p>
 
         {/* Outgoing claim: this conference's predecessor */}
         <p
           className="text-xs font-bold mb-2"
-          style={{ color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}
+          style={{ color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.02em' }}
         >
           Previous edition
         </p>
@@ -5878,10 +5878,10 @@ export default function SettingsPage() {
             style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
           >
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+              <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                 {predecessorInfo?.full_name ?? 'A private conference'}
               </p>
-              <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+              <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                 {view.predecessor_approved
                   ? 'Confirmed as the previous edition of this view.'
                   : 'Waiting for its Main Organiser to confirm the link.'}
@@ -5896,13 +5896,13 @@ export default function SettingsPage() {
               onClick={handleWithdrawClaim}
               disabled={withdrawingClaim}
               className="text-xs font-semibold focus:outline-none hover:underline flex-shrink-0"
-              style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}
+              style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}
             >
               {withdrawingClaim ? 'WITHDRAWING...' : 'WITHDRAW'}
             </button>
           </div>
         ) : (
-          <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+          <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
             No previous edition linked. You can link one when creating your next edition on Gavelling.
           </p>
         )}
@@ -5910,12 +5910,12 @@ export default function SettingsPage() {
         {/* Incoming claims: conferences claiming this one as their predecessor */}
         <p
           className="text-xs font-bold mb-2"
-          style={{ color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}
+          style={{ color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.02em' }}
         >
           Incoming claims
         </p>
         {incomingClaims.length === 0 ? (
-          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
             No conferences currently claim {view.acronym} as their previous edition.
           </p>
         ) : (
@@ -5930,13 +5930,13 @@ export default function SettingsPage() {
                   style={{ borderBottom: isLast ? 'none' : '1px solid #F0EDE6' }}
                 >
                   <div className="flex-1 min-w-0">
-                    <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                    <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
                       {claim.acronym}{year ? ' · ' + year : ''}
                     </p>
-                    <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                    <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                       {claim.full_name}
                     </p>
-                    <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                    <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                       claims to be the next edition of {view.acronym}
                     </p>
                   </div>
@@ -5954,7 +5954,7 @@ export default function SettingsPage() {
                         style={{
                           backgroundColor: lineageBusy === claim.id ? '#DDD4C0' : '#1B3828',
                           color: lineageBusy === claim.id ? '#9A8A78' : '#EED98A',
-                          fontFamily: "'Outfit', sans-serif",
+                          fontFamily: "var(--font-brand), sans-serif",
                           letterSpacing: '0.06em',
                         }}
                         onMouseEnter={(e) => { if (lineageBusy !== claim.id) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
@@ -5970,7 +5970,7 @@ export default function SettingsPage() {
                           backgroundColor: 'transparent',
                           color: '#8B2020',
                           border: '1px solid rgba(139,32,32,0.3)',
-                          fontFamily: "'Outfit', sans-serif",
+                          fontFamily: "var(--font-brand), sans-serif",
                           letterSpacing: '0.06em',
                         }}
                         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
@@ -5991,7 +5991,7 @@ export default function SettingsPage() {
         )}
 
         {lineageError && (
-          <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+          <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>
             {lineageError}
           </p>
         )}

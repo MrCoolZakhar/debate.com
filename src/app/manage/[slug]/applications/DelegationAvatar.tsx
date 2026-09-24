@@ -16,7 +16,7 @@ import { Crown } from 'lucide-react';
 import { FlagImg } from '@/components/FlagImg';
 import { getCountryByName, getCountryByCode } from '@/lib/countries';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 const FOREST = '#1B3828';
 const INK = '#1C1410';
 const INK_SOFT = '#5E5145';

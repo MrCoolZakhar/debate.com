@@ -645,7 +645,7 @@ export default function MapClient() {
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 5,
-                  fontFamily: "'Outfit', sans-serif",
+                  fontFamily: "var(--font-brand), sans-serif",
                   fontSize: 11,
                   fontWeight: 700,
                   color: '#B6871F',
@@ -660,7 +660,7 @@ export default function MapClient() {
 
               <h2
                 style={{
-                  fontFamily: "'Outfit', sans-serif",
+                  fontFamily: "var(--font-brand), sans-serif",
                   fontWeight: 900,
                   fontSize: 28,
                   color: '#1B3828',
@@ -749,10 +749,10 @@ export default function MapClient() {
                     <MapPin size={18} strokeWidth={2} />
                   </span>
                   <div>
-                    <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 14, fontWeight: 800, color: '#1B3828', margin: 0 }}>
+                    <p style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 14, fontWeight: 800, color: '#1B3828', margin: 0 }}>
                       No live conferences yet
                     </p>
-                    <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, lineHeight: 1.5, color: '#9A8A78', margin: '3px 0 0 0' }}>
+                    <p style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 12, lineHeight: 1.5, color: '#9A8A78', margin: '3px 0 0 0' }}>
                       Be the first to bring MUN to {selectedDef.label}.
                     </p>
                   </div>
@@ -764,7 +764,7 @@ export default function MapClient() {
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
                     <span
                       style={{
-                        fontFamily: "'Outfit', sans-serif",
+                        fontFamily: "var(--font-brand), sans-serif",
                         fontSize: 46,
                         fontWeight: 900,
                         lineHeight: 1,
@@ -775,7 +775,7 @@ export default function MapClient() {
                     </span>
                     <span
                       style={{
-                        fontFamily: "'Outfit', sans-serif",
+                        fontFamily: "var(--font-brand), sans-serif",
                         fontSize: 12,
                         fontWeight: 600,
                         lineHeight: 1.3,
@@ -813,12 +813,12 @@ export default function MapClient() {
                         fallbackText={(detail.highlighted.acronym ?? detail.highlighted.full_name).slice(0, 2)}
                       />
                       <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                        <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 500, color: '#B6871F', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                        <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 12, fontWeight: 500, color: '#B6871F', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
                           Spotlight
                         </span>
                         <span
                           style={{
-                            fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 700, color: '#1B3828',
+                            fontFamily: "var(--font-brand), sans-serif", fontSize: 13, fontWeight: 700, color: '#1B3828',
                             lineHeight: 1.25, display: 'flex', alignItems: 'center', gap: 5, maxWidth: 190, minWidth: 0,
                           }}
                         >
@@ -826,7 +826,7 @@ export default function MapClient() {
                           <VerifiedCheck verified={detail.highlighted.is_verified} size={16} title="Verified conference" />
                         </span>
                         {formatMonthYear(detail.highlighted.start_date) && (
-                          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, letterSpacing: '0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 10, color: '#9A8A78', marginTop: 1 }}>
+                          <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, letterSpacing: '0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 10, color: '#9A8A78', marginTop: 1 }}>
                             {formatMonthYear(detail.highlighted.start_date)}
                           </span>
                         )}
@@ -849,7 +849,7 @@ export default function MapClient() {
                   fontSize: 12,
                   fontWeight: 800,
                   letterSpacing: '0.08em',
-                  fontFamily: "'Outfit', sans-serif",
+                  fontFamily: "var(--font-brand), sans-serif",
                   textDecoration: 'none',
                 }}
               >
@@ -870,7 +870,7 @@ export default function MapClient() {
           >
             <p
               style={{
-                fontFamily: "'Outfit', sans-serif",
+                fontFamily: "var(--font-brand), sans-serif",
                 fontWeight: 700,
                 fontSize: 11,
                 letterSpacing: '0.14em',
@@ -905,7 +905,7 @@ export default function MapClient() {
         >
           <p
             style={{
-              fontFamily: "'Outfit', sans-serif",
+              fontFamily: "var(--font-brand), sans-serif",
               fontWeight: 700,
               fontSize: 11,
               letterSpacing: '0.14em',
@@ -937,7 +937,7 @@ export default function MapClient() {
               fontSize: 11,
               fontWeight: 700,
               color: '#EDE7D8',
-              fontFamily: "'Outfit', sans-serif",
+              fontFamily: "var(--font-brand), sans-serif",
               letterSpacing: '0.14em',
               textDecoration: 'none',
               whiteSpace: 'nowrap',
@@ -956,7 +956,7 @@ export default function MapClient() {
           explicit tappable list instead of the (mobile-broken) hover map. */}
       {phase === 'world' && (
         <div className="md:hidden" style={{ position: 'absolute', left: 0, right: 0, bottom: 92, zIndex: 30, padding: '0 16px' }}>
-          <p style={{ textAlign: 'center', margin: '0 0 10px', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 10.5, letterSpacing: '0.14em', color: '#EDE7D8', textShadow: '0 1px 6px rgba(0,0,0,0.6)' }}>
+          <p style={{ textAlign: 'center', margin: '0 0 10px', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: 10.5, letterSpacing: '0.14em', color: '#EDE7D8', textShadow: '0 1px 6px rgba(0,0,0,0.6)' }}>
             TAP A CONTINENT
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, maxWidth: 340, margin: '0 auto' }}>
@@ -973,7 +973,7 @@ export default function MapClient() {
                   fontSize: 12.5,
                   fontWeight: 700,
                   color: '#EDE7D8',
-                  fontFamily: "'Outfit', sans-serif",
+                  fontFamily: "var(--font-brand), sans-serif",
                   letterSpacing: '0.03em',
                   cursor: 'pointer',
                   WebkitBackdropFilter: 'blur(4px)',
@@ -1002,7 +1002,7 @@ export default function MapClient() {
               fontSize: 11,
               fontWeight: 700,
               color: '#EDE7D8',
-              fontFamily: "'Outfit', sans-serif",
+              fontFamily: "var(--font-brand), sans-serif",
               letterSpacing: '0.14em',
               whiteSpace: 'nowrap',
               boxShadow: '0 2px 12px rgba(27,56,40,0.15)',

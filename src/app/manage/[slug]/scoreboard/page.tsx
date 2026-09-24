@@ -57,7 +57,7 @@ import { Layers } from 'lucide-react';
 // tokens below are measured — see live/tokens.ts.
 import { SOFT, RED, CARD_BORDER_COLOR } from '@/app/manage/[slug]/live/tokens';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 function csvEscape(v: string | number): string {
   const s = String(v ?? '');

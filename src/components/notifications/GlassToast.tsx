@@ -16,7 +16,7 @@ import type { CSSProperties } from 'react';
 import { Gavel } from 'lucide-react';
 import { GLASS, glassFallbackCss, SPRING_BEZIER, SPRING_LINEAR } from './glass';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 const SEAT = {
   gained: { bg: 'linear-gradient(160deg, #3D7A52 0%, #1B3828 100%)', ink: '#EED98A' },

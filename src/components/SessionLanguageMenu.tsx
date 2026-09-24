@@ -12,7 +12,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import type { Language } from '@/lib/translations';
 import LanguageRequestDialog from '@/components/LanguageRequestDialog';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 export default function SessionLanguageMenu() {
   const { language, setLanguage, t } = useLanguage();

@@ -454,7 +454,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
       <div className="min-h-screen flex flex-col items-center justify-center text-center px-8" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="pointer-events-none fixed inset-0 z-0" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
         <p className="text-xs font-mono font-bold tracking-widest mb-2 relative z-10" style={{ color: '#1B3828' }}>{getCommitteeDisplayName(committee.name, language)} · {committee.code}</p>
-        <h1 className="text-5xl font-black mb-4 tracking-wide relative z-10" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('advisor_adjourned_title')}</h1>
+        <h1 className="text-5xl font-black mb-4 tracking-wide relative z-10" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>{t('advisor_adjourned_title')}</h1>
         <p className="text-lg relative z-10" style={{ color: '#6A5A4A' }}>{t('advisor_adjourned_desc')}</p>
         <p className="text-xs mt-8 relative z-10" style={{ color: '#9A8A78' }}>{t('advisor_adjourned_esc')}</p>
       </div>
@@ -533,7 +533,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
                 <MajorityPie arcFill={2/3} color="#B6871F" label={`${Math.ceil(present * 2 / 3)}`} />
                 <MajorityPie arcFill={0.5} color="#8A7A6A" label={`${Math.floor(present / 2) + 1}`} />
               </div>
-              <span className="text-xs font-black capitalize px-2 py-1 rounded-lg" style={{ backgroundColor: 'rgba(238,217,138,0.12)', color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>{advisorPhaseDisplay}</span>
+              <span className="text-xs font-black capitalize px-2 py-1 rounded-lg" style={{ backgroundColor: 'rgba(238,217,138,0.12)', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif" }}>{advisorPhaseDisplay}</span>
             </div>
           </div>
           {/* Now Speaking label */}
@@ -635,7 +635,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
           {selectedCountry === null ? (
             <>
               <div className="mb-4 text-center">
-                <h2 className="text-2xl font-black tracking-wide" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{t('advisor_all_delegates')}</h2>
+                <h2 className="text-2xl font-black tracking-wide" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>{t('advisor_all_delegates')}</h2>
                 <p className="text-sm mt-1" style={{ color: '#9A8A78' }}>{t('advisor_click_to_expand')}</p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">

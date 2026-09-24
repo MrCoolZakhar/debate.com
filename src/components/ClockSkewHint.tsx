@@ -14,7 +14,7 @@ import { GLASS, glassFallbackCss } from './notifications/glass';
 import { serverClockMeasured, subscribeServerClock } from '@/lib/serverClock';
 
 const THRESHOLD_MS = 5000;
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 export default function ClockSkewHint() {
   const t = useT();

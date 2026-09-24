@@ -36,7 +36,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { ClockPlus, Pause, Play, RotateCcw, SkipForward, MessageSquareReply, Flag } from 'lucide-react';
 import { useT } from '@/contexts/LanguageContext';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 /** The legacy labels carry their own glyphs ("▶ START", "NEXT →"); the icons replace them. */
 const clean = (label: string) => label.replace(/[▶►⏸→←‖]/g, '').replace(/\s+/g, ' ').trim();

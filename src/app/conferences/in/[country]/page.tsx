@@ -79,7 +79,7 @@ export default async function CountryHubPage({ params }: { params: Promise<{ cou
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemList) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbs) }} />
       <SiteNav brand="conferences" />
-      <main className="mx-auto w-full max-w-5xl px-4 sm:px-6" style={{ paddingTop: 40, paddingBottom: 72, fontFamily: "'Outfit', sans-serif" }}>
+      <main className="mx-auto w-full max-w-5xl px-4 sm:px-6" style={{ paddingTop: 40, paddingBottom: 72, fontFamily: "var(--font-brand), sans-serif" }}>
         <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: '#5C5140' }}>
           <Link href="/conferences/explore" style={{ color: '#1B3828', fontWeight: 600, textDecoration: 'none' }}>Conferences</Link>
           <span aria-hidden="true"> / </span>

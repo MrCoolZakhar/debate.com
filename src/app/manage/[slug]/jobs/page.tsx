@@ -170,7 +170,7 @@ function ApplicationsPanel({
         className="rounded-xl p-4 mt-3"
         style={{ background: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
       >
-        <p className="text-xs text-center py-2" style={{ color: MUTED, fontFamily: "'Outfit', sans-serif", fontWeight: 500 }}>Loading…</p>
+        <p className="text-xs text-center py-2" style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif", fontWeight: 500 }}>Loading…</p>
       </div>
     );
   }
@@ -181,12 +181,12 @@ function ApplicationsPanel({
       style={{ background: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
     >
       {panelError && (
-        <p className="text-xs mb-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", fontWeight: 600 }}>
+        <p className="text-xs mb-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", fontWeight: 600 }}>
           {panelError}
         </p>
       )}
       {apps.length === 0 ? (
-        <p className="text-xs text-center py-2" style={{ color: MUTED, fontFamily: "'Outfit', sans-serif" }}>
+        <p className="text-xs text-center py-2" style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif" }}>
           No applications yet
         </p>
       ) : (
@@ -232,10 +232,10 @@ function ApplicationsPanel({
 
                 {/* Name + email */}
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm truncate" style={{ color: INK, fontFamily: "'Outfit', sans-serif" }}>
+                  <p className="font-semibold text-sm truncate" style={{ color: INK, fontFamily: "var(--font-brand), sans-serif" }}>
                     {profile?.display_name ?? 'Unknown'}
                   </p>
-                  <p className="text-xs truncate" style={{ color: MUTED, fontFamily: "'Outfit', sans-serif" }}>
+                  <p className="text-xs truncate" style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif" }}>
                     {profile?.email ?? ''}
                   </p>
                 </div>
@@ -244,7 +244,7 @@ function ApplicationsPanel({
               {/* Status badge */}
               <span
                 className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                style={{ ...statusStyle, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em' }}
+                style={{ ...statusStyle, fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.06em' }}
               >
                 {app.status.toUpperCase()}
               </span>
@@ -322,16 +322,16 @@ function PostingCard({
       <div className="flex items-center gap-3">
         <span
           className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-          style={{ ...catStyle, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', textTransform: 'uppercase' }}
+          style={{ ...catStyle, fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.06em', textTransform: 'uppercase' }}
         >
           {posting.category}
         </span>
-        <p className="font-semibold text-base flex-1 min-w-0" style={{ color: INK, fontFamily: "'Outfit', sans-serif" }}>
+        <p className="font-semibold text-base flex-1 min-w-0" style={{ color: INK, fontFamily: "var(--font-brand), sans-serif" }}>
           {posting.role_name}
         </p>
         <span
           className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-          style={{ ...openStyle, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em' }}
+          style={{ ...openStyle, fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.06em' }}
         >
           {posting.is_open ? 'OPEN' : 'CLOSED'}
         </span>
@@ -340,24 +340,24 @@ function PostingCard({
       {/* Row 2: meta */}
       <div className="mt-1.5 flex flex-wrap gap-3">
         {posting.conference_committees && (
-          <span className="flex items-center gap-1 text-xs" style={{ color: MUTED, fontFamily: "'Outfit', sans-serif" }}>
+          <span className="flex items-center gap-1 text-xs" style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif" }}>
             <Building2 size={12} />
             {posting.conference_committees.name}
           </span>
         )}
-        <span className="flex items-center gap-1 text-xs" style={{ color: MUTED, fontFamily: "'Outfit', sans-serif" }}>
+        <span className="flex items-center gap-1 text-xs" style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif" }}>
           <CreditCard size={12} />
           {posting.compensation.toLowerCase() === 'other' && posting.compensation_note
             ? posting.compensation_note
             : toUiEnum(posting.compensation)}
         </span>
         {posting.deadline && (
-          <span className="flex items-center gap-1 text-xs" style={{ color: MUTED, fontFamily: "'Outfit', sans-serif" }}>
+          <span className="flex items-center gap-1 text-xs" style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif" }}>
             <Clock size={12} />
             Closes {fmtDeadline(posting.deadline)}
           </span>
         )}
-        <span className="flex items-center gap-1 text-xs" style={{ color: MUTED, fontFamily: "'Outfit', sans-serif" }}>
+        <span className="flex items-center gap-1 text-xs" style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif" }}>
           <Users size={12} />
           {appCount} application{appCount !== 1 ? 's' : ''}
         </span>
@@ -369,7 +369,7 @@ function PostingCard({
           className="mt-2 text-xs leading-relaxed"
           style={{
             color: MUTED,
-            fontFamily: "'Outfit', sans-serif",
+            fontFamily: "var(--font-brand), sans-serif",
             display: '-webkit-box',
             WebkitLineClamp: 2,
             WebkitBoxOrient: 'vertical',
@@ -460,7 +460,7 @@ function PostingModal({
     border: `1px solid ${BORDER}`,
     backgroundColor: '#fff',
     color: INK,
-    fontFamily: "'Outfit', sans-serif",
+    fontFamily: "var(--font-brand), sans-serif",
     borderRadius: '10px',
     padding: '10px 12px',
     fontSize: '14px',
@@ -474,7 +474,7 @@ function PostingModal({
     fontWeight: 700,
     marginBottom: '6px',
     color: MUTED,
-    fontFamily: "'Outfit', sans-serif",
+    fontFamily: "var(--font-brand), sans-serif",
     letterSpacing: '0.05em',
   };
 
@@ -490,7 +490,7 @@ function PostingModal({
             onClick={() => onChange(opt)}
             className="flex-1 py-2 rounded-lg text-xs font-bold transition-all focus:outline-none"
             style={{
-              fontFamily: "'Outfit', sans-serif",
+              fontFamily: "var(--font-brand), sans-serif",
               backgroundColor: value === opt ? FOREST : 'transparent',
               color: value === opt ? GOLD : MUTED,
               letterSpacing: '0.04em',
@@ -522,7 +522,7 @@ function PostingModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
-          <h2 className="font-black text-lg" style={{ color: INK, fontFamily: "'Outfit', sans-serif" }}>
+          <h2 className="font-black text-lg" style={{ color: INK, fontFamily: "var(--font-brand), sans-serif" }}>
             {isEdit ? 'Edit Position' : 'Post a Position'}
           </h2>
           <button onClick={onClose} className="focus:outline-none" style={{ color: MUTED }}>
@@ -635,7 +635,7 @@ function PostingModal({
 
           {/* Submit */}
           {errorText && (
-            <p className="text-xs" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", fontWeight: 600 }}>
+            <p className="text-xs" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", fontWeight: 600 }}>
               {errorText}
             </p>
           )}
@@ -657,7 +657,7 @@ function PostingModal({
             style={{
               backgroundColor: FOREST,
               color: GOLD,
-              fontFamily: "'Outfit', sans-serif",
+              fontFamily: "var(--font-brand), sans-serif",
               letterSpacing: '0.05em',
             }}
             onMouseEnter={(e) => {
@@ -932,11 +932,11 @@ export default function JobBoardPage() {
         <div>
           <p
             className="text-xs tracking-widest mb-1"
-            style={{ color: MUTED, fontFamily: "'Outfit', sans-serif", fontWeight: 700 }}
+            style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif", fontWeight: 700 }}
           >
             {conference?.acronym} / Job Board
           </p>
-          <h1 className="text-2xl font-black" style={{ color: INK, fontFamily: "'Outfit', sans-serif" }}>
+          <h1 className="text-2xl font-black" style={{ color: INK, fontFamily: "var(--font-brand), sans-serif" }}>
             Job Board
           </h1>
         </div>
@@ -946,7 +946,7 @@ export default function JobBoardPage() {
           style={{
             backgroundColor: FOREST,
             color: GOLD,
-            fontFamily: "'Outfit', sans-serif",
+            fontFamily: "var(--font-brand), sans-serif",
             letterSpacing: '0.04em',
           }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
@@ -968,10 +968,10 @@ export default function JobBoardPage() {
             className="flex items-center gap-3 rounded-xl px-5 py-3"
             style={{ backgroundColor: CARD_BG, border: `1px solid ${BORDER}` }}
           >
-            <span className="font-black text-xl" style={{ color: INK, fontFamily: "'Outfit', sans-serif" }}>
+            <span className="font-black text-xl" style={{ color: INK, fontFamily: "var(--font-brand), sans-serif" }}>
               {value}
             </span>
-            <span className="text-xs" style={{ color: MUTED, fontFamily: "'Outfit', sans-serif", fontWeight: 500 }}>
+            <span className="text-xs" style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif", fontWeight: 500 }}>
               {label}
             </span>
           </div>
@@ -989,7 +989,7 @@ export default function JobBoardPage() {
               backgroundColor: categoryTab === cat ? FOREST : 'transparent',
               color: categoryTab === cat ? GOLD : INK,
               border: categoryTab === cat ? `1.5px solid ${FOREST}` : `1.5px solid ${BORDER}`,
-              fontFamily: "'Outfit', sans-serif",
+              fontFamily: "var(--font-brand), sans-serif",
               letterSpacing: '0.07em',
             }}
           >
@@ -1001,10 +1001,10 @@ export default function JobBoardPage() {
       {/* Postings list */}
       {visible.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <p className="font-semibold text-base mb-2" style={{ color: INK, fontFamily: "'Outfit', sans-serif" }}>
+          <p className="font-semibold text-base mb-2" style={{ color: INK, fontFamily: "var(--font-brand), sans-serif" }}>
             {postings.length === 0 ? 'No positions posted yet' : 'No positions in this category'}
           </p>
-          <p className="text-sm mb-4" style={{ color: MUTED, fontFamily: "'Outfit', sans-serif" }}>
+          <p className="text-sm mb-4" style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif" }}>
             {postings.length === 0
               ? 'Click "Post a Position" to start recruiting chairs and staff.'
               : 'Try selecting a different category above.'}

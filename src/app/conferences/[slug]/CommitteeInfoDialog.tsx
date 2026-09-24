@@ -16,7 +16,7 @@ import { truncateAtWord } from '@/components/TruncatedTopic';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { chairTitleLabel } from '@/lib/chairTitles';
 
-const FONT = "'Outfit', sans-serif";
+const FONT = "var(--font-brand), sans-serif";
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI'];
 
 /** How much of each topic the card shows before "Show more". */

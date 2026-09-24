@@ -226,7 +226,7 @@ function NotRegisteredChip() {
   return (
     <span
       className="inline-flex items-center px-2 py-0.5 rounded-full font-bold flex-shrink-0"
-      style={{ fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', backgroundColor: 'rgba(154,138,120,0.12)', color: '#9A8A78', border: '1px solid rgba(154,138,120,0.3)' }}
+      style={{ fontSize: 9, fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', backgroundColor: 'rgba(154,138,120,0.12)', color: '#9A8A78', border: '1px solid rgba(154,138,120,0.3)' }}
     >
       NOT REGISTERED
     </span>
@@ -240,7 +240,7 @@ function InvitedChip() {
   return (
     <span
       className="inline-flex items-center px-2 py-0.5 rounded-full font-bold flex-shrink-0"
-      style={{ fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', backgroundColor: 'rgba(182,135,31,0.14)', color: '#8A6614', border: '1px solid rgba(182,135,31,0.35)' }}
+      style={{ fontSize: 9, fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', backgroundColor: 'rgba(182,135,31,0.14)', color: '#8A6614', border: '1px solid rgba(182,135,31,0.35)' }}
     >
       INVITED
     </span>
@@ -257,7 +257,7 @@ function WaivedChip() {
   return (
     <span
       className="inline-flex items-center px-2.5 py-1 rounded-full font-bold flex-shrink-0"
-      style={{ fontSize: 10, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', backgroundColor: 'rgba(61,122,82,0.14)', color: '#2A5A3C', border: '1px solid rgba(61,122,82,0.35)' }}
+      style={{ fontSize: 10, fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.06em', backgroundColor: 'rgba(61,122,82,0.14)', color: '#2A5A3C', border: '1px solid rgba(61,122,82,0.35)' }}
     >
       WAIVED
     </span>
@@ -2717,7 +2717,7 @@ export default function ApplicationsPage() {
           onClick={() => setRejectingId(app.id)}
           disabled={disabledNow}
           className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-          style={{ backgroundColor: 'rgba(139,32,32,0.08)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
+          style={{ backgroundColor: 'rgba(139,32,32,0.08)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif", ...busyStyle }}
         >
           <X size={13} />
           REJECT
@@ -2733,7 +2733,7 @@ export default function ApplicationsPage() {
         rows={2}
         placeholder={roleConfig?.allow_resubmission ? 'What should they fix before resubmitting?' : 'Optional note to delegate...'}
         className={`${big ? 'w-full' : 'flex-1'} rounded-lg px-3 py-2 text-xs outline-none resize-none`}
-        style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
+        style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: "var(--font-brand), sans-serif", ...busyStyle }}
       />
     );
     const confirmBtn = (
@@ -2741,7 +2741,7 @@ export default function ApplicationsPage() {
         onClick={() => handleReject(app.id)}
         disabled={disabledNow}
         className={`inline-flex items-center justify-center gap-1.5 rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none${big ? ' flex-1' : ''}`}
-        style={{ backgroundColor: 'rgba(139,32,32,0.1)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
+        style={{ backgroundColor: 'rgba(139,32,32,0.1)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif", ...busyStyle }}
       >
         <Check size={13} />
         CONFIRM
@@ -2751,7 +2751,7 @@ export default function ApplicationsPage() {
       <button
         onClick={() => { setRejectingId(null); setRejectNote(''); }}
         className={`gv-lift rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none${big ? ' flex-1' : ''}`}
-        style={{ border: '1px solid #DDD4C0', color: '#9A8A78', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
+        style={{ border: '1px solid #DDD4C0', color: '#9A8A78', backgroundColor: 'transparent', fontFamily: "var(--font-brand), sans-serif" }}
       >
         CANCEL
       </button>
@@ -2762,7 +2762,7 @@ export default function ApplicationsPage() {
       // (and carries no minWidth that would overflow and get clipped).
       <div className={`flex flex-col gap-2${big ? ' w-full' : ' flex-1'}`} style={{ minWidth: big ? 0 : 260 }}>
         {releasesSpot && (
-          <p className="text-[11px]" style={{ color: '#B8844A', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
+          <p className="text-[11px]" style={{ color: '#B8844A', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.5 }}>
             Their payment used a delegation-purchased spot. Rejecting will release that spot back to the delegation as open.
           </p>
         )}

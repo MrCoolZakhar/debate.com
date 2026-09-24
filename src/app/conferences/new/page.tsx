@@ -1536,10 +1536,10 @@ export default function NewConferencePage() {
                       {datesTbd && <Check size={13} strokeWidth={3} style={{ color: '#EED98A' }} />}
                     </span>
                     <span>
-                      <span className="block text-sm font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                      <span className="block text-sm font-semibold" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                         Dates are to be decided
                       </span>
-                      <span className="block text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                      <span className="block text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                         Set them any time later. A TBD conference stays private (no public link) until you add dates. You can still open applications.
                       </span>
                     </span>

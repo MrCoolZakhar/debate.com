@@ -32,7 +32,7 @@ import { anchorBox, place } from '@/components/voting/anchorPosition';
 import { UN_COUNTRIES, getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 const LIST_W = 272;
 const LIST_MAX_H = 300;
 

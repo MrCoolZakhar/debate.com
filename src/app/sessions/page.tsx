@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { pageMetadata } from '@/lib/seo';
-import HomeClient from '../HomeClient';
+import SessionsLanding from './landing/SessionsLanding';
 
 export const metadata: Metadata = pageMetadata({
   // absolute: opt out of the `%s | Gavelling` template — the brand is already
@@ -114,7 +114,7 @@ export default function SessionsPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
       />
-      <HomeClient />
+      <SessionsLanding />
     </>
   );
 }

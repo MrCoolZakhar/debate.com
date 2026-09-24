@@ -16,10 +16,15 @@ import ActivityNotices from '@/components/profile/ActivityNotices';
 import { useMyActivity, useOpenSeenState, markActivitySeen, isVisibleActivity } from '@/lib/myActivity';
 
 const NAV_LINKS_CONFIG = [
-  { en: 'SESSIONS',    es: 'SESIONES',     fr: 'SESSIONS',        ar: 'الجلسات',    href: '/sessions' },
-  { en: 'CONFERENCES', es: 'CONFERENCIAS', fr: 'CONFÉRENCES',     ar: 'المؤتمرات',  href: '/conferences/explore' },
-  { en: 'ABOUT US',    es: 'NOSOTROS',     fr: 'QUI SOMMES-NOUS', ar: 'من نحن',     href: '/about' },
-  { en: 'CONTACT',     es: 'CONTÁCTANOS',  fr: 'CONTACT',         ar: 'تواصل معنا', href: '/contact' },
+  // Written in sentence case and set in capitals by CSS (textTransform), at
+  // weight 600 with light tracking (owner, 24 Sep 2026: the old 700-900
+  // weight and 0.08em tracking read heavy; keep caps). The Sessions link reads
+  // "Start Session": `kicker` is the small word stacked above the label.
+  { en: 'Session',     es: 'Sesión',       fr: 'Session',         ar: 'جلسة',       href: '/sessions',
+    kicker: { en: 'Start', es: 'Iniciar', fr: 'Lancer', ar: 'ابدأ' } },
+  { en: 'Conferences', es: 'Conferencias', fr: 'Conférences',     ar: 'المؤتمرات',  href: '/conferences/explore' },
+  { en: 'About us',    es: 'Nosotros',     fr: 'Qui sommes-nous', ar: 'من نحن',     href: '/about' },
+  { en: 'Contact',     es: 'Contáctanos',  fr: 'Contact',         ar: 'تواصل معنا', href: '/contact' },
 ];
 
 /** The CONFERENCES link opens the directory; it stays lit on any public
@@ -93,7 +98,11 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
     [activity, sheetSeen],
   );
   const t = useT();
-  const navLinks = NAV_LINKS_CONFIG.map(l => ({ label: l[language], href: l.href }));
+  const navLinks = NAV_LINKS_CONFIG.map(l => ({
+    label: l[language],
+    href: l.href,
+    kicker: 'kicker' in l && l.kicker ? l.kicker[language] : null,
+  }));
 
   // The sheet animates on max-height, so it needs a PIXEL height — but that
   // height used to be hand-computed arithmetic (480px plus a per-draft
@@ -228,10 +237,11 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
                   alignItems: 'center',
                   position: 'relative',
                   padding: '8px 16px',
-                  fontSize: '13px',
-                  fontWeight: active ? 900 : 700,
-                  letterSpacing: '0.08em',
-                  fontFamily: "'Outfit', sans-serif",
+                  fontSize: '13.5px',
+                  fontWeight: active ? 700 : 600,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                  fontFamily: "var(--font-brand), sans-serif",
                   color: active ? '#EED98A' : hl ? '#1B3828' : 'rgba(28, 20, 16, 0.55)',
                   textDecoration: 'none',
                   borderRadius: '9999px',
@@ -240,7 +250,13 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
                   transform: hl && !active ? 'translateY(-1px)' : 'translateY(0)',
                 }}
               >
-                {link.label}
+                {link.kicker ? (
+                  // "Start" small on top, the label beneath, one pill tall.
+                  <span className="flex flex-col items-center" style={{ lineHeight: 1 }}>
+                    <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.12em', opacity: 0.8, marginBottom: '2px' }}>{link.kicker} </span>
+                    <span>{link.label}</span>
+                  </span>
+                ) : link.label}
                 <span style={{
                   position: 'absolute',
                   bottom: '4px',
@@ -344,7 +360,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
               >
                 <Globe size={14} strokeWidth={2} />
-                <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.06em' }}>{language.toUpperCase()}</span>
+                <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.06em' }}>{language.toUpperCase()}</span>
               </button>
             </div>
             {showLangMenu && (
@@ -365,7 +381,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
                     style={{
                       color: language === lang ? '#1B3828' : '#9A8A78',
                       fontWeight: language === lang ? 800 : 600,
-                      fontFamily: "'Outfit', sans-serif",
+                      fontFamily: "var(--font-brand), sans-serif",
                       letterSpacing: '0.04em',
                       backgroundColor: 'transparent',
                       border: 'none',
@@ -383,7 +399,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
                   type="button"
                   onClick={() => { setShowLangMenu(false); setRequestLangOpen(true); }}
                   className="w-full flex items-center gap-2 text-start px-4 py-2.5 text-sm transition-colors focus:outline-none"
-                  style={{ color: '#1B3828', fontWeight: 700, fontFamily: "'Outfit', sans-serif", backgroundColor: 'transparent', border: 'none', cursor: 'pointer' }}
+                  style={{ color: '#1B3828', fontWeight: 700, fontFamily: "var(--font-brand), sans-serif", backgroundColor: 'transparent', border: 'none', cursor: 'pointer' }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                 >
@@ -413,7 +429,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
                 fontSize: '13px',
                 fontWeight: 700,
                 letterSpacing: '0.04em',
-                fontFamily: "'Outfit', sans-serif",
+                fontFamily: "var(--font-brand), sans-serif",
                 textDecoration: 'none',
                 transition: 'background-color 150ms ease',
               }}
@@ -433,18 +449,20 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
           ) : (
             /* Signed-out: SIGN IN only */
             <AuthLink
-              className="text-sm font-bold transition-colors focus:outline-none"
+              className="font-bold transition-colors focus:outline-none"
               style={{
                 color: overlay ? '#EDE7D8' : '#1B3828',
-                letterSpacing: '0.06em',
-                fontFamily: "'Outfit', sans-serif",
+                fontSize: '13.5px',
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                fontFamily: "var(--font-brand), sans-serif",
                 textDecoration: 'none',
                 textShadow: overlay ? '0 1px 4px rgba(0,0,0,0.35)' : undefined,
               }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
             >
-              SIGN IN
+              Sign in
             </AuthLink>
           )}
         </div>
@@ -515,9 +533,10 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
                 style={{
                   display: 'block',
                   padding: '12px 16px',
-                  fontSize: '13px',
-                  fontWeight: active ? 900 : 700,
-                  letterSpacing: '0.08em',
+                  fontSize: '14.5px',
+                  fontWeight: active ? 700 : 600,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
                   color: active ? '#1B3828' : 'rgba(28, 20, 16, 0.65)',
                   textDecoration: 'none',
                   borderRadius: '10px',
@@ -526,7 +545,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
                   transition: 'color 150ms ease, background-color 150ms ease, border-left-color 150ms ease',
                 }}
               >
-                {link.label}
+                {link.kicker ? `${link.kicker} ${link.label}` : link.label}
               </Link>
             );
           })}
@@ -546,7 +565,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
                       backgroundColor: language === lang ? '#1B3828' : 'rgba(27,56,40,0.07)',
                       color: language === lang ? '#EED98A' : '#1B3828',
                       border: language === lang ? 'none' : '1px solid rgba(27,56,40,0.18)',
-                      fontFamily: "'Outfit', sans-serif",
+                      fontFamily: "var(--font-brand), sans-serif",
                       letterSpacing: '0.06em',
                       cursor: 'pointer',
                     }}
@@ -559,7 +578,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
                 type="button"
                 onClick={() => { setMenuOpen(false); setRequestLangOpen(true); }}
                 className="mx-2 mt-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold focus:outline-none"
-                style={{ width: 'calc(100% - 16px)', color: '#1B3828', fontFamily: "'Outfit', sans-serif", backgroundColor: 'transparent', border: '1px dashed rgba(27,56,40,0.3)', cursor: 'pointer' }}
+                style={{ width: 'calc(100% - 16px)', color: '#1B3828', fontFamily: "var(--font-brand), sans-serif", backgroundColor: 'transparent', border: '1px dashed rgba(27,56,40,0.3)', cursor: 'pointer' }}
               >
                 <Languages size={15} strokeWidth={2.2} aria-hidden />
                 {t('lang_request_open')}
@@ -572,10 +591,10 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
           {user ? (
             <>
               <div className="px-4 py-2">
-                <p className="text-sm font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                <p className="text-sm font-bold" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                   {profile?.display_name ?? user.email?.split('@')[0]}
                 </p>
-                <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                   {profile?.email ?? user.email}
                 </p>
               </div>
@@ -597,10 +616,10 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
                 }}
               >
                 <CreditCoin size={16} />
-                <span style={{ fontSize: '13px', fontWeight: 800, color: '#1B3828', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
+                <span style={{ fontSize: '13px', fontWeight: 800, color: '#1B3828', fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums' }}>
                   {creditsLoading || creditBalance === null ? '—' : creditBalance}
                 </span>
-                <span style={{ marginLeft: 'auto', fontSize: '12px', fontWeight: 700, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}>
+                <span style={{ marginLeft: 'auto', fontSize: '12px', fontWeight: 700, color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.02em' }}>
                   Credits &amp; Subscription
                 </span>
               </Link>
@@ -611,19 +630,20 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
                   display: 'block',
                   width: '100%',
                   padding: '13px 16px',
-                  fontSize: '13px',
-                  fontWeight: 800,
-                  letterSpacing: '0.08em',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
                   color: '#8B2020',
                   backgroundColor: 'rgba(139, 32, 32, 0.08)',
                   border: '1px solid rgba(139, 32, 32, 0.2)',
                   borderRadius: '10px',
                   cursor: 'pointer',
                   textAlign: 'center',
-                  fontFamily: "'Outfit', sans-serif",
+                  fontFamily: "var(--font-brand), sans-serif",
                 }}
               >
-                SIGN OUT
+                Sign out
               </button>
             </>
           ) : (
@@ -632,19 +652,20 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
               style={{
                 display: 'block',
                 padding: '13px 16px',
-                fontSize: '13px',
-                fontWeight: 800,
-                letterSpacing: '0.08em',
+                fontSize: '14px',
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
                 color: '#1B3828',
                 backgroundColor: 'rgba(27, 56, 40, 0.07)',
                 border: '1.5px solid rgba(27, 56, 40, 0.25)',
                 borderRadius: '10px',
                 textAlign: 'center',
                 textDecoration: 'none',
-                fontFamily: "'Outfit', sans-serif",
+                fontFamily: "var(--font-brand), sans-serif",
               }}
             >
-              SIGN IN
+              Sign in
             </AuthLink>
           )}
         </div>

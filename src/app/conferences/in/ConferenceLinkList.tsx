@@ -7,7 +7,7 @@ import type { ListedConference } from '@/lib/listedConferences';
 // dates, city and the public delegate price (publicFees.ts). Used by the
 // country hubs and /organisers, where the links must be in the raw HTML.
 
-const SANS = "'Outfit', sans-serif";
+const SANS = "var(--font-brand), sans-serif";
 const FOREST = '#1B3828';
 const INK = '#1C1410';
 const INK_SOFT = '#5C5140';

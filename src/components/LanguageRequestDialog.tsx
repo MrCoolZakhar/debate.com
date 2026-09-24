@@ -25,7 +25,7 @@ import {
   submitLanguageRequest,
 } from '@/lib/languageRequests';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 const C = {
   page: '#EDE7D8',
   surface: '#F7F3E8',

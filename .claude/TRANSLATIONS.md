@@ -501,6 +501,11 @@ for f in "src/app/chair/[code]/page.tsx" "src/app/delegate/[code]/page.tsx" \
 
 ## RECENT CHANGES
 
+### 2026-09-24 — Sessions landing redesign + nav labels (`feature/conferences-auth`)
+- **Added 43 `sl_*` keys** in all four locales for the new `/sessions` landing (`src/app/sessions/landing/*`): hero lede, **Start Committee** (`sl_start`), the smaller join field (`sl_have_code`, `sl_code_placeholder`, `sl_join`), the role tabs (`sl_tab_*`, `sl_chair_*`, `sl_del_*`, `sl_adv_*`, `sl_clip_*`) and the conference section (`sl_conf_*`). The headline itself is not a key: `SessionsLanding.tsx` holds it per language (`HEADLINE`) because the gold accent word is a separate span, exactly as the old page did.
+- **`src/app/HomeClient.tsx` was deleted** (the old /sessions page). Its keys (`hero_*`, `feature_*`, `step*_*`, `how_*`, `features_*`) are now unread except `home_footer_copy`; they are left in place for a later dead-key sweep.
+- **`SiteNav` labels are sentence case in the source and set in capitals by CSS.** The Sessions link reads "Start Session": a small kicker (`Start` / `Iniciar` / `Lancer` / `ابدأ`) stacked over `Session` / `Sesión` / `Session` / `جلسة`. These strings live in `NAV_LINKS_CONFIG` in `SiteNav.tsx`, not in translations.ts, as before.
+
 ### 2026-09-18 — motions in the History, motion passed as a point source (`feature/conferences-auth`) — +6 keys
 - **Added 6 keys × 4 locales**, directly after `sb_hist_motion_raised`: the outcome word on a History motion line `sb_hist_motion_passed` (EN *Passed*, ES *Aprobada*, FR *Adoptée*, AR *مقبول*), `sb_hist_motion_rejected` (*Rejected* / *Rechazada* / *Rejetée* / *مرفوض*), `sb_hist_motion_failed` (Suspend / End "No": *Did not pass* / *No aprobada* / *Non adoptée* / *لم يُعتمد*), `sb_hist_motion_fell` (another motion passed: *Fell* / *Decayó* / *Tombée* / *سقط*), `sb_hist_motion_pending` (*On the floor* / *En la sala* / *En séance* / *مطروح*), and `sb_hist_motion_chair` (the proposer when the chair raised it: *Chair* / *Presidencia* / *Présidence* / *الرئاسة*). ES / FR are feminine to agree with *moción* / *motion*.
 - **New built-in source name, not a translations.ts key:** `motionPassed` in `src/lib/scoringNames.ts` (EN *Motion passed*, byte-identical to `DEFAULT_SCORING`; ES *Moción aprobada*, FR *Motion adoptée*, AR *اقتراح مقبول*).

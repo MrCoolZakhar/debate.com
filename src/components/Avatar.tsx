@@ -8,7 +8,7 @@
 // otherwise a squircle initial disc. `rounded` switches the squircle for a
 // true circle (the ProfileDropdown look).
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 const FOREST = '#1B3828';
 
 export default function Avatar({

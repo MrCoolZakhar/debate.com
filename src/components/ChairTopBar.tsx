@@ -28,7 +28,7 @@
 
 import { useLayoutEffect, useState, type ReactNode, type RefObject } from 'react';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 function CountPill({ n, inverted = false }: { n: number; inverted?: boolean }) {
   return (

@@ -9,7 +9,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { EyeIcon, EyeOffIcon } from '@/app/auth/authUi';
 
-export const OUTFIT = "'Outfit', sans-serif";
+export const OUTFIT = "var(--font-brand), sans-serif";
 export const INK = '#222222';
 export const INK_SOFT = '#6A6A6A';
 export const BORDER = '#B0B0B0';

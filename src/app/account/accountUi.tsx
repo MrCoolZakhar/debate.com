@@ -10,7 +10,7 @@ import { EXPERIENCE_BANDS } from '@/lib/munExperience';
 import Portal from '@/components/Portal';
 import { CONFERENCE_COMMITTEE_PRESETS } from '@/components/ConferenceRosterPicker';
 
-export const OUTFIT = "'Outfit', sans-serif";
+export const OUTFIT = "var(--font-brand), sans-serif";
 // No monospace on the conferences side — MONO is an Outfit alias kept only so
 // existing importers keep resolving. Nothing renders as monospace anymore.
 export const MONO = OUTFIT;

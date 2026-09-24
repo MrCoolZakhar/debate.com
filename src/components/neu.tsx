@@ -21,7 +21,7 @@ import { Check, ChevronRight } from 'lucide-react';
 
 // ── Tokens ─────────────────────────────────────────────────────────────────
 
-export const OUTFIT = "'Outfit', sans-serif";
+export const OUTFIT = "var(--font-brand), sans-serif";
 export const EASE = 'cubic-bezier(0.22,1,0.36,1)';
 
 // These are CSS variables, not literals, so a themed conference can override

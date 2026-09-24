@@ -10,6 +10,22 @@ import CompleteBasicsGate from '@/components/CompleteBasicsGate';
 import LiveRoomsGate from '@/components/liveRooms/LiveRoomsGate';
 import AuthModalHost from '@/components/auth/AuthModal';
 import { DOM_TRANSLATION_GUARD } from '@/lib/domTranslationGuard';
+import { Albert_Sans } from 'next/font/google';
+
+// THE typeface (owner, 24 Sep 2026): Albert Sans everywhere, exposed as the
+// CSS variable --font-brand. (Schibsted Grotesk was tried first the same day
+// and dropped because its capital I carries serifs.) Loaded
+// through next/font, so it is self-hosted from our own origin (no request to
+// Google at runtime) and every device renders the same face. Before this the
+// site named 'Outfit' in ~870 places but never loaded it, so each device fell
+// back to its own system font (SF Pro, Segoe UI, Roboto) and the site looked
+// different everywhere. Every former "'Outfit', sans-serif" literal now reads
+// var(--font-brand); `latin-ext` covers names like Aytuğ or Łukasz.
+const brandFont = Albert_Sans({
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-brand',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://gavelling.com'),
@@ -104,21 +120,14 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="h-full">
+    <html lang="en" className={`h-full ${brandFont.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: DOM_TRANSLATION_GUARD }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        {/* DELIBERATE: only Playfair Display (italic) and Noto Sans Arabic are
-            loaded. This matches production exactly and is Peter's explicit
-            choice — do NOT "fix" it by adding Outfit or DM Mono back.
-
-            `OUTFIT` in neu.tsx and the ~460 "'Outfit', sans-serif" style
-            literals therefore fall through to the system sans (SF Pro on macOS,
-            Segoe UI on Windows). That is the intended look. A previous session
-            read the unloaded family as a regression from 91b40e8 and restored
-            it; that change was reverted here because it altered the typography
-            of the whole app away from what ships. */}
+        {/* Playfair Display (italic, the gold accent word) and Noto Sans
+            Arabic come from Google Fonts; the main face, Albert Sans,
+            is self-hosted through next/font (see `brandFont` above). */}
         <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital@1&display=swap" rel="stylesheet" />
         <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
         <meta name="theme-color" content="#1B3828" />

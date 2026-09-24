@@ -17,7 +17,7 @@ import {
 import Portal from '@/components/Portal';
 import { NEU, Emoji3D } from '@/components/neu';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 // ── Roles ──────────────────────────────────────────────────────────────────
 // Order is deliberate and matches how a conference is actually staffed: the

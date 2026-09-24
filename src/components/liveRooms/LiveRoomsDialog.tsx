@@ -31,7 +31,7 @@ export const LR = {
   inkSoft: '#5C4E40',
   surface: '#F6F1E6',
   page: '#EDE7D8',
-  font: "'Outfit', sans-serif",
+  font: "var(--font-brand), sans-serif",
 } as const;
 const DEFAULT_EMBLEM = '/logos/un.svg';
 

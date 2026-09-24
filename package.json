@@ -11,7 +11,8 @@
     "check:og:build": "next build && node scripts/check-og.mjs --start",
     "check:indexability": "node scripts/check-indexability.mjs",
     "check:brand": "node scripts/check-brand-marks.mjs",
-    "prebuild": "node scripts/check-brand-marks.mjs"
+    "prebuild": "node scripts/check-brand-marks.mjs",
+    "check:text-overlaps": "node scripts/check-text-overlaps.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

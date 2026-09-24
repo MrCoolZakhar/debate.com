@@ -111,7 +111,7 @@ export default async function HomePage() {
             <li key={l.href}>
               <Link
                 href={l.href}
-                style={{ fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 600, color: '#5C5140', textDecoration: 'none' }}
+                style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 13, fontWeight: 600, color: '#5C5140', textDecoration: 'none' }}
               >
                 {l.label}
               </Link>

@@ -8,7 +8,7 @@
 import { parseInlineMarks } from '@/lib/emailBlocks';
 import { tokenIdentity, tokenShort } from './tokenKit';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 
 export function createPillNode(tokenKey: string): HTMLSpanElement {

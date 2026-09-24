@@ -46,7 +46,7 @@ import { useSeatArt } from '@/components/SeatFlag';
 import type { SessionSeat } from '@/lib/sessionFlags';
 import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 const RING_DEFAULT = 'rgba(28,20,16,0.14)';
 
 /** Initials disc for a custom seat in the forest chair sidebar (expanded rows): gold on a

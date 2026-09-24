@@ -245,7 +245,7 @@ function DateSortToggle({ sort, onChange }: { sort: DateSort; onChange: (v: Date
         backgroundColor: hover ? 'rgba(27,56,40,0.08)' : 'rgba(237,231,216,0.5)',
         border: '1px solid rgba(221,212,192,0.9)',
         color: hover ? '#1B3828' : '#4A4238',
-        fontFamily: "'Outfit', sans-serif",
+        fontFamily: "var(--font-brand), sans-serif",
         fontWeight: 700,
         fontSize: '12px',
         letterSpacing: '0.03em',
@@ -273,7 +273,7 @@ function RowChip({ label, icon: Icon }: { label: string; icon?: RowIcon }) {
     <span
       className="inline-flex items-center flex-shrink-0"
       style={{
-        fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '10.5px', letterSpacing: '0.09em',
+        fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '10.5px', letterSpacing: '0.09em',
         color: '#6B5F52', backgroundColor: 'transparent',
         border: '1px solid rgba(154,138,120,0.45)',
         gap: '5px',
@@ -315,7 +315,7 @@ function ConferenceListRow({
   }
 
   const ctaBase: React.CSSProperties = {
-    fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '12px', letterSpacing: '0.07em',
+    fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '12px', letterSpacing: '0.07em',
     padding: '9px 18px', borderRadius: 9999, border: 'none', cursor: 'pointer',
   };
 
@@ -355,7 +355,7 @@ function ConferenceListRow({
         <div
           className="flex items-center gap-1.5 min-w-0"
           style={{
-            fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '18px',
+            fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '18px',
             letterSpacing: '0.003em', color: hovered ? '#1B3828' : '#1C1410',
             transition: 'color 160ms ease', lineHeight: 1.2,
           }}
@@ -365,7 +365,7 @@ function ConferenceListRow({
         </div>
         <div
           className="flex items-center gap-2 truncate"
-          style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontSize: '14px', color: '#6B5F52', marginTop: '5px' }}
+          style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, fontSize: '14px', color: '#6B5F52', marginTop: '5px' }}
         >
           {countryObj && <FlagImg code={countryObj.code} size={18} className="flex-shrink-0" />}
           <span className="truncate">{conf.city}, {conf.country}</span>
@@ -376,7 +376,7 @@ function ConferenceListRow({
           {/* Mobile-only inline date (right columns hidden below sm) */}
           <span
             className="sm:hidden inline-flex items-center gap-1.5 flex-shrink-0"
-            style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '12px', color: '#8A7D6C', whiteSpace: 'nowrap' }}
+            style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '12px', color: '#8A7D6C', whiteSpace: 'nowrap' }}
           >
             <CalendarDays size={13} style={{ color: '#9A8A78' }} />
             {range} {year}
@@ -394,7 +394,7 @@ function ConferenceListRow({
       {/* Date (two-line) */}
       <div className="flex items-start gap-2 flex-shrink-0" style={{ width: '152px' }}>
         <CalendarDays size={18} strokeWidth={2} style={{ color: '#2A5A3C', marginTop: '2px', flexShrink: 0 }} />
-        <div style={{ fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
+        <div style={{ fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums' }}>
           <div style={{ fontWeight: 700, fontSize: '14.5px', color: '#1C1410', whiteSpace: 'nowrap' }}>{range}</div>
           <div style={{ fontWeight: 500, fontSize: '13px', color: '#9A8A78', marginTop: '2px' }}>{year}</div>
         </div>
@@ -405,7 +405,7 @@ function ConferenceListRow({
         {conf.expected_delegates > 0 && (
           <>
             <Users size={18} strokeWidth={2} style={{ color: '#9A8A78', flexShrink: 0 }} />
-            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: '15px', color: '#1C1410' }}>
+            <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: '15px', color: '#1C1410' }}>
               {conf.expected_delegates.toLocaleString()}
             </span>
           </>
@@ -419,7 +419,7 @@ function ConferenceListRow({
           <span
             title="Price to be announced"
             style={{
-              fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em',
+              fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em',
               color: '#5C4F44', backgroundColor: 'rgba(28,20,16,0.05)',
               border: '1px solid rgba(28,20,16,0.18)', padding: '4px 12px', borderRadius: 9999,
             }}
@@ -429,7 +429,7 @@ function ConferenceListRow({
         ) : price.kind === 'free' ? (
           <span
             style={{
-              fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em',
+              fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em',
               color: '#2A5A3C', backgroundColor: 'rgba(42,90,60,0.10)',
               border: '1px solid rgba(42,90,60,0.28)', padding: '4px 12px', borderRadius: 9999,
             }}
@@ -440,10 +440,10 @@ function ConferenceListRow({
           <>
             <Emoji3D name="Ticket" size={20} fallback={Ticket} fallbackColor="#B6871F" />
             <span className="inline-flex items-baseline gap-0.5">
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '13px', color: '#B6871F' }}>
+              <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '13px', color: '#B6871F' }}>
                 {currencySymbol(price.currency)}
               </span>
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: '15px', color: '#1C1410' }}>
+              <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: '15px', color: '#1C1410' }}>
                 {formatFeeAmountCompact(price.amount)}
               </span>
             </span>
@@ -505,7 +505,7 @@ function RailHeading({ children }: { children: React.ReactNode }) {
     <p
       className="mb-2.5"
       style={{
-        fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '10px',
+        fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '10px',
         letterSpacing: '0.16em', textTransform: 'uppercase', color: '#9A8A78', margin: '0 0 10px',
       }}
     >
@@ -543,7 +543,7 @@ function RailOption({
         color: active ? '#EED98A' : '#4A4238',
         border: 'none',
         cursor: 'pointer',
-        fontFamily: "'Outfit', sans-serif",
+        fontFamily: "var(--font-brand), sans-serif",
         fontWeight: active ? 700 : 600,
         fontSize: '12.5px',
         transition: 'background-color 140ms ease, color 140ms ease',
@@ -662,7 +662,7 @@ function FilterRail({
               borderRadius: '11px',
               backgroundColor: '#FFFDF9',
               color: '#1C1410',
-              fontFamily: "'Outfit', sans-serif",
+              fontFamily: "var(--font-brand), sans-serif",
             }}
             onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
             onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(221,212,192,0.9)'; }}
@@ -722,7 +722,7 @@ function FilterRail({
             style={{
               marginTop: '4px', padding: '7px 10px', borderRadius: '10px',
               background: 'transparent', border: 'none', cursor: 'pointer',
-              fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11.5px',
+              fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '11.5px',
               letterSpacing: '0.04em', color: '#B6871F',
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
@@ -752,7 +752,7 @@ function FilterRail({
           onClick={onClear}
           className="w-full focus:outline-none"
           style={{
-            fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11px',
+            fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '11px',
             letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8B2020',
             background: 'transparent', border: '1px solid rgba(139,32,32,0.25)',
             borderRadius: '10px', padding: '8px', cursor: 'pointer',
@@ -1147,7 +1147,7 @@ export default function ConferencesExploreClient() {
           <Link
             href="/"
             className="inline-flex items-center gap-1.5 text-[11px] mb-5 transition-colors font-semibold"
-            style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", textDecoration: 'none', letterSpacing: '0.08em', textTransform: 'uppercase' }}
+            style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", textDecoration: 'none', letterSpacing: '0.08em', textTransform: 'uppercase' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
           >
@@ -1159,13 +1159,13 @@ export default function ConferencesExploreClient() {
             <div>
               <p
                 className="mb-2 font-bold"
-                style={{ fontFamily: "'Outfit', sans-serif", fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#B6871F' }}
+                style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#B6871F' }}
               >
                 Conference directory
               </p>
               <h1
                 style={{
-                  fontFamily: "'Outfit', sans-serif", fontWeight: 900,
+                  fontFamily: "var(--font-brand), sans-serif", fontWeight: 900,
                   fontSize: 'clamp(32px, 4vw, 52px)', lineHeight: 1.02, color: '#1C1410', margin: 0,
                 }}
               >
@@ -1175,7 +1175,7 @@ export default function ConferencesExploreClient() {
               </h1>
               <p
                 className="mt-2.5"
-                style={{ fontFamily: "'Outfit', sans-serif", fontSize: '14px', color: '#8A7D6C', maxWidth: '460px', lineHeight: 1.6 }}
+                style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: '14px', color: '#8A7D6C', maxWidth: '460px', lineHeight: 1.6 }}
               >
                 {headlineCount === null
                   ? 'Loading the directory…'
@@ -1190,7 +1190,7 @@ export default function ConferencesExploreClient() {
               className="self-start md:self-auto flex-shrink-0 inline-flex items-center gap-2 rounded-full py-3 px-6 font-bold text-[13px] transition-all focus:outline-none"
               style={{
                 backgroundColor: '#1B3828', color: '#EED98A',
-                fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em',
+                fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.07em',
                 border: 'none', cursor: 'pointer',
                 boxShadow: '0 8px 24px rgba(27,56,40,0.22)',
               }}
@@ -1215,7 +1215,7 @@ export default function ConferencesExploreClient() {
               backgroundColor: filtersOpen ? '#1B3828' : 'rgba(250,248,243,0.8)',
               color: filtersOpen ? '#EED98A' : '#4A4238',
               border: filtersOpen ? '1px solid #1B3828' : '1px solid rgba(221,212,192,0.9)',
-              fontFamily: "'Outfit', sans-serif", letterSpacing: '0.09em', cursor: 'pointer',
+              fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.09em', cursor: 'pointer',
             }}
           >
             <SlidersHorizontal size={15} />
@@ -1251,7 +1251,7 @@ export default function ConferencesExploreClient() {
                 so it stays put while you filter down to nothing and back. */}
             <div className="flex items-center gap-3 mb-6 flex-wrap">
               {!loading && displayed.length > 0 ? (
-                <span className="inline-flex items-center gap-2" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11.5px', letterSpacing: '0.13em', color: '#9A8A78', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                <span className="inline-flex items-center gap-2" style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '11.5px', letterSpacing: '0.13em', color: '#9A8A78', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                   {aroundYouMode ? (
                     <>
                       <Emoji3D name="Globe with meridians" size={17} fallback={Globe} fallbackColor="#9A8A78" style={{ filter: 'none' }} />
@@ -1278,7 +1278,7 @@ export default function ConferencesExploreClient() {
               ) : (
                 <span
                   className="inline-flex items-center gap-2"
-                  style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11.5px', letterSpacing: '0.13em', color: '#9A8A78', whiteSpace: 'nowrap' }}
+                  style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '11.5px', letterSpacing: '0.13em', color: '#9A8A78', whiteSpace: 'nowrap' }}
                 >
                   <Emoji3D name="Globe with meridians" size={17} fallback={Globe} fallbackColor="#9A8A78" style={{ filter: 'none' }} />
                   {loading ? 'LOADING…' : 'NO MATCHES'}
@@ -1317,16 +1317,16 @@ export default function ConferencesExploreClient() {
               /* Country tab is empty, soft local empty state with a reset. */
               <div className="flex flex-col items-center justify-center py-24 text-center">
                 {userCode && <FlagImg code={userCode} size={40} />}
-                <h2 className="font-semibold text-lg mt-5 mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                <h2 className="font-semibold text-lg mt-5 mb-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                   No conferences in {userCountry} yet
                 </h2>
-                <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                   Be the first to bring one home, or browse the worldwide directory.
                 </p>
                 <button
                   onClick={() => changeRegion('')}
                   className="rounded-xl py-3 px-6 font-bold text-sm tracking-widest transition-colors focus:outline-none"
-                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em' }}
+                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.07em' }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
                 >
@@ -1340,10 +1340,10 @@ export default function ConferencesExploreClient() {
                  launching soon, next to 157 conferences, is neither. */
               <div className="flex flex-col items-center justify-center py-24 text-center">
                 <EmptySVG />
-                <h2 className="font-semibold text-lg mt-6 mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                <h2 className="font-semibold text-lg mt-6 mb-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                   {hasActiveFilters ? 'Nothing matches that' : 'No conferences listed yet'}
                 </h2>
-                <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", maxWidth: '360px' }}>
+                <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", maxWidth: '360px' }}>
                   {hasActiveFilters
                     ? 'Try a different search, a wider region, or clear the filters to see the whole directory.'
                     : 'Gavelling Conferences is launching soon. Be the first to list your conference.'}
@@ -1351,7 +1351,7 @@ export default function ConferencesExploreClient() {
                 <button
                   onClick={() => (hasActiveFilters ? clearFilters() : router.push('/conferences/new'))}
                   className="rounded-xl py-3 px-6 font-bold text-sm tracking-widest transition-colors focus:outline-none"
-                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em', border: 'none', cursor: 'pointer' }}
+                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.07em', border: 'none', cursor: 'pointer' }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
                 >
@@ -1406,7 +1406,7 @@ export default function ConferencesExploreClient() {
               <div className="flex items-baseline flex-wrap gap-x-3 gap-y-1 mb-5">
                 <h2
                   style={{
-                    fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '17px',
+                    fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '17px',
                     color: '#1C1410', margin: 0, letterSpacing: '0.004em',
                   }}
                 >
@@ -1414,7 +1414,7 @@ export default function ConferencesExploreClient() {
                 </h2>
                 <p
                   style={{
-                    fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontSize: '13px',
+                    fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, fontSize: '13px',
                     color: '#8A7D6C', margin: 0,
                   }}
                 >
@@ -1446,7 +1446,7 @@ export default function ConferencesExploreClient() {
                 onClick={() => changeRegion('')}
                 className="inline-flex items-center gap-1.5 focus:outline-none transition-colors"
                 style={{
-                  fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11px',
+                  fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '11px',
                   letterSpacing: '0.1em', color: '#9A8A78',
                   background: 'transparent', border: 'none', cursor: 'pointer',
                   textTransform: 'uppercase',

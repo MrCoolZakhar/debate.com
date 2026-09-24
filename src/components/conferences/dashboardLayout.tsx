@@ -101,13 +101,13 @@ export function UnallocatedBadge({ count, href }: { count: number; href: string 
         style={{
           minWidth: 28, height: 28, padding: '0 7px', borderRadius: 999,
           background: 'linear-gradient(135deg, #C0392B 0%, #9E2A1F 100%)', color: '#FFFFFF',
-          fontFamily: "'Outfit', sans-serif", fontSize: 13.5, fontWeight: 900, fontVariantNumeric: 'tabular-nums',
+          fontFamily: "var(--font-brand), sans-serif", fontSize: 13.5, fontWeight: 900, fontVariantNumeric: 'tabular-nums',
           boxShadow: '0 2px 6px -1px rgba(158,42,31,0.35), inset 0 0 0 1px rgba(110,26,18,0.35)',
         }}
       >
         {count > 999 ? '999+' : count}
       </span>
-      <span aria-hidden style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 800, color: '#9E2A1F', whiteSpace: 'nowrap' }}>
+      <span aria-hidden style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 11, fontWeight: 800, color: '#9E2A1F', whiteSpace: 'nowrap' }}>
         to assign
       </span>
     </Link>

@@ -36,7 +36,7 @@ import type { ReactNode } from 'react';
 import { Check, TriangleAlert } from 'lucide-react';
 import { useT } from '@/contexts/LanguageContext';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 const GAUGE_W = 36;
 const GAUGE_H = 20;
 const STROKE = 3.5;

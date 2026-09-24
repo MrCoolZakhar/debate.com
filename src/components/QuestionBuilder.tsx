@@ -51,7 +51,7 @@ const softInput: React.CSSProperties = {
   borderBottom: '1px solid transparent',
   backgroundColor: 'transparent',
   color: '#1C1410',
-  fontFamily: "'Outfit', sans-serif",
+  fontFamily: "var(--font-brand), sans-serif",
   outline: 'none',
   padding: '4px 0',
 };
@@ -141,7 +141,7 @@ function MenuItem({ icon, label, active, onClick }: {
       style={{
         backgroundColor: active ? 'rgba(27,56,40,0.08)' : 'transparent',
         color: active ? '#1B3828' : '#1C1410',
-        fontFamily: "'Outfit', sans-serif",
+        fontFamily: "var(--font-brand), sans-serif",
         fontSize: '13px',
         fontWeight: active ? 700 : 500,
         border: 'none',
@@ -163,7 +163,7 @@ function MenuItem({ icon, label, active, onClick }: {
 function OptionGlyph({ type, index }: { type: QuestionType; index: number }) {
   if (type === 'dropdown') {
     return (
-      <span className="flex-shrink-0 text-center" style={{ width: 16, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontSize: '13px' }}>
+      <span className="flex-shrink-0 text-center" style={{ width: 16, color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", fontSize: '13px' }}>
         {index + 1}.
       </span>
     );
@@ -190,7 +190,7 @@ function AnswerPreview({ block, onPatch }: {
         className="mt-4 pb-1"
         style={{ borderBottom: '1px dotted #B8AC98', maxWidth: '65%' }}
       >
-        <span className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+        <span className="text-sm" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
           {PREVIEW_TEXT[block.type]}
         </span>
       </div>
@@ -237,7 +237,7 @@ function AnswerPreview({ block, onPatch }: {
         style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
       >
         <OptionGlyph type={block.type} index={options.length} />
-        <span className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+        <span className="text-sm" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
           Add option
         </span>
       </button>
@@ -260,13 +260,13 @@ function ArchivedRow({ block, onRestore, onDeleteForever }: {
       className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5"
       style={{ backgroundColor: 'rgba(154,138,120,0.07)', border: '1px solid #EDE7D9' }}
     >
-      <span className="flex-1 min-w-0 truncate text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+      <span className="flex-1 min-w-0 truncate text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
         {block.label || 'Untitled question'}
       </span>
       <button
         onClick={onRestore}
         className="flex items-center gap-1 text-xs font-semibold focus:outline-none hover:underline flex-shrink-0"
-        style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}
+        style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}
       >
         <RotateCcw size={11} /> RESTORE
       </button>
@@ -320,7 +320,7 @@ function RailButton({ icon: Icon, label, horizontal, onClick }: {
       >
         <Icon size={17} strokeWidth={2.2} />
         {horizontal && (
-          <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '12px', fontWeight: 700 }}>{label}</span>
+          <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: '12px', fontWeight: 700 }}>{label}</span>
         )}
       </button>
       {hovered && !horizontal && (
@@ -330,7 +330,7 @@ function RailButton({ icon: Icon, label, horizontal, onClick }: {
           style={{
             right: '100%', top: '50%', transform: 'translateY(-50%)', marginRight: '8px',
             backgroundColor: '#1B3828', color: '#EED98A',
-            fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 700,
+            fontFamily: "var(--font-brand), sans-serif", fontSize: '11px', fontWeight: 700,
             boxShadow: '0 4px 14px rgba(27,56,40,0.10)',
           }}
         >
@@ -525,7 +525,7 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
         <div className="flex-1 min-w-0" style={{ maxWidth: '720px' }}>
           <div ref={stackRef} className="flex flex-col" style={{ gap: '12px' }}>
             {activeBlocks.length === 0 ? (
-              <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+              <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                 No questions yet.
               </p>
             ) : (
@@ -564,7 +564,7 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
                         style={{
                           backgroundColor: '#1B3828',
                           borderTopLeftRadius: '10px', borderTopRightRadius: '10px',
-                          color: '#EED98A', fontFamily: "'Outfit', sans-serif",
+                          color: '#EED98A', fontFamily: "var(--font-brand), sans-serif",
                           fontSize: '11px', fontWeight: 800, letterSpacing: '0.1em',
                           textTransform: 'uppercase',
                         }}
@@ -623,7 +623,7 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
                         {!selected ? (
                           block.kind === 'question' ? (
                             <>
-                              <p className="font-semibold text-sm mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                              <p className="font-semibold text-sm mb-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                                 {block.label || 'Untitled question'}
                               </p>
                               <div className="flex items-center gap-2 pb-1">
@@ -633,11 +633,11 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
                             </>
                           ) : (
                             <>
-                              <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                              <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                                 {block.title || (block.kind === 'section' ? 'Untitled section' : 'Untitled title')}
                               </p>
                               {block.description && (
-                                <p className="text-xs mt-0.5 whitespace-pre-wrap" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                                <p className="text-xs mt-0.5 whitespace-pre-wrap" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                                   {block.description}
                                 </p>
                               )}
@@ -672,7 +672,7 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
                                   border: '1px solid #DDD4C0',
                                   backgroundColor: '#FAF8F3',
                                   color: '#1C1410',
-                                  fontFamily: "'Outfit', sans-serif",
+                                  fontFamily: "var(--font-brand), sans-serif",
                                   fontSize: '13px',
                                   fontWeight: 600,
                                   cursor: 'pointer',
@@ -719,14 +719,14 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
                                 answered, so the form stops saving until it is
                                 fixed. Say so here, where the fix is. */}
                             {(needsLabel || needsOptions) && (
-                              <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+                              <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>
                                 {needsLabel && !needsOptions
                                   ? 'A question needs a label.'
                                   : 'At least 2 options are required. Nothing on this form is saved until you fill them in.'}
                               </p>
                             )}
                             {hasApplications && reworded && (
-                              <p className="flex items-start gap-1.5 text-xs mt-3 rounded-lg px-3 py-2" style={{ color: '#8A5A2C', backgroundColor: 'rgba(184,132,74,0.12)', fontFamily: "'Outfit', sans-serif" }}>
+                              <p className="flex items-start gap-1.5 text-xs mt-3 rounded-lg px-3 py-2" style={{ color: '#8A5A2C', backgroundColor: 'rgba(184,132,74,0.12)', fontFamily: "var(--font-brand), sans-serif" }}>
                                 <Info size={12} className="flex-shrink-0 mt-0.5" />
                                 Existing answers were given to the previous wording.
                               </p>
@@ -758,7 +758,7 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
                                 <Trash2 size={16} />
                               </button>
                               <span aria-hidden style={{ width: '1px', height: '22px', backgroundColor: '#EDE7D9', margin: '0 6px' }} />
-                              <span className="text-xs font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                              <span className="text-xs font-semibold" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                                 Required
                               </span>
                               <PillToggle
@@ -870,7 +870,7 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
 
       {archivedBlocks.length > 0 && (
         <div className="mt-5 pt-4" style={{ borderTop: '1px solid #EDE7D9' }}>
-          <p className="flex items-center gap-1.5 text-xs font-semibold mb-3" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}>
+          <p className="flex items-center gap-1.5 text-xs font-semibold mb-3" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}>
             <Archive size={12} /> ARCHIVED QUESTIONS
           </p>
           <div className="flex flex-col gap-2">

@@ -39,7 +39,7 @@ import {
   type ActivityItem, type ActivityKind,
 } from '@/lib/myActivity';
 
-const FONT = "'Outfit', sans-serif";
+const FONT = "var(--font-brand), sans-serif";
 const INK = '#1C1410';
 const INK_SOFT = '#5C4A3A';
 const FOREST = '#1B3828';

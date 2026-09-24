@@ -489,7 +489,7 @@ const AD_HOC_SEEDS: AdHocSeed[] = [
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 const BORDER = '#DDD4C0';
 
 /** The landing's card surface — the live-status system verbatim (./../live/tokens):

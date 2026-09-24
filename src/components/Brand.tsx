@@ -14,7 +14,7 @@
  * SiteNav and other conferences surfaces.
  */
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 export interface BrandProps {
   /**

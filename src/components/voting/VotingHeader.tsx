@@ -176,7 +176,7 @@ export function VotingHeader({
         aria-label={t('chair_hdr_show_code', { code: sessionCode })}
         title={t('chair_hdr_show_code', { code: sessionCode })}
         className="shrink min-w-0 max-w-[9.5rem] inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[#EDE7D8] hover:bg-[#E2DAC8] text-[#1C1410] transition-[background-color,transform] duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] active:scale-[0.96] ms-1 me-1"
-        style={{ fontFamily: "'Outfit', sans-serif", fontSize: 14, fontWeight: 800, letterSpacing: '0.08em' }}
+        style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 14, fontWeight: 800, letterSpacing: '0.08em' }}
       >
         <Maximize2 size={13} strokeWidth={2.4} aria-hidden className="shrink-0" style={{ opacity: 0.6 }} />
         <span className="tabular-nums truncate min-w-0">{sessionCode}</span>

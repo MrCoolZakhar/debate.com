@@ -30,7 +30,7 @@ import { Eyebrow, OUTFIT } from '@/app/account/accountUi';
 import { NEU, NEU_GRADIENTS, NeuIconDisc, NeuButton } from '@/components/neu';
 import { formatConferenceDates } from '@/lib/conferenceDates';
 
-const MONO_STACK = "'DM Mono', monospace";
+const MONO_STACK = "var(--font-brand), sans-serif";
 const DANGER = '#8B2020';
 
 interface InviteConference {

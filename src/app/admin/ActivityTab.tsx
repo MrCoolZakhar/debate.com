@@ -35,7 +35,7 @@ import { UserDrawer } from './UsersTab';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 const MONO = 'ui-monospace, monospace';
 const INK = '#1C1410';
 const MUTED = '#9A8A78';

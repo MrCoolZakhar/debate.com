@@ -22,7 +22,7 @@ import { isPaperLate, countUnread, type PaperMessageStub } from '@/lib/positionP
 import { NEU, NEU_GRADIENTS, NeuCard } from '@/components/neu';
 import { ActionButton } from '@/components/PositionPaperButtons';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 export interface RosterAllocation {
   country_code: string;

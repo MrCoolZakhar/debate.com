@@ -20,7 +20,7 @@ import { dayInZone, endOfDayIso, startOfDayIso, formatDay, ordinalDay } from '@/
 import { normaliseRoleTimeline, lineUpPhases, type TimelineContext, type TimelineInput, type TimelineResult } from '@/lib/roleTimeline';
 import { constraintMessage } from '@/lib/friendlyError';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 /** conferences.timezone (null for every conference today, which means UTC).
  *  Not on the manage layout's conference columns, so read here once. */

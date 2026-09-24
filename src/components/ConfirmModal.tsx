@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ModalOverlay } from '@/components/ModalOverlay';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 export interface ConfirmModalCheckboxConfig {
   label: string;

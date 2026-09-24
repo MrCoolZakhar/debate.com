@@ -1455,12 +1455,12 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
     {pendingRemovalCount !== null && (
       <ModalOverlay onClose={() => setPendingRemovalCount(null)}>
         <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 380 }}>
-          <p className="text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
+          <p className="text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.5 }}>
             {pendingRemovalCount} of the {seatNounPlural} you removed {pendingRemovalCount === 1 ? 'has' : 'have'} an allocated delegate. Removing {pendingRemovalCount === 1 ? 'it' : 'them'} will return {pendingRemovalCount === 1 ? 'that delegate' : 'those delegates'} to the allocation pool. Proceed?
           </p>
           <div className="flex gap-3">
-            <button onClick={() => setPendingRemovalCount(null)} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}>CANCEL</button>
-            <button onClick={() => { setPendingRemovalCount(null); handleSave(true); }} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#FFFFFF', fontFamily: "'Outfit', sans-serif" }}>PROCEED</button>
+            <button onClick={() => setPendingRemovalCount(null)} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "var(--font-brand), sans-serif" }}>CANCEL</button>
+            <button onClick={() => { setPendingRemovalCount(null); handleSave(true); }} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#FFFFFF', fontFamily: "var(--font-brand), sans-serif" }}>PROCEED</button>
           </div>
         </div>
       </ModalOverlay>
@@ -1468,12 +1468,12 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
     {pendingDoubleOffCount !== null && (
       <ModalOverlay onClose={() => { setPendingDoubleOffCount(null); setDoubleDelegation(true); }}>
         <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 380 }}>
-          <p className="text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
+          <p className="text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.5 }}>
             This action will affect the allocations of {pendingDoubleOffCount} delegates. It is irreversible. Are you sure you wish to continue?
           </p>
           <div className="flex gap-3">
-            <button onClick={() => { setPendingDoubleOffCount(null); setDoubleDelegation(true); }} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}>CANCEL</button>
-            <button onClick={() => { setPendingDoubleOffCount(null); handleSave(true, true); }} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#FFFFFF', fontFamily: "'Outfit', sans-serif" }}>PROCEED</button>
+            <button onClick={() => { setPendingDoubleOffCount(null); setDoubleDelegation(true); }} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "var(--font-brand), sans-serif" }}>CANCEL</button>
+            <button onClick={() => { setPendingDoubleOffCount(null); handleSave(true, true); }} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#FFFFFF', fontFamily: "var(--font-brand), sans-serif" }}>PROCEED</button>
           </div>
         </div>
       </ModalOverlay>

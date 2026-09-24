@@ -12,7 +12,7 @@ import { MonitorSmartphone } from 'lucide-react';
 import Portal from './Portal';
 import { useT } from '@/contexts/LanguageContext';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 export default function ChairDeviceKickModal({ onUseThisDevice, onLeave }: {
   onUseThisDevice: () => Promise<boolean>;

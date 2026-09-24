@@ -182,7 +182,7 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
                 >
                   <span
                     className="font-bold"
-                    style={{ fontFamily: "'DM Mono', monospace", fontSize: 14, color: NEU.ink, letterSpacing: '0.1em' }}
+                    style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 14, color: NEU.ink, letterSpacing: '0.1em' }}
                   >
                     {sessionCode}
                   </span>
@@ -191,7 +191,7 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
                   ) : (
                     <Copy size={13} strokeWidth={2.4} style={{ color: NEU.muted }} />
                   )}
-                  <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: copied ? '#3D7A52' : NEU.muted, letterSpacing: '0.04em', minWidth: 42, textAlign: 'left' }}>
+                  <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 10, color: copied ? '#3D7A52' : NEU.muted, letterSpacing: '0.04em', minWidth: 42, textAlign: 'left' }}>
                     {copied ? 'Copied' : ''}
                   </span>
                 </button>

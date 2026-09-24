@@ -18,7 +18,7 @@ export const metadata: Metadata = pageMetadata({
     'See where Model UN conferences are happening on a world map, from London to San Salvador.',
 });
 
-const SANS = "'Outfit', sans-serif";
+const SANS = "var(--font-brand), sans-serif";
 
 export default async function ConferencesMapPage() {
   // The map itself is a client canvas. The heading and the words a search

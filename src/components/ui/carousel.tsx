@@ -13,7 +13,7 @@ import Link from 'next/link';
 import { motion, type PanInfo } from 'framer-motion';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-const SANS = "'Outfit', sans-serif";
+const SANS = "var(--font-brand), sans-serif";
 const CREAM = '#FAF8F3';
 const FOREST = '#1B3828';
 const GOLD = '#EED98A';

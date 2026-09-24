@@ -14,7 +14,7 @@ export const metadata: Metadata = pageMetadata({
 const EFFECTIVE_DATE = 'September 24, 2026';
 const CONTACT_EMAIL = 'wearegavelling@gmail.com';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 const LINK = { color: '#1B3828', fontWeight: 700 } as const;
 
 /**

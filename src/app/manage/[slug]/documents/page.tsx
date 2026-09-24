@@ -17,7 +17,7 @@ import PositionPaperRoster, { type RosterAllocation, type RosterPaper } from '@/
 import { fetchMessageStubsForPapers, type PaperMessageStub } from '@/lib/positionPapers';
 import { safeStorageKey } from '@/lib/storageKey';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 

@@ -90,7 +90,7 @@ async function ConferenceDirectory() {
           <summary
             className="focus:outline-none"
             style={{
-              fontFamily: "'Outfit', sans-serif",
+              fontFamily: "var(--font-brand), sans-serif",
               fontWeight: 800,
               fontSize: 11,
               letterSpacing: '0.14em',
@@ -113,7 +113,7 @@ async function ConferenceDirectory() {
                 <Link
                   href={`/conferences/${c.slug}`}
                   style={{
-                    fontFamily: "'Outfit', sans-serif",
+                    fontFamily: "var(--font-brand), sans-serif",
                     fontSize: 13,
                     fontWeight: 600,
                     color: '#1B3828',
@@ -123,7 +123,7 @@ async function ConferenceDirectory() {
                   {c.full_name}
                 </Link>
                 {place && (
-                  <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, color: '#9A8A78' }}>
+                  <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 12, color: '#9A8A78' }}>
                     {' '}— {place}
                   </span>
                 )}
@@ -145,7 +145,7 @@ function CountryHubLinks({ hubs }: { hubs: CountryHub[] }) {
     <nav aria-label="Conferences by country" style={{ marginBottom: 28 }}>
       <h2
         style={{
-          fontFamily: "'Outfit', sans-serif",
+          fontFamily: "var(--font-brand), sans-serif",
           fontWeight: 800,
           fontSize: 11,
           letterSpacing: '0.14em',
@@ -163,7 +163,7 @@ function CountryHubLinks({ hubs }: { hubs: CountryHub[] }) {
               href={`/conferences/in/${h.slug}`}
               className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 focus:outline-none"
               style={{
-                fontFamily: "'Outfit', sans-serif",
+                fontFamily: "var(--font-brand), sans-serif",
                 fontSize: 13,
                 fontWeight: 600,
                 color: '#1B3828',

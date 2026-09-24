@@ -497,16 +497,16 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
             ) : (
               <div
                 className="rounded-full flex items-center justify-center font-black shrink-0"
-                style={{ width: '40px', height: '40px', backgroundColor: '#EED98A', color: '#1B3828', fontSize: '16px', fontFamily: "'Outfit', sans-serif" }}
+                style={{ width: '40px', height: '40px', backgroundColor: '#EED98A', color: '#1B3828', fontSize: '16px', fontFamily: "var(--font-brand), sans-serif" }}
               >
                 {avatarInitial}
               </div>
             )}
             <div className="min-w-0">
-              <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+              <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                 {profile?.display_name ?? user.email?.split('@')[0]}
               </p>
-              <p className="text-xs truncate mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+              <p className="text-xs truncate mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                 {profile?.email ?? user.email}
               </p>
             </div>
@@ -544,7 +544,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                   className="flex items-center gap-2.5 px-4 py-2 font-semibold transition-colors"
                   style={{
                     color: '#1C1410',
-                    fontFamily: "'Outfit', sans-serif",
+                    fontFamily: "var(--font-brand), sans-serif",
                     letterSpacing: '0.05em',
                     fontSize: '12px',
                     textDecoration: 'none',
@@ -565,7 +565,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                 className="flex items-center gap-2.5 px-4 py-2 font-semibold transition-colors"
                 style={{
                   color: '#1B3828',
-                  fontFamily: "'Outfit', sans-serif",
+                  fontFamily: "var(--font-brand), sans-serif",
                   letterSpacing: '0.05em',
                   fontSize: '12px',
                   textDecoration: 'none',
@@ -584,7 +584,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                 className="flex items-center gap-2.5 px-4 py-2 font-semibold transition-colors"
                 style={{
                   color: '#1C1410',
-                  fontFamily: "'Outfit', sans-serif",
+                  fontFamily: "var(--font-brand), sans-serif",
                   letterSpacing: '0.05em',
                   fontSize: '12px',
                   textDecoration: 'none',
@@ -616,7 +616,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                 <div className="px-4 pb-1.5 flex items-center gap-2">
                   <p
                     className="font-bold flex-1"
-                    style={{ color: '#9A8A78', fontSize: '10px', letterSpacing: '0.08em', fontFamily: "'Outfit', sans-serif" }}
+                    style={{ color: '#9A8A78', fontSize: '10px', letterSpacing: '0.08em', fontFamily: "var(--font-brand), sans-serif" }}
                   >
                     YOUR CONFERENCES
                   </p>
@@ -689,14 +689,14 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                             />
                           ) : (
-                            <span style={{ fontSize: '9.5px', fontWeight: 900, color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
+                            <span style={{ fontSize: '9.5px', fontWeight: 900, color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>
                               {conf.acronym?.[0] ?? '•'}
                             </span>
                           )}
                         </span>
                         <span
                           className="flex-1 truncate font-semibold"
-                          style={{ color: '#1C1410', fontSize: '12px', letterSpacing: '0.03em', fontFamily: "'Outfit', sans-serif" }}
+                          style={{ color: '#1C1410', fontSize: '12px', letterSpacing: '0.03em', fontFamily: "var(--font-brand), sans-serif" }}
                         >
                           {conferenceAcronymLabel({ acronym: conf.acronym, start_date: conf.start_date })}
                         </span>
@@ -716,7 +716,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                         {conf.standing?.kind === 'allocated' ? (
                           <span
                             className="inline-flex min-w-0 max-w-[55%] shrink items-center gap-1.5 font-semibold"
-                            style={{ color: '#1B3828', fontSize: '11px', fontFamily: "'Outfit', sans-serif" }}
+                            style={{ color: '#1B3828', fontSize: '11px', fontFamily: "var(--font-brand), sans-serif" }}
                             title={`${conf.standing.countryName ?? ''}${conf.standing.committee ? ` · ${conf.standing.committee}` : ''}`}
                           >
                             <CircleFlag code={conf.standing.countryCode} country={conf.standing.countryName} size={18} decorative />
@@ -727,7 +727,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                             className="font-bold uppercase shrink-0"
                             style={{
                               color: conf.standing?.kind === 'unpaid' ? '#8B2020' : conf.standing?.kind === 'approved' ? '#2A5A3C' : conf.pending ? '#8A6614' : '#9A8A78',
-                              fontSize: '9px', letterSpacing: '0.06em', fontFamily: "'Outfit', sans-serif",
+                              fontSize: '9px', letterSpacing: '0.06em', fontFamily: "var(--font-brand), sans-serif",
                             }}
                           >
                             {conf.standing?.kind === 'unpaid' ? 'UNPAID'
@@ -745,7 +745,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                         href="/conferences/new"
                         onClick={() => setOpen(false)}
                         className="flex items-center gap-2.5 px-4 py-2 font-semibold transition-colors"
-                        style={{ color: '#1B3828', fontSize: '11px', letterSpacing: '0.05em', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}
+                        style={{ color: '#1B3828', fontSize: '11px', letterSpacing: '0.05em', fontFamily: "var(--font-brand), sans-serif", textDecoration: 'none' }}
                         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                       >
@@ -757,7 +757,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                         href="/my-conferences"
                         onClick={() => setOpen(false)}
                         className="flex items-center gap-2.5 px-4 py-2 font-semibold transition-colors"
-                        style={{ color: '#1B3828', fontSize: '11px', letterSpacing: '0.05em', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}
+                        style={{ color: '#1B3828', fontSize: '11px', letterSpacing: '0.05em', fontFamily: "var(--font-brand), sans-serif", textDecoration: 'none' }}
                         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                       >
@@ -779,7 +779,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
             className="flex items-center gap-2.5 w-full text-left px-4 py-2.5 my-1 font-semibold transition-colors focus:outline-none"
             style={{
               color: '#8B2020',
-              fontFamily: "'Outfit', sans-serif",
+              fontFamily: "var(--font-brand), sans-serif",
               letterSpacing: '0.05em',
               fontSize: '12px',
               backgroundColor: 'transparent',

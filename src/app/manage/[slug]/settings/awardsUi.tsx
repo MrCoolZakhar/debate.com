@@ -22,7 +22,7 @@ import {
 import { saveAwardsConfig } from '@/lib/awardsService';
 import { friendlyError } from '@/lib/friendlyError';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 // Mirrors the inner grouped sub-card on settings/page.tsx. Kept as a copy on
 // purpose: the page's object is local to the page component and a Next.js

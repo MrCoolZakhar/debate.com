@@ -41,7 +41,7 @@ import { formatConferenceDates } from '@/lib/conferenceDates';
 // end date is exactly the bug that would only show up in somebody's diary.
 import { googleCalendarDates } from '@/lib/emailBlocks';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 const EASE = 'cubic-bezier(0.22,1,0.36,1)';
 const IVORY = '#FAF8F3';
 

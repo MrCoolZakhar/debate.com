@@ -94,7 +94,7 @@ import {
 import { GLASS, GLASS_SAFE, glassFallbackCss, SPRING_BEZIER, SPRING_LINEAR } from './glass';
 import { serverNow } from '@/lib/serverClock';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 const EASE = 'cubic-bezier(0.22,1,0.36,1)';
 const TICK_MS = 250;
 const MAX_VISIBLE = 4;

@@ -21,7 +21,7 @@ import {
 import { queueImportJoinInviteEmails } from '@/lib/emailEvents';
 import { friendlyError } from '@/lib/friendlyError';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 // ── Pool accounting (mirrors applications/page.tsx) ─────────────────────────
 

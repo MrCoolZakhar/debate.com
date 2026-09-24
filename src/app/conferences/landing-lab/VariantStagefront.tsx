@@ -852,7 +852,7 @@ export default function VariantStagefront({
                   display: 'block',
                   color: 'white',
                   fontSize: 'clamp(48px, 5.5vw, 104px)',
-                  fontFamily: "'Outfit', sans-serif",
+                  fontFamily: "var(--font-brand), sans-serif",
                   fontWeight: 900,
                   lineHeight: 1.0,
                 }}
@@ -864,7 +864,7 @@ export default function VariantStagefront({
                   display: 'block',
                   color: '#EED98A',
                   fontSize: 'clamp(48px, 5.5vw, 104px)',
-                  fontFamily: "'Outfit', sans-serif",
+                  fontFamily: "var(--font-brand), sans-serif",
                   fontWeight: 900,
                   lineHeight: 1.0,
                 }}
@@ -880,7 +880,7 @@ export default function VariantStagefront({
                 lineHeight: 1.7,
                 color: 'rgba(237,231,216,0.75)',
                 maxWidth: 'clamp(440px, 32vw, 560px)',
-                fontFamily: "'Outfit', sans-serif",
+                fontFamily: "var(--font-brand), sans-serif",
               }}
             >
               {stats
@@ -894,7 +894,7 @@ export default function VariantStagefront({
                 border: '1.5px solid rgba(238,217,138,0.4)',
                 color: '#EED98A',
                 backgroundColor: 'transparent',
-                fontFamily: "'Outfit', sans-serif",
+                fontFamily: "var(--font-brand), sans-serif",
                 letterSpacing: '0.08em',
                 textDecoration: 'none',
                 alignSelf: 'flex-start',

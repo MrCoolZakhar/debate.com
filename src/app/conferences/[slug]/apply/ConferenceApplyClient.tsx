@@ -3676,7 +3676,7 @@ function ConferenceApplyInner() {
             {!isIndependent && (
               <>
                 <div className="relative">
-                  <label className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+                  <label className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
                     Society / High School Name
                   </label>
                   <input
@@ -3703,7 +3703,7 @@ function ConferenceApplyInner() {
                       border: societyError ? '1.5px solid #8B2020' : '1.5px solid var(--gv-border)',
                       backgroundColor: invitedSocietyId ? 'color-mix(in srgb, var(--gv-main) 5%, transparent)' : 'var(--gv-surface)',
                       color: 'var(--gv-on-surface)',
-                      fontFamily: "'Outfit', sans-serif",
+                      fontFamily: "var(--font-brand), sans-serif",
                       cursor: invitedSocietyId ? 'not-allowed' : 'text',
                     }}
                   />
@@ -3730,7 +3730,7 @@ function ConferenceApplyInner() {
                             className="w-full flex items-center justify-between gap-2 text-left px-4 py-2.5 text-sm focus:outline-none focus-visible:bg-[color-mix(in_srgb,var(--gv-main)_8%,transparent)]"
                             style={{
                               color: taken ? '#B4A992' : 'var(--gv-on-surface)',
-                              fontFamily: "'Outfit', sans-serif",
+                              fontFamily: "var(--font-brand), sans-serif",
                               cursor: taken ? 'not-allowed' : 'pointer',
                               opacity: taken ? 0.7 : 1,
                             }}
@@ -3768,7 +3768,7 @@ function ConferenceApplyInner() {
                         !societySuggestions.some(s => isSameSocietyName(s.name, societyInput)) && (
                           <button
                             className="w-full text-left px-4 py-2.5 text-sm focus:outline-none"
-                            style={{ color: 'var(--gv-main)', fontFamily: "'Outfit', sans-serif", borderTop: '1px solid #F0EDE6' }}
+                            style={{ color: 'var(--gv-main)', fontFamily: "var(--font-brand), sans-serif", borderTop: '1px solid #F0EDE6' }}
                             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'color-mix(in srgb, var(--gv-main) 5%, transparent)'; }}
                             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                             onMouseDown={() => {
@@ -3789,7 +3789,7 @@ function ConferenceApplyInner() {
                   )}
                 </div>
                 {societyError && (
-                  <p className="mt-1.5 text-xs" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+                  <p className="mt-1.5 text-xs" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>
                     {societyError}
                   </p>
                 )}
@@ -3893,7 +3893,7 @@ function ConferenceApplyInner() {
 
         {showSpots && (
           <div className="mb-6">
-            <label className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+            <label className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
               How many delegate spots will you pay for?
             </label>
             <input
@@ -3907,11 +3907,11 @@ function ConferenceApplyInner() {
                 setInvoicingError('');
               }}
               className="w-full rounded-xl px-4 py-3 text-base sm:text-sm focus:outline-none"
-              style={{ border: '1.5px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)', color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}
+              style={{ border: '1.5px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)', color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}
               onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gv-main)'; }}
               onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gv-border)'; }}
             />
-            <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
+            <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>
               These spots stay with your delegation once purchased. If a delegate drops out, the spot remains and can be given to their replacement.
             </p>
           </div>
@@ -3920,7 +3920,7 @@ function ConferenceApplyInner() {
         {/* Parallel question, quieter treatment than the big yes/no above —
             same step, a second decision rather than a second full screen. */}
         <div className="pt-6 mb-2" style={{ borderTop: '1px solid #F0EDE6' }}>
-          <label className="flex items-center gap-2 font-semibold text-sm mb-3" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+          <label className="flex items-center gap-2 font-semibold text-sm mb-3" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
             <GraduationCap size={16} style={{ color: NEU.forest }} />
             Paying for advisor tickets?
           </label>
@@ -3933,7 +3933,7 @@ function ConferenceApplyInner() {
                 border: willPledgeAdvisors === true ? `1.5px solid ${NEU.forest}` : '1.5px solid var(--gv-border)',
                 backgroundColor: willPledgeAdvisors === true ? 'color-mix(in srgb, var(--gv-main) 6%, transparent)' : 'transparent',
                 color: willPledgeAdvisors === true ? NEU.forest : '#6E5F4E',
-                fontFamily: "'Outfit', sans-serif",
+                fontFamily: "var(--font-brand), sans-serif",
               }}
             >
               Yes
@@ -3946,7 +3946,7 @@ function ConferenceApplyInner() {
                 border: willPledgeAdvisors === false ? `1.5px solid ${NEU.forest}` : '1.5px solid var(--gv-border)',
                 backgroundColor: willPledgeAdvisors === false ? 'color-mix(in srgb, var(--gv-main) 6%, transparent)' : 'transparent',
                 color: willPledgeAdvisors === false ? NEU.forest : '#6E5F4E',
-                fontFamily: "'Outfit', sans-serif",
+                fontFamily: "var(--font-brand), sans-serif",
               }}
             >
               No
@@ -3955,7 +3955,7 @@ function ConferenceApplyInner() {
 
           {willPledgeAdvisors === true && (
             <div className="mt-4">
-              <label className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+              <label className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
                 How many advisor tickets will you pay for?
               </label>
               <input
@@ -3969,11 +3969,11 @@ function ConferenceApplyInner() {
                   setInvoicingError('');
                 }}
                 className="w-full rounded-xl px-4 py-3 text-base sm:text-sm focus:outline-none"
-                style={{ border: '1.5px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)', color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}
+                style={{ border: '1.5px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)', color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}
                 onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gv-main)'; }}
                 onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gv-border)'; }}
               />
-              <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
+              <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>
                 Tickets stay with your delegation once purchased, pooled the same way as delegate spots.
               </p>
             </div>
@@ -3981,7 +3981,7 @@ function ConferenceApplyInner() {
         </div>
 
         {invoicingError && (
-          <p className="mt-3 text-xs text-center" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+          <p className="mt-3 text-xs text-center" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>
             {invoicingError}
           </p>
         )}
@@ -5443,8 +5443,8 @@ function ConferenceApplyInner() {
         <SiteNav />
         <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20 text-center">
           <div>
-            <p className="text-xs tracking-widest mb-3" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>404</p>
-            <h1 className="font-black text-2xl mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>Conference Not Found</h1>
+            <p className="text-xs tracking-widest mb-3" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>404</p>
+            <h1 className="font-black text-2xl mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>Conference Not Found</h1>
             <Link href="/conferences/explore" className="text-sm font-semibold" style={{ color: 'var(--gv-main)', textDecoration: 'none' }}>
               Explore conferences →
             </Link>
@@ -5482,17 +5482,17 @@ function ConferenceApplyInner() {
         <SiteNav />
         <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
           <div className="rounded-2xl p-10 text-center max-w-sm w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
-            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
               You&apos;ve already applied
             </h2>
-            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
+            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>
               You already have an active {otherRoleApp.role.replace(/-/g, ' ')} application to this conference. Withdraw it or contact the organizing team if you need to change roles.
               {guestDraftRow && ' The answers you just filled in are still saved in this browser, so if you withdraw it you can come back and finish.'}
             </p>
             <Link
               href={`/conferences/${slug}`}
               className="inline-block rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
-              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}
             >
               VIEW CONFERENCE →
             </Link>
@@ -5521,16 +5521,16 @@ function ConferenceApplyInner() {
         <SiteNav />
         <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
           <div className="rounded-2xl p-10 text-center max-w-md w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
-            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
               You already applied to this conference
             </h2>
-            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
+            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.7 }}>
               You applied as {role.replace(/-/g, ' ')} already. We saved the answers you just filled in on this device. You can use them to update your existing application, or keep the application you already have.
             </p>
             <button
               onClick={() => router.push(updateHref)}
               className="w-full rounded-xl py-3 font-bold text-sm focus:outline-none transition-colors"
-              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', border: 'none', cursor: 'pointer' }}
+              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', border: 'none', cursor: 'pointer' }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
             >
@@ -5539,7 +5539,7 @@ function ConferenceApplyInner() {
             <button
               onClick={() => { clearGuestDraft(slug, role); setGuestOfferDismissed(true); }}
               className="w-full mt-3 text-sm font-semibold focus:outline-none"
-              style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", background: 'none', border: 'none', cursor: 'pointer' }}
+              style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", background: 'none', border: 'none', cursor: 'pointer' }}
             >
               Keep my existing application
             </button>
@@ -5556,17 +5556,17 @@ function ConferenceApplyInner() {
         <SiteNav />
         <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
           <div className="rounded-2xl p-10 text-center max-w-sm w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
-            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
               You&apos;ve already applied
             </h2>
-            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
+            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>
               Your application as {role.replace(/-/g, ' ')} is {existingApp.status}.
               {guestDraftRow && ' The answers you just filled in are still saved in this browser.'}
             </p>
             <Link
               href={`/conferences/${slug}`}
               className="inline-block rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
-              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}
             >
               VIEW CONFERENCE →
             </Link>
@@ -5597,14 +5597,14 @@ function ConferenceApplyInner() {
         <SiteNav />
         <div className="relative z-10 flex-1 flex items-center justify-center px-4 sm:px-6 py-20">
           <div className="rounded-2xl p-8 sm:p-10 text-center max-w-sm w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
-            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", textWrap: 'balance' }}>
+            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif", textWrap: 'balance' }}>
               {openAt
                 ? `Applications for ${roleNouns} open on ${formatWindowInstant(openAt)}`
                 : closeAt
                   ? `Applications for ${roleNouns} closed on ${formatWindowInstant(closeAt)}`
                   : 'Applications are not open'}
             </h2>
-            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6, textWrap: 'pretty' }}>
+            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.6, textWrap: 'pretty' }}>
               {openAt
                 ? 'Come back then to apply. The conference page has everything else in the meantime.'
                 : closeAt
@@ -5615,7 +5615,7 @@ function ConferenceApplyInner() {
             <Link
               href={`/conferences/${slug}`}
               className="inline-block rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
-              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}
             >
               VIEW CONFERENCE
             </Link>
@@ -5636,28 +5636,28 @@ function ConferenceApplyInner() {
           <div className="rounded-2xl p-10 text-center max-w-md w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
             <span
               className="inline-flex items-center rounded-full px-3 py-1 mb-4 text-[11px] font-bold"
-              style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.25)', color: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+              style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.25)', color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}
             >
               AGE REQUIREMENT
             </span>
-            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
               This conference requires delegates to be {ageRequirementText}
             </h2>
-            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
+            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.7 }}>
               Based on your date of birth, you will be {ageAtStart} when {conferenceAcronymLabel(conference)} starts, so you can&apos;t apply this time. If your date of birth is wrong, you can update it in your profile.
             </p>
             <div className="flex items-center justify-center gap-4">
               <Link
                 href="/account/profile"
                 className="text-sm font-semibold"
-                style={{ color: 'var(--gv-main)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
+                style={{ color: 'var(--gv-main)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif" }}
               >
                 Edit profile
               </Link>
               <Link
                 href={`/conferences/${slug}`}
                 className="text-sm font-semibold"
-                style={{ color: 'var(--gv-muted)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
+                style={{ color: 'var(--gv-muted)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif" }}
               >
                 ← Back to {conferenceAcronymLabel(conference)}
               </Link>
@@ -5686,28 +5686,28 @@ function ConferenceApplyInner() {
             <div className="rounded-2xl p-10 text-center max-w-md w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
               <span
                 className="inline-flex items-center rounded-full px-3 py-1 mb-4 text-[11px] font-bold"
-                style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.25)', color: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+                style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.25)', color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}
               >
                 AGE REQUIREMENT
               </span>
-              <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+              <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
                 This conference requires delegates to be {ageRequirementText}
               </h2>
-              <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
+              <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.7 }}>
                 Based on your date of birth, you will be {guestAgeAtStart} when {conferenceAcronymLabel(conference)} starts, so you can&apos;t apply this time. If you typed it wrong, go back and try again.
               </p>
               <div className="flex items-center justify-center gap-4">
                 <button
                   onClick={() => setGuestDobStage('ask')}
                   className="text-sm font-semibold focus:outline-none"
-                  style={{ color: 'var(--gv-main)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: "'Outfit', sans-serif" }}
+                  style={{ color: 'var(--gv-main)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: "var(--font-brand), sans-serif" }}
                 >
                   Go back
                 </button>
                 <Link
                   href={`/conferences/${slug}`}
                   className="text-sm font-semibold"
-                  style={{ color: 'var(--gv-muted)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
+                  style={{ color: 'var(--gv-muted)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif" }}
                 >
                   ← Back to {conferenceAcronymLabel(conference)}
                 </Link>
@@ -5726,18 +5726,18 @@ function ConferenceApplyInner() {
           <div className="rounded-2xl p-10 max-w-md w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
             <span
               className="inline-flex items-center rounded-full px-3 py-1 mb-4 text-[11px] font-bold"
-              style={{ backgroundColor: 'color-mix(in srgb, var(--gv-accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-accent) 35%, transparent)', color: 'var(--gv-accent)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+              style={{ backgroundColor: 'color-mix(in srgb, var(--gv-accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-accent) 35%, transparent)', color: 'var(--gv-accent)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}
             >
               BEFORE YOU START
             </span>
-            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
               What is your date of birth?
             </h2>
-            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
+            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.7 }}>
               {conferenceAcronymLabel(conference)} sets an age requirement, so we ask before you fill anything in. We only use it to check you can apply.
             </p>
 
-            <label className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+            <label className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
               Date of birth
             </label>
             <DatePicker
@@ -5759,7 +5759,7 @@ function ConferenceApplyInner() {
               style={{
                 backgroundColor: !guestDobInput ? 'var(--gv-border)' : 'var(--gv-main)',
                 color: !guestDobInput ? 'var(--gv-muted)' : 'var(--gv-on-main)',
-                fontFamily: "'Outfit', sans-serif",
+                fontFamily: "var(--font-brand), sans-serif",
                 letterSpacing: '0.08em',
                 cursor: !guestDobInput ? 'default' : 'pointer',
               }}
@@ -5772,7 +5772,7 @@ function ConferenceApplyInner() {
               <Link
                 href={`/conferences/${slug}`}
                 className="text-sm font-semibold"
-                style={{ color: 'var(--gv-muted)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
+                style={{ color: 'var(--gv-muted)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif" }}
               >
                 ← Back to {conferenceAcronymLabel(conference)}
               </Link>
@@ -5793,19 +5793,19 @@ function ConferenceApplyInner() {
           <div className="rounded-2xl p-10 max-w-md w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
             <span
               className="inline-flex items-center rounded-full px-3 py-1 mb-4 text-[11px] font-bold"
-              style={{ backgroundColor: 'color-mix(in srgb, var(--gv-accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-accent) 35%, transparent)', color: 'var(--gv-accent)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+              style={{ backgroundColor: 'color-mix(in srgb, var(--gv-accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-accent) 35%, transparent)', color: 'var(--gv-accent)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}
             >
               {hasAgeGate ? `${ageChipText} CONFERENCE` : 'BEFORE YOU APPLY'}
             </span>
-            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
               Two things before you apply
             </h2>
-            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
+            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.7 }}>
               Your profile is missing your nationality or your date of birth. Allocation places delegates by country, and conferences set age limits on who can apply.
               {hasAgeGate ? ` ${conferenceAcronymLabel(conference)} requires delegates to be ${ageRequirementText}.` : ''} Both are saved to your profile, and only your age is ever shown to a conference, never the date.
             </p>
 
-            <label className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+            <label className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
               Nationality
             </label>
             <CountryField
@@ -5817,14 +5817,14 @@ function ConferenceApplyInner() {
                 border: '1px solid var(--gv-border)',
                 borderRadius: 12,
                 color: 'var(--gv-on-surface)',
-                fontFamily: "'Outfit', sans-serif",
+                fontFamily: "var(--font-brand), sans-serif",
                 fontSize: 14,
                 paddingTop: 12,
                 paddingBottom: 12,
               }}
             />
 
-            <label className="block font-semibold text-sm mb-1.5 mt-5" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+            <label className="block font-semibold text-sm mb-1.5 mt-5" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
               Date of birth
             </label>
             <DatePicker
@@ -5834,11 +5834,11 @@ function ConferenceApplyInner() {
               placeholder="Select your date of birth"
               onChange={(iso) => { setDobInput(iso); setBasicsError(''); }}
             />
-            <p className="mt-1.5 text-xs" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
+            <p className="mt-1.5 text-xs" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>
               You must be at least 13 to use Gavelling.
             </p>
             {basicsError && (
-              <p role="alert" className="mt-2 text-xs" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+              <p role="alert" className="mt-2 text-xs" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>
                 {basicsError}
               </p>
             )}
@@ -5849,7 +5849,7 @@ function ConferenceApplyInner() {
               style={{
                 backgroundColor: basicsIncomplete ? 'var(--gv-border)' : 'var(--gv-main)',
                 color: basicsIncomplete ? 'var(--gv-muted)' : 'var(--gv-on-main)',
-                fontFamily: "'Outfit', sans-serif",
+                fontFamily: "var(--font-brand), sans-serif",
                 letterSpacing: '0.08em',
                 cursor: basicsSaving ? 'wait' : basicsIncomplete ? 'default' : 'pointer',
               }}
@@ -5862,7 +5862,7 @@ function ConferenceApplyInner() {
               <Link
                 href={`/conferences/${slug}`}
                 className="text-sm font-semibold"
-                style={{ color: 'var(--gv-muted)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
+                style={{ color: 'var(--gv-muted)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif" }}
               >
                 ← Back to {conferenceAcronymLabel(conference)}
               </Link>
@@ -5909,7 +5909,7 @@ function ConferenceApplyInner() {
           <Link
             href={`/conferences/${slug}`}
             className="text-xs"
-            style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", fontWeight: 600, letterSpacing: '0.06em', textDecoration: 'none' }}
+            style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, letterSpacing: '0.06em', textDecoration: 'none' }}
           >
             ← {conferenceAcronymLabel(conference)}
           </Link>
@@ -5988,7 +5988,7 @@ function ConferenceApplyInner() {
               className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5"
               style={{ backgroundColor: 'color-mix(in srgb, var(--gv-accent) 14%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-accent) 35%, transparent)' }}
             >
-              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: '#8A6614', fontFamily: "'Outfit', sans-serif" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: '#8A6614', fontFamily: "var(--font-brand), sans-serif" }}>
                 EDITING YOUR APPLICATION
               </span>
             </div>

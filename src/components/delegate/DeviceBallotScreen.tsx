@@ -30,7 +30,7 @@ import type { VoteChoice } from '@/lib/voteState';
 import { DG, DelegateStyles } from '@/components/delegate/DelegateUI';
 import { holdsVeto, isVetoChoice, vetoRulesFromRow } from '@/components/voting/vetoHolders';
 
-const OUTFIT = "'Outfit', system-ui, sans-serif";
+const OUTFIT = "var(--font-brand), system-ui, sans-serif";
 
 const CHOICE_KEY = {
   'for': 'voting_choice_for',

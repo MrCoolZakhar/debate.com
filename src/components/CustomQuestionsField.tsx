@@ -21,7 +21,7 @@ const HELP_INK = NEU.inkSoft;
 const inputStyle: React.CSSProperties = {
   width: '100%', borderRadius: '12px', padding: '12px 16px', fontSize: '16px',
   borderWidth: '1.5px', borderStyle: 'solid', borderColor: INPUT_BORDER, backgroundColor: '#FAF8F3', color: '#1C1410',
-  fontFamily: "'Outfit', sans-serif",
+  fontFamily: "var(--font-brand), sans-serif",
 };
 
 function errorStyle(hasError: boolean): React.CSSProperties {
@@ -59,11 +59,11 @@ export default function CustomQuestionsField({ blocks, answers, onChange, missin
         if (block.kind === 'section') {
           return (
             <div key={block.id} className="pt-1 pb-0.5" style={{ borderTop: '1px solid rgba(27,56,40,0.12)' }}>
-              <p className="font-black text-base mt-3" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+              <p className="font-black text-base mt-3" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                 {block.title}
               </p>
               {block.description && (
-                <p className="text-sm mt-1 whitespace-pre-wrap" style={{ color: HELP_INK, fontFamily: "'Outfit', sans-serif" }}>
+                <p className="text-sm mt-1 whitespace-pre-wrap" style={{ color: HELP_INK, fontFamily: "var(--font-brand), sans-serif" }}>
                   {block.description}
                 </p>
               )}
@@ -73,11 +73,11 @@ export default function CustomQuestionsField({ blocks, answers, onChange, missin
         if (block.kind === 'title') {
           return (
             <div key={block.id}>
-              <p className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+              <p className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                 {block.title}
               </p>
               {block.description && (
-                <p className="text-xs mt-1 whitespace-pre-wrap" style={{ color: HELP_INK, fontFamily: "'Outfit', sans-serif" }}>
+                <p className="text-xs mt-1 whitespace-pre-wrap" style={{ color: HELP_INK, fontFamily: "var(--font-brand), sans-serif" }}>
                   {block.description}
                 </p>
               )}
@@ -92,12 +92,12 @@ export default function CustomQuestionsField({ blocks, answers, onChange, missin
         const options = usableOptions(q);
         return (
           <div key={q.id}>
-            <label className="block font-semibold text-sm mb-1 whitespace-pre-wrap" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            <label className="block font-semibold text-sm mb-1 whitespace-pre-wrap" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
               {q.label}
               {q.required && <span className="ml-1" style={{ color: '#8B2020' }}>*</span>}
             </label>
             {q.help && (
-              <p className="text-[13px] mb-1.5 whitespace-pre-wrap" style={{ color: HELP_INK, fontFamily: "'Outfit', sans-serif" }}>{q.help}</p>
+              <p className="text-[13px] mb-1.5 whitespace-pre-wrap" style={{ color: HELP_INK, fontFamily: "var(--font-brand), sans-serif" }}>{q.help}</p>
             )}
 
             {q.type === 'short_text' && (
@@ -174,7 +174,7 @@ export default function CustomQuestionsField({ blocks, answers, onChange, missin
                       className="w-4 h-4 cursor-pointer"
                       style={{ accentColor: '#1B3828' }}
                     />
-                    <span className="text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{opt}</span>
+                    <span className="text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>{opt}</span>
                   </label>
                 ))}
               </div>
@@ -191,14 +191,14 @@ export default function CustomQuestionsField({ blocks, answers, onChange, missin
                       className="w-4 h-4 cursor-pointer"
                       style={{ accentColor: '#1B3828' }}
                     />
-                    <span className="text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{opt}</span>
+                    <span className="text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>{opt}</span>
                   </label>
                 ))}
               </div>
             )}
 
             {hasError && (
-              <p className="text-[13px] mt-1" style={{ color: INPUT_BORDER_ERROR, fontFamily: "'Outfit', sans-serif" }}>
+              <p className="text-[13px] mt-1" style={{ color: INPUT_BORDER_ERROR, fontFamily: "var(--font-brand), sans-serif" }}>
                 This question is required.
               </p>
             )}

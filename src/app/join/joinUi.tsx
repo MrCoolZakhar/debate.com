@@ -25,7 +25,7 @@ import { useState, type CSSProperties, type ReactNode } from 'react';
 import { Gavel } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 
-export const OUTFIT = "'Outfit', sans-serif";
+export const OUTFIT = "var(--font-brand), sans-serif";
 export const PLAYFAIR = "'Playfair Display', serif";
 
 /** The palette from CLAUDE.md §8. `muted` is decorative only: never body text. */

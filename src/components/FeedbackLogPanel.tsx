@@ -820,7 +820,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
   };
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col" style={{ fontFamily: "'Poppins','Outfit',sans-serif" }}>
+    <div className="flex-1 min-h-0 flex flex-col" style={{ fontFamily: "'Poppins',var(--font-brand), sans-serif" }}>
       <style>{`.fb-dock-scroll::-webkit-scrollbar{display:none}`}</style>
       {items.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">

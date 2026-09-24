@@ -330,7 +330,7 @@ function SideRail({
               whiteSpace: 'nowrap',
             }}
           >
-            <span className="flex items-center gap-1.5 text-[15px] font-extrabold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.2 }}>
+            <span className="flex items-center gap-1.5 text-[15px] font-extrabold" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.2 }}>
               {conference ? conferenceAcronymLabel({ acronym: conference.acronym, year }) : '…'}
               {conference && <VerifiedCheck verified={conference.is_verified} showUnverified size={16} title={sealTitle} />}
             </span>
@@ -339,7 +339,7 @@ function SideRail({
                 className="block"
                 style={{
                   fontSize: '10.5px', fontWeight: 600, color: '#9A8A78',
-                  fontFamily: "'Outfit', sans-serif",
+                  fontFamily: "var(--font-brand), sans-serif",
                   fontVariantNumeric: 'tabular-nums',
                   lineHeight: 1.3, marginTop: '1px',
                 }}
@@ -361,7 +361,7 @@ function SideRail({
             {section.header && (
               <p
                 style={{
-                  fontFamily: "'Outfit', sans-serif",
+                  fontFamily: "var(--font-brand), sans-serif",
                   fontSize: '9px', fontWeight: 800, letterSpacing: '0.16em',
                   color: '#B6871F',
                   padding: '4px 10px 3px',
@@ -422,7 +422,7 @@ function SideRail({
                   </span>
                   <span
                     style={{
-                      fontFamily: "'Outfit', sans-serif",
+                      fontFamily: "var(--font-brand), sans-serif",
                       fontSize: '13px', fontWeight: 600,
                       whiteSpace: 'nowrap',
                       maxWidth: expanded ? '150px' : '0px',
@@ -438,7 +438,7 @@ function SideRail({
                       className="flex-shrink-0 flex items-center justify-center rounded-full"
                       style={{
                         minWidth: 18, height: 18, padding: '0 5px', fontSize: 10, fontWeight: 700,
-                        fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums',
+                        fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums',
                         backgroundColor: active ? '#EED98A' : 'rgba(182,135,31,0.16)',
                         color: active ? '#1B3828' : '#8A6614',
                       }}
@@ -472,7 +472,7 @@ function SideRail({
               border: `1px solid ${statusStyle.border}`,
               color: statusStyle.color,
               padding: expanded ? '3px 10px' : '5px',
-              fontFamily: "'Outfit', sans-serif",
+              fontFamily: "var(--font-brand), sans-serif",
               fontSize: '9.5px', fontWeight: 800,
               textTransform: 'uppercase', letterSpacing: '0.1em',
             }}
@@ -537,7 +537,7 @@ function SidebarContent({
           fallbackText={(conference?.acronym ?? '?').slice(0, 2)}
         />
         <div className="min-w-0">
-          <span className="flex items-center gap-1.5 min-w-0 text-sm font-extrabold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.2 }}>
+          <span className="flex items-center gap-1.5 min-w-0 text-sm font-extrabold" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.2 }}>
             <span className="truncate">{conference ? conferenceAcronymLabel({ acronym: conference.acronym, year }) : '…'}</span>
             {conference && <VerifiedCheck verified={conference.is_verified} showUnverified size={16} title={sealTitle} />}
           </span>
@@ -546,7 +546,7 @@ function SidebarContent({
               className="block"
               style={{
                 fontSize: '10.5px', fontWeight: 600, color: '#9A8A78',
-                fontFamily: "'Outfit', sans-serif",
+                fontFamily: "var(--font-brand), sans-serif",
                 fontVariantNumeric: 'tabular-nums',
                 lineHeight: 1.3, marginTop: '1px',
               }}
@@ -563,7 +563,7 @@ function SidebarContent({
             {section.header && (
               <p
                 className="px-4 pt-4 pb-1 text-[10px] tracking-[0.16em] font-extrabold"
-                style={{ color: '#B6871F', fontFamily: "'Outfit', sans-serif" }}
+                style={{ color: '#B6871F', fontFamily: "var(--font-brand), sans-serif" }}
               >
                 {section.header}
               </p>
@@ -606,7 +606,7 @@ function SidebarContent({
                       className="flex-shrink-0 flex items-center justify-center rounded-full"
                       style={{
                         minWidth: 18, height: 18, padding: '0 5px', fontSize: 10, fontWeight: 700,
-                        fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums',
+                        fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums',
                         backgroundColor: 'rgba(182,135,31,0.16)', color: '#8A6614',
                       }}
                     >
@@ -625,7 +625,7 @@ function SidebarContent({
         <div className="px-4 py-4 flex-shrink-0" style={{ borderTop: '1px solid #DDD4C0' }}>
           <p
             className="text-xs mb-1.5 truncate"
-            style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
+            style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}
           >
             {conference.full_name}
           </p>
@@ -635,7 +635,7 @@ function SidebarContent({
               backgroundColor: statusStyle.bg,
               color: statusStyle.color,
               border: `1px solid ${statusStyle.border}`,
-              fontFamily: "'Outfit', sans-serif",
+              fontFamily: "var(--font-brand), sans-serif",
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
             }}
@@ -953,19 +953,19 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     return (
       <div className="min-h-screen flex items-center justify-center px-6" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="max-w-md w-full text-center rounded-2xl p-8" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-          <p style={{ fontSize: 10, color: '#B8844A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.14em', fontWeight: 700, marginBottom: 12 }}>
+          <p style={{ fontSize: 10, color: '#B8844A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.14em', fontWeight: 700, marginBottom: 12 }}>
             COULD NOT LOAD
           </p>
-          <h1 className="text-xl font-bold mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+          <h1 className="text-xl font-bold mb-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
             We could not load this conference
           </h1>
-          <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+          <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
             The connection dropped or your session went stale. Your conference is safe. Try again, and if it keeps happening, sign out and back in.
           </p>
           <button
             onClick={() => { setLoadFailed(false); void loadConference(); }}
             className="rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none transition-colors"
-            style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: "'Outfit', sans-serif" }}
+            style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: "var(--font-brand), sans-serif" }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
           >
@@ -980,19 +980,19 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     return (
       <div className="min-h-screen flex items-center justify-center px-6" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="max-w-md w-full text-center rounded-2xl p-8" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-          <p style={{ fontSize: 10, color: '#B8844A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.14em', fontWeight: 700, marginBottom: 12 }}>
+          <p style={{ fontSize: 10, color: '#B8844A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.14em', fontWeight: 700, marginBottom: 12 }}>
             ACCESS DENIED
           </p>
-          <h1 className="text-xl font-bold mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+          <h1 className="text-xl font-bold mb-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
             You don&apos;t have access to manage this conference
           </h1>
-          <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+          <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
             You&apos;re not listed as an organizer of this conference. If you think this is a mistake, contact the conference&apos;s owner.
           </p>
           <button
             onClick={() => router.push('/')}
             className="rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none transition-colors"
-            style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: "'Outfit', sans-serif" }}
+            style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: "var(--font-brand), sans-serif" }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
           >
@@ -1027,19 +1027,19 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     return (
       <div className="min-h-screen flex items-center justify-center px-6" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="max-w-md w-full text-center rounded-2xl p-8" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-          <p style={{ fontSize: 10, color: '#B8844A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.14em', fontWeight: 700, marginBottom: 12 }}>
+          <p style={{ fontSize: 10, color: '#B8844A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.14em', fontWeight: 700, marginBottom: 12 }}>
             SECTION RESTRICTED
           </p>
-          <h1 className="text-xl font-bold mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+          <h1 className="text-xl font-bold mb-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
             You don&apos;t have access to this section
           </h1>
-          <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+          <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
             Your organizer role for this conference doesn&apos;t include this section. Ask the conference owner to grant it.
           </p>
           <button
             onClick={() => router.push(`/manage/${slug}`)}
             className="rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none transition-colors"
-            style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: "'Outfit', sans-serif" }}
+            style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: "var(--font-brand), sans-serif" }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
           >
@@ -1098,7 +1098,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
           <Link
             href={`/manage/${slug}`}
             className="text-sm font-bold transition-opacity focus:outline-none inline-flex items-center gap-1.5"
-            style={{ color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.03em', textDecoration: 'none' }}
+            style={{ color: '#EED98A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.03em', textDecoration: 'none' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '0.75'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
           >
@@ -1190,7 +1190,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
               className="rounded-xl px-4 py-3 text-sm"
               style={{
                 color: '#7A5A10', backgroundColor: 'rgba(182,135,31,0.12)',
-                border: '1px solid rgba(182,135,31,0.32)', fontFamily: "'Outfit', sans-serif",
+                border: '1px solid rgba(182,135,31,0.32)', fontFamily: "var(--font-brand), sans-serif",
                 lineHeight: 1.5, textWrap: 'pretty', maxWidth: 1080,
               }}
             >

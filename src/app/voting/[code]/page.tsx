@@ -1060,7 +1060,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   backgroundColor: '#FAF8F3',
                   border: `1.5px solid ${chairCodeError ? '#8B2020' : '#DDD4C0'}`,
                   color: '#1C1410',
-                  fontFamily: "'DM Mono', monospace",
+                  fontFamily: "var(--font-brand), sans-serif",
                 }}
               />
               {chairCodeError && (

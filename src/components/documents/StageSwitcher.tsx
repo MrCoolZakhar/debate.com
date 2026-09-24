@@ -24,7 +24,7 @@ import { useT } from '@/contexts/LanguageContext';
 
 export type SwitcherStage = { key: string; label: string; minutes: number; done: boolean };
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 export default function StageSwitcher({ stages, current, onSelect, compact = false }: {
   stages: SwitcherStage[];

@@ -662,10 +662,10 @@ interface Suggestion {
 
 // ── Shared bits ───────────────────────────────────────────────────────────────
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 // Typography rule: no monospace on the conferences side, MONO now resolves to Outfit
 // so every stamp/eyebrow/code that referenced it renders in Outfit (family swap only).
-const MONO = "'Outfit', sans-serif";
+const MONO = "var(--font-brand), sans-serif";
 
 // Depth normalisation: small flag images carried the full dual neu relief
 // (NEU.outSm), which reads heavy and uneven on tiny rectangles/discs. One

@@ -16,7 +16,7 @@ import { CircleFlag } from '@/components/CircleFlag';
 import { UN_COUNTRIES, getCountryByName, getFlagUrl, countryMatchRank } from '@/lib/countries';
 import { useLanguage } from '@/contexts/LanguageContext';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 const MENU_MAX_H = 224;
 

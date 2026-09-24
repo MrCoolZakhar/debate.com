@@ -16,9 +16,9 @@ import { committeeShortName } from '@/app/manage/[slug]/assignment/displayNames'
 
 // ── Shared bits (matches the visual language of the rest of this page) ─────────
 
-export const OUTFIT = "'Outfit', sans-serif";
+export const OUTFIT = "var(--font-brand), sans-serif";
 // Typography rule on this page: no monospace, MONO resolves to Outfit (family swap only).
-export const MONO = "'Outfit', sans-serif";
+export const MONO = "var(--font-brand), sans-serif";
 
 // ── Pool accounting (adapted from applications/page.tsx's fillFreeSpots) ───────
 

@@ -17,7 +17,7 @@ import { Mail, MailX, X } from 'lucide-react';
 import { ModalOverlay } from '@/components/ModalOverlay';
 import { NEU } from '@/components/neu';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 
 export interface AssignConfirmDialogProps {
   delegateName: string;

@@ -174,12 +174,12 @@ function PartnerPopup({
         <div className="flex items-center gap-3">
           <LogoDisc src={entry.logoUrl} alt={entry.name} size={52} fallbackText={entry.name.slice(0, 3)} />
           <div className="min-w-0">
-            <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 9, letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: 0 }}>
+            <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: 9, letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: 0 }}>
               {meta}
             </p>
             <p
               style={{
-                fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 16, color: 'var(--gv-on-surface)', margin: '2px 0 0 0', letterSpacing: '0.01em',
+                fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: 16, color: 'var(--gv-on-surface)', margin: '2px 0 0 0', letterSpacing: '0.01em',
                 display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden', lineHeight: 1.25,
               }}
             >
@@ -188,7 +188,7 @@ function PartnerPopup({
             {/* Long conference names show the acronym above and the spelled-out
                 name small beneath it, never the other way round. */}
             {entry.fullName && (
-              <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: 11, color: 'var(--gv-muted)', margin: '1px 0 0 0', lineHeight: 1.35 }}>
+              <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontSize: 11, color: 'var(--gv-muted)', margin: '1px 0 0 0', lineHeight: 1.35 }}>
                 {entry.fullName}
               </p>
             )}
@@ -201,7 +201,7 @@ function PartnerPopup({
         {entry.description && (
           <p
             style={{
-              fontFamily: "'Outfit', sans-serif", fontSize: 13, lineHeight: 1.7,
+              fontFamily: "var(--font-brand), sans-serif", fontSize: 13, lineHeight: 1.7,
               color: 'var(--gv-on-surface)', margin: '14px 0 0 0', whiteSpace: 'pre-wrap',
             }}
           >
@@ -210,7 +210,7 @@ function PartnerPopup({
         )}
 
         {!entry.description && entry.location && (
-          <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, color: 'var(--gv-muted)', margin: '12px 0 0 0' }}>
+          <p style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 12, color: 'var(--gv-muted)', margin: '12px 0 0 0' }}>
             {entry.location}
           </p>
         )}
@@ -222,7 +222,7 @@ function PartnerPopup({
             className="inline-flex items-center gap-1.5 mt-4 rounded-full px-3.5 py-2 focus:outline-none"
             style={{
               backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none',
-              fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 11, letterSpacing: '0.08em',
+              fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: 11, letterSpacing: '0.08em',
               transition: `background-color 200ms ${EASE}`,
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
@@ -283,7 +283,7 @@ function PartnerButton({
   const name = (
     <span
       style={{
-        fontFamily: "'Outfit', sans-serif",
+        fontFamily: "var(--font-brand), sans-serif",
         fontWeight: 800,
         fontSize: 13,
         letterSpacing: '0.02em',
@@ -410,7 +410,7 @@ export default function ConferencePartners({ partners }: { partners: PartnerEntr
     .map(({ entry }) => entry);
 
   const heading = (
-    <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 9, letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: 0 }}>
+    <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: 9, letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: 0 }}>
       PARTNERS
     </p>
   );

@@ -457,7 +457,7 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
                     <span
                       className="px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest"
                       style={{
-                        fontFamily: "'DM Mono', monospace",
+                        fontFamily: "var(--font-brand), sans-serif",
                         backgroundColor: card.badgeBg ?? '#EDE7D8',
                         border: `1px solid ${card.badgeBorder ?? '#DDD4C0'}`,
                         color: card.badgeColor ?? '#9A8A78',

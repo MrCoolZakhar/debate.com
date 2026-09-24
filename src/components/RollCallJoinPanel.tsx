@@ -20,7 +20,7 @@ import { Maximize2, Smartphone, MonitorSmartphone } from 'lucide-react';
 import { useT } from '@/contexts/LanguageContext';
 import { encodeQr } from '@/lib/qrCode';
 
-const OUTFIT = "'Outfit', sans-serif";
+const OUTFIT = "var(--font-brand), sans-serif";
 const JOIN_HOST = 'gavelling.com';
 const storageKey = (code: string) => `gavelling-phones-join:${code.toUpperCase()}`;
 

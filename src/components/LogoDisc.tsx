@@ -156,7 +156,7 @@ export function LogoDisc({
     >
       <span
         style={{
-          fontFamily: "'Outfit', sans-serif",
+          fontFamily: "var(--font-brand), sans-serif",
           fontWeight: plain ? 900 : 700,
           fontVariantNumeric: 'tabular-nums',
           letterSpacing: '0.06em',

@@ -1021,7 +1021,7 @@ function ScoreboardTutorialCard({ committee, language, box }: {
         maxWidth: 760, maxHeight: '100%',
         backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0',
         boxShadow: '0 32px 80px rgba(27,56,40,0.40)',
-        fontFamily: "'Poppins','Outfit',sans-serif",
+        fontFamily: "'Poppins',var(--font-brand), sans-serif",
       }}
     >
       {/* Header — mirrors the real ScoreboardPanel header so it is recognisable */}
