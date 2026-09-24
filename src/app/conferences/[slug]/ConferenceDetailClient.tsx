@@ -2978,7 +2978,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                 {c.difficulty && (
                                   <div className="absolute" style={{ top: 16, right: 16 }}>
                                     <span className="sr-only">Difficulty: </span>
-                                    <DifficultyTile level={c.difficulty} size="sm" />
+                                    <DifficultyTile level={c.difficulty} size="xs" />
                                   </div>
                                 )}
                                 <div className="flex flex-col items-center px-5 pt-7 flex-1">

@@ -316,7 +316,7 @@ export function CommitteeInfoDialog({
                 {c.name}
               </h2>
               <div className="flex items-center justify-center gap-3 mt-3 flex-wrap">
-                {c.difficulty && <DifficultyTile level={c.difficulty} size="sm" />}
+                {c.difficulty && <DifficultyTile level={c.difficulty} size="xs" />}
                 <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: '#6B5F52' }}>
                   {seatsLine}{isCrisis ? ' · Crisis' : ''}
                 </span>

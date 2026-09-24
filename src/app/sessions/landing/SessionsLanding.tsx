@@ -32,10 +32,10 @@ type Lang = 'en' | 'es' | 'fr' | 'ar';
  *  whole hero (it runs above the phone). `lg` from 1024px, `sm` below it
  *  (vw-based, so it never wraps on a phone). */
 const HEADLINE: Record<Lang, { lead: string; accent: string; lg: string; sm: string }> = {
-  en: { lead: 'MUN done', accent: 'right.', lg: 'clamp(64px, 8.4vw, 150px)', sm: 'clamp(34px, 10.4vw, 72px)' },
-  es: { lead: 'MUN como se', accent: 'debe.', lg: 'clamp(54px, 6.9vw, 124px)', sm: 'clamp(30px, 8.6vw, 64px)' },
-  fr: { lead: 'MUN comme il se', accent: 'doit.', lg: 'clamp(46px, 5.8vw, 104px)', sm: 'clamp(26px, 7.2vw, 56px)' },
-  ar: { lead: 'النموذج الأممي', accent: 'كما يجب.', lg: 'clamp(52px, 6.6vw, 118px)', sm: 'clamp(28px, 8.2vw, 60px)' },
+  en: { lead: 'MUN done', accent: 'right.', lg: 'clamp(44px, 5.2vw, 86px)', sm: 'clamp(34px, 10.4vw, 72px)' },
+  es: { lead: 'MUN como se', accent: 'debe.', lg: 'clamp(36px, 4.2vw, 70px)', sm: 'clamp(30px, 8.6vw, 64px)' },
+  fr: { lead: 'MUN comme il se', accent: 'doit.', lg: 'clamp(30px, 3.5vw, 58px)', sm: 'clamp(26px, 7.2vw, 56px)' },
+  ar: { lead: 'النموذج الأممي', accent: 'كما يجب.', lg: 'clamp(34px, 4vw, 66px)', sm: 'clamp(28px, 8.2vw, 60px)' },
 };
 
 export default function SessionsLanding() {
@@ -223,11 +223,11 @@ const CSS = `
   linear-gradient(270deg, #EDE7D8 0%, rgba(237,231,216,.93) 34%, rgba(237,231,216,.55) 62%, rgba(237,231,216,.35) 100%),
   linear-gradient(to bottom, rgba(237,231,216,0) 74%, #FAF8F3 100%); }
 .sl-hero-in { max-width: 1520px; padding: 116px clamp(16px, 4vw, 64px) 72px; display: grid;
-  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.22fr); grid-template-areas: "h h" "copy dev";
-  column-gap: clamp(24px, 3vw, 56px); row-gap: clamp(8px, 1.2vw, 20px); align-items: start; }
-.sl-h1 { grid-area: h; position: relative; z-index: 3; margin: 0; font-weight: 800; line-height: 0.98; letter-spacing: -0.04em; white-space: nowrap; color: ${INK}; font-size: var(--h1-lg); }
-.sl-copy { grid-area: copy; padding-top: clamp(8px, 1.6vw, 28px); }
-.sl-lede { font-size: 16.5px; line-height: 1.6; margin: 0; max-width: 31em; }
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.22fr); grid-template-areas: "h dev" "copy dev"; grid-template-rows: auto 1fr;
+  column-gap: clamp(24px, 3vw, 56px); row-gap: 0; align-items: start; }
+.sl-h1 { grid-area: h; align-self: end; padding-top: clamp(12px, 2.4vw, 44px); position: relative; z-index: 3; margin: 0; font-weight: 800; line-height: 0.98; letter-spacing: -0.04em; white-space: nowrap; color: ${INK}; font-size: var(--h1-lg); }
+.sl-copy { grid-area: copy; padding-top: clamp(14px, 1.4vw, 22px); }
+.sl-lede { font-size: 16.5px; line-height: 1.6; margin: 0; max-width: 28em; }
 .sl-start { display: inline-flex; align-items: center; justify-content: center; margin-top: 28px; height: 64px; padding: 0 44px;
   border: 0; border-radius: 9999px; background: ${FOREST}; color: ${GOLD_TEXT}; font: 700 19px/1 ${BRAND}; letter-spacing: 0.01em; cursor: pointer;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.16), 0 18px 34px -16px rgba(27,56,40,.9);
@@ -243,7 +243,7 @@ const CSS = `
 .sl-join-box button:disabled { background: #D8CDB6; color: #6B5F52; cursor: default; }
 .sl-join-box:focus-within { box-shadow: inset 0 0 0 1.5px ${FOREST}; }
 .sl-free { margin: 12px 0 0; font-size: 13px; }
-.sl-devices { grid-area: dev; position: relative; margin-inline-end: calc(-1 * clamp(16px, 4vw, 64px) - 2vw); padding-bottom: 6%; }
+.sl-devices { grid-area: dev; align-self: center; position: relative; margin-inline-end: calc(-1 * clamp(16px, 4vw, 64px) - 2vw); padding-bottom: 6%; }
 .sl-laptop { display: block; width: 100%; height: auto; filter: drop-shadow(0 40px 46px rgba(40,30,15,.28)) drop-shadow(0 8px 12px rgba(40,30,15,.12)); }
 .sl-phone { position: absolute; inset-inline-start: -19%; bottom: -12%; width: 31%; height: auto; filter: drop-shadow(0 34px 34px rgba(30,22,10,.38)) drop-shadow(0 6px 10px rgba(30,22,10,.18)); }
 .sl-social { color: #9A8A78; transition: color .15s; } .sl-social:hover { color: ${FOREST}; }
@@ -255,9 +255,9 @@ const CSS = `
 }
 @media (max-width: 1023px) {
   .sl-hero { min-height: 0; }
-  .sl-hero-in { grid-template-columns: minmax(0, 1fr); grid-template-areas: "h" "copy" "dev"; padding-top: 104px; padding-bottom: 56px; }
+  .sl-hero-in { grid-template-columns: minmax(0, 1fr); grid-template-areas: "h" "copy" "dev"; grid-template-rows: auto; padding-top: 104px; padding-bottom: 56px; }
   .sl-copy { padding-top: 6px; }
-  .sl-h1 { font-size: var(--h1-sm); }
+  .sl-h1 { font-size: var(--h1-sm); padding-top: 0; }
   .sl-devices { margin: 40px -8% 24px 17%; }
   [dir="rtl"] .sl-devices { margin: 40px 17% 24px -8%; }
   .sl-phone { inset-inline-start: -22%; bottom: -16%; }

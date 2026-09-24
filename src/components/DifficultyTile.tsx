@@ -17,19 +17,25 @@ import { NEU, OUTFIT } from '@/components/neu';
 // need ~105px on one line, the column needs ~75. At `sm` the tile is 47px tall
 // (30 disc + 4 gap + 13 label). Callers budget their layout around both.
 //
+// `xs` (24 Sep 2026, owner: "the level of the committee text is too big, make
+// both the icon and the text smaller") is the public conference page's size:
+// a 22px disc, 15px glyph and a 9.5px label, 35px tall in all. The organiser
+// committees page keeps `sm`.
+//
 // Returns null for an empty level. An unknown level still renders, in the
 // muted accent with the beginner glyph (LevelInsignia's fallback).
-export function DifficultyTile({ level, size = 'md' }: { level: string; size?: 'sm' | 'md' }) {
+export function DifficultyTile({ level, size = 'md' }: { level: string; size?: 'xs' | 'sm' | 'md' }) {
   const key = (level ?? '').toLowerCase();
   const label = key ? key.charAt(0).toUpperCase() + key.slice(1) : '';
   if (!label) return null;
   const accent = LEVEL_ACCENT[key] ?? NEU.muted;
-  const disc = size === 'sm' ? 30 : 34;
-  const glyph = size === 'sm' ? 21 : 24;
+  const disc = size === 'xs' ? 22 : size === 'sm' ? 30 : 34;
+  const glyph = size === 'xs' ? 15 : size === 'sm' ? 21 : 24;
+  const fontSize = size === 'xs' ? 9.5 : size === 'sm' ? 11 : 11.5;
   return (
     <span
       className="inline-flex flex-col items-center flex-shrink-0"
-      style={{ gap: 4 }}
+      style={{ gap: size === 'xs' ? 3 : 4 }}
     >
       <span
         className="inline-flex items-center justify-center flex-shrink-0"
@@ -41,7 +47,7 @@ export function DifficultyTile({ level, size = 'md' }: { level: string; size?: '
       >
         <LevelInsignia level={key} size={glyph} />
       </span>
-      <span style={{ fontFamily: OUTFIT, fontSize: size === 'sm' ? 11 : 11.5, fontWeight: 700, color: NEU.ink, letterSpacing: '0.01em', lineHeight: '13px' }}>
+      <span style={{ fontFamily: OUTFIT, fontSize, fontWeight: size === 'xs' ? 600 : 700, color: size === 'xs' ? NEU.inkSoft : NEU.ink, letterSpacing: '0.01em', lineHeight: size === 'xs' ? '11px' : '13px' }}>
         {label}
       </span>
     </span>
