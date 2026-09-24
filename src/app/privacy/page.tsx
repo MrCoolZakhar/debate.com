@@ -186,7 +186,7 @@ export default function PrivacyPage() {
             <ul className="list-disc ps-5 mt-2 space-y-1">
               <li><strong>Server logs</strong>: our hosting and database providers record standard things like IP address, browser type and timestamps. We do not use these to build profiles or to advertise to you.</li>
               <li><strong>Crash reports</strong>: when a page breaks in your browser we send ourselves the error message, the technical stack trace, and the address of the page you were on, so we can fix it fast. We do not attach your name to it, but a page address can include a session code.</li>
-              <li><strong>Conference page visits</strong>: when you open a conference&apos;s public page, we add one to an anonymous daily count for that conference, grouped by where the visit came from: Google, another search engine, social media, email, a direct link, Gavelling itself, or another website (for which we keep only the website&apos;s name, never the page address). We use no cookies for this and store no IP address, no browser details and nothing that identifies you. The conference&apos;s organisers see these counts so they can tell where their applicants come from.</li>
+              <li><strong>Conference page visits</strong>: when you open a conference&apos;s public page, we add one to an anonymous daily count for that conference, grouped by where the visit came from: Google, another search engine, social media, email, a direct link, Gavelling itself, or another website (for which we keep only the website&apos;s name, never the page address). We use no cookies for this and store no IP address, no browser details and nothing that identifies you. Visits by the conference&apos;s own team and by people who already applied to it are not counted. The conference&apos;s organisers see these counts so they can tell where their applicants come from.</li>
             </ul>
             <p className="mt-3">
               We do not run Google Analytics, advertising pixels, or any third-party tracking on
@@ -533,11 +533,14 @@ export default function PrivacyPage() {
           keep using Gavelling.
         </p>
         <p>
-          When you open a conference page, your browser keeps one word in its local storage for up
-          to 90 days: the kind of place you came from, for example Google or social media. It is
-          not a cookie and is never sent anywhere on its own. If you apply to that conference, your
-          application records only that word, so the organisers can see how applicants found them.
-          Clearing your local storage removes it.
+          When you open a conference page, your browser keeps a short note in its local storage for
+          up to 90 days: the kind of place you came from, for example Google or social media, and,
+          when it is known, the name of that site or app, for example Instagram, WhatsApp or the
+          conference&apos;s own website. Never a page address. It is worked out on your device (for
+          example, Instagram&apos;s built-in browser names itself), is not a cookie and is never sent
+          anywhere on its own. If you apply to that conference, your application records only those
+          words, so the organisers can see how applicants found them. Clearing your local storage
+          removes it.
         </p>
         <p>
           You can clear local storage and cookies from your browser settings at any time. Doing so

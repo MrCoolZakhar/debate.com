@@ -45,6 +45,7 @@ import { DelegationIdentity, useDelegationSummaries } from './DelegationAvatar';
 import { ORGANIZER_SECTIONS, bundlePermissions } from '@/lib/organizerPermissions';
 // The applicant pop-up (hero, action bar, five tabs) and its ?app= URL state.
 import ApplicantDetailDialog, { useApplicantUrlSync } from './ApplicantDetail/ApplicantDetailDialog';
+import ApplicationSourceMark, { ApplicationSourceChip } from '@/components/conferences/ApplicationSourceMark';
 // Same role-label vocabulary the MUN CV timeline uses (Delegate/Chair/Faculty
 // Advisor/Secretariat/Other), so a chair/secretariat application's listed
 // conferences read consistently with how the applicant's own CV describes them.
@@ -121,6 +122,10 @@ interface Application {
   // the INVITED badge and, when this role has no configured fee at all, the
   // standalone WAIVED chip that stands in for the payment menu.
   fee_waiver_source: string | null;
+  // Where the applicant came from (ApplicationSourceMark). Null on rows an
+  // organiser added and on applications from before 18 Sep 2026.
+  traffic_source: string | null;
+  traffic_detail: string | null;
   // Chair/secretariat only: the conferences the applicant listed on this
   // application (a snapshot taken at application time — never re-derived
   // from their MUN CV after the fact). Every other role's array is empty.
@@ -1969,6 +1974,7 @@ export default function ApplicationsPage() {
           assigned_committee_id, assigned_country_code, assigned_country_name,
           self_paid, attending, pledge_type, spots_pledged, pledge_confirmed_at, society_id,
           aid_requested, aid_statement, aid_status, aid_requested_amount, fee_waiver_source,
+          traffic_source, traffic_detail,
           assigned_committee:conference_committees!assigned_committee_id (name, abbreviation, topics, logo_url),
           profiles (display_name, email, avatar_url, nationality, date_of_birth, mun_experience_level),
           societies (name, city, country_code, logo_url),
@@ -4679,6 +4685,7 @@ export default function ApplicationsPage() {
                   >
                     <CalendarDays size={11} strokeWidth={2.2} />
                     {formatDate(app.submitted_at)}
+                    <ApplicationSourceMark source={app.traffic_source} detail={app.traffic_detail} invited={!!app.invited_email} size={14} style={{ marginLeft: 6, pointerEvents: 'auto' }} />
                   </span>
                 )}
               </NeuCard>
@@ -5412,6 +5419,7 @@ export default function ApplicationsPage() {
                     Resubmitted {formatDate(app.resubmitted_at)}
                   </span>
                 )}
+                <ApplicationSourceChip source={app.traffic_source} detail={app.traffic_detail} invited={!!app.invited_email} />
               </>
             )}
             actions={decisionControls(true)}

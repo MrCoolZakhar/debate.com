@@ -143,7 +143,7 @@ export function TrafficSourcesView({ summary, inDialog = false }: { summary: Tra
             <span
               tabIndex={0}
               aria-label="How this is counted"
-              title="One visit is one browser session on your public conference page. Counted anonymously, with no cookies and no personal data. Your own team's visits are not counted. Conversion is submitted applications divided by visits."
+              title="One visit is one browser session on your public conference page. Counted anonymously, with no cookies and no personal data. Your own team's visits and applicants coming back to their application are not counted. Gavelling means they found you on Gavelling itself (Explore, the map, the homepage), not your own shared link. Conversion is submitted applications divided by visits."
               className="inline-flex focus:outline-none"
               style={{ color: NEU.inkSoft, cursor: 'help' }}
             >
@@ -193,7 +193,7 @@ export function TrafficSourcesView({ summary, inDialog = false }: { summary: Tra
       {model && !empty && (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4" style={{ gap: 14, marginTop: 12 }}>
-            <Figure value={fmtInt(model.visits)} label="Page visits" hint="Browser sessions on your public page" />
+            <Figure value={fmtInt(model.visits)} label="Page visits" hint="Browser sessions on your public page, not counting your team or people who already applied" />
             <Figure value={fmtInt(model.started)} label="Applications started" hint="Submitted, plus applications begun and not yet sent" />
             <Figure value={fmtInt(model.submitted)} label="Applications submitted" />
             <Figure value={fmtPct(model.submitted, model.visits)} label="Conversion" hint="Submitted applications divided by page visits" />

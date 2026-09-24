@@ -3017,9 +3017,13 @@ function ConferenceApplyInner() {
         insertPayload.experience_entries = experienceEntries;
       }
       // Where this applicant first found the conference page (a category such as
-      // 'google', never a URL). Kept in this browser only until now.
+      // 'social' plus one word such as 'instagram', never a URL). Kept in this
+      // browser only until now.
       const firstTouch = readFirstTouch(slug);
-      if (firstTouch) insertPayload.traffic_source = firstTouch;
+      if (firstTouch) {
+        insertPayload.traffic_source = firstTouch.source;
+        if (firstTouch.detail) insertPayload.traffic_detail = firstTouch.detail;
+      }
 
       // A previous attempt already filed this application and then failed on a
       // later step (out of credits, the preference write below). Resume from

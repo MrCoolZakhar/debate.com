@@ -1,26 +1,27 @@
 'use client';
 
 // Counts one anonymous view of a public conference page, once per browser
-// session per conference, and remembers the first-touch SOURCE in this browser
-// so an application filed later can carry the category. No cookie, no id, no
-// fingerprint: the request body is { slug, source, host? } and nothing else.
-// The viewer's access token is forwarded only so the database can skip the
-// conference's own organisers; it is never stored. See src/lib/trafficSource.ts.
+// session per conference. No cookie, no id, no fingerprint: the request body
+// is { slug, source, host? } and nothing else. The viewer's access token is
+// forwarded only so the database can skip the conference's own organisers and
+// anyone who already applied to it (a returning applicant is not a new
+// visitor); it is never stored. See src/lib/trafficSource.ts.
+//
+// Which source a view is counted under (25 Sep 2026):
+//   - the visit began on this conference's own pages: where THAT landing came
+//     from (Instagram, Google, a direct link ...);
+//   - it began elsewhere and reached here inside the app, and this browser
+//     already knows how the visitor first found the conference: that first
+//     touch, not 'gavelling';
+//   - otherwise what the landing says ('gavelling' for Explore, home, ...),
+//     and 'direct' when the visit began on an auth step with nothing stored.
+// The first touch itself is kept by FirstTouchCapture (the conference layout),
+// which also runs on localhost; only the COUNTING is skipped there.
 
 import { useEffect } from 'react';
 import { useAuth } from '@/components/AuthProvider';
-import { classifyTraffic, rememberFirstTouch } from '@/lib/trafficSource';
-
-/** True when this page was reached by an in-app (client-side) navigation. */
-function reachedInApp(): boolean {
-  try {
-    const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
-    if (!nav?.name) return false;
-    return new URL(nav.name).pathname !== window.location.pathname;
-  } catch {
-    return false;
-  }
-}
+import { classifyLanding, ensureFirstTouch } from '@/lib/trafficSource';
+import type { TrafficSource } from '@/lib/trafficSource';
 
 export default function ConferenceViewBeacon({ slug }: { slug: string }) {
   const { session, loading } = useAuth();
@@ -28,6 +29,9 @@ export default function ConferenceViewBeacon({ slug }: { slug: string }) {
 
   useEffect(() => {
     if (loading || !slug) return;
+    // Read before anything is stored by this visit, then keep the first touch.
+    const landing = classifyLanding(slug);
+    const stored = ensureFirstTouch(slug);
     // Local dev and preview deployments share the production database: never
     // let them add to an organiser's numbers.
     const h = window.location.hostname;
@@ -39,13 +43,18 @@ export default function ConferenceViewBeacon({ slug }: { slug: string }) {
     } catch {
       return; // no session storage: do not risk counting every render
     }
-    const { source, host } = classifyTraffic({
-      referrer: document.referrer,
-      search: window.location.search,
-      ownOrigin: window.location.origin,
-      internalNav: reachedInApp(),
-    });
-    rememberFirstTouch(slug, source);
+    let source: TrafficSource;
+    let host: string | null = null;
+    if (landing?.onThisConference) {
+      source = landing.source;
+      host = landing.host;
+    } else if (stored) {
+      source = stored.source;
+      host = stored.source === 'other' ? stored.detail : null;
+    } else {
+      source = landing?.source ?? 'direct';
+      host = landing?.host ?? null;
+    }
     fetch('/api/conference-view', {
       method: 'POST',
       keepalive: true,
