@@ -41,6 +41,7 @@ export function WizardShell({
   subStep,
   minBodyHeight,
   extraChrome = 0,
+  maxWidth = 720,
   children,
 }: {
   /** 1-based current step. */
@@ -88,6 +89,10 @@ export function WizardShell({
    * Without this the rail is frozen while the applicant moves between pages.
    */
   subStep?: { index: number; total: number };
+  /** OPT-IN. The column's max width in px. Defaults to 720, what every
+   *  pre-existing caller gets. The conference wizard's first step widens it for
+   *  its two-column preview + fields layout. */
+  maxWidth?: number;
   children: React.ReactNode;
 }) {
   const [backHover, setBackHover] = useState(false);
@@ -95,7 +100,7 @@ export function WizardShell({
   return (
     <div
       className="w-full flex flex-col items-center"
-      style={{ maxWidth: 720, margin: '0 auto', padding: '8px 4px 32px' }}
+      style={{ maxWidth, margin: '0 auto', padding: '8px 4px 32px' }}
     >
       {labels && labels.length === total ? (
         <StepRail step={step} total={total} labels={labels} subStep={subStep} />

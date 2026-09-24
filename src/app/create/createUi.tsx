@@ -378,16 +378,22 @@ export function ChairTokenField({ id, chairs, draft, onDraft, onCommit, onRemove
   );
 }
 
+const CAPTION_STYLE = { fontFamily: OUTFIT, fontSize: 7.5, fontWeight: 800, letterSpacing: '0.06em', lineHeight: 1 } as const;
+
 /** Square icon button used on roster rows: 36px, tinted on hover, scale on press.
  *  `caption` (18 Sep 2026, owner: "when clicking observer, add little observer text below the
- *  megaphone") draws a tiny uppercase word under the icon INSIDE the same 36px box (it may
- *  overhang the box sideways into the row gap), so nothing else in the row moves. */
-export function RowIconButton({ onClick, label, pressed, tone = 'neutral', caption, children }: {
+ *  megaphone") draws a tiny uppercase word under the icon. The button then grows sideways
+ *  to fit the word (24 Sep 2026: it used to overhang the 36px box, so "OBSERVER" ran out
+ *  of the gold fill); the row height never changes. */
+export function RowIconButton({ onClick, label, pressed, tone = 'neutral', caption, sizeTo, children }: {
   onClick: () => void;
   label: string;
   pressed?: boolean;
   tone?: 'neutral' | 'danger' | 'gold';
   caption?: string;
+  /** A caption this button may carry later: it takes that width now, so a column of these
+   *  buttons (and everything after them in the row) lines up whether or not it is shown. */
+  sizeTo?: string;
   children: ReactNode;
 }) {
   const hover =
@@ -401,16 +407,23 @@ export function RowIconButton({ onClick, label, pressed, tone = 'neutral', capti
       title={label}
       aria-label={label}
       aria-pressed={pressed}
-      className={`relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[10px] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828] active:scale-[0.96] transition-[color,background-color,transform] duration-150 ${hover}`}
+      className={`relative flex h-9 flex-shrink-0 items-center justify-center rounded-[10px] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828] active:scale-[0.96] transition-[color,background-color,transform] duration-150 ${caption || sizeTo ? 'min-w-9 flex-col px-1.5' : 'w-9'} ${hover}`}
       style={{ color: tone === 'gold' ? '#6E500F' : C.inkSoft, backgroundColor: tone === 'gold' ? 'rgba(238,217,138,0.62)' : undefined }}
     >
       {caption ? (
         <>
-          <span className="flex -translate-y-[5px]">{children}</span>
-          <span aria-hidden className="pointer-events-none absolute bottom-[3px] left-1/2 -translate-x-1/2 whitespace-nowrap uppercase"
-            style={{ fontFamily: OUTFIT, fontSize: 7.5, fontWeight: 800, letterSpacing: '0.08em', lineHeight: 1, color: tone === 'gold' ? '#6E500F' : C.inkSoft }}>
+          {/* In the flow, not absolutely placed: the button grows to fit the word, so
+              "OBSERVER" (and the longer es / fr words) stays inside the gold box. */}
+          <span className="flex">{children}</span>
+          <span aria-hidden className="pointer-events-none mt-[2px] whitespace-nowrap uppercase" style={{ ...CAPTION_STYLE, color: tone === 'gold' ? '#6E500F' : C.inkSoft }}>
             {caption}
           </span>
+        </>
+      ) : sizeTo ? (
+        <>
+          {children}
+          {/* Zero-height sizer: gives the button the captioned width, draws nothing. */}
+          <span aria-hidden className="pointer-events-none invisible h-0 overflow-hidden whitespace-nowrap uppercase" style={CAPTION_STYLE}>{sizeTo}</span>
         </>
       ) : children}
     </button>

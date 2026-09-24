@@ -42,13 +42,17 @@ export interface BoardState {
   seen: Record<string, number>;
 }
 
+/** How the board lists students: one speakers-list across rooms, or grouped per committee. */
+export type BoardView = 'queue' | 'committee';
+
 export interface BoardPrefs {
   reminders: boolean;
   keepAwake: boolean;
+  view: BoardView;
 }
 
 const EMPTY: BoardState = { rooms: [], seen: {} };
-const DEFAULT_PREFS: BoardPrefs = { reminders: true, keepAwake: false };
+const DEFAULT_PREFS: BoardPrefs = { reminders: true, keepAwake: false, view: 'queue' };
 
 export function normaliseCode(raw: string): string {
   return raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
@@ -175,7 +179,7 @@ export function markSeen(codes: string[], now = Date.now()) {
   write({ ...s, seen });
 }
 
-// ── Preferences (reminder bell, keep the screen awake) ──────────────────────
+// ── Preferences (reminder bell, keep the screen awake, the list view) ───────
 
 function readPrefs(): BoardPrefs {
   if (prefs) return prefs;
@@ -185,6 +189,7 @@ function readPrefs(): BoardPrefs {
     prefs = {
       reminders: typeof v.reminders === 'boolean' ? v.reminders : DEFAULT_PREFS.reminders,
       keepAwake: typeof v.keepAwake === 'boolean' ? v.keepAwake : DEFAULT_PREFS.keepAwake,
+      view: v.view === 'committee' ? 'committee' : 'queue',
     };
   } catch {
     prefs = { ...DEFAULT_PREFS };

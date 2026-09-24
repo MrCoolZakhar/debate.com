@@ -8,9 +8,8 @@
 //
 // The board treats these exactly like rooms added by code, except:
 //   • names come from the applications (never typed, never stored locally),
-//   • `verified` is true. The room view link (/advisor/CODE) of a conference room
-//     is offered only for `myRole` faculty-advisor / observer: verifyConferenceAccess
-//     does not admit a head delegate to that view.
+//   • `verified` is true. (There is no single-room view any more: /advisor/CODE
+//     redirects to the board since 24 Sep 2026, so nothing links out of the board.)
 //
 // Source: the SECURITY DEFINER RPC my_advisor_delegation() (authenticated only,
 // caller's own society only; never an email, a student's user id or anything from

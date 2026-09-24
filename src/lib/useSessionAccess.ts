@@ -1,8 +1,9 @@
 'use client';
 
 // ── useSessionAccess ──────────────────────────────────────────────────────────
-// The conference access guard shared by /chair/[code], /voting/[code] and
-// /advisor/[code]. One implementation, because all three had the same bug.
+// The conference access guard shared by /chair/[code] and /voting/[code] (and, until it
+// was removed on 24 Sep 2026, the single-room /advisor/[code], which now redirects to the
+// board). One implementation, because all three had the same bug.
 //
 // THE BUG (15 Sep 2026, "the session starts loading and refreshes by itself"):
 // each page ran its guard in an effect keyed on `session?.access_token` and began with
@@ -43,7 +44,7 @@ const settled = (s: SessionAccessState) => s === 'allowed' || s === 'standalone'
 
 export function useSessionAccess(opts: {
   code: string;
-  /** 'dais' = detectConferenceSession (chair, voting); 'origin' = isConferenceSession (advisor). */
+  /** 'dais' = detectConferenceSession (chair, voting); 'origin' = isConferenceSession (the retired advisor room view; no caller today). */
   gate: 'dais' | 'origin';
   /** Which verified conference roles may open this page. */
   allow: (kind: ConferenceAccess['kind']) => boolean;

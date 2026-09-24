@@ -1,19 +1,21 @@
 'use client';
 
-// One student on the advisor board. The only per-second work on the whole board is the
-// small clock inside a card that has one (useClockSeconds): a local 1 s interval, no shared state.
+// One student on the advisor board, as a row of a speakers list (24 Sep 2026: the board
+// is a list, "Up next" or "By committee", never cards). The only per-second work on the
+// whole board is the small clock inside a row that has one (useClockSeconds): a local 1 s
+// interval, no shared state.
 
 import { memo, useEffect, useState } from 'react';
-import { ChevronRight, Mic, Hourglass, UserX, Armchair, Moon } from 'lucide-react';
+import { Mic, UserX, Armchair, Moon } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { getCountryDisplayName } from '@/lib/countries';
-import { committeeDisplayName, getCommitteeDisplayName } from '@/lib/presetNames';
+import { committeeDisplayName, deriveCommitteeAcronym, getCommitteeDisplayName } from '@/lib/presetNames';
 import { serverNow } from '@/lib/serverClock';
-import { clockSeconds, type ClockSpec, type RoomMode, type SeatState } from '@/lib/advisorBoard/derive';
+import { clockSeconds, placeOf, type ClockSpec, type RoomMode, type SeatState } from '@/lib/advisorBoard/derive';
 import type { FollowedSeat, RoomDelegate } from '@/lib/advisorBoard/types';
 import type { TranslationKey } from '@/lib/translations';
-import { C, FONT, SHADOW, clock } from './tokens';
+import { C, FONT, clock } from './tokens';
 
 export function useClockSeconds(spec: ClockSpec | null): number {
   const [now, setNow] = useState(() => serverNow());
@@ -85,15 +87,6 @@ export function StateLine({ state, big = false }: { state: SeatState; big?: bool
   );
 }
 
-function KindIcon({ state }: { state: SeatState }) {
-  const p = { size: 15, strokeWidth: 2.2, 'aria-hidden': true } as const;
-  if (state.kind === 'speaking') return <Mic {...p} />;
-  if (state.kind === 'next' || state.kind === 'ahead') return <Hourglass {...p} />;
-  if (state.kind === 'absent') return <UserX {...p} />;
-  if (state.kind === 'in-room') return <Armchair {...p} />;
-  return <Moon {...p} />;
-}
-
 export function seatTitle(seat: FollowedSeat, language: string): string {
   return seat.name?.trim() || getCountryDisplayName(seat.country, language);
 }
@@ -104,13 +97,91 @@ export function seatSubtitle(seat: FollowedSeat, committeeName: string, language
   return parts.filter(Boolean).join(' · ');
 }
 
-function SeatCardInner({
+/** The committee as the board names it: the acronym (or the name when it is short), and
+ *  the full localised name for the line beneath or the tooltip. */
+export function committeeLabels(name: string, abbreviation: string | null, language: string): { short: string; full: string } {
+  const full = getCommitteeDisplayName(name, language);
+  const short = committeeDisplayName(full, deriveCommitteeAcronym(name, abbreviation)) || full;
+  return { short, full };
+}
+
+/** What the room is doing, in as few words as the row allows. */
+const BUILTIN_MOTION_LABEL = /^(moderated caucus|unmoderated caucus|consultation of the whole|tour de table)$/i;
+
+export function modeLabel(t: ReturnType<typeof useT>, state: Pick<SeatState, 'mode' | 'caucusLabel'>): string {
+  // A stored motion label that is still the built-in English name reads in the viewer's
+  // language; a chair's own name for the motion is shown as typed.
+  if (state.caucusLabel && !BUILTIN_MOTION_LABEL.test(state.caucusLabel.trim())) return state.caucusLabel;
+  if (state.mode === 'gsl') return t('adv_mode_gsl_short');
+  return t(MODE_KEY[state.mode]);
+}
+
+/** WHEN, in plain words: the main line, and a quieter second one (a clock or a wait). */
+function useWhen(state: SeatState): { main: string; sub: string | null; tone: 'floor' | 'soon' | 'room' | 'look' | 'out' } {
+  const t = useT();
+  const secs = useClockSeconds(state.clock);
+  switch (state.kind) {
+    case 'speaking':
+      return { main: t('adv_state_speaking'), sub: state.clock ? t('adv_when_left', { time: clock(secs) }) : null, tone: 'floor' };
+    case 'next':
+      return state.ahead === 0
+        ? { main: t('adv_when_ready'), sub: null, tone: 'soon' }
+        : { main: t('adv_when_next'), sub: waitText(t, secs), tone: 'soon' };
+    case 'ahead':
+      return { main: t('adv_when_ahead', { n: state.ahead }), sub: waitText(t, secs), tone: 'soon' };
+    case 'in-room':
+      return { main: t('adv_state_in_room'), sub: state.clock ? t('adv_when_left', { time: clock(secs) }) : null, tone: 'room' };
+    case 'absent':
+      return { main: state.notOnRoster ? t('adv_state_not_on_roster') : t('adv_state_absent'), sub: null, tone: 'look' };
+    default:
+      return { main: t(MODE_KEY[state.mode]), sub: null, tone: 'out' };
+  }
+}
+
+/** The start column: the place in the room's list (#1 speaking, as the chair's sidebar
+ *  numbers it), or an icon when the student is not on a list. */
+function PlaceMarker({ state }: { state: SeatState }) {
+  const t = useT();
+  const place = placeOf(state);
+  if (state.kind === 'speaking') {
+    return (
+      <span className="flex h-8 w-8 items-center justify-center rounded-full" style={{ backgroundColor: C.forest, color: C.gold }} title={t('adv_state_speaking')}>
+        <Mic size={16} strokeWidth={2.5} aria-hidden />
+      </span>
+    );
+  }
+  if (place !== null) {
+    return (
+      <span aria-hidden title={t('adv_place_title', { n: place })} style={{ fontSize: place < 10 ? 22 : 18, fontWeight: 800, color: state.kind === 'next' ? C.forest : C.forestSoft, fontVariantNumeric: 'tabular-nums', lineHeight: 1, letterSpacing: '-0.02em' }}>
+        {place}
+      </span>
+    );
+  }
+  const p = { size: 18, strokeWidth: 2.1, 'aria-hidden': true } as const;
+  const color = state.kind === 'absent' ? C.danger : 'rgba(74,66,56,0.7)';
+  return (
+    <span style={{ color }}>
+      {state.kind === 'absent' ? <UserX {...p} /> : state.kind === 'in-room' ? <Armchair {...p} /> : <Moon {...p} />}
+    </span>
+  );
+}
+
+const TONE: Record<'floor' | 'soon' | 'room' | 'look' | 'out', string> = {
+  floor: C.forest,
+  soon: C.ink,
+  room: C.inkSoft,
+  look: C.danger,
+  out: C.inkSoft,
+};
+
+function SeatRowInner({
   seat,
   state,
   committeeName,
   delegate,
   onOpen,
   highlight,
+  showWhere,
 }: {
   seat: FollowedSeat;
   state: SeatState;
@@ -118,54 +189,64 @@ function SeatCardInner({
   delegate: RoomDelegate | null;
   onOpen: (key: string) => void;
   highlight: boolean;
+  /** "Up next" names the committee and what it is doing; "By committee" has a header for that. */
+  showWhere: boolean;
 }) {
   const { language } = useLanguage();
   const t = useT();
+  const when = useWhen(state);
   const speaking = state.kind === 'speaking';
-  const modeLine = state.kind !== 'not-in-session' && state.kind !== 'absent'
-    ? (state.caucusLabel || t(MODE_KEY[state.mode]))
-    : null;
+  const title = seatTitle(seat, language);
+  const country = seat.name?.trim() ? getCountryDisplayName(seat.country, language) : null;
+  const committee = committeeName ? committeeLabels(committeeName, seat.committeeAbbreviation, language) : null;
+  const inSessionRow = state.kind !== 'not-in-session' && state.kind !== 'absent';
+  const mode = showWhere && inSessionRow ? modeLabel(t, state) : null;
+  const whereTitle = [committee?.full, seat.conferenceLabel].filter(Boolean).join(' · ');
   return (
     <button
       type="button"
       onClick={() => onOpen(seat.key)}
       data-seat-key={seat.key}
-      className="adv-focus adv-card group flex w-full items-center gap-3.5 rounded-2xl px-4 py-3.5 text-start transition-transform duration-150 active:scale-[0.99]"
+      aria-label={[title, country, showWhere ? committee?.full : null, when.main, when.sub].filter(Boolean).join(', ')}
+      className="adv-focus adv-row flex w-full items-center gap-3 px-3 py-2.5 text-start"
       style={{
         fontFamily: FONT,
-        backgroundColor: speaking ? '#FFFBEA' : C.cream,
-        boxShadow: speaking
-          ? `inset 0 0 0 2px ${C.deepGold}, ${SHADOW.card}`
-          : highlight ? `inset 0 0 0 2px ${C.gold}, ${SHADOW.card}` : SHADOW.card,
-        opacity: state.kind === 'not-in-session' ? 0.86 : 1,
+        minHeight: 60,
+        backgroundColor: speaking ? '#FFF7DC' : 'transparent',
+        boxShadow: highlight ? `inset 0 0 0 2px ${C.gold}` : undefined,
       }}
     >
-      <span className="relative shrink-0">
-        <CircleFlag country={seat.country} code={seat.countryCode} logoUrl={delegate?.logoUrl ?? null} size={44} decorative />
-        {speaking && (
-          <span aria-hidden className="absolute -bottom-1 -end-1 flex h-5 w-5 items-center justify-center rounded-full" style={{ backgroundColor: C.forest, color: C.gold, boxShadow: `0 0 0 2px ${C.cream}` }}>
-            <Mic size={11} strokeWidth={2.6} />
+      <span className="flex w-8 shrink-0 items-center justify-center" aria-hidden>
+        <PlaceMarker state={state} />
+      </span>
+      <span className="shrink-0" style={{ opacity: state.kind === 'not-in-session' ? 0.75 : 1 }}>
+        <CircleFlag country={seat.country} code={seat.countryCode} logoUrl={delegate?.logoUrl ?? null} size={38} decorative />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate" style={{ fontSize: 15.5, fontWeight: 800, color: C.ink, letterSpacing: '-0.005em', lineHeight: 1.25 }}>
+          {title}
+          {country && <span style={{ fontWeight: 500, color: C.inkSoft }}>{' '}{country}</span>}
+        </span>
+        {showWhere && (committee || mode) && (
+          <span className="block truncate" style={{ fontSize: 12.5, fontWeight: 500, color: C.inkSoft, lineHeight: 1.3 }} title={whereTitle || undefined}>
+            {committee && <span style={{ fontWeight: 800, color: C.forestSoft, letterSpacing: '0.02em' }}>{committee.short}</span>}
+            {committee && mode && ' · '}
+            {mode}
           </span>
         )}
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate" style={{ fontSize: 16.5, fontWeight: 800, color: C.ink, letterSpacing: '-0.005em' }}>
-          {seatTitle(seat, language)}
+      <span className="flex min-w-0 max-w-[44%] shrink-0 flex-col items-end text-end">
+        <span className="line-clamp-2" style={{ fontSize: 14, fontWeight: speaking || state.kind === 'next' ? 800 : 700, color: TONE[when.tone], lineHeight: 1.2 }}>
+          {when.main}
         </span>
-        <span className="block truncate" style={{ fontSize: 13, fontWeight: 500, color: C.inkSoft }}>
-          {seatSubtitle(seat, committeeName, language)}
-        </span>
-        <span className="mt-1 flex items-center gap-1.5" style={{ color: speaking ? C.forest : state.kind === 'absent' ? C.danger : C.inkSoft }}>
-          <KindIcon state={state} />
-          <StateLine state={state} />
-        </span>
-        {modeLine && (
-          <span className="mt-0.5 block truncate" style={{ fontSize: 12, fontWeight: 500, color: C.inkSoft }}>{modeLine}</span>
+        {when.sub && (
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: speaking ? C.forest : C.inkSoft, fontVariantNumeric: 'tabular-nums', lineHeight: 1.3 }}>
+            {when.sub}
+          </span>
         )}
       </span>
-      <ChevronRight size={18} aria-hidden className="shrink-0 rtl:rotate-180" style={{ color: 'rgba(27,56,40,0.4)' }} />
     </button>
   );
 }
 
-export const SeatCard = memo(SeatCardInner);
+export const SeatRow = memo(SeatRowInner);

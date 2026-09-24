@@ -177,26 +177,54 @@ export function deriveSeat(room: RoomData | null, country: string, countryCode: 
   return base;
 }
 
-/** Sort weight: lower is more urgent. */
-export function urgency(s: SeatState): number {
+/** Speakers-list order across every room: lower speaks sooner. Speaking now, then
+ *  on deck / next, then N speakers ahead (ascending), then in the room but not queued,
+ *  then absent, then rooms not in session. */
+export function queueRank(s: SeatState): number {
   switch (s.kind) {
     case 'speaking': return 0;
-    case 'next': return 1;
-    case 'ahead': return 2 + s.ahead;
+    case 'next':
+    case 'ahead': return 1 + s.ahead;
     case 'in-room': return 1000;
     case 'absent': return 2000;
     default: return 3000;
   }
 }
 
-export type BoardSection = 'floor' | 'coming' | 'room' | 'look' | 'out';
+/** The student's place in their room's list: the floor speaker is #1, the first queued
+ *  delegation #2, in every mode (the chair's GSL sidebar numbers it the same way; its caucus
+ *  panel numbers the queue from 1, the board keeps one rule). Null when not on a list. */
+export function placeOf(s: SeatState): number | null {
+  if (s.kind === 'speaking') return 1;
+  if (s.kind === 'next' || s.kind === 'ahead') return s.ahead + 1;
+  return null;
+}
 
-export function sectionOf(s: SeatState): BoardSection {
-  if (s.kind === 'speaking') return 'floor';
-  if (s.kind === 'next' || s.kind === 'ahead') return 'coming';
+/** The bands of the "Up next" list. `queue` has no heading: it is the list itself. */
+export type BoardGroup = 'queue' | 'room' | 'look' | 'out';
+
+export function groupOf(s: SeatState): BoardGroup {
+  if (s.kind === 'speaking' || s.kind === 'next' || s.kind === 'ahead') return 'queue';
   if (s.kind === 'in-room') return 'room';
   if (s.kind === 'absent') return 'look';
   return 'out';
+}
+
+/** Who holds the floor in a room that is in session, with their clock when it is theirs. */
+export function roomFloor(room: RoomData | null): { country: string; clock: ClockSpec | null } | null {
+  const mode = roomMode(room);
+  if (!room || !inSession(mode)) return null;
+  const cs = room.current;
+  let floor: string | null = null;
+  if (mode === 'gsl') floor = cs?.country ?? null;
+  else if (mode === 'moderated' || mode === 'tour') floor = room.caucus?.currentSpeaker ?? cs?.country ?? null;
+  else if (mode === 'consultation') floor = room.caucus?.currentSpeaker ?? null;
+  if (!floor) return null;
+  const mine = cs && sameSeat(cs.country, floor) && mode !== 'consultation';
+  return {
+    country: findDelegate(room, floor)?.country ?? floor,
+    clock: mine ? { speaker: { timeRemaining: cs!.timeRemaining, startedAt: cs!.startedAt }, extra: 0, caucusCap: null, total: null } : null,
+  };
 }
 
 // ── Today: objective counts, never scores ─────────────────────────────────────

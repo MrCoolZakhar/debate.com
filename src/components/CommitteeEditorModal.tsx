@@ -92,6 +92,29 @@ export interface EditableCommittee {
   working_language?: string | null;
 }
 
+/** DRAFT MODE (24 Sep 2026, owner: "the committee creation in [the conference
+ *  wizard] should be a pop-up, EXACTLY EXACTLY how it is on the organiser
+ *  dashboard"). The creation wizard opens THIS modal, not a look-alike, before
+ *  the conference exists. With `draft` set the modal never touches the
+ *  database: Save hands the collected committee to `onSave` and closes, the
+ *  edit flow starts from `draft.initial` instead of fetching slots, and the
+ *  chairs section (which needs a committee id) is not drawn because there is
+ *  no `existing` row. Everything else, the type chooser, the set-up card, the
+ *  seat list, the emblem crop and upload (storage only, under the id the
+ *  wizard minted), is the same code path the dashboard runs.
+ *
+ *  Without `draft` (every /manage and conference-page call site) nothing
+ *  below behaves differently. */
+export interface CommitteeDraft extends CommitteeSetupDraft {
+  type: CommitteeType;
+}
+export interface CommitteeDraftMode {
+  /** null = add a new committee (opens on the type chooser); set = edit it. */
+  initial: CommitteeDraft | null;
+  /** Returns an error sentence to show in the modal, or null to accept and close. */
+  onSave: (draft: CommitteeDraft) => string | null;
+}
+
 // ── Fallback emblem, gradient monogram disc with grain, matching the public card
 // Moved to @/components/MonogramMedallion (23 Sep 2026) so the committee set-up
 // kit can draw it without importing this file back. Re-exported so every
@@ -719,8 +742,10 @@ function ChairsDock({ conferenceId, committeeId, committeeName, embedded = false
 
 // ── CommitteeEditor (create + edit) ───────────────────────────────────────────
 
-function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster, initialDelegationSize = 1, initialGroups, initialLanguage = null, onClose, onSaved }: {
+function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster, initialDelegationSize = 1, initialGroups, initialLanguage = null, onClose, onSaved, draftMode }: {
   conferenceId: string;
+  /** See CommitteeDraftMode. Undefined on every database-backed call site. */
+  draftMode?: CommitteeDraftMode;
   committeeType: CommitteeType;
   existing?: EditableCommittee | null;
   initialRoster?: RosterEntry[];
@@ -731,13 +756,14 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   onSaved: () => void;
 }) {
   const { session } = useAuth();
-  const isEdit = !!existing;
+  const draftInitial = draftMode?.initial ?? null;
+  const isEdit = !!existing || !!draftInitial;
   const effectiveType = existing ? existing.committee_type : committeeType;
   const isCustom = effectiveType === 'custom';
-  const [name, setName] = useState(existing?.name ?? '');
-  const [abbreviation, setAbbreviation] = useState(existing?.abbreviation ?? '');
-  const [topics, setTopics] = useState<string[]>(existing?.topics ?? []);
-  const [difficulty, setDifficulty] = useState(existing?.difficulty ?? 'intermediate');
+  const [name, setName] = useState(existing?.name ?? draftInitial?.name ?? '');
+  const [abbreviation, setAbbreviation] = useState(existing?.abbreviation ?? draftInitial?.abbreviation ?? '');
+  const [topics, setTopics] = useState<string[]>(existing?.topics ?? draftInitial?.topics ?? []);
+  const [difficulty, setDifficulty] = useState(existing?.difficulty ?? draftInitial?.difficulty ?? 'intermediate');
   // conference_committees.working_language (src/lib/committeeLanguage.ts).
   // English unless the committee already has a language (owner, 23 Sep 2026:
   // "Language selection by default should be English"). An existing row with
@@ -760,12 +786,12 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   // Turning double delegation OFF is destructive when second seats are
   // occupied — count of affected delegates, shown in the danger confirm modal.
   const [pendingDoubleOffCount, setPendingDoubleOffCount] = useState<number | null>(null);
-  const [logoUrl, setLogoUrl] = useState<string | null>(existing?.logo_url ?? null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(existing?.logo_url ?? draftInitial?.logoUrl ?? null);
   const [logoUploading, setLogoUploading] = useState(false);
   // Once the organiser uploads, clears, or picks an emblem, we stop auto-filling
   // the default from the name. An existing committee that already has an emblem
   // counts as manually set.
-  const [emblemManuallySet, setEmblemManuallySet] = useState<boolean>(!!existing?.logo_url);
+  const [emblemManuallySet, setEmblemManuallySet] = useState<boolean>(draftInitial ? draftInitial.emblemManuallySet : !!existing?.logo_url);
   // The picked file, held while the organiser frames it in LogoCropModal — the
   // same drag-to-fit step the conference logo upload uses. Nothing is uploaded
   // until they save the crop.
@@ -779,7 +805,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   // A selected preset can force the roster path (ICC/ICJ/Crisis/HoC/Senate/Press
   // roster free-text seats even under a non-crisis type). Null → fall back to the
   // committee_type default. Cleared to 'country'/'character' on preset select.
-  const [presetRosterMode, setPresetRosterMode] = useState<'country' | 'character' | null>(null);
+  const [presetRosterMode, setPresetRosterMode] = useState<'country' | 'character' | null>(draftInitial?.presetRosterMode ?? null);
 
   // ── THE SHARED DRAFT ────────────────────────────────────────────────────────
   // One view of this editor's own useStates, in the shape the shared set-up
@@ -1242,6 +1268,14 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
     if (createHalted) return;
     if (!name.trim()) { setError('Committee name is required.'); return; }
     if (roster.length === 0) { setError(`Add at least one ${seatNoun}.`); return; }
+    // Draft mode: no conference row exists yet, so nothing is written. The
+    // caller keeps the committee and writes it when the conference is created.
+    if (draftMode) {
+      const refusal = draftMode.onSave({ ...draft, type: effectiveType as CommitteeType });
+      if (refusal) { setError(refusal); return; }
+      onClose();
+      return;
+    }
     if (!session) return;
     setSaving(true); setError('');
     const supabase = getAuthedClient(session.access_token);
@@ -1569,24 +1603,30 @@ function TypeCard({ opt, onSelect }: { opt: (typeof TYPE_OPTIONS)[number]; onSel
 // committee = null → create flow (opens with the GA / Specialised / Crisis
 // type picker); committee set → edit flow (self-loads the committee's slots).
 
-export function CommitteeEditorModal({ conference, committee, onSaved, onClose }: {
+export function CommitteeEditorModal({ conference, committee, onSaved, onClose, draft }: {
+  /** In draft mode, the id the caller minted for the conference it has not
+   *  created yet: only used as the storage folder for an emblem upload. */
   conference: { id: string };
   committee: EditableCommittee | null;
   onSaved: () => void;
   onClose: () => void;
+  /** Draft mode, see CommitteeDraftMode. Pass `committee={null}` with it. */
+  draft?: CommitteeDraftMode;
 }) {
   const { session } = useAuth();
-  const isEdit = !!committee;
+  const draftInitial = draft?.initial ?? null;
+  const isEdit = !!committee || !!draftInitial;
   const [pendingType, setPendingType] = useState<CommitteeType | null>(
-    committee ? (committee.committee_type as CommitteeType) : null
+    committee ? (committee.committee_type as CommitteeType) : draftInitial ? draftInitial.type : null
   );
-  // Edit flow: null until the committee's current slots are fetched.
-  const [initialRoster, setInitialRoster] = useState<RosterEntry[] | null>(committee ? null : []);
+  // Edit flow: null until the committee's current slots are fetched. A draft
+  // is already in hand, so it never waits.
+  const [initialRoster, setInitialRoster] = useState<RosterEntry[] | null>(committee ? null : (draftInitial?.roster ?? []));
   // Edit flow: null until the committee's current delegation_size is fetched.
-  const [initialDelegationSize, setInitialDelegationSize] = useState<number | null>(committee ? null : 1);
+  const [initialDelegationSize, setInitialDelegationSize] = useState<number | null>(committee ? null : (draftInitial?.doubleDelegation ? 2 : 1));
   // Edit flow: seat groups off the committee row, fetched with the slots.
-  const [initialGroups, setInitialGroups] = useState<SlotGroup[]>(committee ? parseGroups(committee.groups) : []);
-  const [initialLanguage, setInitialLanguage] = useState<string | null>(committee?.working_language ?? null);
+  const [initialGroups, setInitialGroups] = useState<SlotGroup[]>(committee ? parseGroups(committee.groups) : (draftInitial?.groups ?? []));
+  const [initialLanguage, setInitialLanguage] = useState<string | null>(committee ? (committee.working_language ?? null) : (draftInitial?.workingLanguage ?? null));
 
   useEffect(() => {
     if (!committee || !session) return;
@@ -1663,6 +1703,7 @@ export function CommitteeEditorModal({ conference, committee, onSaved, onClose }
       initialLanguage={initialLanguage}
       onClose={onClose}
       onSaved={onSaved}
+      draftMode={draft}
     />
   );
 }

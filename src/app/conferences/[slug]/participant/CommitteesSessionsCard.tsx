@@ -107,7 +107,7 @@ export default function CommitteesSessionsCard({ conferenceId, conferenceStartDa
             </div>
             {released && c.session_code && (
               <Link
-                href={`/advisor/${c.session_code}`}
+                href={`/advisor?add=${encodeURIComponent(c.session_code)}`}
                 className="flex-shrink-0 rounded-lg focus:outline-none"
                 style={{
                   padding: '7px 14px', backgroundColor: '#1B3828', color: '#EED98A',

@@ -53,6 +53,7 @@ import {
 import JoinSeatPicker, { type JoinSeatRow } from './JoinSeatPicker';
 import { getReservedSeatHint, setClaimMarker, takeClaimMarker, type ReservedSeatHint } from './reservedSeatHint';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import { useMyAdvisorDelegation } from '@/lib/advisorDelegation';
 
 type JoinMode = 'delegate' | 'chair' | 'advisor';
 
@@ -94,6 +95,9 @@ function JoinPageInner() {
   const searchParams = useSearchParams();
   const { getSettings } = useSettingsStore();
   const { user, session, profile, loading: authLoading } = useAuth();
+  // A verified faculty advisor / observer's board fills itself (my_advisor_delegation);
+  // read here so the advisor path can skip the add flow when this room is already on it.
+  const advisorDelegation = useMyAdvisorDelegation();
   const initialMode = (searchParams.get('mode') as JoinMode) ?? 'delegate';
   const [mode, setMode] = useState<JoinMode>(initialMode);
   const [code, setCode] = useState((searchParams.get('code') ?? '').toUpperCase());
@@ -498,9 +502,16 @@ function JoinPageInner() {
         }
         return;
       }
-      // Conference advisor / observer / organizer: conference-wide advisor view.
+      // Conference advisor / observer / organizer: the advisor board. The single-room view
+      // was removed on 24 Sep 2026. When the board already fills this room for them (their
+      // students sit in it, or they observe the conference), open it as it is; otherwise
+      // (an organiser, a room with none of their students) open the add flow for this code.
       if (mode === 'advisor') {
-        router.push(`/advisor/${foundCommittee!.code}`);
+        const code = foundCommittee!.code.toUpperCase();
+        const onBoard = advisorDelegation.conferences.some((c) => c.seats.length > 0
+          ? c.seats.some((st) => st.sessionCode?.toUpperCase() === code)
+          : c.rooms.some((r) => r.sessionCode.toUpperCase() === code));
+        router.push(onBoard ? '/advisor' : `/advisor?add=${encodeURIComponent(code)}`);
         return;
       }
       if (!allocatedCountry) {
@@ -534,7 +545,7 @@ function JoinPageInner() {
     }
     if (mode === 'advisor') {
       // A standalone room: the advisor follows it on their board, which can hold many
-      // rooms (/advisor, add flow prefilled). The single-room view stays one tap away there.
+      // rooms (/advisor, add flow prefilled).
       router.push(`/advisor?add=${encodeURIComponent(foundCommittee.code)}`);
       return;
     }
@@ -1150,7 +1161,7 @@ function JoinPageInner() {
 
                   {/* Conference code, no conference role here: anyone may still follow the room,
                       read only, on their advisor board (owner, 24 Sep 2026). Verified advisors and
-                      organisers never see this; they keep the detailed /advisor/CODE view. */}
+                      organisers never see this; their Join button takes them to the board. */}
                   {foundCommittee && isConferenceSession && !checkingConference && !authLoading && !hasVerifiedRole && (
                     <Link
                       href={`/advisor?add=${encodeURIComponent(foundCommittee.code)}`}

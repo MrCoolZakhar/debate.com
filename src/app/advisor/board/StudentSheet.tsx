@@ -5,8 +5,7 @@
 // Never points, rank, ratings, chair notes or nominations (owner).
 
 import { useMemo } from 'react';
-import Link from 'next/link';
-import { ArrowUpRight, Clock3, FileText, Gavel, Info, ListPlus, MessageSquareReply, Mic } from 'lucide-react';
+import { Clock3, FileText, Gavel, Info, ListPlus, MessageSquareReply, Mic } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { describeMotion, type MotionFields } from '@/lib/motionLog';
@@ -54,13 +53,11 @@ export default function StudentSheet({
   seat,
   state,
   room,
-  roomHref,
   onClose,
 }: {
   seat: FollowedSeat;
   state: SeatState;
   room: RoomData | null;
-  roomHref: string | null;
   onClose: () => void;
 }) {
   const t = useT();
@@ -149,15 +146,6 @@ export default function StudentSheet({
           </>
         )}
 
-        {roomHref && (
-          <Link
-            href={roomHref}
-            className="adv-focus mt-6 flex h-12 items-center justify-center gap-2 rounded-2xl"
-            style={{ backgroundColor: C.surface, color: C.forest, fontSize: 15, fontWeight: 800 }}
-          >
-            {t('adv_open_room')} <ArrowUpRight size={17} aria-hidden className="rtl:-scale-x-100" />
-          </Link>
-        )}
       </div>
     </BottomSheet>
   );

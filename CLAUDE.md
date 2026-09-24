@@ -29,7 +29,7 @@ The two meet at the database: a conference committee mints a live session (`comm
 
 - **Chair (Moderator / Commenter).** One laptop is the dais. Wants zero-latency controls, a queue that never empties mid-session, timers that survive reloads, and a record they can defend when awards are questioned. Everything they do is optimistic-first (AGENTS.md rules 3 to 6).
 - **Delegate.** Phone in hand. Wants to know when they speak, to request the floor, submit a paper, read the study guide, and after the conference see their award on a CV they can share. They never see chair notes, factor ratings or nominations before publication.
-- **Faculty advisor / observer.** Read-only board, can nudge.
+- **Faculty advisor / observer.** Read-only board at `/advisor` (the single-room view and its nudges were removed 24 Sep 2026).
 - **Organiser / secretariat.** Repetition at scale: 1,000 applications, 400 seats, 30 committees. Wants the To-Do queue, fit-scored assignment, one-click emails, a live status wall, and a closing ceremony they can run from one page. Section permissions are UI-only (`src/lib/organizerPermissions.ts`); only `team` and `financials_readonly` are DB-enforced.
 - **Applicant browsing.** Discovery (`/conferences/explore`, `/conferences/map`), the job board for chairs and staff (`/conferences/roles`), public conference pages with vanity URLs, and a public MUN CV at `/cv/[id]`.
 
@@ -340,7 +340,7 @@ answer shapes what we lead them with afterwards.
   `{keys, other, answered_at, skipped}`. Three states must stay distinguishable: `'{}'` is
   never asked (every conference created before this shipped), `skipped: true` is asked and
   declined, a non-empty `keys` is answered. The follow-up email depends on that distinction.
-- **Asked before the insert, and required.** It is step 11 of 12 and the answer rides along
+- **Asked before the insert, and required.** It is step 8 of 9 and the answer rides along
   in `insertRow` as `intent: intentPayload(keys)`, so there is no post-create UPDATE to fail
   and nothing exists yet that a failed write could cost anyone. It was briefly the other way
   round, asked after creation to protect against exactly that; requiring it up front removes
@@ -348,6 +348,12 @@ answer shapes what we lead them with afterwards.
   and `readyToCreate` enforces it, so the wizard can no longer produce `skipped: true` at all.
   The Settings editor still can, by clearing every option, which is why the three states below
   still matter.
+- **The wizard around it (24 Sep 2026).** 9 steps: 1 Your conference (name, acronym, logo,
+  banner, dates, one page with a live preview, `conferences/new/IdentityStep.tsx`), 2 format,
+  3 level, 4 where, 5 expected delegates, 6 committees, 7 description + socials, 8 intent,
+  9 review. Step 6 opens the organiser dashboard's own `CommitteeEditorModal` in DRAFT mode
+  (`draft` prop: Save hands the committee back, no chairs section, nothing written until
+  Create conference). Any change to that pop-up shows in both places.
 - **Intent reorders, it never removes.** `intentRank` sorts the dashboard's *pending*
   checklist rows only. `doneCount`, the ring, the progress bar and `SetupCompletionNotices`
   all keep reading the full unfiltered checklist so they cannot disagree with it, and
@@ -409,13 +415,28 @@ application falls back to `societies.advisor_user_id`. Never another society, ne
 student's user id or anything from `committees.settings`. No points, no rank on the board;
 reminders are in-app only (nothing here sends email).
 
+**Two views (24 Sep 2026, owner).** A segmented control at the top (`ViewSwitch` in
+`src/app/advisor/board/AdvisorBoard.tsx`, radiogroup, arrow keys, remembered per device as
+`BoardPrefs.view`, default `queue`): **Up next** is ONE speakers list across every followed student
+in every room, ordered by `queueRank` (`src/lib/advisorBoard/derive.ts`): speaking now, then next,
+then N speakers ahead ascending (ties by committee), then in the room, then "Needs a look"
+(absent), then rooms not in session, the last three under quiet dividers. Each row (`SeatRow` in
+`board/SeatCard.tsx`): the place in the room's list as the chair's sidebar numbers it (#1 = the
+floor, a mic disc), the round flag, the student's name (or the country) with the country, the
+committee acronym (full name as tooltip) and what the room is doing, and WHEN in plain words with
+the ticking clock or estimated wait. **By committee** groups the same rows under one header per
+room (acronym large, full name beneath, the room's mode and who holds the floor with their clock),
+rooms where a student speaks soonest first, rooms not in session last. Tapping a row opens the
+StudentSheet. **The single-room view `/advisor/[code]` was removed the same day**: it redirects to
+`/advisor?add=CODE`, and nothing on the board links to a room.
+
 ---
 
 ## 6. Where things live
 
 ```
 src/app/
-  (sessions)   create, join, chair/[code], delegate/[code], advisor/[code], voting/[code]
+  (sessions)   create, join, chair/[code], delegate/[code], advisor (the board; advisor/[code] only redirects to it), voting/[code]
   (public)     /, sessions, about, contact, blog/*, [slug] (vanity), conferences/{explore,map,roles,[slug]/*}
   (participant) conferences/[slug]/{apply,pay,role/[role],papers,awards}, delegation/[societyId], my-conferences, drafts/[token], invites/*
   (organiser)  manage/[slug]/{committees,applications,assignment,documents,communications,financials,financial-aid,settings,jobs,import,live,scoreboard,awards*}   (*awards = redirect only)
@@ -429,7 +450,7 @@ src/lib/
 src/components/ neu.tsx (design tokens), DatePicker, Portal, SiteNav, ScoreboardTable, ScoreboardPanel, MotionsModal, DocumentsModal, RollCallPanel, ChatPanel, SettingsPanel, FeedbackLogPanel, TutorialOverlay, GuidedWalkthrough
 ```
 
-**State, honestly:** the chair page is React state + `committeeService` + a Supabase Realtime channel, with `useSettingsStore` (zustand, `localStorage: gavelling-settings`) for per-committee settings. `src/lib/store.ts` (`useCommitteeStore`, `localStorage: mun-committees`) is legacy with no live importer (the join page stopped reading it on 14 Sep 2026, J-1: nothing writes it, so a hit could only be an old roster or chair code); `SpeakersListPanel`, `CaucusPanel` and `ResolutionsPanel` import it but are themselves unreferenced. Realtime on the chair, delegate, advisor and voting pages goes through `startSessionSync` (`src/lib/sessionSync.ts`; AGENTS.md RULE 4). The conferences layer uses no zustand at all: React state, `useAuth()` from `AuthProvider`, `getAuthedClient(session.access_token)`, and `useManage()` from the manage layout.
+**State, honestly:** the chair page is React state + `committeeService` + a Supabase Realtime channel, with `useSettingsStore` (zustand, `localStorage: gavelling-settings`) for per-committee settings. `src/lib/store.ts` (`useCommitteeStore`, `localStorage: mun-committees`) is legacy with no live importer (the join page stopped reading it on 14 Sep 2026, J-1: nothing writes it, so a hit could only be an old roster or chair code); `SpeakersListPanel`, `CaucusPanel` and `ResolutionsPanel` import it but are themselves unreferenced. Realtime on the chair, delegate and voting pages goes through `startSessionSync` (`src/lib/sessionSync.ts`; AGENTS.md RULE 4). The conferences layer uses no zustand at all: React state, `useAuth()` from `AuthProvider`, `getAuthedClient(session.access_token)`, and `useManage()` from the manage layout.
 
 **Database:** there is **no `supabase/` directory and no migrations in git**. The schema lives only in the remote project; the loose `scratch-*.sql` files at the root are drafts, not truth. Inspect with the Supabase MCP tools before assuming a column exists. RLS is the security boundary everywhere; `isViewOnly`, section permissions and hidden buttons are not.
 
@@ -622,7 +643,7 @@ Everything else, with line numbers and the reasons behind each rule, is in `AGEN
 - **No count or status pills like '15 delegations' or 'Observer' anywhere: show counts as plain typography and observer status as an icon.** (Owner, 17 Sep 2026. /create shows the count as a large tabular numeral and observers as the megaphone; the join seat picker shows seat state as icon + plain words.)
 - **No em dashes in user-facing copy.** Short sentences. Say what happened and what to do next.
 - **Errors are written for people, never for engineers.** Never render `error.message`, `err.message`, a Postgres, PostgREST, Storage or Stripe string, or a stack trace to a user. Route every caught error through `friendlyError(error, fallback)` from `src/lib/friendlyError.ts`, with a fallback that says what failed and what to do next. When a migration adds a CHECK a user can reach, add its plain sentence to `CONSTRAINT_MESSAGES` in the same change. Better still, check the condition in the UI first so the database never has to refuse (the TBD publish rule is the example). Our own human-written thrown errors use `new UserFacingError('...')` so friendlyError passes them through. The one exemption is `src/app/admin/*`, seen only by platform admins, where raw errors are kept on purpose for debugging; do not copy that pattern anywhere else.
-- **One screen, no page scroll** for consoles and dashboards at 1280x800 and up: the organiser dashboard `/manage/[slug]` (grid in `src/components/conferences/dashboardLayout.tsx`), `/chair`, `/voting`, `/advisor` (`FitToScreen`) and the sessions set-up screens; only a list inside them scrolls. Below 1024 px wide or 600 px tall they stack and scroll. Lists and long forms (applications, assignment, the live wall, settings, apply, blog) scroll by design. Rule and list: `docs/ui-audit/00-DESIGN-RULEBOOK.md` §9.
+- **One screen, no page scroll** for consoles and dashboards at 1280x800 and up: the organiser dashboard `/manage/[slug]` (grid in `src/components/conferences/dashboardLayout.tsx`), `/chair`, `/voting` (`FitToScreen`) and the sessions set-up screens; only a list inside them scrolls. Below 1024 px wide or 600 px tall they stack and scroll. Lists and long forms (applications, assignment, the live wall, settings, apply, blog) scroll by design. Rule and list: `docs/ui-audit/00-DESIGN-RULEBOOK.md` §9.
 - Dates: the shared `DatePicker` only. Popovers: through `Portal` at fixed coordinates, flipped near edges, never clipped. Info hints open on hover. Long committee names show the acronym with the full name beneath (`committeeDisplayName`).
 - i18n: four locales in `src/lib/translations.ts` (en, es, fr, ar with RTL), **sessions only** (18 Sep 2026): `LanguageProvider` returns the stored language only on a sessions route (`src/lib/sessionRoutes.ts`) and English everywhere else, and only sessions surfaces show a picker. Every sessions picker offers "Request a language" (`LanguageRequestDialog`: language, email, Rules of Procedure file into the private `language-requests` bucket, a `language_requests` row (RLS insert-only, trigger rate limit 3 per email / 60 per hour, file must exist), and a team email to wearegavelling@gmail.com through `email_outbox`). The DB stores English; translate at render. Rules and the list of hand-maintained bypasses are in `.claude/TRANSLATIONS.md`, which must be updated when keys change. Manage surfaces are English-only by convention.
 - Polish reference: `.claude/skills/make-interfaces-feel-better/SKILL.md` (the only UI skill installed in this repo).

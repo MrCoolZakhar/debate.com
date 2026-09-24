@@ -72,6 +72,8 @@
 
 **24 Sep 2026, join brand panel:** removed `join_bullet_flags`, `join_bullet_live`, `join_bullet_signin` (x4 locales); added `join_room_not_started`, `join_room_roll_call`, `join_room_in_session`, `join_room_voting`, `join_room_suspended`, `join_room_ended`, `join_room_present` (`{total}`), `join_room_dais` (x4 locales, same place).
 
+**24 Sep 2026, Faculty Advisor board views, room view removed:** in `src/lib/translationsAdvisorBoard.ts` (all four locales, after `adv_sheet_no_room`) added `adv_view_label`, `adv_view_queue`, `adv_view_committee`, `adv_when_ready`, `adv_when_next`, `adv_when_ahead` (`{n}`), `adv_when_left` (`{time}`), `adv_mode_gsl_short`, `adv_place_title` (`{n}`), `adv_floor_now`; removed `adv_section_floor`, `adv_section_coming`, `adv_open_room`. The single-room view `/advisor/[code]` is now a redirect, so its keys went with it: every `advisor_room_*` key in `src/lib/translationsAdvisorRoom.ts` (the file keeps only `join_advisor_follow_*`), and from `translations.ts` every `advisor_*` key (including the already-unread ones and the five `advisor_nudge_*`) plus `delegate_status_absent`, `delegate_status_present`, `delegate_status_pv` (x4 locales, 35 keys per locale). The motion-name tables below no longer include the advisor room page.
+
 **Last counted 15 Sep 2026, after the chat redesign:** **1241 keys per locale** at the time of counting (other workstreams added keys the same day), identical key sets in all four (0 duplicates). Added 21 keys × 4 locales, placed after `chat_everyone_info`: `chat_search`, `chat_search_label`, `chat_no_results`, `chat_section_start`, `chat_new_group`, `chat_group_name`, `chat_group_name_placeholder`, `chat_group_members`, `chat_group_selected` (`{n}`), `chat_group_create`, `chat_group_cancel`, `chat_group_member_count` (`{n}`), `chat_group_info`, `chat_group_created` (`{name}`), `chat_group_failed`, `chat_group_hint`, `chat_back`, `chat_close`, `chat_everyone_subtitle`, `chat_dais_subtitle`, `chat_dais_shared_info`. Reworded `chat_thread_info` in all four so it no longer promises that only the two people can see a DM (every device downloads every message). The old DM picker went away, so `chat_new_message`, `chat_new_message_btn`, `chat_co_chairs`, `chat_delegates`, `chat_send_first`, `chat_no_conversations` and `chat_no_conversations_hint` are now unread; they were left in place (not deleted) to keep this change small.
 
 **Last counted 15 Sep 2026, after the review fixes:** **1210 keys per locale**, identical key sets in all four (0 duplicates). This count supersedes the two "not recounted" entries below. Removed 2 keys × 4 locales: `chair_hdr_copy_code`, `chair_hdr_copied` (nothing read them after the top-bar code button started presenting the code; the "chair floor" entry below still names `chair_hdr_copied` as its insertion point, which now means right after `chair_hdr_chat_unread`). Added 1 key × 4 locales, placed after `voting_proceed_rights`: `voting_continue` (the neutral "Continue" on the all-voted screen of `/voting/[code]` while the tally is hidden, so it does not reveal whether anyone voted with rights). Net -1 per locale.
@@ -198,7 +200,6 @@ Chairs can rename both document types per committee (Settings → Motions → Do
 Motion type names are localised via objects inside each component, NOT via `translations.ts`. These exist in:
 - `src/components/MotionsModal.tsx` — `DEFAULT_MOTION_NAMES_LOCALIZED`
 - `src/app/delegate/[code]/page.tsx` — `mn` inside `phaseDisplay`
-- `src/app/advisor/[code]/page.tsx` — `mn` (delegate card) + `advisorMotionNames` (main page)
 
 Add a `language === 'xx'` branch alongside the existing `language === 'es'` and `language === 'fr'` branches in each.
 
@@ -257,7 +258,7 @@ Also add `PRESET_ACRONYM_XX` and update `getPresetAcronym()` in `create/page.tsx
 Also update the `CommitteeNameInput` component so the search filter uses `localName`/`localAcronym` variables (not `esName`/`esAcronym`).
 
 ### Step 3 — Motion names + TutorialOverlay
-Files: `src/components/MotionsModal.tsx`, `src/app/delegate/[code]/page.tsx`, `src/app/advisor/[code]/page.tsx`, `src/app/chair/[code]/page.tsx` (if it has motion names), `src/components/TutorialOverlay.tsx`
+Files: `src/components/MotionsModal.tsx`, `src/app/delegate/[code]/page.tsx`, `src/app/chair/[code]/page.tsx` (if it has motion names), `src/components/TutorialOverlay.tsx`
 
 Add `language === 'xx'` branch to all motion name objects and all 15 tutorial `bubbleText` ternaries.
 
@@ -474,7 +475,7 @@ for(const L of ['en','es','fr','ar'])for(const [k,v] of Object.entries(T[L])){
 These never translate in any locale. Scan and key them:
 ```bash
 for f in "src/app/chair/[code]/page.tsx" "src/app/delegate/[code]/page.tsx" \
-  "src/app/voting/[code]/page.tsx" "src/app/advisor/[code]/page.tsx" src/components/*.tsx; do
+  "src/app/voting/[code]/page.tsx" src/app/advisor/board/*.tsx src/components/*.tsx; do
   echo "== $f =="; grep -noE '(placeholder|title|aria-label)="[A-Z][a-z][^"]*"|>[A-Z][a-z]+( [A-Za-z,&—-]+){1,}[<.]' "$f" \
     | grep -vE '\{t\(|\$\{|className|viewBox|GavellingLogo'; done
 ```

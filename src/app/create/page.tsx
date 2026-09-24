@@ -1034,6 +1034,7 @@ function CreatePageInner() {
                           pressed={isObserver}
                           tone={isObserver ? 'gold' : 'neutral'}
                           caption={isObserver ? t('rollcall_observer') : undefined}
+                          sizeTo={t('rollcall_observer')}
                         >
                           <Megaphone size={16} strokeWidth={isObserver ? 2.2 : 1.8} />
                         </RowIconButton>

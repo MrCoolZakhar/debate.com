@@ -3,44 +3,49 @@
 // ============================================================
 // /advisor: the Faculty Advisor board (24 Sep 2026).
 //
-// One job made effortless: be in the room when your student speaks. Every followed
-// student is one card, ordered by urgency (On the floor, Coming up, In the room, Needs a
-// look, Rooms not in session). A reminder fires once per turn when a student is two
-// speakers away and when they start speaking.
+// One job made effortless: be in the room when your student speaks. Two views of the
+// same students (owner, 24 Sep 2026), remembered per device (BoardPrefs.view):
+//   • Up next (default): ONE speakers list across every room, speaking now first, then
+//     next, then N speakers ahead, then in the room, then needs a look (absent), then
+//     rooms not in session (queueRank in derive.ts).
+//   • By committee: the same rows grouped under one header per room, with what the room
+//     is doing and who holds the floor; rooms not in session last.
+// A reminder fires once per turn when a student is two speakers away and when they start
+// speaking. There is no single-room view any more (/advisor/CODE redirects here).
 //
 // Rooms come from two places: codes typed on this device (store.ts, names stay here),
 // and a signed-in advisor's conference delegation (useMyAdvisorDelegation, verified).
 // Everything is read anonymously; nothing here writes to a session.
 // ============================================================
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Bell, BellOff, Plus, Sun, SunDim, Pencil, ArrowUpRight, Mic, X, DoorOpen } from 'lucide-react';
+import { Bell, BellOff, Plus, Sun, SunDim, Pencil, Mic, X, DoorOpen, ListOrdered, Rows3 } from 'lucide-react';
 import SessionLanguageMenu from '@/components/SessionLanguageMenu';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { useMyAdvisorDelegation } from '@/lib/advisorDelegation';
+import { CircleFlag } from '@/components/CircleFlag';
+import { getCountryDisplayName } from '@/lib/countries';
 import { getCommitteeDisplayName, committeeDisplayName } from '@/lib/presetNames';
 import { serverNow } from '@/lib/serverClock';
 import { useBoardData } from '@/lib/advisorBoard/data';
-import { deriveSeat, inSession, roomMode, sectionOf, urgency, type BoardSection } from '@/lib/advisorBoard/derive';
+import { deriveSeat, groupOf, inSession, queueRank, roomFloor, roomMode, type BoardGroup } from '@/lib/advisorBoard/derive';
 import { useAdvisorReminders, type ActiveReminder, type BoardSeatView } from '@/lib/advisorBoard/reminders';
-import { markRoomsEnded, markSeen, normaliseCode, setBoardPref, useBoardPrefs, useBoardState, type BoardRoom } from '@/lib/advisorBoard/store';
+import { markRoomsEnded, markSeen, normaliseCode, setBoardPref, useBoardPrefs, useBoardState, type BoardRoom, type BoardView } from '@/lib/advisorBoard/store';
 import type { FollowedSeat, RoomData } from '@/lib/advisorBoard/types';
 import { useWakeLock, useWakeLockSupported } from '@/lib/advisorBoard/wakeLock';
 import type { TranslationKey } from '@/lib/translations';
 import AddRoomSheet from './AddRoomSheet';
 import StudentSheet from './StudentSheet';
-import { MODE_KEY, SeatCard, seatTitle } from './SeatCard';
-import { C, FONT, SHADOW } from './tokens';
+import { MODE_KEY, SeatRow, committeeLabels, modeLabel, seatTitle, useClockSeconds } from './SeatCard';
+import { C, FONT, SHADOW, clock } from './tokens';
 
 const STALE_AFTER_MS = 30_000;
 const lc = (s: string | null | undefined) => (s ?? '').trim().toLowerCase();
 
-const SECTION_ORDER: BoardSection[] = ['floor', 'coming', 'room', 'look', 'out'];
-const SECTION_KEY: Record<BoardSection, TranslationKey> = {
-  floor: 'adv_section_floor',
-  coming: 'adv_section_coming',
+/** The bands of the "Up next" list after the queue itself, each under a quiet divider. */
+const GROUP_KEY: Record<Exclude<BoardGroup, 'queue'>, TranslationKey> = {
   room: 'adv_section_room',
   look: 'adv_section_look',
   out: 'adv_section_out',
@@ -49,6 +54,11 @@ const SECTION_KEY: Record<BoardSection, TranslationKey> = {
 const GLOBAL_CSS = `
 .adv-focus:focus{outline:none}
 .adv-focus:focus-visible{outline:none;box-shadow:0 0 0 3px ${C.cream},0 0 0 5px ${C.deepGold} !important}
+.adv-row{transition:background-color 120ms ease}
+.adv-row:focus-visible{box-shadow:inset 0 0 0 2px ${C.deepGold} !important}
+@media (hover:hover){.adv-row:hover{background-color:rgba(27,56,40,0.045)}}
+.adv-row:active{background-color:rgba(27,56,40,0.07)}
+.adv-list>li+li{box-shadow:inset 0 1px 0 ${C.hairline}}
 .adv-input{outline:none;box-shadow:inset 0 0 0 1.5px rgba(27,56,40,0.16)}
 .adv-input:focus{box-shadow:inset 0 0 0 2px ${C.forest}}
 @media (prefers-reduced-motion: no-preference){
@@ -56,6 +66,7 @@ const GLOBAL_CSS = `
   .adv-sheet-backdrop{animation:adv-fade 180ms ease-out}
   .adv-banner{animation:adv-drop 260ms cubic-bezier(0.32,0.72,0,1)}
   .adv-pulse{animation:adv-pulse 1.6s ease-in-out infinite}
+  .adv-seg{transition:background-color 160ms ease,color 160ms ease}
 }
 @keyframes adv-up{from{transform:translateY(24px);opacity:.6}to{transform:none;opacity:1}}
 @keyframes adv-fade{from{opacity:0}to{opacity:1}}
@@ -74,7 +85,7 @@ export default function AdvisorBoard() {
   const wakeSupported = useWakeLockSupported();
   const wakeHeld = useWakeLock(prefs.keepAwake && wakeSupported);
 
-  // ── ?add=CODE (from /join and the room view) opens the add flow prefilled ──
+  // ── ?add=CODE (from /join, and the retired /advisor/CODE) opens the add flow prefilled ──
   const addParam = normaliseCode(params.get('add') ?? '');
   const [addOpen, setAddOpen] = useState<{ code: string | null; editing: BoardRoom | null } | null>(null);
   const [handledAdd, setHandledAdd] = useState<string | null>(null);
@@ -100,18 +111,6 @@ export default function AdvisorBoard() {
       if (c.seats.length === 0) for (const r of c.rooms) set.add(normaliseCode(r.sessionCode));
     }
     return [...set];
-  }, [delegation.conferences]);
-  // The detailed room view (/advisor/CODE) of a CONFERENCE room admits the conference's
-  // faculty advisors, observers and organisers only (verifyConferenceAccess). A head
-  // delegate's seats are on the board, but a link would land them on "not for you".
-  const verifiedCodes = useMemo(() => {
-    const set = new Set<string>();
-    for (const c of delegation.conferences) {
-      if (c.myRole !== 'faculty-advisor' && c.myRole !== 'observer') continue;
-      for (const s of c.seats) if (s.sessionCode) set.add(normaliseCode(s.sessionCode));
-      for (const r of c.rooms) set.add(normaliseCode(r.sessionCode));
-    }
-    return set;
   }, [delegation.conferences]);
   const codes = useMemo(() => [...new Set([...board.rooms.map((r) => r.code), ...conferenceCodes])], [board.rooms, conferenceCodes]);
   const data = useBoardData(codes);
@@ -186,28 +185,38 @@ export default function AdvisorBoard() {
   const onOpen = useCallback((key: string) => setOpenSeat(key), []);
   const openView = openSeat ? views.find((v) => v.seat.key === openSeat) ?? null : null;
 
-  const roomHrefFor = useCallback((seat: FollowedSeat, room: RoomData | null): string | null => {
-    if (!seat.code) return null;
-    if (verifiedCodes.has(seat.code)) return `/advisor/${seat.code}`;
-    // The room view of a conference room is gated to verified advisors: no link for a code.
-    if (room && room.sessionOrigin === 'standalone') return `/advisor/${seat.code}`;
-    return null;
-  }, [verifiedCodes]);
+  // ── The two views ──────────────────────────────────────────────────────
+  const byRank = useCallback((a: BoardSeatView, b: BoardSeatView) => {
+    const r = queueRank(a.state) - queueRank(b.state);
+    if (r) return r;
+    // Across rooms, a tie (two students both "next") is broken by committee, then name.
+    const ca = data.rooms[a.seat.code ?? '']?.name ?? a.seat.committeeName;
+    const cb = data.rooms[b.seat.code ?? '']?.name ?? b.seat.committeeName;
+    return ca.localeCompare(cb, language) || seatTitle(a.seat, language).localeCompare(seatTitle(b.seat, language), language);
+  }, [data.rooms, language]);
 
-  // ── Sections ────────────────────────────────────────────────────────────
-  const sections = useMemo(() => {
-    const map = new Map<BoardSection, BoardSeatView[]>();
-    for (const v of views) {
-      const s = sectionOf(v.state);
-      const arr = map.get(s) ?? [];
-      arr.push(v);
-      map.set(s, arr);
+  const ordered = useMemo(() => views.slice().sort(byRank), [views, byRank]);
+
+  const committeeGroups = useMemo(() => {
+    const map = new Map<string, { key: string; code: string | null; name: string; abbreviation: string | null; room: RoomData | null; views: BoardSeatView[] }>();
+    for (const v of ordered) {
+      const key = v.seat.code ?? `none|${v.seat.conferenceId ?? ''}|${lc(v.seat.committeeName)}`;
+      let g = map.get(key);
+      if (!g) {
+        const room = v.seat.code ? data.rooms[v.seat.code] ?? null : null;
+        g = { key, code: v.seat.code, name: room?.name ?? v.seat.committeeName, abbreviation: v.seat.committeeAbbreviation, room, views: [] };
+        map.set(key, g);
+      }
+      g.views.push(v);
     }
-    for (const arr of map.values()) {
-      arr.sort((a, b) => urgency(a.state) - urgency(b.state) || seatTitle(a.seat, language).localeCompare(seatTitle(b.seat, language), language));
-    }
-    return map;
-  }, [views, language]);
+    const groups = [...map.values()];
+    const live = (g: (typeof groups)[number]) => (inSession(g.views[0].state.mode) ? 0 : 1);
+    // Rooms where a student speaks soonest first (`ordered` is already by rank, so the
+    // first row of each group is its best); rooms not in session last.
+    return groups.sort((a, b) => live(a) - live(b)
+      || queueRank(a.views[0].state) - queueRank(b.views[0].state)
+      || a.name.localeCompare(b.name, language));
+  }, [ordered, data.rooms, language]);
 
   const observerConferences = delegation.conferences.filter((c) => c.seats.length === 0 && c.rooms.length > 0);
   const empty = seats.length === 0 && board.rooms.length === 0 && observerConferences.length === 0;
@@ -252,29 +261,50 @@ export default function AdvisorBoard() {
 
         {empty && <EmptyState onAdd={() => setAddOpen({ code: null, editing: null })} />}
 
-        {SECTION_ORDER.map((sec) => {
-          const list = sections.get(sec);
-          if (!list || list.length === 0) return null;
-          return (
-            <section key={sec} className="mb-6" aria-labelledby={`adv-sec-${sec}`}>
-              <h2 id={`adv-sec-${sec}`} className="mb-2 flex items-baseline gap-2 px-1" style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: sec === 'floor' ? C.forest : sec === 'look' ? C.danger : C.forestSoft }}>
-                {t(SECTION_KEY[sec])}
-                <span style={{ fontWeight: 600, color: C.inkSoft, letterSpacing: 0 }}>{list.length}</span>
-              </h2>
-              <ul className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
-                {list.map((v) => {
-                  const room = v.seat.code ? data.rooms[v.seat.code] ?? null : null;
-                  return (
-                    <li key={v.seat.key}>
-                      <SeatCard seat={v.seat} state={v.state} committeeName={room?.name ?? v.seat.committeeName}
-                        delegate={v.state.delegate} onOpen={onOpen} highlight={reminders.active.some((r) => r.seatKey === v.seat.key)} />
+        {seats.length > 0 && (
+          <ViewSwitch view={prefs.view} onChange={(v) => setBoardPref('view', v)} />
+        )}
+
+        {seats.length > 0 && prefs.view === 'queue' && (
+          <section className="mb-6" aria-label={t('adv_view_queue')}>
+            <ol className="adv-list overflow-hidden rounded-2xl" style={{ backgroundColor: C.cream, boxShadow: SHADOW.card }}>
+              {ordered.map((v, i) => {
+                const group = groupOf(v.state);
+                const prev = i > 0 ? groupOf(ordered[i - 1].state) : 'queue';
+                const count = group === 'queue' ? 0 : ordered.filter((x) => groupOf(x.state) === group).length;
+                return [
+                  group !== 'queue' && group !== prev ? (
+                    <li key={`sep-${group}`} aria-hidden className="flex items-baseline gap-2 px-4 pb-1.5 pt-3" style={{ backgroundColor: C.surface }}>
+                      <span style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: group === 'look' ? C.danger : C.forestSoft }}>{t(GROUP_KEY[group])}</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: C.inkSoft }}>{count}</span>
                     </li>
-                  );
-                })}
-              </ul>
-            </section>
-          );
-        })}
+                  ) : null,
+                  <li key={v.seat.key}>
+                    <SeatRow seat={v.seat} state={v.state} committeeName={data.rooms[v.seat.code ?? '']?.name ?? v.seat.committeeName}
+                      delegate={v.state.delegate} onOpen={onOpen} showWhere
+                      highlight={reminders.active.some((r) => r.seatKey === v.seat.key)} />
+                  </li>,
+                ];
+              })}
+            </ol>
+          </section>
+        )}
+
+        {seats.length > 0 && prefs.view === 'committee' && committeeGroups.map((g) => (
+          <section key={g.key} className="mb-5" aria-labelledby={`adv-room-${g.key}`}>
+            <RoomGroupHeader id={`adv-room-${g.key}`} code={g.code} name={g.name} abbreviation={g.abbreviation} room={g.room}
+              mode={g.views[0].state.mode} caucusLabel={g.views[0].state.caucusLabel} />
+            <ol className="adv-list overflow-hidden rounded-2xl" style={{ backgroundColor: C.cream, boxShadow: SHADOW.card }}>
+              {g.views.map((v) => (
+                <li key={v.seat.key}>
+                  <SeatRow seat={v.seat} state={v.state} committeeName={g.name}
+                    delegate={v.state.delegate} onOpen={onOpen} showWhere={false}
+                    highlight={reminders.active.some((r) => r.seatKey === v.seat.key)} />
+                </li>
+              ))}
+            </ol>
+          </section>
+        ))}
 
         {observerConferences.map((c) => (
           <section key={c.conferenceId} className="mb-6">
@@ -287,7 +317,7 @@ export default function AdvisorBoard() {
                 const room = data.rooms[code] ?? null;
                 return (
                   <li key={code}>
-                    <RoomRow code={code} name={committeeDisplayName(r.committeeName, r.committeeAbbreviation)} room={room} href={verifiedCodes.has(code) ? `/advisor/${code}` : null} />
+                    <RoomRow code={code} name={committeeDisplayName(r.committeeName, r.committeeAbbreviation)} room={room} />
                   </li>
                 );
               })}
@@ -302,11 +332,10 @@ export default function AdvisorBoard() {
               {board.rooms.map((r) => {
                 const room = data.rooms[r.code] ?? null;
                 const gone = data.loaded && data.missing.has(r.code);
-                const href = room && (room.sessionOrigin === 'standalone' || verifiedCodes.has(r.code)) ? `/advisor/${r.code}` : null;
                 return (
                   <li key={r.code}>
                     <RoomRow code={r.code} name={room ? getCommitteeDisplayName(room.name, language) : ''} room={room} gone={gone}
-                      following={r.follows.length} href={href} onEdit={() => setAddOpen({ code: r.code, editing: r })} />
+                      following={r.follows.length} onEdit={() => setAddOpen({ code: r.code, editing: r })} />
                   </li>
                 );
               })}
@@ -330,7 +359,6 @@ export default function AdvisorBoard() {
           seat={openView.seat}
           state={openView.state}
           room={openView.seat.code ? data.rooms[openView.seat.code] ?? null : null}
-          roomHref={roomHrefFor(openView.seat, openView.seat.code ? data.rooms[openView.seat.code] ?? null : null)}
           onClose={() => setOpenSeat(null)}
         />
       )}
@@ -429,8 +457,8 @@ function ReminderBanner({ reminder, more, onOpen, onDismiss }: { reminder: Activ
   );
 }
 
-function RoomRow({ code, name, room, gone, following, href, onEdit }: {
-  code: string; name: string; room: RoomData | null; gone?: boolean; following?: number; href: string | null; onEdit?: () => void;
+function RoomRow({ code, name, room, gone, following, onEdit }: {
+  code: string; name: string; room: RoomData | null; gone?: boolean; following?: number; onEdit?: () => void;
 }) {
   const t = useT();
   const mode = gone ? 'missing' : room ? roomMode(room) : null;
@@ -447,11 +475,6 @@ function RoomRow({ code, name, room, gone, following, href, onEdit }: {
           {typeof following === 'number' && <>{' · '}{t('adv_following_n', { n: following })}</>}
         </div>
       </div>
-      {href && (
-        <Link href={href} aria-label={t('adv_open_room')} title={t('adv_open_room')} className="adv-focus flex h-11 w-11 items-center justify-center rounded-xl" style={{ color: C.forest }}>
-          <ArrowUpRight size={19} aria-hidden className="rtl:-scale-x-100" />
-        </Link>
-      )}
       {onEdit && (
         <button type="button" onClick={onEdit} aria-label={t('adv_edit_room', { code })} title={t('adv_edit_room', { code })} className="adv-focus flex h-11 w-11 items-center justify-center rounded-xl" style={{ color: C.forest }}>
           <Pencil size={18} aria-hidden />
@@ -478,3 +501,77 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
   );
 }
 
+
+/** Up next / By committee. Two radios, icon over a small word (CLAUDE.md §8), arrow keys
+ *  move between them (either arrow, so RTL needs no mirroring for two options). */
+function ViewSwitch({ view, onChange }: { view: BoardView; onChange: (v: BoardView) => void }) {
+  const t = useT();
+  const refs = useRef<Record<BoardView, HTMLButtonElement | null>>({ queue: null, committee: null });
+  const options: { id: BoardView; icon: React.ReactNode; label: string }[] = [
+    { id: 'queue', icon: <ListOrdered size={21} strokeWidth={2.3} aria-hidden />, label: t('adv_view_queue') },
+    { id: 'committee', icon: <Rows3 size={21} strokeWidth={2.3} aria-hidden />, label: t('adv_view_committee') },
+  ];
+  const pick = (id: BoardView) => { onChange(id); refs.current[id]?.focus(); };
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const i = options.findIndex((o) => o.id === view);
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      pick(options[(i + 1) % options.length].id);
+    } else if (e.key === 'Home') { e.preventDefault(); pick(options[0].id); }
+    else if (e.key === 'End') { e.preventDefault(); pick(options[options.length - 1].id); }
+  };
+  return (
+    <div role="radiogroup" aria-label={t('adv_view_label')} onKeyDown={onKeyDown}
+      className="mb-3 grid grid-cols-2 gap-1 rounded-2xl p-1 sm:max-w-xs" style={{ backgroundColor: 'rgba(27,56,40,0.07)' }}>
+      {options.map((o) => {
+        const on = o.id === view;
+        return (
+          <button key={o.id} ref={(el) => { refs.current[o.id] = el; }} type="button" role="radio" aria-checked={on}
+            tabIndex={on ? 0 : -1} onClick={() => onChange(o.id)}
+            className="adv-focus adv-seg flex h-[52px] flex-col items-center justify-center gap-0.5 rounded-xl"
+            style={{ backgroundColor: on ? C.forest : 'transparent', color: on ? C.gold : C.forestSoft, boxShadow: on ? '0 1px 2px rgba(27,56,40,0.18)' : undefined }}>
+            {o.icon}
+            <span style={{ fontSize: 11.5, fontWeight: 800, lineHeight: 1.1 }}>{o.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** A committee's header in "By committee": acronym large, full name beneath, what the
+ *  room is doing and who holds the floor. The only clock here is the floor speaker's. */
+function RoomGroupHeader({ id, code, name, abbreviation, room, mode, caucusLabel }: {
+  id: string; code: string | null; name: string; abbreviation: string | null; room: RoomData | null;
+  mode: Parameters<typeof modeLabel>[1]['mode']; caucusLabel: string | null;
+}) {
+  const t = useT();
+  const { language } = useLanguage();
+  const { short, full } = committeeLabels(name, abbreviation, language);
+  const floor = roomFloor(room);
+  const secs = useClockSeconds(floor?.clock ?? null);
+  const live = inSession(mode);
+  return (
+    <div className="mb-2 px-1">
+      <h2 id={id} className="truncate" style={{ fontSize: 21, fontWeight: 800, color: C.ink, letterSpacing: '-0.015em', lineHeight: 1.15 }} title={full}>
+        {short || code || t('adv_mode_not_open')}
+      </h2>
+      {full && full !== short && (
+        <p className="truncate" style={{ fontSize: 12.5, fontWeight: 500, color: C.inkSoft, lineHeight: 1.3 }}>{full}</p>
+      )}
+      <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1" style={{ fontSize: 13, fontWeight: 700, color: live ? C.forestSoft : C.inkSoft }}>
+        <span>{live ? modeLabel(t, { mode, caucusLabel }) : t(MODE_KEY[mode])}</span>
+        {floor && (
+          <span className="flex min-w-0 items-center gap-1.5" style={{ color: C.ink, fontWeight: 600 }}>
+            <span aria-hidden style={{ color: C.inkSoft }}>·</span>
+            <Mic size={14} strokeWidth={2.4} aria-hidden style={{ color: C.forest }} />
+            <span className="sr-only">{t('adv_floor_now')}</span>
+            <CircleFlag country={floor.country} size={18} decorative />
+            <span className="truncate">{getCountryDisplayName(floor.country, language)}</span>
+            {floor.clock && <span style={{ color: C.inkSoft, fontVariantNumeric: 'tabular-nums' }}>{clock(secs)}</span>}
+          </span>
+        )}
+      </p>
+    </div>
+  );
+}
