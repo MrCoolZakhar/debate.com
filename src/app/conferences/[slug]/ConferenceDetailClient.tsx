@@ -1829,7 +1829,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
               )}
 
               {/* Floating glass tab pill */}
-              <div className="sticky z-30 mb-7" style={{ top: '12px' }}>
+              {/* md+: below the fixed nav pill (SiteNav), which occupies the top 72px. */}
+              <div className="sticky z-30 mb-7 top-3 md:top-[84px]">
                 <div
                   className="inline-flex items-center gap-1 p-1"
                   style={{
@@ -2294,7 +2295,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
             {/* Right column, sticky rail — on mobile it jumps to the very top so
                 the Apply CTA is the first thing a delegate reaches. */}
             <div className="w-full md:w-[340px] md:flex-shrink-0 order-first md:order-none">
-              <div className="flex flex-col gap-4 md:sticky" style={{ top: '12px' }}>
+              <div className="flex flex-col gap-4 md:sticky md:top-[84px]">
 
                 {/* Apply CTA, always first */}
                 <div

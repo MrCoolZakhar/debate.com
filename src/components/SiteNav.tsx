@@ -196,7 +196,14 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
     scroll, which is the "controls that vanish or move" the rulebook rules out,
     and it would still need every page to cooperate.
 
-    So the pill is simply part of the header now, like the two things beside it:
+    UPDATE 24 Sep 2026 (owner: "the nav pill now doesn't move with the page as it
+    scrolls, fix"): the pill is FIXED again, at the same 72px band it sits in at scroll
+    top, z-40. The collisions below are handled at the sticky bars instead: on desktop
+    (md+, the only widths the pill exists at) every sticky bar on a page with this nav
+    sticks at 84px or lower (conference page tabs and rail, explore filters; roles and
+    account already did). A NEW sticky bar on a page with SiteNav must do the same.
+
+    Before that (20 Sep): the pill was simply part of the header, like the two things beside it:
     absolutely centred inside `<nav>` (which is `relative`, or `absolute` in
     overlay mode — both are positioning contexts), at the exact y it already
     occupied at scroll top, so nothing moves visually. Nothing in the document
@@ -209,8 +216,8 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
   */
   const desktopPill = (
     <div
-      className="hidden md:flex absolute inset-y-0 left-1/2 -translate-x-1/2 items-center pointer-events-none"
-      style={{ zIndex: 1 }}
+      className="hidden md:flex fixed top-0 left-1/2 -translate-x-1/2 items-center pointer-events-none"
+      style={{ zIndex: 40, height: 72 }}
     >
         <div
           className="flex items-center rounded-full pointer-events-auto"

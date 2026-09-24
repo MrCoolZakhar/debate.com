@@ -1227,8 +1227,8 @@ export default function ConferencesExploreClient() {
             aria-label="Filters"
             // Full width on a phone (where it is a disclosed panel), a fixed
             // 250px rail from lg up (where it sits beside the grid).
-            className={`${filtersOpen ? 'block' : 'hidden'} lg:block lg:sticky lg:max-w-[250px] flex-shrink-0`}
-            style={{ width: '100%', top: '20px' }}
+            className={`${filtersOpen ? 'block' : 'hidden'} lg:block lg:sticky lg:top-[84px] lg:max-w-[250px] flex-shrink-0`}
+            style={{ width: '100%' }}
           >
             <FilterRail
               searchQuery={searchQuery} onSearch={setSearchQuery}
