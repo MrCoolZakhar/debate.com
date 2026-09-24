@@ -12,8 +12,9 @@ import ConferenceLinkList from '../ConferenceLinkList';
 // /conferences/in/<country>: every upcoming public conference in one country,
 // as plain server-rendered links. A hub exists only while the country has at
 // least HUB_MIN upcoming listed conferences (countryHubs.ts); otherwise 404,
-// and the sitemap drops it with the same rule. Linked from
-// /conferences/explore, never from the footer (CLAUDE.md §4).
+// and the sitemap drops it with the same rule. Linked from the directory
+// /conferences/all (itself linked from every footer), never listed in the
+// footer itself (CLAUDE.md §4).
 
 export const revalidate = 3600;
 

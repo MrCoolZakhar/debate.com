@@ -17,8 +17,8 @@ import { useMyActivity, useOpenSeenState, markActivitySeen, isVisibleActivity } 
 
 const NAV_LINKS_CONFIG = [
   // Written in sentence case and set in capitals by CSS (textTransform), at
-  // weight 600 with light tracking (owner, 24 Sep 2026: the old 700-900
-  // weight and 0.08em tracking read heavy; keep caps). The Sessions link reads
+  // weight 800 (900 active) with light tracking (owner, 24 Sep 2026: caps; in
+  // Albert Sans anything lighter than 800 reads too thin for the nav). The Sessions link reads
   // "Start Session": `kicker` is the small word stacked above the label.
   { en: 'Session',     es: 'Sesión',       fr: 'Session',         ar: 'جلسة',       href: '/sessions',
     kicker: { en: 'Start', es: 'Iniciar', fr: 'Lancer', ar: 'ابدأ' } },
@@ -238,7 +238,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
                   position: 'relative',
                   padding: '8px 16px',
                   fontSize: '13.5px',
-                  fontWeight: active ? 700 : 600,
+                  fontWeight: active ? 900 : 800,
                   letterSpacing: '0.04em',
                   textTransform: 'uppercase',
                   fontFamily: "var(--font-brand), sans-serif",
@@ -253,7 +253,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
                 {link.kicker ? (
                   // "Start" small on top, the label beneath, one pill tall.
                   <span className="flex flex-col items-center" style={{ lineHeight: 1 }}>
-                    <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.12em', opacity: 0.8, marginBottom: '2px' }}>{link.kicker} </span>
+                    <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '0.12em', opacity: 0.85, marginBottom: '2px' }}>{link.kicker} </span>
                     <span>{link.label}</span>
                   </span>
                 ) : link.label}
@@ -453,6 +453,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
               style={{
                 color: overlay ? '#EDE7D8' : '#1B3828',
                 fontSize: '13.5px',
+                fontWeight: 800,
                 letterSpacing: '0.04em',
                 textTransform: 'uppercase',
                 fontFamily: "var(--font-brand), sans-serif",
@@ -534,7 +535,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
                   display: 'block',
                   padding: '12px 16px',
                   fontSize: '14.5px',
-                  fontWeight: active ? 700 : 600,
+                  fontWeight: active ? 900 : 800,
                   letterSpacing: '0.04em',
                   textTransform: 'uppercase',
                   color: active ? '#1B3828' : 'rgba(28, 20, 16, 0.65)',
@@ -631,7 +632,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
                   width: '100%',
                   padding: '13px 16px',
                   fontSize: '14px',
-                  fontWeight: 700,
+                  fontWeight: 800,
                   letterSpacing: '0.04em',
                   textTransform: 'uppercase',
                   color: '#8B2020',
@@ -653,7 +654,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
                 display: 'block',
                 padding: '13px 16px',
                 fontSize: '14px',
-                fontWeight: 700,
+                fontWeight: 800,
                 letterSpacing: '0.04em',
                 textTransform: 'uppercase',
                 color: '#1B3828',

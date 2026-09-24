@@ -1,81 +1,123 @@
-// A STATIC demo room for the Sessions landing page: one committee as the
-// organiser's live status wall draws it (the real CommitteeCard from
-// manage/[slug]/live, fed this object). Nothing here is read from the
-// database and no real conference or person appears: the committee, topic,
+// STATIC demo rooms for the Sessions landing page: committees as the
+// organiser's live status wall draws them (the real CommitteeCard from
+// manage/[slug]/live, fed these objects). Nothing here is read from the
+// database and no real conference or person appears: committees, topics,
 // papers and chair names are invented, the countries are UN members.
 //
-// `now` is passed in once and never ticks, so the card is a still: Kenya has
-// held the floor for 28 s of a 90 s speech (the clock reads 1:02).
+// `now` is passed in once and never ticks, so every card is a still.
 
-import type { LiveCommittee } from '@/app/manage/[slug]/live/LiveModals';
+import type { LiveCommittee, CaucusJson } from '@/app/manage/[slug]/live/LiveModals';
 
-const PRESENT = [
-  'China', 'France', 'United Kingdom', 'United States', 'Russia', 'Brazil', 'Kenya', 'India',
-  'Japan', 'Germany', 'Mexico', 'Egypt', 'Norway', 'Ghana', 'Indonesia',
-];
+type Room = {
+  id: string;
+  name: string;
+  abbreviation: string;
+  topic: string;
+  logoUrl: string;
+  chairs: [string, string];
+  countries: string[];
+  phase: 'speakers-list' | 'moderated-caucus' | 'unmoderated-caucus';
+  speaker?: { country: string; spokeSec: number; slot: number };
+  caucus?: CaucusJson;
+  queue: string[];
+  scores: [string, number][];
+};
 
-export function demoLiveRoom(now: number): LiveCommittee {
+function build(now: number, r: Room): LiveCommittee {
   const iso = (msAgo: number) => new Date(now - msAgo).toISOString();
   return {
     conf: {
-      id: 'demo-unsc',
-      name: 'United Nations Security Council',
-      abbreviation: 'UNSC',
-      logoUrl: '/logos/un.svg',
-      topics: ['Maintaining peace in the Sahel'],
-      totalSlots: 15,
-      sessionId: 'demo-session',
-      sessionCode: 'KYAH8V',
+      id: `demo-${r.id}`,
+      name: r.name,
+      abbreviation: r.abbreviation,
+      logoUrl: r.logoUrl,
+      topics: [r.topic],
+      totalSlots: r.countries.length,
+      sessionId: `demo-${r.id}`,
+      sessionCode: r.id.toUpperCase(),
       releasedToChairsAt: iso(3 * 24 * 3600e3),
       delegationSize: 1,
       chairUserIds: [],
-      chairs: [
-        { id: null, name: 'Sofia Marín', avatarUrl: null },
-        { id: null, name: 'Daniel Osei', avatarUrl: null },
-      ],
+      chairs: r.chairs.map((name) => ({ id: null, name, avatarUrl: null })),
       pendingChairs: [],
     },
     session: {
-      id: 'demo-session',
-      code: 'KYAH8V',
-      name: 'UN Security Council',
-      phase: 'speakers-list',
-      caucus: null,
-      chairNames: ['Sofia Marín', 'Daniel Osei'],
-      headChair: 'Sofia Marín',
+      id: `demo-${r.id}`,
+      code: r.id.toUpperCase(),
+      name: r.name,
+      phase: r.phase,
+      caucus: r.caucus ?? null,
+      chairNames: [...r.chairs],
+      headChair: r.chairs[0],
       suspendedAt: null,
       endedAt: null,
-      updatedAt: iso(28e3),
+      updatedAt: iso(20e3),
       resumingChair: null,
       quorumThreshold: 'simple',
       scoringFactors: [],
       factorScaleMax: 10,
     },
-    currentSpeaker: { country: 'Kenya', timeRemaining: 90, startedAt: iso(28e3) },
-    delegates: PRESENT.map((country, i) => ({
+    currentSpeaker: r.speaker
+      ? { country: r.speaker.country, timeRemaining: r.speaker.slot, startedAt: iso(r.speaker.spokeSec * 1000) }
+      : null,
+    delegates: r.countries.map((country, i) => ({
       country,
       status: i % 4 === 0 ? 'present-voting' : 'present',
       isObserver: false,
     })),
-    gslQueue: ['France', 'Mexico', 'Norway', 'Ghana', 'United Kingdom', 'Indonesia', 'Brazil', 'Egypt'],
-    caucusQueue: [],
+    gslQueue: r.phase === 'speakers-list' ? r.queue : [],
+    caucusQueue: r.phase === 'moderated-caucus' ? r.queue : [],
     documents: [
-      { type: 'working-paper', status: 'passed', docCode: 'WP 1.1', title: 'Humanitarian corridors in the Sahel', sponsors: ['France', 'Ghana'], fileUrl: null, fileName: null, content: null, createdAt: iso(3600e3) },
-      { type: 'draft-resolution', status: 'submitted', docCode: 'DR 1/1', title: 'Restoring stability and protecting civilians in the Sahel', sponsors: ['Kenya', 'Norway', 'Brazil'], fileUrl: null, fileName: null, content: null, createdAt: iso(1800e3) },
+      { type: 'working-paper', status: 'passed', docCode: 'WP 1.1', title: 'Working paper', sponsors: r.countries.slice(0, 2), fileUrl: null, fileName: null, content: null, createdAt: iso(3600e3) },
     ],
-    speechLogs: [
-      { country: 'China', seconds: 84, context: 'speakers-list', topic: 'Maintaining peace in the Sahel', at: iso(240e3) },
-      { country: 'Egypt', seconds: 90, context: 'speakers-list', topic: 'Maintaining peace in the Sahel', at: iso(140e3) },
-      { country: 'India', seconds: 71, context: 'speakers-list', topic: 'Maintaining peace in the Sahel', at: iso(60e3) },
-    ],
+    speechLogs: r.countries.slice(0, 3).map((country, i) => ({
+      country, seconds: 60 + i * 9, context: 'speakers-list', topic: r.topic, at: iso((i + 1) * 90e3),
+    })),
     eventLogs: [],
-    scores: [
-      { country: 'France', total: 34 }, { country: 'Kenya', total: 29 }, { country: 'China', total: 25 },
-      { country: 'Norway', total: 21 }, { country: 'Ghana', total: 18 },
-    ],
-    lastActivityAt: iso(28e3),
-    lastMessageAt: iso(90e3),
+    scores: r.scores.map(([country, total]) => ({ country, total })),
+    lastActivityAt: iso(20e3),
+    lastMessageAt: iso(60e3),
     hasHistory: true,
     feedback: [],
   };
+}
+
+/** Three rooms of one invented conference, as the live wall shows them. */
+export function demoLiveRooms(now: number): LiveCommittee[] {
+  const iso = (msAgo: number) => new Date(now - msAgo).toISOString();
+  return [
+    build(now, {
+      id: 'unsc', name: 'United Nations Security Council', abbreviation: 'UNSC', topic: 'Maintaining peace in the Sahel',
+      logoUrl: '/logos/un.svg', chairs: ['Sofia Marín', 'Daniel Osei'],
+      countries: ['China', 'France', 'United Kingdom', 'United States', 'Russia', 'Brazil', 'Kenya', 'India', 'Japan', 'Germany', 'Mexico', 'Egypt', 'Norway', 'Ghana', 'Indonesia'],
+      phase: 'speakers-list', speaker: { country: 'Kenya', spokeSec: 28, slot: 90 },
+      queue: ['France', 'Mexico', 'Norway', 'Ghana', 'United Kingdom', 'Indonesia', 'Brazil', 'Egypt'],
+      scores: [['France', 34], ['Kenya', 29], ['China', 25]],
+    }),
+    build(now, {
+      id: 'who', name: 'World Health Organization', abbreviation: 'WHO', topic: 'Vaccine access in low-income countries',
+      logoUrl: '/logos/un.svg', chairs: ['Amira Haddad', 'Lucas Weber'],
+      countries: ['Argentina', 'Australia', 'Canada', 'Chile', 'Colombia', 'Ethiopia', 'Italy', 'Morocco', 'Nigeria', 'Pakistan', 'Peru', 'Philippines', 'South Africa', 'Spain', 'Thailand', 'Turkey', 'Viet Nam', 'Zambia'],
+      phase: 'moderated-caucus', speaker: { country: 'Nigeria', spokeSec: 21, slot: 60 },
+      caucus: {
+        type: 'moderated', motionLabel: 'Moderated Caucus', purpose: 'Funding local vaccine production',
+        totalTime: 600, remainingTime: 412, speakingTime: 60, currentSpeaker: 'Nigeria', totalStartedAt: iso(21e3),
+        spokenCountries: ['Canada', 'Peru', 'Italy'],
+      },
+      queue: ['Philippines', 'Chile', 'Morocco', 'Spain', 'Zambia'],
+      scores: [['Nigeria', 31], ['Canada', 27], ['Peru', 22]],
+    }),
+    build(now, {
+      id: 'disec', name: 'Disarmament and International Security Committee', abbreviation: 'DISEC', topic: 'Autonomous weapons systems',
+      logoUrl: '/logos/un.svg', chairs: ['Hana Sato', 'Omar Farouk'],
+      countries: ['Austria', 'Belgium', 'Bangladesh', 'Cuba', 'Denmark', 'Finland', 'Greece', 'Ireland', 'Israel', 'Jordan', 'Kazakhstan', 'Malaysia', 'Netherlands', 'New Zealand', 'Poland', 'Qatar', 'Senegal', 'Sweden', 'Switzerland', 'Uruguay'],
+      phase: 'unmoderated-caucus',
+      caucus: {
+        type: 'unmoderated', motionLabel: 'Unmoderated Caucus', purpose: 'Drafting a working paper',
+        totalTime: 900, remainingTime: 540, totalStartedAt: iso(95e3), spokenCountries: [],
+      },
+      queue: [],
+      scores: [['Ireland', 28], ['Sweden', 24], ['Qatar', 19]],
+    }),
+  ];
 }

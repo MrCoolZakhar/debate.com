@@ -92,6 +92,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return [
     { url: url('/'), lastModified: hubDate, changeFrequency: 'daily', priority: 1 },
     { url: url('/conferences/explore'), lastModified: hubDate, changeFrequency: 'daily', priority: 0.9 },
+    // The server-rendered A to Z directory: the crawl path to every conference
+    // page and country hub (linked from every footer). Lists conferences, so
+    // its lastmod is the newest conference update.
+    { url: url('/conferences/all'), lastModified: hubDate, changeFrequency: 'daily', priority: 0.8 },
     { url: url('/conferences/map'), lastModified: hubDate, changeFrequency: 'weekly', priority: 0.6 },
     // The organiser landing page (static copy plus the live conference list).
     { url: url('/organisers'), lastModified: hubDate, changeFrequency: 'weekly', priority: 0.9 },

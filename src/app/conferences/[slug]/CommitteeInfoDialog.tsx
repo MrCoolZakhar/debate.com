@@ -38,7 +38,16 @@ export interface DaisChair {
  * risk pointing at the wrong person.
  *
  * Up to 3 chairs sit in one row at full size. From 4 they are drawn smaller
- * and split over two rows (the first row takes the extra one when odd).
+ * and split over rows of at most 3 on the card (4 in the dialog), the first
+ * row taking the extra one when odd. The card never draws more than 6: from 7
+ * it shows 5 and a plain "+N" in the sixth place.
+ *
+ * FIT (24 Sep 2026, owner: "chairs go outside of the committee"): every item
+ * is a flex cell that may SHRINK below its nominal width (`flex: 1 1 0`,
+ * `min-width: 0`, capped at `itemW`), and each row fills the column, so three
+ * chairs share the card's 258px instead of asking for 336px and hanging out
+ * of both sides. A name wraps inside its cell and stops at two lines with an
+ * ellipsis; the full name is the tooltip.
  */
 export function CommitteeDais({
   chairs,
@@ -55,20 +64,57 @@ export function CommitteeDais({
   const avatar = many ? (size === 'dialog' ? 46 : 42) : 52;
   const itemW = many ? (size === 'dialog' ? 88 : 78) : 96;
   const nameSize = many ? 10.5 : 11.5;
-  const rows = many
-    ? [chairs.slice(0, Math.ceil(chairs.length / 2)), chairs.slice(Math.ceil(chairs.length / 2))]
-    : [chairs];
-  let offset = 0;
+  const perRow = size === 'dialog' ? 4 : 3;
+  const cap = size === 'card' ? perRow * 2 : Infinity;
+  const shown = chairs.length > cap ? chairs.slice(0, cap - 1) : chairs;
+  const hidden = chairs.slice(shown.length);
+  const cells = shown.length + (hidden.length > 0 ? 1 : 0);
+  const rowCount = Math.ceil(cells / perRow);
+  const gap = many || cells === 3 ? 12 : 24;
+  // Row boundaries over the cells, spread evenly with the earlier rows taking
+  // the extra one (the "+N" cell, when present, is last).
+  const rowStarts: number[] = [];
+  for (let r = 0, at = 0; r < rowCount; r++) {
+    rowStarts.push(at);
+    at += Math.ceil((cells - at) / (rowCount - r));
+  }
+
+  const cellStyle: CSSProperties = { flex: '1 1 0', minWidth: 0, maxWidth: itemW };
+  const clamp2: CSSProperties = {
+    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+    overflowWrap: 'anywhere', maxWidth: '100%',
+  };
 
   return (
-    <div className="flex flex-col items-center" style={{ gap: many ? 14 : 0 }}>
-      {rows.map((row, ri) => {
-        const start = offset;
-        offset += row.length;
+    <div className="flex flex-col items-stretch w-full" style={{ gap: many ? 14 : 0 }}>
+      {rowStarts.map((start, ri) => {
+        const end = ri + 1 < rowStarts.length ? rowStarts[ri + 1] : cells;
+        const idxs = Array.from({ length: end - start }, (_, k) => start + k);
         return (
-          <div key={ri} className="flex items-start justify-center" style={{ gap: many ? 12 : 24 }}>
-            {row.map((ch, i) => {
-              const idx = start + i;
+          <div key={ri} className="flex items-start justify-center w-full" style={{ gap }}>
+            {idxs.map((idx) => {
+              if (idx >= shown.length) {
+                const names = hidden.map((h) => h.name).join(', ');
+                return (
+                  <div
+                    key="more"
+                    className="flex flex-col items-center text-center"
+                    style={cellStyle}
+                    title={names}
+                    role="img"
+                    aria-label={`${hidden.length} more chairs: ${names}`}
+                  >
+                    <span
+                      aria-hidden
+                      className="flex items-center justify-center"
+                      style={{ width: avatar, height: avatar, color: 'var(--gv-on-surface)', opacity: 0.7, fontFamily: FONT, fontSize: 15, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}
+                    >
+                      +{hidden.length}
+                    </span>
+                  </div>
+                );
+              }
+              const ch = shown[idx];
               const uid = linkable ? (chairIds ?? [])[idx] : null;
               const title = chairTitleLabel(ch.title);
               const inner = (
@@ -76,34 +122,36 @@ export function CommitteeDais({
                   <PersonAvatar name={ch.name} url={ch.avatar_url} px={avatar} />
                   <span
                     className="font-semibold mt-2 leading-tight"
-                    style={{ color: 'var(--gv-on-surface)', fontFamily: FONT, fontSize: nameSize, overflowWrap: 'anywhere' }}
+                    title={ch.name}
+                    style={{ ...clamp2, color: 'var(--gv-on-surface)', fontFamily: FONT, fontSize: nameSize }}
                   >
                     {ch.name}
                   </span>
                   {title && (
                     <span
-                      className="mt-0.5 leading-tight"
-                      style={{ color: 'var(--gv-on-surface)', opacity: 0.7, fontFamily: FONT, fontSize: nameSize - 1.5, fontWeight: 500 }}
+                      className="mt-0.5 leading-tight truncate"
+                      title={title}
+                      style={{ maxWidth: '100%', color: 'var(--gv-on-surface)', opacity: 0.7, fontFamily: FONT, fontSize: nameSize - 1.5, fontWeight: 500 }}
                     >
                       {title}
                     </span>
                   )}
                 </>
               );
-              const cls = 'flex flex-col items-center text-center';
-              return uid ? (
-                <ProfileLink
-                  key={`${ch.name}-${idx}`}
-                  userId={uid}
-                  name={ch.name}
-                  className={`${cls} rounded-lg transition-transform hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--gv-main)]`}
-                  style={{ width: itemW }}
-                >
-                  {inner}
-                </ProfileLink>
-              ) : (
-                <div key={`${ch.name}-${idx}`} className={cls} style={{ width: itemW }}>
-                  {inner}
+              const cls = 'flex flex-col items-center text-center w-full';
+              return (
+                <div key={`${ch.name}-${idx}`} className="flex flex-col items-center text-center" style={cellStyle}>
+                  {uid ? (
+                    <ProfileLink
+                      userId={uid}
+                      name={ch.name}
+                      className={`${cls} rounded-lg transition-transform hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--gv-main)]`}
+                    >
+                      {inner}
+                    </ProfileLink>
+                  ) : (
+                    <div className={cls}>{inner}</div>
+                  )}
                 </div>
               );
             })}

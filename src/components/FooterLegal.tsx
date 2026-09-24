@@ -8,9 +8,14 @@ import { companyLegalLines, TRADING_NAME } from '@/lib/companyDetails';
  * components (e.g. /privacy) and client components. Hover states are static
  * Tailwind classes rather than inline JS so no 'use client' boundary is needed.
  *
- * Only links to routes that exist: the two public hubs (/conferences/explore,
- * /blog), the organiser landing page (/organisers), /terms, /privacy (and its #your-rights anchor). Do NOT add a
- * /cookies link here until that page actually exists.
+ * Only links to routes that exist: the public hubs (/conferences/explore,
+ * /conferences/all, /blog), the organiser landing page (/organisers), the two
+ * session tools (/create, /join), /terms, /privacy (and its #your-rights
+ * anchor). Do NOT add a /cookies link here until that page actually exists.
+ *
+ * Information links only (CLAUDE.md §4): never a list of conferences and never
+ * a per-conference link. "All conferences" is a link TO the directory page,
+ * which is the crawl path to every conference page and country hub.
  */
 
 type Tone = 'ivory' | 'forest';
@@ -45,7 +50,7 @@ export default function FooterLegal({
   const companyLines = companyLegalLines();
   const year = new Date().getFullYear();
 
-  // These five are 11.5px text, which gave them a 17px-tall hit area — a third
+  // These links are 11.5px text, which gave them a 17px-tall hit area — a third
   // of the 44px tap-target floor, on a row where "Terms of Service" and
   // "Privacy Policy" sit two pixels apart. Padding the anchor (rather than
   // growing the type) makes each one thumb-sized on a phone and leaves the
@@ -62,10 +67,16 @@ export default function FooterLegal({
         className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1"
         style={{ fontSize: '11.5px' }}
       >
-        {/* Hub links: every public footer is a crawl path to the two hubs
-            that list everything else (CLAUDE.md §4, indexability). */}
+        {/* Hub links: every public footer is a crawl path to the hubs that
+            list everything else (CLAUDE.md §4, indexability). /conferences/all
+            is the server-rendered directory of every conference and country
+            hub; the explore grid renders its links client-side. */}
         <Link href="/conferences/explore" className={hubLink}>
           Explore Conferences
+        </Link>
+        <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
+        <Link href="/conferences/all" className={hubLink}>
+          All conferences
         </Link>
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
         <Link href="/blog" className={hubLink}>
@@ -76,6 +87,17 @@ export default function FooterLegal({
             information link, as the footer rule allows (CLAUDE.md §4). */}
         <Link href="/organisers" className={hubLink}>
           List your conference
+        </Link>
+        <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
+        {/* The session tools, a plain server-rendered way in to both from
+            every public page (the homepage's extra link row that carried them
+            was removed on 24 Sep 2026). */}
+        <Link href="/create" className={hubLink}>
+          Create a committee
+        </Link>
+        <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
+        <Link href="/join" className={hubLink}>
+          Join a session
         </Link>
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
         <Link href="/terms" className={hubLink}>
