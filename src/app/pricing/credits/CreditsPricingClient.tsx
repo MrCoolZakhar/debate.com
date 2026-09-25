@@ -99,7 +99,7 @@ export default function CreditsPricingClient() {
           <article className="gv-cr-lead">
             <Emoji3D name="Ticket" size={56} fallback={Ticket} fallbackColor={P.forest} />
             <div>
-              <h3>Apply to a conference</h3>
+              <h3>Apply to a Conference</h3>
               <p>Delegates, head delegates, faculty advisors and observers use one. Chairs and staff never do.</p>
             </div>
           </article>
@@ -107,7 +107,7 @@ export default function CreditsPricingClient() {
             <li className="gv-cr-row">
               <Emoji3D name="Inbox tray" size={40} fallback={Inbox} fallbackColor={P.forest} />
               <div>
-                <h3>Import your delegates</h3>
+                <h3>Import Your Delegates</h3>
                 <p>A whole delegation from one balance</p>
               </div>
               <span className="gv-cr-soon">Soon</span>
@@ -115,7 +115,7 @@ export default function CreditsPricingClient() {
             <li className="gv-cr-row">
               <Emoji3D name="Briefcase" size={40} fallback={Briefcase} fallbackColor={P.forest} />
               <div>
-                <h3>The job board</h3>
+                <h3>The Job Board</h3>
                 <p>Chair and secretariat roles across conferences</p>
               </div>
               <span className="gv-cr-soon">Soon</span>

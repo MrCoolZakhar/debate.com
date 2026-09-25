@@ -702,7 +702,7 @@ export default function LiveStatusPage() {
         <div>
           <Eyebrow>Live status</Eyebrow>
           <h1 className="font-black" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 28, lineHeight: 1.1, marginTop: 2 }}>
-            Committee floor
+            Committee Floor
           </h1>
         </div>
         <div className="flex items-center gap-3">

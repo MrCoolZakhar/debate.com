@@ -887,7 +887,7 @@ export default function AwardsPage() {
             <NeuCard style={{ padding: '18px 22px', marginBlockStart: 22 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBlockEnd: 4 }}>
                 <Building2 size={16} style={{ color: NEU.forest }} />
-                <h2 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, color: NEU.ink }}>Delegation standings</h2>
+                <h2 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, color: NEU.ink }}>Delegation Standings</h2>
               </div>
               <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: SOFT, marginBlockEnd: 12 }}>
                 Committee honours tallied by school or society. Weights: {Object.entries(AWARD_WEIGHT).map(([k, w]) => `${config.types.find((t) => t.key === k)?.label ?? k} ${w}`).join(', ')}.

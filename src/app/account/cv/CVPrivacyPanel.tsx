@@ -75,7 +75,7 @@ export default function CVPrivacyPanel({
     <GlassCard className="!p-5 mb-8">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-3">
         <h2 style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 17, color: '#1C1410', margin: 0 }}>
-          Who can see your CV
+          Who Can See Your CV
         </h2>
         {!cvPrivate && publicHref && (
           <a

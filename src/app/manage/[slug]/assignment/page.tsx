@@ -2311,7 +2311,7 @@ function DelegationConflictModal({
       <NeuModalCard width={440}>
         <div className="flex items-start justify-between gap-3 mb-3">
           <h2 className="font-black text-base" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-            Mixed delegation seats
+            Mixed Delegation Seats
           </h2>
           <button onClick={onClose} disabled={!!busy} className="focus:outline-none flex-shrink-0" style={{ color: NEU.muted }}><X size={18} /></button>
         </div>

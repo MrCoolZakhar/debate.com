@@ -64,9 +64,9 @@ export const translations = {
     // --- Sessions landing (sl_*), 24 Sep 2026; reworked 25 Sep 2026 ---
     // Buttons are UPPERCASE, titles Title Case with the last word (the
     // *_accent key) in gold, no full stop on titles, taglines or captions.
-    sl_h1_lead: "Run the",
-    sl_h1_accent: "room",
-    sl_lede: "From initial roll call to final voting. One session, any device.",
+    sl_h1_lead: "MUN done",
+    sl_h1_accent: "right.",
+    sl_lede: "Roll Call, Motions, Voting, Scoring.\nAll in one Session.",
     sl_start: "Start committee",
     sl_code_placeholder: "Session code",
     sl_join: "Join",
@@ -1726,9 +1726,9 @@ export const translations = {
     hero_subtitle: 'La forma más sencilla de dirigir tu comité de MUN.',
     hero_start_committee: 'CREAR MI COMITÉ →',
     // --- Sessions landing (sl_*), 24 Sep 2026; reworked 25 Sep 2026 ---
-    sl_h1_lead: "Dirige la",
-    sl_h1_accent: "sala",
-    sl_lede: "Del pase de lista inicial a la votación final. Una sesión, cualquier dispositivo.",
+    sl_h1_lead: "MUN, bien",
+    sl_h1_accent: "hecho.",
+    sl_lede: "Pase de lista, mociones, votación, puntuación.\nTodo en una sola sesión.",
     sl_start: "Crear comité",
     sl_code_placeholder: "Código de sesión",
     sl_join: "Unirse",
@@ -3387,9 +3387,9 @@ export const translations = {
     hero_subtitle: 'La façon la plus simple de gérer votre comité de MUN.',
     hero_start_committee: 'CRÉER MON COMITÉ →',
     // --- Sessions landing (sl_*), 24 Sep 2026; reworked 25 Sep 2026 ---
-    sl_h1_lead: "Dirigez la",
-    sl_h1_accent: "salle",
-    sl_lede: "De l'appel initial au vote final. Une session, n'importe quel appareil.",
+    sl_h1_lead: "Le MUN, bien",
+    sl_h1_accent: "fait.",
+    sl_lede: "Appel, motions, vote, notation.\nTout en une seule session.",
     sl_start: "Créer un comité",
     sl_code_placeholder: "Code de session",
     sl_join: "Rejoindre",
@@ -5048,9 +5048,9 @@ export const translations = {
     hero_subtitle: 'أسهل طريقة لإدارة لجنة المحاكاة الخاصة بك.',
     hero_start_committee: 'ابدأ لجنتك ←',
     // --- Sessions landing (sl_*), 24 Sep 2026; reworked 25 Sep 2026 ---
-    sl_h1_lead: "أدر",
-    sl_h1_accent: "القاعة",
-    sl_lede: "من تسجيل الحضور الأول إلى التصويت النهائي. جلسة واحدة، أي جهاز.",
+    sl_h1_lead: "MUN",
+    sl_h1_accent: "كما ينبغي.",
+    sl_lede: "تسجيل الحضور، الاقتراحات، التصويت، التقييم.\nكل ذلك في جلسة واحدة.",
     sl_start: "ابدأ اللجنة",
     sl_code_placeholder: "رمز الجلسة",
     sl_join: "انضم",

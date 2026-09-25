@@ -89,7 +89,7 @@ export function InviteLinkCard({ accessToken, societyId, conferenceId, societyNa
           <Link2 size={19} strokeWidth={2.3} aria-hidden />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 style={{ fontFamily: OUTFIT, fontSize: 16, fontWeight: 800, color: NEU.ink }}>Invite delegates</h2>
+          <h2 style={{ fontFamily: OUTFIT, fontSize: 16, fontWeight: 800, color: NEU.ink }}>Invite Delegates</h2>
           <p style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.inkSoft, marginTop: 2, lineHeight: 1.45 }}>
             Share this link. New people apply as a delegate of {societyName}. People who already applied are added to it.
           </p>

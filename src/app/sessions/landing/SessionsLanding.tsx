@@ -38,10 +38,13 @@ type Lang = 'en' | 'es' | 'fr' | 'ar';
  *  `lg` from 1024px, `sm` below it (vw-based, so it never wraps on a phone).
  *  About 10% bigger than the 24 Sep sizes; French is the longest line. */
 const HEADLINE_SIZE: Record<Lang, { lg: string; sm: string }> = {
-  en: { lg: 'clamp(48px, 5.7vw, 95px)', sm: 'clamp(38px, 11.4vw, 80px)' },
-  es: { lg: 'clamp(46px, 5.4vw, 92px)', sm: 'clamp(36px, 10.6vw, 78px)' },
-  fr: { lg: 'clamp(42px, 5vw, 86px)', sm: 'clamp(32px, 9.4vw, 72px)' },
-  ar: { lg: 'clamp(46px, 5.4vw, 92px)', sm: 'clamp(36px, 10.6vw, 78px)' },
+  // "MUN done right." is longer than the old headline and stays on ONE line
+  // (nowrap), so the size is what fits the left column at 1280 (about 500px):
+  // 4.6vw = 59px there, 78px on a wide screen.
+  en: { lg: 'clamp(44px, 4.6vw, 78px)', sm: 'clamp(36px, 10vw, 68px)' },
+  es: { lg: 'clamp(42px, 4.4vw, 74px)', sm: 'clamp(34px, 9.4vw, 64px)' },
+  fr: { lg: 'clamp(40px, 4.1vw, 70px)', sm: 'clamp(32px, 8.8vw, 60px)' },
+  ar: { lg: 'clamp(42px, 4.4vw, 74px)', sm: 'clamp(34px, 9.4vw, 64px)' },
 };
 
 export default function SessionsLanding() {
@@ -197,28 +200,29 @@ const CSS = `
 [dir="rtl"] .sl-wash { background:
   linear-gradient(270deg, ${IVORY} 0%, rgba(237,231,216,.93) 34%, rgba(237,231,216,.55) 62%, rgba(237,231,216,.35) 100%); }
 .sl-hero-in { max-width: 1520px; padding: 116px clamp(16px, 4vw, 64px) 72px; display: grid;
-  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.22fr); grid-template-areas: "h dev" "copy dev"; grid-template-rows: auto 1fr;
+  grid-template-columns: minmax(0, 1.02fr) minmax(0, 1.12fr); grid-template-areas: "h dev" "copy dev"; grid-template-rows: auto 1fr;
   column-gap: clamp(24px, 3vw, 56px); row-gap: 0; align-items: start; }
 .sl-h1 { grid-area: h; align-self: end; padding-top: clamp(12px, 2.4vw, 44px); position: relative; z-index: 3; margin: 0; font-weight: 800; line-height: 0.98; letter-spacing: -0.04em; white-space: nowrap; color: ${INK}; font-size: var(--h1-lg); }
 .sl-copy { grid-area: copy; padding-top: clamp(14px, 1.4vw, 22px); }
-.sl-lede { font-size: clamp(18px, 1.4vw, 21px); font-weight: 500; line-height: 1.4; margin: 0; max-width: 28em; letter-spacing: -0.005em; }
-.sl-start { display: inline-flex; align-items: center; justify-content: center; margin-top: 28px; min-height: 56px; padding: 0 32px;
-  border: 0; border-radius: 12px; background: ${CTA_GRADIENT}; color: ${WHITE}; font: 700 17px/1 ${BRAND}; cursor: pointer;
+/* Two lines by the text itself ("Roll Call, Motions, Voting, Scoring." / "All in one Session."), never wrapped under the devices. */
+.sl-lede { font-size: clamp(20px, 1.7vw, 27px); font-weight: 500; line-height: 1.35; margin: 0; max-width: 24em; letter-spacing: -0.005em; white-space: pre-line; }
+.sl-start { display: inline-flex; align-items: center; justify-content: center; margin-top: 32px; min-height: 66px; padding: 0 42px;
+  border: 0; border-radius: 14px; background: ${CTA_GRADIENT}; color: ${WHITE}; font: 700 clamp(18px, 1.35vw, 21px)/1 ${BRAND}; cursor: pointer;
   box-shadow: 0 10px 24px -14px rgba(27,56,40,.8);
   transition: transform 160ms cubic-bezier(.22,1,.36,1), filter 200ms ease; }
 .sl-start:hover { filter: brightness(1.08); }
 .sl-start:active { transform: scale(.97); }
 .sl-start:focus-visible { outline: 2px solid ${GOLD}; outline-offset: 3px; }
-.sl-join { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
-.sl-join-box { display: inline-flex; align-items: center; height: 52px; padding: 0 4px 0 16px; border-radius: 12px; background: rgba(255,255,255,.85); box-shadow: inset 0 0 0 1.5px ${HAIR}; }
-.sl-join-box input { width: 136px; height: 44px; border: 0; background: transparent; outline: none; font: 700 15px/1 ${BRAND}; letter-spacing: .1em; text-transform: uppercase; color: ${INK}; }
+.sl-join { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+.sl-join-box { display: inline-flex; align-items: center; height: 62px; padding: 0 6px 0 20px; border-radius: 14px; background: rgba(255,255,255,.85); box-shadow: inset 0 0 0 1.5px ${HAIR}; }
+.sl-join-box input { width: 168px; height: 50px; border: 0; background: transparent; outline: none; font: 700 18px/1 ${BRAND}; letter-spacing: .1em; text-transform: uppercase; color: ${INK}; }
 .sl-join-box input::placeholder { letter-spacing: 0; text-transform: none; font-weight: 500; color: ${INK_SOFT}; }
-.sl-join-box button { min-height: 44px; padding: 0 18px; border: 0; border-radius: 10px; background: ${CTA_GRADIENT}; color: ${WHITE}; font: 700 15px/1 ${BRAND}; cursor: pointer; transition: filter 200ms ease; }
+.sl-join-box button { min-height: 50px; padding: 0 24px; border: 0; border-radius: 10px; background: ${CTA_GRADIENT}; color: ${WHITE}; font: 700 17px/1 ${BRAND}; cursor: pointer; transition: filter 200ms ease; }
 .sl-join-box button:hover:not(:disabled) { filter: brightness(1.08); }
 .sl-join-box button:disabled { background: ${IVORY}; color: ${INK_SOFT}; cursor: default; }
 .sl-join-box button:focus-visible { outline: 2px solid ${GOLD}; outline-offset: 2px; }
 .sl-join-box:focus-within { box-shadow: inset 0 0 0 1.5px ${FOREST}; background: ${WHITE}; }
-.sl-free { margin: 12px 0 0; font-size: 13.5px; font-weight: 500; }
+.sl-free { margin: 14px 0 0; font-size: 14.5px; font-weight: 500; }
 .sl-dismiss { min-height: 44px; padding: 0 8px; background: transparent; border: 0; color: rgba(238,217,138,.85); font: 700 14px/1 ${BRAND}; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .sl-dismiss:hover { color: ${GOLD_TEXT}; }
 .sl-dismiss:focus-visible { outline: 2px solid ${GOLD_TEXT}; outline-offset: 2px; border-radius: 6px; }
@@ -232,7 +236,9 @@ const CSS = `
 }
 @media (max-width: 1023px) {
   .sl-hero { min-height: 0; }
-  .sl-hero-in { grid-template-columns: minmax(0, 1fr); grid-template-areas: "h" "copy" "dev"; grid-template-rows: auto; padding-top: 104px; padding-bottom: 56px; }
+  /* 128px, not 104: the two-line tagline sits higher under the smaller phone
+     headline, and the nav (72px, the hero starts behind it) must never touch it. */
+  .sl-hero-in { grid-template-columns: minmax(0, 1fr); grid-template-areas: "h" "copy" "dev"; grid-template-rows: auto; padding-top: 128px; padding-bottom: 56px; }
   .sl-copy { padding-top: 6px; }
   .sl-h1 { font-size: var(--h1-sm); padding-top: 0; }
   .sl-devices { margin: 40px -8% 24px 17%; }

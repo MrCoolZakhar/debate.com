@@ -284,7 +284,7 @@ function StepHeader({ n, label, sub, complete, open, onClick, status = 'idle', h
 
 const STEPS = [
   {
-    n: 1, label: 'General info', sub: 'Dates, capacity and how applications are handled',
+    n: 1, label: 'General Info', sub: 'Dates, capacity and how applications are handled',
     hint: 'The window this role can apply in, and what happens to an application once it arrives. Nothing is public before the opening time, and the link starts working on its own the moment it passes, so you do not have to be at a keyboard. Max accepted is the ceiling on how many you will take; acceptance decides whether they are let in automatically or wait for you to review them; payment decides how early they can pay.',
   },
   {
@@ -4139,7 +4139,7 @@ export default function SettingsPage() {
           {/* Banner card */}
           <div style={cardStyle}>
             <StepHeader
-              n={2} label="Conference banner and logo" sub="The images at the top of your page."
+              n={2} label="Conference Banner and Logo" sub="The images at the top of your page."
               complete={!!conference.banner_url && !!conference.logo_url} open={openConfSection === 2}
               onClick={() => setOpenConfSection(openConfSection === 2 ? 0 : 2)}
             />
@@ -4289,7 +4289,7 @@ export default function SettingsPage() {
           {/* Conference Details card */}
           <div style={cardStyle}>
             <StepHeader
-              n={3} label="Conference details" sub="Name, dates, location, description and age range."
+              n={3} label="Conference Details" sub="Name, dates, location, description and age range."
               complete={true} open={openConfSection === 3}
               status={detailsSaving ? 'saving' : detailsSaved ? 'saved' : 'idle'}
               onClick={() => setOpenConfSection(openConfSection === 3 ? 0 : 3)}
@@ -4605,7 +4605,7 @@ export default function SettingsPage() {
               tab: partners are conference identity, not a privacy setting. */}
           <div style={cardStyle}>
             <StepHeader
-              n={4} label="Partners and sponsors" sub="Other conferences and companies shown on your page."
+              n={4} label="Partners and Sponsors" sub="Other conferences and companies shown on your page."
               complete={true} open={openConfSection === 4}
               onClick={() => setOpenConfSection(openConfSection === 4 ? 0 : 4)}
             />
@@ -5042,7 +5042,7 @@ export default function SettingsPage() {
               conference, then the five URL fields. */}
           <div style={cardStyle}>
             <StepHeader
-              n={5} label="Social media and communication" sub="How applicants find you and reach you."
+              n={5} label="Social Media and Communication" sub="How applicants find you and reach you."
               complete={true} open={openConfSection === 5}
               status={visualSaving ? 'saving' : visualSaved ? 'saved' : 'idle'}
               onClick={() => setOpenConfSection(openConfSection === 5 ? 0 : 5)}

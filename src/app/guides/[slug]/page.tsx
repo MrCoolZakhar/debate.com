@@ -144,7 +144,7 @@ export default async function GuidePage({ params }: { params: Promise<{ slug: st
           </div>
 
           <section className="gvg-more" aria-labelledby="gvg-more-title">
-            <h2 id="gvg-more-title">More premium guides</h2>
+            <h2 id="gvg-more-title">More Premium Guides</h2>
             <div className="gvg-cards">
               {others.map((g) => (
                 <GuideCard key={g.slug} guide={g} />

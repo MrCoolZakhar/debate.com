@@ -8,7 +8,7 @@
 
 import { Suspense, useState } from 'react';
 import Link from 'next/link';
-import { BookOpen, Briefcase, Check, FolderArchive, Infinity as InfinityIcon, Mail, Ticket, Wrench } from 'lucide-react';
+import { BookOpen, Briefcase, Check, FolderArchive, Infinity as InfinityIcon, Ticket } from 'lucide-react';
 import { Emoji3D, OUTFIT } from '@/components/neu';
 import { GoldWord } from '@/components/BrandHeading';
 import { formatUsd } from '@/lib/creditPricing';
@@ -21,12 +21,11 @@ import RenewOnceOpener from '@/components/pricing/RenewOnceOpener';
 import { ActionButton, ActionLink, FOCUS_RING, P, PricingStyles, QuestionBox } from '@/components/pricing/pricingKit';
 
 const INCLUDED: { name: string; fallback: typeof Ticket; label: string; href?: string }[] = [
-  { name: 'Ticket', fallback: Ticket, label: 'Every application covered' },
-  { name: 'Briefcase', fallback: Briefcase, label: 'Premium job board roles' },
-  { name: 'File cabinet', fallback: FolderArchive, label: 'Your MUN archive' },
+  // Kept in step with BENEFITS in the Unlimited pop-up (owner, 25 Sep 2026).
+  { name: 'Ticket', fallback: Ticket, label: 'Apply to as many conferences as you like' },
   { name: 'Books', fallback: BookOpen, label: 'Premium MUN guides', href: '/guides' },
-  { name: 'Toolbox', fallback: Wrench, label: 'Tools for your upcoming conferences' },
-  { name: 'Envelope', fallback: Mail, label: 'Unlimited email builder for organizers' },
+  { name: 'File cabinet', fallback: FolderArchive, label: 'Your MUN archive' },
+  { name: 'Briefcase', fallback: Briefcase, label: 'Premium job board roles' },
 ];
 
 const FREE_LIST = ['Run and join sessions', 'Find and apply to conferences', 'The job board', 'Your MUN CV'];

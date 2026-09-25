@@ -44,7 +44,7 @@ export default function GuidesIndexPage() {
             <span aria-hidden="true">/</span>
             <span>Premium guides</span>
           </nav>
-          <h1 className="gvg-h1" style={{ marginTop: 20 }}>Premium MUN guides</h1>
+          <h1 className="gvg-h1" style={{ marginTop: 20 }}>Premium MUN Guides</h1>
           <p className="gvg-lead">
             The long versions. Each guide is a complete playbook for one job at a conference: winning the room as a
             delegate, chairing a committee people remember, funding and growing a conference, and designing committees

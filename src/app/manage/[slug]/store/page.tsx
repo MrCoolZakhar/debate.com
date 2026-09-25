@@ -153,7 +153,7 @@ export default function StorePage() {
                   </div>
                   <div className="gv-st-product-foot">
                     <span className="gv-st-product-price">{priceLine(data.prices[p])}<small>credits</small></span>
-                    <span className="gv-st-link" aria-hidden>BOOK</span>
+                    <span className="gv-st-link" aria-hidden>Book</span>
                   </div>
                 </button>
               ))}
@@ -172,7 +172,7 @@ export default function StorePage() {
                 <Big n={shown.sponsorship.used} cap="used so far" />
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <button type="button" className="gv-st-btn gv-st-forest" onClick={() => setPopup({ kind: 'sponsorship' })}>ADD CREDITS</button>
+                <button type="button" className="gv-st-btn gv-st-forest" onClick={() => setPopup({ kind: 'sponsorship' })}>Add credits</button>
                 {shown.sponsorship.available > 0 && !backOpen && (
                   <button type="button" className="gv-st-link" onClick={() => { setBackOpen(true); setBackText(String(shown.sponsorship.available)); }}>Send unused credits back</button>
                 )}
@@ -182,7 +182,7 @@ export default function StorePage() {
                   <label htmlFor="gv-st-back" className="gv-st-quiet" style={{ display: 'block', marginBottom: 6 }}>How many to send back to conference credits, up to {shown.sponsorship.available}</label>
                   <div className="flex flex-wrap items-center gap-2">
                     <input id="gv-st-back" type="number" inputMode="numeric" min={1} max={shown.sponsorship.available} value={backText} onChange={(e) => setBackText(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))} className="gv-st-field" style={{ width: 96, height: 44, fontSize: 17 }} />
-                    <button type="button" className="gv-st-btn gv-st-outline" disabled={backBusy || !(parseInt(backText, 10) > 0)} onClick={() => { void sendBack(); }}>{backBusy ? 'SENDING' : 'SEND BACK'}</button>
+                    <button type="button" className="gv-st-btn gv-st-outline" disabled={backBusy || !(parseInt(backText, 10) > 0)} onClick={() => { void sendBack(); }}>{backBusy ? 'Sending' : 'Send back'}</button>
                     <button type="button" className="gv-st-link" onClick={() => { setBackOpen(false); setBackErr(''); }}>Keep them</button>
                   </div>
                   {backErr ? <p className="gv-st-err" role="alert">{backErr}</p> : null}
@@ -210,9 +210,9 @@ export default function StorePage() {
                 <p className="gv-st-quiet mb-4">Your email count could not be read</p>
               )}
               <div className="flex flex-wrap gap-2">
-                <Link href={`/manage/${conference.slug}/communications`} className="gv-st-btn gv-st-outline">EXPLORE EMAIL BUILDER</Link>
-                <button type="button" className="gv-st-btn gv-st-forest" onClick={() => setPopup({ kind: 'emails', initial: '500' })}>BUY MORE</button>
-                {!email?.unlimited && <button type="button" className="gv-st-btn gv-st-outline" onClick={() => setPopup({ kind: 'emails', initial: 'unlimited' })}>GO UNLIMITED</button>}
+                <Link href={`/manage/${conference.slug}/communications`} className="gv-st-btn gv-st-outline">Explore email builder</Link>
+                <button type="button" className="gv-st-btn gv-st-forest" onClick={() => setPopup({ kind: 'emails', initial: '500' })}>Buy more</button>
+                {!email?.unlimited && <button type="button" className="gv-st-btn gv-st-outline" onClick={() => setPopup({ kind: 'emails', initial: 'unlimited' })}>Go Unlimited</button>}
               </div>
             </StoreCard>
 
@@ -222,8 +222,8 @@ export default function StorePage() {
               hint="Bring a spreadsheet of delegates in at once and send each of them a claim link. Each imported delegate uses one conference credit at the moment you import."
             >
               <div className="flex flex-wrap gap-2">
-                <Link href={`/manage/${conference.slug}/applications`} className="gv-st-btn gv-st-outline">IMPORTED DELEGATES</Link>
-                <Link href={`/manage/${conference.slug}/import`} className="gv-st-btn gv-st-forest">GO TO IMPORTER</Link>
+                <Link href={`/manage/${conference.slug}/applications`} className="gv-st-btn gv-st-outline">Imported delegates</Link>
+                <Link href={`/manage/${conference.slug}/import`} className="gv-st-btn gv-st-forest">Go to importer</Link>
               </div>
             </StoreCard>
           </div>

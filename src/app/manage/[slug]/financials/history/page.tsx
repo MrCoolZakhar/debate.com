@@ -101,7 +101,7 @@ export default function FinancialsHistoryPage() {
         <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Receipt} emoji="Receipt" size={36} />
         <div>
           <h2 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, color: NEU.ink, lineHeight: 1.15 }}>
-            Transaction history
+            Transaction History
           </h2>
           <p style={mutedCaption}>
             Every payment recorded against this conference&apos;s invoices, newest first. The money log.

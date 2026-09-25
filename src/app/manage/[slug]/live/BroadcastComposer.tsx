@@ -542,7 +542,7 @@ export function BroadcastComposer({
             <div className="min-w-0 flex-1">
               <Eyebrow>Broadcast · {conferenceLabel}</Eyebrow>
               <h2 className="font-black" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 23, lineHeight: 1.1, marginTop: 2 }}>
-                Message the floor
+                Message the Floor
               </h2>
             </div>
             <button

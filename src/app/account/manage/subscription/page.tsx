@@ -20,12 +20,12 @@ import {
   FOREST, GOLD, INK, INK_SOFT, IVORY,
 } from '../manageUi';
 
+// Kept in step with the Unlimited pop-up's list (owner, 25 Sep 2026).
 const BENEFITS = [
-  'Every application covered',
-  'Premium job board roles',
+  'Apply to as many conferences as you like',
+  'Premium MUN guides',
   'Your MUN archive',
-  'Tools for your upcoming conferences',
-  'Unlimited email builder for organizers',
+  'Premium job board roles',
 ];
 
 export default function SubscriptionPage() {

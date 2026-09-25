@@ -100,7 +100,7 @@ export default function FinancialsOverviewPage() {
           <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Users} emoji="Busts in silhouette" size={36} />
           <div>
             <h2 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 16, color: NEU.ink, lineHeight: 1.2 }}>
-              Delegate estimate vs reality
+              Delegate Estimate vs Reality
             </h2>
             <p style={mutedCaption}>
               Your estimate of {expectedDelegates} delegates comes from the conference settings.
@@ -159,7 +159,7 @@ export default function FinancialsOverviewPage() {
             <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={HandCoins} emoji="Receipt" size={36} />
             <div>
               <h2 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, color: NEU.ink, lineHeight: 1.15 }}>
-                Payment pipeline
+                Payment Pipeline
               </h2>
               <p style={mutedCaption}>
                 Read-only here. Mark payments on the{' '}

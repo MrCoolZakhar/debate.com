@@ -2402,7 +2402,7 @@ function PayInvoiceAndActions({
           <ActionRow
             icon={Coins}
             gradient={NEU_GRADIENTS.gold}
-            title="Pay for your delegates"
+            title="Pay for Your Delegates"
             subtitle={creditsOpen ? 'Hide' : 'Add credits your delegates apply with'}
             onClick={() => setCreditsOpen(v => !v)}
           />
@@ -2411,7 +2411,7 @@ function PayInvoiceAndActions({
           <ActionRow
             icon={Coins}
             gradient={NEU_GRADIENTS.gold}
-            title="Buy credits"
+            title="Buy Credits"
             subtitle="Credits for your own applications"
             onClick={() => openCreditsPopup({ context: 'pay' })}
           />
@@ -2423,7 +2423,7 @@ function PayInvoiceAndActions({
           <ActionRow
             icon={UserPlus}
             gradient={NEU_GRADIENTS.forest}
-            title="Import your delegates"
+            title="Import Your Delegates"
             subtitle={importOpen ? 'Hide' : 'Invite delegates by name and email'}
             onClick={() => setImportOpen(v => !v)}
           />

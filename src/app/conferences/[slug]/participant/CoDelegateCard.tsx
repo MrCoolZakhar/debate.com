@@ -105,7 +105,7 @@ export default function CoDelegateCard({ conferenceId, myAllocation }: {
       <div className="flex items-center gap-2.5 mb-5">
         <Users size={18} strokeWidth={2.2} style={{ color: '#1B3828' }} aria-hidden />
         <h3 className="font-bold text-[16px]" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
-          Your delegation
+          Your Delegation
         </h3>
       </div>
 

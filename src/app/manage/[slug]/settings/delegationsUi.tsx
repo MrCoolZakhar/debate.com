@@ -138,7 +138,7 @@ export function DelegationsSettings({
       <div style={CARD}>
         <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: FONT }}>
           <Emoji3D name="Counterclockwise arrows button" size={20} fallback={Users2} fallbackColor="#1B3828" />
-          Delegation allocation swaps
+          Delegation Allocation Swaps
           <InfoHint
             label="About allocation swaps"
             text="Once you have allocated a delegation its seats, its head delegate and faculty advisor may want to move their own people between them, putting a stronger delegate onto a harder country, say. Off keeps every move with your team. Request lets them ask and you approve. Self-serve lets them rearrange inside their own delegation freely and notifies you; they can never take a seat from another delegation."

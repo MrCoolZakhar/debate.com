@@ -139,7 +139,7 @@ export function TrafficSourcesView({ summary, inDialog = false }: { summary: Tra
       <div className="flex items-start justify-between gap-3 flex-wrap" style={inDialog ? { paddingInlineEnd: 36 } : undefined}>
         <div className="min-w-0">
           <h2 className="flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>
-            Where applicants come from
+            Where Applicants Come From
             <span
               tabIndex={0}
               aria-label="How this is counted"
@@ -302,7 +302,7 @@ export function TrafficCompactView({ summary }: { summary: TrafficSummary | null
   return (
     <NeuCard className="flex flex-col" style={{ padding: '15px 16px', border: BENTO_BORDER, height: '100%' }}>
       <h2 className="flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink, lineHeight: 1.2 }}>
-        Where applicants come from
+        Where Applicants Come From
       </h2>
       {!summary && <p style={{ ...label, marginTop: 8 }}>Loading…</p>}
       {empty && (

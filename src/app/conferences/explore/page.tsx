@@ -44,7 +44,7 @@ export default function ConferencesExplorePage() {
                 page's real text and its plain <a href> into the directory
                 (/conferences/all) for crawlers and no-JS visitors; the check
                 needs 250+ characters of body text in the raw HTML. */}
-            <h1 className="sr-only">Explore Model UN conferences</h1>
+            <h1 className="sr-only">Explore Model UN Conferences</h1>
             <Loader size={72} label="Loading conferences" />
             <p style={{ maxWidth: 460, margin: '20px 0 0', fontSize: 14, lineHeight: 1.6, color: '#5C5140' }}>
               Browse Model UN conferences around the world by country, date, fee and level. Each conference page

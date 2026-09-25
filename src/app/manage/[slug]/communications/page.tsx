@@ -3180,7 +3180,7 @@ function CommunicationsPageInner() {
       before: () => { setView('automatic'); },
       text: (
         <>
-          <TourGold>Automatic emails</TourGold> send themselves. Each is tied to a moment: an
+          <TourGold>Automatic Emails</TourGold> send themselves. Each is tied to a moment: an
           application accepted, a payment received, an allocation released, so people hear from
           you the second it happens. Turn one <TourGreen>on</TourGreen> and our default copy goes
           out; draft your own and it sends instead. Hundreds of emails you never write again.
@@ -4029,7 +4029,7 @@ function CommunicationsPageInner() {
                     lineHeight: 1.08, letterSpacing: '-0.022em', textWrap: 'balance',
                   }}
                 >
-                  Automatic emails
+                  Automatic Emails
                 </h2>
                 <p className="text-sm" style={{ color: SOFT, fontFamily: OUTFIT, textWrap: 'pretty', maxWidth: 640, marginBlockStart: 5, lineHeight: 1.5 }}>
                   Each one is tied to a moment in the conference and sends itself the second that
@@ -4890,7 +4890,7 @@ function CommunicationsPageInner() {
                       className="block font-black"
                       style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 17, lineHeight: 1.15, letterSpacing: '-0.015em', textWrap: 'balance' }}
                     >
-                      Automatic emails
+                      Automatic Emails
                     </span>
                     <span
                       className="block"

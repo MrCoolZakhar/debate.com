@@ -18,7 +18,7 @@
 
 import { useCallback, useState } from 'react';
 import Link from 'next/link';
-import { BookOpen, Briefcase, Infinity as InfinityIcon, Loader2, Mail, Archive, Wrench } from 'lucide-react';
+import { BookOpen, Briefcase, Infinity as InfinityIcon, Loader2, Archive } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { Emoji3D } from '@/components/neu';
 import { openAuth } from '@/lib/authModal';
@@ -33,12 +33,13 @@ import { notifyOk } from '@/lib/appNotify';
 import { StripeEmbeddedForm } from './StripeEmbedded';
 import { BenefitList, BrandTitle, ErrorLine, Eyebrow, GOLD, GoldButton, PurchaseShell, SwapLine, type Benefit } from './purchaseKit';
 
+// Only what is real, as titles (owner, 25 Sep 2026): no caption under any
+// of them, so the pop-up fits a 1280x800 screen. Kept in step with INCLUDED
+// on /pricing/subscription and BENEFITS on /account/manage/subscription.
 const BENEFITS: Benefit[] = [
-  { emoji: 'Infinity', fallback: InfinityIcon, title: 'Apply to as many conferences as you like', note: 'Every application covered while you are on Unlimited.', live: true },
-  { emoji: 'Books', fallback: BookOpen, title: 'Premium MUN guides', note: 'In-depth playbooks for delegates, chairs and organisers.', live: true },
-  { emoji: 'File cabinet', fallback: Archive, title: 'Your MUN archive', note: 'Every conference, committee and award, kept for you.', live: false },
-  { emoji: 'Toolbox', fallback: Wrench, title: 'Tools for your upcoming conferences', live: false },
-  { emoji: 'Envelope', fallback: Mail, title: 'Unlimited email builder for organizers', live: false },
+  { emoji: 'Infinity', fallback: InfinityIcon, title: 'Apply to as many conferences as you like', live: true },
+  { emoji: 'Books', fallback: BookOpen, title: 'Premium MUN guides', live: true },
+  { emoji: 'File cabinet', fallback: Archive, title: 'Your MUN archive', live: false },
   { emoji: 'Briefcase', fallback: Briefcase, title: 'Premium job board roles', live: false },
 ];
 
@@ -130,7 +131,7 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
           </>
         ) : stage === 'pay' && checkout ? (
           <>
-            <h3 className="gv-buy-rtitle">Pay with card</h3>
+            <h3 className="gv-buy-rtitle">Pay with Card</h3>
             <div className="gv-buy-change">
               <span>
                 <strong>Unlimited, {checkout.plan === 'monthly' ? 'monthly' : 'yearly'}</strong> for <strong>{formatUsd(amountCents)}</strong>
@@ -147,7 +148,7 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
           </>
         ) : renewOnce ? (
           <>
-            <h3 className="gv-buy-rtitle">Pay once for a year</h3>
+            <h3 className="gv-buy-rtitle">Pay Once for a Year</h3>
             <div className="gv-buy-plans" style={{ gridTemplateColumns: '1fr' }} role="radiogroup" aria-label="Plan">
               <button type="button" role="radio" aria-checked className="gv-buy-plan">
                 <span className="gv-buy-plan-name">One year</span>
@@ -163,7 +164,7 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
           </>
         ) : (
           <>
-            <h3 className="gv-buy-rtitle">Choose how you pay</h3>
+            <h3 className="gv-buy-rtitle">Choose How You Pay</h3>
             <div className="gv-buy-plans" role="radiogroup" aria-label="Plan">
               <button type="button" role="radio" aria-checked={plan === 'yearly'} className="gv-buy-plan" onClick={() => { setPlan('yearly'); setErr(''); }}>
                 <span className="gv-buy-plan-badge">2 months free</span>

@@ -69,7 +69,7 @@ export default function RelatedGuides({ currentSlug }: { currentSlug: string }) 
         className="m-0 mb-6 font-extrabold"
         style={{ color: '#1B3828', fontSize: '24px', lineHeight: 1.2, letterSpacing: '-0.012em' }}
       >
-        Keep reading
+        Keep Reading
       </h2>
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {related.map((post) => (

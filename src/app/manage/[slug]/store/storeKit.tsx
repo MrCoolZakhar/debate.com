@@ -35,7 +35,7 @@ export const STORE_CSS = `
 .gv-st-sec-line{margin:0 0 14px;font-size:14px;color:${INK_SOFT}}
 .gv-st-big{font-size:34px;font-weight:900;letter-spacing:-0.03em;line-height:1;font-variant-numeric:tabular-nums;color:${FOREST}}
 .gv-st-big-cap{display:block;margin-top:4px;font-size:12.5px;font-weight:600;color:${INK_SOFT}}
-.gv-st-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 18px;border-radius:12px;border:none;cursor:pointer;font-family:${OUTFIT};font-size:13px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;text-decoration:none;transition:background-color 140ms ease,transform 120ms ease,opacity 140ms ease}
+.gv-st-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 18px;border-radius:12px;border:none;cursor:pointer;font-family:${OUTFIT};font-size:13.5px;font-weight:700;letter-spacing:0.01em;text-decoration:none;transition:background-color 140ms ease,transform 120ms ease,opacity 140ms ease}
 .gv-st-btn:active{transform:scale(0.985)}
 .gv-st-btn:disabled{opacity:0.55;cursor:default;transform:none}
 .gv-st-btn:focus{outline:none}
@@ -94,8 +94,9 @@ export const STORE_CSS = `
 .gv-buy-panel.gv-st-small{max-width:460px;min-height:0}
 .gv-buy-panel.gv-st-small .gv-buy-body{flex-direction:column}
 .gv-buy-panel.gv-st-small .gv-buy-left{flex:1 1 auto}
+.gv-buy-panel.gv-st-small .gv-buy-gold{text-transform:none;letter-spacing:0.01em}
 .gv-st-dir{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.gv-st-dir button{min-height:44px;border-radius:12px;border:1.5px solid rgba(27,56,40,0.28);background:transparent;color:${INK};font-family:${OUTFIT};font-size:13px;font-weight:800;letter-spacing:0.04em;cursor:pointer}
+.gv-st-dir button{min-height:44px;border-radius:12px;border:1.5px solid rgba(27,56,40,0.28);background:transparent;color:${INK};font-family:${OUTFIT};font-size:13.5px;font-weight:700;cursor:pointer}
 .gv-st-dir button[aria-checked="true"]{background:${FOREST};color:${GOLD};border-color:${FOREST}}
 .gv-st-field{width:100%;height:52px;border-radius:12px;border:1.5px solid rgba(27,56,40,0.28);background:${IVORY};color:${INK};font-family:${OUTFIT};font-size:20px;font-weight:800;text-align:center;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
 .gv-st-field::-webkit-outer-spin-button,.gv-st-field::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
@@ -205,12 +206,12 @@ export function TransferDialog({ conferenceId, state, onClose, onChanged }: {
       <PurchaseShell tone="light" label="Transfer credits" onClose={onClose} testId="store-transfer" panelClass="gv-st-small">
         <div className="gv-buy-left" style={{ gap: 16 }}>
           <div>
-            <h2 className="gv-buy-rtitle" style={{ fontSize: 24 }}>Transfer credits</h2>
+            <h2 className="gv-buy-rtitle" style={{ fontSize: 24 }}>Transfer Credits</h2>
             <p className="gv-buy-sub" style={{ marginTop: 6 }}>Credits in the conference are spent by the whole team</p>
           </div>
           <div className="gv-st-dir" role="radiogroup" aria-label="Direction">
-            <button type="button" role="radio" aria-checked={dir === 'in'} onClick={() => setDir('in')}>INTO THE CONFERENCE</button>
-            <button type="button" role="radio" aria-checked={dir === 'out'} onClick={() => setDir('out')}>BACK TO ME</button>
+            <button type="button" role="radio" aria-checked={dir === 'in'} onClick={() => setDir('in')}>Into the conference</button>
+            <button type="button" role="radio" aria-checked={dir === 'out'} onClick={() => setDir('out')}>Back to me</button>
           </div>
           <div>
             <label htmlFor="gv-st-transfer-qty" className="gv-st-ba-cap" style={{ display: 'block' }}>Amount</label>
@@ -250,8 +251,8 @@ export function TransferDialog({ conferenceId, state, onClose, onChanged }: {
             </div>
           </div>
           {err ? <ErrorLine>{err}</ErrorLine> : null}
-          <GoldButton onClick={() => { void go(); }} busy={busy} busyText="MOVING…" disabled={invalid}>
-            {dir === 'in' ? `MOVE ${qty} INTO THE CONFERENCE` : `TAKE ${qty} BACK`}
+          <GoldButton onClick={() => { void go(); }} busy={busy} busyText="Moving…" disabled={invalid}>
+            {dir === 'in' ? `Move ${qty} into the conference` : `Take ${qty} back`}
           </GoldButton>
         </div>
       </PurchaseShell>

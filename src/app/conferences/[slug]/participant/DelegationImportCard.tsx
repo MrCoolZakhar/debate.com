@@ -472,9 +472,9 @@ export default function DelegationImportCard({
             onClick={fillFromPaste}
             disabled={!pasteText.trim()}
             className={`mt-2 rounded-xl px-4 font-bold text-sm ${FOCUS}`}
-            style={{ height: 44, backgroundColor: '#FFFFFF', border: `1.5px solid ${INK}`, color: INK, fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: pasteText.trim() ? 'pointer' : 'not-allowed', opacity: pasteText.trim() ? 1 : 0.5 }}
+            style={{ height: 44, backgroundColor: '#FFFFFF', border: `1.5px solid ${INK}`, color: INK, fontFamily: OUTFIT, letterSpacing: '0.01em', cursor: pasteText.trim() ? 'pointer' : 'not-allowed', opacity: pasteText.trim() ? 1 : 0.5 }}
           >
-            FILL THE ROWS
+            Fill the rows
           </button>
         </div>
       )}
@@ -540,10 +540,10 @@ export default function DelegationImportCard({
         type="button"
         onClick={addRow}
         className={`mt-3 inline-flex items-center gap-1.5 rounded-xl px-3 font-bold text-sm ${FOCUS}`}
-        style={{ height: 40, backgroundColor: '#EDE7D8', border: 'none', color: FOREST, fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: 'pointer' }}
+        style={{ height: 40, backgroundColor: '#EDE7D8', border: 'none', color: FOREST, fontFamily: OUTFIT, letterSpacing: '0.01em', cursor: 'pointer' }}
       >
         <Plus size={16} strokeWidth={2.4} aria-hidden />
-        ADD ROW
+        Add row
       </button>
       {capNote && (
         <p role="status" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: INK_SOFT, margin: '8px 0 0 0' }}>{capNote}</p>
@@ -561,12 +561,12 @@ export default function DelegationImportCard({
             minWidth: 220, height: 48,
             backgroundColor: busy ? '#2A5A3C' : FOREST,
             color: '#EED98A',
-            fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none',
+            fontFamily: OUTFIT, letterSpacing: '0.01em', border: 'none',
             cursor: busy ? 'wait' : count === 0 ? 'not-allowed' : 'pointer',
             opacity: count === 0 ? 0.5 : busy ? 0.85 : 1,
           }}
         >
-          {busy ? 'IMPORTING' : count === 1 ? 'IMPORT 1 DELEGATE' : `IMPORT ${count} DELEGATES`}
+          {busy ? 'Importing' : count === 1 ? 'Import 1 delegate' : `Import ${count} delegates`}
         </button>
         {count > 0 && (
           <p style={{ fontFamily: OUTFIT, fontSize: 13, color: INK_SOFT, margin: 0 }}>
@@ -583,9 +583,9 @@ export default function DelegationImportCard({
               type="button"
               onClick={onPledgeMore}
               className={`mt-3 rounded-xl px-4 font-bold text-sm ${FOCUS}`}
-              style={{ height: 44, backgroundColor: '#FFFFFF', border: `1.5px solid ${INK}`, color: INK, fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: 'pointer' }}
+              style={{ height: 44, backgroundColor: '#FFFFFF', border: `1.5px solid ${INK}`, color: INK, fontFamily: OUTFIT, letterSpacing: '0.01em', cursor: 'pointer' }}
             >
-              PLEDGE MORE SPOTS
+              Pledge more spots
             </button>
           )}
         </div>

@@ -51,7 +51,7 @@ export default function SponsorshipPopup({ conferenceId, available, used, confer
   };
 
   return (
-    <PurchaseShell tone="light" label="Sponsor your delegates' credits" onClose={onClose} testId="store-sponsorship">
+    <PurchaseShell tone="light" label="Sponsor your delegates' credits" onClose={onClose} testId="store-sponsorship" panelClass="gv-st-pop">
       <div className="gv-buy-left">
         <BrandTitle word="Sponsorship" tone="light" sub={<>Your conference pays the credit, so applying costs your delegates nothing</>} />
         <div>
@@ -66,7 +66,7 @@ export default function SponsorshipPopup({ conferenceId, available, used, confer
         </div>
       </div>
       <div className="gv-buy-right">
-        <h3 className="gv-buy-rtitle">How many applicants to cover</h3>
+        <h3 className="gv-buy-rtitle">How Many Applicants to Cover</h3>
         <div className="gv-buy-grid" role="radiogroup" aria-label="How many applicants" style={{ gridTemplateColumns: 'repeat(2,minmax(0,1fr))' }}>
           {CHIPS.map((n) => (
             <button key={n} type="button" role="radio" aria-checked={!custom && qty === n} className="gv-buy-chip gv-sp-chip-light" onClick={() => { setCustom(false); setQty(n); setErr(''); }}>
@@ -102,7 +102,7 @@ export default function SponsorshipPopup({ conferenceId, available, used, confer
         {ownOffer !== null && (
           <p className="gv-buy-note">The conference is short by {creditsWord(ownOffer)}. <button type="button" onClick={acceptOwn}>Use {ownOffer} of your own</button> and add now.</p>
         )}
-        <GoldButton onClick={add} busy={busy} busyText="ADDING…">{`ADD ${qty} ${qty === 1 ? 'APPLICANT' : 'APPLICANTS'}`}</GoldButton>
+        <GoldButton onClick={add} busy={busy} busyText="Adding…">{`Add ${qty} ${qty === 1 ? 'applicant' : 'applicants'}`}</GoldButton>
       </div>
       <style>{LIGHT_CHIP_CSS}</style>
     </PurchaseShell>
@@ -111,6 +111,7 @@ export default function SponsorshipPopup({ conferenceId, available, used, confer
 
 /** The kit's bundle chips are drawn for forest; these sit on cream. */
 export const LIGHT_CHIP_CSS = `
+.gv-buy-panel.gv-st-pop .gv-buy-gold{text-transform:none;letter-spacing:0.01em}
 .gv-buy-chip.gv-sp-chip-light{border-color:rgba(27,56,40,0.28);color:${INK}}
 .gv-buy-chip.gv-sp-chip-light:hover{border-color:${FOREST}}
 .gv-buy-chip.gv-sp-chip-light[aria-checked="true"]{border-color:${FOREST};box-shadow:inset 0 0 0 1.5px ${FOREST};background:rgba(27,56,40,0.06)}

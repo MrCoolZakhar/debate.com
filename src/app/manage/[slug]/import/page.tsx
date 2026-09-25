@@ -816,7 +816,7 @@ export default function ImportPage() {
             <p className="text-xs mb-2" style={{ color: NEU.muted, fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.14em' }}>
               {conference.acronym} / IMPORT
             </p>
-            <h1 className="font-black text-3xl" style={{ color: NEU.ink, fontFamily: OUTFIT, letterSpacing: '-0.01em' }}>Import your roster</h1>
+            <h1 className="font-black text-3xl" style={{ color: NEU.ink, fontFamily: OUTFIT, letterSpacing: '-0.01em' }}>Import Your Roster</h1>
             <p className="mt-3" style={{ color: '#6B5F52', fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.65 }}>
               Bring your whole roster into Gavelling in one step. Upload a CSV or spreadsheet and we create an application for every
               participant, match them to their delegation, and place them on a committee and country whenever you name one.

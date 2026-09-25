@@ -92,13 +92,13 @@ export default function YourSpotlights({ spotlights, stats, onChanged }: {
                         <p className="gv-st-quiet">Cancel this whole booking? The credits go back to the conference</p>
                         <div style={{ display: 'flex', gap: 8 }}>
                           <button type="button" className="gv-st-btn gv-st-outline" style={{ minHeight: 38, color: DANGER, boxShadow: `inset 0 0 0 1.5px ${DANGER}` }} disabled={busyId === p.purchase_id} onClick={() => { void cancel(p.purchase_id); }}>
-                            {busyId === p.purchase_id ? 'CANCELLING' : 'YES, CANCEL'}
+                            {busyId === p.purchase_id ? 'Cancelling' : 'Yes, cancel'}
                           </button>
-                          <button type="button" className="gv-st-btn gv-st-outline" style={{ minHeight: 38 }} onClick={() => setConfirmId(null)}>KEEP IT</button>
+                          <button type="button" className="gv-st-btn gv-st-outline" style={{ minHeight: 38 }} onClick={() => setConfirmId(null)}>Keep it</button>
                         </div>
                       </>
                     ) : (
-                      <button type="button" className="gv-st-btn gv-st-outline" style={{ minHeight: 38 }} onClick={() => setConfirmId(p.purchase_id)}>CANCEL</button>
+                      <button type="button" className="gv-st-btn gv-st-outline" style={{ minHeight: 38 }} onClick={() => setConfirmId(p.purchase_id)}>Cancel</button>
                     )}
                     <p className="gv-st-quiet" style={{ fontSize: 12 }}>
                       Cancel up to 2 days before it starts{p.cancel_until ? `, by ${fmtDay(p.cancel_until)}` : ''}

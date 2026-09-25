@@ -132,7 +132,7 @@ export default async function AllConferencesPage() {
             textWrap: 'balance',
           }}
         >
-          All Model UN conferences on Gavelling
+          All Model UN Conferences on Gavelling
         </h1>
         <p
           style={{
@@ -158,7 +158,7 @@ export default async function AllConferencesPage() {
         {hubs.length > 0 && (
           <section aria-labelledby="by-country" style={{ marginTop: 44 }}>
             <h2 id="by-country" style={h2Style}>
-              By country
+              By Country
             </h2>
             <ul
               className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-1"

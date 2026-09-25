@@ -194,7 +194,7 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
           </>
         ) : stage === 'pay' && checkout ? (
           <>
-            <h3 className="gv-buy-rtitle">Pay with card</h3>
+            <h3 className="gv-buy-rtitle">Pay with Card</h3>
             <div className="gv-buy-change">
               <span><strong>{checkout.quantity} {plural(checkout.quantity)}</strong> for <strong>{formatUsd(checkout.amountCents)}</strong></span>
               <button type="button" className="gv-buy-changebtn" onClick={() => { setStage('choose'); setCheckout(null); }}>Change</button>

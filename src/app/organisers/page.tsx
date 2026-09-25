@@ -175,12 +175,12 @@ export default async function OrganisersPage() {
         </ul>
       </section>
 
-      {/* ── Conferences already on Gavelling ────────────────────────────── */}
+      {/* ── Conferences Already on Gavelling ────────────────────────────── */}
       {named.length > 0 && (
         <section style={{ backgroundColor: IVORY }}>
           <div className="mx-auto max-w-6xl px-4 sm:px-6" style={{ paddingTop: 'clamp(56px, 6vw, 88px)', paddingBottom: 'clamp(56px, 6vw, 88px)' }}>
             <h2 style={{ fontWeight: 900, fontSize: 'clamp(26px, 3vw, 42px)', letterSpacing: '-0.02em', margin: 0, textWrap: 'balance' }}>
-              Conferences already on Gavelling
+              Conferences Already on Gavelling
             </h2>
             <p style={{ fontSize: 16, lineHeight: 1.6, color: INK_70, margin: '10px 0 0', maxWidth: 620 }}>
               {total.toLocaleString('en')} conferences in {countries.toLocaleString('en')} countries, from school conferences to university circuits.
@@ -213,7 +213,7 @@ export default async function OrganisersPage() {
       <section className="mx-auto max-w-5xl px-4 sm:px-6" style={{ paddingTop: 'clamp(64px, 7vw, 104px)', paddingBottom: 'clamp(40px, 5vw, 64px)' }}>
         <p style={{ fontWeight: 700, fontSize: 12.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 10px' }}>Pricing</p>
         <h2 style={{ fontWeight: 900, fontSize: 'clamp(26px, 3vw, 42px)', letterSpacing: '-0.02em', margin: 0, textWrap: 'balance' }}>
-          Per-participant pricing, compared
+          Per-participant Pricing, Compared
         </h2>
         <p style={{ fontSize: 16, lineHeight: 1.65, color: INK_70, margin: '12px 0 0', maxWidth: 680, textWrap: 'pretty' }}>
           Many conference platforms bill the organiser for every participant, and some for every day. At one unit of currency per participant per day, a three-day conference of 300 delegates costs the secretariat 900 before a single committee sits. On Gavelling that line is zero.
@@ -252,7 +252,7 @@ export default async function OrganisersPage() {
         <div className="rounded-[28px] flex flex-col md:flex-row md:items-center md:justify-between gap-6" style={{ backgroundColor: FOREST, padding: 'clamp(28px, 4vw, 48px)' }}>
           <div>
             <h2 style={{ fontWeight: 900, fontSize: 'clamp(24px, 2.6vw, 36px)', letterSpacing: '-0.015em', color: CREAM, margin: 0, textWrap: 'balance' }}>
-              Your conference, listed today
+              Your Conference, Listed Today
             </h2>
             <p style={{ fontSize: 16, color: 'rgba(237,231,216,0.8)', margin: '8px 0 0' }}>
               Free for organisers, now and later

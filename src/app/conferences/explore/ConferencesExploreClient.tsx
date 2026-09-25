@@ -1614,7 +1614,7 @@ export default function ConferencesExploreClient() {
                     color: '#1C1410', margin: 0,
                   }}
                 >
-                  Bigger conferences worth travelling for
+                  Bigger Conferences Worth Travelling For
                 </h2>
                 <p
                   style={{

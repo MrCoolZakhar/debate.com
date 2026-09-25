@@ -51,7 +51,7 @@ export default function EmailsPopup({ conferenceId, email, yourCredits, initial 
   const cap = email ? (email.unlimited ? null : email.free + email.extra) : null;
 
   return (
-    <PurchaseShell tone="light" label="Buy more emails" onClose={onClose} testId="store-emails">
+    <PurchaseShell tone="light" label="Buy more emails" onClose={onClose} testId="store-emails" panelClass="gv-st-pop">
       <div className="gv-buy-left">
         <BrandTitle word="Emails" tone="light" sub={<>Every conference sends 1,000 bulk emails free. Buy more when you need them</>} />
         <div>
@@ -69,7 +69,7 @@ export default function EmailsPopup({ conferenceId, email, yourCredits, initial 
         )}
       </div>
       <div className="gv-buy-right">
-        <h3 className="gv-buy-rtitle">Pick a pack</h3>
+        <h3 className="gv-buy-rtitle">Pick a Pack</h3>
         <div className="gv-buy-grid" role="radiogroup" aria-label="Email packs" style={{ gridTemplateColumns: '1fr' }}>
           {PACKS.map((p) => {
             const off = p.id === 'unlimited' && !!email?.unlimited;
@@ -86,8 +86,8 @@ export default function EmailsPopup({ conferenceId, email, yourCredits, initial 
         {ownOffer !== null && (
           <p className="gv-buy-note">The conference is short by {creditsWord(ownOffer)}. <button type="button" onClick={acceptOwn}>Use {ownOffer} of your own</button> and buy now.</p>
         )}
-        <GoldButton onClick={buy} busy={busy} busyText="ONE MOMENT…" disabled={pack === 'unlimited' && !!email?.unlimited}>
-          {pack === 'unlimited' ? `GO UNLIMITED FOR ${chosen.price} CREDITS` : `BUY ${chosen.qty} MORE FOR ${creditsWord(chosen.price).toUpperCase()}`}
+        <GoldButton onClick={buy} busy={busy} busyText="One moment…" disabled={pack === 'unlimited' && !!email?.unlimited}>
+          {pack === 'unlimited' ? `Go Unlimited for ${chosen.price} credits` : `Buy ${chosen.qty} more for ${creditsWord(chosen.price)}`}
         </GoldButton>
       </div>
       <style>{LIGHT_CHIP_CSS}</style>

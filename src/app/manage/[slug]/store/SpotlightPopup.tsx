@@ -509,12 +509,12 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
             <span className="gv-sp-total-unit">credits</span>
           </div>
           {onDescription ? (
-            <GoldButton onClick={book} busy={busy} busyText="BOOKING…" disabled={!bookable || !allChosen || descProblem(description) !== ''}>
-              {`BOOK FOR ${total ?? '…'} CREDITS`}
+            <GoldButton onClick={book} busy={busy} busyText="Booking…" disabled={!bookable || !allChosen || descProblem(description) !== ''}>
+              {`Book for ${total ?? '…'} credits`}
             </GoldButton>
           ) : (
             <GoldButton onClick={() => { setStepIx(stepIx + 1); setPending(null); setErr(''); }} disabled={!bookable || !stepReady || chosenDays === 0}>
-              {stepIx + 1 < items.length ? `NEXT: ${NAMES[items[stepIx + 1].placement].toUpperCase()}` : 'NEXT: CUSTOMISE'}
+              {stepIx + 1 < items.length ? `Next: ${NAMES[items[stepIx + 1].placement]}` : 'Next: customise'}
             </GoldButton>
           )}
         </div>
@@ -525,6 +525,7 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
 
 const SPOT_CSS = `
 .gv-buy-panel.gv-sp{max-width:980px}
+.gv-buy-panel.gv-sp .gv-buy-gold{text-transform:none;letter-spacing:0.01em}
 .gv-sp-left{gap:18px}
 .gv-sp-right{padding-bottom:0!important;display:flex;flex-direction:column}
 .gv-sp-steps{flex:1 1 auto;display:flex;flex-direction:column;gap:12px;padding-bottom:16px}

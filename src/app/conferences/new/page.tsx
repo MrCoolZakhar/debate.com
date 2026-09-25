@@ -1059,7 +1059,7 @@ export default function NewConferencePage() {
               <WizardShell
                 step={1} total={TOTAL_STEPS}
                 maxWidth={1080}
-                title="Your conference"
+                title="Your Conference"
                 sub="Its name, its look and its dates. You can change any of it later."
                 onBack={returnToReview ? back : undefined}
               >

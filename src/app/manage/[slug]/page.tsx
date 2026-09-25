@@ -613,7 +613,7 @@ export function RecentActivity({ events, now, fill = false }: {
         <div className="flex items-center gap-2 flex-shrink-0">
           <Activity size={15} strokeWidth={2.4} style={{ color: NEU.deepGold }} />
           <h2 style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: NEU.deepGold }}>
-            Recent activity
+            Recent Activity
           </h2>
           {openable && (
             <span
@@ -689,7 +689,7 @@ function ActivityModal({ events, now, onClose }: { events: ActivityEvent[]; now:
         <div className="flex items-center gap-2.5 flex-shrink-0" style={{ padding: '18px 20px 12px' }}>
           <Activity size={17} strokeWidth={2.4} style={{ color: NEU.deepGold }} />
           <div className="min-w-0">
-            <h2 style={{ fontFamily: OUTFIT, fontSize: 16, fontWeight: 900, color: NEU.ink }}>Recent activity</h2>
+            <h2 style={{ fontFamily: OUTFIT, fontSize: 16, fontWeight: 900, color: NEU.ink }}>Recent Activity</h2>
             <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
               {events.length} event{events.length === 1 ? '' : 's'}
             </p>
@@ -1742,7 +1742,7 @@ export default function DashboardPage() {
         <NeuCard className="gv-dash-prio flex flex-col" style={{ padding: '13px 15px 11px', border: BENTO_BORDER, backgroundColor: BENTO_WASH_FOREST }}>
           <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginBottom: 7 }}>
             <div className="min-w-0">
-              <h2 style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>Set-up priorities</h2>
+              <h2 style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>Set-up Priorities</h2>
               <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
                 {doneCount} of {checklist.length} done{doneCount === checklist.length ? '. You are all set.' : ''}
               </p>
@@ -1837,7 +1837,7 @@ export default function DashboardPage() {
         <NeuCard className="flex flex-col" style={{ padding: '13px 16px 12px', border: BENTO_BORDER, height: '100%' }}>
           <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginBottom: 6, minHeight: 28 }}>
             <h2 className="truncate" style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>
-              Applicants against target
+              Applicants Against Target
             </h2>
             <UnallocatedBadge count={unallocated} href={`/manage/${slug}/assignment`} />
           </div>

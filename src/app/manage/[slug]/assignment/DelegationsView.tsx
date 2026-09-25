@@ -125,7 +125,7 @@ function AdvisorTransferModal({
         className="p-6"
         style={{ width: 'min(92vw, 440px)', backgroundColor: NEU.surface, borderRadius: 24, maxHeight: '80dvh', overflowY: 'auto', boxShadow: `${NEU.out}, 0 24px 60px rgba(27,56,40,0.28)` }}
       >
-        <h3 className="font-black text-base mb-1" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Transfer spot</h3>
+        <h3 className="font-black text-base mb-1" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Transfer Spot</h3>
         <p className="text-xs mb-4" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
           Pick another accepted faculty advisor to receive {advisor.profiles?.display_name ?? advisor.invited_name ?? 'this advisor'}&apos;s paid spot.
         </p>

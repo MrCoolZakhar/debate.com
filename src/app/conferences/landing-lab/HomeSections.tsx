@@ -5,7 +5,7 @@
 // VariantStagefront.tsx. Kept in their own file so the big composition stays a
 // thin list of sections.
 //
-//   SessionsSection   second on the page: laptop | "Run the room" | phone, with
+//   SessionsSection   second on the page: laptop | "MUN done right." | phone, with
 //                     START COMMITTEE and the join-with-a-code field the
 //                     sessions landing hero has (25 Sep 2026)
 //   LearnMunSection   third on the page: six evergreen guides from
@@ -78,10 +78,10 @@ export function SessionsSection() {
         }
         .hs-sess-laptop img, .hs-sess-phone img { display: block; width: 100%; height: auto; }
         .hs-sess-cta {
-          display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 64px;
-          padding: 0 clamp(30px, 2.4vw, 42px); border: 0; border-radius: 12px; cursor: pointer;
+          display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 68px;
+          padding: 0 clamp(34px, 2.8vw, 48px); border: 0; border-radius: 14px; cursor: pointer;
           background: linear-gradient(90deg, #1B3828 0%, #2A5A3C 55%, #1E4A31 100%); color: #FFFFFF; box-shadow: 0 16px 32px rgba(27,56,40,0.24);
-          font: 700 clamp(17px, 1.3vw, 20px)/1 ${SANS};
+          font: 700 clamp(18px, 1.4vw, 22px)/1 ${SANS};
           transition: transform 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
         }
         .hs-sess-cta:hover { transform: translateY(-2px); box-shadow: 0 20px 38px rgba(27,56,40,0.30); }
@@ -91,17 +91,17 @@ export function SessionsSection() {
         /* The join field, the sessions landing hero's sl-join-box. */
         .hs-sess-join { display: flex; justify-content: center; width: 100%; margin-top: 14px; }
         .hs-sess-join-box {
-          display: inline-flex; align-items: center; height: 54px; padding: 0 6px 0 20px; border-radius: 9999px;
+          display: inline-flex; align-items: center; height: 60px; padding: 0 7px 0 22px; border-radius: 9999px;
           background: rgba(255,255,255,0.85); box-shadow: inset 0 0 0 1.5px ${HAIR};
         }
         .hs-sess-join-box:focus-within { box-shadow: inset 0 0 0 1.5px ${FOREST}; }
         .hs-sess-join-box input {
-          width: 148px; border: 0; background: transparent; outline: none;
-          font: 700 17px/1 ${SANS}; letter-spacing: 0.1em; text-transform: uppercase; color: ${INK};
+          width: 164px; border: 0; background: transparent; outline: none;
+          font: 700 18px/1 ${SANS}; letter-spacing: 0.1em; text-transform: uppercase; color: ${INK};
         }
         .hs-sess-join-box input::placeholder { letter-spacing: 0; text-transform: none; font-weight: 500; color: ${INK_55}; }
         .hs-sess-join-box button {
-          width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 9999px; cursor: pointer;
+          width: 48px; height: 48px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 9999px; cursor: pointer;
           background: ${FOREST}; color: #FFFFFF;
           transition: background-color 160ms ease;
         }
@@ -142,12 +142,13 @@ export function SessionsSection() {
           </p>
           <h2
             id="hs-sess-heading"
-            style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(40px, 4.4vw, 72px)', lineHeight: 1.02, letterSpacing: '-0.02em', color: INK, margin: 0, textWrap: 'balance' }}
+            style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(40px, 4.2vw, 60px)', lineHeight: 1.02, letterSpacing: '-0.02em', color: INK, margin: 0, textWrap: 'balance' }}
           >
-            Run the <GoldWord>room</GoldWord>
+            MUN done <GoldWord>right.</GoldWord>
           </h2>
-          <p style={{ fontFamily: SANS, fontSize: 'clamp(17px, 1.35vw, 22px)', lineHeight: 1.45, color: INK_70, margin: '14px auto 0', maxWidth: '460px', textWrap: 'balance' }}>
-            From initial roll call to final voting. One session, any device.
+          {/* Two lines on purpose, so the tagline never runs under the devices. */}
+          <p style={{ fontFamily: SANS, fontSize: 'clamp(18px, 1.5vw, 24px)', lineHeight: 1.4, color: INK_70, margin: '14px auto 0', maxWidth: '460px', whiteSpace: 'pre-line' }}>
+            {'Roll Call, Motions, Voting, Scoring.\nAll in one Session.'}
           </p>
           <div className="flex flex-col items-center" style={{ marginTop: '26px' }}>
             <button type="button" onClick={() => router.push('/create/sessions')} className="hs-sess-cta">
