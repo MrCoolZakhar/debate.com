@@ -120,11 +120,11 @@ export function SessionsSection() {
           .hs-sess { z-index: 2; }
           .hs-sess-stage {
             display: grid; align-items: center; gap: 0;
-            grid-template-columns: minmax(0, 1.05fr) minmax(380px, 480px) minmax(0, 0.62fr); max-width: 1440px; margin: 0 auto; padding: 0 clamp(16px, 3vw, 48px);
+            grid-template-columns: minmax(0, 1.45fr) minmax(380px, 480px) minmax(0, 0.62fr); max-width: 1440px; margin: 0 auto; padding: 0 clamp(16px, 3vw, 48px);
           }
           .hs-sess-devices { display: contents; }
           .hs-sess-laptop {
-            grid-column: 1; grid-row: 1; width: 100%; margin-left: 0;
+            grid-column: 1; grid-row: 1; width: 104%; margin-left: -1%;
             transform: perspective(1800px) rotateY(12deg) rotateZ(-1deg); transform-origin: right center;
           }
           .hs-sess-copy { grid-column: 2; grid-row: 1; padding: 0 12px; max-width: none; }
