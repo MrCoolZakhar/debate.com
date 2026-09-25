@@ -23,7 +23,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowRight, BookOpen, Clock, GraduationCap, Landmark, MonitorSmartphone } from 'lucide-react';
+import { Lock, ArrowRight, BookOpen, Clock, GraduationCap, Landmark, MonitorSmartphone } from 'lucide-react';
 import { CardPhoto } from '@/components/blog/BlogPhoto';
 import type { PhotoId } from '@/components/blog/photos';
 import { GoldWord } from '@/components/BrandHeading';
@@ -62,7 +62,7 @@ export function SessionsSection() {
   return (
     <section className="hs-sess" aria-labelledby="hs-sess-heading" style={{ backgroundColor: CREAM }}>
       <style>{`
-        .hs-sess { position: relative; overflow-x: clip; padding: clamp(56px, 6vw, 104px) 0 clamp(64px, 6vw, 112px); }
+        .hs-sess { position: relative; overflow-x: clip; padding: clamp(40px, 4vw, 64px) 0 clamp(32px, 3vw, 48px); }
         /* A soft ivory spotlight behind the copy: the stage the devices sit on. */
         .hs-sess::before {
           content: ''; position: absolute; inset: 8% 10% 0; pointer-events: none;
@@ -71,17 +71,17 @@ export function SessionsSection() {
         .hs-sess-stage { position: relative; display: flex; flex-direction: column; align-items: center; gap: 36px; }
         .hs-sess-copy { position: relative; z-index: 3; text-align: center; padding: 0 24px; max-width: 520px; }
         .hs-sess-devices { position: relative; width: 100%; max-width: 720px; padding: 0 0 8% 0; }
-        .hs-sess-laptop { position: relative; width: 104%; margin-left: -12%; filter: drop-shadow(0 26px 40px rgba(27,56,40,0.22)); }
+        .hs-sess-laptop { position: relative; width: 100%; margin-left: 0; filter: drop-shadow(0 26px 40px rgba(27,56,40,0.22)); }
         .hs-sess-phone {
           position: absolute; right: 2%; bottom: -2%; width: 34%; z-index: 2;
           transform: rotate(5deg); filter: drop-shadow(0 24px 34px rgba(27,56,40,0.28));
         }
         .hs-sess-laptop img, .hs-sess-phone img { display: block; width: 100%; height: auto; }
         .hs-sess-cta {
-          display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 60px;
+          display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 64px;
           padding: 0 clamp(30px, 2.4vw, 42px); border: 0; border-radius: 12px; cursor: pointer;
           background: linear-gradient(90deg, #1B3828 0%, #2A5A3C 55%, #1E4A31 100%); color: #FFFFFF; box-shadow: 0 16px 32px rgba(27,56,40,0.24);
-          font: 700 clamp(16px, 1.15vw, 18px)/1 ${SANS};
+          font: 700 clamp(17px, 1.3vw, 20px)/1 ${SANS};
           transition: transform 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
         }
         .hs-sess-cta:hover { transform: translateY(-2px); box-shadow: 0 20px 38px rgba(27,56,40,0.30); }
@@ -91,17 +91,17 @@ export function SessionsSection() {
         /* The join field, the sessions landing hero's sl-join-box. */
         .hs-sess-join { display: flex; justify-content: center; width: 100%; margin-top: 14px; }
         .hs-sess-join-box {
-          display: inline-flex; align-items: center; height: 48px; padding: 0 4px 0 18px; border-radius: 9999px;
+          display: inline-flex; align-items: center; height: 54px; padding: 0 6px 0 20px; border-radius: 9999px;
           background: rgba(255,255,255,0.85); box-shadow: inset 0 0 0 1.5px ${HAIR};
         }
         .hs-sess-join-box:focus-within { box-shadow: inset 0 0 0 1.5px ${FOREST}; }
         .hs-sess-join-box input {
           width: 148px; border: 0; background: transparent; outline: none;
-          font: 700 16px/1 ${SANS}; letter-spacing: 0.1em; text-transform: uppercase; color: ${INK};
+          font: 700 17px/1 ${SANS}; letter-spacing: 0.1em; text-transform: uppercase; color: ${INK};
         }
         .hs-sess-join-box input::placeholder { letter-spacing: 0; text-transform: none; font-weight: 500; color: ${INK_55}; }
         .hs-sess-join-box button {
-          width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 9999px; cursor: pointer;
+          width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 9999px; cursor: pointer;
           background: ${FOREST}; color: #FFFFFF;
           transition: background-color 160ms ease;
         }
@@ -117,12 +117,12 @@ export function SessionsSection() {
         @media (min-width: 1024px) {
           .hs-sess-stage {
             display: grid; align-items: center; gap: 0;
-            grid-template-columns: minmax(0, 1.05fr) minmax(360px, 440px) minmax(0, 0.62fr);
+            grid-template-columns: minmax(0, 1.05fr) minmax(380px, 480px) minmax(0, 0.62fr); max-width: 1440px; margin: 0 auto; padding: 0 clamp(16px, 3vw, 48px);
           }
           .hs-sess-devices { display: contents; }
           .hs-sess-laptop {
-            grid-column: 1; grid-row: 1; width: 122%; margin-left: -20%;
-            transform: perspective(1800px) rotateY(18deg) rotateZ(-1deg); transform-origin: right center;
+            grid-column: 1; grid-row: 1; width: 100%; margin-left: 0;
+            transform: perspective(1800px) rotateY(12deg) rotateZ(-1deg); transform-origin: right center;
           }
           .hs-sess-copy { grid-column: 2; grid-row: 1; padding: 0 12px; max-width: none; }
           .hs-sess-phone {
@@ -139,14 +139,14 @@ export function SessionsSection() {
           </p>
           <h2
             id="hs-sess-heading"
-            style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(35px, 3.75vw, 62px)', lineHeight: 1.02, letterSpacing: '-0.02em', color: INK, margin: 0, textWrap: 'balance' }}
+            style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(40px, 4.4vw, 72px)', lineHeight: 1.02, letterSpacing: '-0.02em', color: INK, margin: 0, textWrap: 'balance' }}
           >
             Run the <GoldWord>room</GoldWord>
           </h2>
-          <p style={{ fontFamily: SANS, fontSize: 'clamp(16px, 1.15vw, 19px)', lineHeight: 1.5, color: INK_70, margin: '14px auto 0', maxWidth: '420px', textWrap: 'balance' }}>
+          <p style={{ fontFamily: SANS, fontSize: 'clamp(17px, 1.35vw, 22px)', lineHeight: 1.45, color: INK_70, margin: '14px auto 0', maxWidth: '460px', textWrap: 'balance' }}>
             From initial roll call to final voting. One session, any device.
           </p>
-          <div className="flex flex-col items-center" style={{ marginTop: '30px' }}>
+          <div className="flex flex-col items-center" style={{ marginTop: '26px' }}>
             <button type="button" onClick={() => router.push('/create/sessions')} className="hs-sess-cta">
               Start a committee
             </button>
@@ -200,26 +200,26 @@ export function SessionsSection() {
 
 export function AboutCards() {
   const card: React.CSSProperties = {
-    borderRadius: 28,
-    padding: 'clamp(28px, 3vw, 52px)',
+    borderRadius: 20,
+    padding: 'clamp(22px, 2vw, 32px)',
   };
   return (
     <section
       className="px-5 md:px-14"
-      style={{ backgroundColor: CREAM, paddingTop: 'clamp(64px, 6vw, 104px)', paddingBottom: 'clamp(64px, 6vw, 104px)' }}
+      style={{ backgroundColor: CREAM, paddingTop: 'clamp(40px, 4vw, 64px)', paddingBottom: 'clamp(40px, 4vw, 64px)' }}
     >
-      <div className="mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] gap-5 lg:gap-7" style={{ maxWidth: '1280px' }}>
+      <div className="mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5" style={{ maxWidth: '1280px' }}>
         {/* "What is Model UN?", the SEO explainer. Text and headings unchanged. */}
         <article
           style={{ ...card, backgroundColor: CARD, boxShadow: '0 1px 0 rgba(255,255,255,0.8) inset, 0 0 0 1px rgba(27,56,40,0.07), 0 24px 50px rgba(27,56,40,0.10)' }}
         >
           <p style={eyebrow}>New to the circuit?</p>
           <h2
-            style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(28px, 3vw, 48px)', lineHeight: 1.03, letterSpacing: '-0.02em', color: INK, margin: 0 }}
+            style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(22px, 2vw, 30px)', lineHeight: 1.1, letterSpacing: '-0.02em', color: INK, margin: 0 }}
           >
             What is Model United Nations?
           </h2>
-          <p style={{ fontFamily: SANS, fontSize: 'clamp(16px, 1.1vw, 19px)', lineHeight: 1.7, color: INK_70, margin: '20px 0 0 0', maxWidth: '760px' }}>
+          <p style={{ fontFamily: SANS, fontSize: '15px', lineHeight: 1.6, color: INK_70, margin: '12px 0 0 0' }}>
             Model United Nations, or <strong style={{ color: INK }}>MUN</strong>, is an academic
             simulation of the real United Nations. Students step into the shoes of diplomats,
             each representing a country, and debate the world&rsquo;s biggest challenges, from
@@ -227,7 +227,7 @@ export function AboutCards() {
             It&rsquo;s part debate, part public speaking, part teamwork, and one of the best ways
             to sharpen the skills that carry into university and beyond.
           </p>
-          <p style={{ fontFamily: SANS, fontSize: 'clamp(16px, 1.1vw, 19px)', lineHeight: 1.7, color: INK_70, margin: '18px 0 0 0', maxWidth: '760px' }}>
+          <p style={{ fontFamily: SANS, fontSize: '15px', lineHeight: 1.6, color: INK_70, margin: '10px 0 0 0' }}>
             At a conference, delegates research their country&rsquo;s position, deliver speeches,
             negotiate with allies and rivals, and work together to draft <strong style={{ color: INK }}>resolutions</strong>:
             the written proposals a committee votes on. A chairperson keeps the debate flowing,
@@ -235,34 +235,29 @@ export function AboutCards() {
             start: everyone gives their first speech eventually.
           </p>
 
-          <h3 style={{ fontFamily: SANS, fontWeight: 800, fontSize: 'clamp(19px, 1.4vw, 24px)', letterSpacing: '-0.01em', color: FOREST, margin: 'clamp(28px, 2.6vw, 40px) 0 16px 0' }}>
+          <h3 style={{ fontFamily: SANS, fontWeight: 800, fontSize: '17px', letterSpacing: '-0.01em', color: FOREST, margin: '18px 0 10px 0' }}>
             How a Model UN conference works
           </h3>
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '14px', maxWidth: '760px' }}>
+          <ul className="grid grid-cols-1 sm:grid-cols-2" style={{ listStyle: 'none', margin: 0, padding: 0, gap: '8px 18px' }}>
             {[
               ['Pick a committee', 'Conferences run committees: the Security Council, historical crises, specialised agencies and more, each with its own topic and pace.'],
               ['Represent a country', 'You’re assigned a country (or a character) and speak, vote and negotiate on its behalf throughout the weekend.'],
               ['Debate and negotiate', 'Delegates make speeches, form blocs, and hammer out compromises through moderated and unmoderated caucuses.'],
               ['Draft resolutions', 'Working together, committees write and amend resolutions, then vote: the heart of every MUN session.'],
             ].map(([term, desc]) => (
-              <li key={term} className="flex items-start gap-3.5">
+              <li key={term} className="flex items-start gap-2.5">
                 <span
                   aria-hidden="true"
                   className="flex-shrink-0"
-                  style={{ width: 10, height: 10, marginTop: 9, borderRadius: 9999, backgroundColor: GOLD, boxShadow: '0 0 0 4px rgba(184,148,58,0.16)' }}
+                  style={{ width: 7, height: 7, marginTop: 8, borderRadius: 9999, backgroundColor: GOLD, boxShadow: '0 0 0 4px rgba(184,148,58,0.16)' }}
                 />
-                <p style={{ fontFamily: SANS, fontSize: 'clamp(15px, 1.02vw, 17.5px)', lineHeight: 1.6, color: INK_70, margin: 0 }}>
+                <p style={{ fontFamily: SANS, fontSize: '14px', lineHeight: 1.5, color: INK_70, margin: 0 }}>
                   <strong style={{ color: INK }}>{term}.</strong>{' '}{desc}
                 </p>
               </li>
             ))}
           </ul>
 
-          <p style={{ fontFamily: SANS, fontSize: 'clamp(15px, 1.02vw, 17.5px)', lineHeight: 1.7, color: INK_55, margin: 'clamp(24px, 2.2vw, 36px) 0 0 0', maxWidth: '760px' }}>
-            Whether you&rsquo;re a total beginner looking for your first conference or a seasoned
-            delegate chasing the next gavel, Gavelling helps you find the right room. Browse
-            conferences above and apply in minutes.
-          </p>
         </article>
 
         {/* "What is Gavelling?" */}
@@ -280,40 +275,40 @@ export function AboutCards() {
             height={512}
             loading="lazy"
             className="pointer-events-none absolute"
-            style={{ width: 'min(78%, 360px)', height: 'auto', right: '-14%', bottom: '-10%', opacity: 0.07 }}
+            style={{ width: 'min(50%, 220px)', height: 'auto', right: '-6%', bottom: '-12%', opacity: 0.06 }}
           />
           <p style={eyebrow}>The platform</p>
           <h2
-            style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(28px, 3vw, 48px)', lineHeight: 1.03, letterSpacing: '-0.02em', color: INK, margin: 0 }}
+            style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(22px, 2vw, 30px)', lineHeight: 1.1, letterSpacing: '-0.02em', color: INK, margin: 0 }}
           >
             What is Gavelling?
           </h2>
-          <p style={{ fontFamily: SANS, fontSize: 'clamp(16px, 1.1vw, 19px)', lineHeight: 1.7, color: INK_70, margin: '20px 0 0 0' }}>
+          <p style={{ fontFamily: SANS, fontSize: '15px', lineHeight: 1.6, color: INK_70, margin: '12px 0 0 0' }}>
             Gavelling is free software for Model UN, built for the people in the room.
           </p>
-          <dl className="relative" style={{ margin: 'clamp(22px, 2vw, 30px) 0 0 0', display: 'grid', gap: '18px' }}>
+          <dl className="relative grid grid-cols-1 sm:grid-cols-2" style={{ margin: '16px 0 0 0', gap: '12px 18px' }}>
             {[
               { icon: MonitorSmartphone, term: 'Sessions', desc: 'Runs a committee live. The chair works from a laptop and delegates follow on their phones. Free, and no account needed.' },
               { icon: Landmark, term: 'Conferences', desc: 'Gives a secretariat applications, allocations, payments and the live status of every room. Free for organisers.' },
               { icon: BookOpen, term: 'Your MUN CV', desc: 'Every conference you attend on Gavelling goes on a CV you can share, verified by the conference.' },
               { icon: GraduationCap, term: 'Learn MUN', desc: 'Guides on position papers, speeches, rules of procedure and resolutions, written for a first conference and a tenth.' },
             ].map(({ icon: Icon, term, desc }) => (
-              <div key={term} className="flex items-start gap-3.5">
+              <div key={term} className="flex items-start gap-2.5">
                 <span
                   aria-hidden="true"
                   className="flex flex-shrink-0 items-center justify-center rounded-full"
-                  style={{ width: 38, height: 38, backgroundColor: PALE_GOLD, color: FOREST, boxShadow: 'inset 0 0 0 1.5px rgba(27,56,40,0.18)' }}
+                  style={{ width: 30, height: 30, backgroundColor: PALE_GOLD, color: FOREST, boxShadow: 'inset 0 0 0 1.5px rgba(27,56,40,0.18)' }}
                 >
-                  <Icon size={18} strokeWidth={2.1} />
+                  <Icon size={15} strokeWidth={2.2} />
                 </span>
                 <div>
-                  <dt style={{ fontFamily: SANS, fontWeight: 800, fontSize: 'clamp(15.5px, 1.05vw, 18px)', color: INK }}>{term}</dt>
-                  <dd style={{ fontFamily: SANS, fontSize: 'clamp(14.5px, 0.98vw, 16.5px)', lineHeight: 1.6, color: INK_70, margin: '3px 0 0 0' }}>{desc}</dd>
+                  <dt style={{ fontFamily: SANS, fontWeight: 800, fontSize: '15px', color: INK }}>{term}</dt>
+                  <dd style={{ fontFamily: SANS, fontSize: '13.5px', lineHeight: 1.5, color: INK_70, margin: '2px 0 0 0' }}>{desc}</dd>
                 </div>
               </div>
             ))}
           </dl>
-          <div className="relative mt-auto flex flex-wrap items-center gap-x-6 gap-y-3" style={{ paddingTop: 'clamp(28px, 2.6vw, 40px)' }}>
+          <div className="relative mt-auto flex flex-wrap items-center gap-x-6 gap-y-3" style={{ paddingTop: '18px' }}>
             <Link
               href="/sessions"
               className="inline-flex min-h-11 items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded"
@@ -352,6 +347,9 @@ export interface HomeGuide {
   description: string;
   readingMinutes: number;
   photo?: PhotoId;
+  /** A premium guide (Unlimited): links to /guides/<slug>, shown with its
+   *  title and description only, no photo. */
+  premium?: boolean;
 }
 
 /** "How to Write a MUN Position Paper: Format, Tips & Examples" → the part
@@ -367,7 +365,7 @@ export function LearnMunSection({ guides }: { guides: HomeGuide[] }) {
     <section
       className="px-5 md:px-14"
       aria-labelledby="hs-learn-heading"
-      style={{ backgroundColor: '#FFFFFF', paddingTop: 'clamp(64px, 6vw, 100px)', paddingBottom: 'clamp(72px, 6vw, 108px)' }}
+      style={{ backgroundColor: '#FFFFFF', paddingTop: 'clamp(40px, 4vw, 64px)', paddingBottom: 'clamp(40px, 4vw, 64px)' }}
     >
       <style>{`
         .hs-guide { transition: transform 200ms ease, box-shadow 200ms ease; }
@@ -387,7 +385,7 @@ export function LearnMunSection({ guides }: { guides: HomeGuide[] }) {
             </p>
             <h2
               id="hs-learn-heading"
-              style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(28px, 3vw, 48px)', letterSpacing: '-0.015em', color: INK, margin: '0 0 6px 0', textWrap: 'balance' }}
+              style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(26px, 2.4vw, 40px)', letterSpacing: '-0.015em', color: INK, margin: '0 0 4px 0', textWrap: 'balance' }}
             >
               Learn <GoldWord>MUN</GoldWord>
             </h2>
@@ -405,38 +403,45 @@ export function LearnMunSection({ guides }: { guides: HomeGuide[] }) {
         </div>
 
         <ul
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6"
-          style={{ listStyle: 'none', padding: 0, margin: '32px 0 0 0' }}
+          className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5"
+          style={{ listStyle: 'none', padding: 0, margin: '24px 0 0 0' }}
         >
           {guides.map(g => (
             <li key={g.slug} className="flex">
               <a
-                href={`/blog/${g.slug}`}
+                href={g.premium ? `/guides/${g.slug}` : `/blog/${g.slug}`}
                 title={g.title}
                 className="hs-guide flex w-full flex-col overflow-hidden focus:outline-none"
-                style={{ borderRadius: 22, backgroundColor: CARD, textDecoration: 'none', boxShadow: '0 0 0 1px rgba(27,56,40,0.08), 0 14px 30px rgba(27,56,40,0.10)' }}
+                style={{ borderRadius: 18, backgroundColor: g.premium ? '#FBF6E6' : CARD, textDecoration: 'none', boxShadow: g.premium ? '0 0 0 1.5px rgba(184,148,58,0.45), 0 14px 30px rgba(27,56,40,0.10)' : '0 0 0 1px rgba(27,56,40,0.08), 0 14px 30px rgba(27,56,40,0.10)' }}
               >
-                <div style={{ aspectRatio: '16 / 9', backgroundColor: '#E4DCCA' }}>
-                  {g.photo ? (
-                    <CardPhoto id={g.photo} />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center" style={{ color: FOREST }}>
-                      <BookOpen size={40} strokeWidth={1.6} aria-hidden="true" />
-                    </div>
+                {!g.premium && (
+                  <div style={{ aspectRatio: '2.3 / 1', backgroundColor: '#E4DCCA' }}>
+                    {g.photo ? (
+                      <CardPhoto id={g.photo} />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center" style={{ color: FOREST }}>
+                        <BookOpen size={32} strokeWidth={1.6} aria-hidden="true" />
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="flex flex-1 flex-col" style={{ padding: g.premium ? '22px 22px 18px' : '16px 18px 16px' }}>
+                  {g.premium && (
+                    <span className="inline-flex items-center gap-1.5" style={{ fontFamily: SANS, fontSize: '13px', fontWeight: 800, color: GOLD, marginBottom: '10px' }}>
+                      <Lock size={14} strokeWidth={2.4} aria-hidden="true" /> Premium guide
+                    </span>
                   )}
-                </div>
-                <div className="flex flex-1 flex-col" style={{ padding: '20px 22px 22px' }}>
-                  <h3 style={{ fontFamily: SANS, fontWeight: 800, fontSize: 'clamp(17px, 1.2vw, 20px)', lineHeight: 1.25, letterSpacing: '-0.01em', color: INK, margin: 0, textWrap: 'balance' }}>
-                    {shortTitle(g.title)}
+                  <h3 style={{ fontFamily: SANS, fontWeight: 800, fontSize: g.premium ? 'clamp(19px, 1.5vw, 24px)' : 'clamp(16px, 1.1vw, 18px)', lineHeight: 1.25, letterSpacing: '-0.01em', color: INK, margin: 0, textWrap: 'balance' }}>
+                    {g.premium ? g.title : shortTitle(g.title)}
                   </h3>
-                  <p style={{ fontFamily: SANS, fontSize: '14.5px', lineHeight: 1.55, color: INK_70, margin: '8px 0 0 0', textWrap: 'pretty' }}>
+                  <p style={{ fontFamily: SANS, fontSize: '14px', lineHeight: 1.5, color: INK_70, margin: '6px 0 0 0', textWrap: 'pretty' }}>
                     {g.description}
                   </p>
-                  <div className="mt-auto flex items-center justify-between" style={{ paddingTop: '18px' }}>
+                  <div className="mt-auto flex items-center justify-between" style={{ paddingTop: '12px' }}>
                     <span className="inline-flex items-center gap-1.5" style={{ fontFamily: SANS, fontSize: '13px', fontWeight: 600, color: INK_55, fontVariantNumeric: 'tabular-nums' }}>
-                      <Clock size={13} strokeWidth={2.25} aria-hidden="true" /> {g.readingMinutes} min read
+                      {g.premium ? 'With Unlimited' : <><Clock size={13} strokeWidth={2.25} aria-hidden="true" /> {g.readingMinutes} min read</>}
                     </span>
-                    <span className="hs-guide-go inline-flex items-center gap-1" style={{ fontFamily: SANS, fontSize: '14px', fontWeight: 800, color: FOREST, textDecoration: 'underline', textUnderlineOffset: '3px' }}>
+                    <span className="hs-guide-go" style={{ fontFamily: SANS, fontSize: '14px', fontWeight: 800, color: FOREST, textDecoration: 'underline', textUnderlineOffset: '3px' }}>
                       Read
                     </span>
                   </div>

@@ -4,6 +4,7 @@ import StagefrontClient from './conferences/StagefrontClient';
 import { fetchListedConferences, fetchPlatformStats } from '@/lib/listedConferences';
 import { articles } from './blog/posts';
 import type { HomeGuide } from './conferences/landing-lab/HomeSections';
+import { listGuides } from '@/lib/premiumGuides';
 
 // The cards and the trust counts are read here, on the
 // server, so they are real in the HTML (they used to render "—" until a
@@ -89,12 +90,20 @@ const HOME_GUIDE_SLUGS = [
   'mun-delegate-tips',
 ];
 
-const homeGuides: HomeGuide[] = HOME_GUIDE_SLUGS.flatMap(slug => {
+// One row of three (owner, 25 Sep 2026: "one row and slightly shorter"):
+// the first two blog guides above that exist, then one premium guide shown
+// with its title and description only (the body stays behind the paywall on
+// /guides/<slug>).
+const blogGuides: HomeGuide[] = HOME_GUIDE_SLUGS.flatMap(slug => {
   const a = articles.find(p => p.slug === slug);
   return a
     ? [{ slug: a.slug, title: a.title, description: a.description, readingMinutes: a.readingMinutes, photo: a.photo }]
     : [];
-});
+}).slice(0, 2);
+const premiumPick = listGuides()[0];
+const homeGuides: HomeGuide[] = premiumPick
+  ? [...blogGuides, { slug: premiumPick.slug, title: premiumPick.title, description: premiumPick.description, readingMinutes: premiumPick.readingMinutes, premium: true }]
+  : blogGuides;
 
 export default async function HomePage() {
   const [conferences, stats] = await Promise.all([

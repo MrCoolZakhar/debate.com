@@ -423,6 +423,47 @@ export default function VariantStagefront({
             Second on the page by the owner's instruction (24 Sep 2026). ──── */}
         <SessionsSection />
 
+        {/* ── The circuit in numbers, a slim bar right under Run the room (owner, 25 Sep 2026):
+            three plain figures, no cards, no chrome. Real data from the board. */}
+        <section
+          className="px-6 md:px-14"
+          style={{ backgroundColor: CREAM, paddingTop: '8px', paddingBottom: '36px' }}
+        >
+          <div className="mx-auto flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-0" style={{ maxWidth: '960px', borderTop: '1px solid #E6DECB', paddingTop: '22px' }}>
+            {[
+              // Conferences and countries are now real platform totals from
+              // public_conference_stats — every conference on Gavelling, not
+              // only the published ones these cards are drawn from. The
+              // delegates figure keeps its display-only launch offset.
+              { n: stats?.total_conferences ?? (conferences.length || null), label: 'conferences' },
+              { n: conferences.reduce((s, c) => s + (c.expected_delegates || 0), 0) + 20000, label: 'delegates' },
+              { n: stats?.countries ?? (new Set(conferences.map(c => c.country)).size || null), label: 'countries' },
+            ].map((stat, i) => (
+              <div
+                key={stat.label}
+                className={`flex items-baseline justify-center gap-2 sm:px-8 md:px-12 ${i > 0 ? 'sm:border-l sm:border-[#DDD4C0]' : ''}`}
+              >
+                <span
+                  style={{
+                    fontFamily: SANS, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+                    fontSize: 'clamp(26px, 2.4vw, 38px)', lineHeight: 1, color: FOREST, letterSpacing: '-0.02em',
+                  }}
+                >
+                  {/* Null while both the RPC and the card fetch are still in
+                      flight; a dash holds the space instead of a false zero. */}
+                  {stat.n === null ? '–' : stat.n.toLocaleString()}
+                </span>
+                {/* The word beside the number (owner's taste board: "big number,
+                    word beside", 25 Sep 2026), not an uppercase gold label under it. */}
+                <span style={{ fontFamily: SANS, fontWeight: 600, fontSize: 'clamp(14px, 1vw, 16px)', color: INK }}>
+                  {stat.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+
         {/* ── Learn MUN, the guides from the blog, on forest. Third on the
             page by the owner's instruction (25 Sep 2026). ─────────────────── */}
         <LearnMunSection guides={guides} />
@@ -435,7 +476,7 @@ export default function VariantStagefront({
             short supporting line and the same links beneath. */}
         <section
           className="px-6 md:px-14"
-          style={{ backgroundColor: CREAM, paddingTop: 'clamp(64px, 6vw, 108px)', paddingBottom: 'clamp(8px, 1vw, 16px)' }}
+          style={{ backgroundColor: CREAM, paddingTop: 'clamp(40px, 4vw, 64px)', paddingBottom: 'clamp(32px, 3vw, 48px)' }}
         >
           <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: 'clamp(12px, 0.8vw, 14px)', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 8px 0', textAlign: 'center' }}>
             Find your seat
@@ -444,56 +485,16 @@ export default function VariantStagefront({
             style={{
               fontFamily: SANS,
               fontWeight: 900,
-              fontSize: 'clamp(26px, 3vw, 48px)',
+              fontSize: 'clamp(24px, 2.4vw, 38px)',
               letterSpacing: '-0.015em',
               color: INK,
-              margin: '0 0 clamp(34px, 3vw, 52px) 0',
+              margin: '0 0 clamp(20px, 2vw, 30px) 0',
               textAlign: 'center',
             }}
           >
             One platform, every <GoldWord>role</GoldWord>
           </h2>
           <RoleCarousel slides={ROLE_SLIDES} />
-        </section>
-
-        {/* ── The circuit in numbers, slim worlddiplomats-style impact strip:
-            three plain figures, no cards, no chrome. Real data from the board. */}
-        <section
-          className="px-6 md:px-14"
-          style={{ backgroundColor: CREAM, paddingTop: '56px', paddingBottom: '64px' }}
-        >
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-10 sm:gap-0">
-            {[
-              // Conferences and countries are now real platform totals from
-              // public_conference_stats — every conference on Gavelling, not
-              // only the published ones these cards are drawn from. The
-              // delegates figure keeps its display-only launch offset.
-              { n: stats?.total_conferences ?? (conferences.length || null), label: 'conferences' },
-              { n: conferences.reduce((s, c) => s + (c.expected_delegates || 0), 0) + 20000, label: 'delegates' },
-              { n: stats?.countries ?? (new Set(conferences.map(c => c.country)).size || null), label: 'countries' },
-            ].map((stat, i) => (
-              <div
-                key={stat.label}
-                className={`flex items-baseline justify-center gap-3 sm:px-10 md:px-16 ${i > 0 ? 'sm:border-l sm:border-[#DDD4C0]' : ''}`}
-              >
-                <span
-                  style={{
-                    fontFamily: SANS, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
-                    fontSize: 'clamp(38px, 4.5vw, 74px)', lineHeight: 1, color: FOREST, letterSpacing: '-0.02em',
-                  }}
-                >
-                  {/* Null while both the RPC and the card fetch are still in
-                      flight; a dash holds the space instead of a false zero. */}
-                  {stat.n === null ? '–' : stat.n.toLocaleString()}
-                </span>
-                {/* The word beside the number (owner's taste board: "big number,
-                    word beside", 25 Sep 2026), not an uppercase gold label under it. */}
-                <span style={{ fontFamily: SANS, fontWeight: 600, fontSize: 'clamp(16px, 1.3vw, 22px)', color: INK }}>
-                  {stat.label}
-                </span>
-              </div>
-            ))}
-          </div>
         </section>
 
         {/* The job board ("Opportunities beyond delegating") was here. Removed
@@ -509,7 +510,7 @@ export default function VariantStagefront({
           <section
             className="relative px-6 md:px-14"
             aria-labelledby="sf-near-heading"
-            style={{ backgroundColor: IVORY, paddingTop: '64px', paddingBottom: '72px' }}
+            style={{ backgroundColor: IVORY, paddingTop: 'clamp(40px, 4vw, 56px)', paddingBottom: 'clamp(40px, 4vw, 56px)' }}
           >
             <div className="mx-auto" style={{ maxWidth: '1320px' }}>
               <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
@@ -519,7 +520,7 @@ export default function VariantStagefront({
                   </p>
                   <h2
                     id="sf-near-heading"
-                    style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(26px, 3vw, 48px)', letterSpacing: '-0.015em', color: INK, margin: '0 0 6px 0', textWrap: 'balance' }}
+                    style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(24px, 2.4vw, 38px)', letterSpacing: '-0.015em', color: INK, margin: '0 0 4px 0', textWrap: 'balance' }}
                   >
                     Conferences near <GoldWord>you</GoldWord>
                   </h2>
@@ -535,7 +536,7 @@ export default function VariantStagefront({
                   See every conference
                 </Link>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 md:gap-6" style={{ marginTop: '32px' }}>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 md:gap-6" style={{ marginTop: '22px' }}>
                 {nearby.picks.map(c => (
                   <ConferenceCard
                     key={c.id}
@@ -559,17 +560,17 @@ export default function VariantStagefront({
         <section
           className="px-6 md:px-14"
           aria-labelledby="sf-globe-heading"
-          style={{ backgroundColor: '#FFFFFF', paddingTop: 'clamp(64px, 6vw, 104px)', paddingBottom: 'clamp(64px, 6vw, 104px)' }}
+          style={{ backgroundColor: '#FFFFFF', paddingTop: 'clamp(40px, 4vw, 64px)', paddingBottom: 'clamp(40px, 4vw, 64px)' }}
         >
           <div className="mx-auto flex flex-col lg:flex-row lg:items-center gap-10 lg:gap-16" style={{ maxWidth: '1320px' }}>
             <div className="flex-1" style={{ maxWidth: '560px' }}>
               <h2
                 id="sf-globe-heading"
-                style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(34px, 4vw, 72px)', lineHeight: 1.02, letterSpacing: '-0.02em', color: INK, margin: 0, textWrap: 'balance' }}
+                style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(28px, 3vw, 48px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: INK, margin: 0, textWrap: 'balance' }}
               >
                 MUN across the <GoldWord>globe</GoldWord>
               </h2>
-              <p style={{ marginTop: 20, marginBottom: 32, fontSize: 'clamp(16px, 1.1vw, 19px)', lineHeight: 1.65, color: INK_55, fontFamily: SANS }}>
+              <p style={{ marginTop: 14, marginBottom: 24, fontSize: 'clamp(15px, 1.05vw, 18px)', lineHeight: 1.65, color: INK_55, fontFamily: SANS }}>
                 {stats
                   ? `${stats.total_conferences} conferences across every continent. From The Hague to Singapore, Tokyo to New York`
                   : 'From The Hague to Singapore, Tokyo to New York. Explore conferences on every continent'}
@@ -584,7 +585,7 @@ export default function VariantStagefront({
             </div>
             <div
               className="relative w-full lg:flex-1 overflow-hidden"
-              style={{ aspectRatio: '4 / 3', maxHeight: '560px', borderRadius: 24, backgroundColor: '#1B3828', boxShadow: '0 30px 60px -30px rgba(27,56,40,0.45)' }}
+              style={{ aspectRatio: '16 / 10', maxHeight: '400px', borderRadius: 20, backgroundColor: '#1B3828', boxShadow: '0 30px 60px -30px rgba(27,56,40,0.45)' }}
             >
               <DeferredGlobeVideo />
             </div>
@@ -872,7 +873,7 @@ function RoleCarousel({ slides }: { slides: RoleSlide[] }) {
         tabIndex={0}
         onKeyDown={handleKeyDown}
         className="relative w-full outline-none"
-        style={{ height: 'clamp(440px, 50vw, 560px)', overflowX: 'clip' }}
+        style={{ height: 'clamp(340px, 34vw, 420px)', overflowX: 'clip' }}
       >
         {slides.map((slide, i) => {
           const offset = getOffset(i);
@@ -884,7 +885,7 @@ function RoleCarousel({ slides }: { slides: RoleSlide[] }) {
               key={slide.role}
               className="absolute inset-y-0 left-1/2 rounded-[30px] overflow-hidden select-none"
               style={{
-                width: 'min(640px, 82vw)',
+                width: 'min(540px, 82vw)',
                 marginLeft: 'calc(min(640px, 82vw) / -2)',
                 boxShadow: isActive
                   ? '0 32px 70px rgba(15,26,19,0.38), 0 0 0 1px rgba(250,248,243,0.14)'
@@ -915,7 +916,7 @@ function RoleCarousel({ slides }: { slides: RoleSlide[] }) {
                 alt={slide.imageAlt}
                 fill
                 loading="eager"
-                sizes="(min-width: 768px) 640px, 82vw"
+                sizes="(min-width: 768px) 540px, 82vw"
                 style={{ objectFit: 'cover' }}
                 draggable={false}
               />
@@ -934,7 +935,7 @@ function RoleCarousel({ slides }: { slides: RoleSlide[] }) {
                   style={{
                     fontFamily: SANS,
                     fontWeight: 900,
-                    fontSize: 'clamp(32px, 6.5vw, 72px)',
+                    fontSize: 'clamp(30px, 5vw, 56px)',
                     lineHeight: 0.98,
                     letterSpacing: '0.01em',
                     textTransform: 'uppercase',
@@ -993,7 +994,7 @@ function RoleCarousel({ slides }: { slides: RoleSlide[] }) {
         })}
       </div>
 
-      <div className="flex items-center justify-center gap-4 mt-8">
+      <div className="flex items-center justify-center gap-4 mt-4">
         <CarouselArrow direction="left" onClick={prev} label="Previous slide" />
         <CarouselArrow direction="right" onClick={next} label="Next slide" />
       </div>
