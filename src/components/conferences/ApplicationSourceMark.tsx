@@ -10,7 +10,7 @@
 // no request ever leaves for a third party. Everything without a logo is plain
 // text. The full sentence is the tooltip and the accessible name.
 
-import { Mail } from 'lucide-react';
+import { Mail, UsersRound } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { TrafficSource } from '@/lib/trafficSource';
 
@@ -196,6 +196,7 @@ export default function ApplicationSourceMark({
   source,
   detail,
   invited,
+  importedBy,
   size = 16,
   style,
 }: {
@@ -203,9 +204,27 @@ export default function ApplicationSourceMark({
   detail: string | null;
   /** Organiser-added rows (imports, invites) have no source of their own. */
   invited?: boolean;
+  /** The delegation whose leader imported this applicant
+   *  (conference_leader_imports). Shown instead of the traffic source, and
+   *  still after the delegate claims (claiming clears invited_email). */
+  importedBy?: string | null;
   size?: number;
   style?: CSSProperties;
 }) {
+  if (importedBy) {
+    const text = `Imported by ${importedBy}`;
+    return (
+      <span
+        role="img"
+        aria-label={text}
+        title={text}
+        className="inline-flex items-center justify-center"
+        style={{ width: size, height: size, flexShrink: 0, color: '#1B3828', ...style }}
+      >
+        <UsersRound size={size} strokeWidth={2.2} aria-hidden />
+      </span>
+    );
+  }
   if (invited) return null;
   const info = describeApplicationSource(source, detail);
   if (info.logo) {
@@ -245,11 +264,26 @@ export function ApplicationSourceChip({
   source,
   detail,
   invited,
+  importedBy,
 }: {
   source: string | null;
   detail: string | null;
   invited?: boolean;
+  /** See ApplicationSourceMark: a leader import names the delegation. */
+  importedBy?: string | null;
 }) {
+  if (importedBy) {
+    return (
+      <span
+        style={{
+          fontFamily: 'var(--font-brand), sans-serif', fontSize: 11, fontWeight: 600, color: 'rgba(250,248,243,0.82)',
+          overflowWrap: 'anywhere', maxWidth: 260, lineHeight: 1.2,
+        }}
+      >
+        Imported by {importedBy}
+      </span>
+    );
+  }
   if (invited) return null;
   const info = describeApplicationSource(source, detail);
   if (info.logo) {

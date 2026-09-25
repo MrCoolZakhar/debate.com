@@ -7,7 +7,7 @@ import {
   SlidersHorizontal, Building2, Users2, ShieldCheck, X, Lock, Copy, AlertTriangle, Check,
   Plus, Crown, Mail as MailIcon, ChevronDown, Info, ArrowLeft,
   Settings2, Globe, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, Briefcase, Trophy,
-  ClipboardList, CreditCard, Megaphone, Star, type LucideIcon,
+  ClipboardList, CreditCard, Megaphone, Star, UsersRound, type LucideIcon,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 
@@ -44,6 +44,7 @@ import {
 // untouched on disk; swap this import and the render below back to it to
 // re-enable the real configuration UI. See awardsComingSoon.tsx.
 import { AwardsComingSoon } from './awardsComingSoon';
+import { DelegationsSettings } from './delegationsUi';
 import CustomizationCard from './CustomizationCard';
 import { type FormBlock, normalizeBlocks, unpublishableQuestions } from '@/lib/customQuestions';
 import QuestionBuilder from '@/components/QuestionBuilder';
@@ -57,7 +58,7 @@ import ProfileLink from '@/components/ProfileLink';
 // ── Types ──────────────────────────────────────────────────────────────────
 
 /** The settings sub-tabs; also the accepted values of the ?tab= deep link. */
-type SettingsTab = 'applications' | 'conference' | 'organizers' | 'privacy' | 'awards';
+type SettingsTab = 'applications' | 'delegations' | 'conference' | 'organizers' | 'privacy' | 'awards';
 
 interface RoleConfig {
   id: string;
@@ -201,11 +202,6 @@ function roleCanHavePreference(role: string): boolean {
   return role === 'delegate' || role === 'head-delegate' || role === 'chair';
 }
 
-const SWAP_MODE_OPTIONS: { value: string; label: string; desc: string }[] = [
-  { value: 'off', label: 'OFF', desc: 'Only organizers manage allocations.' },
-  { value: 'request', label: 'REQUEST', desc: 'Advisors and head delegates can request swaps; you approve them.' },
-  { value: 'self_serve', label: 'SELF-SERVE', desc: "Advisors and head delegates can swap within their delegation; you're notified." },
-];
 
 // ── Constants & helpers ────────────────────────────────────────────────────
 
@@ -572,7 +568,7 @@ export default function SettingsPage() {
   const initialTab = ((): SettingsTab => {
     const t = searchParams.get('tab') ?? searchParams.get('section');
     if (t === 'team') return 'organizers';
-    return t === 'conference' || t === 'organizers' || t === 'privacy' || t === 'awards' ? t : 'applications';
+    return t === 'delegations' || t === 'conference' || t === 'organizers' || t === 'privacy' || t === 'awards' ? t : 'applications';
   })();
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   // Which role's configuration the Applications section is showing. Derived
@@ -3025,6 +3021,7 @@ export default function SettingsPage() {
     icon: typeof SlidersHorizontal;
   }[] = [
     { key: 'applications', label: 'Applications', hint: 'Roles, windows & questions', icon: SlidersHorizontal },
+    { key: 'delegations',  label: 'Delegations',  hint: 'Swaps & leader imports',     icon: UsersRound },
     { key: 'conference',   label: 'Conference',   hint: 'Identity, media & fee',      icon: Building2 },
     { key: 'organizers',   label: 'Organizers',   hint: 'Team & permissions',         icon: Users2 },
     { key: 'privacy',      label: 'Privacy',       hint: 'Publishing & lineage',       icon: ShieldCheck },
@@ -3989,6 +3986,18 @@ export default function SettingsPage() {
 
 
       {/* ── VISUAL TAB ── */}
+      {activeTab === 'delegations' && (
+        <DelegationsSettings
+          conferenceId={conference.id}
+          allowImport={!!conference.allow_delegation_import}
+          onConferenceSaved={refreshConferenceQuiet}
+          swapMode={swapMode}
+          swapModeSaving={swapModeSaving}
+          swapModeError={swapModeError}
+          onSwapModeChange={(v) => { void saveSwapMode(v); }}
+        />
+      )}
+
       {activeTab === 'conference' && (
         <div>
           {/* ── Persistent header bar. Never collapses: a preview link and a
@@ -4592,58 +4601,15 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* ── Swaps ── */}
+          {/* Section 4: Partners and sponsors. Moved here from the Privacy
+              tab: partners are conference identity, not a privacy setting. */}
           <div style={cardStyle}>
             <StepHeader
-              n={4} label="Delegation allocation swaps" sub="Whether delegates may trade allocations."
+              n={4} label="Partners and sponsors" sub="Other conferences and companies shown on your page."
               complete={true} open={openConfSection === 4}
               onClick={() => setOpenConfSection(openConfSection === 4 ? 0 : 4)}
             />
             {openConfSection === 4 && (
-            <div className="mt-5">
-            <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-              <Emoji3D name="Counterclockwise arrows button" size={20} fallback={Users2} fallbackColor="#1B3828" />
-              Delegation allocation swaps
-              <InfoHint
-                label="About allocation swaps"
-                text="Once you have allocated a delegation its seats, its head delegate and faculty advisor may want to move their own people between them, putting a stronger delegate onto a harder country, say. Off keeps every move with your team. Request lets them ask and you approve. Self-serve lets them rearrange inside their own delegation freely and notifies you; they can never take a seat from another delegation."
-              />
-            </p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-              Control whether delegation leaders can trade committee allocations within their own delegation.
-            </p>
-            <div className="flex items-center" style={{ gap: 8 }}>
-              <div className="flex-1">
-                <Segmented
-                  options={SWAP_MODE_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
-                  value={swapMode}
-                  disabled={swapModeSaving}
-                  onChange={(v) => saveSwapMode(v)}
-                />
-              </div>
-              {swapModeSaving && (
-                <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-              )}
-            </div>
-            <p className="text-xs mt-2" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-              {SWAP_MODE_OPTIONS.find(o => o.value === swapMode)?.desc}
-            </p>
-            {swapModeError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{swapModeError}</p>
-            )}
-            </div>
-            )}
-          </div>
-
-          {/* Section 5: Partners and sponsors. Moved here from the Privacy
-              tab: partners are conference identity, not a privacy setting. */}
-          <div style={cardStyle}>
-            <StepHeader
-              n={5} label="Partners and sponsors" sub="Other conferences and companies shown on your page."
-              complete={true} open={openConfSection === 5}
-              onClick={() => setOpenConfSection(openConfSection === 5 ? 0 : 5)}
-            />
-            {openConfSection === 5 && (
             <div className="mt-5">
         <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
           Partners
@@ -5071,17 +5037,17 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* Section 6: Social media and communication. Contact email first,
+          {/* Section 5: Social media and communication. Contact email first,
               because it is the one an applicant actually uses to reach a
               conference, then the five URL fields. */}
           <div style={cardStyle}>
             <StepHeader
-              n={6} label="Social media and communication" sub="How applicants find you and reach you."
-              complete={true} open={openConfSection === 6}
+              n={5} label="Social media and communication" sub="How applicants find you and reach you."
+              complete={true} open={openConfSection === 5}
               status={visualSaving ? 'saving' : visualSaved ? 'saved' : 'idle'}
-              onClick={() => setOpenConfSection(openConfSection === 6 ? 0 : 6)}
+              onClick={() => setOpenConfSection(openConfSection === 5 ? 0 : 5)}
             />
-            {openConfSection === 6 && (
+            {openConfSection === 5 && (
             <div className="mt-5">
             <div className="mb-3">
               <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Contact email</label>

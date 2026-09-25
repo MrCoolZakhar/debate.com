@@ -29,7 +29,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, ChevronDown, ChevronUp, Clock, Coins, CreditCard, GraduationCap, HandCoins, ImageUp,
-  Lock, Mail, Minus, Plus, Receipt, ShoppingBag, Users2, Wallet, X,
+  Lock, Mail, Minus, Plus, Receipt, ShoppingBag, UserPlus, Users2, Wallet, X,
 } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
@@ -54,6 +54,7 @@ import { getGateState, roleLabel, statusPriority } from '../participant/shared';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import AidRequestModal from '../participant/AidRequestModal';
 import DelegationCreditsCard from '../participant/DelegationCreditsCard';
+import DelegationImportCard, { useDelegationImport } from '../participant/DelegationImportCard';
 import PledgeInvoicingCard from '../participant/PledgeInvoicingCard';
 import { safeStorageKey } from '@/lib/storageKey';
 
@@ -62,6 +63,7 @@ import { safeStorageKey } from '@/lib/storageKey';
 interface PayConference {
   id: string;
   full_name: string;
+  acronym: string | null;
   fee_currency: string;
   contact_email: string | null;
   payment_method: string | null;
@@ -386,7 +388,7 @@ export default function PayPage() {
       const { data: confData } = await supabase
         .from('conferences')
         .select(`
-          id, full_name, fee_currency, contact_email,
+          id, full_name, acronym, fee_currency, contact_email,
           payment_method, connect_onboarding_status, platform_collects, external_payment_url, external_payment_note,
           financial_aid_enabled, aid_questions, aid_intro, theme
         `)
@@ -1729,7 +1731,7 @@ function PayInvoiceAndActions({
    *  should vanish from the list right away, not wait on a round trip). */
   onInvoiceRemoved: (invoiceId: string) => void;
 }) {
-  const { session } = useAuth();
+  const { session, user } = useAuth();
   const aidBlocks: FormBlock[] = normalizeBlocks(conference.aid_questions);
   const currency = roleConfig?.fee_currency ?? conference.fee_currency;
   const { amount: resolvedFee, phase } = activePhaseFee({ fee_amount: roleConfig?.fee_amount ?? 0, fee_phases: roleConfig?.fee_phases ?? null });
@@ -1792,6 +1794,12 @@ function PayInvoiceAndActions({
   const [addonsModalOpen, setAddonsModalOpen] = useState(false);
   const [creditsOpen, setCreditsOpen] = useState(false);
   const [spotsOpen, setSpotsOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const spotsRowRef = useRef<HTMLDivElement | null>(null);
+  // Delegation imports: the row exists only while the conference allows it
+  // and this person leads the delegation (my_delegation_import decides both).
+  const delegationImport = useDelegationImport(canBuyDelegationStuff && leaderApp?.society_id ? leaderApp.society_id : null);
+  const importAvailable = !!delegationImport.leader?.enabled;
   const [advisorModalOpen, setAdvisorModalOpen] = useState(false);
   // Left column: Current Invoices (what's owed or awaiting review) vs
   // Payments (the full payment_batches history, every method). Settled
@@ -2346,6 +2354,7 @@ function PayInvoiceAndActions({
           }}
         />
 
+        <div ref={spotsRowRef} style={{ scrollMarginTop: 96 }}>
         <ActionRow
           icon={Users2}
           gradient={NEU_GRADIENTS.forest}
@@ -2357,6 +2366,7 @@ function PayInvoiceAndActions({
             setSpotsOpen(v => !v);
           }}
         />
+        </div>
         {canBuyDelegationStuff && leaderApp && spotsOpen && (
           <>
             <AddSpotsPanel
@@ -2407,6 +2417,31 @@ function PayInvoiceAndActions({
           />
         )}
         {canBuyDelegationStuff && leaderApp && creditsOpen && <DelegationCreditsCard societyId={leaderApp.society_id as string} />}
+
+        {canBuyDelegationStuff && leaderApp && importAvailable && (
+          // A delegation leader brings their own delegates in, one credit each.
+          <ActionRow
+            icon={UserPlus}
+            gradient={NEU_GRADIENTS.forest}
+            title="Import your delegates"
+            subtitle={importOpen ? 'Hide' : 'Invite delegates by name and email'}
+            onClick={() => setImportOpen(v => !v)}
+          />
+        )}
+        {canBuyDelegationStuff && leaderApp && importAvailable && importOpen && delegationImport.leader && (
+          <DelegationImportCard
+            societyId={leaderApp.society_id as string}
+            data={delegationImport.leader}
+            reload={delegationImport.reload}
+            conferenceAcronym={conference.acronym?.trim() || conference.full_name}
+            userEmail={user?.email ?? null}
+            onPledgeMore={() => {
+              setSpotsOpen(true);
+              requestAnimationFrame(() => spotsRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+            }}
+            onImported={onInvoicesChanged}
+          />
+        )}
       </div>
 
       {stubMessage && (

@@ -1766,6 +1766,10 @@ export default function ApplicationsPage() {
   const urlPayment = searchParams.get('payment');
   const paymentsLive = isPaymentsLive(conference?.id, conference?.connect_onboarding_status, conference?.payment_method, conference?.platform_collects);
   const [applications, setApplications] = useState<Application[]>([]);
+  // application_id → the delegation whose leader imported it
+  // (conference_leader_imports). Keyed on the id, never on invited_email,
+  // because claiming clears invited_email and the mark must stay.
+  const [leaderImports, setLeaderImports] = useState<Map<string, string>>(() => new Map());
   // Unpaid gating invoices (gates_acceptance=true, status not settled/waived/
   // void). Only app_fee rows ever carry the flag, since it comes from
   // application_surcharges.gates_acceptance. Fetched with the applications list.
@@ -1964,6 +1968,17 @@ export default function ApplicationsPage() {
     await supabase.rpc('sync_conference_invoices', { p_conference_id: conference.id });
     // Paged (fetchAllRows): a single request stops at 1,000 rows without a
     // word, so a big conference silently lost its oldest applications.
+    // Leader imports are read beside the applications; a failed read only
+    // leaves the marks off, it never blocks the list.
+    void (async () => {
+      const { data, error } = await supabase.rpc('conference_leader_imports', { p_conference: conference.id });
+      if (seq !== loadSeq.current || error) return;
+      const next = new Map<string, string>();
+      for (const row of (data ?? []) as { application_id: string | null; delegation_name: string | null }[]) {
+        if (row.application_id) next.set(row.application_id, row.delegation_name?.trim() || 'a delegation leader');
+      }
+      setLeaderImports(next);
+    })();
     const [appRes, cfgRes, gatingRes] = await Promise.all([
       fetchAllRows((from, to) => supabase
         .from('applications')
@@ -4685,7 +4700,7 @@ export default function ApplicationsPage() {
                   >
                     <CalendarDays size={11} strokeWidth={2.2} />
                     {formatDate(app.submitted_at)}
-                    <ApplicationSourceMark source={app.traffic_source} detail={app.traffic_detail} invited={!!app.invited_email} size={14} style={{ marginLeft: 6, pointerEvents: 'auto' }} />
+                    <ApplicationSourceMark source={app.traffic_source} detail={app.traffic_detail} invited={!!app.invited_email} importedBy={leaderImports.get(app.id) ?? null} size={14} style={{ marginLeft: 6, pointerEvents: 'auto' }} />
                   </span>
                 )}
               </NeuCard>
@@ -5419,7 +5434,7 @@ export default function ApplicationsPage() {
                     Resubmitted {formatDate(app.resubmitted_at)}
                   </span>
                 )}
-                <ApplicationSourceChip source={app.traffic_source} detail={app.traffic_detail} invited={!!app.invited_email} />
+                <ApplicationSourceChip source={app.traffic_source} detail={app.traffic_detail} invited={!!app.invited_email} importedBy={leaderImports.get(app.id) ?? null} />
               </>
             )}
             actions={decisionControls(true)}

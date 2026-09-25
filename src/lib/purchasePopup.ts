@@ -29,6 +29,12 @@ export interface CreditsPopupRequest {
   preselect?: number;
   /** Fired once the payment is complete (embedded) and the balance was refreshed. */
   onComplete?: () => void;
+  /** Why the pop-up opened, when a flow ran short. 'import': a delegation
+   *  leader importing delegates (pay page); the pop-up says they are short
+   *  and lists importing as a live use. */
+  purpose?: 'import';
+  /** With purpose 'import': the delegation the delegates are imported into. */
+  delegationName?: string;
 }
 
 export interface UnlimitedPopupRequest {

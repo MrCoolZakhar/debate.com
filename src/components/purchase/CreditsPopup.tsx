@@ -36,6 +36,7 @@ import { BenefitList, BrandTitle, ErrorLine, Eyebrow, FOREST, GoldButton, INK, P
 
 const USE_APPLY: Benefit = { emoji: 'Ticket', fallback: Ticket, title: 'Apply to conferences', note: 'One credit per conference, however many times you edit.', live: true };
 const USE_IMPORT: Benefit = { emoji: 'Busts in silhouette', fallback: Users, title: 'Importing your delegates', note: 'Bring a whole delegation in at once.', live: false };
+const USE_IMPORT_LIVE: Benefit = { emoji: 'Busts in silhouette', fallback: Users, title: 'Importing your delegates', note: 'One credit per delegate you import', live: true };
 const USE_JOBS: Benefit = { emoji: 'Briefcase', fallback: Briefcase, title: 'The job board', note: 'Chair and staff roles across conferences.', live: false };
 
 function usesFor(context: CreditsContext): Benefit[] {
@@ -56,7 +57,8 @@ const RIGHT_TITLE: Record<CreditsContext, string> = {
 const plural = (n: number) => (n === 1 ? 'credit' : 'credits');
 
 export default function CreditsPopup({ request }: { request: CreditsPopupRequest }) {
-  const { context, conferenceName, preselect } = request;
+  const { context, conferenceName, preselect, purpose, delegationName } = request;
+  const forImport = purpose === 'import';
   const { user, loading: authLoading } = useAuth();
   const { table, error: tableError, retry } = useCreditPriceTable();
   const { balance } = useCredits();
@@ -81,7 +83,7 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
   // Only on the "Another amount" path, and only from the table.
   const nudge = custom && table ? nextTierNudge(qty, table) : null;
 
-  const uses = useMemo(() => usesFor(context), [context]);
+  const uses = useMemo(() => (forImport ? [USE_IMPORT_LIVE, USE_APPLY] : usesFor(context)), [context, forImport]);
 
   function pick(n: number) {
     setCustom(false);
@@ -147,7 +149,9 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
   }, [tableError, retry]);
 
   const signedOut = !authLoading && !user;
-  const label = context === 'apply' && conferenceName ? `Buy credits for ${conferenceName}` : 'Buy Gavelling credits';
+  const label = forImport
+    ? (delegationName ? `Buy credits to import delegates into ${delegationName}` : 'Buy credits to import your delegates')
+    : context === 'apply' && conferenceName ? `Buy credits for ${conferenceName}` : 'Buy Gavelling credits';
 
   return (
     <PurchaseShell tone="light" label={label} onClose={closePurchasePopup} testId="credits-popup">
@@ -155,7 +159,9 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
         <BrandTitle
           word="Credits"
           tone="light"
-          sub={context === 'apply' && conferenceName
+          sub={forImport
+            ? <>It seems you don&apos;t have enough credits for this</>
+            : context === 'apply' && conferenceName
             ? <>For your application to <strong style={{ fontWeight: 600, color: INK }}>{conferenceName}</strong></>
             : undefined}
         />
