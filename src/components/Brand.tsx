@@ -1,20 +1,15 @@
 'use client';
 
 /**
- * Brand.tsx, the Gavelling brand lockup (gavel mark + optional live wordmark).
+ * Brand.tsx, the Gavelling logo.
  *
- * The shipped logo PNGs read "GAVELLING SESSIONS APP"; every
- * conferences-related surface must read "GAVELLING CONFERENCES" instead.
- * Rather than shipping another baked PNG, <Brand /> composes the standalone
- * gavel mark (/gavel-mark.png, gavel + laurel, transparent) with live text:
- * "GAVELLING" in Outfit 900 (ink on light surfaces, ivory on dark) and, for
- * the conferences variant, a gold "CONFERENCES" eyebrow underneath.
- *
- * <BrandConferences /> is the stable conferences-variant shorthand used by
- * SiteNav and other conferences surfaces.
+ * Since 25 Sep 2026 there is ONE logo everywhere (owner: "i don't want any of them
+ * to say sessions or conferences anymore"): /gavelling-lockup.webp (gavel + wreath,
+ * GAVELLING, "The #1 MUN Ecosystem"). The old files GavellingLogo, GavellingSessionsApp
+ * and Conferences (.png / .webp) now hold the same artwork, so every older reference
+ * shows it too. `markOnly` still draws the square gavel mark for round / square spots.
+ * `variant` and `tone` are kept so callers compile; they no longer change the art.
  */
-
-const OUTFIT = "var(--font-brand), sans-serif";
 
 export interface BrandProps {
   /**
@@ -40,21 +35,12 @@ export interface BrandProps {
 }
 
 export function Brand({
-  variant = 'conferences',
   tone = 'light',
   size = 34,
   shadow = false,
   markOnly = false,
   monochrome = false,
 }: BrandProps) {
-  const ink = tone === 'dark' ? '#EDE7D8' : '#1C1410';
-  const gold = monochrome
-    ? (tone === 'dark' ? 'rgba(238,217,138,0.75)' : '#9A8A78')
-    : tone === 'dark' ? '#EED98A' : '#B6871F';
-  // Type scales with the mark: wordmark ~46% of mark height, eyebrow fixed 8–9px band.
-  const wordSize = Math.max(13, Math.round(size * 0.46));
-  const eyebrowSize = size >= 32 ? 9 : 8;
-
   const markFilter = monochrome
     ? `grayscale(1)${tone === 'dark' ? ' brightness(2.1)' : ''}`
     : undefined;
@@ -80,45 +66,23 @@ export function Brand({
     );
   }
 
+  // The full logo is ONE image (owner, 25 Sep 2026): gavel + wreath, GAVELLING,
+  // and "The #1 MUN Ecosystem" beneath. Never type "GAVELLING" out as text in
+  // place of it (CLAUDE.md §8). 4:1 artwork, so width = 4 x the height. `size`
+  // keeps meaning "the mark's height"; the lockup is drawn a little taller so the
+  // mark inside it stays about that size.
+  const h = Math.round(size * 1.35);
   return (
-    <span
-      className="inline-flex items-center"
+    <img
+      src="/gavelling-lockup.webp"
+      alt="Gavelling"
+      width={h * 4}
+      height={h}
       style={{
-        gap: Math.round(size * 0.22),
-        filter: shadow ? 'drop-shadow(0 2px 8px rgba(0,0,0,0.55)) drop-shadow(0 1px 3px rgba(0,0,0,0.4))' : undefined,
+        height: h, width: 'auto', objectFit: 'contain', flexShrink: 0, filter: [markFilter, shadow ? 'drop-shadow(0 2px 8px rgba(0,0,0,0.55))' : ''].filter(Boolean).join(' ') || undefined,
       }}
-    >
-      {mark}
-      <span className="flex flex-col" style={{ lineHeight: 1 }}>
-        <span
-          style={{
-            fontFamily: OUTFIT,
-            fontWeight: 900,
-            fontSize: wordSize,
-            letterSpacing: '0.04em',
-            color: ink,
-            lineHeight: 1,
-          }}
-        >
-          GAVELLING
-        </span>
-        {variant === 'conferences' && (
-          <span
-            style={{
-              fontFamily: OUTFIT,
-              fontWeight: 800,
-              fontSize: eyebrowSize,
-              letterSpacing: '0.2em',
-              color: gold,
-              lineHeight: 1,
-              marginTop: Math.max(2, Math.round(size * 0.09)),
-            }}
-          >
-            CONFERENCES
-          </span>
-        )}
-      </span>
-    </span>
+      onError={(e) => { const img = e.target as HTMLImageElement; if (!img.src.endsWith('.png')) img.src = '/gavelling-lockup.png'; }}
+    />
   );
 }
 

@@ -20,7 +20,9 @@ icons, avatars, discs, chips, structured-data logos, anything `object-cover`.
 | `gavelling-mark.png` | 512x512 | Byte-identical to the master, at a stable public URL. Used by the `send-setup-nudges` Supabase edge function and by JSON-LD (`src/lib/seo.ts`). **Do not delete — `grep` shows no hits because the consumers are remote.** |
 | `gavel-mark.png` / `.webp` | 300x300 | In-app mark (`Brand.tsx`, `SiteNav` credit chip, auth pages). Derived from the master. |
 
-### 2. The LOCKUP (wide, ~4:1)
+### 2. The LOCKUP (wide, 4:1)
+
+**Since 25 Sep 2026 there is ONE lockup** (owner: "i don't want any of them to say sessions or conferences anymore"): gavel + wreath, GAVELLING, and "The #1 MUN Ecosystem" in gold beneath. The master is `gavelling-lockup.webp` / `.png` (1000x250, transparent). `GavellingLogo.*`, `GavellingSessionsApp.*` and `Conferences.*` were overwritten with the same artwork so every existing reference shows it; new code should reference `gavelling-lockup.*`. Never type the wordmark as text (CLAUDE.md §8). The table below describes the files' old roles.
 
 Mark on the left, then the word "GAVELLING" starting at roughly x=185.
 
