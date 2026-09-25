@@ -100,7 +100,8 @@ const blogGuides: HomeGuide[] = HOME_GUIDE_SLUGS.flatMap(slug => {
     ? [{ slug: a.slug, title: a.title, description: a.description, readingMinutes: a.readingMinutes, photo: a.photo }]
     : [];
 }).slice(0, 2);
-const premiumPick = listGuides()[0];
+// The sponsorship playbook is the landing page's premium guide (owner, 25 Sep 2026).
+const premiumPick = listGuides().find(g => g.slug === 'sponsorship-playbook') ?? listGuides()[0];
 const homeGuides: HomeGuide[] = premiumPick
   ? [...blogGuides, { slug: premiumPick.slug, title: premiumPick.title, description: premiumPick.description, readingMinutes: premiumPick.readingMinutes, premium: true }]
   : blogGuides;

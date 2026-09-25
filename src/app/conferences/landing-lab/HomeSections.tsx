@@ -349,7 +349,51 @@ export function LearnMunSection({ guides }: { guides: HomeGuide[] }) {
           className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5"
           style={{ listStyle: 'none', padding: 0, margin: '24px 0 0 0' }}
         >
-          {guides.map(g => (
+          {guides.map(g => g.premium ? (
+            // A premium guide looks premium (owner, 25 Sep 2026): a cover photo
+            // under frosted glass, the lock, and "Unlock with Unlimited". Only
+            // the title and description are shown; the guide itself is behind
+            // the paywall on /guides/<slug>.
+            <li key={g.slug} className="flex">
+              <a
+                href={`/guides/${g.slug}`}
+                title={g.title}
+                className="hs-guide relative flex w-full flex-col justify-end overflow-hidden focus:outline-none"
+                style={{ borderRadius: 18, minHeight: 300, textDecoration: 'none', boxShadow: '0 0 0 1.5px rgba(184,148,58,0.55), 0 16px 34px rgba(27,56,40,0.16)' }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/landing/organiser-desk.jpg" alt="" aria-hidden="true" loading="lazy" className="absolute inset-0 h-full w-full" style={{ objectFit: 'cover' }} />
+                <div
+                  className="relative"
+                  style={{
+                    margin: 12,
+                    padding: '18px 18px 16px',
+                    borderRadius: 14,
+                    background: 'rgba(255, 253, 248, 0.62)',
+                    backdropFilter: 'blur(14px) saturate(1.2)',
+                    WebkitBackdropFilter: 'blur(14px) saturate(1.2)',
+                    boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.6), 0 8px 24px rgba(15,26,19,0.18)',
+                  }}
+                >
+                  <span className="inline-flex items-center gap-1.5" style={{ fontFamily: SANS, fontSize: '13px', fontWeight: 800, color: '#8A6414' }}>
+                    <Lock size={14} strokeWidth={2.4} aria-hidden="true" /> Premium guide
+                  </span>
+                  <h3 style={{ fontFamily: SANS, fontWeight: 800, fontSize: 'clamp(18px, 1.35vw, 22px)', lineHeight: 1.2, letterSpacing: '-0.01em', color: INK, margin: '6px 0 0 0', textWrap: 'balance' }}>
+                    {g.title}
+                  </h3>
+                  <p style={{ fontFamily: SANS, fontSize: '14px', lineHeight: 1.5, color: '#3A3128', margin: '6px 0 0 0', textWrap: 'pretty' }}>
+                    {g.description}
+                  </p>
+                  <span
+                    className="inline-flex items-center justify-center gap-2"
+                    style={{ marginTop: 14, height: 42, padding: '0 18px', borderRadius: 10, background: 'linear-gradient(90deg, #1B3828 0%, #2A5A3C 55%, #1E4A31 100%)', color: '#FFFFFF', fontFamily: SANS, fontWeight: 700, fontSize: '15px' }}
+                  >
+                    <Lock size={15} strokeWidth={2.4} aria-hidden="true" /> Unlock with Unlimited
+                  </span>
+                </div>
+              </a>
+            </li>
+          ) : (
             <li key={g.slug} className="flex">
               <a
                 href={g.premium ? `/guides/${g.slug}` : `/blog/${g.slug}`}

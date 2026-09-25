@@ -308,7 +308,20 @@ export default function VariantStagefront({
           {/* Backdrop, sized to the hero zone exactly. A fixed podium-speaker
               image (not a live conference banner, which used to pull whichever
               conference happened to sort first and looked random). */}
-          <div className="absolute inset-0 z-0" aria-hidden="true" style={{ overflow: 'hidden' }}>
+          {/* The backdrop DISSOLVES into the cream section below through a mask
+              (owner, 25 Sep 2026: "the white shadow gradient is still weird ...
+              completely blend it"): the photo and its darkening fade to
+              transparent over the cream page, so no pale film is painted over
+              the photo on the way down. */}
+          <div
+            className="absolute inset-0 z-0"
+            aria-hidden="true"
+            style={{
+              overflow: 'hidden',
+              WebkitMaskImage: 'linear-gradient(to bottom, #000 0%, #000 84%, rgba(0,0,0,0.55) 93%, transparent 100%)',
+              maskImage: 'linear-gradient(to bottom, #000 0%, #000 84%, rgba(0,0,0,0.55) 93%, transparent 100%)',
+            }}
+          >
             <Image
               src="/landing/podium-speaker.jpg"
               alt=""
@@ -322,7 +335,7 @@ export default function VariantStagefront({
               className="absolute inset-0"
               style={{
                 background:
-                  'linear-gradient(to bottom, rgba(8,18,13,0.52) 0%, rgba(8,18,13,0.4) 30%, rgba(8,18,13,0.62) 62%, rgba(10,22,16,0.9) 92%, #FAF8F3 100%)',
+                  'linear-gradient(to bottom, rgba(8,18,13,0.52) 0%, rgba(8,18,13,0.4) 30%, rgba(8,18,13,0.62) 62%, rgba(10,22,16,0.82) 100%)',
               }}
             />
             <div
@@ -886,7 +899,7 @@ function RoleCarousel({ slides }: { slides: RoleSlide[] }) {
               className="absolute inset-y-0 left-1/2 rounded-[30px] overflow-hidden select-none"
               style={{
                 width: 'min(540px, 82vw)',
-                marginLeft: 'calc(min(640px, 82vw) / -2)',
+                marginLeft: 'calc(min(540px, 82vw) / -2)',
                 boxShadow: isActive
                   ? '0 32px 70px rgba(15,26,19,0.38), 0 0 0 1px rgba(250,248,243,0.14)'
                   : '0 18px 40px rgba(15,26,19,0.22), 0 0 0 1px rgba(250,248,243,0.10)',
