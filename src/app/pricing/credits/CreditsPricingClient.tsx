@@ -1,9 +1,9 @@
 'use client';
 
 // ── /pricing/credits ─────────────────────────────────────────────────────────
-// Forest hero with the sessions gavel film fading into the green, a white
-// block for what credits do, the bundle picker on the cream ground, the
-// questions on white, and the way to the help center. Every price on the
+// A hero straight on the ivory page with the sessions gavel film, the bundle
+// picker, a white block for what credits do, the questions on white, and the
+// way to the help center. Every price on the
 // page is read from the server's price table.
 
 import Link from 'next/link';
@@ -44,7 +44,7 @@ export default function CreditsPricingClient() {
         .gv-cr-row:last-child{border-bottom:1px solid rgba(27,56,40,0.14)}
         .gv-cr-row h3{margin:0;font-size:19px;font-weight:800;letter-spacing:-0.01em;line-height:1.2;color:${P.ink}}
         .gv-cr-row p{margin:4px 0 0;font-size:15px;line-height:1.45;color:${P.inkSoft}}
-        .gv-cr-soon{font-size:12px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:${P.goldDeep};white-space:nowrap}
+        .gv-cr-soon{font-size:14px;font-weight:700;color:${P.goldDeep};white-space:nowrap}
         .gv-cr-faq{margin-top:24px}
         @media (min-width:640px){
           .gv-cr-uses{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}
@@ -69,7 +69,7 @@ export default function CreditsPricingClient() {
           </h1>
           <p className="gv-cr-line">One currency for everything on Gavelling</p>
           <div className="gv-cr-actions">
-            <ActionButton skin="gold" big onClick={() => openCreditsPopup({ context: 'pricing' })}>Buy credits</ActionButton>
+            <ActionButton skin="forest" big onClick={() => openCreditsPopup({ context: 'pricing' })}>Buy credits</ActionButton>
             <ActionLink href="/pricing/subscription" skin="outline">See Unlimited</ActionLink>
           </div>
           {user && balance !== null && (

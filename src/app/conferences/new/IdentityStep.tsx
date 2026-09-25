@@ -56,18 +56,20 @@ export interface IdentityStepProps {
   onToggleTbd: () => void;
 }
 
+// A label above a white box, never a pressed-in well (CLAUDE.md §8).
+const FIELD_BORDER = 'rgba(27,56,40,0.22)';
+
 const inputStyle: React.CSSProperties = {
   width: '100%',
-  backgroundColor: NEU.base,
-  border: '1.5px solid transparent',
-  borderRadius: 16,
+  backgroundColor: '#FFFFFF',
+  border: `1.5px solid ${FIELD_BORDER}`,
+  borderRadius: 12,
   padding: '14px 16px',
   fontSize: 16,
   fontWeight: 600,
   color: NEU.ink,
   fontFamily: OUTFIT,
   outline: 'none',
-  boxShadow: NEU.inSm,
   transition: `border-color 180ms ${EASE}`,
 };
 
@@ -77,8 +79,8 @@ function Label({ htmlFor, children, aside }: { htmlFor?: string; children: React
       <label
         htmlFor={htmlFor}
         style={{
-          fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.12em',
-          color: NEU.inkSoft, textTransform: 'uppercase',
+          fontFamily: OUTFIT, fontSize: 14, fontWeight: 700,
+          color: NEU.ink,
         }}
       >
         {children}
@@ -135,7 +137,7 @@ export function IdentityStep(p: IdentityStepProps) {
   const datesBackwards = !p.datesTbd && !!p.startDate && !!p.endDate && p.endDate < p.startDate;
 
   const focus = (e: React.FocusEvent<HTMLInputElement>) => { e.currentTarget.style.borderColor = NEU.forest; };
-  const blur = (e: React.FocusEvent<HTMLInputElement>) => { e.currentTarget.style.borderColor = 'transparent'; };
+  const blur = (e: React.FocusEvent<HTMLInputElement>) => { e.currentTarget.style.borderColor = FIELD_BORDER; };
 
   return (
     <div className="gv-idstep">
@@ -168,7 +170,8 @@ export function IdentityStep(p: IdentityStepProps) {
         <section
           aria-label="Preview of your conference"
           style={{
-            backgroundColor: NEU.surface, borderRadius: 26, boxShadow: NEU.out,
+            backgroundColor: '#FFFFFF', borderRadius: 18,
+            boxShadow: '0 1px 2px rgba(27,56,40,0.06), 0 6px 20px -6px rgba(27,56,40,0.16)',
             overflow: 'hidden', position: 'relative',
           }}
         >
@@ -226,7 +229,7 @@ export function IdentityStep(p: IdentityStepProps) {
               className="relative flex items-center justify-center focus:outline-none focus-visible:shadow-[0_0_0_3px_#1B3828]"
               style={{
                 width: 104, height: 104, marginTop: -54, borderRadius: 999,
-                backgroundColor: '#FDFCF9', border: `4px solid ${NEU.surface}`,
+                backgroundColor: '#FDFCF9', border: '4px solid #FFFFFF',
                 boxShadow: logoHover ? '0 10px 26px rgba(27,56,40,0.28)' : '0 6px 18px rgba(27,56,40,0.20)',
                 cursor: 'pointer', overflow: 'visible', padding: 0,
                 transform: logoHover ? 'translateY(-2px)' : 'none',
@@ -253,7 +256,7 @@ export function IdentityStep(p: IdentityStepProps) {
                 style={{
                   right: -2, bottom: 2, width: 30, height: 30, borderRadius: 999,
                   background: 'linear-gradient(135deg, #EED98A, #C9A54A)', color: '#1B3828',
-                  border: `2.5px solid ${NEU.surface}`,
+                  border: '2.5px solid #FFFFFF',
                 }}
               >
                 {p.logoUploading && p.logoUrl ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} strokeWidth={2.4} />}
@@ -304,8 +307,8 @@ export function IdentityStep(p: IdentityStepProps) {
             <button
               type="button"
               onClick={() => p.onBannerPreset('')}
-              className="focus:outline-none focus-visible:underline hover:underline"
-              style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: NEU.inkSoft, background: 'none', border: 0, padding: 0, cursor: 'pointer' }}
+              className="focus:outline-none"
+              style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink, textDecoration: 'underline', textDecorationThickness: 1.5, textUnderlineOffset: 3, background: 'none', border: 0, padding: 0, cursor: 'pointer' }}
             >
               Remove banner
             </button>
@@ -413,7 +416,6 @@ export function IdentityStep(p: IdentityStepProps) {
                 min={p.todayISO}
                 onChange={p.onStartDate}
                 placeholder="First day"
-                variant="well"
                 invalid={datesBackwards}
               />
             </div>
@@ -424,7 +426,6 @@ export function IdentityStep(p: IdentityStepProps) {
                 min={p.startDate || p.todayISO}
                 onChange={p.onEndDate}
                 placeholder="Last day"
-                variant="well"
                 invalid={datesBackwards}
               />
             </div>

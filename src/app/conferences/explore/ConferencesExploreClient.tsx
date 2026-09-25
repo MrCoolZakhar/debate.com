@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  Search, SlidersHorizontal, ArrowLeft, LayoutGrid, Rows3, Users, ArrowRight, Check,
+  Search, SlidersHorizontal, LayoutGrid, Rows3, Users, Check,
   CalendarDays, Ticket, Globe, CalendarArrowUp, CalendarArrowDown,
   MapPin, Monitor, School, GraduationCap, Plus,
 } from 'lucide-react';
@@ -15,7 +15,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase } from '@/lib/supabase';
 import { getCountryByName, getCountryByCode, UN_COUNTRIES, fold, countryIdentity, countryMatchRank } from '@/lib/countries';
-import { FlagImg } from '@/components/FlagImg';
+import { CircleFlag } from '@/components/CircleFlag';
 import { currencySymbol, formatFeeAmountCompact } from '@/lib/utils';
 import { fetchDelegatePrices, withDelegatePrice, TBD_PRICE, type DelegatePrice } from '@/lib/publicFees';
 import { compareStartDate, hasConcluded, splitConferenceDates } from '@/lib/conferenceDates';
@@ -51,9 +51,21 @@ const CONTINENT_LABELS: Record<string, string> = {
   'oceania': 'Oceania',
 };
 
-// The rail no longer lists continents, but /conferences/map still deep-links
-// here with ?continent=<key>, so the filter itself stays alive and the rail
-// surfaces whichever continent arrived in the URL as one clearable row.
+// The rail no longer lists continents, but old links may still carry
+// ?continent=<key>, so the filter itself stays alive and the rail surfaces
+// whichever continent arrived in the URL as one clearable row.
+
+// The one main button (owner's taste board two): a forest gradient rounded
+// rectangle, sentence case. Second actions use SECONDARY_BUTTON.
+const PRIMARY_BUTTON: React.CSSProperties = {
+  background: 'linear-gradient(90deg,#1B3828 0%,#2A5A3C 55%,#1E4A31 100%)',
+  color: '#FFFFFF', border: 'none', borderRadius: '11px', cursor: 'pointer',
+  fontFamily: "var(--font-brand), sans-serif", fontWeight: 700,
+};
+const SECONDARY_BUTTON: React.CSSProperties = {
+  background: '#FFFFFF', color: '#1C1410', border: '1.5px solid #1C1410', borderRadius: '11px', cursor: 'pointer',
+  fontFamily: "var(--font-brand), sans-serif", fontWeight: 700,
+};
 
 // User-facing labels for student_level DB values ('school' stays 'school' in the DB).
 const LEVEL_LABELS: Record<string, string> = {
@@ -184,7 +196,7 @@ function ViewToggle({ view, onChange }: { view: ExploreView; onChange: (v: Explo
       style={{
         backgroundColor: 'rgba(237,231,216,0.5)',
         border: '1px solid rgba(221,212,192,0.9)',
-        borderRadius: 9999,
+        borderRadius: '12px',
         padding: '4px',
         gap: '3px',
       }}
@@ -199,11 +211,11 @@ function ViewToggle({ view, onChange }: { view: ExploreView; onChange: (v: Explo
             aria-pressed={active}
             title={label}
             onClick={() => onChange(key)}
-            className="flex items-center justify-center rounded-full transition-colors focus:outline-none"
+            className="flex items-center justify-center transition-colors focus:outline-none"
             style={{
-              width: '38px', height: '32px',
+              width: '38px', height: '32px', borderRadius: '8px',
               backgroundColor: active ? '#1B3828' : 'transparent',
-              color: active ? '#EED98A' : '#4A4238',
+              color: active ? '#FFFFFF' : '#4A4238',
               boxShadow: active ? '0 2px 6px rgba(27,56,40,0.25)' : 'none',
             }}
             onMouseEnter={(e) => {
@@ -249,14 +261,13 @@ function DateSortToggle({ sort, onChange }: { sort: DateSort; onChange: (v: Date
         height: '42px',
         padding: '0 15px',
         gap: '7px',
-        borderRadius: 9999,
+        borderRadius: '12px',
         backgroundColor: hover ? 'rgba(27,56,40,0.08)' : 'rgba(237,231,216,0.5)',
         border: '1px solid rgba(221,212,192,0.9)',
         color: hover ? '#1B3828' : '#4A4238',
         fontFamily: "var(--font-brand), sans-serif",
         fontWeight: 700,
-        fontSize: '12px',
-        letterSpacing: '0.03em',
+        fontSize: '13px',
         whiteSpace: 'nowrap',
         cursor: 'pointer',
         transition: 'background-color 140ms ease, color 140ms ease',
@@ -281,12 +292,11 @@ function RowChip({ label, icon: Icon }: { label: string; icon?: RowIcon }) {
     <span
       className="inline-flex items-center flex-shrink-0"
       style={{
-        fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '10.5px', letterSpacing: '0.09em',
+        fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontSize: '12px',
         color: '#6B5F52', backgroundColor: 'transparent',
         border: '1px solid rgba(154,138,120,0.45)',
         gap: '5px',
-        padding: Icon ? '3.5px 10px 3.5px 8px' : '3.5px 10px', borderRadius: 9999, whiteSpace: 'nowrap',
-        textTransform: 'uppercase',
+        padding: Icon ? '3px 9px 3px 7px' : '3px 9px', borderRadius: '8px', whiteSpace: 'nowrap',
       }}
     >
       {Icon && <Icon size={12.5} strokeWidth={2.25} style={{ color: '#2A5A3C', flexShrink: 0 }} />}
@@ -323,8 +333,7 @@ function ConferenceListRow({
   }
 
   const ctaBase: React.CSSProperties = {
-    fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '12px', letterSpacing: '0.07em',
-    padding: '9px 18px', borderRadius: 9999, border: 'none', cursor: 'pointer',
+    fontSize: '13px', padding: '9px 16px',
   };
 
   return (
@@ -361,22 +370,27 @@ function ConferenceListRow({
           the same position on every row (tidy, scannable columns). */}
       <div className="min-w-0" style={{ flex: '1 1 0' }}>
         <div
-          className="flex items-center gap-1.5 min-w-0"
+          className="flex items-center gap-1.5 min-w-0 flex-wrap"
           style={{
             fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '18px',
             letterSpacing: '0.003em', color: hovered ? '#1B3828' : '#1C1410',
             transition: 'color 160ms ease', lineHeight: 1.2,
           }}
         >
-          <span className="truncate">{conferenceAcronymLabel(conf) || conf.full_name}</span>
+          <span style={{ overflowWrap: 'anywhere' }}>{conferenceAcronymLabel(conf) || conf.full_name}</span>
           <VerifiedCheck verified={!!conf.is_verified} size={18} title="Verified conference" />
         </div>
+        {conferenceAcronymLabel(conf) && conf.full_name && conf.full_name !== conferenceAcronymLabel(conf) && (
+          <div style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, fontSize: '13px', color: '#6B5F52', marginTop: '2px', lineHeight: 1.3, overflowWrap: 'anywhere' }}>
+            {conf.full_name}
+          </div>
+        )}
         <div
-          className="flex items-center gap-2 truncate"
+          className="flex items-center gap-2 min-w-0"
           style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, fontSize: '14px', color: '#6B5F52', marginTop: '5px' }}
         >
-          {countryObj && <FlagImg code={countryObj.code} size={18} className="flex-shrink-0" />}
-          <span className="truncate">{conf.city}, {conf.country}</span>
+          {countryObj && <CircleFlag code={countryObj.code} size={18} decorative className="flex-shrink-0" />}
+          <span style={{ overflowWrap: 'anywhere' }}>{conf.city}, {conf.country}</span>
         </div>
         <div className="flex flex-wrap items-center gap-2 mt-2.5">
           {conf.format && <RowChip label={formatLabel} icon={FORMAT_ICONS[conf.format]} />}
@@ -426,23 +440,13 @@ function ConferenceListRow({
         {price.kind === 'tbd' ? (
           <span
             title="Price to be announced"
-            style={{
-              fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em',
-              color: '#5C4F44', backgroundColor: 'rgba(28,20,16,0.05)',
-              border: '1px solid rgba(28,20,16,0.18)', padding: '4px 12px', borderRadius: 9999,
-            }}
+            style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '15px', color: '#6B5F52' }}
           >
             TBD
           </span>
         ) : price.kind === 'free' ? (
-          <span
-            style={{
-              fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em',
-              color: '#2A5A3C', backgroundColor: 'rgba(42,90,60,0.10)',
-              border: '1px solid rgba(42,90,60,0.28)', padding: '4px 12px', borderRadius: 9999,
-            }}
-          >
-            FREE
+          <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '15px', color: '#2A5A3C' }}>
+            Free
           </span>
         ) : (
           <>
@@ -464,37 +468,26 @@ function ConferenceListRow({
       <div className="hidden sm:flex justify-end flex-shrink-0" style={{ width: '124px' }}>
         {member ? (
           <button type="button" onClick={onCta} className="inline-flex items-center gap-1.5 focus:outline-none"
-            style={{
-              ...ctaBase,
-              color: '#EAF5EE', backgroundColor: '#2A5A3C',
-              boxShadow: '0 3px 8px rgba(27,56,40,0.25), 0 0 0 1px rgba(127,214,160,0.45)',
-            }}
+            style={{ ...SECONDARY_BUTTON, ...ctaBase }}
           >
-            VIEW
-            <ArrowRight size={13} strokeWidth={2.75} />
+            View
           </button>
         ) : applied ? (
           <button type="button" onClick={onCta} className="inline-flex items-center gap-1.5 focus:outline-none"
-            style={{
-              ...ctaBase, fontSize: '11px',
-              color: '#EAF5EE', backgroundColor: '#2A5A3C',
-              boxShadow: '0 3px 8px rgba(27,56,40,0.25), 0 0 0 1px rgba(127,214,160,0.45)',
-            }}
+            style={{ ...SECONDARY_BUTTON, ...ctaBase }}
           >
-            APPLIED
-            <Check size={13} strokeWidth={3} />
+            <Check size={14} strokeWidth={3} style={{ color: '#2A5A3C' }} />
+            Applied
           </button>
         ) : (
           <button type="button" onClick={onCta} className="inline-flex items-center gap-1.5 focus:outline-none"
             style={{
-              ...ctaBase,
-              color: '#1B3828', backgroundColor: hovered ? '#F3E3A1' : '#EED98A',
-              boxShadow: '0 3px 8px rgba(182,135,31,0.28), 0 0 0 1px rgba(182,135,31,0.22)',
-              transition: 'background-color 180ms ease',
+              ...PRIMARY_BUTTON, ...ctaBase,
+              boxShadow: hovered ? '0 6px 16px rgba(27,56,40,0.26)' : '0 3px 8px rgba(27,56,40,0.18)',
+              transition: 'box-shadow 180ms ease',
             }}
           >
-            APPLY
-            <ArrowRight size={13} strokeWidth={2.75} />
+            Apply
           </button>
         )}
       </div>
@@ -513,8 +506,8 @@ function RailHeading({ children }: { children: React.ReactNode }) {
     <p
       className="mb-2.5"
       style={{
-        fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '10px',
-        letterSpacing: '0.16em', textTransform: 'uppercase', color: '#9A8A78', margin: '0 0 10px',
+        fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '14px',
+        color: '#1C1410', margin: '0 0 8px',
       }}
     >
       {children}
@@ -548,7 +541,7 @@ function RailOption({
         padding: '7px 10px',
         borderRadius: '10px',
         backgroundColor: active ? '#1B3828' : 'transparent',
-        color: active ? '#EED98A' : '#4A4238',
+        color: active ? '#FFFFFF' : '#4A4238',
         border: 'none',
         cursor: 'pointer',
         fontFamily: "var(--font-brand), sans-serif",
@@ -560,7 +553,7 @@ function RailOption({
       onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
     >
       {flagCode ? (
-        <FlagImg code={flagCode} size={16} />
+        <CircleFlag code={flagCode} size={16} decorative />
       ) : Icon ? (
         <Icon size={14} strokeWidth={2.2} style={{ flexShrink: 0, color: active ? '#EED98A' : '#2A5A3C' }} />
       ) : (
@@ -576,9 +569,9 @@ function RailOption({
           {active && <Check size={10} strokeWidth={3.5} style={{ color: '#EED98A' }} />}
         </span>
       )}
-      <span className="truncate flex-1">{label}</span>
+      <span className="flex-1 min-w-0" style={{ overflowWrap: 'anywhere' }}>{label}</span>
       {note && (
-        <span style={{ fontSize: '9px', letterSpacing: '0.12em', fontWeight: 800, color: active ? 'rgba(238,217,138,0.75)' : '#B6871F' }}>
+        <span style={{ fontSize: '11px', fontWeight: 700, color: active ? 'rgba(255,255,255,0.8)' : '#8A6414', flexShrink: 0 }}>
           {note}
         </span>
       )}
@@ -586,7 +579,7 @@ function RailOption({
         <span
           style={{
             fontSize: '11px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
-            color: active ? 'rgba(238,217,138,0.8)' : '#9A8A78', flexShrink: 0,
+            color: active ? 'rgba(255,255,255,0.8)' : '#6B5F52', flexShrink: 0,
           }}
         >
           {count}
@@ -667,13 +660,12 @@ function FilterRail({
   return (
     <div
       style={{
-        backgroundColor: 'rgba(250,248,243,0.78)',
-        backdropFilter: 'blur(18px) saturate(1.4)',
-        WebkitBackdropFilter: 'blur(18px) saturate(1.4)',
-        border: '1px solid rgba(221,212,192,0.9)',
+        // A white floating panel beside the grid (owner's taste board three).
+        backgroundColor: '#FFFFFF',
+        border: '1px solid rgba(27,56,40,0.06)',
         borderRadius: '20px',
         padding: '18px 16px',
-        boxShadow: '0 10px 34px rgba(27,56,40,0.09), 0 1px 0 rgba(255,255,255,0.6) inset',
+        boxShadow: '0 1px 2px rgba(27,56,40,0.06), 0 12px 32px rgba(27,56,40,0.10)',
       }}
     >
       {/* Search */}
@@ -703,7 +695,7 @@ function FilterRail({
       {/* Open applications: which roles a person could apply for today. A
           conference matches when ANY ticked role is open. */}
       <div style={group} role="listbox" aria-label="Open applications" aria-multiselectable="true">
-        <RailHeading>Open Applications</RailHeading>
+        <RailHeading>Open applications</RailHeading>
         {ROLE_OPTIONS.map(r => (
           <RailOption key={r.key} label={r.label} active={roleFilter.has(r.key)} onClick={() => onToggleRole(r.key)} />
         ))}
@@ -732,11 +724,11 @@ function FilterRail({
         ))}
         <div className="gv-explore-range" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '8px' }}>
           <div>
-            <p style={{ margin: '0 0 4px 2px', fontSize: '10px', fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif" }}>From</p>
+            <p style={{ margin: '0 0 4px 2px', fontSize: '12px', fontWeight: 700, color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif" }}>From</p>
             <DatePicker value={dateFrom} onChange={(iso) => { onDateFrom(iso); onDate(''); }} min={todayIso} max={dateTo || undefined} placeholder="Any" />
           </div>
           <div>
-            <p style={{ margin: '0 0 4px 2px', fontSize: '10px', fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif" }}>To</p>
+            <p style={{ margin: '0 0 4px 2px', fontSize: '12px', fontWeight: 700, color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif" }}>To</p>
             <DatePicker value={dateTo} onChange={(iso) => { onDateTo(iso); onDate(''); }} min={dateFrom || todayIso} placeholder="Any" />
           </div>
         </div>
@@ -752,7 +744,7 @@ function FilterRail({
             active={region === 'country'}
             onClick={() => onRegion(region === 'country' ? '' : 'country')}
             flagCode={userCode}
-            note="NEAR YOU"
+            note="Near you"
             count={userCountryCount}
           />
         )}
@@ -762,7 +754,7 @@ function FilterRail({
           onClick={() => onRegion('')}
           icon={Globe}
         />
-        {/* A continent can still arrive from the world map's deep link. It is
+        {/* A continent can still arrive from an old ?continent= link. It is
             not offered here, but while it is on it has to be visible and it
             has to be clearable. */}
         {continentLabel && (
@@ -794,11 +786,9 @@ function FilterRail({
             style={{
               marginTop: '4px', padding: '7px 10px', borderRadius: '10px',
               background: 'transparent', border: 'none', cursor: 'pointer',
-              fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '11px',
-              letterSpacing: '0.08em', textTransform: 'uppercase', color: '#B6871F',
+              fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '13px',
+              color: '#1B3828', textDecoration: 'underline', textUnderlineOffset: '3px',
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
           >
             {showAllCountries ? 'Show fewer' : `Show all ${countries.length} countries`}
           </button>
@@ -823,12 +813,7 @@ function FilterRail({
         <button
           onClick={onClear}
           className="w-full focus:outline-none"
-          style={{
-            fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '11px',
-            letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8B2020',
-            background: 'transparent', border: '1px solid rgba(139,32,32,0.25)',
-            borderRadius: '10px', padding: '8px', cursor: 'pointer',
-          }}
+          style={{ ...SECONDARY_BUTTON, fontSize: '13px', padding: '9px' }}
         >
           Clear all filters
         </button>
@@ -897,7 +882,7 @@ export default function ConferencesExploreClient() {
 
   // Region: '' = everywhere, 'country' = the visitor's own country, 'country:<id>'
   // = a country picked in the rail, else a continent key (only reachable from
-  // the world map's ?continent= deep link, which still has to work).
+  // an old ?continent= link, which still has to work).
   // A ?continent= or ?country= URL param wins over the geo default.
   const [region, setRegion] = useState<string>(() => {
     const continent = searchParams.get('continent');
@@ -969,8 +954,8 @@ export default function ConferencesExploreClient() {
   }, []);
 
   // The address bar follows the filters (replaceState, so Back is not
-  // flooded). Region keys keep their existing spelling so the world map's
-  // ?continent= deep link and ?country= still work in both directions.
+  // flooded). Region keys keep their existing spelling so an old
+  // ?continent= link and ?country= still work in both directions.
   useEffect(() => {
     const continent = region && region !== 'country' && !region.startsWith(COUNTRY_PREFIX) ? region : null;
     // The state holds the ISO identity; the URL carries the country NAME, which
@@ -1288,15 +1273,12 @@ export default function ConferencesExploreClient() {
         <SiteNav hideLanguage />
 
         {/* ── Editorial header ─────────────────────────────────────── */}
-        <header className="px-6 md:px-10 pt-8 pb-7">
+        <header className="px-6 md:px-10" style={{ paddingTop: 'clamp(24px, 3vw, 40px)', paddingBottom: '28px' }}>
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-[11px] mb-5 transition-colors font-semibold"
-            style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", textDecoration: 'none', letterSpacing: '0.08em', textTransform: 'uppercase' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+            className="inline-block text-[13px] mb-4 font-bold focus:outline-none"
+            style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif", textDecoration: 'underline', textUnderlineOffset: '3px' }}
           >
-            <ArrowLeft size={13} strokeWidth={2.25} />
             Back to conferences
           </Link>
 
@@ -1304,7 +1286,7 @@ export default function ConferencesExploreClient() {
             <div>
               <p
                 className="mb-2 font-bold"
-                style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#B6871F' }}
+                style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: '14px', color: '#8A6414' }}
               >
                 Conference directory
               </p>
@@ -1319,7 +1301,7 @@ export default function ConferencesExploreClient() {
               </h1>
               <p
                 className="mt-2.5"
-                style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: '14px', color: '#8A7D6C', maxWidth: '460px', lineHeight: 1.6 }}
+                style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: '14px', color: '#6B5F52', maxWidth: '460px', lineHeight: 1.6 }}
               >
                 {headlineCount === null
                   ? 'Loading the directory…'
@@ -1331,18 +1313,13 @@ export default function ConferencesExploreClient() {
                 the loudest thing on a page about browsing, not creating. */}
             <button
               onClick={() => router.push('/conferences/new')}
-              className="self-start md:self-auto flex-shrink-0 inline-flex items-center gap-2 rounded-full py-3 px-6 font-bold text-[13px] transition-all focus:outline-none"
-              style={{
-                backgroundColor: '#1B3828', color: '#EED98A',
-                fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.07em',
-                border: 'none', cursor: 'pointer',
-                boxShadow: '0 8px 24px rgba(27,56,40,0.22)',
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
+              className="self-start md:self-auto flex-shrink-0 inline-flex items-center gap-2 py-3 px-5 text-[14px] transition-shadow focus:outline-none"
+              style={{ ...PRIMARY_BUTTON, boxShadow: '0 6px 18px rgba(27,56,40,0.20)' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 10px 24px rgba(27,56,40,0.28)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 18px rgba(27,56,40,0.20)'; }}
             >
               <Plus size={17} strokeWidth={2.6} />
-              ORGANISE
+              Organise a conference
             </button>
           </div>
         </header>
@@ -1354,22 +1331,18 @@ export default function ConferencesExploreClient() {
             .gv-explore-rail::-webkit-scrollbar { display: none; }
           }
         `}</style>
-        <main className="flex-1 px-6 md:px-10 pb-16 flex flex-col lg:flex-row" style={{ gap: '26px', alignItems: 'flex-start' }}>
+        <main className="flex-1 px-6 md:px-10 flex flex-col lg:flex-row" style={{ gap: '28px', alignItems: 'flex-start', paddingBottom: 'clamp(40px, 4vw, 64px)' }}>
 
           {/* Mobile: the rail folds behind one button rather than pushing the
               results a screen and a half down. */}
           <button
             onClick={() => setFiltersOpen(v => !v)}
-            className="lg:hidden w-full flex items-center justify-center gap-2 rounded-full py-3 font-bold text-[12.5px] focus:outline-none"
-            style={{
-              backgroundColor: filtersOpen ? '#1B3828' : 'rgba(250,248,243,0.8)',
-              color: filtersOpen ? '#EED98A' : '#4A4238',
-              border: filtersOpen ? '1px solid #1B3828' : '1px solid rgba(221,212,192,0.9)',
-              fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.09em', cursor: 'pointer',
-            }}
+            aria-expanded={filtersOpen}
+            className="lg:hidden w-full flex items-center justify-center gap-2 py-3 text-[14px] focus:outline-none"
+            style={filtersOpen ? PRIMARY_BUTTON : SECONDARY_BUTTON}
           >
             <SlidersHorizontal size={15} />
-            FILTERS
+            Filters
             {hasActiveFilters && <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: filtersOpen ? '#EED98A' : '#B6871F' }} />}
           </button>
 
@@ -1408,38 +1381,41 @@ export default function ConferencesExploreClient() {
                 LABEL depends on there being results; the view toggle does not,
                 so it stays put while you filter down to nothing and back. */}
             <div className="flex items-center gap-3 mb-6 flex-wrap">
+              {/* Counts as plain typography: a big number with the word beside
+                  it, never a pill or tracked capitals (owner's taste board). */}
               {!loading && displayed.length > 0 ? (
-                <span className="inline-flex items-center gap-2" style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '11.5px', letterSpacing: '0.13em', color: '#9A8A78', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                <span className="inline-flex items-baseline flex-wrap" style={{ gap: '8px', fontFamily: "var(--font-brand), sans-serif", color: '#1C1410', fontVariantNumeric: 'tabular-nums' }}>
                   {aroundYouMode ? (
-                    <>
-                      <Emoji3D name="Globe with meridians" size={17} fallback={Globe} fallbackColor="#9A8A78" style={{ filter: 'none' }} />
-                      CONFERENCES AROUND YOU
-                    </>
+                    <span style={{ fontWeight: 800, fontSize: '17px' }}>Conferences around you</span>
                   ) : countryMode ? (
                     <>
-                      {userCode && <FlagImg code={userCode} size={17} />}
-                      CONFERENCES IN {userCountry!.toUpperCase()}
-                      {displayed.length < sorted.length ? ` · ${displayed.length} OF ${sorted.length}` : ''}
+                      {userCode && <CircleFlag code={userCode} size={18} decorative style={{ alignSelf: 'center' }} />}
+                      <span style={{ fontWeight: 800, fontSize: '22px' }}>{displayed.length}</span>
+                      <span style={{ fontWeight: 600, fontSize: '15px', color: '#4A4238', overflowWrap: 'anywhere' }}>
+                        {displayed.length === 1 ? 'conference' : 'conferences'} in {userCountry}
+                        {displayed.length < sorted.length ? ` of ${sorted.length}` : ''}
+                      </span>
                     </>
                   ) : selectedCountry ? (
                     <>
-                      {selectedCountry.code && <FlagImg code={selectedCountry.code} size={17} />}
-                      CONFERENCES IN {selectedCountry.name.toUpperCase()} · {sorted.length}
+                      {selectedCountry.code && <CircleFlag code={selectedCountry.code} size={18} decorative style={{ alignSelf: 'center' }} />}
+                      <span style={{ fontWeight: 800, fontSize: '22px' }}>{sorted.length}</span>
+                      <span style={{ fontWeight: 600, fontSize: '15px', color: '#4A4238', overflowWrap: 'anywhere' }}>
+                        {sorted.length === 1 ? 'conference' : 'conferences'} in {selectedCountry.name}
+                      </span>
                     </>
                   ) : (
                     <>
-                      <Emoji3D name="Globe with meridians" size={17} fallback={Globe} fallbackColor="#9A8A78" style={{ filter: 'none' }} />
-                      SHOWING {sorted.length} {sorted.length === 1 ? 'CONFERENCE' : 'CONFERENCES'}
+                      <span style={{ fontWeight: 800, fontSize: '22px' }}>{sorted.length}</span>
+                      <span style={{ fontWeight: 600, fontSize: '15px', color: '#4A4238' }}>
+                        {sorted.length === 1 ? 'conference' : 'conferences'}
+                      </span>
                     </>
                   )}
                 </span>
               ) : (
-                <span
-                  className="inline-flex items-center gap-2"
-                  style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '11.5px', letterSpacing: '0.13em', color: '#9A8A78', whiteSpace: 'nowrap' }}
-                >
-                  <Emoji3D name="Globe with meridians" size={17} fallback={Globe} fallbackColor="#9A8A78" style={{ filter: 'none' }} />
-                  {loading ? 'LOADING…' : 'NO MATCHES'}
+                <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '15px', color: '#6B5F52', whiteSpace: 'nowrap' }}>
+                  {loading ? 'Loading conferences' : 'No matches'}
                 </span>
               )}
               <div className="flex-1 h-px" style={{ backgroundColor: 'rgba(221,212,192,0.8)', minWidth: '12px' }} />
@@ -1474,7 +1450,7 @@ export default function ConferencesExploreClient() {
             countryMode && !searchQuery && !formatFilter && !levelFilter ? (
               /* Country tab is empty, soft local empty state with a reset. */
               <div className="flex flex-col items-center justify-center py-24 text-center">
-                {userCode && <FlagImg code={userCode} size={40} />}
+                {userCode && <CircleFlag code={userCode} size={40} decorative />}
                 <h2 className="font-semibold text-lg mt-5 mb-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                   No conferences in {userCountry} yet
                 </h2>
@@ -1483,12 +1459,10 @@ export default function ConferencesExploreClient() {
                 </p>
                 <button
                   onClick={() => changeRegion('')}
-                  className="rounded-xl py-3 px-6 font-bold text-sm tracking-widest transition-colors focus:outline-none"
-                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.07em' }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                  className="py-3 px-6 text-sm focus:outline-none"
+                  style={PRIMARY_BUTTON}
                 >
-                  EXPLORE ALL CONFERENCES →
+                  Explore all conferences
                 </button>
               </div>
             ) : (
@@ -1508,12 +1482,10 @@ export default function ConferencesExploreClient() {
                 </p>
                 <button
                   onClick={() => (hasActiveFilters ? clearFilters() : router.push('/conferences/new'))}
-                  className="rounded-xl py-3 px-6 font-bold text-sm tracking-widest transition-colors focus:outline-none"
-                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.07em', border: 'none', cursor: 'pointer' }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                  className="py-3 px-6 text-sm focus:outline-none"
+                  style={PRIMARY_BUTTON}
                 >
-                  {hasActiveFilters ? 'CLEAR FILTERS' : 'ORGANISE A CONFERENCE →'}
+                  {hasActiveFilters ? 'Clear filters' : 'Organise a conference'}
                 </button>
               </div>
             )
@@ -1564,8 +1536,8 @@ export default function ConferencesExploreClient() {
               <div className="flex items-baseline flex-wrap gap-x-3 gap-y-1 mb-5">
                 <h2
                   style={{
-                    fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '17px',
-                    color: '#1C1410', margin: 0, letterSpacing: '0.004em',
+                    fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: 'clamp(20px, 2vw, 26px)',
+                    color: '#1C1410', margin: 0,
                   }}
                 >
                   Bigger conferences worth travelling for
@@ -1602,19 +1574,15 @@ export default function ConferencesExploreClient() {
             <div className="flex justify-center mt-10">
               <button
                 onClick={() => changeRegion('')}
-                className="inline-flex items-center gap-1.5 focus:outline-none transition-colors"
+                className="inline-flex items-center gap-1.5 focus:outline-none"
                 style={{
-                  fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '11px',
-                  letterSpacing: '0.1em', color: '#9A8A78',
-                  background: 'transparent', border: 'none', cursor: 'pointer',
-                  textTransform: 'uppercase',
+                  fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '14px',
+                  color: '#1B3828', background: 'transparent', border: 'none', cursor: 'pointer',
+                  textDecoration: 'underline', textUnderlineOffset: '3px',
                 }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
               >
-                <Globe size={13} strokeWidth={2.25} />
+                <Globe size={14} strokeWidth={2.25} />
                 Explore all conferences
-                <ArrowRight size={12} strokeWidth={2.5} />
               </button>
             </div>
           )}

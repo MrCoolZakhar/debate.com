@@ -54,7 +54,7 @@ export default function ConferencesExplorePage() {
             <Link
               href="/conferences/all"
               className="focus:outline-none"
-              style={{ marginTop: 10, fontSize: 14, fontWeight: 700, color: '#1B3828' }}
+              style={{ marginTop: 10, fontSize: 14, fontWeight: 700, color: '#1B3828', textDecoration: 'underline', textUnderlineOffset: 3 }}
             >
               See every conference, A to Z
             </Link>

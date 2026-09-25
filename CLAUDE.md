@@ -541,6 +541,8 @@ the batch it re-sends each row alone (600 ms apart, 100 s budget, a 429 or the b
 back to `pending`), so only the guilty row fails. Every address-level error text starts with
 "Invalid recipient address", which is what `outbox_error_is_address_level()` keys on: keep it.
 
+**Founder welcome email v2 (25 Sep 2026).** `queue_founder_welcome_emails()` (cron `founder-welcome-emails`, hourly at :25) sends every new account, 24 to 48 hours after sign-up and once (`founder_welcome_sent`), the email rendered by `founder_welcome_render(first, email)`: "Thank you for joining Gavelling", three alternating image/text rows (running a conference: the verified check; chairing: the laptop; joining: the phone and Explore near you), then the free welcome credit and what it is for. It no longer mentions the $1 price (owner). Images are `session-documents/email-assets/welcome-v2-{hero,organiser,chair,delegate,credit}.png` (rendered from the site's own device shots). No claim of a delegate-count increase is made: there is no data behind one.
+
 ### STOP ALL EMAIL
 
 ```sql

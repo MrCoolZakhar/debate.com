@@ -3,11 +3,11 @@
 // ── Bundles: the centrepiece of /pricing/credits ─────────────────────────────
 //
 // Left: the selected bundle by name, the quantity huge, the per-credit price,
-// the Save pill, the quantity chips (1, 10, 25, 50, 100, Custom), the nudge
+// the saving in plain type, the quantity chips (1, 10, 25, 50, 100, Custom), the nudge
 // ("1 more credit saves you $4.20") and the confirm button, which opens the
 // credits pop-up with that quantity preselected.
 // Right: six large cards, 3 + 3 on desktop: five photo cards with a dark
-// scrim and the quantity huge in white, and a Custom card with a number field
+// scrim and the quantity huge in white, and a white Custom card with a number field
 // you can type into straight away. Card and chip are two views of one choice.
 //
 // Every number comes from the server's price table (useCreditPriceTable).
@@ -30,7 +30,7 @@ import {
   useCreditPriceTable,
 } from '@/lib/creditPricing';
 import { openCreditsPopup } from '@/lib/purchasePopup';
-import { FOCUS_RING, FOCUS_RING_GOLD, P } from './pricingKit';
+import { FOCUS_RING, P } from './pricingKit';
 
 const BUNDLES = CREDIT_BUNDLES.pricing;
 const DEFAULT_CUSTOM = 15;
@@ -137,7 +137,7 @@ export default function BundlePicker() {
         .gv-bp-num{font-size:clamp(64px,8vw,88px);font-weight:900;letter-spacing:-0.045em;line-height:0.95;color:${P.forest};font-variant-numeric:tabular-nums}
         .gv-bp-unit{font-size:22px;font-weight:700;color:${P.inkSoft};letter-spacing:-0.01em}
         .gv-bp-facts{display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px;margin-top:14px;min-height:32px}
-        .gv-bp-save{display:inline-flex;align-items:center;min-height:30px;padding:0 12px;border-radius:999px;background:${P.gold};color:${P.ink};font-size:13px;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;white-space:nowrap}
+        .gv-bp-save{font-size:16px;font-weight:800;color:${P.goldDeep};white-space:nowrap}
         .gv-bp-each{font-size:16px;font-weight:600;color:${P.ink};font-variant-numeric:tabular-nums}
         .gv-bp-each b{font-weight:800}
         .gv-bp-was{font-size:14px;color:${P.inkSoft};text-decoration:line-through;font-variant-numeric:tabular-nums}
@@ -145,7 +145,7 @@ export default function BundlePicker() {
         .gv-bp-chip{display:inline-flex;align-items:center;justify-content:center;min-width:52px;min-height:44px;padding:0 16px;border-radius:999px;border:2px solid rgba(27,56,40,0.28);background:transparent;color:${P.ink};font-family:${OUTFIT};font-size:15.5px;font-weight:700;cursor:pointer;font-variant-numeric:tabular-nums;transition:background-color 140ms ease-out,color 140ms ease-out,border-color 140ms ease-out}
         .gv-bp-chip:hover{background:rgba(27,56,40,0.07);border-color:${P.forest}}
         .gv-bp-chip[aria-checked="true"]{background:${P.forest};color:${P.gold};border-color:${P.forest}}
-        .gv-bp-nudge{display:inline-flex;align-items:center;gap:8px;margin-top:16px;min-height:44px;padding:0 16px 0 12px;border-radius:12px;border:none;background:${P.gold};color:${P.ink};font-family:${OUTFIT};font-size:12.5px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;box-shadow:0 10px 22px -16px rgba(182,135,31,0.8);transition:background-color 140ms ease-out,transform 140ms ease-out}
+        .gv-bp-nudge{display:inline-flex;align-items:center;gap:8px;margin-top:16px;min-height:44px;padding:0 16px 0 12px;border-radius:12px;border:none;background:${P.gold};color:${P.ink};font-family:${OUTFIT};font-size:14.5px;font-weight:700;cursor:pointer;box-shadow:0 10px 22px -16px rgba(182,135,31,0.8);transition:background-color 140ms ease-out,transform 140ms ease-out}
         .gv-bp-nudge:hover{background:#F3E2A0;transform:translateY(-1px)}
         .gv-bp-confirm{width:100%;margin-top:22px;min-height:60px;font-size:15px}
         .gv-bp-err{margin:16px 0 0;padding:12px 14px;border-radius:12px;background:rgba(27,56,40,0.07);color:${P.ink};font-size:14px;line-height:1.5}
@@ -161,7 +161,8 @@ export default function BundlePicker() {
         .gv-bp-scrim{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(8,20,13,0.66) 0%,rgba(8,20,13,0.18) 34%,rgba(8,20,13,0) 50%),linear-gradient(to top,rgba(8,20,13,0.95) 0%,rgba(8,20,13,0.7) 36%,rgba(8,20,13,0) 62%)}
         .gv-bp-top{position:absolute;top:0;left:0;right:0;padding:14px 14px 0}
         .gv-bp-pillrow{display:flex;justify-content:flex-end;min-height:28px}
-        .gv-bp-card-save{display:inline-flex;align-items:center;min-height:28px;padding:0 11px;border-radius:999px;background:${P.gold};color:${P.ink};font-size:13px;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;white-space:nowrap}
+        .gv-bp-card-save{display:inline-flex;align-items:center;min-height:28px;font-size:15px;font-weight:800;color:${P.gold};white-space:nowrap;text-shadow:0 1px 8px rgba(0,0,0,0.55)}
+        .gv-bp-custom .gv-bp-card-save{color:${P.goldDeep};text-shadow:none}
         .gv-bp-card-num{display:block;margin-top:6px;font-size:clamp(56px,34cqw,72px);font-weight:900;letter-spacing:-0.05em;line-height:0.9;color:#FFFFFF;font-variant-numeric:tabular-nums;text-shadow:0 2px 14px rgba(0,0,0,0.4)}
         .gv-bp-card-unit{display:block;margin-top:6px;font-size:13px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.9)}
         .gv-bp-bottom{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:flex-end;justify-content:space-between;gap:8px;padding:0 14px 16px}
@@ -170,18 +171,20 @@ export default function BundlePicker() {
         .gv-bp-card-total{display:block;margin-top:6px;font-size:14px;font-weight:700;color:#FFFFFF;font-variant-numeric:tabular-nums}
         .gv-bp-disc{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;background:rgba(250,248,243,0.94);color:${P.forest};transition:background-color 160ms ease-out,color 160ms ease-out}
         .gv-bp-card[aria-checked="true"] .gv-bp-disc{background:${P.forest};color:${P.gold}}
-        .gv-bp-custom{cursor:default;grid-column:1/-1;aspect-ratio:auto;min-height:230px;background:radial-gradient(120% 90% at 20% 0%,${P.forestMid} 0%,${P.forest} 48%,${P.forestDeep} 100%)}
-        .gv-bp-custom::after{content:"";position:absolute;right:-30%;bottom:-32%;width:80%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,rgba(238,217,138,0.28) 0%,rgba(238,217,138,0) 68%);pointer-events:none}
+        .gv-bp-custom{cursor:default;grid-column:1/-1;aspect-ratio:auto;min-height:230px;background:${P.white};box-shadow:0 1px 0 rgba(27,56,40,0.08),0 18px 40px -32px rgba(27,56,40,0.35)}
+        .gv-bp-custom .gv-bp-card-each,.gv-bp-custom .gv-bp-card-total{color:${P.ink}}
+        .gv-bp-custom .gv-bp-card-each small{color:${P.inkSoft}}
+        .gv-bp-custom .gv-bp-disc{background:rgba(27,56,40,0.08)}
         .gv-bp-custom-body{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;padding:14px 14px 16px}
-        .gv-bp-custom-word{font-size:13px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:${P.gold}}
+        .gv-bp-custom-word{font-size:13px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:${P.goldDeep}}
         .gv-bp-custom-field{display:flex;align-items:center;gap:8px;margin-top:10px}
-        .gv-bp-step{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:44px;height:44px;border-radius:12px;border:2px solid rgba(238,217,138,0.5);background:transparent;color:${P.gold};cursor:pointer;transition:background-color 140ms ease-out}
-        .gv-bp-step:hover{background:rgba(238,217,138,0.12)}
+        .gv-bp-step{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:44px;height:44px;border-radius:12px;border:1.5px solid ${P.ink};background:transparent;color:${P.ink};cursor:pointer;transition:background-color 140ms ease-out}
+        .gv-bp-step:hover{background:rgba(27,56,40,0.07)}
         .gv-bp-step:disabled{opacity:0.4;cursor:not-allowed}
-        .gv-bp-input{flex:1 1 auto;min-width:0;width:100%;height:52px;border-radius:12px;border:2px solid transparent;background:${P.white};color:${P.ink};font-family:${OUTFIT};font-size:20px;font-weight:800;text-align:center;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
+        .gv-bp-input{flex:1 1 auto;min-width:0;width:100%;height:52px;border-radius:12px;border:1.5px solid rgba(27,56,40,0.28);background:${P.ivory};color:${P.ink};font-family:${OUTFIT};font-size:20px;font-weight:800;text-align:center;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
         .gv-bp-input::-webkit-outer-spin-button,.gv-bp-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
-        .gv-bp-input:focus{outline:none;box-shadow:0 0 0 3px ${P.forestDeep},0 0 0 6px ${P.gold}}
-        .gv-bp-custom-max{margin:8px 0 0;font-size:13px;font-weight:600;color:rgba(255,255,255,0.78)}
+        .gv-bp-input:focus{outline:none;border-color:${P.forest};box-shadow:0 0 0 3px ${P.white},0 0 0 6px ${P.forest}}
+        .gv-bp-custom-max{margin:8px 0 0;font-size:13px;font-weight:600;color:${P.inkSoft}}
         .gv-bp-custom-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:8px}
         .gv-bp-live{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
         @container (min-width:560px){
@@ -365,7 +368,7 @@ export default function BundlePicker() {
                 <div className="gv-bp-custom-field">
                   <button
                     type="button"
-                    className={`gv-bp-step ${FOCUS_RING_GOLD}`}
+                    className={`gv-bp-step ${FOCUS_RING}`}
                     aria-label="One credit fewer"
                     onClick={() => stepCustom(-1)}
                     disabled={customQty <= 1}
@@ -394,7 +397,7 @@ export default function BundlePicker() {
                   />
                   <button
                     type="button"
-                    className={`gv-bp-step ${FOCUS_RING_GOLD}`}
+                    className={`gv-bp-step ${FOCUS_RING}`}
                     aria-label="One credit more"
                     onClick={() => stepCustom(1)}
                     disabled={maxQty !== null && customQty >= maxQty}
@@ -412,7 +415,7 @@ export default function BundlePicker() {
                   </span>
                   <span className="gv-bp-card-total">{table ? formatUsd(priceCentsFor(customQty, table)) : '…'} in total</span>
                 </div>
-                <span className="gv-bp-disc" style={choice === 'custom' ? { background: P.gold, color: P.forest } : undefined}>
+                <span className="gv-bp-disc" style={choice === 'custom' ? { background: P.forest, color: P.gold } : undefined}>
                   {choice === 'custom' ? <Check size={20} strokeWidth={3} /> : <Plus size={20} strokeWidth={2.6} />}
                 </span>
               </div>

@@ -21,12 +21,12 @@ const RULE = 'rgba(27,56,40,0.14)';
 
 function ActionChip({ action, context }: { action: FaqAction; context: 'pricing' | 'manage' | 'header' }) {
   const cls = 'gv-faq-act';
-  if (action.kind === 'link') return <Link href={action.href} className={cls}>{action.label}</Link>;
+  if (action.kind === 'link') return <Link href={action.href} className={`${cls} gv-faq-act-link`}>{action.label}</Link>;
   if (action.kind === 'open-credits') return <button type="button" className={cls} onClick={() => openCreditsPopup({ context })}>{action.label}</button>;
   return <button type="button" className={cls} onClick={() => openUnlimitedPopup()}>{action.label}</button>;
 }
 
-export function FaqList({ entries, defaultOpen, context = 'pricing', compact = false }: {
+export function FaqList({ entries, defaultOpen, context = 'pricing', compact = false, reading = false }: {
   entries: FaqEntry[];
   /** Ids open on first render (a URL fragment, say). */
   defaultOpen?: string[];
@@ -34,6 +34,10 @@ export function FaqList({ entries, defaultOpen, context = 'pricing', compact = f
   context?: 'pricing' | 'manage' | 'header';
   /** Smaller type, for the help center's denser lists. */
   compact?: boolean;
+  /** The help center's calm reading look: a 65ch answer column at 16px / 1.6,
+   *  links as bold underlined text, buttons as the sentence-case forest
+   *  gradient. Off by default, so the pricing pages are unchanged. */
+  reading?: boolean;
 }) {
   const [open, setOpen] = useState<Set<string>>(() => new Set(defaultOpen ?? []));
   // The bundle-discount answer is built from credit_price_tiers() at render.
@@ -46,7 +50,7 @@ export function FaqList({ entries, defaultOpen, context = 'pricing', compact = f
     });
   }
   return (
-    <div className="gv-faq" style={{ fontFamily: OUTFIT }}>
+    <div className={reading ? 'gv-faq gv-faq--reading' : 'gv-faq'} style={{ fontFamily: OUTFIT }}>
       <style>{`
         .gv-faq{border-top:1px solid ${RULE}}
         .gv-faq-row{border-bottom:1px solid ${RULE}}
@@ -63,6 +67,13 @@ export function FaqList({ entries, defaultOpen, context = 'pricing', compact = f
         .gv-faq-act:active{transform:scale(0.98)}
         .gv-faq-act:focus{outline:none}
         .gv-faq-act:focus-visible{box-shadow:0 0 0 2px ${FOREST}}
+        .gv-faq--reading .gv-faq-a{max-width:65ch;padding-bottom:20px}
+        .gv-faq--reading .gv-faq-a p{font-size:16px;line-height:1.6;color:${INK}}
+        .gv-faq--reading .gv-faq-acts{align-items:center;gap:10px 20px;margin-top:14px}
+        .gv-faq--reading .gv-faq-act{min-height:40px;padding:0 16px;border-radius:10px;background:linear-gradient(90deg,#1B3828 0%,#2A5A3C 55%,#1E4A31 100%);color:#FFFFFF;font-size:14px;font-weight:700;letter-spacing:0;text-transform:none}
+        .gv-faq--reading .gv-faq-act:hover{background:linear-gradient(90deg,#22452F 0%,#316844 55%,#245638 100%)}
+        .gv-faq--reading .gv-faq-act-link{min-height:0;padding:0;border-radius:4px;background:none;color:${FOREST};font-size:15px;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px}
+        .gv-faq--reading .gv-faq-act-link:hover{background:none;color:#2A5A3C}
         @media (prefers-reduced-motion:reduce){.gv-faq-q svg{transition:none}}
       `}</style>
       {entries.map((f) => {

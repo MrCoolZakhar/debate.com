@@ -1,8 +1,8 @@
 'use client';
 
 // ── /pricing/subscription ────────────────────────────────────────────────────
-// Gavelling Unlimited. A forest hero with a gold infinity composition, the
-// two plan cards straight under it (Yearly by default, the switch passes
+// Gavelling Unlimited. A hero straight on the ivory page, the two plan cards
+// straight under it (Unlimited is dark glass over a photo with a gold edge) (Yearly by default, the switch passes
 // its state into the pop-up), the feature strip, the promo line, the
 // questions. Prices come from unlimitedPricing().
 
@@ -63,14 +63,18 @@ export default function SubscriptionPricingClient() {
         .gv-su-plans-wrap{margin-top:28px}
         .gv-su-switch-row{display:flex;justify-content:center;margin-bottom:20px}
         .gv-su-switch{display:inline-grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border-radius:999px;background:${P.white};box-shadow:0 1px 0 rgba(27,56,40,0.08),0 12px 28px -24px rgba(27,56,40,0.5)}
-        .gv-su-seg{min-width:128px;min-height:44px;padding:0 18px;border-radius:999px;border:none;background:transparent;color:${P.ink};font-family:${OUTFIT};font-size:13px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;transition:background-color 160ms ease-out,color 160ms ease-out}
+        .gv-su-seg{min-width:128px;min-height:44px;padding:0 18px;border-radius:999px;border:none;background:transparent;color:${P.ink};font-family:${OUTFIT};font-size:15px;font-weight:700;cursor:pointer;transition:background-color 160ms ease-out,color 160ms ease-out}
         .gv-su-seg:hover{background:rgba(27,56,40,0.07)}
         .gv-su-seg[aria-checked="true"]{background:${P.forest};color:${P.gold}}
-        .gv-su-seg small{display:block;margin-top:2px;font-size:11px;font-weight:700;letter-spacing:0.04em;text-transform:none;opacity:0.8}
+        .gv-su-seg small{display:block;margin-top:2px;font-size:12px;font-weight:600;opacity:0.8}
         .gv-su-plans{display:grid;grid-template-columns:1fr;gap:16px;align-items:stretch}
         .gv-su-plan{display:flex;flex-direction:column;padding:30px 28px;border-radius:26px}
         .gv-su-plan-free{background:${P.white};box-shadow:0 1px 0 rgba(27,56,40,0.08),0 18px 40px -32px rgba(27,56,40,0.35)}
-        .gv-su-plan-unl{background:${P.forest};color:#FFFFFF;padding:38px 32px;box-shadow:0 28px 56px -30px rgba(20,48,31,0.75)}
+        .gv-su-plan-unl{position:relative;overflow:hidden;isolation:isolate;background:${P.forestDeep};color:#FFFFFF;padding:38px 32px;box-shadow:inset 0 0 0 1px rgba(238,217,138,0.55),0 28px 56px -30px rgba(20,48,31,0.75)}
+        .gv-su-plan-unl>:not(.gv-su-unl-bg){position:relative;z-index:1}
+        .gv-su-unl-bg{position:absolute;inset:0;z-index:0;pointer-events:none}
+        .gv-su-unl-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:52% 62%;filter:blur(8px) saturate(0.8);transform:scale(1.12)}
+        .gv-su-unl-glass{position:absolute;inset:0;background:radial-gradient(90% 60% at 100% 0%,rgba(238,217,138,0.22) 0%,rgba(238,217,138,0) 60%),linear-gradient(165deg,rgba(20,48,31,0.74) 0%,rgba(10,28,18,0.88) 100%)}
         .gv-su-plan-name{margin:0;font-size:clamp(28px,3vw,34px);font-weight:800;letter-spacing:-0.02em;line-height:1.05}
         .gv-su-plan-free .gv-su-plan-name{color:${P.ink}}
         .gv-su-plan-unl .gv-su-plan-name{color:#FFFFFF}
@@ -84,13 +88,13 @@ export default function SubscriptionPricingClient() {
         .gv-su-price span{font-size:18px;font-weight:600}
         .gv-su-plan-free .gv-su-price span{color:${P.inkSoft}}
         .gv-su-plan-unl .gv-su-price span{color:rgba(255,255,255,0.82)}
-        .gv-su-price-note{margin:8px 0 0;font-size:14px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:${P.gold};min-height:1.4em}
+        .gv-su-price-note{margin:8px 0 0;font-size:16px;font-weight:800;color:${P.gold};min-height:1.4em}
         .gv-su-list{list-style:none;margin:24px 0 0;padding:0;display:grid;gap:12px}
         .gv-su-list li{display:grid;grid-template-columns:24px minmax(0,1fr);gap:12px;align-items:start;font-size:16px;line-height:1.4;font-weight:600}
         .gv-su-plan-free .gv-su-list li{color:${P.ink}}
         .gv-su-plan-unl .gv-su-list li{color:#FFFFFF}
         .gv-su-tick{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;margin-top:0}
-        .gv-su-plan-free .gv-su-tick{background:${P.forest};color:${P.gold}}
+        .gv-su-plan-free .gv-su-tick{background:rgba(61,122,82,0.16);color:${P.forest}}
         .gv-su-plan-unl .gv-su-tick{background:${P.gold};color:${P.forest}}
         .gv-su-plan-cta{margin-top:auto;padding-top:28px;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
         .gv-su-plan-small{margin:0;font-size:13.5px;line-height:1.45;color:${P.inkSoft}}
@@ -183,6 +187,11 @@ export default function SubscriptionPricingClient() {
           </article>
 
           <article className="gv-su-plan gv-su-plan-unl" aria-labelledby="gv-su-plan-unl">
+            <div className="gv-su-unl-bg" aria-hidden>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img className="gv-su-unl-photo" src="/onboarding/hall-01.jpg" alt="" width={800} height={1000} loading="lazy" decoding="async" draggable={false} />
+              <div className="gv-su-unl-glass" />
+            </div>
             <h2 id="gv-su-plan-unl" className="gv-su-plan-name">Unlimited</h2>
             <p className="gv-su-plan-line">Unlimited MUN and Unlimited Gavelling</p>
             <div className="gv-su-price" aria-live="polite">

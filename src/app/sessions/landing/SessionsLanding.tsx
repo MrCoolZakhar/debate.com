@@ -1,12 +1,13 @@
 'use client';
 
 // The Sessions landing page (/sessions), redesigned 24 Sep 2026, reworked
-// 25 Sep 2026 to the owner's taste (uppercase buttons, Title Case titles with
-// the last word in gold, no full stops on titles and captions, one palette).
+// 25 Sep 2026 to the owner's taste boards (sentence-case Airbnb buttons in the
+// forest gradient, the last word of a title in gold, ivory and white only, the
+// hero dissolving into the page through a mask, never a painted fade).
 //
 //   1. Hero: the gavel film washed to ivory, "Run the *room*" on ONE line in
-//      every language, START COMMITTEE as the one big action and a smaller
-//      code field with JOIN under it, the chair's laptop and a delegate's
+//      every language, "Start committee" as the one big action and a
+//      smaller code field with Join under it, the chair's laptop and a delegate's
 //      phone on the right as still images.
 //   2. RoleCards: "Built for every role in the *room*", one tall photo panel
 //      per role (Chairs, Delegates, Faculty advisors) with the role word, one
@@ -28,7 +29,7 @@ import { GoldWord } from '@/components/BrandHeading';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import RoleCards from './RoleCards';
 import ConferenceBridge from './ConferenceBridge';
-import { BRAND, INK, INK_SOFT, FOREST, FOREST_DEEP, GOLD, GOLD_TEXT, HAIR, IVORY, CREAM, WHITE } from './tokens';
+import { BRAND, INK, INK_SOFT, FOREST, GOLD, GOLD_TEXT, HAIR, IVORY, CREAM, WHITE, CTA_GRADIENT } from './tokens';
 
 type Lang = 'en' | 'es' | 'fr' | 'ar';
 
@@ -94,7 +95,7 @@ export default function SessionsLanding() {
         )}
 
         {/* ── 1. Hero ─────────────────────────────────────────────────────── */}
-        <section className="sl-hero relative overflow-hidden" style={{ marginTop: -72, backgroundColor: IVORY }}>
+        <section className="sl-hero relative overflow-hidden" style={{ marginTop: -72 }}>
           {/* Plays once and rests on its last frame (owner: no loop). */}
           <video className="sl-film" autoPlay muted playsInline preload="metadata" aria-hidden>
             <source src="/hero_no_audio.webm" type="video/webm" />
@@ -188,37 +189,37 @@ const GRAIN: CSSProperties = {
 
 const CSS = `
 .sl-hero { min-height: min(100svh, 960px); display: flex; align-items: center; }
-.sl-film { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .42; filter: blur(2px) saturate(.75); }
+.sl-film { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .42; filter: blur(2px) saturate(.75);
+  -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent 100%); mask-image: linear-gradient(to bottom, #000 78%, transparent 100%); }
 .sl-wash { position: absolute; inset: 0; background:
-  linear-gradient(90deg, ${IVORY} 0%, rgba(237,231,216,.93) 34%, rgba(237,231,216,.55) 62%, rgba(237,231,216,.35) 100%),
-  linear-gradient(to bottom, rgba(237,231,216,0) 74%, ${CREAM} 100%); }
+  linear-gradient(90deg, ${IVORY} 0%, rgba(237,231,216,.93) 34%, rgba(237,231,216,.55) 62%, rgba(237,231,216,.35) 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent 100%); mask-image: linear-gradient(to bottom, #000 78%, transparent 100%); }
 [dir="rtl"] .sl-wash { background:
-  linear-gradient(270deg, ${IVORY} 0%, rgba(237,231,216,.93) 34%, rgba(237,231,216,.55) 62%, rgba(237,231,216,.35) 100%),
-  linear-gradient(to bottom, rgba(237,231,216,0) 74%, ${CREAM} 100%); }
+  linear-gradient(270deg, ${IVORY} 0%, rgba(237,231,216,.93) 34%, rgba(237,231,216,.55) 62%, rgba(237,231,216,.35) 100%); }
 .sl-hero-in { max-width: 1520px; padding: 116px clamp(16px, 4vw, 64px) 72px; display: grid;
   grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.22fr); grid-template-areas: "h dev" "copy dev"; grid-template-rows: auto 1fr;
   column-gap: clamp(24px, 3vw, 56px); row-gap: 0; align-items: start; }
 .sl-h1 { grid-area: h; align-self: end; padding-top: clamp(12px, 2.4vw, 44px); position: relative; z-index: 3; margin: 0; font-weight: 800; line-height: 0.98; letter-spacing: -0.04em; white-space: nowrap; color: ${INK}; font-size: var(--h1-lg); }
 .sl-copy { grid-area: copy; padding-top: clamp(14px, 1.4vw, 22px); }
 .sl-lede { font-size: clamp(18px, 1.4vw, 21px); font-weight: 500; line-height: 1.4; margin: 0; max-width: 28em; letter-spacing: -0.005em; }
-.sl-start { display: inline-flex; align-items: center; justify-content: center; margin-top: 28px; min-height: 64px; padding: 0 44px;
-  border: 0; border-radius: 9999px; background: ${FOREST}; color: ${GOLD_TEXT}; font: 800 17px/1 ${BRAND}; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.16), 0 18px 34px -16px rgba(27,56,40,.9);
-  transition: transform 160ms cubic-bezier(.22,1,.36,1), background-color 200ms ease; }
-.sl-start:hover { background: ${FOREST_DEEP}; }
+.sl-start { display: inline-flex; align-items: center; justify-content: center; margin-top: 28px; min-height: 56px; padding: 0 32px;
+  border: 0; border-radius: 12px; background: ${CTA_GRADIENT}; color: ${WHITE}; font: 700 17px/1 ${BRAND}; cursor: pointer;
+  box-shadow: 0 10px 24px -14px rgba(27,56,40,.8);
+  transition: transform 160ms cubic-bezier(.22,1,.36,1), filter 200ms ease; }
+.sl-start:hover { filter: brightness(1.08); }
 .sl-start:active { transform: scale(.97); }
 .sl-start:focus-visible { outline: 2px solid ${GOLD}; outline-offset: 3px; }
 .sl-join { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
-.sl-join-box { display: inline-flex; align-items: center; height: 52px; padding: 0 4px 0 16px; border-radius: 9999px; background: rgba(255,255,255,.85); box-shadow: inset 0 0 0 1.5px ${HAIR}; }
+.sl-join-box { display: inline-flex; align-items: center; height: 52px; padding: 0 4px 0 16px; border-radius: 12px; background: rgba(255,255,255,.85); box-shadow: inset 0 0 0 1.5px ${HAIR}; }
 .sl-join-box input { width: 136px; height: 44px; border: 0; background: transparent; outline: none; font: 700 15px/1 ${BRAND}; letter-spacing: .1em; text-transform: uppercase; color: ${INK}; }
 .sl-join-box input::placeholder { letter-spacing: 0; text-transform: none; font-weight: 500; color: ${INK_SOFT}; }
-.sl-join-box button { min-height: 44px; padding: 0 18px; border: 0; border-radius: 9999px; background: ${FOREST}; color: ${GOLD_TEXT}; font: 800 13px/1 ${BRAND}; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; transition: background-color 200ms ease; }
-.sl-join-box button:hover:not(:disabled) { background: ${FOREST_DEEP}; }
+.sl-join-box button { min-height: 44px; padding: 0 18px; border: 0; border-radius: 10px; background: ${CTA_GRADIENT}; color: ${WHITE}; font: 700 15px/1 ${BRAND}; cursor: pointer; transition: filter 200ms ease; }
+.sl-join-box button:hover:not(:disabled) { filter: brightness(1.08); }
 .sl-join-box button:disabled { background: ${IVORY}; color: ${INK_SOFT}; cursor: default; }
 .sl-join-box button:focus-visible { outline: 2px solid ${GOLD}; outline-offset: 2px; }
 .sl-join-box:focus-within { box-shadow: inset 0 0 0 1.5px ${FOREST}; background: ${WHITE}; }
 .sl-free { margin: 12px 0 0; font-size: 13.5px; font-weight: 500; }
-.sl-dismiss { min-height: 44px; padding: 0 8px; background: transparent; border: 0; color: rgba(238,217,138,.85); font: 800 12px/1 ${BRAND}; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; }
+.sl-dismiss { min-height: 44px; padding: 0 8px; background: transparent; border: 0; color: rgba(238,217,138,.85); font: 700 14px/1 ${BRAND}; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .sl-dismiss:hover { color: ${GOLD_TEXT}; }
 .sl-dismiss:focus-visible { outline: 2px solid ${GOLD_TEXT}; outline-offset: 2px; border-radius: 6px; }
 .sl-devices { grid-area: dev; align-self: center; position: relative; margin-inline-end: calc(-1 * clamp(16px, 4vw, 64px) - 2vw); padding-bottom: 6%; }

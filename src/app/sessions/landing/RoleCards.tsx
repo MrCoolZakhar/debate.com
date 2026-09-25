@@ -4,9 +4,9 @@
 // role in the homepage's role pattern ("Find your seat"): the photo, a dark
 // scrim at the foot, the role word big, ONE short line and a real action.
 //
-//   Chairs            CREATE YOUR SESSION           -> /create
-//   Delegates         code field + FIND A SESSION   -> /join?code=CODE
-//   Faculty advisors  code field + FIND A SESSION   -> /join?code=CODE&mode=advisor
+//   Chairs            Create your session           -> /create/sessions
+//   Delegates         code field + Find a session   -> /join?code=CODE
+//   Faculty advisors  code field + Find a session   -> /join?code=CODE&mode=advisor
 //                     and the inline link "Open your board" -> /advisor
 //
 // Three-up from 900px; below that one swipeable scroll-snap row (native
@@ -22,7 +22,7 @@ import { useT } from '@/contexts/LanguageContext';
 import { GoldWord } from '@/components/BrandHeading';
 import { GoldButton } from '@/components/GoldButton';
 import type { TranslationKey } from '@/lib/translations';
-import { BRAND, INK, FOREST, GOLD_TEXT, CREAM, WHITE } from './tokens';
+import { BRAND, INK, IVORY, GOLD_TEXT, CREAM, WHITE } from './tokens';
 
 type Role = {
   id: 'chairs' | 'delegates' | 'advisors';
@@ -112,10 +112,10 @@ export default function RoleCards() {
 }
 
 const CSS = `
-.rc { max-width: 1520px; padding: clamp(56px, 6vw, 96px) clamp(16px, 4vw, 64px) clamp(40px, 4vw, 64px); }
-.rc-h2 { margin: 0; text-align: center; font-weight: 800; font-size: clamp(32px, 3.6vw, 56px); line-height: 1.05; letter-spacing: -0.03em; color: ${INK}; }
-.rc-row { margin-top: clamp(28px, 3vw, 48px); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(14px, 1.6vw, 24px); }
-.rc-panel { position: relative; overflow: hidden; border-radius: 28px; background: ${FOREST}; aspect-ratio: 3 / 4; min-height: 520px;
+.rc { max-width: 1520px; padding: clamp(40px, 4vw, 64px) clamp(16px, 4vw, 64px); }
+.rc-h2 { margin: 0; text-align: center; font-weight: 800; font-size: clamp(24px, 2.4vw, 40px); line-height: 1.05; letter-spacing: -0.03em; color: ${INK}; }
+.rc-row { margin-top: clamp(20px, 2.2vw, 32px); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(14px, 1.6vw, 24px); }
+.rc-panel { position: relative; overflow: hidden; border-radius: 24px; background: ${IVORY}; aspect-ratio: 4 / 5; min-height: 440px;
   box-shadow: 0 30px 60px -38px rgba(27,56,40,.6), 0 2px 6px rgba(27,56,40,.08); transition: transform .25s cubic-bezier(.22,1,.36,1); }
 @media (hover: hover) { .rc-panel:hover { transform: translateY(-3px); } }
 .rc-panel img { user-select: none; }
@@ -129,7 +129,7 @@ const CSS = `
   font: 700 15px/1 ${BRAND}; letter-spacing: .1em; text-transform: uppercase; outline: none; box-shadow: inset 0 0 0 1.5px rgba(27,56,40,.14); }
 .rc-code::placeholder { letter-spacing: 0; text-transform: none; font-weight: 500; color: #5A5046; }
 .rc-code:focus { background: ${WHITE}; box-shadow: inset 0 0 0 2px ${GOLD_TEXT}; }
-.rc-cta { white-space: nowrap; }
+.rc-cta.gv-gold-cta { white-space: nowrap; text-transform: none; letter-spacing: 0; font-weight: 700; }
 .rc-link { display: inline-flex; align-items: center; min-height: 44px; color: ${GOLD_TEXT}; font-weight: 800; font-size: 15px; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1.5px; }
 .rc-link:hover { color: ${WHITE}; }
 .rc-link:focus-visible { outline: 2px solid ${GOLD_TEXT}; outline-offset: 3px; border-radius: 6px; }
@@ -139,7 +139,7 @@ const CSS = `
   .rc-row { display: flex; gap: 12px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; padding: 4px 16px 20px;
     -webkit-overflow-scrolling: touch; scrollbar-width: none; }
   .rc-row::-webkit-scrollbar { display: none; }
-  .rc-panel { flex: 0 0 84vw; max-width: 420px; min-height: 460px; aspect-ratio: 3 / 4; scroll-snap-align: center; }
+  .rc-panel { flex: 0 0 84vw; max-width: 420px; min-height: 420px; aspect-ratio: 4 / 5; scroll-snap-align: center; }
   .rc-panel:hover { transform: none; }
 }
 @media (prefers-reduced-motion: reduce) { .rc-panel { transition: none; } .rc-row { scroll-behavior: auto; } }

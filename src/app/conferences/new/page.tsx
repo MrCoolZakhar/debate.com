@@ -16,7 +16,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, ArrowRight, Mail, Pencil, Check, Camera, ThumbsUp, Music2, MessageCircle, Globe, Plus, ClipboardList, CreditCard, Building2, Megaphone, Trash2, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, Mail, Pencil, Check, Camera, ThumbsUp, Music2, MessageCircle, Globe, Plus, ClipboardList, CreditCard, Building2, Megaphone, Trash2, type LucideIcon } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
@@ -25,7 +25,7 @@ import { conferenceSlugAttempts, conferenceYear, isSlugTakenError } from '@/lib/
 import { UN_COUNTRIES, getCountryByName } from '@/lib/countries';
 import { FlagImg } from '@/components/FlagImg';
 import { WizardShell, TwoTabPick, CardSelect } from '@/components/wizard';
-import { NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuButton, NeuInset, Emoji3D } from '@/components/neu';
+import { NEU, OUTFIT, EASE, Emoji3D } from '@/components/neu';
 import { IdentityStep } from './IdentityStep';
 import { LogoCropModal } from '@/components/LogoCropModal';
 import { uploadConferenceAsset } from '@/lib/conferenceAssets';
@@ -160,34 +160,41 @@ function committeeKey(name: string): string {
 
 // ── Small shared bits ──────────────────────────────────────────────────────
 
+// Taste board (CLAUDE.md §8): a label above a white box, never a pressed-in
+// well; white cards with a soft forest-tinted shadow, never neumorphic; the
+// main button is the forest gradient rounded rectangle in sentence case.
+const FIELD_BORDER = 'rgba(27,56,40,0.22)';
+const CARD_SHADOW = '0 1px 2px rgba(27,56,40,0.06), 0 6px 20px -6px rgba(27,56,40,0.16)';
+const CARD_SHADOW_HOVER = '0 2px 4px rgba(27,56,40,0.08), 0 12px 28px -8px rgba(27,56,40,0.22)';
+const FOREST_BUTTON = 'linear-gradient(90deg,#1B3828 0%,#2A5A3C 55%,#1E4A31 100%)';
+
 const bigInputStyle: React.CSSProperties = {
   width: '100%',
-  backgroundColor: NEU.base,
-  border: '1.5px solid transparent',
-  borderRadius: 16,
-  padding: '15px 18px',
+  backgroundColor: '#FFFFFF',
+  border: `1.5px solid ${FIELD_BORDER}`,
+  borderRadius: 12,
+  padding: '14px 16px',
   fontSize: 16,
   fontWeight: 600,
   color: NEU.ink,
   fontFamily: OUTFIT,
   outline: 'none',
-  boxShadow: NEU.inSm,
   transition: `border-color 180ms ${EASE}`,
 };
 
-function focusForest(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
+function focusForest(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
   e.currentTarget.style.borderColor = NEU.forest;
 }
-function blurClear(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = 'transparent';
+function blurClear(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
+  e.currentTarget.style.borderColor = FIELD_BORDER;
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
     <p
       style={{
-        fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.12em',
-        color: NEU.muted, textTransform: 'uppercase', marginBottom: 8,
+        fontFamily: OUTFIT, fontSize: 14, fontWeight: 700,
+        color: NEU.ink, marginBottom: 8,
       }}
     >
       {children}
@@ -216,15 +223,15 @@ function TertiaryPick({ label, selected, onClick }: { label: string; selected: b
       className="focus:outline-none"
       style={{
         marginTop: 14,
-        padding: '9px 20px',
-        borderRadius: 999,
-        border: selected ? `2px solid ${NEU.forest}` : '2px solid rgba(27,56,40,0.14)',
-        backgroundColor: selected ? NEU.surface : 'transparent',
-        boxShadow: selected ? NEU.outSm : 'none',
-        color: selected ? NEU.forest : NEU.muted,
-        fontFamily: OUTFIT, fontSize: 13, fontWeight: 700,
+        padding: '10px 20px',
+        borderRadius: 10,
+        border: selected ? `2px solid ${NEU.forest}` : `2px solid ${FIELD_BORDER}`,
+        backgroundColor: '#FFFFFF',
+        boxShadow: selected ? CARD_SHADOW : 'none',
+        color: selected ? NEU.forest : NEU.ink,
+        fontFamily: OUTFIT, fontSize: 14, fontWeight: 700,
         cursor: 'pointer',
-        transition: `all 220ms ${EASE}`,
+        transition: `border-color 220ms ${EASE}, box-shadow 220ms ${EASE}, color 220ms ${EASE}`,
       }}
     >
       {label}
@@ -244,9 +251,9 @@ function SkipLink({ label, onClick }: { label: string; onClick: () => void }) {
       className="focus:outline-none"
       style={{
         background: 'none', border: 'none', cursor: 'pointer',
-        fontFamily: OUTFIT, fontSize: 13, fontWeight: 700,
-        color: hovered ? NEU.forest : NEU.muted,
-        textDecoration: 'underline', textDecorationColor: 'rgba(154,138,120,0.5)',
+        fontFamily: OUTFIT, fontSize: 14, fontWeight: 700,
+        color: hovered ? NEU.forest : NEU.ink,
+        textDecoration: 'underline', textDecorationThickness: 1.5,
         textUnderlineOffset: 3, transition: `color 200ms ${EASE}`,
       }}
     >
@@ -322,9 +329,9 @@ function DraftCommitteeCard({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        backgroundColor: NEU.surface,
-        borderRadius: 22,
-        boxShadow: hovered ? NEU.outHover : NEU.out,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 18,
+        boxShadow: hovered ? CARD_SHADOW_HOVER : CARD_SHADOW,
         transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
         transition: `transform 300ms ${EASE}, box-shadow 300ms ${EASE}`,
       }}
@@ -336,13 +343,14 @@ function DraftCommitteeCard({
 
         <CommitteeEmblem committee={committee} size={56} />
 
-        {/* Acronym eyebrow. #7A5A10, the manage layout's own gold ink: the
-            brighter #B6871F fails contrast at this size. */}
+        {/* Two rows (CLAUDE.md §8): the acronym big, the full name smaller
+            beneath, wrapping, never cut. */}
         {committee.abbreviation && (
           <p
             style={{
-              margin: '9px 0 0 0', fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 700,
-              letterSpacing: '0.18em', color: '#7A5A10', fontVariantNumeric: 'tabular-nums',
+              margin: '9px 0 0 0', fontFamily: OUTFIT, fontSize: 16, fontWeight: 800,
+              color: NEU.ink, lineHeight: 1.15, textAlign: 'center',
+              overflowWrap: 'anywhere', fontVariantNumeric: 'tabular-nums',
             }}
           >
             {committee.abbreviation.toUpperCase()}
@@ -351,11 +359,13 @@ function DraftCommitteeCard({
 
         {/* `balance` so a two-line name breaks evenly instead of leaving an orphan. */}
         <h3
-          className="text-center font-bold"
+          className="text-center"
           style={{
-            color: NEU.ink, fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.35,
+            color: committee.abbreviation ? NEU.inkSoft : NEU.ink, fontFamily: OUTFIT,
+            fontSize: committee.abbreviation ? 12 : 14, fontWeight: committee.abbreviation ? 600 : 800,
+            lineHeight: 1.35,
             margin: committee.abbreviation ? '3px 0 0 0' : '10px 0 0 0',
-            minHeight: '2.4em', textWrap: 'balance',
+            minHeight: '2.4em', textWrap: 'balance', overflowWrap: 'anywhere',
           }}
         >
           {committee.name}
@@ -378,16 +388,16 @@ function DraftCommitteeCard({
           onMouseLeave={() => setEditHover(false)}
           className="flex items-center gap-1.5 focus:outline-none"
           style={{
-            padding: '7px 14px', borderRadius: 9999, border: 'none',
-            backgroundColor: NEU.base,
-            boxShadow: editHover ? NEU.outSmHover : NEU.outSm,
-            color: NEU.forest, fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800,
-            letterSpacing: '0.08em', cursor: 'pointer',
-            transition: `box-shadow 200ms ${EASE}`,
+            height: 32, padding: '0 12px', borderRadius: 10,
+            border: `1.5px solid ${editHover ? NEU.ink : FIELD_BORDER}`,
+            backgroundColor: '#FFFFFF',
+            color: NEU.ink, fontFamily: OUTFIT, fontSize: 13, fontWeight: 700,
+            cursor: 'pointer',
+            transition: `border-color 200ms ${EASE}`,
           }}
         >
-          <Pencil size={12} strokeWidth={2.6} />
-          EDIT
+          <Pencil size={13} strokeWidth={2.4} />
+          Edit
         </button>
         <button
           type="button"
@@ -397,11 +407,11 @@ function DraftCommitteeCard({
           aria-label={`Remove ${committee.name}`}
           className="flex items-center justify-center focus:outline-none"
           style={{
-            width: 32, height: 32, borderRadius: 9999, border: 'none',
-            backgroundColor: NEU.base,
-            boxShadow: removeHover ? NEU.outSmHover : NEU.outSm,
+            width: 32, height: 32, borderRadius: 10,
+            border: `1.5px solid ${removeHover ? '#8B2020' : FIELD_BORDER}`,
+            backgroundColor: '#FFFFFF',
             color: '#8B2020', cursor: 'pointer',
-            transition: `box-shadow 200ms ${EASE}`,
+            transition: `border-color 200ms ${EASE}`,
           }}
         >
           <Trash2 size={14} strokeWidth={2.4} />
@@ -429,18 +439,41 @@ function SocialInput({
         onBlur={(e) => { setFocused(false); blurClear(e); }}
         aria-label={label}
         placeholder={placeholder}
-        style={{ ...bigInputStyle, paddingLeft: 42, fontSize: 14, backgroundColor: NEU.surface, boxShadow: NEU.inSm }}
+        style={{ ...bigInputStyle, paddingLeft: 42, fontSize: 14 }}
       />
     </div>
   );
 }
 
+/** The main action: the Airbnb-style forest gradient rounded rectangle,
+ *  sentence case, white text (taste board two, CLAUDE.md §8). */
+function PrimaryButton({ children, disabled, onClick, style }: {
+  children: React.ReactNode; disabled?: boolean; onClick: () => void; style?: React.CSSProperties;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex items-center justify-center gap-2 focus:outline-none focus-visible:shadow-[0_0_0_3px_#EED98A] transition-[transform,filter,opacity] duration-200 enabled:hover:brightness-110 enabled:active:scale-[0.98]"
+      style={{
+        background: FOREST_BUTTON, color: '#FFFFFF', border: 'none', borderRadius: 11,
+        padding: '13px 30px', fontFamily: OUTFIT, fontSize: 15, fontWeight: 700,
+        cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.45 : 1,
+        ...style,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 function ContinueButton({ label = 'Continue', disabled, onClick }: { label?: string; disabled?: boolean; onClick: () => void }) {
   return (
-    <div className="flex justify-center" style={{ marginTop: 26 }}>
-      <NeuButton onClick={onClick} disabled={disabled} icon={ArrowRight} style={{ padding: '13px 34px', fontSize: 14 }}>
+    <div className="flex justify-center" style={{ marginTop: 24 }}>
+      <PrimaryButton onClick={onClick} disabled={disabled}>
         {label}
-      </NeuButton>
+      </PrimaryButton>
     </div>
   );
 }
@@ -959,7 +992,7 @@ export default function NewConferencePage() {
   }
 
   // Acronyms where there is one, so the row reads "UNSC, DISEC, WHO" rather
-  // than three wrapped sentences. ReviewRow truncates a long list on its own.
+  // than three wrapped sentences. ReviewRow wraps a long list, never cuts it.
   const committeesSummary = committees.length
     ? committees.map((c) => committeeDisplayName(c.name, c.abbreviation)).join(', ')
     : 'None yet';
@@ -1141,6 +1174,8 @@ export default function NewConferencePage() {
                   onChange={(k) => { setCountry(k); setStepError(''); }}
                   searchable
                   columns={3}
+                  // Country names wrap rather than end in an ellipsis.
+                  wrapText
                 />
                 <div style={{ marginTop: 18 }}>
                   <FieldLabel>City</FieldLabel>
@@ -1291,15 +1326,15 @@ export default function NewConferencePage() {
                       rows={4}
                       maxLength={1500}
                       style={{ ...bigInputStyle, resize: 'vertical', lineHeight: 1.55, minHeight: 108 }}
-                      onFocus={(e) => { e.currentTarget.style.borderColor = NEU.forest; }}
-                      onBlur={(e) => { e.currentTarget.style.borderColor = 'transparent'; }}
+                      onFocus={focusForest}
+                      onBlur={blurClear}
                     />
                     <div style={{ textAlign: 'right', marginTop: 6, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 600, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
                       {description.length} / 1500
                     </div>
                   </div>
 
-                  <NeuInset style={{ padding: '18px 20px', borderRadius: 20 }}>
+                  <div style={{ padding: '18px 20px', borderRadius: 16, backgroundColor: '#FFFFFF', boxShadow: CARD_SHADOW }}>
                     <FieldLabel>Social links</FieldLabel>
                     <div className="flex flex-col gap-3" style={{ marginTop: 4 }}>
                       <SocialInput Icon={Camera} label="Instagram" value={instagram} onChange={setInstagram} placeholder="@yourmun or instagram.com/yourmun" />
@@ -1308,7 +1343,7 @@ export default function NewConferencePage() {
                       <SocialInput Icon={MessageCircle} label="WhatsApp" value={whatsapp} onChange={setWhatsapp} placeholder="wa.me/44… or your number" />
                       <SocialInput Icon={Globe} label="Website" value={website} onChange={setWebsite} placeholder="yourmun.org" />
                     </div>
-                  </NeuInset>
+                  </div>
                 </div>
 
                 <ContinueButton onClick={() => advance(7)} />
@@ -1473,14 +1508,13 @@ export default function NewConferencePage() {
                 )}
 
                 <div className="flex justify-center" style={{ marginTop: 24 }}>
-                  <NeuButton
+                  <PrimaryButton
                     onClick={handleCreate}
                     disabled={submitting || !readyToCreate || !contactEmail.trim()}
-                    gradient={NEU_GRADIENTS.gold}
-                    style={{ padding: '15px 44px', fontSize: 15 }}
+                    style={{ padding: '14px 38px' }}
                   >
-                    {submitting ? 'CREATING…' : 'CREATE CONFERENCE'}
-                  </NeuButton>
+                    {submitting ? 'Creating' : 'Create conference'}
+                  </PrimaryButton>
                 </div>
               </WizardShell>
             )}
@@ -1536,29 +1570,28 @@ function ReviewRow({ label, value, onEdit }: { label: string; value: string; onE
       onClick={onEdit}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className="w-full flex items-center gap-3 text-left focus:outline-none"
+      className="w-full flex items-center gap-3 text-left focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
       style={{
-        padding: '13px 18px',
-        borderRadius: 16,
+        padding: '12px 16px',
+        borderRadius: 12,
         border: 'none',
-        backgroundColor: NEU.surface,
-        boxShadow: hovered ? NEU.outSmHover : NEU.outSm,
-        transform: hovered ? 'translateY(-1px)' : 'translateY(0)',
-        transition: `all 220ms ${EASE}`,
+        backgroundColor: '#FFFFFF',
+        boxShadow: hovered ? CARD_SHADOW_HOVER : CARD_SHADOW,
+        transition: `box-shadow 220ms ${EASE}`,
         cursor: 'pointer',
       }}
     >
       <span
         style={{
-          fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.1em',
-          color: NEU.muted, textTransform: 'uppercase', width: 132, flexShrink: 0,
+          fontFamily: OUTFIT, fontSize: 13, fontWeight: 600,
+          color: NEU.inkSoft, width: 140, flexShrink: 0,
         }}
       >
         {label}
       </span>
       <span
-        className="flex-1 truncate"
-        style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 700, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}
+        className="flex-1 min-w-0"
+        style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 700, color: NEU.ink, fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}
       >
         {value}
       </span>

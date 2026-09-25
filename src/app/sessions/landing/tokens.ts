@@ -14,3 +14,6 @@ export const IVORY = '#EDE7D8';
 export const CREAM = '#FAF8F3';
 export const WHITE = '#FFFFFF';
 export const HAIR = 'rgba(27,56,40,0.14)';
+/** The main button (owner's taste board two): Airbnb's rounded rectangle in
+ *  the forest gradient, white sentence-case text. */
+export const CTA_GRADIENT = 'linear-gradient(90deg, #1B3828 0%, #2A5A3C 55%, #1E4A31 100%)';
