@@ -1,10 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Gavel, Globe } from 'lucide-react';
 import { pageMetadata } from '@/lib/seo';
 import SiteNav from '@/components/SiteNav';
 import SiteFooter from '@/components/SiteFooter';
-import { Emoji3D } from '@/components/neu';
+import CreateDoorEmoji from './CreateDoorEmoji';
 import { GoldWord } from '@/components/BrandHeading';
 
 // ── /create: what are you creating? ─────────────────────────────────────────
@@ -72,7 +71,7 @@ export default function CreateChooserPage() {
         <div className="gv-create-grid">
           <Link href="/create/sessions" className="gv-create-card gv-create-card-white" aria-label="Create a committee">
             <span className="gv-create-disc" aria-hidden>
-              <Emoji3D name="Classical building" size={40} fallback={Gavel} fallbackColor={FOREST} />
+              <CreateDoorEmoji name="Classical building" fallback="gavel" color={FOREST} />
             </span>
             <p className="gv-create-eyebrow">A committee</p>
             <h2 className="gv-create-name">One live session room</h2>
@@ -82,7 +81,7 @@ export default function CreateChooserPage() {
 
           <Link href="/conferences/new" className="gv-create-card gv-create-card-forest" aria-label="Create a conference">
             <span className="gv-create-disc" aria-hidden>
-              <Emoji3D name="Globe with meridians" size={40} fallback={Globe} fallbackColor={GOLD} />
+              <CreateDoorEmoji name="Globe with meridians" fallback="globe" color={GOLD} />
             </span>
             <p className="gv-create-eyebrow">A conference</p>
             <h2 className="gv-create-name">Applications, payments and every committee</h2>
