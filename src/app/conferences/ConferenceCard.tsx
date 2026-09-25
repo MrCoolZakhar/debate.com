@@ -48,6 +48,7 @@ import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { formatConferenceDates } from '@/lib/conferenceDates';
 import VerifiedCheck from '@/components/VerifiedCheck';
 import { CircleFlag } from '@/components/CircleFlag';
+import { CreditSponsoredMark, SpotlightTag, SPOTLIGHT_GLOW, SPOTLIGHT_GLOW_HOVER } from '@/components/conferences/SpotlightTag';
 
 // Photo-forward hero cards: kill the Ken Burns zoom + hover lift for users who
 // asked the OS for less motion. Scoped to the hero tier's own class names.
@@ -109,9 +110,15 @@ function formatDateRangeDense(start: string | null, end: string | null): string 
 
 export function ConferenceCard({
   conf, hovered, onHover, onLeave, onClick, compact = false, heroCompact = false, goldGlow = false, applied = false, member = false,
-  showFlag = true, wrapTitle = true,
+  showFlag = true, wrapTitle = true, spotlight = false, creditSponsored = false,
 }: {
   conf: CardConference;
+  /** A booked Gavelling Spotlight: the small tag top right and the bright gold
+   *  edge and glow (25 Sep 2026). */
+  spotlight?: boolean;
+  /** The conference's Store pays applicants' credit: "Credit sponsored" with a
+   *  heart, right beside the fee. */
+  creditSponsored?: boolean;
   hovered: boolean;
   onHover: () => void;
   onLeave: () => void;
@@ -150,9 +157,13 @@ export function ConferenceCard({
   const padX = dense ? 'px-4' : 'px-5';
 
   // Layered golden glow, soft, static, tasteful (deepens slightly on hover).
-  const glowShadow = hovered
-    ? '0 0 0 1px rgba(238,217,138,0.55), 0 6px 20px rgba(182,135,31,0.30), 0 18px 46px rgba(238,217,138,0.24), 0 2px 8px rgba(27,56,40,0.10)'
-    : '0 0 0 1px rgba(238,217,138,0.40), 0 4px 16px rgba(182,135,31,0.22), 0 12px 34px rgba(238,217,138,0.18)';
+  const glowShadow = spotlight
+    ? (hovered ? SPOTLIGHT_GLOW_HOVER : SPOTLIGHT_GLOW)
+    : hovered
+      ? '0 0 0 1px rgba(238,217,138,0.55), 0 6px 20px rgba(182,135,31,0.30), 0 18px 46px rgba(238,217,138,0.24), 0 2px 8px rgba(27,56,40,0.10)'
+      : '0 0 0 1px rgba(238,217,138,0.40), 0 4px 16px rgba(182,135,31,0.22), 0 12px 34px rgba(238,217,138,0.18)';
+  // A spotlight card is always glowing, whatever the caller passes.
+  const glowing = goldGlow || spotlight;
 
   // ── Photo-forward hero tier ───────────────────────────────────────────────
   // The banner photo IS the card: full-bleed cover, forest-tinted scrim heavier
@@ -170,10 +181,10 @@ export function ConferenceCard({
         height: '188px',
         backgroundColor: '#14241B',
         // Solid, defined edge over the glow, stronger card definition.
-        border: goldGlow ? '1px solid rgba(238,217,138,0.75)' : '1px solid rgba(221,212,192,0.9)',
+        border: glowing ? '1px solid rgba(238,217,138,0.75)' : '1px solid rgba(221,212,192,0.9)',
         borderRadius: '20px',
-        transform: goldGlow ? undefined : hovered ? 'translateY(-4px)' : 'translateY(0)',
-        boxShadow: goldGlow
+        transform: glowing ? undefined : hovered ? 'translateY(-4px)' : 'translateY(0)',
+        boxShadow: glowing
           ? glowShadow
           : hovered
             ? '0 20px 48px rgba(27,56,40,0.16), 0 2px 8px rgba(27,56,40,0.08)'
@@ -221,12 +232,18 @@ export function ConferenceCard({
         }}
       />
 
-      {/* Date chip, glass pill, top-right over the photo (omitted when TBD/missing) */}
+      {/* Top-right cluster: the Spotlight tag (booked spotlights), then the
+          date chip, glass pill (omitted when TBD/missing) */}
+      {spotlight && (
+        <span style={{ position: 'absolute', top: '12px', right: '14px', zIndex: 3 }}>
+          <SpotlightTag size="sm" />
+        </span>
+      )}
       {showDates && (
         <span
           className="flex items-center gap-1"
           style={{
-            position: 'absolute', top: '12px', right: '14px', zIndex: 2,
+            position: 'absolute', top: spotlight ? '40px' : '12px', right: '14px', zIndex: 2,
             backgroundColor: 'rgba(20,36,27,0.5)',
             backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
             border: '1px solid rgba(250,248,243,0.2)',
@@ -311,6 +328,7 @@ export function ConferenceCard({
                 {currencySymbol(price.currency)}{formatFeeAmountCompact(price.amount)}
               </span>
             )}
+            {creditSponsored && <CreditSponsoredMark tone="dark" size="sm" />}
             {conf.expected_delegates > 0 && (
               <span className="flex items-center gap-1">
                 <Users size={13} style={{ color: 'rgba(237,231,216,0.66)', flexShrink: 0 }} />
@@ -333,14 +351,14 @@ export function ConferenceCard({
       style={{
         position: 'relative',
         backgroundColor: '#FAF8F3',
-        border: goldGlow
+        border: glowing
           ? '1px solid rgba(238,217,138,0.7)'
           : hovered ? '1px solid rgba(27,56,40,0.55)' : '1px solid #DDD4C0',
         borderRadius: '20px',
-        // When goldGlow, the hover lift lives on the outer wrapper so the
+        // When glowing, the hover lift lives on the outer wrapper so the
         // overlapping gavel disc travels with the card.
-        transform: goldGlow ? undefined : hovered ? 'translateY(-4px)' : 'translateY(0)',
-        boxShadow: goldGlow
+        transform: glowing ? undefined : hovered ? 'translateY(-4px)' : 'translateY(0)',
+        boxShadow: glowing
           ? glowShadow
           : hovered
             ? '0 20px 48px rgba(27,56,40,0.16), 0 2px 8px rgba(27,56,40,0.08)'
@@ -397,11 +415,18 @@ export function ConferenceCard({
             </span>
           </span>
         )}
-        {/* Format chip */}
+        {/* Spotlight tag, top right, over the format chip's spot */}
+        {spotlight && (
+          <span className="absolute top-3 right-3" style={{ zIndex: 3 }}>
+            <SpotlightTag size="sm" />
+          </span>
+        )}
+        {/* Format chip (moves under the tag on a spotlight) */}
         {conf.format && (
           <span
-            className="absolute top-3 right-3"
+            className={spotlight ? 'absolute right-3' : 'absolute top-3 right-3'}
             style={{
+              top: spotlight ? '38px' : undefined,
               fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: dense ? '8.5px' : '9px', letterSpacing: dense ? '0.09em' : '0.12em',
               color: '#FAF8F3', backgroundColor: 'rgba(20,36,27,0.45)',
               backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
@@ -413,6 +438,20 @@ export function ConferenceCard({
           </span>
         )}
       </div>
+
+      {/* "Credit sponsored", right beside the fee bubble */}
+      {creditSponsored && (
+        <div
+          style={{
+            position: 'absolute', zIndex: 2, right: dense ? '14px' : '18px',
+            top: `${(compact ? 72 : 104) + 22}px`,
+            backgroundColor: '#FAF8F3', borderRadius: 9999, padding: '2px 8px',
+            boxShadow: '0 2px 8px rgba(27,56,40,0.12)',
+          }}
+        >
+          <CreditSponsoredMark size="sm" />
+        </div>
+      )}
 
       {/* Fee bubble, straddles the seam between the banner photo and the
           card body, right-hand side, with the real currency symbol */}
@@ -504,7 +543,7 @@ export function ConferenceCard({
     </article>
   );
 
-  if (!goldGlow) return card;
+  if (!glowing) return card;
 
   // goldGlow: positioned wrapper carries the hover lift and hosts the gavel
   // disc as a SIBLING of the article, above it in z-order, the article keeps

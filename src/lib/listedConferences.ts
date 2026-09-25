@@ -14,6 +14,7 @@
 import { supabase } from '@/lib/supabase';
 import { fetchDelegatePrices, withDelegatePrice, type DelegatePrice } from '@/lib/publicFees';
 import { isListedConference } from '@/lib/publicConferences';
+import { fetchFeatured, type FeaturedRow } from '@/lib/spotlight';
 
 export interface ListedConference {
   id: string;
@@ -96,6 +97,14 @@ export async function fetchListedConferences(): Promise<ListedConference[]> {
   } catch {
     return [];
   }
+}
+
+/** The homepage's "up next" rail: featured_conferences('homepage'), today's
+ *  booked Spotlights first, then the empty slots filled with the upcoming
+ *  conferences with the most accepted delegates. Read on the server so the
+ *  first paint does not jump. */
+export async function fetchFeaturedHomepage(): Promise<FeaturedRow[]> {
+  return fetchFeatured(supabase, 'homepage', '');
 }
 
 /** Today as YYYY-MM-DD (UTC). A conference is upcoming until its last day has passed. */

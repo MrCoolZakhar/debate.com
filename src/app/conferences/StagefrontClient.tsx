@@ -11,6 +11,7 @@
 import VariantStagefront from './landing-lab/VariantStagefront';
 import type { HomeGuide } from './landing-lab/HomeSections';
 import type { LabConference } from './landing-lab/shared';
+import type { FeaturedRow } from '@/lib/spotlight';
 
 export interface PlatformStats {
   total_conferences: number;
@@ -22,10 +23,13 @@ export default function StagefrontClient({
   conferences,
   stats,
   guides,
+  featured = [],
 }: {
   conferences: LabConference[];
   stats: PlatformStats | null;
   guides: HomeGuide[];
+  /** The hero rail from featured_conferences('homepage'), read on the server. */
+  featured?: FeaturedRow[];
 }) {
-  return <VariantStagefront conferences={conferences} ratings={{}} stats={stats} guides={guides} />;
+  return <VariantStagefront conferences={conferences} ratings={{}} stats={stats} guides={guides} featured={featured} />;
 }

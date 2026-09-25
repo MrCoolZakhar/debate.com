@@ -10,6 +10,7 @@ import CompleteBasicsGate from '@/components/CompleteBasicsGate';
 import LiveRoomsGate from '@/components/liveRooms/LiveRoomsGate';
 import AuthModalHost from '@/components/auth/AuthModal';
 import PurchasePopupHost from '@/components/purchase/PurchasePopupHost';
+import SiteViewBeacon from '@/components/SiteViewBeacon';
 import { DOM_TRANSLATION_GUARD } from '@/lib/domTranslationGuard';
 import { Albert_Sans } from 'next/font/google';
 
@@ -143,6 +144,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthProvider>
           <LanguageProvider>
             {children}
+            {/* Anonymous site-wide page counter: { page, source } once per page
+                per session, nothing else (src/lib/siteView.ts). */}
+            <SiteViewBeacon />
             <DemoGate />
             {/* Buying credits or Unlimited is a pop-up on every page
                 (src/lib/purchasePopup.ts). Mounted BEFORE the auth host so a

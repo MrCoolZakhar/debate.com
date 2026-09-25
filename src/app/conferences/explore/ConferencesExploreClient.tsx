@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   Search, SlidersHorizontal, LayoutGrid, Rows3, Users, Check,
   CalendarDays, Ticket, Globe, CalendarArrowUp, CalendarArrowDown,
-  MapPin, Monitor, School, GraduationCap, Plus,
+  MapPin, Monitor, School, GraduationCap, Plus, Heart,
 } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import SiteFooter from '@/components/SiteFooter';
@@ -24,6 +24,10 @@ import { ConferenceCard } from '../ConferenceCard';
 import VerifiedCheck from '@/components/VerifiedCheck';
 import { LogoDisc } from '@/components/LogoDisc';
 import { isListedConference } from '@/lib/publicConferences';
+import { fetchFeatured, recordSpotlightClick, recordSpotlightView, type FeaturedRow } from '@/lib/spotlight';
+import { fetchCreditSponsoredIds } from '@/lib/creditSponsored';
+import { CreditSponsoredMark } from '@/components/conferences/SpotlightTag';
+import ConferenceSpotlightDialog, { claimSpotlightDialog } from './ConferenceSpotlightDialog';
 import { DatePicker } from '@/components/DatePicker';
 import {
   DATE_OPTIONS, PRICE_OPTIONS, ROLE_OPTIONS, matchesDateBucket, matchesDateRange, matchesPrice, matchesRoles,
@@ -306,9 +310,10 @@ function RowChip({ label, icon: Icon }: { label: string; icon?: RowIcon }) {
 }
 
 function ConferenceListRow({
-  conf, applied, member, hovered, onHover, onLeave,
+  conf, applied, member, hovered, onHover, onLeave, creditSponsored = false,
 }: {
   conf: Conference;
+  creditSponsored?: boolean;
   applied: boolean;
   /** Viewer is already part of this conference (organizer / chair / delegate), takes precedence over `applied`. */
   member: boolean;
@@ -461,6 +466,7 @@ function ConferenceListRow({
             </span>
           </>
         )}
+        {creditSponsored && <CreditSponsoredMark size="sm" style={{ marginLeft: 4 }} />}
       </div>
       </div>
 
@@ -606,6 +612,7 @@ function FilterRail({
   roleFilter, onToggleRole,
   facetsUnavailable,
   priceFilter, onPrice,
+  sponsoredFilter, onSponsored,
   dateFilter, onDate,
   dateFrom, dateTo, onDateFrom, onDateTo,
   hasActiveFilters, onClear,
@@ -627,6 +634,7 @@ function FilterRail({
   /** The facets read failed: say so under Open Applications and Price. */
   facetsUnavailable: boolean;
   priceFilter: PriceFilter; onPrice: (v: PriceFilter) => void;
+  sponsoredFilter: boolean; onSponsored: (v: boolean) => void;
   dateFilter: DateFilter; onDate: (v: DateFilter) => void;
   dateFrom: string; dateTo: string; onDateFrom: (v: string) => void; onDateTo: (v: string) => void;
   hasActiveFilters: boolean; onClear: () => void;
@@ -713,6 +721,16 @@ function FilterRail({
           Approximate, converted to USD
         </p>
         {facetsUnavailable && <FacetsNote />}
+      </div>
+
+      {/* Credit sponsored: the conference pays applicants' Gavelling credit
+          (credit_sponsored_conference_ids), ?sponsored=1 */}
+      <div style={group} role="listbox" aria-label="Credit sponsored">
+        <RailHeading>Credits</RailHeading>
+        <RailOption label="Credit sponsored" active={sponsoredFilter} onClick={() => onSponsored(!sponsoredFilter)} icon={Heart} />
+        <p style={{ margin: '6px 10px 0', fontSize: '11px', lineHeight: 1.4, color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif" }}>
+          The conference pays your Gavelling credit
+        </p>
       </div>
 
       {/* Dates: quick buckets on the start day, or a custom range through the
@@ -861,6 +879,14 @@ export default function ConferencesExploreClient() {
   );
   const [roleFilter, setRoleFilter] = useState<Set<RoleKey>>(() => new Set(initialQuery.roles));
   const [priceFilter, setPriceFilter] = useState<PriceFilter>(initialQuery.price);
+  const [sponsoredFilter, setSponsoredFilter] = useState<boolean>(initialQuery.sponsored);
+  // Conferences whose Store pays applicants' credit (src/lib/creditSponsored.ts).
+  const [sponsoredIds, setSponsoredIds] = useState<Set<string>>(() => new Set());
+  // Gavelling Spotlight (src/lib/spotlight.ts): the Explore row, read once; the
+  // Region and Country rows, read for the filter in force. Booked rows only.
+  const [exploreSpots, setExploreSpots] = useState<FeaturedRow[]>([]);
+  const [regionSpots, setRegionSpots] = useState<{ key: string; rows: FeaturedRow[] }>({ key: '', rows: [] });
+  const [spotlightDialog, setSpotlightDialog] = useState<FeaturedRow[] | null>(null);
   const [dateFilter, setDateFilter] = useState<DateFilter>(initialQuery.when);
   const [dateFrom, setDateFrom] = useState(initialQuery.from);
   const [dateTo, setDateTo] = useState(initialQuery.to);
@@ -936,6 +962,16 @@ export default function ConferencesExploreClient() {
       setConferences(confs.map(c => withDelegatePrice(c, prices)));
       setLoading(false);
 
+      // Credit sponsored and the Explore Spotlight row, in the background.
+      void fetchCreditSponsoredIds().then(setSponsoredIds);
+      void fetchFeatured(supabase, 'explore', '').then(rows => {
+        const booked = rows.filter(r => r.is_spotlight);
+        setExploreSpots(booked);
+        // The Conference Spotlight pop-up, once per site visit, only when a
+        // booking is live today.
+        if (booked.length > 0 && claimSpotlightDialog()) setSpotlightDialog(booked);
+      });
+
       // One call for every listed id: which roles are open right now and the
       // approximate USD fee, for the Open Applications and Price filters. The
       // anon client, so a signed-out visitor gets the same answer. A failed
@@ -966,12 +1002,12 @@ export default function ConferencesExploreClient() {
     const next = writeExploreQuery({
       search: searchQuery, format: formatFilter, level: levelFilter,
       roles: [...roleFilter], price: priceFilter, when: dateFilter, from: dateFrom, to: dateTo,
-      sort: dateSort, continent, country,
+      sort: dateSort, continent, country, sponsored: sponsoredFilter,
     });
     const current = window.location.search;
     if (next === current) return;
     window.history.replaceState(window.history.state, '', window.location.pathname + next + window.location.hash);
-  }, [searchQuery, formatFilter, levelFilter, roleFilter, priceFilter, dateFilter, dateFrom, dateTo, dateSort, region]);
+  }, [searchQuery, formatFilter, levelFilter, roleFilter, priceFilter, dateFilter, dateFrom, dateTo, dateSort, region, sponsoredFilter]);
 
   // Visitor's country, /api/geo (Vercel edge headers), falling back to a
   // keyless IP lookup in local dev. Best-effort; null keeps region = ALL.
@@ -1132,8 +1168,9 @@ export default function ConferencesExploreClient() {
     if (!matchesPrice(facet, priceFilter)) return false;
     if (!matchesDateBucket(c.start_date, dateFilter)) return false;
     if (!matchesDateRange(c.start_date, dateFrom, dateTo)) return false;
+    if (sponsoredFilter && !sponsoredIds.has(c.id)) return false;
     return true;
-  }), [conferences, searchQuery, formatFilter, levelFilter, facets, roleFilter, priceFilter, dateFilter, dateFrom, dateTo]);
+  }), [conferences, searchQuery, formatFilter, levelFilter, facets, roleFilter, priceFilter, dateFilter, dateFrom, dateTo, sponsoredFilter, sponsoredIds]);
 
   // Countries actually represented in the results. Keyed by ISO identity so a
   // row saved as "Turkey" and one saved as "Türkiye" are one country, labelled
@@ -1187,13 +1224,42 @@ export default function ConferencesExploreClient() {
     return true;
   }), [preRegion, countryMode, userCountry, selectedCountryId, continentKey, continentIdentities]);
 
+  // The spotlight row in force: the country's Country Spotlight under a
+  // country filter, the continent's Region Spotlight under a continent, else
+  // the Explore Spotlight row. Booked rows only; read when the filter changes.
+  const spotTarget = selectedCountry ? `country:${selectedCountry.name}` : continentKey ? `region:${continentKey}` : '';
+  useEffect(() => {
+    if (!spotTarget) return;
+    let cancelled = false;
+    const colon = spotTarget.indexOf(':');
+    const placement = spotTarget.slice(0, colon) as 'region' | 'country';
+    const target = spotTarget.slice(colon + 1);
+    void fetchFeatured(supabase, placement, target).then(rows => {
+      if (!cancelled) setRegionSpots({ key: spotTarget, rows: rows.filter(r => r.is_spotlight) });
+    });
+    return () => { cancelled = true; };
+  }, [spotTarget]);
+  const spotlightRows = useMemo(() => (spotTarget ? (regionSpots.key === spotTarget ? regionSpots.rows : []) : exploreSpots), [spotTarget, regionSpots, exploreSpots]);
+  const spotlightById = useMemo(() => new Map(spotlightRows.map(r => [r.conference_id, r])), [spotlightRows]);
+
   const sorted = useMemo(() => {
     const copy = [...filtered];
     // Undated (TBD) conferences sort last in BOTH directions, and a null
     // start_date must never reach .localeCompare — see compareStartDate.
     copy.sort((a, b) => compareStartDate(a.start_date, b.start_date, dateSort === 'asc' ? 'asc' : 'desc'));
-    return copy;
-  }, [filtered, dateSort]);
+    // Spotlight conferences first, in the row's order; they still had to pass
+    // every filter above, or they are simply not here.
+    if (spotlightById.size === 0) return copy;
+    const first = spotlightRows.map(r => copy.find(c => c.id === r.conference_id)).filter((c): c is Conference => !!c);
+    const firstIds = new Set(first.map(c => c.id));
+    return [...first, ...copy.filter(c => !firstIds.has(c.id))];
+  }, [filtered, dateSort, spotlightRows, spotlightById]);
+
+  // One 'view' per session per spotlight booking that is on screen.
+  useEffect(() => {
+    const shown = new Set(sorted.map(c => c.id));
+    for (const r of spotlightRows) if (shown.has(r.conference_id)) recordSpotlightView(r.booking_id);
+  }, [sorted, spotlightRows]);
 
   // Country tab shows up to 4 local conferences prominently.
   const displayed = countryMode ? sorted.slice(0, 4) : sorted;
@@ -1224,6 +1290,7 @@ export default function ConferencesExploreClient() {
     setDateFilter('');
     setDateFrom('');
     setDateTo('');
+    setSponsoredFilter(false);
     setRegion('');
     setRegionTouched(true);
     setSearchQuery('');
@@ -1231,7 +1298,7 @@ export default function ConferencesExploreClient() {
 
   const hasActiveFilters =
     !!formatFilter || !!levelFilter || !!searchQuery || (!!region && region !== 'country')
-    || roleFilter.size > 0 || !!priceFilter || !!dateFilter || !!dateFrom || !!dateTo;
+    || roleFilter.size > 0 || !!priceFilter || !!dateFilter || !!dateFrom || !!dateTo || sponsoredFilter;
 
   const userCode = userCountry ? getCountryByName(userCountry)?.code : undefined;
 
@@ -1369,6 +1436,7 @@ export default function ConferencesExploreClient() {
               roleFilter={roleFilter} onToggleRole={toggleRole}
               facetsUnavailable={facetsFailed}
               priceFilter={priceFilter} onPrice={setPriceFilter}
+              sponsoredFilter={sponsoredFilter} onSponsored={setSponsoredFilter}
               dateFilter={dateFilter} onDate={setDateFilter}
               dateFrom={dateFrom} dateTo={dateTo} onDateFrom={setDateFrom} onDateTo={setDateTo}
               hasActiveFilters={hasActiveFilters} onClear={clearFilters}
@@ -1495,6 +1563,7 @@ export default function ConferencesExploreClient() {
                 <ConferenceListRow
                   key={conf.id}
                   conf={conf}
+                  creditSponsored={sponsoredIds.has(conf.id)}
                   applied={appliedIds.has(conf.id)}
                   member={isMember(conf)}
                   hovered={hoveredId === conf.id}
@@ -1505,19 +1574,24 @@ export default function ConferencesExploreClient() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" style={{ gap: '20px' }}>
-              {displayed.map(conf => (
-                <ConferenceCard
-                  key={conf.id}
-                  conf={conf}
-                  compact
-                  applied={appliedIds.has(conf.id)}
-                  member={isMember(conf)}
-                  hovered={hoveredId === conf.id}
-                  onHover={() => setHoveredId(conf.id)}
-                  onLeave={() => setHoveredId(null)}
-                  onClick={() => router.push(`/conferences/${conf.slug}`)}
-                />
-              ))}
+              {displayed.map(conf => {
+                const spot = spotlightById.get(conf.id);
+                return (
+                  <ConferenceCard
+                    key={conf.id}
+                    conf={conf}
+                    compact
+                    spotlight={!!spot}
+                    creditSponsored={sponsoredIds.has(conf.id)}
+                    applied={appliedIds.has(conf.id)}
+                    member={isMember(conf)}
+                    hovered={hoveredId === conf.id}
+                    onHover={() => setHoveredId(conf.id)}
+                    onLeave={() => setHoveredId(null)}
+                    onClick={() => { if (spot) recordSpotlightClick(spot.booking_id); router.push(`/conferences/${conf.slug}`); }}
+                  />
+                );
+              })}
             </div>
           )}
 
@@ -1591,6 +1665,7 @@ export default function ConferencesExploreClient() {
 
         <SiteFooter />
       </div>
+      {spotlightDialog && <ConferenceSpotlightDialog rows={spotlightDialog} onClose={() => setSpotlightDialog(null)} />}
     </div>
   );
 }

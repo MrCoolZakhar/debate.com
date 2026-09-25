@@ -10,6 +10,8 @@ import { useAuth } from '@/components/AuthProvider';
 import { notifyDraftsChanged } from '@/hooks/useDraftCount';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
+import { fetchConferenceCreditSponsored, creditSponsoredLine } from '@/lib/creditSponsored';
+import { CreditSponsoredMark } from '@/components/conferences/SpotlightTag';
 import { useCredits } from '@/hooks/useCredits';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
@@ -1091,6 +1093,15 @@ function ConferenceApplyInner() {
   // Whether the anticipated delegation's pool covers this credit. A boolean on
   // purpose: a member is only ever told "covered" or not, never a count.
   const [poolCovers, setPoolCovers] = useState(false);
+  // The conference's Store pays applicants' credit (conference_credit_sponsored).
+  const [creditSponsored, setCreditSponsored] = useState(false);
+  const sponsoredConfId = conference?.id ?? null;
+  useEffect(() => {
+    if (!sponsoredConfId) return;
+    let cancelled = false;
+    void fetchConferenceCreditSponsored(sponsoredConfId).then(v => { if (!cancelled) setCreditSponsored(v); });
+    return () => { cancelled = true; };
+  }, [sponsoredConfId]);
   const [recapOpen, setRecapOpen] = useState(false);
 
   /** Human copy for validate_voucher's machine reasons. */
@@ -5031,6 +5042,8 @@ function ConferenceApplyInner() {
       ? 'Included with your free trial'
       : hasUnlimited
       ? 'Included with Gavelling Unlimited ∞'
+      : creditSponsored
+      ? creditSponsoredLine(conference?.acronym || conference?.full_name || 'The conference')
       : poolCovered
       ? 'Your delegation covers your credit'
       : 'This application uses 1 Gavelling credit';
@@ -5206,12 +5219,15 @@ function ConferenceApplyInner() {
                 >
                   <Coins size={17} strokeWidth={2.2} style={{ color: 'var(--gv-on-main)' }} />
                 </span>
-                <p className="font-bold text-sm" style={{ color: 'var(--gv-on-surface)', fontFamily: OUTFIT }}>
-                  {costLabel}
-                </p>
+                <div className="min-w-0">
+                  {creditSponsored && !isExemptRole && !hasUnlimited && <CreditSponsoredMark size="sm" style={{ marginBottom: 2 }} />}
+                  <p className="font-bold text-sm" style={{ color: 'var(--gv-on-surface)', fontFamily: OUTFIT, margin: 0 }}>
+                    {costLabel}
+                  </p>
+                </div>
               </div>
 
-              {!isExemptRole && !hasUnlimited && !poolCovered && (
+              {!isExemptRole && !hasUnlimited && !poolCovered && !creditSponsored && (
                 <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
                   You have {creditBalanceLoading || creditBalance === null ? '–' : creditBalance} credit{creditBalance === 1 ? '' : 's'}.
                 </p>

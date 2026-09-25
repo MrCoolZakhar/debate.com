@@ -154,6 +154,8 @@ export interface ExploreQuery {
   from: string;
   to: string;
   sort: 'asc' | 'desc';
+  /** Only conferences whose Store pays applicants' credit (?sponsored=1). */
+  sponsored: boolean;
 }
 
 export function readExploreQuery(sp: { get(name: string): string | null }): ExploreQuery {
@@ -171,6 +173,7 @@ export function readExploreQuery(sp: { get(name: string): string | null }): Expl
     from: isDate(sp.get('from')) ? (sp.get('from') as string) : '',
     to: isDate(sp.get('to')) ? (sp.get('to') as string) : '',
     sort: sp.get('sort') === 'desc' ? 'desc' : 'asc',
+    sponsored: sp.get('sponsored') === '1',
   };
 }
 
@@ -189,6 +192,7 @@ export function writeExploreQuery(q: ExploreQuery & { continent?: string | null;
   if (q.from) p.set('from', q.from);
   if (q.to) p.set('to', q.to);
   if (q.sort === 'desc') p.set('sort', 'desc');
+  if (q.sponsored) p.set('sponsored', '1');
   const s = p.toString();
   return s ? `?${s}` : '';
 }

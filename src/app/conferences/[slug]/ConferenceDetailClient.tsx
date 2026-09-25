@@ -16,6 +16,8 @@ import DecorativeBleed from '@/components/DecorativeBleed';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
+import { fetchConferenceCreditSponsored, creditSponsoredLine } from '@/lib/creditSponsored';
+import { CreditSponsoredMark } from '@/components/conferences/SpotlightTag';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { effectiveSlotArt, parseGroups, type SlotGroup } from '@/lib/slotGroups';
 import { OrganizerPencil } from '@/components/OrganizerPencil';
@@ -1397,6 +1399,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   // Pricing details (and the role picker's prices) only once delegate
   // applications are set up (enabled), open now or opening later.
   const pricingVisible = heroPrice !== null && heroPrice.kind !== 'tbd' && enabledRoles.length > 0;
+  // "Credit sponsored": the conference's Store pays applicants' Gavelling
+  // credit (conference_credit_sponsored). Shown under the price medallion.
+  const [creditSponsored, setCreditSponsored] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void fetchConferenceCreditSponsored(conference.id).then(v => { if (!cancelled) setCreditSponsored(v); });
+    return () => { cancelled = true; };
+  }, [conference.id]);
 
   function getRoleWindowStatus(r: RoleConfig): 'open' | 'closed' | 'opens-soon' | 'open-always' {
     if (!r.applications_open_at && !r.applications_close_at) return 'open-always';
@@ -2614,6 +2624,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         PER DELEGATE
                       </span>
                     </div>
+                    {creditSponsored && (
+                      <div className="mt-3 flex flex-col items-center gap-1 text-center">
+                        <CreditSponsoredMark />
+                        <p style={{ margin: 0, fontFamily: "var(--font-brand), sans-serif", fontSize: '12.5px', lineHeight: 1.45, color: 'var(--gv-on-surface)' }}>
+                          {creditSponsoredLine(conference.acronym || conference.full_name)}
+                        </p>
+                      </div>
+                    )}
 
                     {pricingVisible && (<>
                     <button

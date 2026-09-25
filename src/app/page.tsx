@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_LOGO } from '@/lib/seo';
 import StagefrontClient from './conferences/StagefrontClient';
-import { fetchListedConferences, fetchPlatformStats } from '@/lib/listedConferences';
+import { fetchFeaturedHomepage, fetchListedConferences, fetchPlatformStats } from '@/lib/listedConferences';
 import { articles } from './blog/posts';
 import type { HomeGuide } from './conferences/landing-lab/HomeSections';
 import { listGuides } from '@/lib/premiumGuides';
@@ -108,9 +108,10 @@ const homeGuides: HomeGuide[] = premiumPick
   : blogGuides;
 
 export default async function HomePage() {
-  const [conferences, stats] = await Promise.all([
+  const [conferences, stats, featured] = await Promise.all([
     fetchListedConferences(),
     fetchPlatformStats(),
+    fetchFeaturedHomepage(),
   ]);
   return (
     <>
@@ -122,7 +123,7 @@ export default async function HomePage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
       />
-      <StagefrontClient conferences={conferences} stats={stats} guides={homeGuides} />
+      <StagefrontClient conferences={conferences} stats={stats} guides={homeGuides} featured={featured} />
     </>
   );
 }

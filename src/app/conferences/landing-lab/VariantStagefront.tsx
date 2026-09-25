@@ -44,6 +44,7 @@ import {
   CREAM, FOREST, GOLD, IVORY, PALE_GOLD, SANS,
   isConcluded, pickHeadliner,
 } from './shared';
+import { recordSpotlightClick, recordSpotlightView, type FeaturedRow } from '@/lib/spotlight';
 import { SessionsSection, AboutCards, LearnMunSection, type HomeGuide } from './HomeSections';
 
 // Ink-on-cream tokens for the light slabs.
@@ -123,28 +124,15 @@ function landingConfTitle(c: Pick<LabConference, 'acronym' | 'full_name' | 'star
   return base;
 }
 
-/** The conferences the front page leads with, in order.
- *
- *  Manual by design. Change this array to change the hero rail; nothing else
- *  needs touching. A slug that is not public, not found, or already concluded
- *  is skipped and the rail tops itself up (see upcomingTrio).
- *
- *  This list does NOT affect the SEO nav at the bottom of `/`, which still
- *  links every public conference. That list exists as the crawl path that got
- *  conference pages indexed in the first place, so curating it would orphan
- *  the ones left out. */
-const FEATURED_SLUGS = [
-  'harvard-worldmun-2027-2h45a',                                  // WorldMUN 2027
-  'stonehill-international-school-model-united-nations-ydkzm',    // SISMUN 2026
-  'tirta-model-united-nations-cq00g',                             // TIRTAMUN 2026 (replaced MUNKR, which ended 13 Sep and let SIMUN fill the slot)
-];
-
 export default function VariantStagefront({
   conferences,
   stats,
   guides = [],
+  featured = [],
 }: {
   conferences: LabConference[];
+  /** featured_conferences('homepage'): the hero's "up next" rail. */
+  featured?: FeaturedRow[];
   ratings: Record<string, RatingSummary>; // accepted for caller compatibility (season ledger removed)
   /** Platform-wide totals (all conferences, not just the published ones the
    *  cards are drawn from). Null until the RPC lands. */
@@ -190,36 +178,30 @@ export default function VariantStagefront({
     return () => { cancelled = true; };
   }, [authLoading, user, session]);
 
-  // The hero's "up next" rail is CURATED. Edit this list to change what the
-  // front page leads with; order here is the order on screen.
-  //
-  // It used to pick the three biggest upcoming conferences by expected
-  // delegate count, which put whoever typed the largest number on the front
-  // page whether or not they had set their conference up.
-  //
-  // Slugs, not acronyms: two live conferences share the acronym SIMUN, and a
-  // slug is the one identifier that cannot collide.
+  // The hero's "up next" rail comes from featured_conferences('homepage')
+  // (src/lib/spotlight.ts): today's booked Gavelling Spotlights first, then the
+  // empty slots filled with the upcoming conferences with the most accepted
+  // delegates. Read on the server (src/app/page.tsx), so the first paint does
+  // not jump. Each row is matched to the listed conference by id for its
+  // delegate price and delegate count; a row not in the list (a private one
+  // with a booking, say) is drawn from the row's own fields.
   const upcomingTrio = useMemo(() => {
-    const active = conferences.filter(c => !isConcluded(c));
-    const bySlug = new Map(active.map(c => [c.slug, c]));
+    const byId = new Map(conferences.map(c => [c.id, c]));
+    return featured.slice(0, 3).map(f => {
+      const listed = byId.get(f.conference_id);
+      const conf: LabConference = listed ?? {
+        id: f.conference_id, slug: f.slug, full_name: f.full_name ?? '', acronym: f.acronym ?? '',
+        city: f.city ?? '', country: f.country ?? '', start_date: f.start_date ?? '', end_date: f.end_date ?? '',
+        fee_amount: 0, fee_currency: 'USD', expected_delegates: 0, logo_url: f.logo_url, banner_url: f.banner_url,
+      };
+      return { conf, spotlight: !!f.is_spotlight, bookingId: f.booking_id };
+    });
+  }, [conferences, featured]);
 
-    const picked = FEATURED_SLUGS
-      .map(slug => bySlug.get(slug))
-      .filter((c): c is LabConference => !!c);
-
-    // Top up from the old heuristic rather than render a short or empty rail.
-    // This is not decoration: `isConcluded` drops a conference the day after
-    // it ends, so a hand-written list empties itself as its conferences run.
-    // Two of the three below finish this month. When that happens the rail
-    // quietly falls back to the biggest upcoming conferences instead of going
-    // blank, and the fix is to edit FEATURED_SLUGS.
-    if (picked.length >= 3) return picked.slice(0, 3);
-    const pickedIds = new Set(picked.map(c => c.id));
-    const filler = active
-      .filter(c => !pickedIds.has(c.id))
-      .sort((a, b) => (b.expected_delegates || 0) - (a.expected_delegates || 0));
-    return [...picked, ...filler].slice(0, 3);
-  }, [conferences]);
+  // One 'view' per browser session per spotlight booking shown here.
+  useEffect(() => {
+    for (const t of upcomingTrio) if (t.spotlight) recordSpotlightView(t.bookingId);
+  }, [upcomingTrio]);
 
   // ── Geolocation ────────────────────────────────────────────────────────────
   // /api/geo only: Vercel's IP-country header, first party. There is NO
@@ -407,22 +389,25 @@ export default function VariantStagefront({
                     gains room. Above lg the rail is overflow-visible and needs
                     neither. */}
                 <div className="sf-hero-rail flex flex-row lg:flex-col gap-3 lg:gap-2.5 overflow-x-auto lg:overflow-visible -mx-6 px-6 lg:mx-0 lg:px-0 pt-3 -mt-3 pb-2 lg:pt-0 lg:mt-0 lg:pb-0">
-                  {upcomingTrio.map(c => (
+                  {upcomingTrio.map(({ conf: c, spotlight, bookingId }) => (
                     <div
                       key={c.id}
                       className="w-[280px] lg:w-auto flex-shrink-0 lg:flex-shrink"
                       style={{ filter: 'drop-shadow(0 14px 30px rgba(0,0,0,0.40))', scrollSnapAlign: 'start' }}
                     >
+                      {/* A booked Spotlight wears the tag and the bright gold
+                          edge; a filled slot is today's plain card. */}
                       <ConferenceCard
                         conf={c}
                         heroCompact
-                        goldGlow
+                        goldGlow={spotlight}
+                        spotlight={spotlight}
                         applied={appliedIds.has(c.id)}
                         member={memberIds.has(c.id)}
                         hovered={hoveredId === c.id}
                         onHover={() => setHoveredId(c.id)}
                         onLeave={() => setHoveredId(null)}
-                        onClick={() => goTo(c.slug)}
+                        onClick={() => { if (spotlight) recordSpotlightClick(bookingId); goTo(c.slug); }}
                       />
                     </div>
                   ))}
