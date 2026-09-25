@@ -17,10 +17,10 @@ import { openCreditsPopup } from '@/lib/purchasePopup';
 import ActivityNotices from '@/components/profile/ActivityNotices';
 import { useMyActivity, useOpenSeenState, markActivitySeen, isVisibleActivity } from '@/lib/myActivity';
 
-// Five one-word items, in this order (owner, 25 Sep 2026): SESSIONS, CREATE,
-// EXPLORE, PRICING, HELP. Written in sentence case and set in capitals by CSS
-// (textTransform), at weight 800 (900 active) with light tracking (in Albert
-// Sans anything lighter than 800 reads too thin for the nav). No stacked
+// Five one-word items, in this order (owner, 25 Sep 2026): Sessions, Create,
+// Explore, Pricing, Help. Sentence case since the owner's taste boards (25 Sep
+// 2026: no tracked capitals; the active item is ink with a short forest
+// underline, Airbnb's category-rail manner, not a forest pill). No stacked
 // kicker words any more. CREATE is a plain link to /create, the chooser page
 // (a committee or a conference; since 25 Sep 2026 the session creator lives at
 // /create/sessions). Home, About us and Contact left the nav; the footer and
@@ -246,16 +246,15 @@ export default function SiteNav(props: SiteNavProps = {}) {
               whiteSpace: 'nowrap',
               minHeight: 44,
               padding: '8px clamp(10px, 1.1vw, 16px)',
-              fontSize: 'clamp(12px, 0.95vw, 13.5px)',
-              fontWeight: active ? 900 : 800,
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
+              fontSize: 'clamp(14px, 1.05vw, 15.5px)',
+              fontWeight: active ? 800 : 600,
+              letterSpacing: '0',
               fontFamily: "var(--font-brand), sans-serif",
-              color: active ? '#EED98A' : hl ? '#1B3828' : 'rgba(28, 20, 16, 0.55)',
+              color: active ? '#1C1410' : hl ? '#1C1410' : 'rgba(28, 20, 16, 0.62)',
               textDecoration: 'none',
               borderRadius: '9999px',
               transition: 'color 200ms cubic-bezier(0.22,1,0.36,1), background-color 200ms cubic-bezier(0.22,1,0.36,1), transform 200ms cubic-bezier(0.22,1,0.36,1)',
-              backgroundColor: active ? '#1B3828' : hl ? 'rgba(27, 56, 40, 0.06)' : 'transparent',
+              backgroundColor: hl && !active ? 'rgba(27, 56, 40, 0.06)' : 'transparent',
               transform: hl && !active ? 'translateY(-1px)' : 'translateY(0)',
               border: 'none',
               cursor: 'pointer',
@@ -265,12 +264,12 @@ export default function SiteNav(props: SiteNavProps = {}) {
             const underline = (
               <span aria-hidden style={{
                 position: 'absolute',
-                bottom: '6px',
-                left: '14px',
-                right: '14px',
-                height: '1px',
-                backgroundColor: '#B6871F',
-                transform: hl && !active ? 'scaleX(1)' : 'scaleX(0)',
+                bottom: '5px',
+                left: '30%',
+                right: '30%',
+                height: '2px',
+                backgroundColor: '#1B3828',
+                transform: active ? 'scaleX(1)' : 'scaleX(0)',
                 transformOrigin: 'left',
                 transition: 'transform 200ms ease',
                 borderRadius: '2px',
@@ -445,19 +444,19 @@ export default function SiteNav(props: SiteNavProps = {}) {
           ) : (
             /* Signed-out: SIGN IN only */
             <AuthLink
-              className="font-bold transition-colors focus:outline-none"
+              className="inline-flex items-center justify-center transition-[filter] hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A] focus-visible:ring-offset-2"
               style={{
-                color: overlay ? '#EDE7D8' : '#1B3828',
-                fontSize: '13.5px',
-                fontWeight: 800,
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase',
+                color: '#FFFFFF',
+                background: 'linear-gradient(90deg, #1B3828 0%, #2A5A3C 55%, #1E4A31 100%)',
+                height: 42,
+                padding: '0 20px',
+                borderRadius: 10,
+                fontSize: '15px',
+                fontWeight: 700,
                 fontFamily: "var(--font-brand), sans-serif",
                 textDecoration: 'none',
-                textShadow: overlay ? '0 1px 4px rgba(0,0,0,0.35)' : undefined,
+                boxShadow: overlay ? '0 6px 18px rgba(0,0,0,0.28)' : '0 6px 16px rgba(27,56,40,0.18)',
               }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
             >
               Sign in
             </AuthLink>
@@ -528,15 +527,13 @@ export default function SiteNav(props: SiteNavProps = {}) {
               width: '100%',
               minHeight: 44,
               padding: '12px 16px',
-              fontSize: '14.5px',
-              fontWeight: active ? 900 : 800,
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-              color: active ? '#1B3828' : 'rgba(28, 20, 16, 0.65)',
+              fontSize: '16px',
+              fontWeight: active ? 800 : 600,
+              color: active ? '#1C1410' : 'rgba(28, 20, 16, 0.7)',
               textDecoration: 'none',
               borderRadius: '10px',
               backgroundColor: active ? 'rgba(27, 56, 40, 0.07)' : 'transparent',
-              borderLeft: active ? '3px solid #B6871F' : '3px solid transparent',
+              borderLeft: active ? '3px solid #1B3828' : '3px solid transparent',
               transition: 'color 150ms ease, background-color 150ms ease, border-left-color 150ms ease',
               fontFamily: "var(--font-brand), sans-serif",
               textAlign: 'start',
@@ -632,7 +629,7 @@ export default function SiteNav(props: SiteNavProps = {}) {
                 <span style={{ fontSize: '13px', fontWeight: 800, color: '#1B3828', fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums' }}>
                   {creditsLoading || creditBalance === null ? '–' : creditBalance}
                 </span>
-                <span className="truncate" style={{ marginLeft: 'auto', fontSize: '12px', fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>
+                <span style={{ marginLeft: 'auto', fontSize: '14px', fontWeight: 700, color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>
                   Buy credits
                 </span>
                 <span
@@ -658,10 +655,8 @@ export default function SiteNav(props: SiteNavProps = {}) {
                   display: 'block',
                   width: '100%',
                   padding: '13px 16px',
-                  fontSize: '14px',
-                  fontWeight: 800,
-                  letterSpacing: '0.04em',
-                  textTransform: 'uppercase',
+                  fontSize: '15px',
+                  fontWeight: 700,
                   color: '#8B2020',
                   backgroundColor: 'rgba(139, 32, 32, 0.08)',
                   border: '1px solid rgba(139, 32, 32, 0.2)',
@@ -680,13 +675,11 @@ export default function SiteNav(props: SiteNavProps = {}) {
               style={{
                 display: 'block',
                 padding: '13px 16px',
-                fontSize: '14px',
-                fontWeight: 800,
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase',
-                color: '#1B3828',
-                backgroundColor: 'rgba(27, 56, 40, 0.07)',
-                border: '1.5px solid rgba(27, 56, 40, 0.25)',
+                fontSize: '15px',
+                fontWeight: 700,
+                color: '#FFFFFF',
+                background: 'linear-gradient(90deg, #1B3828 0%, #2A5A3C 55%, #1E4A31 100%)',
+                border: 'none',
                 borderRadius: '10px',
                 textAlign: 'center',
                 textDecoration: 'none',

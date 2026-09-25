@@ -27,7 +27,7 @@ import { Lock, ArrowRight, BookOpen, Clock, GraduationCap, Landmark, MonitorSmar
 import { CardPhoto } from '@/components/blog/BlogPhoto';
 import type { PhotoId } from '@/components/blog/photos';
 import { GoldWord } from '@/components/BrandHeading';
-import { CREAM, FOREST, GOLD, IVORY, PALE_GOLD, SANS } from './shared';
+import { CREAM, FOREST, GOLD, PALE_GOLD, SANS } from './shared';
 
 const INK = '#1C1410';
 const INK_70 = '#4A4238';
@@ -114,7 +114,10 @@ export function SessionsSection() {
           .hs-sess-join-box { flex: 1; }
           .hs-sess-join-box input { flex: 1; min-width: 0; width: auto; }
         }
+        /* Desktop: the phone hangs a little over the hero's bottom edge (owner,
+           25 Sep 2026: "the phone hanging over ever so slightly"). */
         @media (min-width: 1024px) {
+          .hs-sess { z-index: 2; }
           .hs-sess-stage {
             display: grid; align-items: center; gap: 0;
             grid-template-columns: minmax(0, 1.05fr) minmax(380px, 480px) minmax(0, 0.62fr); max-width: 1440px; margin: 0 auto; padding: 0 clamp(16px, 3vw, 48px);
@@ -127,7 +130,7 @@ export function SessionsSection() {
           .hs-sess-copy { grid-column: 2; grid-row: 1; padding: 0 12px; max-width: none; }
           .hs-sess-phone {
             grid-column: 3; grid-row: 1; position: relative; right: auto; bottom: auto;
-            width: min(92%, 330px); margin: 40px 0 0 clamp(0px, 3vw - 24px, 32px); transform: rotate(6deg);
+            width: min(92%, 330px); margin: clamp(-110px, -6vw, -60px) 0 0 clamp(0px, 3vw - 24px, 32px); transform: rotate(6deg); align-self: start;
           }
         }
       `}</style>
@@ -199,137 +202,77 @@ export function SessionsSection() {
 // ── 2. What is Model UN? + What is Gavelling? ───────────────────────────────
 
 export function AboutCards() {
+  // Half the text it had, and plain white cards with a soft forest-tinted
+  // shadow (owner, 25 Sep 2026: "very text heavy, reduce by 50%", "cards don't
+  // follow design rule"). No raised 3D card, no ivory card, no eyebrow.
   const card: React.CSSProperties = {
     borderRadius: 20,
-    padding: 'clamp(22px, 2vw, 32px)',
+    padding: 'clamp(22px, 2vw, 30px)',
+    backgroundColor: '#FFFFFF',
+    boxShadow: '0 0 0 1px rgba(27,56,40,0.07), 0 14px 32px rgba(27,56,40,0.09)',
   };
+  const h2: React.CSSProperties = { fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(22px, 2vw, 30px)', lineHeight: 1.1, letterSpacing: '-0.02em', color: INK, margin: 0 };
+  const lead: React.CSSProperties = { fontFamily: SANS, fontSize: '15px', lineHeight: 1.6, color: INK_70, margin: '10px 0 0 0' };
+  const term: React.CSSProperties = { fontFamily: SANS, fontWeight: 800, fontSize: '15px', color: INK };
+  const desc: React.CSSProperties = { fontFamily: SANS, fontSize: '13.5px', lineHeight: 1.5, color: INK_70, margin: '2px 0 0 0' };
   return (
     <section
       className="px-5 md:px-14"
       style={{ backgroundColor: CREAM, paddingTop: 'clamp(40px, 4vw, 64px)', paddingBottom: 'clamp(40px, 4vw, 64px)' }}
     >
       <div className="mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5" style={{ maxWidth: '1280px' }}>
-        {/* "What is Model UN?", the SEO explainer. Text and headings unchanged. */}
-        <article
-          style={{ ...card, backgroundColor: CARD, boxShadow: '0 1px 0 rgba(255,255,255,0.8) inset, 0 0 0 1px rgba(27,56,40,0.07), 0 24px 50px rgba(27,56,40,0.10)' }}
-        >
-          <p style={eyebrow}>New to the circuit?</p>
-          <h2
-            style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(22px, 2vw, 30px)', lineHeight: 1.1, letterSpacing: '-0.02em', color: INK, margin: 0 }}
-          >
-            What is Model United Nations?
-          </h2>
-          <p style={{ fontFamily: SANS, fontSize: '15px', lineHeight: 1.6, color: INK_70, margin: '12px 0 0 0' }}>
-            Model United Nations, or <strong style={{ color: INK }}>MUN</strong>, is an academic
-            simulation of the real United Nations. Students step into the shoes of diplomats,
-            each representing a country, and debate the world&rsquo;s biggest challenges, from
-            climate change to global security, in committees modelled on the UN&rsquo;s own.
-            It&rsquo;s part debate, part public speaking, part teamwork, and one of the best ways
-            to sharpen the skills that carry into university and beyond.
+        {/* "What is Model UN?", the SEO explainer. */}
+        <article style={card}>
+          <h2 style={h2}>What is Model United Nations?</h2>
+          <p style={lead}>
+            Model United Nations, or <strong style={{ color: INK }}>MUN</strong>, is a simulation of
+            the real UN. Students represent countries, debate world issues and write
+            <strong style={{ color: INK }}> resolutions</strong> together. No experience needed.
           </p>
-          <p style={{ fontFamily: SANS, fontSize: '15px', lineHeight: 1.6, color: INK_70, margin: '10px 0 0 0' }}>
-            At a conference, delegates research their country&rsquo;s position, deliver speeches,
-            negotiate with allies and rivals, and work together to draft <strong style={{ color: INK }}>resolutions</strong>:
-            the written proposals a committee votes on. A chairperson keeps the debate flowing,
-            and awards recognise the delegates who lead the room. No experience is needed to
-            start: everyone gives their first speech eventually.
-          </p>
-
-          <h3 style={{ fontFamily: SANS, fontWeight: 800, fontSize: '17px', letterSpacing: '-0.01em', color: FOREST, margin: '18px 0 10px 0' }}>
-            How a Model UN conference works
-          </h3>
-          <ul className="grid grid-cols-1 sm:grid-cols-2" style={{ listStyle: 'none', margin: 0, padding: 0, gap: '8px 18px' }}>
+          <ul className="grid grid-cols-1 sm:grid-cols-2" style={{ listStyle: 'none', margin: '16px 0 0 0', padding: 0, gap: '12px 18px' }}>
             {[
-              ['Pick a committee', 'Conferences run committees: the Security Council, historical crises, specialised agencies and more, each with its own topic and pace.'],
-              ['Represent a country', 'You’re assigned a country (or a character) and speak, vote and negotiate on its behalf throughout the weekend.'],
-              ['Debate and negotiate', 'Delegates make speeches, form blocs, and hammer out compromises through moderated and unmoderated caucuses.'],
-              ['Draft resolutions', 'Working together, committees write and amend resolutions, then vote: the heart of every MUN session.'],
-            ].map(([term, desc]) => (
-              <li key={term} className="flex items-start gap-2.5">
-                <span
-                  aria-hidden="true"
-                  className="flex-shrink-0"
-                  style={{ width: 7, height: 7, marginTop: 8, borderRadius: 9999, backgroundColor: GOLD, boxShadow: '0 0 0 4px rgba(184,148,58,0.16)' }}
-                />
-                <p style={{ fontFamily: SANS, fontSize: '14px', lineHeight: 1.5, color: INK_70, margin: 0 }}>
-                  <strong style={{ color: INK }}>{term}.</strong>{' '}{desc}
-                </p>
+              ['Pick a committee', 'From the Security Council to a historical crisis'],
+              ['Represent a country', 'Speak, vote and negotiate on its behalf'],
+              ['Debate and negotiate', 'Speeches, blocs and caucuses'],
+              ['Draft resolutions', 'Write them together, then vote'],
+            ].map(([t, d]) => (
+              <li key={t} className="flex items-start gap-2.5">
+                <span aria-hidden="true" className="flex-shrink-0" style={{ width: 7, height: 7, marginTop: 8, borderRadius: 9999, backgroundColor: GOLD }} />
+                <div>
+                  <div style={term}>{t}</div>
+                  <p style={desc}>{d}</p>
+                </div>
               </li>
             ))}
           </ul>
-
         </article>
 
         {/* "What is Gavelling?" */}
-        <article
-          className="relative flex flex-col overflow-hidden"
-          style={{ ...card, backgroundColor: IVORY, boxShadow: '0 0 0 1px rgba(27,56,40,0.08), 0 24px 50px rgba(27,56,40,0.10)' }}
-        >
-          {/* The Gavelling mark, large and faint in the corner. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/gavelling-mark.png"
-            alt=""
-            aria-hidden="true"
-            width={512}
-            height={512}
-            loading="lazy"
-            className="pointer-events-none absolute"
-            style={{ width: 'min(50%, 220px)', height: 'auto', right: '-6%', bottom: '-12%', opacity: 0.06 }}
-          />
-          <p style={eyebrow}>The platform</p>
-          <h2
-            style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(22px, 2vw, 30px)', lineHeight: 1.1, letterSpacing: '-0.02em', color: INK, margin: 0 }}
-          >
-            What is Gavelling?
-          </h2>
-          <p style={{ fontFamily: SANS, fontSize: '15px', lineHeight: 1.6, color: INK_70, margin: '12px 0 0 0' }}>
-            Gavelling is free software for Model UN, built for the people in the room.
-          </p>
-          <dl className="relative grid grid-cols-1 sm:grid-cols-2" style={{ margin: '16px 0 0 0', gap: '12px 18px' }}>
+        <article className="flex flex-col" style={card}>
+          <h2 style={h2}>What is Gavelling?</h2>
+          <p style={lead}>Free software for Model UN, built for the people in the room.</p>
+          <dl className="grid grid-cols-1 sm:grid-cols-2" style={{ margin: '16px 0 0 0', gap: '12px 18px' }}>
             {[
-              { icon: MonitorSmartphone, term: 'Sessions', desc: 'Runs a committee live. The chair works from a laptop and delegates follow on their phones. Free, and no account needed.' },
-              { icon: Landmark, term: 'Conferences', desc: 'Gives a secretariat applications, allocations, payments and the live status of every room. Free for organisers.' },
-              { icon: BookOpen, term: 'Your MUN CV', desc: 'Every conference you attend on Gavelling goes on a CV you can share, verified by the conference.' },
-              { icon: GraduationCap, term: 'Learn MUN', desc: 'Guides on position papers, speeches, rules of procedure and resolutions, written for a first conference and a tenth.' },
-            ].map(({ icon: Icon, term, desc }) => (
-              <div key={term} className="flex items-start gap-2.5">
-                <span
-                  aria-hidden="true"
-                  className="flex flex-shrink-0 items-center justify-center rounded-full"
-                  style={{ width: 30, height: 30, backgroundColor: PALE_GOLD, color: FOREST, boxShadow: 'inset 0 0 0 1.5px rgba(27,56,40,0.18)' }}
-                >
+              { icon: MonitorSmartphone, t: 'Sessions', d: 'Run a committee live, free, no account' },
+              { icon: Landmark, t: 'Conferences', d: 'Applications, allocations and payments' },
+              { icon: BookOpen, t: 'Your MUN CV', d: 'Every conference, verified and shareable' },
+              { icon: GraduationCap, t: 'Learn MUN', d: 'Guides for your first conference and your tenth' },
+            ].map(({ icon: Icon, t, d }) => (
+              <div key={t} className="flex items-start gap-2.5">
+                <span aria-hidden="true" className="flex flex-shrink-0 items-center justify-center rounded-full" style={{ width: 30, height: 30, backgroundColor: PALE_GOLD, color: FOREST, boxShadow: 'inset 0 0 0 1.5px rgba(27,56,40,0.18)' }}>
                   <Icon size={15} strokeWidth={2.2} />
                 </span>
                 <div>
-                  <dt style={{ fontFamily: SANS, fontWeight: 800, fontSize: '15px', color: INK }}>{term}</dt>
-                  <dd style={{ fontFamily: SANS, fontSize: '13.5px', lineHeight: 1.5, color: INK_70, margin: '2px 0 0 0' }}>{desc}</dd>
+                  <dt style={term}>{t}</dt>
+                  <dd style={desc}>{d}</dd>
                 </div>
               </div>
             ))}
           </dl>
-          <div className="relative mt-auto flex flex-wrap items-center gap-x-6 gap-y-3" style={{ paddingTop: '18px' }}>
-            <Link
-              href="/sessions"
-              className="inline-flex min-h-11 items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded"
-              style={{ ...textLink, fontSize: '15px', color: FOREST }}
-            >
-              Sessions <ArrowRight size={15} strokeWidth={2.5} aria-hidden="true" />
-            </Link>
-            <Link
-              href="/organisers"
-              className="inline-flex min-h-11 items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded"
-              style={{ ...textLink, fontSize: '15px', color: FOREST }}
-            >
-              For organisers <ArrowRight size={15} strokeWidth={2.5} aria-hidden="true" />
-            </Link>
-            <Link
-              href="/blog"
-              className="inline-flex min-h-11 items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded"
-              style={{ ...textLink, fontSize: '15px', color: FOREST }}
-            >
-              Learn MUN <ArrowRight size={15} strokeWidth={2.5} aria-hidden="true" />
-            </Link>
+          <div className="mt-auto flex flex-wrap items-center gap-x-6 gap-y-2" style={{ paddingTop: '16px' }}>
+            <Link href="/sessions" className="inline-flex min-h-11 items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded" style={{ ...textLink, fontSize: '15px', color: FOREST }}>Sessions</Link>
+            <Link href="/organisers" className="inline-flex min-h-11 items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded" style={{ ...textLink, fontSize: '15px', color: FOREST }}>For organisers</Link>
+            <Link href="/blog" className="inline-flex min-h-11 items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded" style={{ ...textLink, fontSize: '15px', color: FOREST }}>Learn MUN</Link>
           </div>
         </article>
       </div>
