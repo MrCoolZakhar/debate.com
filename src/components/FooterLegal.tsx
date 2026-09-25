@@ -21,10 +21,12 @@ import { companyLegalLines, TRADING_NAME } from '@/lib/companyDetails';
 type Tone = 'ivory' | 'forest';
 
 const TONE = {
+  // Links were a light taupe the owner could not read (25 Sep 2026): now a
+  // dark ink, forest and underlined on hover and focus.
   ivory: {
-    text: '#9A8A78',
+    text: '#5A5046',
     rule: '#DDD4C0',
-    link: 'text-[#9A8A78] hover:text-[#1B3828] transition-colors',
+    link: 'text-[#2B241E] font-semibold hover:text-[#1B3828] hover:underline focus-visible:underline underline-offset-[3px] transition-colors',
   },
   forest: {
     text: 'rgba(238,217,138,0.45)',
@@ -102,7 +104,15 @@ export default function FooterLegal({
         </Link>
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
         <Link href="/help" className={hubLink}>
-          Help center
+          Help
+        </Link>
+        <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
+        <Link href="/contact" className={hubLink}>
+          Contact
+        </Link>
+        <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
+        <Link href="/about" className={hubLink}>
+          About Gavelling
         </Link>
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
         {/* The session tools, a plain server-rendered way in to both from

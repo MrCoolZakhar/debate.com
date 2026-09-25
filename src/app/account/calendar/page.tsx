@@ -245,7 +245,7 @@ export default function CalendarPage() {
             onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#1B3828'; }}
           >
             <Compass size={15} strokeWidth={2.2} />
-            Explore the directory
+            EXPLORE THE DIRECTORY
           </Link>
         </div>
       ) : (

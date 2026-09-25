@@ -1,23 +1,32 @@
+'use client';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Homepage sections added 24 Sep 2026 (owner's brief), mounted by
 // VariantStagefront.tsx. Kept in their own file so the big composition stays a
 // thin list of sections.
 //
-//   SessionsSection   second on the page: laptop | "Start a session" | phone
-//   AboutCards        "What is Model United Nations?" (the SEO explainer, text
-//                     unchanged) beside "What is Gavelling?"
-//   LearnMunSection   six evergreen guides from src/app/blog/posts.ts, each a
-//                     real <a href="/blog/<slug>"> in the server HTML
+//   SessionsSection   second on the page: laptop | "Run the room" | phone, with
+//                     START COMMITTEE and the join-with-a-code field the
+//                     sessions landing hero has (25 Sep 2026)
+//   LearnMunSection   third on the page: six evergreen guides from
+//                     src/app/blog/posts.ts on a FOREST band (owner, 25 Sep
+//                     2026), each a real <a href="/blog/<slug>"> in the HTML
+//   AboutCards        last before the footer: "What is Model United Nations?"
+//                     (the SEO explainer, text unchanged) beside "What is
+//                     Gavelling?"
 //
-// No hooks, no state: everything here renders on the server with the page.
-// Light grounds only (owner: never a full-width green band on a landing page).
+// Client module only for the code field's state and router; everything else
+// is static markup that still renders on the server with the page.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowRight, BookOpen, Check, Clock, Landmark, MonitorSmartphone } from 'lucide-react';
+import { ArrowRight, BookOpen, Clock, GraduationCap, Landmark, MonitorSmartphone } from 'lucide-react';
 import { CardPhoto } from '@/components/blog/BlogPhoto';
 import type { PhotoId } from '@/components/blog/photos';
+import { GoldWord } from '@/components/BrandHeading';
 import { CREAM, FOREST, GOLD, IVORY, PALE_GOLD, SANS } from './shared';
 
 const INK = '#1C1410';
@@ -25,16 +34,31 @@ const INK_70 = '#4A4238';
 const INK_55 = '#6B5F52';
 const HAIR = '#DDD4C0';
 const CARD = '#FFFDF8';
-const PLAYFAIR = "'Playfair Display', serif";
 
 const eyebrow: React.CSSProperties = {
   fontFamily: SANS, fontWeight: 700, fontSize: 'clamp(12px, 0.8vw, 14px)', letterSpacing: '0.14em',
   textTransform: 'uppercase', color: GOLD, margin: '0 0 10px 0',
 };
 
+// Every text link on the page is bold and underlined (owner, 25 Sep 2026).
+const textLink: React.CSSProperties = {
+  fontFamily: SANS, fontWeight: 800, textDecoration: 'underline', textUnderlineOffset: '4px', textDecorationThickness: '1.5px',
+};
+
 // ── 1. Running a committee ──────────────────────────────────────────────────
 
 export function SessionsSection() {
+  const router = useRouter();
+  const [code, setCode] = useState('');
+
+  // Enter or JOIN: straight to the join page with the code. /join itself
+  // recognises a chair code (CODE-1234) and opens the chair tab.
+  const join = () => {
+    const c = code.trim().toUpperCase();
+    if (!c) return;
+    router.push('/join?code=' + encodeURIComponent(c));
+  };
+
   return (
     <section className="hs-sess" aria-labelledby="hs-sess-heading" style={{ backgroundColor: CREAM }}>
       <style>{`
@@ -53,10 +77,43 @@ export function SessionsSection() {
           transform: rotate(5deg); filter: drop-shadow(0 24px 34px rgba(27,56,40,0.28));
         }
         .hs-sess-laptop img, .hs-sess-phone img { display: block; width: 100%; height: auto; }
-        .hs-sess-cta { transition: transform 180ms ease, background-color 180ms ease, box-shadow 180ms ease; }
-        .hs-sess-cta:hover { transform: translateY(-2px); background-color: #2A5A3C !important; box-shadow: 0 20px 38px rgba(27,56,40,0.30) !important; }
+        .hs-sess-cta {
+          display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 60px;
+          padding: 0 clamp(30px, 2.4vw, 42px); border: 0; border-radius: 9999px; cursor: pointer;
+          background: ${FOREST}; color: ${PALE_GOLD}; box-shadow: 0 16px 32px rgba(27,56,40,0.24);
+          font: 800 clamp(15px, 1.1vw, 17px)/1 ${SANS}; letter-spacing: 0.08em; text-transform: uppercase;
+          transition: transform 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
+        }
+        .hs-sess-cta:hover { transform: translateY(-2px); background-color: #2A5A3C; box-shadow: 0 20px 38px rgba(27,56,40,0.30); }
         .hs-sess-cta:active { transform: scale(0.97); }
-        .hs-sess-join:hover { color: ${FOREST} !important; text-decoration-color: ${FOREST} !important; }
+        .hs-sess-cta:focus { outline: none; }
+        .hs-sess-cta:focus-visible { outline: 2px solid ${GOLD}; outline-offset: 3px; }
+        /* The join field, the sessions landing hero's sl-join-box. */
+        .hs-sess-join { display: flex; justify-content: center; width: 100%; margin-top: 14px; }
+        .hs-sess-join-box {
+          display: inline-flex; align-items: center; height: 48px; padding: 0 4px 0 18px; border-radius: 9999px;
+          background: rgba(255,255,255,0.85); box-shadow: inset 0 0 0 1.5px ${HAIR};
+        }
+        .hs-sess-join-box:focus-within { box-shadow: inset 0 0 0 1.5px ${FOREST}; }
+        .hs-sess-join-box input {
+          width: 148px; border: 0; background: transparent; outline: none;
+          font: 700 16px/1 ${SANS}; letter-spacing: 0.1em; text-transform: uppercase; color: ${INK};
+        }
+        .hs-sess-join-box input::placeholder { letter-spacing: 0; text-transform: none; font-weight: 500; color: ${INK_55}; }
+        .hs-sess-join-box button {
+          height: 40px; min-width: 44px; padding: 0 18px; border: 0; border-radius: 9999px; cursor: pointer;
+          background: ${FOREST}; color: ${PALE_GOLD}; font: 800 13.5px/1 ${SANS}; letter-spacing: 0.08em; text-transform: uppercase;
+          transition: background-color 160ms ease;
+        }
+        .hs-sess-join-box button:hover { background: #2A5A3C; }
+        .hs-sess-join-box button:disabled { background: #D8CDB6; color: ${INK_55}; cursor: default; }
+        .hs-sess-join-box button:focus { outline: none; }
+        .hs-sess-join-box button:focus-visible { outline: 2px solid ${GOLD}; outline-offset: 2px; }
+        @media (max-width: 479px) {
+          .hs-sess-cta { width: 100%; }
+          .hs-sess-join-box { flex: 1; }
+          .hs-sess-join-box input { flex: 1; min-width: 0; width: auto; }
+        }
         @media (min-width: 1024px) {
           .hs-sess-stage {
             display: grid; align-items: center; gap: 0;
@@ -82,42 +139,36 @@ export function SessionsSection() {
           </p>
           <h2
             id="hs-sess-heading"
-            style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(32px, 3.4vw, 56px)', lineHeight: 1.02, letterSpacing: '-0.02em', color: INK, margin: 0, textWrap: 'balance' }}
+            style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(35px, 3.75vw, 62px)', lineHeight: 1.02, letterSpacing: '-0.02em', color: INK, margin: 0, textWrap: 'balance' }}
           >
-            Run the{' '}
-            <span style={{ fontFamily: PLAYFAIR, fontStyle: 'italic', fontWeight: 400, color: GOLD }}>room</span>{' '}
-            from one laptop.
+            Run the <GoldWord>room</GoldWord>
           </h2>
-          <p style={{ fontFamily: SANS, fontSize: 'clamp(15px, 1.1vw, 18px)', lineHeight: 1.6, color: INK_70, margin: '18px auto 0', maxWidth: '420px', textWrap: 'pretty' }}>
-            The chair runs roll call, the speakers list, motions and votes from a laptop. Delegates follow and ask for the floor on their phones.
+          <p style={{ fontFamily: SANS, fontSize: 'clamp(16px, 1.15vw, 19px)', lineHeight: 1.5, color: INK_70, margin: '14px auto 0', maxWidth: '420px', textWrap: 'balance' }}>
+            From roll call to the final vote
           </p>
-          <div className="flex flex-col items-center gap-4" style={{ marginTop: '30px' }}>
-            <Link
-              href="/create"
-              className="hs-sess-cta inline-flex items-center justify-center gap-3 focus:outline-none"
-              style={{
-                fontFamily: SANS, fontSize: 'clamp(16px, 1.15vw, 19px)', fontWeight: 800, letterSpacing: '0.01em',
-                color: PALE_GOLD, backgroundColor: FOREST, padding: 'clamp(16px, 1.2vw, 20px) clamp(30px, 2.4vw, 42px)',
-                borderRadius: '9999px', textDecoration: 'none', boxShadow: '0 16px 32px rgba(27,56,40,0.24)',
-              }}
-            >
-              Start a session <ArrowRight size={19} strokeWidth={2.5} aria-hidden="true" />
-            </Link>
-            <Link
-              href="/join"
-              className="hs-sess-join focus:outline-none"
-              style={{ fontFamily: SANS, fontSize: '14.5px', fontWeight: 700, color: INK_55, textDecoration: 'underline', textDecorationColor: HAIR, textUnderlineOffset: '4px' }}
-            >
-              Join with a code
-            </Link>
+          <div className="flex flex-col items-center" style={{ marginTop: '30px' }}>
+            <button type="button" onClick={() => router.push('/create')} className="hs-sess-cta">
+              START COMMITTEE <ArrowRight size={19} strokeWidth={2.5} aria-hidden="true" />
+            </button>
+            <form className="hs-sess-join" onSubmit={(e) => { e.preventDefault(); join(); }}>
+              <span className="hs-sess-join-box">
+                <input
+                  id="hs-sess-code"
+                  aria-label="Session code"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  placeholder="Session code"
+                  maxLength={12}
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <button type="submit" disabled={code.trim().length === 0}>
+                  JOIN
+                </button>
+              </span>
+            </form>
           </div>
-          <ul className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2" style={{ listStyle: 'none', padding: 0, margin: '26px 0 0 0' }}>
-            {['Free forever', 'No account', 'Any phone'].map(t => (
-              <li key={t} className="inline-flex items-center gap-1.5" style={{ fontFamily: SANS, fontSize: '13px', fontWeight: 600, color: INK_55 }}>
-                <Check size={14} strokeWidth={2.75} style={{ color: FOREST }} aria-hidden="true" /> {t}
-              </li>
-            ))}
-          </ul>
         </div>
 
         <div className="hs-sess-devices">
@@ -245,6 +296,7 @@ export function AboutCards() {
               { icon: MonitorSmartphone, term: 'Sessions', desc: 'Runs a committee live. The chair works from a laptop and delegates follow on their phones. Free, and no account needed.' },
               { icon: Landmark, term: 'Conferences', desc: 'Gives a secretariat applications, allocations, payments and the live status of every room. Free for organisers.' },
               { icon: BookOpen, term: 'Your MUN CV', desc: 'Every conference you attend on Gavelling goes on a CV you can share, verified by the conference.' },
+              { icon: GraduationCap, term: 'Learn MUN', desc: 'Guides on position papers, speeches, rules of procedure and resolutions, written for a first conference and a tenth.' },
             ].map(({ icon: Icon, term, desc }) => (
               <div key={term} className="flex items-start gap-3.5">
                 <span
@@ -264,17 +316,24 @@ export function AboutCards() {
           <div className="relative mt-auto flex flex-wrap items-center gap-x-6 gap-y-3" style={{ paddingTop: 'clamp(28px, 2.6vw, 40px)' }}>
             <Link
               href="/sessions"
-              className="inline-flex items-center gap-1.5 focus:outline-none"
-              style={{ fontFamily: SANS, fontSize: '15px', fontWeight: 800, color: FOREST, textDecoration: 'none' }}
+              className="inline-flex min-h-11 items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded"
+              style={{ ...textLink, fontSize: '15px', color: FOREST }}
             >
               Sessions <ArrowRight size={15} strokeWidth={2.5} aria-hidden="true" />
             </Link>
             <Link
               href="/organisers"
-              className="inline-flex items-center gap-1.5 focus:outline-none"
-              style={{ fontFamily: SANS, fontSize: '15px', fontWeight: 800, color: FOREST, textDecoration: 'none' }}
+              className="inline-flex min-h-11 items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded"
+              style={{ ...textLink, fontSize: '15px', color: FOREST }}
             >
               For organisers <ArrowRight size={15} strokeWidth={2.5} aria-hidden="true" />
+            </Link>
+            <Link
+              href="/blog"
+              className="inline-flex min-h-11 items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded"
+              style={{ ...textLink, fontSize: '15px', color: FOREST }}
+            >
+              Learn MUN <ArrowRight size={15} strokeWidth={2.5} aria-hidden="true" />
             </Link>
           </div>
         </article>
@@ -283,7 +342,7 @@ export function AboutCards() {
   );
 }
 
-// ── 3. Learn MUN (the blog) ─────────────────────────────────────────────────
+// ── 3. Learn MUN (the blog), on forest ──────────────────────────────────────
 
 /** A guide as the homepage needs it, picked on the server from the blog
  *  manifest (src/app/page.tsx), so the client bundle never carries the manifest. */
@@ -308,36 +367,40 @@ export function LearnMunSection({ guides }: { guides: HomeGuide[] }) {
     <section
       className="px-5 md:px-14"
       aria-labelledby="hs-learn-heading"
-      style={{ backgroundColor: IVORY, paddingTop: 'clamp(64px, 6vw, 100px)', paddingBottom: 'clamp(72px, 6vw, 108px)' }}
+      style={{ backgroundColor: FOREST, paddingTop: 'clamp(64px, 6vw, 100px)', paddingBottom: 'clamp(72px, 6vw, 108px)' }}
     >
       <style>{`
         .hs-guide { transition: transform 200ms ease, box-shadow 200ms ease; }
-        .hs-guide:hover { transform: translateY(-3px); box-shadow: 0 0 0 1px rgba(27,56,40,0.10), 0 26px 48px rgba(27,56,40,0.16) !important; }
+        .hs-guide:hover { transform: translateY(-3px); box-shadow: 0 0 0 1px rgba(238,217,138,0.35), 0 26px 48px rgba(0,0,0,0.32) !important; }
+        .hs-guide:focus-visible { outline: 2px solid ${PALE_GOLD}; outline-offset: 4px; }
         .hs-guide:hover .hs-guide-go { transform: translateX(3px); }
         .hs-guide-go { transition: transform 200ms ease; }
+        .hs-learn-all { color: ${PALE_GOLD}; transition: color 160ms ease; }
+        .hs-learn-all:hover { color: #FFFFFF; }
+        .hs-learn-all:focus-visible { outline: 2px solid ${PALE_GOLD}; outline-offset: 3px; border-radius: 4px; }
       `}</style>
       <div className="mx-auto" style={{ maxWidth: '1280px' }}>
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
           <div>
-            <p className="inline-flex items-center gap-2" style={{ ...eyebrow, margin: '0 0 8px 0' }}>
+            <p className="inline-flex items-center gap-2" style={{ ...eyebrow, color: PALE_GOLD, margin: '0 0 8px 0' }}>
               <BookOpen size={14} strokeWidth={2.25} aria-hidden="true" /> MUN guides
             </p>
             <h2
               id="hs-learn-heading"
-              style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(28px, 3vw, 48px)', letterSpacing: '-0.015em', color: INK, margin: '0 0 6px 0', textWrap: 'balance' }}
+              style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(28px, 3vw, 48px)', letterSpacing: '-0.015em', color: '#FFFFFF', margin: '0 0 6px 0', textWrap: 'balance' }}
             >
-              Learn MUN
+              Learn <GoldWord tone="dark">MUN</GoldWord>
             </h2>
-            <p style={{ fontFamily: SANS, fontSize: 'clamp(15px, 1.05vw, 18px)', lineHeight: 1.6, color: INK_55, margin: 0 }}>
-              The guides delegates read before their first conference, and their tenth.
+            <p style={{ fontFamily: SANS, fontSize: 'clamp(15px, 1.05vw, 18px)', lineHeight: 1.6, color: 'rgba(237,231,216,0.78)', margin: 0 }}>
+              Explore guides written to sharpen your MUN
             </p>
           </div>
           <Link
             href="/blog"
-            className="inline-flex items-center gap-1.5 self-start sm:self-auto focus:outline-none"
-            style={{ fontFamily: SANS, fontSize: '14px', fontWeight: 700, color: FOREST, textDecoration: 'none', whiteSpace: 'nowrap' }}
+            className="hs-learn-all inline-flex min-h-11 items-center gap-1.5 self-start sm:self-auto focus:outline-none"
+            style={{ ...textLink, fontSize: '14px', letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}
           >
-            All guides <ArrowRight size={15} strokeWidth={2.5} aria-hidden="true" />
+            ALL GUIDES <ArrowRight size={15} strokeWidth={2.5} aria-hidden="true" />
           </Link>
         </div>
 
@@ -351,7 +414,7 @@ export function LearnMunSection({ guides }: { guides: HomeGuide[] }) {
                 href={`/blog/${g.slug}`}
                 title={g.title}
                 className="hs-guide flex w-full flex-col overflow-hidden focus:outline-none"
-                style={{ borderRadius: 22, backgroundColor: CARD, textDecoration: 'none', boxShadow: '0 0 0 1px rgba(27,56,40,0.07), 0 16px 34px rgba(27,56,40,0.09)' }}
+                style={{ borderRadius: 22, backgroundColor: CARD, textDecoration: 'none', boxShadow: '0 0 0 1px rgba(238,217,138,0.18), 0 16px 34px rgba(0,0,0,0.26)' }}
               >
                 <div style={{ aspectRatio: '16 / 9', backgroundColor: '#E4DCCA' }}>
                   {g.photo ? (
@@ -373,8 +436,8 @@ export function LearnMunSection({ guides }: { guides: HomeGuide[] }) {
                     <span className="inline-flex items-center gap-1.5" style={{ fontFamily: SANS, fontSize: '13px', fontWeight: 600, color: INK_55, fontVariantNumeric: 'tabular-nums' }}>
                       <Clock size={13} strokeWidth={2.25} aria-hidden="true" /> {g.readingMinutes} min read
                     </span>
-                    <span className="hs-guide-go inline-flex items-center gap-1" style={{ fontFamily: SANS, fontSize: '13.5px', fontWeight: 800, color: FOREST }}>
-                      Read <ArrowRight size={14} strokeWidth={2.5} aria-hidden="true" />
+                    <span className="hs-guide-go inline-flex items-center gap-1" style={{ fontFamily: SANS, fontSize: '13px', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: GOLD }}>
+                      READ <ArrowRight size={14} strokeWidth={2.5} aria-hidden="true" />
                     </span>
                   </div>
                 </div>

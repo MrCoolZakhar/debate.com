@@ -753,7 +753,7 @@ export default function MapClient() {
                       No live conferences yet
                     </p>
                     <p style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 12, lineHeight: 1.5, color: '#9A8A78', margin: '3px 0 0 0' }}>
-                      Be the first to bring MUN to {selectedDef.label}.
+                      Be the first to bring MUN to {selectedDef.label}
                     </p>
                   </div>
                 </div>

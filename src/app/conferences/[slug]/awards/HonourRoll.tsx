@@ -9,7 +9,7 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Trophy } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
-import FooterLegal from '@/components/FooterLegal';
+import SiteFooter from '@/components/SiteFooter';
 import { LogoDisc } from '@/components/LogoDisc';
 import { FlagImg } from '@/components/FlagImg';
 import ProfileLink from '@/components/ProfileLink';
@@ -106,7 +106,7 @@ export default function HonourRoll({ conference, committees, awards }: {
                 <Trophy size={22} style={{ color: '#1B3828' }} />
               </span>
               <p style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 700, color: '#1C1410', margin: 0 }}>
-                Awards for {name} have not been announced yet.
+                Awards for {name} have not been announced yet
               </p>
               <p style={{ fontFamily: OUTFIT, fontSize: 13, color: '#9A8A78', margin: '6px 0 18px 0', lineHeight: 1.6 }}>
                 They appear here the moment the secretariat publishes them after the closing ceremony.
@@ -172,9 +172,7 @@ export default function HonourRoll({ conference, committees, awards }: {
         )}
       </main>
 
-      <div className="w-full max-w-3xl mx-auto px-5 md:px-8 pb-8">
-        <FooterLegal tone="ivory" showCopyright />
-      </div>
+      <SiteFooter />
     </div>
   );
 }

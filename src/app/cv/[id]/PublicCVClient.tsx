@@ -35,7 +35,7 @@ export default function PublicCVClient({ profile, entries }: { profile: PublicPr
           className="mt-6 inline-flex items-center gap-2 rounded-full"
           style={{ padding: '12px 20px', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, textDecoration: 'none' }}
         >
-          Go to Gavelling <ArrowRight size={16} strokeWidth={2.4} />
+          GO TO GAVELLING <ArrowRight size={16} strokeWidth={2.4} />
         </Link>
       </div>
     );
@@ -62,7 +62,7 @@ export default function PublicCVClient({ profile, entries }: { profile: PublicPr
             className="inline-flex items-center gap-1.5 rounded-full"
             style={{ padding: '9px 15px', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 12.5, textDecoration: 'none' }}
           >
-            Build your MUN CV <ArrowRight size={15} strokeWidth={2.5} />
+            BUILD YOUR MUN CV <ArrowRight size={15} strokeWidth={2.5} />
           </Link>
           {/* Signed-in readers get their own avatar menu; nothing while signed out. */}
           <ProfileAvatarMenu size={48} />
@@ -159,7 +159,7 @@ export default function PublicCVClient({ profile, entries }: { profile: PublicPr
             className="inline-flex items-center gap-2 rounded-full"
             style={{ padding: '12px 20px', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, textDecoration: 'none' }}
           >
-            Build your MUN CV <ArrowRight size={16} strokeWidth={2.4} />
+            BUILD YOUR MUN CV <ArrowRight size={16} strokeWidth={2.4} />
           </Link>
         </div>
       </main>

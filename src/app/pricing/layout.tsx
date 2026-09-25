@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import SiteNav from '@/components/SiteNav';
-import FooterLegal from '@/components/FooterLegal';
+import SiteFooter from '@/components/SiteFooter';
 import PricingRail from '@/components/pricing/PricingRail';
 
 // ── The pricing section frame ────────────────────────────────────────────────
@@ -53,11 +53,7 @@ export default function PricingLayout({ children }: { children: ReactNode }) {
         <PricingRail />
         <main className="gv-pr-main">{children}</main>
       </div>
-      <footer className="relative z-10 w-full px-6 pb-8" style={{ borderTop: '1px solid rgba(27,56,40,0.14)' }}>
-        <div className="mx-auto w-full" style={{ maxWidth: 1360 }}>
-          <FooterLegal tone="ivory" showCopyright />
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

@@ -2,7 +2,6 @@
 
 import { delegatePriceLabel, TBD_PRICE, type DelegatePrice } from '@/lib/publicFees';
 import { formatConferenceDates } from '@/lib/conferenceDates';
-import FooterLegal from '@/components/FooterLegal';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared primitives for the "Stagefront" landing composition.
@@ -154,58 +153,5 @@ export function Stars({ avg, size = 13, color = GOLD }: { avg: number; size?: nu
   );
 }
 
-// ── Shared ivory footer (design rule: footer bg is always #EDE7D8) ───────────
-
-export function LabFooter() {
-  return (
-    <footer
-      className="relative z-10 border-t px-6 py-8"
-      style={{
-        borderColor: HAIRLINE,
-        backgroundImage: GRAIN,
-        backgroundRepeat: 'repeat',
-        backgroundSize: '300px 300px',
-        backgroundColor: IVORY,
-      }}
-    >
-      <div className="flex flex-col items-center gap-4 md:grid md:grid-cols-3 md:gap-0 md:items-center">
-        <img
-          src="/Conferences.webp"
-          alt="Gavelling Conferences"
-          loading="lazy"
-          decoding="async"
-          className="h-7 w-auto"
-          style={{ filter: 'drop-shadow(0 1px 2px rgba(27,56,40,0.18))' }}
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-        />
-        <div className="flex items-center justify-center gap-4">
-          <a
-            href="https://www.instagram.com/wearegavelling/"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Instagram"
-            style={{ color: TAUPE, transition: 'color 0.15s' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = FOREST; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = TAUPE; }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
-            </svg>
-          </a>
-          <a href="https://www.linkedin.com/company/gavelling/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn"
-                  style={{ color: '#C8BFB0', transition: 'color 0.15s' }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#1B3828'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#C8BFB0'; }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>
-            </svg>
-          </a>
-        </div>
-        <p className="text-xs font-semibold md:text-right" style={{ color: FOREST, fontFamily: SANS }}>
-          © {new Date().getFullYear()} Gavelling. Built for the MUN community.
-        </p>
-      </div>
-      <FooterLegal tone="ivory" />
-    </footer>
-  );
-}
+// The grain footer (LabFooter) that lived here is gone: there is ONE site
+// footer, src/components/SiteFooter.tsx.

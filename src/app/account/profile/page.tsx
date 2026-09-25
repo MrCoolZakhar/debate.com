@@ -554,7 +554,7 @@ export default function ProfilePage() {
           )}
         </h1>
         <p style={{ fontSize: T.body, color: HINT, fontFamily: OUTFIT, margin: 0 }}>
-          Manage your Gavelling account details.
+          Manage your Gavelling account details
         </p>
       </div>
 
@@ -700,7 +700,8 @@ export default function ProfilePage() {
                       Leave a review of{' '}
                       <Link
                         href={`/conferences/${conf.slug}`}
-                        style={{ color: '#B6871F', textDecoration: 'none', fontWeight: 600 }}
+                        className="hover:text-[#1B3828]"
+                        style={{ color: '#B6871F', textDecoration: 'underline', textUnderlineOffset: 3, fontWeight: 700 }}
                       >
                         {conf.full_name}
                       </Link>
@@ -852,11 +853,11 @@ export default function ProfilePage() {
             <button
               onClick={() => avatarInputRef.current?.click()}
               disabled={avatarUploading}
-              className="inline-flex items-center gap-2 rounded-full px-4 font-bold focus:outline-none"
+              className="inline-flex items-center gap-2 rounded-full px-4 font-bold uppercase focus:outline-none"
               style={{ fontSize: T.body, minHeight: 44, whiteSpace: 'nowrap', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, border: 'none', cursor: avatarUploading ? 'default' : 'pointer', boxShadow: NEU.outSm }}
             >
               <Camera size={14} strokeWidth={2.2} />
-              {displayAvatar ? 'Change photo' : 'Upload photo'}
+              {displayAvatar ? 'CHANGE PHOTO' : 'UPLOAD PHOTO'}
             </button>
             <p className="mt-2" style={{ fontSize: T.caption, color: avatarError ? '#8B2020' : HINT, fontFamily: OUTFIT }}>
               {avatarError || 'JPG or PNG, up to 5MB.'}
@@ -1188,7 +1189,7 @@ export default function ProfilePage() {
           <CardTitle>Notification Preferences</CardTitle>
         </div>
         <p className="relative mb-4" style={{ fontSize: T.body, color: HINT, fontFamily: OUTFIT, zIndex: 1 }}>
-          Control which emails Gavelling sends you.
+          Control which emails Gavelling sends you
         </p>
 
         <div className="relative" style={{ zIndex: 1 }}>

@@ -293,10 +293,10 @@ function ConfirmationInner({ conference }: { conference: ConfRow }) {
             <div className="flex justify-center">
               <Link
                 href="/conferences/explore"
-                className="mt-6 text-xs font-medium focus:outline-none transition-colors"
-                style={{ color: 'var(--gv-muted)', textDecoration: 'underline', textUnderlineOffset: 3, fontFamily: OUTFIT }}
+                className="mt-6 text-xs font-bold focus:outline-none transition-colors"
+                style={{ color: 'var(--gv-main)', textDecoration: 'underline', textUnderlineOffset: 3, fontFamily: OUTFIT }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-on-bg)'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-muted)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-main)'; }}
               >
                 Explore More Conferences
               </Link>

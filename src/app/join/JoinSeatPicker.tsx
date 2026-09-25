@@ -187,7 +187,10 @@ export default function JoinSeatPicker({
   };
 
   return (
-    <div>
+    // `gv-join-picker` / `gv-join-picker-list` are hooks for the desktop one-screen
+    // fit in page.tsx (JOIN_FIT_CSS): there the list takes the flexible space of the
+    // stage instead of its fixed height. Presentation only.
+    <div className="gv-join-picker">
       {/* Search + counter */}
       <div className="mb-2.5 flex items-center gap-2">
         <div className="relative min-w-0 flex-1">
@@ -224,8 +227,8 @@ export default function JoinSeatPicker({
               type="button"
               onClick={() => setQuery('')}
               aria-label={labels.clear}
-              className="absolute inset-y-0 flex items-center justify-center focus:outline-none"
-              style={{ insetInlineEnd: 4, width: 32, color: C.muted }}
+              className="absolute inset-y-0 flex items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
+              style={{ insetInlineEnd: 4, width: 36, color: C.inkSoft, cursor: 'pointer' }}
             >
               <X size={15} strokeWidth={2.6} />
             </button>
@@ -245,7 +248,7 @@ export default function JoinSeatPicker({
         ref={listRef}
         role="listbox"
         aria-label={labels.search}
-        className="relative h-[272px] overflow-y-auto overscroll-contain sm:h-[300px]"
+        className="gv-join-picker-list relative h-[272px] overflow-y-auto overscroll-contain sm:h-[300px]"
         style={{
           borderRadius: 18,
           backgroundColor: C.surfaceAlt,
@@ -337,9 +340,10 @@ function EmptyState({ text, action }: { text: string; action?: { label: string; 
         <button
           type="button"
           onClick={action.onClick}
-          className="focus:outline-none active:scale-[0.96]"
+          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 active:scale-[0.96]"
           style={{
-            fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: C.forest,
+            fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.forest,
+            minHeight: 44, cursor: 'pointer',
             padding: '8px 14px', borderRadius: 12, backgroundColor: 'rgba(27,56,40,0.06)',
             boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.12)',
             transitionProperty: 'background-color, transform', transitionDuration: '150ms',

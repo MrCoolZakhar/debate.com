@@ -1,5 +1,7 @@
 'use client';
 
+import BrandLogo from '@/components/BrandLogo';
+
 import React, { useState, useRef, Suspense } from 'react';
 import FitToScreen from '@/components/FitToScreen';
 import { useRouter } from 'next/navigation';
@@ -686,9 +688,7 @@ function CreatePageInner() {
         {/* Grain texture: matches landing page */}
         <div className="pointer-events-none fixed inset-0 z-[1]" style={grainStyle} />
         <nav className="relative z-20 border-b border-[#DDD4C0]/60 px-8 md:px-14 flex items-center shrink-0" style={{ height: '72px', backgroundColor: '#EDE7D8' }}>
-          <Link href="/sessions">
-            <img src="/GavellingLogo.png" alt="Gavelling" className="h-10 w-auto object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-          </Link>
+          <BrandLogo href="/sessions" height={30} tone="ink" priority />
           {langMenu}
           {/* Signed-in: the shared account avatar. Renders nothing signed out. */}
           <span className="ms-2 empty:hidden"><ProfileAvatarMenu size={60} /></span>
@@ -753,10 +753,7 @@ function CreatePageInner() {
       <CreateStyles />
 
       <nav className="relative z-20 mx-auto flex h-14 lg:h-12 w-full max-w-[1440px] flex-shrink-0 items-center gap-2 px-4 sm:gap-3 sm:px-6">
-        <Link href="/sessions" className="flex flex-shrink-0 items-center focus:outline-none">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/GavellingLogo.png" alt="Gavelling" className="h-auto w-[112px] object-contain sm:w-[132px]" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-        </Link>
+        <BrandLogo href="/sessions" height={24} tone="ink" priority />
         <button
           type="button"
           onClick={() => setCommitteeMode('select')}

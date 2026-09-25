@@ -197,7 +197,7 @@ export default function ParticipantView({
             className="inline-flex items-center gap-2 rounded-full"
             style={{ padding: '11px 20px', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, letterSpacing: '0.03em', textDecoration: 'none' }}
           >
-            Manage conference →
+            MANAGE CONFERENCE →
           </Link>
         </div>
       </SectionCard>

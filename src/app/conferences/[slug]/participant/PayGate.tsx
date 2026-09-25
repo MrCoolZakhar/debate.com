@@ -20,7 +20,7 @@ export function LockedCard() {
           <Lock size={24} strokeWidth={1.8} style={{ color: '#1B3828' }} />
         </div>
         <p className="text-[15px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-          Unlocks once your registration is paid.
+          Unlocks once your registration is paid
         </p>
         <p className="text-[13px] max-w-[340px]" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.7 }}>
           Settle your fee below and this section opens up right away.
@@ -118,7 +118,7 @@ export function WithdrawnCard({ conferenceSlug }: { conferenceSlug: string; role
           <LogOut size={24} strokeWidth={1.8} style={{ color: '#6B5F52' }} />
         </div>
         <p className="text-[15px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-          You withdrew this application.
+          You withdrew this application
         </p>
         <p className="text-[13px] max-w-[340px] mb-6" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.7 }}>
           The organizing team no longer has it under review. Any Gavelling credit you spent is refunded. To take part after all, contact the organizing team.

@@ -15,7 +15,12 @@
 //     step all occupy the same box. Nothing below moves when a message or a
 //     committee card appears;
 //   • the house palette used with confidence: ivory page, forest panel, gold
-//     accents, and the conference's own artwork when the code belongs to one.
+//     accents, and the conference's own artwork when the code belongs to one;
+//   • ONE SCREEN on desktop (25 Sep 2026): from 1024px wide and 700px tall the
+//     page never scrolls. The brand panel is capped to the viewport (PANEL_FIT_CSS
+//     below) and the card's stage is sized to what is left (JOIN_FIT_CSS in
+//     page.tsx), so JOIN SESSION is always on screen. Phones scroll as before.
+//   • button labels are uppercase and inline links bold + underlined (owner).
 //
 // Everything here is presentational. No data fetching, no routing, no state
 // that outlives a hover.
@@ -203,8 +208,9 @@ export function RoleTile({ icon, label, desc, active, onClick }: {
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className="group relative flex h-full w-full flex-col items-center gap-1 overflow-hidden text-center focus:outline-none active:scale-[0.96] sm:items-start sm:text-start"
+      className="group relative flex h-full w-full flex-col items-center gap-1 overflow-hidden text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAF8F3] active:scale-[0.96] sm:items-start sm:text-start"
       style={{
+        cursor: 'pointer',
         padding: '11px 10px 12px',
         borderRadius: 18,
         backgroundColor: active ? C.forest : 'rgba(27,56,40,0.055)',
@@ -229,7 +235,8 @@ export function RoleTile({ icon, label, desc, active, onClick }: {
       </span>
       <span
         style={{
-          fontFamily: OUTFIT, fontSize: 'clamp(11.5px, 3.2vw, 13.5px)', fontWeight: 800, letterSpacing: '0.01em',
+          fontFamily: OUTFIT, fontSize: 'clamp(11.5px, 3.2vw, 13.5px)', fontWeight: 800, letterSpacing: '0.05em',
+          textTransform: 'uppercase',
           color: active ? C.gold : C.forest, lineHeight: 1.2, textWrap: 'balance',
         }}
       >
@@ -284,7 +291,16 @@ const PHONE_W = 240;
 const PHONE_H = 300;
 // Only where the sticky panel plus the phone's overhang fit a laptop screen.
 const PHONE_MEDIA = '(min-width: 1024px) and (min-height: 760px)';
-const PHONE_CSS = `.gv-join-phone{display:none}@media ${PHONE_MEDIA}{.gv-join-phone{display:block}.gv-phone-room{padding-bottom:124px}}`;
+// Desktop fit (25 Sep 2026): from 1024px wide and 700px tall the whole page must
+// sit on one screen. The panel is capped at the viewport minus the nav (64px), the
+// main's top padding (8px) and its bottom padding (16px); its content scrolls
+// under a hidden scrollbar rather than pushing the page. Where the phone mockup
+// is drawn (760px tall and up) it hangs 92px below the panel, and an absolutely
+// positioned overhang still extends the document, so the cap makes room for it.
+// dvh, never vh (the phone's toolbar would otherwise leave a scroll).
+const FIT_MEDIA = '(min-width: 1024px) and (min-height: 700px)';
+const PANEL_FIT_CSS = `@media ${FIT_MEDIA}{.gv-join-panel{max-height:calc(100dvh - 88px);display:flex;flex-direction:column}.gv-join-panel-inner{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none}.gv-join-panel-inner::-webkit-scrollbar{display:none}}@media ${PHONE_MEDIA}{.gv-join-panel{max-height:calc(100dvh - 180px)}}`;
+const PHONE_CSS = `.gv-join-phone{display:none}@media ${PHONE_MEDIA}{.gv-join-phone{display:block}.gv-phone-room{padding-bottom:124px}}${PANEL_FIT_CSS}`;
 const BLANK_GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
 /** Decorative: the card beside it is the real interface. */
@@ -355,7 +371,7 @@ export function BrandPanel({ title, accent, sub, room, footer }: {
     <div className="relative">
     <style>{PHONE_CSS}</style>
     <section
-      className="relative overflow-hidden"
+      className="gv-join-panel relative overflow-hidden"
       style={{
         borderRadius: 28,
         backgroundColor: C.forest,
@@ -365,7 +381,7 @@ export function BrandPanel({ title, accent, sub, room, footer }: {
       }}
     >
       {/* lg:pb keeps the bottom inline-end corner free for the phone. */}
-      <div className="relative px-6 py-7 sm:px-8 sm:py-9 gv-phone-room">
+      <div className="gv-join-panel-inner relative px-6 py-7 sm:px-8 sm:py-9 gv-phone-room">
         {room ? <RoomBrand room={room} /> : (
           <h1
             style={{
@@ -519,7 +535,8 @@ export function JoinCard({ children }: { children: ReactNode }) {
         className="absolute inset-x-0 top-0"
         style={{ height: 3, background: `linear-gradient(90deg, ${C.gold} 0%, rgba(182,135,31,0.55) 40%, rgba(27,56,40,0.18) 100%)` }}
       />
-      <div className="px-5 pb-6 pt-7 sm:px-7 sm:pb-7">{children}</div>
+      {/* lg: tighter vertical padding, part of the one-screen budget in page.tsx (JOIN_FIT_CSS). */}
+      <div className="px-5 pb-6 pt-7 sm:px-7 sm:pb-7 lg:pb-4 lg:pt-5">{children}</div>
     </section>
   );
 }
@@ -541,12 +558,13 @@ export function PrimaryAction({ children, onClick, disabled, icon }: {
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="gv-lift flex w-full items-center justify-center gap-2 focus:outline-none active:scale-[0.96]"
+      className="gv-lift flex w-full items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAF8F3] active:scale-[0.96]"
       style={{
         height: 54, borderRadius: 18, border: 'none',
         backgroundColor: disabled ? 'rgba(27,56,40,0.10)' : C.forest,
         color: disabled ? C.muted : C.gold,
-        fontFamily: OUTFIT, fontSize: 15, fontWeight: 800, letterSpacing: '0.04em',
+        fontFamily: OUTFIT, fontSize: 15, fontWeight: 800, letterSpacing: '0.06em',
+        textTransform: 'uppercase',
         cursor: disabled ? 'not-allowed' : 'pointer',
         transitionProperty: 'background-color, color, box-shadow, transform',
         transitionDuration: '180ms',
@@ -570,13 +588,14 @@ export function GhostAction({ children, onClick, icon, tone = 'forest' }: {
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-2 focus:outline-none active:scale-[0.96]"
+      className="inline-flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 active:scale-[0.96]"
       style={{
-        minHeight: 40, padding: '8px 14px', borderRadius: 12,
+        minHeight: 44, padding: '8px 14px', borderRadius: 12, cursor: 'pointer',
         backgroundColor: gold ? 'rgba(238,217,138,0.16)' : 'rgba(27,56,40,0.06)',
         boxShadow: `inset 0 0 0 1px ${gold ? 'rgba(238,217,138,0.34)' : 'rgba(27,56,40,0.12)'}`,
         color: gold ? C.gold : C.forest,
-        fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, letterSpacing: '0.02em',
+        fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, letterSpacing: '0.06em',
+        textTransform: 'uppercase',
         transitionProperty: 'background-color, box-shadow, transform', transitionDuration: '160ms',
       }}
     >

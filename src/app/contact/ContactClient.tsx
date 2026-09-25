@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import SiteNav from '@/components/SiteNav';
-import FooterLegal from '@/components/FooterLegal';
+import SiteFooter from '@/components/SiteFooter';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -19,12 +19,46 @@ const inputStyle: React.CSSProperties = {
 };
 
 const labelStyle: React.CSSProperties = {
-  color: '#6A5A4A',
+  color: '#5A5046',
   fontSize: 12,
   fontWeight: 600,
   letterSpacing: '0.08em',
   textTransform: 'uppercase',
 };
+
+const FOREST = '#1B3828';
+const GOLD = '#EED98A';
+const INK_SOFT = '#5A5046';
+
+// Hover and focus states live in a stylesheet, not in mouse handlers: a keyboard
+// user gets the same lift on focus-visible, and prefers-reduced-motion switches
+// the motion off. Palette: forest / gold / ivory / ink only (owner).
+const CONTACT_CSS = `
+.gv-way{display:flex;align-items:center;gap:12px;min-height:48px;padding:6px 10px;margin-inline:-10px;border-radius:14px;
+  text-decoration:none;cursor:pointer;outline:none;
+  transition:transform 160ms ease-out,box-shadow 160ms ease-out,background-color 160ms ease-out}
+.gv-way-disc{width:40px;height:40px;border-radius:12px;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  background:rgba(27,56,40,0.08);border:1px solid rgba(27,56,40,0.14);color:${FOREST};
+  transition:background-color 160ms ease-out,border-color 160ms ease-out,color 160ms ease-out}
+.gv-way-label{font-size:12px;font-weight:700;letter-spacing:0.02em;color:#1C1410;margin:0;
+  text-decoration:underline;text-decoration-color:transparent;text-decoration-thickness:1.5px;text-underline-offset:3px;
+  transition:color 160ms ease-out,text-decoration-color 160ms ease-out}
+.gv-way-desc{font-size:11px;color:${INK_SOFT};margin:1px 0 0}
+.gv-way:hover,.gv-way:focus-visible{transform:translateY(-2px);background-color:rgba(250,248,243,0.7);
+  box-shadow:0 2px 6px rgba(27,56,40,0.10),0 12px 26px -8px rgba(27,56,40,0.32)}
+.gv-way:hover .gv-way-disc,.gv-way:focus-visible .gv-way-disc{background:${FOREST};border-color:${FOREST};color:${GOLD}}
+.gv-way:hover .gv-way-label,.gv-way:focus-visible .gv-way-label{color:${FOREST};text-decoration-color:${FOREST}}
+.gv-way:focus-visible{box-shadow:0 0 0 2px #FAF8F3,0 0 0 4px ${FOREST},0 12px 26px -8px rgba(27,56,40,0.32)}
+.gv-btn:focus-visible{outline:2px solid ${FOREST};outline-offset:3px}
+.gv-btn-inline:focus-visible{outline:2px solid ${FOREST};outline-offset:3px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){
+  .gv-way,.gv-way-disc,.gv-way-label{transition:none}
+  .gv-way:hover,.gv-way:focus-visible{transform:none}
+}
+`;
+
+/** Titles and captions carry no full stop (owner). Body sentences keep theirs. */
+const noStop = (s: string) => s.replace(/[.。]\s*$/, '');
 
 export default function ContactClient() {
   const { language } = useLanguage();
@@ -78,7 +112,11 @@ export default function ContactClient() {
   };
 
   return (
-    <div className="min-h-screen md:h-screen bg-[#EDE7D8] flex flex-col relative md:overflow-hidden">
+    // An ordinary scrolling page (25 Sep 2026). It used to be md:h-screen with
+    // overflow hidden and the form column scrolling inside, which left the footer
+    // clipped below the screen on every desktop; the green panel is sticky, so the
+    // split still reads as one screen while the form and the footer flow past it.
+    <div className="min-h-screen bg-[#EDE7D8] flex flex-col relative">
 
       {/* Grain overlay */}
       <div
@@ -92,13 +130,14 @@ export default function ContactClient() {
         }}
       />
 
-      <div className="relative z-10 flex flex-col md:h-full">
+      <div className="relative z-10 flex flex-col flex-1">
+        <style>{CONTACT_CSS}</style>
         <SiteNav />
 
         {/* ── Hero split ── */}
         <section className="flex flex-col md:flex-row flex-1">
 
-          {/* Left — editorial green panel */}
+          {/* Left — editorial green panel, sticky for the page's scroll */}
           <div
             className="relative flex flex-col px-10 py-12 md:px-14 md:py-14 md:sticky md:top-0 md:h-screen md:basis-[44%] md:shrink-0"
             style={{
@@ -117,7 +156,7 @@ export default function ContactClient() {
               }}
             />
 
-            <div className="relative z-10 flex flex-col md:h-full">
+            <div className="relative z-10 flex flex-col md:h-full md:min-h-0">
               {/* Heading */}
               <h1
                 className="font-black text-white tracking-tight leading-[0.9]"
@@ -162,7 +201,7 @@ export default function ContactClient() {
                   {t('contact_hero_quote')}
                 </p>
                 <p className="text-xs mt-2" style={{ color: 'rgba(238, 217, 138, 0.2)', letterSpacing: '0.12em' }}>
-                  {t('contact_hero_quote_author')}
+                  {noStop(t('contact_hero_quote_author'))}
                 </p>
               </div>
             </div>
@@ -170,7 +209,7 @@ export default function ContactClient() {
 
           {/* Right — form */}
           <div
-            className="flex-1 flex flex-col justify-start px-10 py-10 md:px-14 md:pt-10 md:overflow-y-auto"
+            className="flex-1 flex flex-col justify-start px-10 py-10 md:px-14 md:pt-10 md:pb-14"
             style={{ backgroundColor: '#EDE7D8' }}
           >
             {submitted ? (
@@ -188,14 +227,16 @@ export default function ContactClient() {
                 </div>
 
                 <div>
-                  <p className="text-xs font-mono tracking-[0.2em] text-[#9A8A78] mb-2 uppercase">{t('contact_success_eyebrow')}</p>
-                  <h2 className="text-3xl font-black text-[#1C1410] mb-3">{t('contact_success_title')}</h2>
-                  <p className="text-[#6A5A4A] leading-relaxed">
+                  <p className="text-xs font-mono tracking-[0.2em] text-[#5A5046] mb-2 uppercase">{noStop(t('contact_success_eyebrow'))}</p>
+                  <h2 className="text-3xl font-black text-[#1C1410] mb-3">{noStop(t('contact_success_title'))}</h2>
+                  <p className="text-[#5A5046] leading-relaxed">
                     {t('contact_success_desc')}
                   </p>
                 </div>
 
                 <button
+                  type="button"
+                  className="gv-btn-inline"
                   onClick={() => {
                     setSubmitted(false);
                     setForm({ name: '', email: '', message: '' });
@@ -205,14 +246,17 @@ export default function ContactClient() {
                     fontSize: 13,
                     fontWeight: 700,
                     color: '#1B3828',
-                    letterSpacing: '0.05em',
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
                     background: 'none',
                     border: 'none',
                     cursor: 'pointer',
                     textDecoration: 'underline',
-                    textDecorationColor: 'rgba(27, 56, 40, 0.3)',
+                    textDecorationColor: '#1B3828',
+                    textDecorationThickness: 1.5,
                     textUnderlineOffset: 3,
-                    padding: 0,
+                    padding: '10px 0',
+                    minHeight: 44,
                   }}
                 >
                   {t('contact_send_another')}
@@ -222,8 +266,8 @@ export default function ContactClient() {
               <div className="flex flex-col gap-5 w-full">
 
                 <div>
-                  <p className="text-xs font-mono tracking-[0.2em] text-[#9A8A78] mb-2 uppercase">{t('contact_heading_eyebrow')}</p>
-                  <h2 className="text-3xl font-black text-[#1C1410]">{t('contact_heading')}</h2>
+                  <p className="text-xs font-mono tracking-[0.2em] text-[#5A5046] mb-2 uppercase">{noStop(t('contact_heading_eyebrow'))}</p>
+                  <h2 className="text-3xl font-black text-[#1C1410]">{noStop(t('contact_heading'))}</h2>
                 </div>
 
                 {/* Subject pills */}
@@ -242,16 +286,21 @@ export default function ContactClient() {
                       return (
                         <button
                           key={s.id}
+                          type="button"
+                          className="gv-btn"
+                          aria-pressed={active}
                           onClick={() => setSubject(s.id)}
                           style={{
-                            // 40px tall: a thumb-sized target on a phone.
+                            // 44px tall: a thumb-sized target on a phone.
                             padding: '7px 16px',
-                            minHeight: 40,
+                            minHeight: 44,
                             borderRadius: 9999,
-                            fontSize: 13,
-                            fontWeight: active ? 800 : 600,
+                            fontSize: 12.5,
+                            fontWeight: active ? 800 : 700,
+                            letterSpacing: '0.05em',
+                            textTransform: 'uppercase',
                             backgroundColor: active ? '#1B3828' : 'rgba(28, 20, 16, 0.07)',
-                            color: active ? '#EED98A' : '#6A5A4A',
+                            color: active ? '#EED98A' : '#5A5046',
                             border: `1.5px solid ${active ? '#1B3828' : 'rgba(28, 20, 16, 0.14)'}`,
                             cursor: 'pointer',
                             transition: 'all 180ms ease',
@@ -314,6 +363,8 @@ export default function ContactClient() {
                 {/* Submit */}
                 <div className="flex items-center gap-5">
                   <button
+                    type="button"
+                    className="gv-btn"
                     onClick={handleSubmit}
                     disabled={!canSubmit || sending}
                     onMouseEnter={(e) => {
@@ -337,8 +388,10 @@ export default function ContactClient() {
                       color: '#EED98A',
                       fontWeight: 800,
                       fontSize: 15,
-                      letterSpacing: '0.04em',
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
                       padding: '13px 32px',
+                      minHeight: 48,
                       borderRadius: 14,
                       border: 'none',
                       cursor: canSubmit && !sending ? 'pointer' : 'not-allowed',
@@ -349,58 +402,61 @@ export default function ContactClient() {
                   >
                     {sending ? t('contact_sending') : t('contact_submit_btn')}
                   </button>
-                  <p className="text-xs" style={{ color: '#9A8A78' }}>{t('contact_reply_time')}</p>
+                  <p className="text-xs" style={{ color: '#5A5046' }}>{noStop(t('contact_reply_time'))}</p>
                 </div>
 
                 {/* Other ways to reach us — inline */}
                 <div style={{ marginTop: 20, borderTop: '1px solid rgba(28, 20, 16, 0.1)', paddingTop: 20 }}>
-                  <p style={{ fontSize: 10, fontFamily: 'monospace', letterSpacing: '0.2em', textTransform: 'uppercase', color: '#9A8A78', marginBottom: 12 }}>
-                    {t('contact_other_ways')}
+                  <p style={{ fontSize: 10, fontFamily: 'monospace', letterSpacing: '0.2em', textTransform: 'uppercase', color: '#5A5046', marginBottom: 8 }}>
+                    {noStop(t('contact_other_ways'))}
                   </p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {/* Each way is one link that LOOKS like one: on hover and focus it lifts,
+                      the disc turns forest with a gold glyph and the label goes forest and
+                      underlined (CONTACT_CSS). The SVGs read currentColor for that. */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
 
                     {/* Email */}
-                    <a href="mailto:wearegavelling@gmail.com" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(27, 56, 40, 0.08)', border: '1px solid rgba(27, 56, 40, 0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1B3828" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <a href="mailto:wearegavelling@gmail.com" className="gv-way">
+                      <span className="gv-way-disc" aria-hidden>
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                           <rect x="2" y="4" width="20" height="16" rx="2" />
                           <polyline points="2,4 12,13 22,4" />
                         </svg>
-                      </div>
+                      </span>
                       <div>
-                        <p style={{ fontSize: 11, fontWeight: 700, color: '#1B3828', letterSpacing: '0.02em' }}>wearegavelling@gmail.com</p>
-                        <p style={{ fontSize: 11, color: '#9A8A78', marginTop: 1 }}>{t('contact_email_desc')}</p>
+                        <p className="gv-way-label">wearegavelling@gmail.com</p>
+                        <p className="gv-way-desc">{noStop(t('contact_email_desc'))}</p>
                       </div>
                     </a>
 
                     {/* Instagram */}
-                    <a href="https://instagram.com/wearegavelling" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(27, 56, 40, 0.08)', border: '1px solid rgba(27, 56, 40, 0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1B3828" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <a href="https://instagram.com/wearegavelling" target="_blank" rel="noopener noreferrer" className="gv-way">
+                      <span className="gv-way-disc" aria-hidden>
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                           <rect x="2" y="2" width="20" height="20" rx="5" />
                           <circle cx="12" cy="12" r="4" />
-                          <circle cx="17.5" cy="6.5" r="0.5" fill="#1B3828" />
+                          <circle cx="17.5" cy="6.5" r="0.5" fill="currentColor" />
                         </svg>
-                      </div>
+                      </span>
                       <div>
-                        <p style={{ fontSize: 11, fontWeight: 700, color: '#1B3828', letterSpacing: '0.02em' }}>@wearegavelling</p>
-                        <p style={{ fontSize: 11, color: '#9A8A78', marginTop: 1 }}>{t('contact_instagram_desc')}</p>
+                        <p className="gv-way-label">@wearegavelling</p>
+                        <p className="gv-way-desc">{noStop(t('contact_instagram_desc'))}</p>
                       </div>
                     </a>
 
                     {/* Book a call */}
-                    <a href="https://calendar.app.google/BgWXxMdKmEJE3dDq6" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(27, 56, 40, 0.08)', border: '1px solid rgba(27, 56, 40, 0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1B3828" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <a href="https://calendar.app.google/BgWXxMdKmEJE3dDq6" target="_blank" rel="noopener noreferrer" className="gv-way">
+                      <span className="gv-way-disc" aria-hidden>
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                           <rect x="3" y="4" width="18" height="18" rx="2" />
                           <line x1="16" y1="2" x2="16" y2="6" />
                           <line x1="8" y1="2" x2="8" y2="6" />
                           <line x1="3" y1="10" x2="21" y2="10" />
                         </svg>
-                      </div>
+                      </span>
                       <div>
-                        <p style={{ fontSize: 11, fontWeight: 700, color: '#1B3828', letterSpacing: '0.02em' }}>{t('contact_book_call')}</p>
-                        <p style={{ fontSize: 11, color: '#9A8A78', marginTop: 1 }}>{t('contact_book_call_desc')}</p>
+                        <p className="gv-way-label">{noStop(t('contact_book_call'))}</p>
+                        <p className="gv-way-desc">{noStop(t('contact_book_call_desc'))}</p>
                       </div>
                     </a>
 
@@ -412,44 +468,8 @@ export default function ContactClient() {
           </div>
         </section>
 
-        {/* ── Footer ── */}
-        <footer className="relative z-10 border-t border-[#DDD4C0] bg-[#EDE7D8] px-6 py-4">
-          <div className="flex flex-col items-center gap-4 md:grid md:grid-cols-3 md:gap-0 md:items-center">
-            <img
-              src="/GavellingLogo.webp"
-              alt="Gavelling"
-              loading="lazy"
-              decoding="async"
-              className="h-7 w-auto"
-              style={{ filter: 'brightness(0) saturate(100%) invert(18%) sepia(25%) saturate(800%) hue-rotate(100deg) brightness(85%)' }}
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            />
-            <div className="flex items-center justify-center gap-4">
-              <a href="https://www.instagram.com/wearegavelling/" target="_blank" rel="noopener noreferrer"
-                aria-label="Instagram"
-                style={{ color: '#9A8A78', transition: 'color 0.15s' }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#1B3828'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#9A8A78'; }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
-                </svg>
-              </a>
-              <a href="https://www.linkedin.com/company/gavelling/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn"
-                  style={{ color: '#C8BFB0', transition: 'color 0.15s' }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#1B3828'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#C8BFB0'; }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>
-                </svg>
-              </a>
-            </div>
-            <div className="flex flex-col items-center gap-1 md:items-end">
-              <p className="text-xs text-[#9A8A78]">{t('contact_footer_copy').replace('{year}', String(new Date().getFullYear()))}</p>
-              <a href="/privacy" className="text-xs transition-colors" style={{ color: '#9A8A78' }} onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#1B3828'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#9A8A78'; }}>Privacy Policy</a>
-            </div>
-          </div>
-          <FooterLegal tone="ivory" />
-        </footer>
+        {/* ── Footer: the one footer (src/components/SiteFooter.tsx) ── */}
+        <SiteFooter copy={t('contact_footer_copy')} />
       </div>
     </div>
   );

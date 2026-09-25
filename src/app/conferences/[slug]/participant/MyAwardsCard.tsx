@@ -140,9 +140,9 @@ export default function MyAwardsCard({ conferenceId, conferenceSlug, myAllocatio
 
           <p className="text-[12.5px] mt-4" style={{ color: '#2E2820', fontFamily: OUTFIT, margin: '16px 0 0 0', lineHeight: 1.6 }}>
             This is now a verified entry on your MUN CV.{' '}
-            <Link href="/account/cv" style={{ color: '#2A5A3C', fontWeight: 700, textDecoration: 'none' }}>Open your CV</Link>
+            <Link href="/account/cv" style={{ color: '#2A5A3C', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Open your CV</Link>
             {' '}or see the{' '}
-            <Link href={honourRollPath} style={{ color: '#2A5A3C', fontWeight: 700, textDecoration: 'none' }}>public honour roll</Link>.
+            <Link href={honourRollPath} style={{ color: '#2A5A3C', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>public honour roll</Link>.
           </p>
 
           <div className="flex flex-wrap gap-2 mt-4">

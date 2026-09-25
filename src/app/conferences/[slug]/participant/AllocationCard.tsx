@@ -72,7 +72,7 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
             <Compass size={26} strokeWidth={1.8} style={{ color: '#1B3828' }} />
           </div>
           <p className="text-[15px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-            Your committee allocation will appear here.
+            Your committee allocation will appear here
           </p>
         </div>
       </SectionCard>

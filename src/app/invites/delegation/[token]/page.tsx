@@ -129,13 +129,13 @@ export default function DelegationInvitePage() {
 
   const primary = (label: string, onClick: () => void, disabled = false) => (
     <button type="button" onClick={onClick} disabled={disabled} className="inline-flex items-center gap-2 focus:outline-none focus-visible:ring-2"
-      style={{ padding: '11px 18px', borderRadius: 12, border: 'none', backgroundColor: NEU.forest, color: NEU.gold, fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.55 : 1 }}>
+      style={{ padding: '11px 18px', borderRadius: 12, border: 'none', backgroundColor: NEU.forest, color: NEU.gold, fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.55 : 1 }}>
       {label} <ArrowRight size={16} strokeWidth={2.4} aria-hidden />
     </button>
   );
   const secondary = (label: string, href: string) => (
     <Link href={href} className="inline-flex items-center focus:outline-none focus-visible:ring-2"
-      style={{ padding: '11px 18px', borderRadius: 12, border: NEU.hairline, color: NEU.forest, fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, textDecoration: 'none' }}>
+      style={{ padding: '11px 18px', borderRadius: 12, border: NEU.hairline, color: NEU.forest, fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', textDecoration: 'none' }}>
       {label}
     </Link>
   );

@@ -125,7 +125,7 @@ export default function PledgeInvoicingCard({
         <button
           type="button"
           onClick={() => setAidModalOpen(true)}
-          className="text-xs font-semibold text-left focus:outline-none"
+          className="text-xs font-bold text-left focus:outline-none hover:text-[#1B3828]"
           style={{ color: '#6E5F4E', fontFamily: OUTFIT, textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
         >
           Request financial aid for your delegation

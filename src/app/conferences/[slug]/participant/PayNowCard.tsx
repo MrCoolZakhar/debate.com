@@ -98,7 +98,7 @@ function BalanceRow({ b, showConference }: { b: OpenBalance; showConference: boo
           className="inline-flex items-center gap-1.5 rounded-full px-4 py-2.5 focus:outline-none flex-shrink-0"
           style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}
         >
-          Pay now <ArrowRight size={14} aria-hidden />
+          PAY NOW <ArrowRight size={14} aria-hidden />
         </Link>
       ) : (
         <p className="flex-shrink-0" style={{ fontFamily: OUTFIT, fontSize: 12, color: '#6B5F52', margin: 0, maxWidth: 220 }}>

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import SiteNav from '@/components/SiteNav';
-import FooterLegal from '@/components/FooterLegal';
+import SiteFooter from '@/components/SiteFooter';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCountryDisplayName } from '@/lib/countries';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -231,7 +231,7 @@ export default function AboutClient() {
           </p>
           <button
             onClick={() => { setOpen(true); setSubmitted(false); }}
-            className="inline-flex items-center gap-2 mt-8 px-8 py-3 rounded-full font-bold text-sm tracking-wide transition-all duration-150"
+            className="inline-flex items-center gap-2 mt-8 px-8 py-3 rounded-full font-bold text-sm tracking-wide uppercase transition-all duration-150"
             style={{ border: '1.5px solid rgba(238, 217, 138, 0.4)', color: '#EED98A', background: 'transparent', cursor: 'pointer' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(238, 217, 138, 0.12)'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
@@ -262,7 +262,7 @@ export default function AboutClient() {
                 style={{ backgroundColor: 'rgba(27, 56, 40, 0.1)', border: '1px solid rgba(27, 56, 40, 0.3)' }}>
                 <span style={{ fontSize: 28, color: '#1B3828' }}>✓</span>
               </div>
-              <Button onClick={() => setOpen(false)} style={{ backgroundColor: '#1B3828', color: '#EED98A', borderRadius: '12px', fontWeight: 700 }}>
+              <Button onClick={() => setOpen(false)} className="uppercase" style={{ backgroundColor: '#1B3828', color: '#EED98A', borderRadius: '12px', fontWeight: 700 }}>
                 {t('about_btn_close')}
               </Button>
             </div>
@@ -285,11 +285,11 @@ export default function AboutClient() {
                 <Textarea id="amb-exp" placeholder={t('about_placeholder_experience')} value={form.experience} onChange={(e) => setForm({ ...form, experience: e.target.value })} rows={4} style={{ ...inputStyle, resize: 'none' }} />
               </div>
               <div className="flex gap-3 pt-2">
-                <Button variant="outline" onClick={() => setOpen(false)} className="flex-1"
+                <Button variant="outline" onClick={() => setOpen(false)} className="flex-1 uppercase"
                   style={{ borderColor: 'rgba(28, 20, 16, 0.2)', color: '#9A8A78', backgroundColor: 'transparent', borderRadius: '12px' }}>
                   {t('about_btn_cancel')}
                 </Button>
-                <Button onClick={handleSubmit} disabled={!form.name || !form.email || !form.country} className="flex-1"
+                <Button onClick={handleSubmit} disabled={!form.name || !form.email || !form.country} className="flex-1 uppercase"
                   style={{ backgroundColor: '#1B3828', color: '#EED98A', borderRadius: '12px', fontWeight: 800, opacity: (!form.name || !form.email || !form.country) ? 0.45 : 1 }}>
                   {t('about_btn_submit')}
                 </Button>
@@ -299,38 +299,7 @@ export default function AboutClient() {
         </DialogContent>
       </Dialog>
 
-      {/* Footer */}
-      <footer className="relative z-10 border-t border-[#DDD4C0] bg-[#EDE7D8] px-6 py-8">
-        <div className="flex flex-col items-center gap-4 md:grid md:grid-cols-3 md:gap-0 md:items-center">
-          <img src="/GavellingLogo.webp" alt="Gavelling" loading="lazy" decoding="async" className="h-7 w-auto"
-            style={{ filter: 'brightness(0) saturate(100%) invert(18%) sepia(25%) saturate(800%) hue-rotate(100deg) brightness(85%)' }}
-            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-          <div className="flex items-center justify-center gap-4">
-            <a href="https://www.instagram.com/wearegavelling/" target="_blank" rel="noopener noreferrer"
-              aria-label="Instagram"
-              style={{ color: '#9A8A78', transition: 'color 0.15s' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#1B3828'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#9A8A78'; }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
-              </svg>
-            </a>
-            <a href="https://www.linkedin.com/company/gavelling/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn"
-                  style={{ color: '#C8BFB0', transition: 'color 0.15s' }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#1B3828'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#C8BFB0'; }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>
-              </svg>
-            </a>
-          </div>
-          <div className="flex flex-col items-center gap-1 md:items-end">
-            <p className="text-xs text-[#9A8A78]">{t('about_footer_copy').replace('{year}', String(new Date().getFullYear()))}</p>
-            <a href="/privacy" className="text-xs transition-colors" style={{ color: '#9A8A78' }} onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#1B3828'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#9A8A78'; }}>Privacy Policy</a>
-          </div>
-        </div>
-        <FooterLegal tone="ivory" />
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

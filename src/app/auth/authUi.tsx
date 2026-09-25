@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Globe2, CalendarCheck, KeyRound, MailCheck, RotateCw, Sparkles, Star } from 'lucide-react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import DecorativeBleed from '@/components/DecorativeBleed';
+import BrandLogo from '@/components/BrandLogo';
 
 export const OUTFIT = "var(--font-brand), sans-serif";
 
@@ -54,28 +55,13 @@ export function withNext(href: string, searchParams: URLSearchParams): string {
 
 // ── Brand marks ────────────────────────────────────────────────────────────
 
-/** Card header: the real GAVELLING CONFERENCES logo lockup (same mark the
- *  footer and SiteNav use), on the ivory glass card. */
+/** Card header: the ONE Gavelling wordmark (src/components/BrandLogo.tsx),
+ *  the same mark the header and footer use, linked home. */
 export function ConferencesWordmark() {
   return (
-    <Link href="/" className="flex flex-col items-center" style={{ textDecoration: 'none' }}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/Conferences.webp"
-        alt="Gavelling Conferences"
-        width={184}
-        height={46}
-        decoding="async"
-        style={{ height: 46, width: 'auto', objectFit: 'contain' }}
-        onError={(e) => {
-          // .webp can intermittently fail to decode; fall back to the .png
-          // once before giving up, never hide the brand outright.
-          const img = e.currentTarget as HTMLImageElement;
-          if (!img.src.endsWith('/Conferences.png')) img.src = '/Conferences.png';
-          else img.style.display = 'none';
-        }}
-      />
-    </Link>
+    <div className="flex flex-col items-center">
+      <BrandLogo height={40} tone="ink" />
+    </div>
   );
 }
 

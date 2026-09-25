@@ -28,11 +28,19 @@ import { GoldWord } from '@/components/BrandHeading';
 import { useModalEscape } from '@/components/ModalOverlay';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { OUTFIT } from '@/components/auth/authModalKit';
+import { GOLD_CTA_BG, GOLD_CTA_BG_HOVER, GOLD_CTA_INK, GOLD_CTA_SHADOW, GOLD_CTA_SHADOW_HOVER } from '@/components/GoldButton';
 
 export type Tone = 'light' | 'dark';
 
 export const FOREST = '#1B3828';
 export const FOREST_DEEP = '#14301F';
+/**
+ * The ground around Stripe's form on the Credits pop-up. The owner sets the
+ * Stripe Dashboard brand colour to this same value so the card form and the
+ * panel read as one surface; change it here and in the Stripe Dashboard
+ * together, nowhere else.
+ */
+export const PANEL_GREEN = '#0F3A28';
 export const CREAM = '#F6F3EC';
 export const IVORY = '#FAF8F3';
 export const INK = '#1C1410';
@@ -187,7 +195,9 @@ export const PURCHASE_CSS = `
 .gv-buy-left{padding:30px 28px 26px;background:${CREAM};display:flex;flex-direction:column;gap:22px}
 .gv-buy-dark .gv-buy-left{background:${FOREST_DEEP}}
 .gv-buy-right{padding:30px 28px 26px;display:flex;flex-direction:column;gap:14px;background:${CREAM}}
-.gv-buy-right.gv-buy-dark,.gv-buy-dark .gv-buy-right{background:${FOREST};color:${DARK_INK}}
+.gv-buy-dark .gv-buy-right{background:${FOREST};color:${DARK_INK}}
+/* The Credits right column (the Stripe side) is PANEL_GREEN, matching the Stripe brand colour. */
+.gv-buy-right.gv-buy-dark{background:${PANEL_GREEN};color:${DARK_INK}}
 
 /* Title: "Gavelling Word", the word in gold Playfair italic, a picture beside it. */
 .gv-buy-title{margin:0;display:flex;align-items:center;gap:10px;font-size:28px;font-weight:800;letter-spacing:-0.02em;line-height:1.08;color:${INK}}
@@ -268,22 +278,24 @@ export const PURCHASE_CSS = `
 .gv-buy-err{margin:0;font-size:13.5px;line-height:1.45;color:#9E2A12}
 .gv-buy-dark .gv-buy-err{color:#FFB4A2}
 
-/* Stripe's white form sits in a subtle inset well on the forest. Its own
-   colours come from the Stripe Dashboard branding, not from us. */
-.gv-buy-formwell{padding:8px;border-radius:20px;background:rgba(0,0,0,0.22);box-shadow:inset 0 1px 3px rgba(0,0,0,0.35),inset 0 0 0 1px rgba(255,255,255,0.08)}
+/* Stripe's white form sits on PANEL_GREEN, the same colour the Stripe
+   Dashboard branding is set to, so nothing around the form is a different
+   green: the well is the panel colour with no darkening overlay. The form's
+   own colours come from the Stripe Dashboard branding, not from us. */
+.gv-buy-formwell{padding:8px;border-radius:20px;background:${PANEL_GREEN};box-shadow:none}
 .gv-buy-form{border-radius:14px;padding:6px;background:#FFFFFF;min-height:340px}
 .gv-buy-stripe{min-height:320px}
 .gv-buy-change{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid ${HAIR_LIGHT};border-radius:12px;background:${IVORY};font-size:14px;color:${INK}}
-.gv-buy-dark .gv-buy-change{background:rgba(255,255,255,0.06);border-color:${HAIR_DARK};color:${DARK_INK}}
+.gv-buy-dark .gv-buy-change{background:${PANEL_GREEN};border-color:${HAIR_DARK};color:${DARK_INK}}
 .gv-buy-change strong{font-weight:700}
 .gv-buy-changebtn{background:none;border:none;padding:0;font-family:${OUTFIT};font-size:13.5px;font-weight:700;color:${INK};text-decoration:underline;text-underline-offset:3px;cursor:pointer;white-space:nowrap}
 .gv-buy-dark .gv-buy-changebtn{color:${GOLD}}
 
-/* THE pay button */
-.gv-buy-gold{width:100%;min-height:54px;padding:0 20px;border:none;border-radius:12px;cursor:pointer;color:${INK};font-family:${OUTFIT};font-size:15.5px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;font-variant-numeric:tabular-nums;background:${GOLD};box-shadow:0 6px 18px rgba(0,0,0,0.22);transition:background-color 140ms ease,transform 120ms ease,opacity 160ms ease}
-.gv-buy-gold:hover:not(:disabled){background:${GOLD_HOVER}}
-.gv-buy-gold:active:not(:disabled){transform:scale(0.985)}
-.gv-buy-gold:disabled{cursor:default;opacity:0.5}
+/* THE pay button: the one gold CTA (src/components/GoldButton.tsx), full width. */
+.gv-buy-gold{width:100%;min-height:54px;padding:0 20px;border:none;border-radius:12px;cursor:pointer;color:${GOLD_CTA_INK};font-family:${OUTFIT};font-size:15.5px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;font-variant-numeric:tabular-nums;background:${GOLD_CTA_BG};box-shadow:${GOLD_CTA_SHADOW};transition:transform 120ms ease,box-shadow 160ms ease,background 160ms ease,opacity 160ms ease}
+.gv-buy-gold:hover:not(:disabled){background:${GOLD_CTA_BG_HOVER};box-shadow:${GOLD_CTA_SHADOW_HOVER};transform:translateY(-1px)}
+.gv-buy-gold:active:not(:disabled){transform:translateY(0) scale(0.985)}
+.gv-buy-gold:disabled{cursor:default;opacity:0.55;transform:none}
 
 /* Unlimited plans */
 .gv-buy-plans{display:grid;grid-template-columns:1fr 1fr;gap:10px}

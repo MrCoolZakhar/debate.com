@@ -8,6 +8,7 @@
 import Link from 'next/link';
 import type { CSSProperties, ReactNode } from 'react';
 import { OUTFIT } from '@/components/neu';
+import { GOLD_CTA_BG, GOLD_CTA_BG_HOVER, GOLD_CTA_INK, GOLD_CTA_SHADOW, GOLD_CTA_SHADOW_HOVER } from '@/components/GoldButton';
 
 export const P = {
   cream: '#EDE7D8',
@@ -54,8 +55,8 @@ export function PricingStyles() {
       .gv-p-btn-big{min-height:60px;padding:0 34px;font-size:15.5px}
       .gv-p-btn-forest{background:${P.forest};color:${P.gold};box-shadow:0 12px 26px -16px rgba(27,56,40,0.7)}
       .gv-p-btn-forest:hover{background:${P.forestMid}}
-      .gv-p-btn-gold{background:${P.gold};color:${P.ink};box-shadow:0 12px 26px -16px rgba(182,135,31,0.7)}
-      .gv-p-btn-gold:hover{background:#F3E2A0}
+      .gv-p-btn-gold{background:${GOLD_CTA_BG};color:${GOLD_CTA_INK};box-shadow:${GOLD_CTA_SHADOW}}
+      .gv-p-btn-gold:hover{background:${GOLD_CTA_BG_HOVER};box-shadow:${GOLD_CTA_SHADOW_HOVER}}
       .gv-p-btn-outline{background:transparent;color:${P.forest};border-color:${P.forest}}
       .gv-p-btn-outline:hover{background:rgba(27,56,40,0.07)}
       .gv-p-btn-outline-ivory{background:transparent;color:${P.ivory};border-color:rgba(250,248,243,0.7)}

@@ -247,13 +247,13 @@ export default function DelegationPortalClient() {
           <div className="flex flex-wrap justify-center gap-2">
             {state === 'error' && (
               <button type="button" onClick={() => load()} className="focus:outline-none focus-visible:ring-2"
-                style={{ padding: '10px 16px', borderRadius: 12, border: 'none', backgroundColor: NEU.forest, color: NEU.gold, fontFamily: OUTFIT, fontWeight: 700, cursor: 'pointer' }}>
-                Try again
+                style={{ padding: '10px 16px', borderRadius: 12, border: 'none', backgroundColor: NEU.forest, color: NEU.gold, fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.04em', cursor: 'pointer' }}>
+                TRY AGAIN
               </button>
             )}
             <Link href="/account/conferences" className="focus:outline-none focus-visible:ring-2"
-              style={{ padding: '10px 16px', borderRadius: 12, border: NEU.hairline, color: NEU.forest, fontFamily: OUTFIT, fontWeight: 700, textDecoration: 'none' }}>
-              My conferences
+              style={{ padding: '10px 16px', borderRadius: 12, border: NEU.hairline, color: NEU.forest, fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.04em', textDecoration: 'none' }}>
+              MY CONFERENCES
             </Link>
           </div>
         </Panel>

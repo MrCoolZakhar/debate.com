@@ -1,8 +1,19 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Building2, CreditCard, Clock, Users, X, ChevronDown, ChevronUp } from 'lucide-react';
+import Link from 'next/link';
+import { Building2, CreditCard, Clock, Users, X, ChevronDown, ChevronUp, Briefcase } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
+import { Emoji3D } from '@/components/neu';
+import { GoldWord } from '@/components/BrandHeading';
+
+// ── Launch gate ─────────────────────────────────────────────────────────────
+// The PUBLIC job board (/conferences/roles) is hidden until launch, so a
+// posting made here would reach nobody. While this is false the page shows a
+// coming-soon panel instead of the posting tools. Every hook, query and
+// component below is untouched and keeps compiling: flip this to true and the
+// board is back exactly as built.
+const JOB_BOARD_LIVE = false as boolean;
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import Portal from '@/components/Portal';
@@ -908,6 +919,59 @@ export default function JobBoardPage() {
   const visible = categoryTab === 'ALL'
     ? postings
     : postings.filter(p => p.category.toUpperCase() === categoryTab);
+
+  // Coming soon: the public board is not open yet (see JOB_BOARD_LIVE above).
+  // Placed after every hook so the hook order is the same on both branches.
+  if (!JOB_BOARD_LIVE) {
+    return (
+      <div className="px-6 md:px-10 py-8">
+        <div
+          className="rounded-3xl"
+          style={{
+            backgroundColor: FOREST,
+            color: '#F4F1E8',
+            padding: 'clamp(28px, 4vw, 44px)',
+            maxWidth: 640,
+            boxShadow: '0 18px 40px -24px rgba(27,56,40,0.55)',
+            fontFamily: "var(--font-brand), sans-serif",
+          }}
+        >
+          <div
+            aria-hidden
+            className="inline-flex items-center justify-center rounded-2xl"
+            style={{ width: 72, height: 72, backgroundColor: 'rgba(255,255,255,0.08)', marginBottom: 18 }}
+          >
+            <Emoji3D name="Briefcase" size={48} fallback={Briefcase} fallbackColor={GOLD} />
+          </div>
+          <h1
+            className="font-black"
+            style={{ margin: 0, fontSize: 'clamp(26px, 3vw, 34px)', lineHeight: 1.08, letterSpacing: '-0.02em', color: '#F4F1E8' }}
+          >
+            Job Board <GoldWord tone="dark">Coming Soon</GoldWord>
+          </h1>
+          <p style={{ margin: '12px 0 0', fontSize: 15.5, lineHeight: 1.5, color: 'rgba(244,241,232,0.78)', maxWidth: '44ch' }}>
+            Post chair and staff roles here once the public job board opens
+          </p>
+          <Link
+            href={`/manage/${conference?.slug ?? ''}`}
+            className="focus:outline-none"
+            style={{
+              display: 'inline-block',
+              marginTop: 22,
+              color: GOLD,
+              fontWeight: 800,
+              fontSize: 14,
+              textDecoration: 'underline',
+              textUnderlineOffset: 4,
+              textDecorationThickness: 2,
+            }}
+          >
+            Back to the dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

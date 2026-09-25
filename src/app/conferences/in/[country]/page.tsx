@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { pageMetadata, SITE_URL } from '@/lib/seo';
 import SiteNav from '@/components/SiteNav';
-import { LabFooter } from '../../landing-lab/shared';
+import SiteFooter from '@/components/SiteFooter';
 import { fetchListedConferences, isUpcoming } from '@/lib/listedConferences';
 import { countryHubs, inCountry } from '@/lib/countryHubs';
 import ConferenceLinkList from '../ConferenceLinkList';
@@ -100,12 +100,12 @@ export default async function CountryHubPage({ params }: { params: Promise<{ cou
         </div>
         <p style={{ marginTop: 32, fontSize: 14, color: '#5C5140' }}>
           Looking further afield?{' '}
-          <Link href="/conferences/explore" style={{ color: '#1B3828', fontWeight: 700 }}>Explore every conference</Link>
+          <Link href="/conferences/explore" className="hover:text-[#0F3A28]" style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Explore every conference</Link>
           {' '}or{' '}
-          <Link href="/conferences/map" style={{ color: '#1B3828', fontWeight: 700 }}>see them on the map</Link>.
+          <Link href="/conferences/map" className="hover:text-[#0F3A28]" style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>see them on the map</Link>.
         </p>
       </main>
-      <LabFooter />
+      <SiteFooter />
     </div>
   );
 }

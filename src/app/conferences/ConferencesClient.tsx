@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Users, FileText, CreditCard, Zap } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
-import FooterLegal from '@/components/FooterLegal';
+import SiteFooter from '@/components/SiteFooter';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/AuthProvider';
 import { FocusCard } from '@/components/ConferenceFocusCards';
@@ -133,7 +133,7 @@ function FeaturedSection() {
               lineHeight: 1.0,
             }}
           >
-            Conference.
+            Conference
           </span>
         </h2>
 
@@ -311,9 +311,9 @@ function OrganiserSection() {
 
 function RolesSection() {
   const stats = [
-    { number: '—', label: 'Open Positions', sub: 'Across all conferences' },
-    { number: '—', label: 'Conferences Hiring', sub: 'Actively recruiting' },
-    { number: '—', label: 'Roles Filled', sub: 'This season' },
+    { number: '–', label: 'Open Positions', sub: 'Across all conferences' },
+    { number: '–', label: 'Conferences Hiring', sub: 'Actively recruiting' },
+    { number: '–', label: 'Roles Filled', sub: 'This season' },
   ];
 
   return (
@@ -468,7 +468,7 @@ function GlobeSection() {
               lineHeight: 1.0,
             }}
           >
-            the Globe.
+            the Globe
           </span>
         </h2>
         <p
@@ -502,52 +502,7 @@ function GlobeSection() {
         </Link>
       </div>
 
-      {/* Footer */}
-      <footer
-        className="relative z-10 px-6 py-8"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='0.18'/%3E%3C/svg%3E")`,
-          backgroundRepeat: 'repeat',
-          backgroundSize: '300px 300px',
-          backgroundColor: '#1B3828',
-          borderTop: '1px solid rgba(238,217,138,0.1)',
-        }}
-      >
-        <div className="flex flex-col items-center gap-4 md:grid md:grid-cols-3 md:gap-0 md:items-center">
-          <img
-            src="/GavellingLogo.png"
-            alt="Gavelling"
-            className="h-7 w-auto"
-            style={{ filter: 'brightness(0) saturate(100%) invert(85%) sepia(30%) saturate(500%) hue-rotate(5deg) brightness(105%)' }}
-            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-          />
-          <div className="flex items-center justify-center gap-4">
-            <a
-              href="https://www.instagram.com/wearegavelling/"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Instagram"
-              style={{ color: 'rgba(238,217,138,0.5)', transition: 'color 0.15s' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#EED98A'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = 'rgba(238,217,138,0.5)'; }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
-              </svg>
-            </a>
-            <a href="https://www.linkedin.com/company/gavelling/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn"
-                  style={{ color: 'rgba(238,217,138,0.3)', transition: 'color 0.15s' }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#EED98A'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = 'rgba(238,217,138,0.3)'; }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>
-              </svg>
-            </a>
-          </div>
-          <p className="text-xs font-semibold md:text-right" style={{ color: 'rgba(238,217,138,0.45)' }}>© {new Date().getFullYear()} Gavelling. Built for the MUN community.</p>
-        </div>
-        <FooterLegal tone="forest" />
-      </footer>
+      <SiteFooter />
     </section>
   );
 }

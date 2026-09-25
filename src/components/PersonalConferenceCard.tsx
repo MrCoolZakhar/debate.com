@@ -16,6 +16,7 @@ import { CalendarClock, MapPin, ArrowUpRight, Sparkles, Users, RefreshCw } from 
 import { getCountryByName, getFlagUrl } from '@/lib/countries';
 import { Pill, type PillTone, OUTFIT } from '@/app/account/accountUi';
 import { NEU, EASE } from '@/components/neu';
+import { GOLD_CTA_BG, GOLD_CTA_BG_HOVER, GOLD_CTA_INK, GOLD_CTA_SHADOW, GOLD_CTA_SHADOW_HOVER } from '@/components/GoldButton';
 import { LogoDisc } from '@/components/LogoDisc';
 import { formatConferenceDates } from '@/lib/conferenceDates';
 import { conferenceAcronymLabel, editionYear } from '@/lib/conferenceLabels';
@@ -295,7 +296,8 @@ export function PersonalConferenceCard({
               fontFamily: OUTFIT,
               fontSize: '12px',
               fontWeight: 800,
-              letterSpacing: '0.03em',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
               textDecoration: 'none',
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
@@ -317,19 +319,21 @@ export function PersonalConferenceCard({
             style={{
               padding: '6px 13px',
               borderRadius: 999,
-              background: `linear-gradient(135deg, ${NEU.gold}, ${NEU.deepGold})`,
-              boxShadow: `0 3px 8px color-mix(in srgb, ${NEU.deepGold} 27%, transparent), ${NEU.outSm}`,
-              color: NEU.forest,
+              // The one gold CTA (src/components/GoldButton.tsx), as a pill.
+              background: GOLD_CTA_BG,
+              boxShadow: GOLD_CTA_SHADOW,
+              color: GOLD_CTA_INK,
               fontFamily: OUTFIT,
               fontSize: '12px',
               fontWeight: 800,
-              letterSpacing: '0.03em',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
               textDecoration: 'none',
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = `0 5px 12px color-mix(in srgb, ${NEU.deepGold} 40%, transparent), ${NEU.outSmHover}`; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = `0 3px 8px color-mix(in srgb, ${NEU.deepGold} 27%, transparent), ${NEU.outSm}`; }}
+            onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.background = GOLD_CTA_BG_HOVER; el.style.boxShadow = GOLD_CTA_SHADOW_HOVER; }}
+            onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.background = GOLD_CTA_BG; el.style.boxShadow = GOLD_CTA_SHADOW; }}
           >
-            <Users size={13} strokeWidth={2.6} style={{ color: NEU.forest }} />
+            <Users size={13} strokeWidth={2.6} style={{ color: GOLD_CTA_INK }} />
             Manage delegation
             <ArrowUpRight size={13} strokeWidth={2.6} />
           </Link>
@@ -351,7 +355,8 @@ export function PersonalConferenceCard({
               fontFamily: OUTFIT,
               fontSize: '12px',
               fontWeight: 800,
-              letterSpacing: '0.03em',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
               textDecoration: 'none',
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.14)'; }}

@@ -1208,7 +1208,7 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
             </p>
           </div>
           <div className="flex-shrink-0 sm:mt-1">
-            <NeuAnchorCta href="/conferences/new" icon={Plus}>Organise a conference</NeuAnchorCta>
+            <NeuAnchorCta href="/conferences/new" icon={Plus}>ORGANISE A CONFERENCE</NeuAnchorCta>
           </div>
         </div>
 
@@ -1322,7 +1322,7 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
                 <CountChip n={organizerDrafts.length} muted />
               </div>
               <p className="text-xs mb-4" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-                Drafts are not listed publicly until you publish them.
+                Drafts are not listed publicly until you publish them
               </p>
               {organizerDrafts.length === 0 ? (
                 <p className="text-sm" style={{ color: NEU.muted, fontFamily: OUTFIT }}>No drafts match these filters.</p>

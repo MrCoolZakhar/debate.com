@@ -7,15 +7,15 @@
 // the hero zone: everything below sits on clean cream / ivory slabs so each
 // section reads as its own distinct band.
 //
-// Composition, top to bottom (24 Sep 2026):
+// Composition, top to bottom (25 Sep 2026):
 //   1. Hero, headline left, "up next" card rail right         , DARK (theatre photo)
-//   2. Sessions: laptop | "Start a session" | phone            , CREAM (HomeSections.tsx)
-//   3. "Find your seat" role carousel + circuit-in-numbers strip, CREAM
-//   4. "Conferences near you", three cards chosen by IP country , IVORY
-//   5. "What is Model UN?" card beside "What is Gavelling?"    , CREAM (HomeSections.tsx)
-//   6. "Learn MUN": six guides from the blog                   , IVORY (HomeSections.tsx)
-//   7. The production globe section, verbatim                  , FOREST
-//   8. Ivory footer (design rule)
+//   2. Sessions: laptop | "Run the room" + code field | phone  , CREAM (HomeSections.tsx)
+//   3. "Learn MUN": six guides from the blog                   , FOREST (HomeSections.tsx)
+//   4. "Find your seat" role carousel + circuit-in-numbers strip, CREAM
+//   5. "Conferences near you", three cards chosen by IP country , IVORY
+//   6. The production globe section, verbatim                  , FOREST
+//   7. "What is Model UN?" card beside "What is Gavelling?"    , CREAM (HomeSections.tsx)
+//   8. The one site footer (src/components/SiteFooter.tsx)
 // The job board is hidden until it launches (see the comment where it was).
 //
 // The hero rail + the near-you row reuse the SHARED ConferenceCard
@@ -37,11 +37,12 @@ import { UN_COUNTRIES } from '@/lib/countries';
 import { recommendNearby } from '@/lib/nearbyConferences';
 import { ConferenceCard } from '../ConferenceCard';
 import { LogoDisc } from '@/components/LogoDisc';
+import SiteFooter from '@/components/SiteFooter';
+import { GoldWord } from '@/components/BrandHeading';
 import {
   LabConference, RatingSummary,
   CREAM, FOREST, GOLD, IVORY, PALE_GOLD, SANS,
   isConcluded, pickHeadliner,
-  LabFooter,
 } from './shared';
 import { SessionsSection, AboutCards, LearnMunSection, type HomeGuide } from './HomeSections';
 
@@ -74,24 +75,24 @@ const ROLE_SLIDES: RoleSlide[] = [
     blurb: 'The machine behind the weekend: run applications, allocations, delegations and communications from one place. The whole show, zero fees.',
     image: '/roles/secretariat.webp',
     imageAlt: 'Secretariat staff coordinating a conference',
-    primary: { label: 'See open roles', href: '/conferences/roles' },
-    secondary: { label: 'List your conference', href: '/conferences/new' },
+    primary: { label: 'SEE OPEN ROLES', href: '/conferences/roles' },
+    secondary: { label: 'LIST YOUR CONFERENCE', href: '/conferences/new' },
   },
   {
     role: 'Chairs',
     blurb: 'Gavel in hand: scoring, motions and the speakers list, run live from one dashboard.',
     image: '/roles/chair-card.webp',
     imageAlt: 'A chair presiding over committee from the dais',
-    primary: { label: 'Explore chairing opportunities', href: '/conferences/roles' },
-    secondary: { label: 'View your conferences', href: '/account/conferences?tab=chair' },
+    primary: { label: 'EXPLORE CHAIRING OPPORTUNITIES', href: '/conferences/roles' },
+    secondary: { label: 'VIEW YOUR CONFERENCES', href: '/account/conferences?tab=chair' },
   },
   {
     role: 'Delegates',
     blurb: 'Browse the circuit, apply once with your Gavelling profile, and build a MUN CV that writes itself.',
     image: '/roles/delegate.jpg',
     imageAlt: 'A delegate speaking from their seat in committee',
-    primary: { label: 'Explore conferences', href: '/conferences/explore' },
-    secondary: { label: 'View your conferences', href: '/account/conferences?tab=delegate' },
+    primary: { label: 'EXPLORE CONFERENCES', href: '/conferences/explore' },
+    secondary: { label: 'VIEW YOUR CONFERENCES', href: '/account/conferences?tab=delegate' },
   },
 ];
 
@@ -252,10 +253,10 @@ export default function VariantStagefront({
   }, [conferences, geo]);
 
   const nearbySub = !geo?.country
-    ? 'Taking applications now, soonest first.'
+    ? 'Taking applications now, soonest first'
     : nearby.tier === 0
-      ? `Coming up in ${geo.country}.`
-      : `Nothing open in ${geo.country} right now. These are the nearest.`;
+      ? `Coming up in ${geo.country}`
+      : `Nothing open in ${geo.country} right now. These are the nearest`;
 
   const goTo = (slug: string) => router.push(`/conferences/${slug}`);
 
@@ -348,18 +349,7 @@ export default function VariantStagefront({
                   textShadow: '0 2px 24px rgba(0,0,0,0.35)',
                 }}
               >
-                Go where<br />the{' '}
-                <span
-                  style={{
-                    fontFamily: "'Playfair Display', serif",
-                    fontStyle: 'italic',
-                    fontWeight: 400,
-                    color: PALE_GOLD,
-                  }}
-                >
-                  debate
-                </span>{' '}
-                is.
+                Go where<br />the <GoldWord tone="dark">debate</GoldWord> is
               </h1>
               <p
                 style={{
@@ -371,7 +361,7 @@ export default function VariantStagefront({
                   maxWidth: 'clamp(460px, 36vw, 620px)',
                 }}
               >
-                Real conferences, real committee rooms, from London to San Salvador. Pick your weekend.
+                Real conferences, real committee rooms, from London to San Salvador. Pick your weekend
               </p>
 
               <div className="flex flex-col gap-3" style={{ marginTop: '32px', maxWidth: 'clamp(460px, 40vw, 640px)' }}>
@@ -429,9 +419,13 @@ export default function VariantStagefront({
           </div>
         </section>
 
-        {/* ── Running a committee: laptop | Start a session | phone. Second
-            on the page by the owner's instruction (24 Sep 2026). ─────────── */}
+        {/* ── Running a committee: laptop | Run the room + code field | phone.
+            Second on the page by the owner's instruction (24 Sep 2026). ──── */}
         <SessionsSection />
+
+        {/* ── Learn MUN, the guides from the blog, on forest. Third on the
+            page by the owner's instruction (25 Sep 2026). ─────────────────── */}
+        <LearnMunSection guides={guides} />
 
         {/* ── Find your seat, role carousel, cream ──────────────────────────
             The photo carousel is back (recovered from the pre-neumorphic
@@ -457,7 +451,7 @@ export default function VariantStagefront({
               textAlign: 'center',
             }}
           >
-            One platform, every role.
+            One platform, every <GoldWord>role</GoldWord>
           </h2>
           <RoleCarousel slides={ROLE_SLIDES} />
         </section>
@@ -532,7 +526,7 @@ export default function VariantStagefront({
                     id="sf-near-heading"
                     style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(26px, 3vw, 48px)', letterSpacing: '-0.015em', color: INK, margin: '0 0 6px 0', textWrap: 'balance' }}
                   >
-                    Conferences near you
+                    Conferences near <GoldWord>you</GoldWord>
                   </h2>
                   <p aria-live="polite" style={{ fontFamily: SANS, fontSize: 'clamp(15px, 1.05vw, 18px)', lineHeight: 1.6, color: INK_55, margin: 0 }}>
                     {nearbySub}
@@ -540,8 +534,8 @@ export default function VariantStagefront({
                 </div>
                 <Link
                   href="/conferences/explore"
-                  className="inline-flex items-center gap-1.5 self-start sm:self-auto focus:outline-none"
-                  style={{ fontFamily: SANS, fontSize: '14px', fontWeight: 700, color: FOREST, textDecoration: 'none', whiteSpace: 'nowrap' }}
+                  className="inline-flex min-h-11 items-center gap-1.5 self-start sm:self-auto rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                  style={{ fontFamily: SANS, fontSize: '14px', fontWeight: 800, color: FOREST, textDecoration: 'underline', textUnderlineOffset: '4px', textDecorationThickness: '1.5px', whiteSpace: 'nowrap' }}
                 >
                   See every conference <ArrowRight size={15} strokeWidth={2.5} aria-hidden="true" />
                 </Link>
@@ -563,12 +557,6 @@ export default function VariantStagefront({
             </div>
           </section>
         )}
-
-        {/* ── "What is Model UN?" (the SEO explainer, text unchanged) beside
-            "What is Gavelling?", then the guides from the blog ─────────── */}
-        <AboutCards />
-
-        <LearnMunSection guides={guides} />
 
         {/* ── Section: MUN Across the Globe, copied verbatim from production ── */}
         <section
@@ -648,7 +636,7 @@ export default function VariantStagefront({
                   lineHeight: 1.0,
                 }}
               >
-                the Globe.
+                the Globe
               </span>
             </h2>
             <p
@@ -686,7 +674,12 @@ export default function VariantStagefront({
           </div>
         </section>
 
-        <LabFooter />
+        {/* ── "What is Model UN?" (the SEO explainer, text unchanged) beside
+            "What is Gavelling?", the last thing before the footer (owner,
+            25 Sep 2026) ────────────────────────────────────────────────── */}
+        <AboutCards />
+
+        <SiteFooter />
       </div>
     </div>
   );
@@ -833,7 +826,7 @@ function HeroSearchBar({ conferences }: { conferences: LabConference[] }) {
           onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.backgroundColor = PALE_GOLD; }}
         >
           <Search size={16} strokeWidth={2.75} className="sm:hidden" aria-hidden="true" />
-          <span className="hidden sm:inline">{q ? 'Search' : 'Discover all'}</span>
+          <span className="hidden sm:inline">{q ? 'SEARCH' : 'DISCOVER ALL'}</span>
         </button>
       </div>
 
@@ -884,7 +877,7 @@ function HeroSearchBar({ conferences }: { conferences: LabConference[] }) {
               className="block px-4 py-3.5"
               style={{ fontFamily: SANS, fontSize: 13.5, color: INK_55, textDecoration: 'none' }}
             >
-              No conferences match &ldquo;{q}&rdquo;. <span style={{ color: FOREST, fontWeight: 700 }}>browse all &rarr;</span>
+              No conferences match &ldquo;{q}&rdquo;. <span style={{ color: FOREST, fontWeight: 800, textDecoration: 'underline', textUnderlineOffset: '3px' }}>browse all &rarr;</span>
             </Link>
           )}
         </div>
@@ -900,13 +893,15 @@ function HeroTextLink({ href, label }: { href: string; label: string }) {
       href={href}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      className="inline-flex items-center gap-1.5"
+      className="inline-flex min-h-11 items-center gap-1.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]"
       style={{
         fontFamily: SANS,
         fontSize: '13.5px',
-        fontWeight: 600,
-        color: hover ? CREAM : 'rgba(237,231,216,0.7)',
-        textDecoration: 'none',
+        fontWeight: 800,
+        color: hover ? CREAM : 'rgba(237,231,216,0.82)',
+        textDecoration: 'underline',
+        textUnderlineOffset: '4px',
+        textDecorationThickness: '1.5px',
         transition: 'color 160ms ease',
         textShadow: '0 1px 6px rgba(0,0,0,0.4)',
       }}

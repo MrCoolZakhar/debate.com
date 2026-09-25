@@ -1,5 +1,7 @@
 'use client';
 
+import BrandLogo from '@/components/BrandLogo';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // /join — enter a session code, pick a role, take a seat.
 //
@@ -17,7 +19,10 @@
 //     code and the role carried back;
 //   • a chair code typed or linked as CODE-1234 (the homepage routes those here
 //     with &mode=chair) looks up CODE and fills the chair code in. It used to look
-//     up "CODE-1234" and find nothing.
+//     up "CODE-1234" and find nothing;
+//   • ONE SCREEN on desktop (25 Sep 2026): from 1024px wide and 700px tall the
+//     stage is sized to the viewport and scrolls inside itself, so the page never
+//     scrolls and the Join button is always on screen (JOIN_FIT_CSS below).
 // Visual kit: ./joinUi.tsx. Seat list: ./JoinSeatPicker.tsx.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -698,17 +703,17 @@ function JoinPageInner() {
 
       {/* ── Nav ─────────────────────────────────────────────────────────────── */}
       <nav className="relative z-20 mx-auto flex h-16 w-full max-w-[1120px] items-center justify-between gap-3 px-4 sm:px-6">
-        <Link href="/sessions" className="flex flex-shrink-0 items-center focus:outline-none">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/GavellingLogo.png" alt="Gavelling" className="h-auto w-[118px] object-contain sm:w-[140px]" />
-        </Link>
+        {/* The one wordmark (src/components/BrandLogo.tsx); on the set-up
+            screens it leads back to /sessions, not home. */}
+        <BrandLogo href="/sessions" height={26} tone="ink" priority />
+
         <div className="flex min-w-0 items-center gap-2">
           <SessionLanguageMenu />
           <Link
             href="/create"
             aria-label={t('join_nav_create')}
-            className="inline-flex h-10 items-center gap-1.5 rounded-xl px-3 focus:outline-none active:scale-[0.96]"
-            style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: C.forest, transitionProperty: 'transform, background-color', transitionDuration: '150ms' }}
+            className="inline-flex h-11 items-center gap-1.5 rounded-xl px-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 active:scale-[0.96]"
+            style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.forest, transitionProperty: 'transform, background-color', transitionDuration: '150ms' }}
           >
             <Plus size={16} strokeWidth={2.6} />
             <span className="hidden sm:inline">{t('join_nav_create')}</span>
@@ -721,8 +726,8 @@ function JoinPageInner() {
               onClick={goSignIn}
               disabled={authLoading}
               aria-label={t('join_signin_cta')}
-              className="gv-lift inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl px-3.5 focus:outline-none active:scale-[0.96]"
-              style={{ backgroundColor: C.forest, color: C.gold, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, letterSpacing: '0.02em', opacity: authLoading ? 0 : 1, transitionProperty: 'opacity, transform, box-shadow' }}
+              className="gv-lift inline-flex h-11 items-center gap-2 whitespace-nowrap rounded-xl px-3.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 active:scale-[0.96]"
+              style={{ backgroundColor: C.forest, color: C.gold, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', cursor: 'pointer', opacity: authLoading ? 0 : 1, transitionProperty: 'opacity, transform, box-shadow' }}
             >
               <LogIn size={15} strokeWidth={2.6} />
               {/* Icon only under 400px: "Se connecter" / "Iniciar sesión" pushed the bar off a 360px phone. */}
@@ -732,7 +737,7 @@ function JoinPageInner() {
         </div>
       </nav>
 
-      <main className="relative z-10 mx-auto w-full max-w-[1120px] px-4 pb-16 pt-1 sm:px-6 sm:pt-3">
+      <main className="relative z-10 mx-auto w-full max-w-[1120px] px-4 pb-16 pt-1 sm:px-6 sm:pt-3 lg:pb-4 lg:pt-2">
         {/* Idle logout notice: /delegate/[code] sends a delegate here with ?idle=<country>
             after an hour without activity (src/lib/delegateIdle.ts). */}
         {idleCountry && (
@@ -760,7 +765,7 @@ function JoinPageInner() {
           </div>
 
           <JoinCard>
-            <style>{JOIN_BAR_CSS}</style>
+            <style>{JOIN_BAR_CSS + JOIN_FIT_CSS}</style>
             {/* ── 1. The code ─────────────────────────────────────────────── */}
             <FieldLabel htmlFor="join-code">{t('join_code_label')}</FieldLabel>
             <div className="relative">
@@ -810,8 +815,8 @@ function JoinPageInner() {
                     <button
                       type="button"
                       onClick={() => doLookup(lookupCode.toUpperCase(), mode, splitChairCode(code.trim()).suffix)}
-                      className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 focus:outline-none active:scale-[0.96]"
-                      style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: C.danger, backgroundColor: 'rgba(139,32,32,0.08)' }}
+                      className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8B2020] focus-visible:ring-offset-2 active:scale-[0.96]"
+                      style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', cursor: 'pointer', color: C.danger, backgroundColor: 'rgba(139,32,32,0.08)' }}
                     >
                       <RotateCw size={13} strokeWidth={2.6} />
                       {t('join_retry')}
@@ -833,12 +838,16 @@ function JoinPageInner() {
 
             {/* ── 3. The stage: reserved height, so steps swap in place ──────── */}
             {/* Reserved from lg only: on a phone the stage grows with its step and the
-                Join action is a sticky bar at the bottom of the screen instead (#36). */}
-            <div className="mt-4 lg:min-h-[656px]">
+                Join action is a sticky bar at the bottom of the screen instead (#36).
+                On a desktop of at least 700px tall the reserve is what the viewport
+                leaves (JOIN_FIT_CSS): a step taller than that scrolls INSIDE the stage,
+                the seat list flexing first, so the page itself never scrolls and the
+                Join button is always on screen. */}
+            <div className="gv-join-stage mt-4 lg:mt-3">
               {!foundCommittee ? (
                 <EmptyStage busy={lookingUp} title={t('join_stage_empty_title')} body={t('join_stage_empty_body')} />
               ) : (
-                <div className="space-y-4">
+                <div className="gv-join-steps space-y-4">
                   <CommitteeCard
                     committee={foundCommittee}
                     conferenceCommittee={conferenceCommittee}
@@ -990,7 +999,7 @@ function JoinPageInner() {
                       </div>
                     ) : undefined;
                     return (
-                      <div>
+                      <div className="gv-join-seatstep">
                         <FieldLabel>{t('join_country_label')}</FieldLabel>
                         <JoinSeatPicker
                           seats={seats}
@@ -1039,9 +1048,9 @@ function JoinPageInner() {
                                 type="button"
                                 aria-pressed={on}
                                 onClick={() => { setChairNameMode('select'); setChairName(n); }}
-                                className="inline-flex items-center gap-2 rounded-xl px-3.5 focus:outline-none active:scale-[0.96]"
+                                className="inline-flex items-center gap-2 rounded-xl px-3.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 active:scale-[0.96]"
                                 style={{
-                                  minHeight: 42,
+                                  minHeight: 44, cursor: 'pointer',
                                   backgroundColor: on ? C.forest : 'rgba(27,56,40,0.05)',
                                   boxShadow: on ? `inset 0 0 0 1.5px ${C.gold}` : 'inset 0 0 0 1px rgba(27,56,40,0.12)',
                                   color: on ? C.page : C.ink, fontFamily: OUTFIT, fontSize: 14, fontWeight: 700,
@@ -1058,12 +1067,12 @@ function JoinPageInner() {
                             type="button"
                             aria-pressed={chairNameMode === 'new'}
                             onClick={() => { setChairNameMode('new'); setChairName(''); }}
-                            className="inline-flex items-center gap-1.5 rounded-xl px-3.5 focus:outline-none active:scale-[0.96]"
+                            className="inline-flex items-center gap-1.5 rounded-xl px-3.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 active:scale-[0.96]"
                             style={{
-                              minHeight: 42,
+                              minHeight: 44, cursor: 'pointer',
                               backgroundColor: chairNameMode === 'new' ? 'rgba(238,217,138,0.45)' : 'transparent',
                               boxShadow: chairNameMode === 'new' ? 'inset 0 0 0 1.5px rgba(182,135,31,0.5)' : 'inset 0 0 0 1px rgba(27,56,40,0.18)',
-                              color: C.forest, fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700,
+                              color: C.forest, fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
                               transitionProperty: 'background-color, box-shadow, transform', transitionDuration: '150ms',
                             }}
                           >
@@ -1096,13 +1105,13 @@ function JoinPageInner() {
                               type="button"
                               aria-pressed={on}
                               onClick={() => setChairRole(r)}
-                              className="inline-flex items-center justify-center gap-2 rounded-xl focus:outline-none active:scale-[0.96]"
+                              className="inline-flex items-center justify-center gap-2 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 active:scale-[0.96]"
                               style={{
-                                height: 44,
+                                height: 44, cursor: 'pointer',
                                 backgroundColor: on ? C.forest : 'transparent',
                                 color: on ? C.gold : C.inkSoft,
                                 boxShadow: on ? '0 2px 8px rgba(27,56,40,0.22)' : 'none',
-                                fontFamily: OUTFIT, fontSize: 14, fontWeight: 800,
+                                fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase',
                                 transitionProperty: 'background-color, color, box-shadow, transform', transitionDuration: '160ms',
                               }}
                             >
@@ -1187,7 +1196,7 @@ function JoinPageInner() {
             {/* ── 4. The action ───────────────────────────────────────────── */}
             {/* A sticky bar at the bottom of the screen, above the safe area and (through
                 --join-kb, the visual viewport) above the on-screen keyboard. */}
-            <div ref={joinBarRef} className="join-action-bar mt-5">
+            <div ref={joinBarRef} className="join-action-bar mt-5 lg:mt-3">
               <PrimaryAction
                 onClick={handleJoin}
                 disabled={joinDisabled}
@@ -1208,9 +1217,9 @@ function JoinPageInner() {
               </div>
             )}
 
-            <p className="mt-5 text-center" style={{ fontFamily: OUTFIT, fontSize: 13, color: C.inkSoft }}>
+            <p className="mt-5 text-center lg:mt-3" style={{ fontFamily: OUTFIT, fontSize: 13, color: C.inkSoft }}>
               {t('join_chair_prompt')}{' '}
-              <Link href="/create" className="font-bold underline-offset-4 hover:underline focus:outline-none" style={{ color: C.forest }}>
+              <Link href="/create" className="font-bold underline decoration-[1.5px] underline-offset-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 rounded-sm" style={{ color: C.forest }}>
                 {t('join_create_instead')}
               </Link>
             </p>
@@ -1240,6 +1249,66 @@ const JOIN_BAR_CSS = `
 }
 @media (min-width: 640px) {
   .join-action-bar { margin-inline: -28px; padding-inline: 28px; }
+}
+`;
+
+// One screen on desktop (25 Sep 2026). From 1024px wide and 700px tall the page
+// never scrolls: the stage takes exactly what the viewport leaves and the Join
+// button sits under it, on screen. The budget, in CSS px, at lg:
+//   nav 64 + main pt 8 + pb 16 + card pt 20 + pb 16 + code label 25 + code field 66
+//   + rail 8 + 42 + stage mt 12 + action mt 12 + action bar 70 + create line 32 = 391,
+// rounded up to 394. So the stage is 100dvh - 394px, capped at the 656px it always
+// reserved (nothing changes from 1050px tall up) and never under 300px. A step
+// taller than the stage scrolls INSIDE it: the delegate step gives the seat list
+// the flexible space first (down to 160px, three rows and a peek), so at 900px
+// tall the whole delegate step fits, at 800px the stage scrolls about 100px and
+// the chair step (about 650px of controls) scrolls in every height under 1050.
+// dvh, never vh. Below 1024 wide, or under 700 tall, nothing here applies and the
+// page scrolls exactly as before (lg keeps its 656px reserve).
+const JOIN_FIT_CSS = `
+@media (min-width: 1024px) {
+  .gv-join-stage { min-height: 656px; }
+}
+@media (min-width: 1024px) and (min-height: 700px) {
+  .gv-join-stage {
+    display: flex;
+    flex-direction: column;
+    min-height: 300px;
+    height: clamp(300px, calc(100dvh - 394px), 656px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    /* Room for the card shadows on either side of the scroll box. */
+    margin-inline: -12px;
+    padding-inline: 12px;
+    padding-bottom: 4px;
+  }
+  .gv-join-stage > .gv-join-steps {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .gv-join-stage > .gv-join-steps > * { flex-shrink: 0; }
+  .gv-join-stage .gv-join-seatstep {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .gv-join-stage .gv-join-picker {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .gv-join-stage .gv-join-picker > * { flex-shrink: 0; }
+  .gv-join-stage .gv-join-picker-list {
+    height: auto;
+    flex: 1 1 300px;
+    min-height: 160px;
+  }
+  .join-action-bar { padding-top: 8px; padding-bottom: 8px; }
 }
 `;
 
@@ -1308,7 +1377,7 @@ function EmptyStage({ busy, title, body }: { busy: boolean; title: string; body:
   const flags = ['BR', 'FR', 'KE', 'JP', 'IN', 'MX'];
   return (
     <div
-      className="flex h-full min-h-[inherit] flex-col items-center justify-center rounded-3xl px-6 text-center"
+      className="flex h-full min-h-[inherit] flex-1 flex-col items-center justify-center rounded-3xl px-6 text-center"
       style={{
         minHeight: 'inherit',
         backgroundColor: 'rgba(240,235,221,0.6)',

@@ -15,7 +15,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Search, X, Landmark, GraduationCap, Gavel, Briefcase, Wallet, type LucideIcon } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
-import FooterLegal from '@/components/FooterLegal';
+import SiteFooter from '@/components/SiteFooter';
 import { Emoji3D, OUTFIT } from '@/components/neu';
 import { GoldWord } from '@/components/BrandHeading';
 import { FaqList } from '@/components/pricing/FaqList';
@@ -267,7 +267,7 @@ export default function HelpClient() {
         </div>
       </main>
 
-      <FooterLegal tone="ivory" />
+      <SiteFooter />
     </div>
   );
 }

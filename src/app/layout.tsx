@@ -137,7 +137,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             page load spent early bandwidth on something no visitor sees, while
             the one image that IS painted immediately (the header logo) had to
             wait, flashing its alt text in the meantime. */}
-        <link rel="preload" as="image" href="/Conferences.webp" type="image/webp" fetchPriority="high" />
+        <link rel="preload" as="image" href="/gavelling-logo.png" type="image/png" fetchPriority="high" />
       </head>
       <body className="min-h-full bg-[#EDE7D8] text-[#1C1410] antialiased">
         <AuthProvider>

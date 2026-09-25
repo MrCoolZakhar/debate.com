@@ -4,7 +4,7 @@ import { MapPin } from 'lucide-react';
 import { pageMetadata, SITE_URL } from '@/lib/seo';
 import { supabase } from '@/lib/supabase';
 import SiteNav from '@/components/SiteNav';
-import { LabFooter } from '../landing-lab/shared';
+import SiteFooter from '@/components/SiteFooter';
 import { isListedConference } from '@/lib/publicConferences';
 import { countryHubs } from '@/lib/countryHubs';
 
@@ -149,7 +149,7 @@ export default async function AllConferencesPage() {
             : 'Every conference listed on Gavelling, from A to Z. '}
           Each page has the committees, dates and fees, and you apply as a delegate, chair or advisor with one
           profile. To filter by date, fee or level,{' '}
-          <Link href="/conferences/explore" style={{ color: FOREST, fontWeight: 700 }}>
+          <Link href="/conferences/explore" className="hover:text-[#0F3A28]" style={{ color: FOREST, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>
             explore conferences
           </Link>
           .
@@ -190,7 +190,7 @@ export default async function AllConferencesPage() {
           {confs.length === 0 ? (
             <p style={{ fontSize: 15, color: INK_SOFT, margin: 0 }}>
               The list could not be loaded just now. Please try again in a moment, or{' '}
-              <Link href="/conferences/explore" style={{ color: FOREST, fontWeight: 700 }}>
+              <Link href="/conferences/explore" className="hover:text-[#0F3A28]" style={{ color: FOREST, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>
                 explore conferences
               </Link>
               .
@@ -248,7 +248,7 @@ export default async function AllConferencesPage() {
           )}
         </section>
       </main>
-      <LabFooter />
+      <SiteFooter />
     </div>
   );
 }

@@ -194,7 +194,7 @@ export default function CVPage() {
             MUN CV
           </h1>
           <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: 0 }}>
-            Your Model UN conference history: typeset, verified, and yours.
+            Your Model UN conference history: typeset, verified, and yours
           </p>
         </div>
 
@@ -227,7 +227,7 @@ export default function CVPage() {
             onPointerUp={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
           >
             {copied ? <Check size={16} strokeWidth={2.6} style={{ color: '#2A5A3C' }} /> : <Share2 size={15} strokeWidth={2.4} />}
-            {copied ? 'Copied!' : 'Share'}
+            {copied ? 'COPIED' : 'SHARE'}
           </button>
 
           <button

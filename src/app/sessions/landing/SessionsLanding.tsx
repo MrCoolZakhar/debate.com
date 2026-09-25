@@ -1,40 +1,46 @@
 'use client';
 
-// The Sessions landing page (/sessions), redesigned 24 Sep 2026.
+// The Sessions landing page (/sessions), redesigned 24 Sep 2026, reworked
+// 25 Sep 2026 to the owner's taste (uppercase buttons, Title Case titles with
+// the last word in gold, no full stops on titles and captions, one palette).
 //
-//   1. Hero: the gavel film washed to ivory, "MUN done right." on ONE line in
-//      every language, Start Committee as the one big action and a smaller
-//      code field under it, the chair's laptop and a delegate's phone on the
-//      right as still images (the owner removed the live ticking clock).
-//   2. RoleCards: three photo cards, Chairs / Delegates / Faculty advisors (25 Sep 2026;
-//      they replaced RoleShowcase's tabs of session screenshots, at the owner's request).
-//   3. ConferenceBridge: running a whole conference, with one committee drawn
-//      by the organiser's real live status card (static demo data).
+//   1. Hero: the gavel film washed to ivory, "Run the *room*" on ONE line in
+//      every language, START COMMITTEE as the one big action and a smaller
+//      code field with JOIN under it, the chair's laptop and a delegate's
+//      phone on the right as still images.
+//   2. RoleCards: "Built for every role in the *room*", one tall photo panel
+//      per role (Chairs, Delegates, Faculty advisors) with the role word, one
+//      line and a real action, in the homepage's role pattern.
+//   3. ConferenceBridge: running a whole conference, with three committees
+//      drawn by the organiser's real live status card (static demo data).
+//   4. SiteFooter, the one footer every public page shares.
 //
 // Sessions route, so every string goes through t() in all four languages
 // (sl_* keys in src/lib/translations.ts).
 
 import { useEffect, useState, type CSSProperties } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import SiteNav from '@/components/SiteNav';
-import FooterLegal from '@/components/FooterLegal';
+import SiteFooter from '@/components/SiteFooter';
+import { GoldButtonStyles } from '@/components/GoldButton';
+import { GoldWord } from '@/components/BrandHeading';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import RoleCards from './RoleCards';
 import ConferenceBridge from './ConferenceBridge';
-import { BRAND, INK, INK_SOFT, FOREST, GOLD_TEXT, BRONZE, HAIR } from './tokens';
+import { BRAND, INK, INK_SOFT, FOREST, FOREST_DEEP, GOLD, GOLD_TEXT, HAIR, IVORY, CREAM, WHITE } from './tokens';
 
 type Lang = 'en' | 'es' | 'fr' | 'ar';
 
-/** The headline, one line in every language, on its own row across the
- *  whole hero (it runs above the phone). `lg` from 1024px, `sm` below it
- *  (vw-based, so it never wraps on a phone). */
-const HEADLINE: Record<Lang, { lead: string; accent: string; lg: string; sm: string }> = {
-  en: { lead: 'MUN done', accent: 'right.', lg: 'clamp(44px, 5.2vw, 86px)', sm: 'clamp(34px, 10.4vw, 72px)' },
-  es: { lead: 'MUN como se', accent: 'debe.', lg: 'clamp(36px, 4.2vw, 70px)', sm: 'clamp(30px, 8.6vw, 64px)' },
-  fr: { lead: 'MUN comme il se', accent: 'doit.', lg: 'clamp(30px, 3.5vw, 58px)', sm: 'clamp(26px, 7.2vw, 56px)' },
-  ar: { lead: 'النموذج الأممي', accent: 'كما يجب.', lg: 'clamp(34px, 4vw, 66px)', sm: 'clamp(28px, 8.2vw, 60px)' },
+/** The headline sits on one line in every language, on its own row across
+ *  the whole hero. Only the SIZE is per language (the words come from t()):
+ *  `lg` from 1024px, `sm` below it (vw-based, so it never wraps on a phone).
+ *  About 10% bigger than the 24 Sep sizes; French is the longest line. */
+const HEADLINE_SIZE: Record<Lang, { lg: string; sm: string }> = {
+  en: { lg: 'clamp(48px, 5.7vw, 95px)', sm: 'clamp(38px, 11.4vw, 80px)' },
+  es: { lg: 'clamp(46px, 5.4vw, 92px)', sm: 'clamp(36px, 10.6vw, 78px)' },
+  fr: { lg: 'clamp(42px, 5vw, 86px)', sm: 'clamp(32px, 9.4vw, 72px)' },
+  ar: { lg: 'clamp(46px, 5.4vw, 92px)', sm: 'clamp(36px, 10.6vw, 78px)' },
 };
 
 export default function SessionsLanding() {
@@ -42,7 +48,7 @@ export default function SessionsLanding() {
   const t = useT();
   const { language } = useLanguage();
   const lang = (['en', 'es', 'fr', 'ar'].includes(language) ? language : 'en') as Lang;
-  const head = HEADLINE[lang];
+  const size = HEADLINE_SIZE[lang];
   const [joinCode, setJoinCode] = useState('');
   const [showDeletedNotice, setShowDeletedNotice] = useState(false);
 
@@ -66,8 +72,9 @@ export default function SessionsLanding() {
   };
 
   return (
-    <div className="min-h-screen relative overflow-x-hidden" style={{ backgroundColor: '#FAF8F3', fontFamily: BRAND, color: INK }}>
+    <div className="min-h-screen relative overflow-x-hidden" style={{ backgroundColor: CREAM, fontFamily: BRAND, color: INK }}>
       <style>{CSS}</style>
+      <GoldButtonStyles />
 
       {/* Paper grain, as on every public page */}
       <div aria-hidden className="pointer-events-none fixed inset-0 z-[1]" style={GRAIN} />
@@ -76,18 +83,18 @@ export default function SessionsLanding() {
         <SiteNav />
 
         {showDeletedNotice && (
-          <div className="fixed top-4 left-1/2 z-[100] -translate-x-1/2 px-4 w-full flex justify-center">
-            <div className="flex items-center gap-3 rounded-xl px-4 py-3 shadow-lg" style={{ backgroundColor: FOREST, border: '1px solid rgba(238,217,138,0.35)', maxWidth: 420 }}>
-              <p className="text-sm font-semibold flex-1" style={{ color: '#EED98A', margin: 0 }}>Your account has been deleted.</p>
-              <button onClick={() => setShowDeletedNotice(false)} className="text-xs font-bold focus:outline-none" style={{ color: 'rgba(238,217,138,0.75)' }}>
-                Dismiss
+          <div className="fixed top-4 left-1/2 z-[100] -translate-x-1/2 px-4 w-full flex justify-center" role="status">
+            <div className="flex items-center gap-3 rounded-xl px-4 py-2 shadow-lg" style={{ backgroundColor: FOREST, border: '1px solid rgba(238,217,138,0.35)', maxWidth: 440 }}>
+              <p className="text-sm font-semibold flex-1" style={{ color: GOLD_TEXT, margin: 0 }}>{t('sl_deleted_notice')}</p>
+              <button type="button" onClick={() => setShowDeletedNotice(false)} className="sl-dismiss focus:outline-none">
+                {t('sl_dismiss')}
               </button>
             </div>
           </div>
         )}
 
         {/* ── 1. Hero ─────────────────────────────────────────────────────── */}
-        <section className="sl-hero relative overflow-hidden" style={{ marginTop: -72, backgroundColor: '#EDE7D8' }}>
+        <section className="sl-hero relative overflow-hidden" style={{ marginTop: -72, backgroundColor: IVORY }}>
           {/* Plays once and rests on its last frame (owner: no loop). */}
           <video className="sl-film" autoPlay muted playsInline preload="metadata" aria-hidden>
             <source src="/hero_no_audio.webm" type="video/webm" />
@@ -98,12 +105,10 @@ export default function SessionsLanding() {
           <div className="sl-hero-in relative z-[2] mx-auto w-full">
             <h1
               className="sl-h1"
-              style={{ '--h1-lg': head.lg, '--h1-sm': head.sm } as CSSProperties}
+              style={{ '--h1-lg': size.lg, '--h1-sm': size.sm } as CSSProperties}
             >
-              {head.lead}{' '}
-              <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: BRONZE, letterSpacing: '-0.01em' }}>
-                {head.accent}
-              </span>
+              {t('sl_h1_lead')}{' '}
+              <GoldWord tone="light">{t('sl_h1_accent')}</GoldWord>
             </h1>
             <div className="sl-copy min-w-0">
               <p className="sl-lede" style={{ color: INK_SOFT }}>{t('sl_lede')}</p>
@@ -134,7 +139,7 @@ export default function SessionsLanding() {
                   </button>
                 </span>
               </form>
-              <p className="sl-free" style={{ color: '#6B5F52' }}>{t('sl_free')}</p>
+              <p className="sl-free" style={{ color: INK_SOFT }}>{t('sl_free')}</p>
             </div>
 
             <div className="sl-devices" aria-label={`${t('sl_alt_laptop')} ${t('sl_alt_phone')}`} role="img">
@@ -160,45 +165,14 @@ export default function SessionsLanding() {
           </div>
         </section>
 
-        {/* ── 2. One room, three seats ─────────────────────────────────────── */}
+        {/* ── 2. Built for every role in the room ──────────────────────────── */}
         <RoleCards />
 
         {/* ── 3. Running a whole conference ────────────────────────────────── */}
         <ConferenceBridge />
 
-        {/* ── Footer (unchanged from the old page) ─────────────────────────── */}
-        <footer className="relative z-10 border-t px-6 py-8" style={{ borderColor: HAIR, backgroundColor: '#F6F1E9' }}>
-          <div className="flex flex-col items-center gap-4 md:grid md:grid-cols-3 md:gap-0 md:items-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/GavellingLogo.webp"
-              alt="Gavelling"
-              loading="lazy"
-              decoding="async"
-              className="h-7 w-auto"
-              style={{ filter: 'brightness(0) saturate(100%) invert(18%) sepia(25%) saturate(800%) hue-rotate(100deg) brightness(85%)' }}
-            />
-            <div className="flex items-center justify-center gap-4">
-              <a href="https://www.instagram.com/wearegavelling/" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="sl-social">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <rect x="2" y="2" width="20" height="20" rx="5" ry="5" /><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" /><line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
-                </svg>
-              </a>
-              <a href="https://www.linkedin.com/company/gavelling/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" className="sl-social">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" /><rect x="2" y="9" width="4" height="12" /><circle cx="4" cy="4" r="2" />
-                </svg>
-              </a>
-            </div>
-            <div className="flex flex-col items-center gap-1 md:items-end">
-              <p className="text-xs font-semibold" style={{ color: FOREST, margin: 0 }}>
-                {t('home_footer_copy').replace('{year}', String(new Date().getFullYear()))}
-              </p>
-              <Link href="/privacy" className="text-xs sl-footlink">Privacy Policy</Link>
-            </div>
-          </div>
-          <FooterLegal tone="ivory" />
-        </footer>
+        {/* ── Footer: the one shared footer ────────────────────────────────── */}
+        <SiteFooter copy={t('home_footer_copy')} />
       </div>
     </div>
   );
@@ -216,37 +190,40 @@ const CSS = `
 .sl-hero { min-height: min(100svh, 960px); display: flex; align-items: center; }
 .sl-film { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .42; filter: blur(2px) saturate(.75); }
 .sl-wash { position: absolute; inset: 0; background:
-  linear-gradient(90deg, #EDE7D8 0%, rgba(237,231,216,.93) 34%, rgba(237,231,216,.55) 62%, rgba(237,231,216,.35) 100%),
-  linear-gradient(to bottom, rgba(237,231,216,0) 74%, #FAF8F3 100%); }
+  linear-gradient(90deg, ${IVORY} 0%, rgba(237,231,216,.93) 34%, rgba(237,231,216,.55) 62%, rgba(237,231,216,.35) 100%),
+  linear-gradient(to bottom, rgba(237,231,216,0) 74%, ${CREAM} 100%); }
 [dir="rtl"] .sl-wash { background:
-  linear-gradient(270deg, #EDE7D8 0%, rgba(237,231,216,.93) 34%, rgba(237,231,216,.55) 62%, rgba(237,231,216,.35) 100%),
-  linear-gradient(to bottom, rgba(237,231,216,0) 74%, #FAF8F3 100%); }
+  linear-gradient(270deg, ${IVORY} 0%, rgba(237,231,216,.93) 34%, rgba(237,231,216,.55) 62%, rgba(237,231,216,.35) 100%),
+  linear-gradient(to bottom, rgba(237,231,216,0) 74%, ${CREAM} 100%); }
 .sl-hero-in { max-width: 1520px; padding: 116px clamp(16px, 4vw, 64px) 72px; display: grid;
   grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.22fr); grid-template-areas: "h dev" "copy dev"; grid-template-rows: auto 1fr;
   column-gap: clamp(24px, 3vw, 56px); row-gap: 0; align-items: start; }
 .sl-h1 { grid-area: h; align-self: end; padding-top: clamp(12px, 2.4vw, 44px); position: relative; z-index: 3; margin: 0; font-weight: 800; line-height: 0.98; letter-spacing: -0.04em; white-space: nowrap; color: ${INK}; font-size: var(--h1-lg); }
 .sl-copy { grid-area: copy; padding-top: clamp(14px, 1.4vw, 22px); }
-.sl-lede { font-size: 16.5px; line-height: 1.6; margin: 0; max-width: 28em; }
-.sl-start { display: inline-flex; align-items: center; justify-content: center; margin-top: 28px; height: 64px; padding: 0 44px;
-  border: 0; border-radius: 9999px; background: ${FOREST}; color: ${GOLD_TEXT}; font: 700 19px/1 ${BRAND}; letter-spacing: 0.01em; cursor: pointer;
+.sl-lede { font-size: clamp(18px, 1.4vw, 21px); font-weight: 500; line-height: 1.4; margin: 0; max-width: 28em; letter-spacing: -0.005em; }
+.sl-start { display: inline-flex; align-items: center; justify-content: center; margin-top: 28px; min-height: 64px; padding: 0 44px;
+  border: 0; border-radius: 9999px; background: ${FOREST}; color: ${GOLD_TEXT}; font: 800 17px/1 ${BRAND}; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.16), 0 18px 34px -16px rgba(27,56,40,.9);
   transition: transform 160ms cubic-bezier(.22,1,.36,1), background-color 200ms ease; }
-.sl-start:hover { background: #224733; }
+.sl-start:hover { background: ${FOREST_DEEP}; }
 .sl-start:active { transform: scale(.97); }
-.sl-start:focus-visible { outline: 2px solid #B6871F; outline-offset: 3px; }
+.sl-start:focus-visible { outline: 2px solid ${GOLD}; outline-offset: 3px; }
 .sl-join { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
-.sl-join-box { display: inline-flex; align-items: center; height: 44px; padding: 0 4px 0 16px; border-radius: 9999px; background: rgba(255,255,255,.85); box-shadow: inset 0 0 0 1.5px ${HAIR}; }
-.sl-join-box input { width: 128px; border: 0; background: transparent; outline: none; font: 700 14.5px/1 ${BRAND}; letter-spacing: .1em; text-transform: uppercase; color: ${INK}; }
-.sl-join-box input::placeholder { letter-spacing: 0; text-transform: none; font-weight: 500; color: #6B5F52; }
-.sl-join-box button { height: 36px; padding: 0 16px; border: 0; border-radius: 9999px; background: ${FOREST}; color: ${GOLD_TEXT}; font: 700 13.5px/1 ${BRAND}; cursor: pointer; }
-.sl-join-box button:disabled { background: #D8CDB6; color: #6B5F52; cursor: default; }
-.sl-join-box:focus-within { box-shadow: inset 0 0 0 1.5px ${FOREST}; }
-.sl-free { margin: 12px 0 0; font-size: 13px; }
+.sl-join-box { display: inline-flex; align-items: center; height: 52px; padding: 0 4px 0 16px; border-radius: 9999px; background: rgba(255,255,255,.85); box-shadow: inset 0 0 0 1.5px ${HAIR}; }
+.sl-join-box input { width: 136px; height: 44px; border: 0; background: transparent; outline: none; font: 700 15px/1 ${BRAND}; letter-spacing: .1em; text-transform: uppercase; color: ${INK}; }
+.sl-join-box input::placeholder { letter-spacing: 0; text-transform: none; font-weight: 500; color: ${INK_SOFT}; }
+.sl-join-box button { min-height: 44px; padding: 0 18px; border: 0; border-radius: 9999px; background: ${FOREST}; color: ${GOLD_TEXT}; font: 800 13px/1 ${BRAND}; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; transition: background-color 200ms ease; }
+.sl-join-box button:hover:not(:disabled) { background: ${FOREST_DEEP}; }
+.sl-join-box button:disabled { background: ${IVORY}; color: ${INK_SOFT}; cursor: default; }
+.sl-join-box button:focus-visible { outline: 2px solid ${GOLD}; outline-offset: 2px; }
+.sl-join-box:focus-within { box-shadow: inset 0 0 0 1.5px ${FOREST}; background: ${WHITE}; }
+.sl-free { margin: 12px 0 0; font-size: 13.5px; font-weight: 500; }
+.sl-dismiss { min-height: 44px; padding: 0 8px; background: transparent; border: 0; color: rgba(238,217,138,.85); font: 800 12px/1 ${BRAND}; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; }
+.sl-dismiss:hover { color: ${GOLD_TEXT}; }
+.sl-dismiss:focus-visible { outline: 2px solid ${GOLD_TEXT}; outline-offset: 2px; border-radius: 6px; }
 .sl-devices { grid-area: dev; align-self: center; position: relative; margin-inline-end: calc(-1 * clamp(16px, 4vw, 64px) - 2vw); padding-bottom: 6%; }
-.sl-laptop { display: block; width: 100%; height: auto; filter: drop-shadow(0 40px 46px rgba(40,30,15,.28)) drop-shadow(0 8px 12px rgba(40,30,15,.12)); }
-.sl-phone { position: absolute; inset-inline-start: -19%; bottom: -12%; width: 31%; height: auto; filter: drop-shadow(0 34px 34px rgba(30,22,10,.38)) drop-shadow(0 6px 10px rgba(30,22,10,.18)); }
-.sl-social { color: #9A8A78; transition: color .15s; } .sl-social:hover { color: ${FOREST}; }
-.sl-footlink { color: #9A8A78; } .sl-footlink:hover { color: ${FOREST}; }
+.sl-laptop { display: block; width: 100%; height: auto; filter: drop-shadow(0 40px 46px rgba(28,20,16,.28)) drop-shadow(0 8px 12px rgba(28,20,16,.12)); }
+.sl-phone { position: absolute; inset-inline-start: -19%; bottom: -12%; width: 31%; height: auto; filter: drop-shadow(0 34px 34px rgba(28,20,16,.38)) drop-shadow(0 6px 10px rgba(28,20,16,.18)); }
 @media (prefers-reduced-motion: no-preference) {
   .sl-laptop { animation: sl-rise 1.2s cubic-bezier(.16,1,.3,1) both; }
   .sl-phone { animation: sl-rise 1.1s .22s cubic-bezier(.16,1,.3,1) both; }
@@ -267,5 +244,5 @@ const CSS = `
   .sl-join-box { flex: 1; }
   .sl-join-box input { flex: 1; min-width: 0; width: auto; }
 }
-@media (prefers-reduced-motion: reduce) { .sl-film { display: none; } }
+@media (prefers-reduced-motion: reduce) { .sl-film { display: none; } .sl-start, .sl-join-box button { transition: none; } }
 `;

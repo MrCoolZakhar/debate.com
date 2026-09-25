@@ -392,7 +392,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
               className="focus:outline-none flex-shrink-0 rounded-full px-3.5 py-1.5"
               style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#EED98A', background: '#1B3828', border: 'none', cursor: 'pointer' }}
             >
-              Retry
+              RETRY
             </button>
           </div>
         )}
@@ -463,7 +463,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
                     onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.color = NEU.forest; el.style.textDecoration = 'underline'; }}
                     onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.color = NEU.muted; el.style.textDecoration = 'none'; }}
                   >
-                    Change
+                    CHANGE
                   </button>
                 </div>
               )}

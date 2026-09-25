@@ -516,7 +516,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 mt-2"
-                style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#2A5A3C', textDecoration: 'none', letterSpacing: '0.03em' }}
+                style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#2A5A3C', textDecoration: 'underline', textUnderlineOffset: 3, letterSpacing: '0.03em' }}
               >
                 Full guide <ExternalLink size={11} />
               </a>
@@ -793,7 +793,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
       {state === 'published' && (
         <p className="mt-4" style={{ fontFamily: OUTFIT, fontSize: 12, color: '#6B5F52', margin: '16px 0 0 0' }}>
           The honour roll is public at{' '}
-          <a href={`/conferences/${conferenceSlug}/awards`} style={{ color: '#2A5A3C', fontWeight: 700, textDecoration: 'none' }}>
+          <a href={`/conferences/${conferenceSlug}/awards`} style={{ color: '#2A5A3C', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>
             /conferences/{conferenceSlug}/awards
           </a>.
         </p>

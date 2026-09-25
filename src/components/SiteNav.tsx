@@ -2,13 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, type CSSProperties } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
-import { Globe, Languages, Plus } from 'lucide-react';
+import { ChevronDown, Globe, Languages, Plus } from 'lucide-react';
 import LanguageRequestDialog from '@/components/LanguageRequestDialog';
 import { isSessionsPath } from '@/lib/sessionRoutes';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
+import BrandLogo from '@/components/BrandLogo';
+import CreateChooser, { CreateOptions } from '@/components/CreateChooser';
 import AuthLink from '@/components/auth/AuthLink';
 import { useCredits } from '@/hooks/useCredits';
 import { CreditCoin } from '@/components/CreditCoin';
@@ -16,41 +18,46 @@ import { openCreditsPopup } from '@/lib/purchasePopup';
 import ActivityNotices from '@/components/profile/ActivityNotices';
 import { useMyActivity, useOpenSeenState, markActivitySeen, isVisibleActivity } from '@/lib/myActivity';
 
-const NAV_LINKS_CONFIG = [
-  // Written in sentence case and set in capitals by CSS (textTransform), at
-  // weight 800 (900 active) with light tracking (owner, 24 Sep 2026: caps; in
-  // Albert Sans anything lighter than 800 reads too thin for the nav). The Sessions link reads
-  // "Start Session": `kicker` is the small word stacked above the label.
-  { en: 'Session',     es: 'Sesión',       fr: 'Session',         ar: 'جلسة',       href: '/sessions',
-    kicker: { en: 'Start', es: 'Iniciar', fr: 'Lancer', ar: 'ابدأ' } },
-  // "Explore Conferences", stacked like "Start Session" (owner, 25 Sep 2026).
-  { en: 'Conferences', es: 'Conferencias', fr: 'Conférences',     ar: 'المؤتمرات',  href: '/conferences/explore',
-    kicker: { en: 'Explore', es: 'Explorar', fr: 'Explorer', ar: 'استكشف' } },
-  // PRICING leads to the credits page and stays lit on every /pricing page.
-  { en: 'Pricing',     es: 'Precios',      fr: 'Tarifs',          ar: 'الأسعار',    href: '/pricing/credits' },
-  // HOME sits in the middle of the pill and is the lit item on the landing page
-  // the moment someone opens it (owner, 25 Sep 2026).
-  { en: 'Home',        es: 'Inicio',       fr: 'Accueil',         ar: 'الرئيسية',   href: '/' },
-  { en: 'About us',    es: 'Nosotros',     fr: 'Qui sommes-nous', ar: 'من نحن',     href: '/about' },
-  { en: 'Contact',     es: 'Contáctanos',  fr: 'Contact',         ar: 'تواصل معنا', href: '/contact' },
+// Five one-word items, in this order (owner, 25 Sep 2026): SESSIONS, CREATE,
+// EXPLORE, PRICING, HELP. Written in sentence case and set in capitals by CSS
+// (textTransform), at weight 800 (900 active) with light tracking (in Albert
+// Sans anything lighter than 800 reads too thin for the nav). No stacked
+// kicker words any more. CREATE has no href: it opens the CreateChooser
+// (session or conference) instead of navigating. Home, About us and Contact
+// left the nav; the footer and the profile menu carry them.
+const NAV_LINKS_CONFIG: ReadonlyArray<{
+  en: string; es: string; fr: string; ar: string;
+  href: string | null;
+  /** The item that opens the CREATE chooser instead of navigating. */
+  create?: true;
+}> = [
+  { en: 'Sessions', es: 'Sesiones', fr: 'Sessions', ar: 'الجلسات',  href: '/sessions' },
+  { en: 'Create',   es: 'Crear',    fr: 'Créer',    ar: 'إنشاء',    href: null, create: true },
+  { en: 'Explore',  es: 'Explorar', fr: 'Explorer', ar: 'استكشف',   href: '/conferences/explore' },
+  { en: 'Pricing',  es: 'Precios',  fr: 'Tarifs',   ar: 'الأسعار',  href: '/pricing/credits' },
+  { en: 'Help',     es: 'Ayuda',    fr: 'Aide',     ar: 'المساعدة', href: '/help' },
 ];
 
-/** The CONFERENCES link opens the directory; it stays lit on any public
- *  conferences page (explore, map, roles, a conference page). */
-function isNavLinkActive(pathname: string | null, href: string): boolean {
-  if (!pathname) return false;
+/** SESSIONS lights on every sessions path (isSessionsPath), EXPLORE on any
+ *  public conferences page (explore, map, roles, a conference page), PRICING on
+ *  every /pricing page, HELP on /help. CREATE lights while its chooser is open
+ *  (decided by the caller, not here). */
+function isNavLinkActive(pathname: string | null, href: string | null): boolean {
+  if (!pathname || !href) return false;
+  if (href === '/sessions') return isSessionsPath(pathname);
   if (href === '/conferences/explore') return pathname.startsWith('/conferences');
   if (href === '/pricing/credits') return pathname.startsWith('/pricing');
+  if (href === '/help') return pathname === '/help' || pathname.startsWith('/help/');
   return pathname === href;
 }
 
 interface SiteNavProps {
+  /** No-op since 25 Sep 2026: there is ONE wordmark (BrandLogo). Still
+   *  accepted because other pages pass it. */
   logoOverride?: { src: string; alt: string };
-  /** Which wordmark to show, stated rather than inferred. `usePathname()` is
-   *  not reliable during a static prerender — the homepage is ISR-rendered and
-   *  has been shipping the SESSIONS mark in its prerendered HTML despite the
-   *  path being '/', which no local build reproduces. A page that knows its own
-   *  brand should say so instead of leaving it to a heuristic. */
+  /** No-op since 25 Sep 2026: the Conferences / Sessions lockups are retired
+   *  and every header shows the one Gavelling wordmark. Still accepted because
+   *  other pages pass it. */
   brand?: 'conferences' | 'sessions';
   /**
    * Overlay mode: the header floats transparently over the page's hero media
@@ -65,8 +72,17 @@ interface SiteNavProps {
   hideLanguage?: boolean;
 }
 
-export default function SiteNav({ logoOverride, overlay = false, hideLanguage: hideLanguageProp = false, brand }: SiteNavProps = {}) {
+export default function SiteNav(props: SiteNavProps = {}) {
+  // `logoOverride` and `brand` are still accepted (other pages pass them) but
+  // no longer read: there is ONE wordmark since 25 Sep 2026.
+  const { overlay = false, hideLanguage: hideLanguageProp = false } = props;
   const pathname = usePathname();
+  // The CREATE chooser (desktop popover / phone sheet) and the inline CREATE
+  // rows in the hamburger sheet.
+  const [createOpen, setCreateOpen] = useState(false);
+  const [mobileCreateOpen, setMobileCreateOpen] = useState(false);
+  const createRef = useRef<HTMLButtonElement>(null);
+  const closeCreate = useCallback(() => setCreateOpen(false), []);
   // Languages are a sessions feature: every conferences-side page is English
   // only and shows no switcher (owner, 18 Sep 2026).
   const hideLanguage = hideLanguageProp || !isSessionsPath(pathname);
@@ -110,7 +126,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
   const navLinks = NAV_LINKS_CONFIG.map(l => ({
     label: l[language],
     href: l.href,
-    kicker: 'kicker' in l && l.kicker ? l.kicker[language] : null,
+    create: l.create === true,
   }));
 
   // The sheet animates on max-height, so it needs a PIXEL height — but that
@@ -157,30 +173,9 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
     return () => document.removeEventListener('mousedown', handleMouseDown);
   }, []);
 
-  // Brand-per-context: conferences-area pages get the "GAVELLING CONFERENCES"
-  // logo lockup (/Conferences.webp, .png fallback) — the same mark the footer,
-  // manage header and auth card use. Sessions pages get the "GAVELLING SESSIONS
-  // APP" logo (/GavellingSessionsApp.png). This mirrors the wordmark text the
-  // nav already switches per context.
-  const CONFERENCES_PREFIXES = ['/conferences', '/manage', '/account', '/auth', '/account/conferences', '/invites'];
-  // `!pathname` defaults to the CONFERENCES lockup on purpose. usePathname() can
-  // resolve to null while a page is being statically prerendered, and when that
-  // happened the homepage baked the SESSIONS logo into its static HTML — every
-  // first-time visitor to gavelling.com saw the wrong brand until hydration
-  // swapped it. Gavelling is conferences-first, so an unknown path must fall
-  // back to conferences rather than to sessions.
-  // An explicit `brand` always wins; the pathname heuristic is only the
-  // fallback for pages that have not said which side of the product they are.
-  const inConferencesArea =
-    !logoOverride && (
-      brand ? brand === 'conferences'
-        : (!pathname || pathname === '/' || CONFERENCES_PREFIXES.some(p => pathname.startsWith(p)))
-    );
-  // Transparent WEBP: the original .png has NO alpha and carried a solid
-  // #F2F2F2 plate, which showed as a pale block behind the mark on the
-  // site's ivory. The .png remains as the onError fallback.
-  const logoSrc = logoOverride?.src ?? '/GavellingSessionsApp.webp';
-  const logoAlt = logoOverride?.alt ?? 'Gavelling Sessions';
+  // The hamburger sheet's inline CREATE rows fold back up whenever the sheet
+  // closes, so the next open starts on the plain list.
+  useEffect(() => { if (!menuOpen) setMobileCreateOpen(false); }, [menuOpen]);
 
   async function handleSignOut() {
     await signOut();
@@ -208,7 +203,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
     UPDATE 24 Sep 2026 (owner: "the nav pill now doesn't move with the page as it
     scrolls, fix"): the pill is FIXED again, at the same 72px band it sits in at scroll
     top, z-40. The collisions below are handled at the sticky bars instead: on desktop
-    (lg+, the only widths the pill exists at: six items (PRICING joined the five of 25 Sep 2026) need 1024px, so 768 to 1023 use the phone menu) every sticky bar on a page with this nav
+    (lg+, the only widths the pill exists at: five one-word items (SESSIONS, CREATE, EXPLORE, PRICING, HELP since 25 Sep 2026) need 1024px, so 768 to 1023 use the phone menu) every sticky bar on a page with this nav
     sticks at 84px or lower (conference page tabs and rail, explore filters; roles and
     account already did). A NEW sticky bar on a page with SiteNav must do the same.
 
@@ -240,57 +235,89 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
           }}
         >
           {navLinks.map((link) => {
-            const active = isNavLinkActive(pathname, link.href);
+            // CREATE lights while its chooser is open; the others on their path.
+            const active = link.create ? createOpen : isNavLinkActive(pathname, link.href);
             const hl = hovered === link.label;
+            // One style for the link items and the CREATE button, so the pill
+            // reads as five equal items. Five one-word labels: at 1024px
+            // (1vw = 10px) each item is 12px type with 10px side padding, about
+            // 410px of pill between a 240px logo group and a 200px account
+            // group; at 1280px the clamp opens to 13.5px / 16px. Never wrap.
+            const itemStyle: CSSProperties = {
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              position: 'relative',
+              whiteSpace: 'nowrap',
+              minHeight: 44,
+              padding: '8px clamp(10px, 1.1vw, 16px)',
+              fontSize: 'clamp(12px, 0.95vw, 13.5px)',
+              fontWeight: active ? 900 : 800,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              fontFamily: "var(--font-brand), sans-serif",
+              color: active ? '#EED98A' : hl ? '#1B3828' : 'rgba(28, 20, 16, 0.55)',
+              textDecoration: 'none',
+              borderRadius: '9999px',
+              transition: 'color 200ms cubic-bezier(0.22,1,0.36,1), background-color 200ms cubic-bezier(0.22,1,0.36,1), transform 200ms cubic-bezier(0.22,1,0.36,1)',
+              backgroundColor: active ? '#1B3828' : hl ? 'rgba(27, 56, 40, 0.06)' : 'transparent',
+              transform: hl && !active ? 'translateY(-1px)' : 'translateY(0)',
+              border: 'none',
+              cursor: 'pointer',
+              lineHeight: 1.2,
+            };
+            const itemClass = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAF8F3]';
+            const underline = (
+              <span aria-hidden style={{
+                position: 'absolute',
+                bottom: '6px',
+                left: '14px',
+                right: '14px',
+                height: '1px',
+                backgroundColor: '#B6871F',
+                transform: hl && !active ? 'scaleX(1)' : 'scaleX(0)',
+                transformOrigin: 'left',
+                transition: 'transform 200ms ease',
+                borderRadius: '2px',
+              }} />
+            );
+            if (link.create) {
+              return (
+                <button
+                  key={link.label}
+                  ref={createRef}
+                  type="button"
+                  aria-haspopup="dialog"
+                  aria-expanded={createOpen}
+                  onClick={() => setCreateOpen((v) => !v)}
+                  onMouseEnter={() => setHovered(link.label)}
+                  onMouseLeave={() => setHovered(null)}
+                  className={itemClass}
+                  style={itemStyle}
+                >
+                  {link.label}
+                  <ChevronDown
+                    aria-hidden
+                    size={13}
+                    strokeWidth={2.6}
+                    style={{ transform: createOpen ? 'rotate(180deg)' : 'none', transition: 'transform 200ms ease', marginTop: 1 }}
+                  />
+                  {underline}
+                </button>
+              );
+            }
             return (
               <Link
                 key={link.label}
-                href={link.href}
+                href={link.href ?? '/'}
                 onMouseEnter={() => setHovered(link.label)}
                 onMouseLeave={() => setHovered(null)}
                 aria-current={active ? 'page' : undefined}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  position: 'relative',
-                  // Six items since PRICING joined (Session, Conferences, Pricing,
-                  // Home, About us, Contact): never wrap a label, and tighten the
-                  // padding and the type on narrower desktops so all six fit
-                  // between the logo and the account controls at 1280px.
-                  whiteSpace: 'nowrap',
-                  padding: '8px clamp(7px, 1vw, 16px)',
-                  fontSize: 'clamp(11.5px, 0.95vw, 13.5px)',
-                  fontWeight: active ? 900 : 800,
-                  letterSpacing: '0.04em',
-                  textTransform: 'uppercase',
-                  fontFamily: "var(--font-brand), sans-serif",
-                  color: active ? '#EED98A' : hl ? '#1B3828' : 'rgba(28, 20, 16, 0.55)',
-                  textDecoration: 'none',
-                  borderRadius: '9999px',
-                  transition: 'color 200ms cubic-bezier(0.22,1,0.36,1), background-color 200ms cubic-bezier(0.22,1,0.36,1), transform 200ms cubic-bezier(0.22,1,0.36,1)',
-                  backgroundColor: active ? '#1B3828' : hl ? 'rgba(27, 56, 40, 0.06)' : 'transparent',
-                  transform: hl && !active ? 'translateY(-1px)' : 'translateY(0)',
-                }}
+                className={itemClass}
+                style={itemStyle}
               >
-                {link.kicker ? (
-                  // "Start" small on top, the label beneath, one pill tall.
-                  <span className="flex flex-col items-center" style={{ lineHeight: 1 }}>
-                    <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '0.12em', opacity: 0.85, marginBottom: '2px' }}>{link.kicker} </span>
-                    <span>{link.label}</span>
-                  </span>
-                ) : link.label}
-                <span style={{
-                  position: 'absolute',
-                  bottom: '4px',
-                  left: '16px',
-                  right: '16px',
-                  height: '1px',
-                  backgroundColor: '#B6871F',
-                  transform: hl && !active ? 'scaleX(1)' : 'scaleX(0)',
-                  transformOrigin: 'left',
-                  transition: 'transform 200ms ease',
-                  borderRadius: '2px',
-                }} />
+                {link.label}
+                {underline}
               </Link>
             );
           })}
@@ -307,68 +334,16 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
         {desktopPill}
         {/* Logo + language toggle (left side) */}
         <div className="flex items-center gap-1">
-          <Link href="/" onClick={() => setMenuOpen(false)} style={{ textDecoration: 'none' }}>
-            {inConferencesArea ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src="/Conferences.webp"
-                alt="Gavelling Conferences"
-                width={144}
-                height={36}
-                decoding="async"
-                loading="eager"
-                fetchPriority="high"
-                style={{
-                  height: 36,
-                  width: 'auto',
-                  objectFit: 'contain',
-                  // Until the bitmap arrives the browser paints the ALT TEXT
-                  // (and a broken-image glyph) into the reserved 144x36 box —
-                  // the ugly block that flashed on every cold load. Transparent
-                  // text hides that flash; `alt` is untouched, so screen readers
-                  // and crawlers still get the name.
-                  color: 'transparent',
-                  filter: overlay ? 'drop-shadow(0 2px 6px rgba(0,0,0,0.35))' : undefined,
-                }}
-                onError={(e) => {
-                  // .webp can intermittently fail to decode (cache/partial); fall
-                  // back to the .png once before giving up, never hide outright.
-                  const img = e.currentTarget as HTMLImageElement;
-                  if (!img.src.endsWith('/Conferences.png')) img.src = '/Conferences.png';
-                  else img.style.display = 'none';
-                }}
-              />
-            ) : (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={logoSrc}
-                alt={logoAlt}
-                width={160}
-                height={40}
-                decoding="async"
-                loading="eager"
-                fetchPriority="high"
-                className="h-8 md:h-10 w-auto object-contain"
-                style={{
-                  // Same alt-text flash guard as the conferences lockup above.
-                  color: 'transparent',
-                  ...(overlay
-                    ? { filter: 'brightness(0) saturate(100%) invert(85%) sepia(30%) saturate(500%) hue-rotate(5deg) brightness(105%) drop-shadow(0 2px 6px rgba(0,0,0,0.35))' }
-                    : {}),
-                }}
-                onError={(e) => {
-                  // Retry ONCE past a partial/failed cache entry. Never
-                  // display:none — that was how the logo used to vanish for the
-                  // rest of the session after a single transient failure.
-                  const img = e.currentTarget as HTMLImageElement;
-                  if (!img.dataset.retried) {
-                    img.dataset.retried = '1';
-                    img.src = `${logoSrc}?reload=1`;
-                  }
-                }}
-              />
-            )}
-          </Link>
+          {/* ONE wordmark (BrandLogo, /gavelling-logo.png), linked to /, white
+              over hero media. 24px tall on phones, 28px from md, sized through
+              a custom property because BrandLogo writes its height inline. */}
+          <span
+            className="inline-flex items-center [--logo-h:24px] md:[--logo-h:28px]"
+            onClick={() => setMenuOpen(false)}
+            style={{ filter: overlay ? 'drop-shadow(0 2px 6px rgba(0,0,0,0.35))' : undefined }}
+          >
+            <BrandLogo priority height={28} tone={overlay ? 'white' : 'ink'} style={{ height: 'var(--logo-h)' }} />
+          </span>
 
           {/* Language toggle (desktop only — mobile keeps its own toggle in the hamburger menu) */}
           {!hideLanguage && (
@@ -575,28 +550,67 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
       >
         <div ref={sheetRef} className="flex flex-col px-6 py-4 gap-1">
           {navLinks.map((link) => {
-            const active = isNavLinkActive(pathname, link.href);
+            const active = link.create ? mobileCreateOpen : isNavLinkActive(pathname, link.href);
+            const rowStyle: CSSProperties = {
+              display: 'flex',
+              alignItems: 'center',
+              width: '100%',
+              minHeight: 44,
+              padding: '12px 16px',
+              fontSize: '14.5px',
+              fontWeight: active ? 900 : 800,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              color: active ? '#1B3828' : 'rgba(28, 20, 16, 0.65)',
+              textDecoration: 'none',
+              borderRadius: '10px',
+              backgroundColor: active ? 'rgba(27, 56, 40, 0.07)' : 'transparent',
+              borderLeft: active ? '3px solid #B6871F' : '3px solid transparent',
+              transition: 'color 150ms ease, background-color 150ms ease, border-left-color 150ms ease',
+              fontFamily: "var(--font-brand), sans-serif",
+              textAlign: 'start',
+            };
+            const rowClass = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-inset';
+            if (link.create) {
+              // CREATE opens its two options INLINE, right under the row, so
+              // nothing stacks over the sheet. The sheet's ResizeObserver
+              // re-measures the extra height.
+              return (
+                <div key={link.label}>
+                  <button
+                    type="button"
+                    aria-expanded={mobileCreateOpen}
+                    aria-controls="site-nav-create-options"
+                    onClick={() => setMobileCreateOpen((v) => !v)}
+                    className={rowClass}
+                    style={{ ...rowStyle, border: 'none', borderLeft: rowStyle.borderLeft, cursor: 'pointer' }}
+                  >
+                    <span className="flex-1">{link.label}</span>
+                    <ChevronDown
+                      aria-hidden
+                      size={16}
+                      strokeWidth={2.6}
+                      style={{ transform: mobileCreateOpen ? 'rotate(180deg)' : 'none', transition: 'transform 200ms ease' }}
+                    />
+                  </button>
+                  {mobileCreateOpen && (
+                    <div id="site-nav-create-options" className="px-1 pb-1 pt-0.5">
+                      <CreateOptions language={language} onNavigate={() => setMenuOpen(false)} />
+                    </div>
+                  )}
+                </div>
+              );
+            }
             return (
               <Link
                 key={link.label}
-                href={link.href}
+                href={link.href ?? '/'}
                 onClick={() => setMenuOpen(false)}
-                style={{
-                  display: 'block',
-                  padding: '12px 16px',
-                  fontSize: '14.5px',
-                  fontWeight: active ? 900 : 800,
-                  letterSpacing: '0.04em',
-                  textTransform: 'uppercase',
-                  color: active ? '#1B3828' : 'rgba(28, 20, 16, 0.65)',
-                  textDecoration: 'none',
-                  borderRadius: '10px',
-                  backgroundColor: active ? 'rgba(27, 56, 40, 0.07)' : 'transparent',
-                  borderLeft: active ? '3px solid #B6871F' : '3px solid transparent',
-                  transition: 'color 150ms ease, background-color 150ms ease, border-left-color 150ms ease',
-                }}
+                aria-current={active ? 'page' : undefined}
+                className={rowClass}
+                style={rowStyle}
               >
-                {link.kicker ? `${link.kicker} ${link.label}` : link.label}
+                {link.label}
               </Link>
             );
           })}
@@ -744,6 +758,9 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
         </div>
       </div>
       {!hideLanguage && <LanguageRequestDialog open={requestLangOpen} onClose={() => setRequestLangOpen(false)} />}
+      {/* The CREATE chooser: a popover under the CREATE item on desktop, a
+          bottom sheet on phones. Closes on outside click, Escape, route change. */}
+      <CreateChooser open={createOpen} onClose={closeCreate} anchorRef={createRef} language={language} />
     </>
   );
 }

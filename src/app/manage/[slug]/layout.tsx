@@ -3,9 +3,11 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter, usePathname, useParams } from 'next/navigation';
 import Link from 'next/link';
+import BrandLogo from '@/components/BrandLogo';
 import {
   LayoutDashboard, Building2, Users, MapPin, FileText,
   Mail, CreditCard, Settings, Briefcase, Menu, X, Radio, Upload, HeartHandshake,
+  type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -189,7 +191,22 @@ export interface NavBadges {
 
 const NO_BADGES: NavBadges = { applications: 0, assignment: 0, communications: 0, financialAid: 0 };
 
-const NAV_SECTIONS = (slug: string, badges: NavBadges = NO_BADGES) => [
+interface NavItem {
+  icon: LucideIcon;
+  label: string;
+  href: string;
+  external: boolean;
+  badge: number;
+  /** A small gold tag at the end of the row (e.g. COMING SOON). Uppercase, no full stop. */
+  tag?: string;
+}
+
+interface NavSection {
+  header: string | null;
+  items: NavItem[];
+}
+
+const NAV_SECTIONS = (slug: string, badges: NavBadges = NO_BADGES): NavSection[] => [
   {
     header: null,
     items: [
@@ -234,7 +251,9 @@ const NAV_SECTIONS = (slug: string, badges: NavBadges = NO_BADGES) => [
     header: 'SETTINGS',
     items: [
       { icon: Settings,  label: 'Settings',  href: `/manage/${slug}/settings`, external: false, badge: 0 },
-      { icon: Briefcase, label: 'Job Board', href: `/manage/${slug}/jobs`,     external: false, badge: 0 },
+      // The public job board is not open yet, so a posting would reach nobody.
+      // The entry stays a link (the page shows a coming-soon panel) with a tag.
+      { icon: Briefcase, label: 'Job Board', href: `/manage/${slug}/jobs`,     external: false, badge: 0, tag: 'COMING SOON' },
       { icon: Upload,    label: 'Import',    href: `/manage/${slug}/import`,   external: false, badge: 0 },
     ],
   },
@@ -446,6 +465,19 @@ function SideRail({
                       {item.badge}
                     </span>
                   )}
+                  {expanded && item.tag && (
+                    <span
+                      className="flex-shrink-0 rounded-full"
+                      style={{
+                        marginLeft: 'auto', padding: '2px 6px', fontSize: 9.5, fontWeight: 800,
+                        letterSpacing: '0.08em', textTransform: 'uppercase', lineHeight: 1.2, whiteSpace: 'nowrap',
+                        fontFamily: "var(--font-brand), sans-serif",
+                        backgroundColor: '#EED98A', color: '#1C1410',
+                      }}
+                    >
+                      {item.tag}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -611,6 +643,19 @@ function SidebarContent({
                       }}
                     >
                       {item.badge}
+                    </span>
+                  )}
+                  {item.tag && (
+                    <span
+                      className="flex-shrink-0 rounded-full"
+                      style={{
+                        padding: '2px 6px', fontSize: 9.5, fontWeight: 800,
+                        letterSpacing: '0.08em', textTransform: 'uppercase', lineHeight: 1.2, whiteSpace: 'nowrap',
+                        fontFamily: "var(--font-brand), sans-serif",
+                        backgroundColor: '#EED98A', color: '#1C1410',
+                      }}
+                    >
+                      {item.tag}
                     </span>
                   )}
                 </Link>
@@ -1075,25 +1120,9 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
       >
         {/* Left: logo + divider + acronym */}
         <div className="flex items-center gap-3">
-          <Link href="/" style={{ textDecoration: 'none', display: 'inline-flex' }}>
-            {/* The Conferences logo asset, greyed (grayscale+brightness) so the
-                forest-green wordmark reads on the dark /manage chrome. Same
-                mark SiteNav and the auth card use, for one consistent brand. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/Conferences.webp"
-              alt="Gavelling Conferences"
-              width={120}
-              height={30}
-              decoding="async"
-              style={{ height: 30, width: 'auto', objectFit: 'contain', filter: 'grayscale(1) brightness(2.1)' }}
-              onError={(e) => {
-                const img = e.currentTarget as HTMLImageElement;
-                if (!img.src.endsWith('/Conferences.png')) img.src = '/Conferences.png';
-                else img.style.display = 'none';
-              }}
-            />
-          </Link>
+          {/* The ONE wordmark (src/components/BrandLogo.tsx), in white on the
+              dark /manage chrome; the same mark the site header and footer use. */}
+          <BrandLogo height={26} tone="white" priority />
           <span style={{ color: 'rgba(238,217,138,0.3)', fontSize: '16px' }}>/</span>
           <Link
             href={`/manage/${slug}`}

@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { pageMetadata, SITE_URL, JSONLD_PUBLISHER } from '@/lib/seo';
 import SiteNav from '@/components/SiteNav';
-import { LabFooter } from '@/app/conferences/landing-lab/shared';
+import SiteFooter from '@/components/SiteFooter';
 import { fetchListedConferences, fetchPlatformStats, isUpcoming } from '@/lib/listedConferences';
 import { conferenceTitle } from '@/app/conferences/in/ConferenceLinkList';
 
@@ -124,11 +124,11 @@ export default async function OrganisersPage() {
               <Link
                 href="/conferences/new"
                 className="inline-flex items-center gap-2.5 rounded-full focus:outline-none transition-transform duration-150 active:scale-[0.97]"
-                style={{ backgroundColor: PALE_GOLD, color: FOREST, fontWeight: 800, fontSize: 15, padding: '15px 28px', textDecoration: 'none', boxShadow: '0 14px 30px rgba(0,0,0,0.25)' }}
+                style={{ backgroundColor: PALE_GOLD, color: FOREST, fontWeight: 800, fontSize: 15, padding: '15px 28px', textDecoration: 'none', textTransform: 'uppercase', letterSpacing: '0.04em', boxShadow: '0 14px 30px rgba(0,0,0,0.25)' }}
               >
                 List your conference free <ArrowRight size={17} strokeWidth={2.5} aria-hidden="true" />
               </Link>
-              <Link href="/conferences/explore" style={{ color: 'rgba(237,231,216,0.85)', fontWeight: 600, fontSize: 14.5 }}>
+              <Link href="/conferences/explore" style={{ color: 'rgba(237,231,216,0.9)', fontWeight: 700, fontSize: 14.5, textDecoration: 'underline', textUnderlineOffset: 3 }}>
                 See conferences already here
               </Link>
             </div>
@@ -152,7 +152,7 @@ export default async function OrganisersPage() {
       <section className="mx-auto max-w-6xl px-4 sm:px-6" style={{ paddingTop: 'clamp(64px, 7vw, 104px)', paddingBottom: 'clamp(48px, 5vw, 72px)' }}>
         <p style={{ fontWeight: 700, fontSize: 12.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 10px' }}>How it works</p>
         <h2 style={{ fontWeight: 900, fontSize: 'clamp(28px, 3.4vw, 48px)', letterSpacing: '-0.02em', lineHeight: 1.05, margin: 0, maxWidth: 720, textWrap: 'balance' }}>
-          From the first application to the closing ceremony.
+          From the first application to the closing ceremony
         </h2>
         <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" style={{ listStyle: 'none', padding: 0, margin: '36px 0 0' }}>
           {FEATURES.map(f => (
@@ -166,9 +166,9 @@ export default async function OrganisersPage() {
           ))}
           <li className="rounded-3xl flex flex-col justify-between" style={{ backgroundColor: FOREST, padding: '26px 24px', color: CREAM }}>
             <p style={{ fontWeight: 800, fontSize: 19, margin: 0, lineHeight: 1.3 }}>
-              Your conference page goes live the moment you publish it.
+              Your conference page goes live the moment you publish it
             </p>
-            <Link href="/conferences/new" className="inline-flex items-center gap-2 focus:outline-none" style={{ marginTop: 20, color: PALE_GOLD, fontWeight: 800, fontSize: 15, textDecoration: 'none' }}>
+            <Link href="/conferences/new" className="inline-flex items-center gap-2 focus:outline-none" style={{ marginTop: 20, color: PALE_GOLD, fontWeight: 800, fontSize: 15, textDecoration: 'none', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               List your conference free <ArrowRight size={16} strokeWidth={2.5} aria-hidden="true" />
             </Link>
           </li>
@@ -213,7 +213,7 @@ export default async function OrganisersPage() {
       <section className="mx-auto max-w-5xl px-4 sm:px-6" style={{ paddingTop: 'clamp(64px, 7vw, 104px)', paddingBottom: 'clamp(40px, 5vw, 64px)' }}>
         <p style={{ fontWeight: 700, fontSize: 12.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 10px' }}>Pricing</p>
         <h2 style={{ fontWeight: 900, fontSize: 'clamp(26px, 3vw, 42px)', letterSpacing: '-0.02em', margin: 0, textWrap: 'balance' }}>
-          Per-participant pricing, compared.
+          Per-participant pricing, compared
         </h2>
         <p style={{ fontSize: 16, lineHeight: 1.65, color: INK_70, margin: '12px 0 0', maxWidth: 680, textWrap: 'pretty' }}>
           Many conference platforms bill the organiser for every participant, and some for every day. At one unit of currency per participant per day, a three-day conference of 300 delegates costs the secretariat 900 before a single committee sits. On Gavelling that line is zero.
@@ -252,23 +252,23 @@ export default async function OrganisersPage() {
         <div className="rounded-[28px] flex flex-col md:flex-row md:items-center md:justify-between gap-6" style={{ backgroundColor: FOREST, padding: 'clamp(28px, 4vw, 48px)' }}>
           <div>
             <h2 style={{ fontWeight: 900, fontSize: 'clamp(24px, 2.6vw, 36px)', letterSpacing: '-0.015em', color: CREAM, margin: 0, textWrap: 'balance' }}>
-              Your conference, listed today.
+              Your conference, listed today
             </h2>
             <p style={{ fontSize: 16, color: 'rgba(237,231,216,0.8)', margin: '8px 0 0' }}>
-              Free for organisers, now and later.
+              Free for organisers, now and later
             </p>
           </div>
           <Link
             href="/conferences/new"
             className="inline-flex shrink-0 items-center gap-2.5 self-start md:self-auto rounded-full focus:outline-none transition-transform duration-150 active:scale-[0.97]"
-            style={{ backgroundColor: PALE_GOLD, color: FOREST, fontWeight: 800, fontSize: 15, padding: '15px 28px', textDecoration: 'none' }}
+            style={{ backgroundColor: PALE_GOLD, color: FOREST, fontWeight: 800, fontSize: 15, padding: '15px 28px', textDecoration: 'none', textTransform: 'uppercase', letterSpacing: '0.04em' }}
           >
             List your conference free <ArrowRight size={17} strokeWidth={2.5} aria-hidden="true" />
           </Link>
         </div>
       </section>
 
-      <LabFooter />
+      <SiteFooter />
     </div>
   );
 }
