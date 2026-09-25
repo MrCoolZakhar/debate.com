@@ -2,35 +2,37 @@
 
 // ── The Credits pop-up ───────────────────────────────────────────────────────
 //
-// LEFT: "Gavelling Credits", what they are for (the uses that fit the
-// context), and at the foot "Your credits": the balance now, and the balance
-// after this purchase, following the selection live. There is ONE balance in
-// every context, the signed-in person's own.
+// LEFT, cream: "Gavelling Credits", what they are for (the uses that fit the
+// context), and at the foot "Your credits": the balance now and the balance
+// after this purchase, two big numbers with an arrow between them, following
+// the selection live. There is ONE balance in every context, the signed-in
+// person's own.
 //
-// RIGHT: a short title, at most five bundles plus "Another amount", the total
-// with the saving, then the payment. Pressing the green button asks the edge
-// function for an embedded Checkout session (priced server-side) and Stripe's
-// own card form takes the bundle grid's place, with a "Change" link back. With
-// no publishable key the button sends the person to Stripe's hosted page
-// instead, and the site's return handler finishes the job when they land back.
+// RIGHT, forest: a short title, at most five bundles plus "Another amount",
+// the total with the saving (and, on a custom amount, the nudge to the next
+// tier when it is cheaper), then the gold PAY button. Pressing it asks the
+// edge function for an embedded Checkout session (priced server-side) and
+// Stripe's own white card form takes the bundle grid's place in an inset well,
+// with a "Change" link back. With no publishable key the button sends the
+// person to Stripe's hosted page instead, and the site's return handler
+// finishes the job when they land back.
 //
 // Owner's rules: no "USD 1 a credit" and no "never expires" anywhere here.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Briefcase, Loader2, Minus, Plus, Ticket, Users } from 'lucide-react';
+import { ArrowRight, Briefcase, Loader2, Minus, Plus, Sparkles, Ticket, Users } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { openAuth } from '@/lib/authModal';
-import { GreenButton } from '@/components/auth/authModalKit';
 import { useCredits, pollCreditsUntilChanged } from '@/hooks/useCredits';
 import {
-  CREDIT_BUNDLES, DEFAULT_BUNDLE, clampQty, discountPctFor, formatUsd, listCentsFor, priceCentsFor, useCreditPriceTable,
+  CREDIT_BUNDLES, DEFAULT_BUNDLE, clampQty, discountPctFor, formatUsd, listCentsFor, nextTierNudge, priceCentsFor, useCreditPriceTable,
   type CreditsContext,
 } from '@/lib/creditPricing';
 import { closePurchasePopup, swapToUnlimited, type CreditsPopupRequest } from '@/lib/purchasePopup';
 import { EMBEDDED_CHECKOUT_AVAILABLE, checkoutErrorText, startCreditsCheckout } from '@/lib/purchaseCheckout';
 import { notifyOk } from '@/lib/appNotify';
 import { StripeEmbeddedForm } from './StripeEmbedded';
-import { BenefitList, BrandTitle, ErrorLine, Eyebrow, PurchaseShell, SecureLine, SwapLine, type Benefit } from './purchaseKit';
+import { BenefitList, BrandTitle, ErrorLine, Eyebrow, FOREST, GoldButton, INK, PurchaseShell, SwapLine, type Benefit } from './purchaseKit';
 
 const USE_APPLY: Benefit = { emoji: 'Ticket', fallback: Ticket, title: 'Apply to conferences', note: 'One credit per conference, however many times you edit.', live: true };
 const USE_IMPORT: Benefit = { emoji: 'Busts in silhouette', fallback: Users, title: 'Importing your delegates', note: 'Bring a whole delegation in at once.', live: false };
@@ -76,6 +78,8 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
   const list = table ? listCentsFor(qty, table) : null;
   const pct = table ? discountPctFor(qty, table) : 0;
   const saving = price !== null && list !== null ? list - price : 0;
+  // Only on the "Another amount" path, and only from the table.
+  const nudge = custom && table ? nextTierNudge(qty, table) : null;
 
   const uses = useMemo(() => usesFor(context), [context]);
 
@@ -97,6 +101,12 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
     const n = clampQty(qty + delta, table);
     setQty(n);
     setTyped(String(n));
+  }
+  /** The nudge: jump to the tier's quantity, staying in custom mode. */
+  function takeNudge(n: number) {
+    setQty(n);
+    setTyped(String(n));
+    setErr('');
   }
 
   async function pay() {
@@ -144,13 +154,18 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
       <div className="gv-buy-left">
         <BrandTitle
           word="Credits"
+          tone="light"
+          icon={
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src="/gavelling-mark.png" alt="" width={26} height={26} className="gv-buy-mark" />
+          }
           sub={context === 'apply' && conferenceName
-            ? <>For your application to <strong style={{ fontWeight: 600, color: '#222' }}>{conferenceName}</strong>.</>
+            ? <>For your application to <strong style={{ fontWeight: 600, color: INK }}>{conferenceName}</strong>.</>
             : 'Buy a few or a lot. They wait in your account until you apply.'}
         />
         <div>
           <Eyebrow>What they&apos;re for</Eyebrow>
-          <BenefitList items={uses} />
+          <BenefitList items={uses} tone="light" />
         </div>
         <div className="gv-buy-balance">
           <Eyebrow>Your credits</Eyebrow>
@@ -159,7 +174,7 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
               <span className="gv-buy-balance-big">{balance === null ? '–' : balance}</span>
               <span className="gv-buy-balance-cap">now</span>
             </div>
-            <ArrowRight size={18} strokeWidth={2.2} className="gv-buy-balance-arrow" aria-hidden />
+            <ArrowRight size={24} strokeWidth={2.4} className="gv-buy-balance-arrow" style={{ color: FOREST }} aria-hidden />
             <div className="gv-buy-balance-cell">
               <span className="gv-buy-balance-big gv-buy-after">{balance === null ? '–' : balance + qty}</span>
               <span className="gv-buy-balance-cap">after this purchase</span>
@@ -168,12 +183,12 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
         </div>
       </div>
 
-      <div className="gv-buy-right">
+      <div className="gv-buy-right gv-buy-dark">
         {signedOut ? (
           <>
             <h3 className="gv-buy-rtitle">Log in to buy credits</h3>
             <p className="gv-buy-sub" style={{ margin: 0 }}>Credits live on your account, so we need to know whose they are.</p>
-            <GreenButton type="button" onClick={() => { closePurchasePopup(); openAuth(); }}>Log in or sign up</GreenButton>
+            <GoldButton onClick={() => { closePurchasePopup(); openAuth(); }}>LOG IN OR SIGN UP</GoldButton>
           </>
         ) : stage === 'pay' && checkout ? (
           <>
@@ -182,10 +197,11 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
               <span><strong>{checkout.quantity} {plural(checkout.quantity)}</strong> for <strong>{formatUsd(checkout.amountCents)}</strong></span>
               <button type="button" className="gv-buy-changebtn" onClick={() => { setStage('choose'); setCheckout(null); }}>Change</button>
             </div>
-            <div className="gv-buy-form">
-              <StripeEmbeddedForm clientSecret={checkout.clientSecret} onComplete={onComplete} />
+            <div className="gv-buy-formwell">
+              <div className="gv-buy-form">
+                <StripeEmbeddedForm clientSecret={checkout.clientSecret} onComplete={onComplete} />
+              </div>
             </div>
-            <SecureLine />
           </>
         ) : (
           <>
@@ -207,7 +223,7 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
               <button type="button" role="radio" aria-checked={custom} className="gv-buy-chip" onClick={pickCustom}>
                 <span className="gv-buy-chip-qty" style={{ fontSize: 16, fontWeight: 700, lineHeight: 1.2 }}>Another amount</span>
                 <span className="gv-buy-chip-unit">up to {table?.maxQty ?? 500}</span>
-                <span className="gv-buy-chip-price">{custom && table ? formatUsd(priceCentsFor(qty, table)) : ' '}</span>
+                <span className="gv-buy-chip-price">{custom && table ? formatUsd(priceCentsFor(qty, table)) : ' '}</span>
               </button>
             </div>
 
@@ -237,18 +253,26 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
               <div className="gv-buy-total-amount">{price === null ? '…' : formatUsd(price)}</div>
             </div>
 
+            {nudge ? (
+              <button type="button" className="gv-buy-nudge" onClick={() => takeNudge(nudge.qty)} data-testid="credits-nudge">
+                <Sparkles size={15} strokeWidth={2.2} aria-hidden />
+                <span>
+                  <b>{nudge.extra}</b> more {plural(nudge.extra)} {nudge.extra === 1 ? 'saves' : 'save'} you <b>{formatUsd(nudge.saves)}</b>
+                </span>
+              </button>
+            ) : null}
+
             {tableError && !table ? (
               <ErrorLine>We could not load prices just now. Trying again…</ErrorLine>
             ) : null}
             {err ? <ErrorLine>{err}</ErrorLine> : null}
 
-            <GreenButton type="button" onClick={pay} busy={busy} busyText="Preparing your payment…" disabled={!table || price === null}>
-              {price === null ? 'Loading prices…' : `Pay ${formatUsd(price)}`}
-            </GreenButton>
+            <GoldButton onClick={pay} busy={busy} busyText="PREPARING YOUR PAYMENT…" disabled={!table || price === null} testId="credits-pay">
+              {price === null ? 'LOADING PRICES…' : `PAY ${formatUsd(price)}`}
+            </GoldButton>
             {busy && !EMBEDDED_CHECKOUT_AVAILABLE ? (
               <p className="gv-buy-wait"><Loader2 size={15} className="animate-spin" aria-hidden /> Taking you to Stripe…</p>
             ) : null}
-            <SecureLine />
             <SwapLine lead="Need more Gavelling?" action="Go Unlimited" onClick={swapToUnlimited} />
           </>
         )}

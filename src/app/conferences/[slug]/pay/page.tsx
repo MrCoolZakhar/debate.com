@@ -39,6 +39,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { formatFee } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
 import { payInvoiceCheckout, payInvoicesCheckout } from '@/lib/payments';
+import { openCreditsPopup } from '@/lib/purchasePopup';
 import { reportBlocked } from '@/lib/reportCrash';
 import { normalizeBlocks, type FormBlock } from '@/lib/customQuestions';
 import {
@@ -2386,17 +2387,25 @@ function PayInvoiceAndActions({
           }}
         />
 
-        <ActionRow
-          icon={Coins}
-          gradient={NEU_GRADIENTS.gold}
-          title="Buy credits"
-          subtitle={canBuyDelegationStuff ? (creditsOpen ? 'Hide' : "For your own applications and your delegation's") : 'Delegation leaders only'}
-          dimmed={!canBuyDelegationStuff}
-          onClick={() => {
-            if (!canBuyDelegationStuff) { setStubMessage('Only delegation leaders can buy spots or credits.'); return; }
-            setCreditsOpen(v => !v);
-          }}
-        />
+        {canBuyDelegationStuff && leaderApp ? (
+          // A delegation leader funds the pool their delegates apply from.
+          <ActionRow
+            icon={Coins}
+            gradient={NEU_GRADIENTS.gold}
+            title="Pay for your delegates"
+            subtitle={creditsOpen ? 'Hide' : 'Add credits your delegates apply with'}
+            onClick={() => setCreditsOpen(v => !v)}
+          />
+        ) : (
+          // Everyone else buys credits for themselves, straight in the pop-up.
+          <ActionRow
+            icon={Coins}
+            gradient={NEU_GRADIENTS.gold}
+            title="Buy credits"
+            subtitle="Credits for your own applications"
+            onClick={() => openCreditsPopup({ context: 'pay' })}
+          />
+        )}
         {canBuyDelegationStuff && leaderApp && creditsOpen && <DelegationCreditsCard societyId={leaderApp.society_id as string} />}
       </div>
 

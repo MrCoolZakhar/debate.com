@@ -50,8 +50,8 @@
  * PROFILE, MANAGE ACCOUNT (the credit count at its right edge and a + that
  * opens the buy-credits pop-up), PRICING (a Free / Unlimited badge, and on Free
  * an up arrow that opens the Unlimited pop-up); YOUR CONFERENCES (three rows,
- * then "All conferences" or "Create a conference"); SIGN OUT. The MUN CV and
- * calendar rows moved to the account area's own menu.
+ * then "All conferences" or "Create a conference"); ABOUT GAVELLING; SIGN OUT.
+ * The MUN CV and calendar rows moved to the account area's own menu.
  */
 
 import Link from 'next/link';
@@ -59,7 +59,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { compareStartDate, hasConcluded } from '@/lib/conferenceDates';
-import { User, Settings2, Tag, ArrowUp, LogOut, ArrowRight, Plus } from 'lucide-react';
+import { User, Settings2, Tag, ArrowUp, LogOut, ArrowRight, Plus, Info } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useCredits } from '@/hooks/useCredits';
 import { openCreditsPopup, openUnlimitedPopup } from '@/lib/purchasePopup';
@@ -552,8 +552,9 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
               button at their right edge (buy credits, go Unlimited) that opens a
               pop-up instead of navigating. A <button> cannot sit inside an <a>,
               so those rows are a flex wrapper holding the <Link> and the
-              <button> side by side; the hover wash is on the wrapper so the row
-              still reads as one. */}
+              <button> side by side. The ROW has no hover wash (owner, 25 Sep
+              2026): only the disc lights up and grows on its own hover / focus,
+              so it reads as the thing to press. */}
           <div className="py-1">
             {/* MY PROFILE */}
             <Link
@@ -569,11 +570,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
             </Link>
 
             {/* MANAGE ACCOUNT, with the credit count and a + to buy more */}
-            <div
-              className="flex items-center transition-colors"
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-            >
+            <div className="flex items-center">
               <Link
                 href="/account/manage/credits"
                 onClick={() => setOpen(false)}
@@ -594,15 +591,16 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                 aria-label="Buy credits"
                 title="Buy credits"
                 onClick={(e) => { e.stopPropagation(); setOpen(false); openCreditsPopup({ context: 'header' }); }}
-                className="flex items-center justify-center shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-inset"
-                // A 32px pressable box drawing an 18px gold disc; keeps the row
-                // at its height while giving the + something to press.
+                // A 32px pressable box drawing a 22px gold disc that grows to
+                // 26px and brightens on its own hover / focus; keeps the row at
+                // its height while giving the + something to press.
+                className="group flex items-center justify-center shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAF8F3]"
                 style={{ width: 32, height: 32, marginRight: 8, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
               >
                 <span
                   aria-hidden
-                  className="flex items-center justify-center rounded-full"
-                  style={{ width: 18, height: 18, backgroundColor: '#EED98A', color: '#1B3828' }}
+                  className="flex items-center justify-center rounded-full bg-[#EED98A] transition-[transform,background-color] duration-[140ms] ease-out group-hover:scale-[1.18] group-hover:bg-[#F5E6A8] group-focus-visible:scale-[1.18] group-focus-visible:bg-[#F5E6A8]"
+                  style={{ width: 22, height: 22, color: '#1B3828' }}
                 >
                   <Plus size={12} strokeWidth={3} />
                 </span>
@@ -610,11 +608,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
             </div>
 
             {/* PRICING, with the plan badge; on Free, an arrow to go Unlimited */}
-            <div
-              className="flex items-center transition-colors"
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-            >
+            <div className="flex items-center">
               <Link
                 href="/pricing/credits"
                 onClick={() => setOpen(false)}
@@ -653,13 +647,13 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                   aria-label="Go Unlimited"
                   title="Go Unlimited"
                   onClick={(e) => { e.stopPropagation(); setOpen(false); openUnlimitedPopup(); }}
-                  className="flex items-center justify-center shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-inset"
+                  className="group flex items-center justify-center shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAF8F3]"
                   style={{ width: 32, height: 32, marginRight: 8, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
                 >
                   <span
                     aria-hidden
-                    className="flex items-center justify-center rounded-full"
-                    style={{ width: 18, height: 18, backgroundColor: '#1B3828', color: '#EED98A' }}
+                    className="flex items-center justify-center rounded-full bg-[#1B3828] transition-[transform,background-color] duration-[140ms] ease-out group-hover:scale-[1.18] group-hover:bg-[#2A5A3C] group-focus-visible:scale-[1.18] group-focus-visible:bg-[#2A5A3C]"
+                    style={{ width: 22, height: 22, color: '#EED98A' }}
                   >
                     <ArrowUp size={12} strokeWidth={3} />
                   </span>
@@ -837,10 +831,23 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
 
           <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
 
+          {/* ABOUT GAVELLING, the same row as MY PROFILE, directly above Sign out */}
+          <Link
+            href="/about"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2.5 px-4 py-2 mt-1 font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-inset"
+            style={{ ...ROW_TEXT, textDecoration: 'none' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+          >
+            <Info size={15} strokeWidth={2.1} style={{ color: '#9A8A78', flexShrink: 0 }} />
+            <span className="flex-1">ABOUT GAVELLING</span>
+          </Link>
+
           {/* Sign out */}
           <button
             onClick={handleSignOut}
-            className="flex items-center gap-2.5 w-full text-left px-4 py-2.5 my-1 font-bold transition-colors focus:outline-none"
+            className="flex items-center gap-2.5 w-full text-left px-4 py-2.5 mb-1 font-bold transition-colors focus:outline-none"
             style={{
               color: '#8B2020',
               fontFamily: "var(--font-brand), sans-serif",

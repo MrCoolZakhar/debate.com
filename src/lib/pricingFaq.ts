@@ -9,6 +9,8 @@
 // Plain text, no markup: renderers put the links after the answer as a row
 // of small actions, so the sentence never breaks around an anchor.
 
+import { describeTiers, formatUsd, priceCentsFor, type CreditPriceTable } from './creditPricing';
+
 export type FaqAction =
   | { kind: 'link'; label: string; href: string }
   | { kind: 'open-credits'; label: string }
@@ -44,7 +46,9 @@ export const PRICING_FAQ: FaqEntry[] = [
   {
     id: 'how-much',
     question: 'How much does a credit cost?',
-    answer: 'One US dollar each. Bundles from 10 credits up are discounted: 10 or more are 10% off, 25 or more 15% off, 50 or more 20% off, and 100 or more 25% off. Any quantity gets the discount of the highest step it reaches, so 12 credits cost $10.80 and 30 credits cost $25.50.',
+    // {{tiers}} and {{example}} are filled from credit_price_tiers() at render
+    // time (answerFor below): the ladder is never typed into the client.
+    answer: 'One US dollar each. Bundles are discounted: {{tiers}}. Any quantity gets the discount of the highest step it reaches, so {{example}}.',
     actions: [{ kind: 'open-credits', label: 'See the bundles' }],
     pages: ['credits'],
     keywords: ['price', 'discount', 'bundle', 'bulk', 'cheaper'],
@@ -141,4 +145,21 @@ export const PRICING_FAQ: FaqEntry[] = [
 
 export function faqForPage(page: 'credits' | 'subscription'): FaqEntry[] {
   return PRICING_FAQ.filter((f) => f.pages.includes(page));
+}
+
+/**
+ * The answer with its price placeholders filled from the server's tier table.
+ * With no table yet the placeholders read as plain "…" so nothing invented is
+ * ever printed. Pure: safe to call during render.
+ */
+export function answerFor(entry: FaqEntry, table: CreditPriceTable | null): string {
+  if (!entry.answer.includes('{{')) return entry.answer;
+  if (!table) return entry.answer.replace(/\{\{tiers\}\}/g, '…').replace(/\{\{example\}\}/g, '…');
+  const firstStep = table.tiers.find((t) => t.pct > 0)?.min_qty ?? 10;
+  const a = firstStep + 2;
+  const b = firstStep * 3;
+  const example = `${a} credits cost ${formatUsd(priceCentsFor(a, table))} and ${b} credits cost ${formatUsd(priceCentsFor(b, table))}`;
+  return entry.answer
+    .replace(/\{\{tiers\}\}/g, describeTiers(table))
+    .replace(/\{\{example\}\}/g, example);
 }

@@ -1,19 +1,18 @@
 'use client';
 
 // ── The pricing section's two tabs ───────────────────────────────────────────
-// A sticky rail beside the content from 1024px, a segmented control above it
-// below that. The active tab is weight plus a forest fill, never a side stripe.
+// A sticky rail beside the content from 1024px (position sticky, top 96px),
+// a segmented control above it below that. The active tab is a forest fill
+// with gold type, never a side stripe.
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { OUTFIT } from '@/components/neu';
 
 const TABS = [
-  { href: '/pricing/credits', label: 'Credits', hint: 'A dollar an application' },
-  { href: '/pricing/subscription', label: 'Subscription', hint: 'Unlimited, monthly or yearly' },
+  { href: '/pricing/credits', label: 'Credits' },
+  { href: '/pricing/subscription', label: 'Subscription' },
 ] as const;
-
-const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2';
 
 export default function PricingRail() {
   const pathname = usePathname() ?? '';
@@ -28,17 +27,15 @@ export default function PricingRail() {
               <Link
                 href={t.href}
                 aria-current={active ? 'page' : undefined}
-                className={`gv-pr-tab ${FOCUS}`}
+                className="gv-pr-tab"
                 data-active={active ? 'true' : 'false'}
               >
-                <span className="gv-pr-tab-label">{t.label}</span>
-                <span className="gv-pr-tab-hint">{t.hint}</span>
+                {t.label}
               </Link>
             </li>
           );
         })}
       </ul>
-      <p className="gv-pr-rail-note">Organisers pay nothing. Credits and Unlimited are for the people who apply.</p>
     </nav>
   );
 }

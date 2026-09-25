@@ -767,6 +767,15 @@ function RankedRow({
   );
 }
 
+/** A transport failure (the request never got an answer), as opposed to a
+ *  PostgREST refusal. supabase-js THROWS these out of `executeWithRetry`
+ *  ("TypeError: Failed to fetch" in Chrome, "NetworkError" in Firefox,
+ *  "Load failed" in Safari); a refusal is resolved with `error` set. */
+function isNetworkError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : typeof err === 'string' ? err : (err as { message?: string } | null)?.message ?? '';
+  return /Failed to fetch|NetworkError|Load failed|network/i.test(message);
+}
+
 /** Inline text button inside the red out-of-credits strips. */
 const CREDIT_STRIP_LINK: React.CSSProperties = {
   color: '#8B2020', textDecoration: 'underline', textUnderlineOffset: 3,
@@ -1079,7 +1088,9 @@ function ConferenceApplyInner() {
   // pooled/delegation balance is fetched separately for whichever society
   // this application would attach to (see previewSocietyId below).
   const { balance: creditBalance, loading: creditBalanceLoading, refresh: refreshCredits } = useCredits();
-  const [poolBalance, setPoolBalance] = useState<number | null>(null);
+  // Whether the anticipated delegation's pool covers this credit. A boolean on
+  // purpose: a member is only ever told "covered" or not, never a count.
+  const [poolCovers, setPoolCovers] = useState(false);
   const [recapOpen, setRecapOpen] = useState(false);
 
   /** Human copy for validate_voucher's machine reasons. */
@@ -1234,7 +1245,7 @@ function ConferenceApplyInner() {
   const isExemptRole = !CREDIT_CHARGED_ROLES.includes(role);
   const hasUnlimited = financeProfile.has_active_subscription;
   const previewSocietyId = !isIndependent && !isObserver ? selectedSocietyId : null;
-  const poolCovered = !!previewSocietyId && (poolBalance ?? 0) > 0;
+  const poolCovered = !!previewSocietyId && poolCovers;
   // Gavelling-sponsored conferences: consume_credit_for_application always
   // succeeds without consuming a credit (reason:'sponsored') — never gate or
   // charge here, regardless of the applicant's own balance.
@@ -2028,18 +2039,33 @@ function ConferenceApplyInner() {
     setDiscardError('We could not delete this draft. It may already be gone, or it is not on this account. Refresh the page and try again.');
   }
 
-  // ── Pooled/delegation credit balance for the Overview gate, refetched
-  // whenever the anticipated society changes (independent/observer → null).
+  // ── Delegation pool coverage for the Overview gate, refetched whenever the
+  // anticipated society changes (independent/observer → null). The RPC tells
+  // a leader the pool figures and a member only whether it covers them.
   useEffect(() => {
-    if (!previewSocietyId || !session) { setPoolBalance(null); return; }
+    if (!previewSocietyId || !session) { setPoolCovers(false); return; }
     let cancelled = false;
     const supabase = getAuthedClient(session.access_token);
-    supabase.rpc('society_credit_balance', { p_society: previewSocietyId }).then(({ data, error }) => {
+    supabase.rpc('my_delegation_pool', { p_society: previewSocietyId }).then(({ data, error }) => {
       if (cancelled) return;
-      setPoolBalance(!error && typeof data === 'number' ? data : null);
+      const pool = (data ?? null) as { ok?: boolean; is_leader?: boolean; pool?: number; covers?: boolean } | null;
+      if (error || !pool?.ok) { setPoolCovers(false); return; }
+      setPoolCovers(pool.is_leader ? (pool.pool ?? 0) > 0 : pool.covers === true);
     });
     return () => { cancelled = true; };
   }, [previewSocietyId, session]);
+
+  // After buying a credit from the Submit gate (handleSubmit, H1), the
+  // application submits itself the moment the balance has been re-read, on
+  // the same path as pressing Submit. The ref is set only by that gate and by
+  // the need_credit backstop, and cleared here before the re-run.
+  const autoSubmitRef = useRef(false);
+  useEffect(() => {
+    if (!autoSubmitRef.current || !canApply || submitting) return;
+    autoSubmitRef.current = false;
+    void handleSubmit();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [creditBalance, canApply]);
 
   async function fetchAll() {
     // GUARD BEFORE setLoading(true), not after. The other order flipped the
@@ -2834,10 +2860,40 @@ function ConferenceApplyInner() {
         return;
       }
     }
+    // No credit, no Unlimited, no sponsorship, not exempt, not pool-covered:
+    // nothing is written. The credits pop-up opens instead, and once the
+    // balance has been re-read the application submits itself (autoSubmitRef).
+    // A row this tab already filed is past the credit gate (the credit was
+    // taken at insert), so a resume never reopens the pop-up.
+    if (!isEditMode && !previewing && !!user && !canApply && !submittedAppIdRef.current) {
+      setSubmitError('');
+      setSubmitting(false);
+      goBuyCredits({ autoSubmit: true });
+      return;
+    }
     setSubmitting(true);
     setSubmitError('');
     if (!session) { setSubmitError('Session expired. Please sign in again.'); setSubmitting(false); return; }
     const supabase = getAuthedClient(session.access_token);
+
+    /** The applicant's own live application for this conference and role, if
+     *  one exists: the row a lost INSERT response left behind, or one filed
+     *  from another tab. Read after a network failure and before any insert,
+     *  so a row that exists is always adopted and never duplicated. */
+    async function findMyLiveApplication(client: typeof supabase): Promise<{ id: string; status: string } | null> {
+      const { data, error } = await client
+        .from('applications')
+        .select('id, status')
+        .eq('user_id', user!.id)
+        .eq('conference_id', conference!.id)
+        .eq('role', role)
+        .in('status', ['submitted', 'accepted', 'assigned', 'checked-in'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) return null;
+      return (data as { id: string; status: string } | null) ?? null;
+    }
     // Stop autosaving for the duration of the submit, so a debounce that
     // was already in flight can't re-create the draft after we delete it.
     // Re-enabled below if the submit fails and they're still in the flow.
@@ -2985,44 +3041,73 @@ function ConferenceApplyInner() {
       // until now nothing enforced it. The society lookup and the credit RPC
       // above/below are both safe to re-run; the voucher redemption is not,
       // and is skipped on a resume.
-      const resumeAppId = submittedAppIdRef.current;
+      //
+      // The row can also exist WITHOUT this tab knowing: on 25 Sep 2026 an
+      // observer's INSERT reached Postgres (row created, credit taken by the
+      // insert-time trigger) but the response never came back, supabase-js
+      // threw "Failed to fetch" out of the insert, and the applicant was left
+      // on an error with an application already filed. So a live row is looked
+      // for BEFORE inserting (the retry after a lost response, and the second
+      // tab) and AGAIN when the insert fails on the network, and is adopted
+      // whenever it is there.
+      let resumeAppId = submittedAppIdRef.current;
       let newAppId: string;
+      if (!resumeAppId) {
+        const live = await findMyLiveApplication(supabase);
+        if (live) {
+          submittedAppIdRef.current = live.id;
+          resumeAppId = live.id;
+        }
+      }
       if (resumeAppId) {
         newAppId = resumeAppId;
       } else {
-        const { data: app, error: appError } = await supabase
-          .from('applications')
-          .insert(insertPayload)
-          .select('id')
-          .single();
+        let inserted: { id: string } | null = null;
+        try {
+          const { data: app, error: appError } = await supabase
+            .from('applications')
+            .insert(insertPayload)
+            .select('id')
+            .single();
 
-        // A failed insert stops the applicant dead and never reaches an error
-        // boundary — the catch below turns it into a tidy inline message and
-        // nobody is ever told. Report it.
-        // A refusal because the role's window closed (or has not opened) is
-        // a business rule, not a crash: no alert, and a plain sentence below.
-        if (appError) {
-          // guard_application_write refuses a self-submitted application from
-          // a profile with no nationality or date of birth: show the wall.
-          if ((appError as { hint?: string }).hint === 'basics_required') {
-            setMyNationality(null);
-            setMyDob(null);
-          } else if (!isApplicationWindowRefusal(appError)) {
-            reportBlocked('submit application', appError, { conferenceSlug: slug, role });
+          // A failed insert stops the applicant dead and never reaches an error
+          // boundary — the catch below turns it into a tidy inline message and
+          // nobody is ever told. Report it.
+          // A refusal because the role's window closed (or has not opened) is
+          // a business rule, not a crash: no alert, and a plain sentence below.
+          if (appError) {
+            // guard_application_write refuses a self-submitted application from
+            // a profile with no nationality or date of birth: show the wall.
+            if ((appError as { hint?: string }).hint === 'basics_required') {
+              setMyNationality(null);
+              setMyDob(null);
+            } else if (!isApplicationWindowRefusal(appError)) {
+              reportBlocked('submit application', appError, { conferenceSlug: slug, role });
+            }
+            throw appError;
           }
-          throw appError;
+          inserted = app as { id: string };
+        } catch (insertErr: unknown) {
+          // The response was lost, not necessarily the write: look for the row
+          // before giving up. Found = adopt it and carry on; not found = the
+          // insert really did not land, and the catch below says so.
+          if (!isNetworkError(insertErr)) throw insertErr;
+          const live = await findMyLiveApplication(supabase);
+          if (!live) throw insertErr;
+          reportBlocked('submit application (response lost, row adopted)', insertErr, { conferenceSlug: slug, role, appId: live.id });
+          inserted = { id: live.id };
         }
-        newAppId = (app as { id: string }).id;
+        newAppId = inserted.id;
         submittedAppIdRef.current = newAppId;
       }
 
-      // Consume a Gavelling credit for this application. The Overview step
-      // already gated submission on canApply, so need_credit here means the
-      // applicant's coverage changed between viewing Overview and clicking
-      // submit (e.g. balance spent in another tab) — block the redirect and
+      // Consume a Gavelling credit for this application. handleSubmit already
+      // stopped on !canApply before writing anything, so need_credit here
+      // means the applicant's coverage changed between that check and the
+      // insert (e.g. balance spent in another tab) — block the redirect and
       // surface it rather than silently sending an uncharged application
-      // through, the application row stays as-is so a retry (after buying
-      // credits) doesn't create a duplicate.
+      // through, the application row stays as-is so the automatic retry
+      // (after buying a credit) resumes it instead of filing a duplicate.
       //
       // RECOVERABLE. A transport/RLS failure here is Gavelling's ledger, not
       // the delegate's application, and the row is already in — stranding a
@@ -3030,34 +3115,45 @@ function ConferenceApplyInner() {
       // worse outcome. Report it and carry on. The business rule (need_credit)
       // still blocks whenever the RPC actually answers. Without destructuring
       // `error` at all, `data` came back null and need_credit could never fire.
-      const { data: credit, error: creditError } = await supabase.rpc('consume_credit_for_application', {
-        p_application_id: newAppId,
-      });
-      if (creditError) reportBlocked('consume application credit', creditError, { conferenceSlug: slug, role });
-      const creditResult = credit as { ok?: boolean; consumed?: boolean; need_credit?: boolean } | null;
-      if (creditResult?.need_credit) {
-        setSubmitError("You're out of credits. Add one and submit again.");
-        setSubmitting(false);
-        // Open the credits pop-up at once; its onComplete clears this error
-        // once the balance has been re-read, so Submit works straight away.
-        goBuyCredits();
-        return;
-      }
-      refreshCredits();
-
-      // Record the voucher redemption atomically (BEFORE INSERT trigger locks
-      // the voucher row, enforces active/expiry/limit, bumps redeemed_count).
-      // Non-fatal: the application is already in, a failed redemption just
-      // means the organizer sees the voucher columns without a redemption row.
-      // RECOVERABLE, as the comment above already says — but it has to be
-      // observed to be known about, so report it.
-      if (!resumeAppId && appliedVoucher && breakdown.voucherDiscount > 0) {
-        const { error: voucherError } = await supabase.rpc('redeem_voucher', {
-          p_voucher_id: appliedVoucher.voucherId,
-          p_context: 'conference_signup',
+      //
+      // From here on the row EXISTS, so nothing below may keep the applicant
+      // off the confirmation screen: every step after the insert is caught,
+      // reported and stepped over, and the redirect at the end still runs.
+      // Two exceptions, on purpose: need_credit (the pop-up opens and the
+      // application submits itself once a credit is there), and the
+      // preference insert (the ranking matters, and the retry resumes).
+      try {
+        const { data: credit, error: creditError } = await supabase.rpc('consume_credit_for_application', {
           p_application_id: newAppId,
         });
-        if (voucherError) reportBlocked('redeem voucher', voucherError, { conferenceSlug: slug, role });
+        if (creditError) reportBlocked('consume application credit', creditError, { conferenceSlug: slug, role });
+        const creditResult = credit as { ok?: boolean; consumed?: boolean; need_credit?: boolean } | null;
+        if (creditResult?.need_credit) {
+          setSubmitError("You're out of credits. Add one and we will finish submitting for you.");
+          setSubmitting(false);
+          // Open the credits pop-up at once; once the balance has been re-read
+          // the application submits itself (autoSubmitRef) and resumes this row.
+          goBuyCredits({ autoSubmit: true });
+          return;
+        }
+        refreshCredits();
+
+        // Record the voucher redemption atomically (BEFORE INSERT trigger locks
+        // the voucher row, enforces active/expiry/limit, bumps redeemed_count).
+        // Non-fatal: the application is already in, a failed redemption just
+        // means the organizer sees the voucher columns without a redemption row.
+        // RECOVERABLE, as the comment above already says — but it has to be
+        // observed to be known about, so report it.
+        if (!resumeAppId && appliedVoucher && breakdown.voucherDiscount > 0) {
+          const { error: voucherError } = await supabase.rpc('redeem_voucher', {
+            p_voucher_id: appliedVoucher.voucherId,
+            p_context: 'conference_signup',
+            p_application_id: newAppId,
+          });
+          if (voucherError) reportBlocked('redeem voucher', voucherError, { conferenceSlug: slug, role });
+        }
+      } catch (afterErr: unknown) {
+        reportBlocked('after application insert', afterErr, { conferenceSlug: slug, role, appId: newAppId });
       }
 
       if (showPreferenceStep && preferences.length > 0) {
@@ -3086,14 +3182,19 @@ function ConferenceApplyInner() {
         }
       }
 
-      // Fire-and-forget: the confirmation redirect below must never wait on
-      // (or fail because of) the email queue.
-      if (session) void queueParticipantEventEmail(session.access_token, conference!.id, 'application_received', [newAppId]);
+      try {
+        // Fire-and-forget: the confirmation redirect below must never wait on
+        // (or fail because of) the email queue.
+        if (session) void queueParticipantEventEmail(session.access_token, conference!.id, 'application_received', [newAppId]);
 
-      // The application row now supersedes the draft. Leaving it behind would
-      // show the organiser a "still deciding" draft for somebody who has
-      // already applied, and would keep the reminder job emailing them.
-      await discardDraft(supabase);
+        // The application row now supersedes the draft. Leaving it behind would
+        // show the organiser a "still deciding" draft for somebody who has
+        // already applied, and would keep the reminder job emailing them.
+        await discardDraft(supabase);
+        refreshCredits();
+      } catch (afterErr: unknown) {
+        reportBlocked('after application insert', afterErr, { conferenceSlug: slug, role, appId: newAppId });
+      }
       const timingParam = roleConfig?.payment_timing ? `&timing=${roleConfig.payment_timing}` : '';
       router.push(`/conferences/${slug}/apply/confirmation?role=${role}${timingParam}`);
     } catch (err: unknown) {
@@ -3256,13 +3357,20 @@ function ConferenceApplyInner() {
   // ── Buying credits / going Unlimited: the global pop-ups ─────────────────
   // Both open in place (src/lib/purchasePopup.ts); nothing here calls a
   // checkout function or sends the person to another page.
-  function goBuyCredits() {
+  /** `autoSubmit`: opened from Submit itself (the credit gate or need_credit),
+   *  so once the balance is re-read the application submits on its own. The
+   *  draft is still flushed first: the pop-up can hand off to a hosted Stripe
+   *  checkout, which leaves the page. */
+  function goBuyCredits(opts: { autoSubmit?: boolean } = {}) {
     void flushDraftBeforeCheckout();
     openCreditsPopup({
       context: 'apply',
       conferenceName: conference?.full_name || conference?.acronym || undefined,
       preselect: 1,
-      onComplete: afterPurchase,
+      onComplete: () => {
+        afterPurchase();
+        if (opts.autoSubmit) autoSubmitRef.current = true;
+      },
     });
   }
 
@@ -3893,7 +4001,7 @@ function ConferenceApplyInner() {
 
         <WizardFooter
           onNext={handleContinue}
-          nextLabel={step >= totalSteps ? (previewing ? 'Return to settings' : submitting ? 'Submitting…' : (isEditMode ? 'Resubmit application' : 'Submit application')) : 'Continue'}
+          nextLabel={step >= totalSteps ? (previewing ? 'Return to settings' : submitting ? 'Submitting…' : (isEditMode ? 'RESUBMIT APPLICATION' : 'SUBMIT APPLICATION')) : 'Continue'}
           primary
           disabled={submitting}
         />
@@ -4924,7 +5032,7 @@ function ConferenceApplyInner() {
       : hasUnlimited
       ? 'Included with Gavelling Unlimited ∞'
       : poolCovered
-      ? 'Covered by your delegation'
+      ? 'Your delegation covers your credit'
       : 'This application uses 1 Gavelling credit';
     // Same formula as trialDaysLeft in account/unlimited/page.tsx: whole
     // days, floored at 0, never negative. Quiet nudge only, not an upsell.
@@ -4935,8 +5043,10 @@ function ConferenceApplyInner() {
     // Edit mode resubmits the existing application via resubmit_application —
     // it never runs the credit-consuming create path in handleSubmit, so the
     // gate/cost card only applies to fresh submissions.
+    // Out of credits is no longer a gate on this screen: Submit stays enabled
+    // and handleSubmit opens the credits pop-up itself, then submits on its
+    // own once a credit is there.
     const guestGate = !user && !previewing;
-    const gated = !isEditMode && !previewing && !guestGate && !canApply;
 
     return (
       <WizardShell
@@ -5121,27 +5231,11 @@ function ConferenceApplyInner() {
               )}
             </div>
 
-            {gated && (
-              <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(139,32,32,0.06)', border: '1.5px solid rgba(139,32,32,0.22)' }}>
-                <p className="text-sm font-semibold" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
-                  Out of credits?{' '}
-                  <button type="button" onClick={goBuyCredits} className="focus:outline-none" style={CREDIT_STRIP_LINK}>
-                    Buy credits
-                  </button>
-                  {' '}or{' '}
-                  <button type="button" onClick={goUnlimitedPopup} className="focus:outline-none" style={CREDIT_STRIP_LINK}>
-                    go Unlimited
-                  </button>
-                  {' '}to continue.
-                </p>
-              </div>
-            )}
-
             {resubmitNeedsCredit && (
               <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(139,32,32,0.06)', border: '1.5px solid rgba(139,32,32,0.22)' }}>
                 <p className="text-sm font-semibold" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
                   Out of credits?{' '}
-                  <button type="button" onClick={goBuyCredits} className="focus:outline-none" style={CREDIT_STRIP_LINK}>
+                  <button type="button" onClick={() => goBuyCredits()} className="focus:outline-none" style={CREDIT_STRIP_LINK}>
                     Buy credits
                   </button>
                   {' '}or{' '}
@@ -5178,9 +5272,9 @@ function ConferenceApplyInner() {
 
         <WizardFooter
           onNext={guestGate ? goSignIn : handleSubmit}
-          nextLabel={guestGate ? 'Sign in and submit' : previewing ? 'Return to settings' : submitting ? 'Submitting…' : (isEditMode ? 'Resubmit application' : 'Submit application')}
+          nextLabel={guestGate ? 'Sign in and submit' : previewing ? 'Return to settings' : submitting ? 'Submitting…' : (isEditMode ? 'RESUBMIT APPLICATION' : 'SUBMIT APPLICATION')}
           primary
-          disabled={guestGate ? false : (submitting || gated)}
+          disabled={guestGate ? false : submitting}
         />
 
         {/* ── Withdraw application — secondary, destructive; only while the
@@ -5365,6 +5459,12 @@ function ConferenceApplyInner() {
   }
 
   if (existingApp && !canEdit && !previewing) {
+    // A live application with a fee still to pay leads with the payment,
+    // the reason most people land here after a submit whose response was
+    // lost (the row exists, the confirmation never showed).
+    const hasFee = !!roleConfig && activePhaseFee(roleConfig).amount > 0;
+    const liveForPayment = ['submitted', 'accepted', 'assigned', 'checked-in'].includes(existingApp.status);
+    const showPayment = hasFee && liveForPayment;
     return (
       <div className="min-h-screen flex flex-col" style={{ ...themeCssVars(activeTheme), backgroundColor: 'var(--gv-bg)' }}>
         <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
@@ -5378,13 +5478,26 @@ function ConferenceApplyInner() {
               Your application as {role.replace(/-/g, ' ')} is {existingApp.status}.
               {guestDraftRow && ' The answers you just filled in are still saved in this browser.'}
             </p>
-            <Link
-              href={`/conferences/${slug}`}
-              className="inline-block rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
-              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}
-            >
-              VIEW CONFERENCE →
-            </Link>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              {showPayment && (
+                <Link
+                  href={`/conferences/${slug}/pay`}
+                  className="inline-block rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
+                  style={{ backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}
+                >
+                  GO TO PAYMENT
+                </Link>
+              )}
+              <Link
+                href={`/conferences/${slug}`}
+                className="inline-block rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
+                style={showPayment
+                  ? { backgroundColor: 'transparent', color: 'var(--gv-on-surface)', border: '1.5px solid var(--gv-border)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }
+                  : { backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}
+              >
+                VIEW CONFERENCE
+              </Link>
+            </div>
           </div>
         </div>
       </div>

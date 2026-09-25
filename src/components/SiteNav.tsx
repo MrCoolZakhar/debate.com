@@ -437,64 +437,58 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
         {/* Desktop right actions */}
         <div className="hidden lg:flex items-center gap-3">
 
-          {/* Credit chip: ONE pill holding two controls. The coin and the number
-              are a link to Manage account; the small gold + at the right end
-              opens the buy-credits pop-up without leaving the page. They are
-              siblings (a <button> inside an <a> is invalid HTML), styled as one
-              pill on the wrapper, which also keeps the `data-credits-chip`
-              spotlight target of CreditsWelcomeModal. */}
+          {/* Credit chip: ONE button. The coin and the number are the whole
+              pill, and a click anywhere on it opens the buy-credits pop-up
+              without leaving the page (owner, 25 Sep 2026: it no longer links to
+              Manage account, which the profile menu still does). The small gold
+              + on its top-right corner is a signifier only (aria-hidden, takes no
+              pointer). `data-credits-chip` stays on the button for the
+              CreditsWelcomeModal spotlight. */}
           {user && (
-            <div
+            <button
+              type="button"
               data-credits-chip
-              className="relative flex items-center"
+              aria-label="Buy credits"
+              title="Buy credits"
+              onClick={() => openCreditsPopup({ context: 'header' })}
+              // 30px pill; on a touch screen a pseudo-element widens the hit
+              // area to 44px without changing what is drawn.
+              className="relative flex items-center gap-1.5 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2 [@media(pointer:coarse)]:before:absolute [@media(pointer:coarse)]:before:-inset-y-[7px] [@media(pointer:coarse)]:before:inset-x-0 [@media(pointer:coarse)]:before:content-['']"
               style={{
                 backgroundColor: '#1B3828',
                 color: '#EED98A',
-                borderRadius: '9999px',
-                padding: '3px 4px 3px 0',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '7px 16px 7px 14px',
+                fontSize: '13px',
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                fontFamily: "var(--font-brand), sans-serif",
                 transition: 'background-color 150ms ease',
               }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
             >
-              <Link
-                href="/account/manage/credits"
-                aria-label="Manage account"
-                className="flex items-center gap-1.5 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2"
+              <CreditCoin size={16} />
+              <span style={{ fontVariantNumeric: 'tabular-nums' }}>{creditsLoading || creditBalance === null ? '–' : creditBalance}</span>
+              {/* The + badge: 18px gold disc with an ivory ring, overlapping the
+                  pill's top-right edge. Purely a signifier. */}
+              <span
+                aria-hidden
+                className="absolute flex items-center justify-center rounded-full pointer-events-none"
                 style={{
-                  color: '#EED98A',
-                  padding: '4px 6px 4px 14px',
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  letterSpacing: '0.04em',
-                  fontFamily: "var(--font-brand), sans-serif",
-                  textDecoration: 'none',
-                }}
-              >
-                <CreditCoin size={16} />
-                <span style={{ fontVariantNumeric: 'tabular-nums' }}>{creditsLoading || creditBalance === null ? '–' : creditBalance}</span>
-              </Link>
-              <button
-                type="button"
-                aria-label="Buy credits"
-                title="Buy credits"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); openCreditsPopup({ context: 'header' }); }}
-                // 22px disc; on a touch screen a pseudo-element widens the hit
-                // area to 44px without changing what is drawn.
-                className="relative flex items-center justify-center rounded-full shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2 [@media(pointer:coarse)]:before:absolute [@media(pointer:coarse)]:before:-inset-[11px] [@media(pointer:coarse)]:before:content-['']"
-                style={{
-                  width: 22,
-                  height: 22,
+                  top: -6,
+                  right: -6,
+                  width: 18,
+                  height: 18,
                   backgroundColor: '#EED98A',
                   color: '#1B3828',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: 0,
+                  boxShadow: '0 0 0 1.5px #FAF8F3',
                 }}
               >
-                <Plus size={13} strokeWidth={3} aria-hidden />
-              </button>
-            </div>
+                <Plus size={12} strokeWidth={3} />
+              </span>
+            </button>
           )}
 
           {/* Auth section */}
@@ -660,53 +654,48 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
                   organiser work, each row a link to where it is done. */}
               <ActivityNotices items={sheetAttention} variant="sheet" onNavigate={() => setMenuOpen(false)} />
 
-              {/* The phone's credit counter: the same two controls as the desktop
-                  chip. Coin + number + "Manage account" is the link; the + at the
-                  right edge closes the sheet and opens the buy-credits pop-up. */}
-              <div
-                className="flex items-center"
+              {/* The phone's credit counter: the same one control as the desktop
+                  chip. The whole row is a button that closes the sheet and opens
+                  the buy-credits pop-up; the + badge on its corner is a signifier. */}
+              <button
+                type="button"
+                aria-label="Buy credits"
+                title="Buy credits"
+                onClick={() => { setMenuOpen(false); openCreditsPopup({ context: 'header' }); }}
+                className="relative flex w-full items-center gap-2 rounded-[10px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2"
                 style={{
                   margin: '0 0 4px',
-                  borderRadius: '10px',
+                  padding: '12px 16px',
+                  minHeight: 44,
                   backgroundColor: 'rgba(27, 56, 40, 0.07)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  textAlign: 'start',
                 }}
               >
-                <Link
-                  href="/account/manage/credits"
-                  onClick={() => setMenuOpen(false)}
-                  className="flex flex-1 min-w-0 items-center gap-2 rounded-[10px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2"
+                <CreditCoin size={16} />
+                <span style={{ fontSize: '13px', fontWeight: 800, color: '#1B3828', fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums' }}>
+                  {creditsLoading || creditBalance === null ? '–' : creditBalance}
+                </span>
+                <span className="truncate" style={{ marginLeft: 'auto', fontSize: '12px', fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>
+                  Buy credits
+                </span>
+                <span
+                  aria-hidden
+                  className="absolute flex items-center justify-center rounded-full pointer-events-none"
                   style={{
-                    padding: '12px 8px 12px 16px',
-                    minHeight: 44,
-                    textDecoration: 'none',
+                    top: -6,
+                    right: -6,
+                    width: 18,
+                    height: 18,
+                    backgroundColor: '#EED98A',
+                    color: '#1B3828',
+                    boxShadow: '0 0 0 1.5px #FAF8F3',
                   }}
                 >
-                  <CreditCoin size={16} />
-                  <span style={{ fontSize: '13px', fontWeight: 800, color: '#1B3828', fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums' }}>
-                    {creditsLoading || creditBalance === null ? '–' : creditBalance}
-                  </span>
-                  <span className="truncate" style={{ marginLeft: 'auto', fontSize: '12px', fontWeight: 700, color: '#5A4E46', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.02em' }}>
-                    Manage account
-                  </span>
-                </Link>
-                <button
-                  type="button"
-                  aria-label="Buy credits"
-                  title="Buy credits"
-                  onClick={() => { setMenuOpen(false); openCreditsPopup({ context: 'header' }); }}
-                  // A 44x44 tap target drawing a 24px gold disc.
-                  className="flex items-center justify-center shrink-0 rounded-[10px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2"
-                  style={{ width: 44, height: 44, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
-                >
-                  <span
-                    aria-hidden
-                    className="flex items-center justify-center rounded-full"
-                    style={{ width: 24, height: 24, backgroundColor: '#EED98A', color: '#1B3828' }}
-                  >
-                    <Plus size={14} strokeWidth={3} />
-                  </span>
-                </button>
-              </div>
+                  <Plus size={12} strokeWidth={3} />
+                </span>
+              </button>
 
               <button
                 onClick={handleSignOut}

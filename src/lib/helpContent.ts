@@ -22,8 +22,6 @@ export interface HelpSection {
   /** Fluent 3D emoji asset name, sentence case, e.g. "Classical building". */
   emoji: string;
   fallback: HelpFallbackIcon;
-  /** One line under the title. */
-  intro: string;
   entries: FaqEntry[];
 }
 
@@ -198,7 +196,6 @@ export const HELP_SECTIONS: HelpSection[] = [
     title: 'Sessions',
     emoji: 'Classical building',
     fallback: 'Landmark',
-    intro: 'Running a committee room from a laptop, with delegates on their phones.',
     entries: SESSIONS,
   },
   {
@@ -206,7 +203,6 @@ export const HELP_SECTIONS: HelpSection[] = [
     title: 'Delegates',
     emoji: 'Graduation cap',
     fallback: 'GraduationCap',
-    intro: 'Applying, paying the conference and taking your seat.',
     entries: DELEGATES,
   },
   {
@@ -214,7 +210,6 @@ export const HELP_SECTIONS: HelpSection[] = [
     title: 'Chairs',
     emoji: 'Balance scale',
     fallback: 'Gavel',
-    intro: 'Getting onto the dais and running the room.',
     entries: CHAIRS,
   },
   {
@@ -222,7 +217,6 @@ export const HELP_SECTIONS: HelpSection[] = [
     title: 'Organizers',
     emoji: 'Briefcase',
     fallback: 'Briefcase',
-    intro: 'Listing a conference, setting it up and watching it run.',
     entries: ORGANIZERS,
   },
   {
@@ -230,7 +224,6 @@ export const HELP_SECTIONS: HelpSection[] = [
     title: 'Pricing',
     emoji: 'Money bag',
     fallback: 'Wallet',
-    intro: 'Credits, Unlimited and who pays what.',
     entries: PRICING_FAQ,
   },
 ];

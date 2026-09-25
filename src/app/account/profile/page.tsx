@@ -1258,19 +1258,25 @@ export default function ProfilePage() {
         </div>
         <div className="flex gap-3">
           <button
+            type="button"
             onClick={handleSignOut}
-            className="flex-1 rounded-full py-2.5 font-semibold focus:outline-none transition-colors"
+            className="flex-1 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8B2020] focus-visible:ring-offset-2 transition-colors"
             style={{
+              minHeight: 48,
+              minWidth: 160,
               fontSize: T.body,
-              border: '1px solid rgba(139,32,32,0.3)',
-              color: '#8B2020',
-              backgroundColor: 'transparent',
+              fontWeight: 800,
+              textTransform: 'uppercase',
+              border: '1px solid #8B2020',
+              color: '#FFFFFF',
+              backgroundColor: '#8B2020',
               fontFamily: OUTFIT,
-              letterSpacing: '0.06em',
+              letterSpacing: '0.08em',
               cursor: 'pointer',
+              boxShadow: NEU.outSm,
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#A32A2A'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
           >
             SIGN OUT
           </button>

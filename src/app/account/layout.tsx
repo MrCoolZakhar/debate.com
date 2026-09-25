@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import {
-  User, ScrollText, CalendarDays, CalendarCheck, FileClock, ArrowLeft, Coins, Infinity as InfinityIcon, Ticket,
+  User, ScrollText, CalendarDays, CalendarCheck, FileClock, Coins, Infinity as InfinityIcon, Ticket,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -18,9 +18,10 @@ const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'
 const FONT = "var(--font-brand), sans-serif";
 const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2';
 
-// The rail sits under the 72px site header with a little air above it.
-const HEADER_PX = 72;
-const RAIL_TOP = HEADER_PX + 16;
+// The rail sits under the 72px site header with a little air above it. It is
+// ONE rail (the profile group, then Manage Account underneath) on every
+// /account page: there is no second menu and no "Back to profile".
+const RAIL_TOP = 96;
 const RAIL_WIDTH = 248;
 
 type NavLink = {
@@ -32,11 +33,15 @@ type NavLink = {
   /** My conferences reads a touch warmer than the rest, with no stripe. */
   warm?: boolean;
   badge?: number;
-  /** The "Back to profile" row at the top of the Manage account menu. */
-  back?: boolean;
 };
 
-const ACCOUNT_LINKS: NavLink[] = [
+type NavGroup = {
+  /** Shown as a small heading above the group; the profile group has none. */
+  heading?: string;
+  links: NavLink[];
+};
+
+const PROFILE_LINKS: NavLink[] = [
   { label: 'My profile', href: '/account/profile', Icon: User },
   { label: 'MUN CV', href: '/account/cv', Icon: ScrollText },
   { label: 'Conference calendar', href: '/account/calendar', Icon: CalendarDays },
@@ -44,14 +49,12 @@ const ACCOUNT_LINKS: NavLink[] = [
 ];
 
 const MANAGE_LINKS: NavLink[] = [
-  { label: 'Back to profile', href: '/account/profile', Icon: ArrowLeft, back: true },
-  { label: 'Credits and usage', href: '/account/manage/credits', Icon: Coins, match: 'prefix' },
+  { label: 'Credits and Usage', href: '/account/manage/credits', Icon: Coins, match: 'prefix' },
   { label: 'Subscription', href: '/account/manage/subscription', Icon: InfinityIcon, match: 'prefix' },
-  { label: 'Promo code', href: '/account/manage/promo', Icon: Ticket, match: 'prefix' },
+  { label: 'Promo Code', href: '/account/manage/promo', Icon: Ticket, match: 'prefix' },
 ];
 
 function isActive(link: NavLink, pathname: string): boolean {
-  if (link.back) return false;
   // Query strings and hashes are not part of `pathname`, so the drafts row
   // (same page as My conferences, a different anchor) never lights up on its own.
   const path = link.href.split(/[?#]/)[0];
@@ -65,7 +68,7 @@ function Badge({ n }: { n: number }) {
       style={{
         minWidth: 20, height: 20, padding: '0 6px', fontSize: 11, fontWeight: 700,
         fontFamily: FONT, fontVariantNumeric: 'tabular-nums',
-        backgroundColor: 'rgba(182,135,31,0.18)', color: '#7A5A20',
+        backgroundColor: 'rgba(182,135,31,0.18)', color: '#B6871F',
       }}
       aria-label={`${n} to complete`}
     >
@@ -81,19 +84,20 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
   const unlimitedStatus = useUnlimitedStatus();
   const { count: draftCount } = useDraftCount();
 
-  const inManage = pathname.startsWith('/account/manage');
-
   // Drafts to complete is a single destination row (the profile menu lists
   // one entry per draft; this rail does not), shown only while there is
   // something to finish, with the same count off the same hook.
-  const accountLinks: NavLink[] = draftCount && draftCount > 0
+  const profileLinks: NavLink[] = draftCount && draftCount > 0
     ? [
-        ...ACCOUNT_LINKS,
+        ...PROFILE_LINKS,
         { label: 'Drafts to complete', href: '/account/conferences?tab=all#drafts', Icon: FileClock, badge: draftCount },
       ]
-    : ACCOUNT_LINKS;
+    : PROFILE_LINKS;
 
-  const navLinks = inManage ? MANAGE_LINKS : accountLinks;
+  const groups: NavGroup[] = [
+    { links: profileLinks },
+    { heading: 'Manage Account', links: MANAGE_LINKS },
+  ];
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -110,7 +114,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
     if (!rail) return;
     const active = rail.querySelector('[data-acct-tab="active"]');
     active?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
-  }, [pathname, draftCount, inManage]);
+  }, [pathname, draftCount]);
 
   if (authLoading) {
     return (
@@ -163,152 +167,199 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
           .gv-acct-signout:hover{background-color:rgba(139,32,32,0.07)}
         `}</style>
 
-        {/* Mobile tab bar. A horizontal scroller that bleeds to the screen
-            edges, hides its scrollbar (the native bar drew over the active
-            underline), contains its overscroll, and scrolls the current tab
-            into view on mount. Rows are 44px so a thumb can hit them. */}
+        {/* Mobile tab bar: every entry of both groups in one horizontal
+            scroller that bleeds to the screen edges, hides its scrollbar (the
+            native bar drew over the active underline), contains its overscroll,
+            and scrolls the current tab into view on mount. Rows are 44px so a
+            thumb can hit them. A hairline separates the two groups. */}
         <div
           ref={tabRailRef}
           className="gv-acct-tabs md:hidden flex overflow-x-auto gap-0 px-4"
           style={{ borderBottom: '1px solid #DDD4C0', overscrollBehaviorX: 'contain' }}
-          aria-label={inManage ? 'Manage account' : 'Account'}
+          aria-label="Account"
         >
-          {navLinks.map((link) => {
-            const active = isActive(link, pathname);
-            const color = active ? '#1B3828' : link.warm ? '#7A5A20' : '#5A5046';
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                data-acct-tab={active ? 'active' : undefined}
-                aria-current={active ? 'page' : undefined}
-                className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 ${FOCUS}`}
-                style={{
-                  minHeight: 44,
-                  color,
-                  borderBottom: active ? '2px solid #1B3828' : '2px solid transparent',
-                  textDecoration: 'none',
-                  fontFamily: FONT,
-                  fontSize: 14,
-                  fontWeight: active ? 700 : 600,
-                  whiteSpace: 'nowrap',
-                  transition: 'color 150ms ease-out',
-                }}
-              >
-                <link.Icon size={14} strokeWidth={2.4} aria-hidden />
-                {link.label}
-                {link.badge !== undefined && <Badge n={link.badge} />}
-              </Link>
-            );
-          })}
+          {groups.map((group, gi) => (
+            <div key={gi} className="flex flex-shrink-0 items-stretch">
+              {gi > 0 && (
+                <span aria-hidden className="self-center flex-shrink-0" style={{ width: 1, height: 20, backgroundColor: '#DDD4C0', margin: '0 6px' }} />
+              )}
+              {group.links.map((link) => {
+                const active = isActive(link, pathname);
+                const color = active ? '#1B3828' : link.warm ? '#B6871F' : '#5A5046';
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    data-acct-tab={active ? 'active' : undefined}
+                    aria-current={active ? 'page' : undefined}
+                    className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 ${FOCUS}`}
+                    style={{
+                      minHeight: 44,
+                      color,
+                      borderBottom: active ? '2px solid #1B3828' : '2px solid transparent',
+                      textDecoration: 'none',
+                      fontFamily: FONT,
+                      fontSize: 14,
+                      fontWeight: active ? 700 : 600,
+                      whiteSpace: 'nowrap',
+                      transition: 'color 150ms ease-out',
+                    }}
+                  >
+                    <link.Icon size={14} strokeWidth={2.4} aria-hidden />
+                    {link.label}
+                    {link.badge !== undefined && <Badge n={link.badge} />}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </div>
 
         {/* Rail on the left edge, content column flexible. The content is
             rendered ONCE (a hidden desktop tree plus a visible mobile tree used
-            to mount every page twice, portals included). */}
-        <div className="flex items-start">
+            to mount every page twice, portals included).
+
+            Stickiness: the <aside> ITSELF is sticky with `align-self:
+            flex-start`, so it is content-height and travels inside the flex row,
+            which is as tall as the content column. (A sticky child of a
+            content-height aside has nowhere to travel, which is what the old
+            rail did.) No ancestor is a scroll container: html/body use
+            `overflow-x: clip`, which never breaks sticky, and nothing between
+            them and the aside sets overflow. */}
+        <div className="flex">
           <aside
-            className="hidden md:block flex-shrink-0"
-            style={{ width: RAIL_WIDTH, paddingLeft: 24, paddingRight: 12 }}
-            aria-label={inManage ? 'Manage account' : 'Account'}
+            className="hidden md:flex flex-col flex-shrink-0"
+            style={{
+              width: RAIL_WIDTH,
+              paddingLeft: 24,
+              paddingRight: 12,
+              paddingTop: 16,
+              position: 'sticky',
+              top: RAIL_TOP,
+              alignSelf: 'flex-start',
+              // A very short window scrolls the rail itself; overflow on the
+              // sticky element is fine, it is overflow on an ANCESTOR that breaks it.
+              maxHeight: `calc(100vh - ${RAIL_TOP}px)`,
+              overflowY: 'auto',
+            }}
+            aria-label="Account"
           >
-            <div className="sticky flex flex-col" style={{ top: RAIL_TOP, paddingTop: 16 }}>
-              {/* Who */}
-              <div className="flex items-center gap-3 px-3 pb-4">
-                {profile?.avatar_url ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
-                    src={profile.avatar_url}
-                    alt=""
-                    className="rounded-full object-cover flex-shrink-0"
-                    style={{ width: 44, height: 44 }}
-                  />
-                ) : (
-                  <div
-                    className="rounded-full flex items-center justify-center flex-shrink-0"
-                    style={{
-                      width: 44, height: 44,
-                      backgroundColor: 'rgba(27,56,40,0.1)',
-                      color: '#1B3828',
-                      fontFamily: FONT, fontWeight: 800, fontSize: 18,
-                    }}
-                    aria-hidden
-                  >
-                    {avatarInitial}
-                  </div>
-                )}
-                <div className="min-w-0">
-                  <p className="truncate" style={{ margin: 0, color: '#1C1410', fontFamily: FONT, fontWeight: 700, fontSize: 14, lineHeight: 1.3 }}>
-                    {displayName}
-                  </p>
-                  <p className="truncate" style={{ margin: 0, color: '#5A5046', fontFamily: FONT, fontWeight: 500, fontSize: 12, lineHeight: 1.4 }}>
-                    {email}
-                  </p>
-                  {isUnlimited(unlimitedStatus) && (
-                    <span
-                      className="inline-flex items-center rounded-full mt-1"
-                      style={{
-                        padding: '1px 8px',
-                        backgroundColor: 'rgba(238,217,138,0.3)',
-                        color: '#7A5A20',
-                        fontFamily: FONT, fontWeight: 700, fontSize: 10.5, letterSpacing: '0.12em',
-                      }}
-                    >
-                      UNLIMITED
-                    </span>
-                  )}
+            {/* Who */}
+            <div className="flex items-center gap-3 px-3 pb-4">
+              {profile?.avatar_url ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={profile.avatar_url}
+                  alt=""
+                  className="rounded-full object-cover flex-shrink-0"
+                  style={{ width: 44, height: 44 }}
+                />
+              ) : (
+                <div
+                  className="rounded-full flex items-center justify-center flex-shrink-0"
+                  style={{
+                    width: 44, height: 44,
+                    backgroundColor: '#1B3828',
+                    color: '#EED98A',
+                    fontFamily: FONT, fontWeight: 800, fontSize: 18,
+                  }}
+                  aria-hidden
+                >
+                  {avatarInitial}
                 </div>
+              )}
+              <div className="min-w-0">
+                <p className="truncate" style={{ margin: 0, color: '#1C1410', fontFamily: FONT, fontWeight: 700, fontSize: 14, lineHeight: 1.3 }}>
+                  {displayName}
+                </p>
+                <p className="truncate" style={{ margin: 0, color: '#5A5046', fontFamily: FONT, fontWeight: 500, fontSize: 12, lineHeight: 1.4 }}>
+                  {email}
+                </p>
+                {isUnlimited(unlimitedStatus) && (
+                  <span
+                    className="inline-flex items-center rounded-full mt-1"
+                    style={{
+                      padding: '1px 8px',
+                      backgroundColor: '#1B3828',
+                      color: '#EED98A',
+                      fontFamily: FONT, fontWeight: 700, fontSize: 10.5, letterSpacing: '0.12em',
+                    }}
+                  >
+                    UNLIMITED
+                  </span>
+                )}
               </div>
+            </div>
 
-              <nav className="flex flex-col gap-0.5">
-                {navLinks.map((link) => {
-                  const active = isActive(link, pathname);
-                  return (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      data-active={active ? 'true' : 'false'}
-                      data-warm={link.warm ? 'true' : undefined}
-                      aria-current={active ? 'page' : undefined}
-                      className={`gv-acct-row flex items-center gap-2.5 rounded-xl px-3 ${FOCUS}`}
+            <nav className="flex flex-col" aria-label="Account pages">
+              {groups.map((group, gi) => (
+                <div key={gi} className="flex flex-col gap-0.5" style={{ marginTop: gi > 0 ? 18 : 0 }}>
+                  {group.heading && (
+                    <p
+                      className="px-3"
                       style={{
-                        minHeight: 44,
-                        color: '#5A5046',
-                        textDecoration: 'none',
+                        margin: '0 0 4px',
                         fontFamily: FONT,
-                        fontSize: 14,
-                        fontWeight: active ? 700 : link.back ? 500 : 600,
-                        marginBottom: link.back ? 8 : 0,
+                        fontSize: 11,
+                        fontWeight: 800,
+                        letterSpacing: '0.14em',
+                        textTransform: 'uppercase',
+                        color: '#B6871F',
                       }}
                     >
-                      <link.Icon size={16} strokeWidth={2.2} aria-hidden style={{ flexShrink: 0 }} />
-                      <span className="flex-1 min-w-0 truncate">{link.label}</span>
-                      {link.badge !== undefined && <Badge n={link.badge} />}
-                    </Link>
-                  );
-                })}
-              </nav>
+                      {group.heading}
+                    </p>
+                  )}
+                  {group.links.map((link) => {
+                    const active = isActive(link, pathname);
+                    return (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        data-active={active ? 'true' : 'false'}
+                        data-warm={link.warm ? 'true' : undefined}
+                        aria-current={active ? 'page' : undefined}
+                        className={`gv-acct-row flex items-center gap-2.5 rounded-xl px-3 ${FOCUS}`}
+                        style={{
+                          minHeight: 44,
+                          color: '#5A5046',
+                          textDecoration: 'none',
+                          fontFamily: FONT,
+                          fontSize: 14,
+                          fontWeight: active ? 700 : 600,
+                        }}
+                      >
+                        <link.Icon size={16} strokeWidth={2.2} aria-hidden style={{ flexShrink: 0 }} />
+                        <span className="flex-1 min-w-0 truncate">{link.label}</span>
+                        {link.badge !== undefined && <Badge n={link.badge} />}
+                      </Link>
+                    );
+                  })}
+                </div>
+              ))}
+            </nav>
 
-              <div className="mt-3 mb-1 mx-3" style={{ borderTop: '1px solid rgba(221,212,192,0.8)' }} />
+            <div className="mt-3 mb-1 mx-3" style={{ borderTop: '1px solid rgba(221,212,192,0.8)' }} />
 
-              <button
-                type="button"
-                onClick={handleSignOut}
-                className={`gv-acct-signout w-full rounded-xl px-3 text-left ${FOCUS}`}
-                style={{
-                  minHeight: 44,
-                  color: '#8B2020',
-                  backgroundColor: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontFamily: FONT,
-                  fontSize: 13,
-                  fontWeight: 600,
-                }}
-              >
-                Sign out
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className={`gv-acct-signout w-full rounded-xl px-3 text-left ${FOCUS}`}
+              style={{
+                minHeight: 44,
+                color: '#8B2020',
+                backgroundColor: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                fontFamily: FONT,
+                fontSize: 12.5,
+                fontWeight: 800,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+              }}
+            >
+              SIGN OUT
+            </button>
           </aside>
 
           {/* Content column: flexible, its own measure, its own gutters. */}

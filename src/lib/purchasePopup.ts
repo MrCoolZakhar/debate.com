@@ -34,6 +34,8 @@ export interface CreditsPopupRequest {
 export interface UnlimitedPopupRequest {
   /** Offer only the one-time year ($30, nothing automatic): the failed-renewal fallback. */
   renewOnce?: boolean;
+  /** Which plan opens selected. The pricing page passes its own switch; default yearly. */
+  plan?: 'monthly' | 'yearly';
   onComplete?: () => void;
 }
 

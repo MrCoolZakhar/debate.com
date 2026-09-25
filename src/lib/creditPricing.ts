@@ -108,6 +108,34 @@ export function perCreditCents(qty: number, table: CreditPriceTable): number {
   return Math.round(priceCentsFor(qty, table) / qty);
 }
 
+/**
+ * The nudge (owner, 25 Sep 2026): when a few more credits would cost LESS in
+ * total because they reach the next tier, say so. Returns the nearest tier
+ * above `qty` whose total is cheaper than the total at `qty`, or null.
+ * `extra` credits more, saving `saves` cents. Computed only from the table.
+ */
+export function nextTierNudge(qty: number, table: CreditPriceTable): { qty: number; extra: number; saves: number } | null {
+  const here = priceCentsFor(qty, table);
+  for (const t of table.tiers) {
+    if (t.min_qty <= qty || t.min_qty > table.maxQty) continue;
+    const there = priceCentsFor(t.min_qty, table);
+    if (there < here) return { qty: t.min_qty, extra: t.min_qty - qty, saves: here - there };
+    // Tiers are ascending; the first one above `qty` decides.
+    return null;
+  }
+  return null;
+}
+
+/** "10 or more are 10% off, 25 or more 15% off, 50 or more 20% off, and 100 or
+ *  more 25% off": the discount ladder as a sentence fragment, from the table. */
+export function describeTiers(table: CreditPriceTable): string {
+  const steps = table.tiers.filter((t) => t.pct > 0);
+  if (steps.length === 0) return 'there are no bundle discounts at the moment';
+  const parts = steps.map((t, i) => `${t.min_qty} or more ${i === 0 ? 'are ' : ''}${t.pct}% off`);
+  if (parts.length === 1) return parts[0];
+  return `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`;
+}
+
 // ── Where the pop-up opened from, and which bundles it offers there ──────────
 
 export type CreditsContext = 'header' | 'pricing' | 'manage' | 'apply' | 'pay' | 'organizer';

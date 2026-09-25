@@ -1,100 +1,36 @@
 'use client';
 
-// Manage account: Subscription. The current Unlimited plan, read the way the
-// old /account/unlimited page read it (a personal subscriptions row, active or
-// trialing, not past its period end), with Go Unlimited through the global
-// pop-up and Manage or cancel through Stripe's billing portal. There is no
-// in-app cancel flow on purpose: the portal is the one place a plan changes.
+// Manage Account: Subscription. Two columns from 900px: the current plan on
+// the left (read through useMySubscription, the one definition the pop-up
+// shares), the Unlimited benefits on a forest card on the right. GO UNLIMITED
+// opens the global pop-up; MANAGE OR CANCEL opens Stripe's billing portal, the
+// one place a paid plan changes. There is no in-app cancel flow on purpose.
 
-import { useCallback, useEffect, useState } from 'react';
-import { Infinity as InfinityIcon, Sparkles } from 'lucide-react';
-import { useAuth } from '@/components/AuthProvider';
-import { getFreshAuthedClient } from '@/lib/supabase-auth';
-import { useUnlimitedStatus } from '@/lib/unlimitedStatus';
+import { useState } from 'react';
+import { Check, Infinity as InfinityIcon, Sparkles } from 'lucide-react';
+import { useMySubscription, formatPlanDate } from '@/lib/mySubscription';
 import { openUnlimitedPopup } from '@/lib/purchasePopup';
 import { openBillingPortal, checkoutErrorText } from '@/lib/purchaseCheckout';
 import { notifyErr } from '@/lib/appNotify';
-import { friendlyError } from '@/lib/friendlyError';
 import { Emoji3D } from '@/components/neu';
+import { GoldWord } from '@/components/BrandHeading';
 import { OUTFIT, T, W } from '../../accountUi';
-import { PageHead, HelpLine, PrimaryButton, SecondaryButton, formatDay } from '../manageUi';
+import {
+  PageHead, HelpLine, PrimaryButton, ButtonStyles, WhiteCard, ForestCard, Eyebrow, TextLink,
+  FOREST, GOLD, INK, INK_SOFT, IVORY,
+} from '../manageUi';
 
-interface SubscriptionRow {
-  plan: string;
-  status: string;
-  current_period_end: string | null;
-}
-
-type PlanView =
-  | { kind: 'loading' }
-  | { kind: 'free' }
-  | { kind: 'trial'; daysLeft: number; endsOn: string | null }
-  | { kind: 'paid'; cadence: 'monthly' | 'yearly'; renewsOn: string | null }
-  | { kind: 'lapsed'; endedOn: string | null; wasTrial: boolean };
-
-function isActiveRow(r: SubscriptionRow, now: number): boolean {
-  return (r.status === 'active' || r.status === 'trialing')
-    && (r.current_period_end === null || new Date(r.current_period_end).getTime() > now);
-}
-
-/** Any plan starting "unlimited" that is not "_monthly" or "_trial" is the yearly one
- *  (it has appeared as both unlimited_yearly and unlimited_annual). */
-function cadenceOf(plan: string): 'monthly' | 'yearly' {
-  return plan === 'unlimited_monthly' ? 'monthly' : 'yearly';
-}
-
-function daysLeft(iso: string | null): number {
-  if (!iso) return 0;
-  return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000));
-}
-
-function viewOf(rows: SubscriptionRow[]): PlanView {
-  const now = Date.now();
-  const active = rows.find((r) => isActiveRow(r, now)) ?? null;
-  if (active) {
-    if (active.plan === 'unlimited_trial' || active.status === 'trialing') {
-      return { kind: 'trial', daysLeft: daysLeft(active.current_period_end), endsOn: active.current_period_end };
-    }
-    return { kind: 'paid', cadence: cadenceOf(active.plan), renewsOn: active.current_period_end };
-  }
-  const latest = rows[0];
-  if (latest && latest.plan.startsWith('unlimited')) {
-    return { kind: 'lapsed', endedOn: latest.current_period_end, wasTrial: latest.plan === 'unlimited_trial' };
-  }
-  return { kind: 'free' };
-}
+const BENEFITS = [
+  'Every application covered',
+  'Premium job board roles',
+  'Your MUN archive',
+  'Tools for your upcoming conferences',
+  'Unlimited email builder for organizers',
+];
 
 export default function SubscriptionPage() {
-  const { user } = useAuth();
-  const unlimitedStatus = useUnlimitedStatus();
-  const [view, setView] = useState<PlanView>({ kind: 'loading' });
-  const [loadError, setLoadError] = useState('');
+  const sub = useMySubscription();
   const [portalBusy, setPortalBusy] = useState(false);
-
-  const load = useCallback(async () => {
-    if (!user) return;
-    try {
-      const client = await getFreshAuthedClient();
-      if (!client) throw new Error('signed out');
-      const { data, error } = await client
-        .from('subscriptions')
-        .select('plan, status, current_period_end')
-        .eq('owner_user_id', user.id)
-        .is('conference_id', null)
-        .order('created_at', { ascending: false })
-        .limit(5);
-      if (error) throw error;
-      setLoadError('');
-      setView(viewOf((data as SubscriptionRow[] | null) ?? []));
-    } catch (err) {
-      setLoadError(friendlyError(err, 'Could not read your plan. Refresh the page to try again.'));
-      setView({ kind: 'free' });
-    }
-  }, [user]);
-
-  // Re-read on mount and whenever the Unlimited status moves (a purchase from
-  // the pop-up, a promo code, a cancellation), so nothing needs a reload.
-  useEffect(() => { void load(); }, [load, unlimitedStatus]);
 
   async function handlePortal() {
     if (portalBusy) return;
@@ -110,130 +46,144 @@ export default function SubscriptionPage() {
 
   return (
     <div>
-      <PageHead title="Subscription" lede="Unlimited covers every application, so credits are never a question." />
+      <ButtonStyles />
+      <style>{`
+        .gv-sub-grid{display:grid;grid-template-columns:1fr;gap:20px;align-items:start}
+        @media (min-width:900px){.gv-sub-grid{grid-template-columns:1fr 1fr;gap:24px}}
+      `}</style>
 
-      {loadError && (
-        <p role="alert" style={{ margin: '0 0 16px', fontFamily: OUTFIT, fontSize: T.body, color: '#C13515' }}>
-          {loadError}
-        </p>
-      )}
+      <PageHead title={<>Your <GoldWord>Subscription</GoldWord></>} />
 
-      <section
-        aria-live="polite"
-        className="rounded-[20px] p-6 md:p-8"
-        style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', maxWidth: 640 }}
-      >
-        {view.kind === 'loading' ? (
-          <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: T.body, color: '#5A5046' }}>Reading your plan.</p>
-        ) : (
-          <PlanBlock view={view} portalBusy={portalBusy} onPortal={handlePortal} />
-        )}
-      </section>
+      <div className="gv-sub-grid">
+        <WhiteCard aria-live="polite">
+          {sub.loading ? (
+            <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: T.body, color: INK_SOFT }}>Reading your plan</p>
+          ) : (
+            <PlanBlock sub={sub} portalBusy={portalBusy} onPortal={handlePortal} />
+          )}
+        </WhiteCard>
+
+        <ForestCard>
+          <Eyebrow onDark>Unlimited</Eyebrow>
+          <h2 style={{ margin: '6px 0 0', fontFamily: OUTFIT, fontWeight: W.title, fontSize: 'clamp(24px, 5vw, 30px)', lineHeight: 1.15, color: IVORY, letterSpacing: '-0.01em' }}>
+            Everything in <GoldWord tone="dark">Unlimited</GoldWord>
+          </h2>
+          <ul className="flex flex-col gap-3" style={{ margin: '20px 0 0', padding: 0, listStyle: 'none' }}>
+            {BENEFITS.map((b) => (
+              <li key={b} className="flex items-center gap-3" style={{ fontFamily: OUTFIT, fontSize: T.body, fontWeight: W.label, color: IVORY, lineHeight: 1.4 }}>
+                <span className="inline-flex items-center justify-center flex-shrink-0 rounded-full" style={{ width: 24, height: 24, backgroundColor: 'rgba(238,217,138,0.18)' }} aria-hidden>
+                  <Check size={15} strokeWidth={3} style={{ color: GOLD }} />
+                </span>
+                {b}
+              </li>
+            ))}
+          </ul>
+          <p style={{ margin: '22px 0 0', fontFamily: OUTFIT, fontSize: T.body, color: 'rgba(250,248,243,0.85)' }}>
+            <TextLink href="/pricing/subscription" onDark>Find out more</TextLink>
+          </p>
+        </ForestCard>
+      </div>
 
       <HelpLine />
     </div>
   );
 }
 
-function PlanBlock({ view, portalBusy, onPortal }: { view: Exclude<PlanView, { kind: 'loading' }>; portalBusy: boolean; onPortal: () => void }) {
-  const eyebrow = (
-    <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: T.caption, fontWeight: W.section, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#B6871F' }}>
-      Your plan
-    </p>
-  );
-
+function PlanBlock({ sub, portalBusy, onPortal }: {
+  sub: ReturnType<typeof useMySubscription>;
+  portalBusy: boolean;
+  onPortal: () => void;
+}) {
   const title = (text: string) => (
-    <h2 style={{ margin: '6px 0 0', fontFamily: OUTFIT, fontWeight: W.title, fontSize: 'clamp(24px, 6vw, 30px)', lineHeight: 1.15, color: '#1C1410', letterSpacing: '-0.01em' }}>
+    <h2 style={{ margin: '6px 0 0', fontFamily: OUTFIT, fontWeight: W.title, fontSize: 'clamp(24px, 6vw, 30px)', lineHeight: 1.15, color: INK, letterSpacing: '-0.01em' }}>
       {text}
     </h2>
   );
 
   const line = (text: string) => (
-    <p style={{ margin: '10px 0 0', fontFamily: OUTFIT, fontSize: T.body, lineHeight: 1.55, color: '#5A5046', maxWidth: '60ch' }}>
+    <p style={{ margin: '10px 0 0', fontFamily: OUTFIT, fontSize: T.body, lineHeight: 1.5, color: INK_SOFT, maxWidth: '44ch' }}>
       {text}
     </p>
   );
 
-  const icon = (name: string) => (
-    <span className="flex-shrink-0 inline-flex items-center justify-center rounded-2xl" style={{ width: 52, height: 52, backgroundColor: 'rgba(238,217,138,0.28)' }} aria-hidden>
-      <Emoji3D name={name} size={30} fallback={name === 'Infinity' ? InfinityIcon : Sparkles} fallbackColor="#1B3828" />
+  const icon = (name: 'Infinity' | 'Sparkles') => (
+    <span className="flex-shrink-0 inline-flex items-center justify-center rounded-2xl" style={{ width: 56, height: 56, backgroundColor: 'rgba(238,217,138,0.32)' }} aria-hidden>
+      <Emoji3D name={name} size={32} fallback={name === 'Infinity' ? InfinityIcon : Sparkles} fallbackColor={FOREST} />
     </span>
   );
 
-  if (view.kind === 'free') {
-    return (
-      <div className="flex items-start gap-4">
-        {icon('Sparkles')}
-        <div className="min-w-0 flex-1">
-          {eyebrow}
-          {title('Free')}
-          {line('Each application costs one credit. Unlimited takes credits out of the picture for as long as it runs.')}
-          <div className="mt-5">
-            <PrimaryButton onClick={() => openUnlimitedPopup()}>Go Unlimited</PrimaryButton>
+  const date = sub.endsAt ? formatPlanDate(sub.endsAt) : null;
+  const cadenceWord = sub.cadence === 'monthly' ? 'monthly' : 'yearly';
+
+  let body: React.ReactNode;
+
+  if (sub.kind === 'trial') {
+    body = (
+      <>
+        {title('Unlimited, trial')}
+        {date && line(`Ends on ${date}`)}
+        <div className="mt-5">
+          <PrimaryButton onClick={() => openUnlimitedPopup()}>GO UNLIMITED</PrimaryButton>
+        </div>
+        {date && line(`Your paid plan starts when your current Unlimited ends on ${date}`)}
+      </>
+    );
+  } else if (sub.kind === 'paid') {
+    body = (
+      <>
+        {title(`Unlimited, ${cadenceWord}`)}
+        {date && line(`Renews on ${date}`)}
+        <div className="mt-5">
+          <PrimaryButton onClick={onPortal} disabled={portalBusy}>
+            {portalBusy ? 'OPENING' : 'MANAGE OR CANCEL'}
+          </PrimaryButton>
+        </div>
+        {line('Cancelling keeps Unlimited until the end of the period you paid for')}
+      </>
+    );
+  } else if (sub.kind === 'past_due') {
+    body = (
+      <>
+        {title(`Unlimited, ${cadenceWord}`)}
+        <div className="mt-5 rounded-2xl p-5" style={{ backgroundColor: GOLD }}>
+          <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: T.section, fontWeight: W.section, lineHeight: 1.25, color: INK }}>
+            Your renewal did not go through
+          </p>
+          <div className="mt-4">
+            <PrimaryButton onClick={() => openUnlimitedPopup({ renewOnce: true })}>RENEW FOR A YEAR</PrimaryButton>
           </div>
         </div>
-      </div>
+      </>
+    );
+  } else if (sub.kind === 'lapsed') {
+    body = (
+      <>
+        {title('Free')}
+        {line(date ? `Your Unlimited plan ended on ${date}` : 'Your Unlimited plan ended')}
+        <div className="mt-5">
+          <PrimaryButton onClick={() => openUnlimitedPopup()}>GO UNLIMITED</PrimaryButton>
+        </div>
+      </>
+    );
+  } else {
+    body = (
+      <>
+        {title('Free')}
+        <div className="mt-5">
+          <PrimaryButton onClick={() => openUnlimitedPopup()}>GO UNLIMITED</PrimaryButton>
+        </div>
+      </>
     );
   }
 
-  if (view.kind === 'trial') {
-    const days = view.daysLeft;
-    return (
-      <div className="flex items-start gap-4">
-        {icon('Infinity')}
-        <div className="min-w-0 flex-1">
-          {eyebrow}
-          {title('Unlimited, trial')}
-          {line(
-            days === 0
-              ? 'Your trial ends today.'
-              : `${days} day${days === 1 ? '' : 's'} left${view.endsOn ? `, until ${formatDay(view.endsOn)}` : ''}.`,
-          )}
-          {line('Keep it going with a plan and nothing changes on the day the trial ends.')}
-          <div className="mt-5">
-            <PrimaryButton onClick={() => openUnlimitedPopup()}>Go Unlimited</PrimaryButton>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const onUnlimited = sub.kind === 'trial' || sub.kind === 'paid' || sub.kind === 'past_due';
 
-  if (view.kind === 'paid') {
-    return (
-      <div className="flex items-start gap-4">
-        {icon('Infinity')}
-        <div className="min-w-0 flex-1">
-          {eyebrow}
-          {title(view.cadence === 'monthly' ? 'Unlimited, monthly' : 'Unlimited, yearly')}
-          {view.renewsOn ? line(`Renews on ${formatDay(view.renewsOn)}.`) : line('Active.')}
-          <div className="mt-5 flex flex-col items-start gap-3">
-            <SecondaryButton onClick={onPortal} disabled={portalBusy}>
-              {portalBusy ? 'Opening your billing portal' : 'Manage or cancel'}
-            </SecondaryButton>
-            <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: T.caption, lineHeight: 1.5, color: '#5A5046', maxWidth: '60ch' }}>
-              Cancelling keeps Unlimited until the end of the period you paid for.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // lapsed
   return (
     <div className="flex items-start gap-4">
-      {icon('Sparkles')}
+      {icon(onUnlimited ? 'Infinity' : 'Sparkles')}
       <div className="min-w-0 flex-1">
-        {eyebrow}
-        {title('Free')}
-        {line(
-          view.wasTrial
-            ? `Your free trial ended${view.endedOn ? ` on ${formatDay(view.endedOn)}` : ''}. Subscribe to get Unlimited back.`
-            : `Your Unlimited plan ended${view.endedOn ? ` on ${formatDay(view.endedOn)}` : ''}.`,
-        )}
-        <div className="mt-5">
-          <PrimaryButton onClick={() => openUnlimitedPopup()}>Go Unlimited</PrimaryButton>
-        </div>
+        <Eyebrow>Your plan</Eyebrow>
+        {body}
       </div>
     </div>
   );

@@ -1,14 +1,16 @@
 'use client';
 
 // ── /pricing/subscription ────────────────────────────────────────────────────
-// Gavelling Unlimited: the dark forest and gold identity. What it covers, the
-// two plans (Free and Unlimited, monthly or yearly), the questions. Prices
-// come from unlimitedPricing(); the prose states only the approved facts.
+// Gavelling Unlimited. A forest hero with a gold infinity composition, the
+// two plan cards straight under it (Yearly by default, the switch passes
+// its state into the pop-up), the feature strip, the promo line, the
+// questions. Prices come from unlimitedPricing().
 
 import { Suspense, useState } from 'react';
 import Link from 'next/link';
-import { Briefcase, FolderArchive, Infinity as InfinityIcon, Mail, Ticket, Wrench } from 'lucide-react';
+import { Briefcase, Check, FolderArchive, Infinity as InfinityIcon, Mail, Ticket, Wrench } from 'lucide-react';
 import { Emoji3D, OUTFIT } from '@/components/neu';
+import { GoldWord } from '@/components/BrandHeading';
 import { formatUsd } from '@/lib/creditPricing';
 import { unlimitedPricing } from '@/lib/payments';
 import { openCreditsPopup, openUnlimitedPopup } from '@/lib/purchasePopup';
@@ -16,15 +18,18 @@ import { isUnlimited, useUnlimitedStatus } from '@/lib/unlimitedStatus';
 import { faqForPage } from '@/lib/pricingFaq';
 import FaqList from '@/components/pricing/FaqList';
 import RenewOnceOpener from '@/components/pricing/RenewOnceOpener';
-import { ActionButton, ActionLink, FOCUS_RING, P, PricingStyles, QuestionBox, SectionHeading, StatusWord } from '@/components/pricing/pricingKit';
+import { ActionButton, ActionLink, FOCUS_RING, P, PricingStyles, QuestionBox } from '@/components/pricing/pricingKit';
 
-const BENEFITS = [
-  { name: 'Ticket', fallback: Ticket, title: 'Apply to as many conferences as you like', text: 'Every application you make while Unlimited is active is covered. No counting, no topping up.', live: true },
-  { name: 'File cabinet', fallback: FolderArchive, title: 'Your MUN archive', text: 'Everything you took part in, kept in one place.', live: false },
-  { name: 'Toolbox', fallback: Wrench, title: 'Tools for your upcoming conferences', text: 'What you need before each conference you are going to.', live: false },
-  { name: 'Envelope', fallback: Mail, title: 'Unlimited email builder for organizers', text: 'Every conference email, with no cap.', live: false },
-  { name: 'Briefcase', fallback: Briefcase, title: 'Premium job board roles', text: 'Chair and secretariat openings across conferences.', live: false },
+const INCLUDED = [
+  { name: 'Ticket', fallback: Ticket, label: 'Every application covered' },
+  { name: 'Briefcase', fallback: Briefcase, label: 'Premium job board roles' },
+  { name: 'File cabinet', fallback: FolderArchive, label: 'Your MUN archive' },
+  { name: 'Toolbox', fallback: Wrench, label: 'Tools for your upcoming conferences' },
+  { name: 'Envelope', fallback: Mail, label: 'Unlimited email builder for organizers' },
 ];
+
+const FREE_LIST = ['Run and join sessions', 'Find and apply to conferences', 'The job board', 'Your MUN CV'];
+const UNLIMITED_LIST = INCLUDED.map((i) => i.label);
 
 type Period = 'yearly' | 'monthly';
 
@@ -37,9 +42,9 @@ export default function SubscriptionPricingClient() {
   const [period, setPeriod] = useState<Period>('yearly');
   const faq = faqForPage('subscription');
 
-  const unlimitedCta = onUnlimited
-    ? <ActionLink href="/account/manage/subscription" skin="gold">You&apos;re on Unlimited</ActionLink>
-    : <ActionButton skin="gold" onClick={() => openUnlimitedPopup()}>Go Unlimited</ActionButton>;
+  const unlimitedCta = (big: boolean, onForest: boolean) => onUnlimited
+    ? <ActionLink href="/account/manage/subscription" skin="gold" big={big} onForest={onForest}>You&apos;re on Unlimited</ActionLink>
+    : <ActionButton skin="gold" big={big} onForest={onForest} onClick={() => openUnlimitedPopup({ plan: period })}>Go Unlimited</ActionButton>;
 
   return (
     <div className="gv-p" style={{ fontFamily: OUTFIT }}>
@@ -48,181 +53,201 @@ export default function SubscriptionPricingClient() {
         <RenewOnceOpener />
       </Suspense>
       <style>{`
-        .gv-su-hero{position:relative;display:grid;grid-template-columns:1fr;gap:28px;align-items:center;padding:clamp(28px,5vw,56px);border-radius:28px;background:${P.forestDeep};color:#FFFFFF;overflow:hidden}
-        .gv-su-hero-eyebrow{display:flex;align-items:center;gap:10px;margin:0 0 18px;font-size:13px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:${P.gold}}
-        .gv-su-h1{margin:0;font-size:clamp(38px,5.6vw,68px);font-weight:900;letter-spacing:-0.035em;line-height:0.98;color:#FFFFFF}
-        .gv-su-h1 em{font-style:normal;color:${P.gold}}
-        .gv-su-lead{margin:20px 0 0;font-size:clamp(17px,1.6vw,19.5px);line-height:1.5;color:rgba(255,255,255,0.84);max-width:44ch}
-        .gv-su-lead b{color:#FFFFFF;font-weight:700}
-        .gv-su-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
-        .gv-su-fine{margin:16px 0 0;font-size:14px;line-height:1.5;color:rgba(255,255,255,0.72);max-width:48ch}
-        .gv-su-photo{position:relative;border-radius:20px;overflow:hidden;aspect-ratio:16/10;background:${P.forest}}
-        .gv-su-photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:52% 62%;display:block}
-        .gv-su-photo::after{content:"";position:absolute;inset:0;background:linear-gradient(to top,rgba(20,48,31,0.55),rgba(20,48,31,0) 55%);pointer-events:none}
-        .gv-su-list{list-style:none;margin:28px 0 0;padding:0;border-top:1px solid rgba(27,56,40,0.14)}
-        .gv-su-row{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px 18px;align-items:center;padding:20px 0;border-bottom:1px solid rgba(27,56,40,0.14)}
-        .gv-su-row-text h3{margin:0;font-size:18px;font-weight:800;letter-spacing:-0.01em;line-height:1.25;color:${P.ink}}
-        .gv-su-row-text p{margin:5px 0 0;font-size:15px;line-height:1.5;color:${P.inkSoft};max-width:60ch}
-        .gv-su-row-status{grid-column:2}
-        .gv-su-row-lead{padding:28px 0}
-        .gv-su-row-lead h3{font-size:clamp(22px,2.4vw,27px)}
-        .gv-su-row-lead p{font-size:16.5px}
-        .gv-su-switch-wrap{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;margin-top:28px}
-        .gv-su-switch{display:inline-grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border-radius:999px;background:rgba(27,56,40,0.08)}
-        .gv-su-seg{min-width:112px;min-height:44px;padding:0 18px;border-radius:999px;border:none;background:transparent;color:${P.ink};font-family:${OUTFIT};font-size:15.5px;font-weight:600;cursor:pointer;transition:background-color 160ms ease-out,color 160ms ease-out}
-        .gv-su-seg:hover{background:rgba(27,56,40,0.08)}
-        .gv-su-seg[aria-checked="true"]{background:${P.forest};color:#FAF8F3;font-weight:700}
-        .gv-su-switch-note{font-size:14px;font-weight:600;color:${P.forestLight}}
-        .gv-su-plans{display:grid;grid-template-columns:1fr;gap:16px;margin-top:24px;align-items:stretch}
-        .gv-su-plan{display:flex;flex-direction:column;padding:28px;border-radius:24px}
-        .gv-su-plan-free{background:${P.surface};border:1px solid ${P.border}}
-        .gv-su-plan-unl{background:${P.forestDeep};color:#FFFFFF;padding:36px 32px;box-shadow:0 24px 48px -28px rgba(20,48,31,0.7)}
-        .gv-su-plan-name{margin:0;font-size:13px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase}
-        .gv-su-plan-free .gv-su-plan-name{color:${P.inkSoft}}
-        .gv-su-plan-unl .gv-su-plan-name{color:${P.gold}}
-        .gv-su-price{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-top:14px}
-        .gv-su-price b{font-size:clamp(48px,6vw,72px);font-weight:900;letter-spacing:-0.045em;line-height:0.95;font-variant-numeric:tabular-nums}
-        .gv-su-plan-free .gv-su-price b{font-size:clamp(36px,4vw,48px);color:${P.ink}}
+        .gv-su-hero{position:relative;overflow:hidden;min-height:420px;display:flex;align-items:center;isolation:isolate}
+        .gv-su-art{position:absolute;inset:0;z-index:0;pointer-events:none;background:radial-gradient(60% 70% at 88% 30%,rgba(238,217,138,0.22) 0%,rgba(238,217,138,0) 70%)}
+        .gv-su-art-in{display:none}
+        .gv-su-hero-in{position:relative;z-index:2;max-width:600px}
+        .gv-su-h1{display:flex;align-items:center;flex-wrap:wrap;gap:14px 18px;margin:0;font-size:clamp(48px,6vw,64px);font-weight:800;letter-spacing:-0.03em;line-height:1;color:#FFFFFF}
+        .gv-su-line{margin:16px 0 0;font-size:clamp(18px,1.7vw,21px);line-height:1.4;color:rgba(255,255,255,0.86)}
+        .gv-su-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:32px}
+        .gv-su-fine{margin:14px 0 0;font-size:13.5px;line-height:1.45;color:rgba(255,255,255,0.7);text-align:right}
+        .gv-su-plans-wrap{margin-top:28px}
+        .gv-su-switch-row{display:flex;justify-content:center;margin-bottom:20px}
+        .gv-su-switch{display:inline-grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border-radius:999px;background:${P.white};box-shadow:0 1px 0 rgba(27,56,40,0.08),0 12px 28px -24px rgba(27,56,40,0.5)}
+        .gv-su-seg{min-width:128px;min-height:44px;padding:0 18px;border-radius:999px;border:none;background:transparent;color:${P.ink};font-family:${OUTFIT};font-size:13px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;transition:background-color 160ms ease-out,color 160ms ease-out}
+        .gv-su-seg:hover{background:rgba(27,56,40,0.07)}
+        .gv-su-seg[aria-checked="true"]{background:${P.forest};color:${P.gold}}
+        .gv-su-seg small{display:block;margin-top:2px;font-size:11px;font-weight:700;letter-spacing:0.04em;text-transform:none;opacity:0.8}
+        .gv-su-plans{display:grid;grid-template-columns:1fr;gap:16px;align-items:stretch}
+        .gv-su-plan{display:flex;flex-direction:column;padding:30px 28px;border-radius:26px}
+        .gv-su-plan-free{background:${P.white};box-shadow:0 1px 0 rgba(27,56,40,0.08),0 18px 40px -32px rgba(27,56,40,0.35)}
+        .gv-su-plan-unl{background:${P.forest};color:#FFFFFF;padding:38px 32px;box-shadow:0 28px 56px -30px rgba(20,48,31,0.75)}
+        .gv-su-plan-name{margin:0;font-size:clamp(28px,3vw,34px);font-weight:800;letter-spacing:-0.02em;line-height:1.05}
+        .gv-su-plan-free .gv-su-plan-name{color:${P.ink}}
+        .gv-su-plan-unl .gv-su-plan-name{color:#FFFFFF}
+        .gv-su-plan-line{margin:8px 0 0;font-size:15.5px;line-height:1.45}
+        .gv-su-plan-free .gv-su-plan-line{color:${P.inkSoft}}
+        .gv-su-plan-unl .gv-su-plan-line{color:rgba(255,255,255,0.82)}
+        .gv-su-price{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-top:22px}
+        .gv-su-price b{font-size:clamp(48px,6vw,68px);font-weight:900;letter-spacing:-0.045em;line-height:0.95;font-variant-numeric:tabular-nums}
+        .gv-su-plan-free .gv-su-price b{font-size:clamp(40px,4.4vw,52px);color:${P.forest}}
         .gv-su-plan-unl .gv-su-price b{color:#FFFFFF}
         .gv-su-price span{font-size:18px;font-weight:600}
         .gv-su-plan-free .gv-su-price span{color:${P.inkSoft}}
-        .gv-su-plan-unl .gv-su-price span{color:rgba(255,255,255,0.8)}
-        .gv-su-price-note{margin:10px 0 0;font-size:15px;font-weight:700;color:${P.gold};min-height:1.4em}
-        .gv-su-plan p.gv-su-plan-text{margin:16px 0 0;font-size:15.5px;line-height:1.55;max-width:44ch}
-        .gv-su-plan-free p.gv-su-plan-text{color:${P.inkSoft}}
-        .gv-su-plan-unl p.gv-su-plan-text{color:rgba(255,255,255,0.84)}
-        .gv-su-plan-cta{margin-top:auto;padding-top:24px;display:flex;flex-direction:column;gap:12px;align-items:flex-start}
-        .gv-su-plan-small{margin:0;font-size:13.5px;line-height:1.5}
-        .gv-su-plan-unl .gv-su-plan-small{color:rgba(255,255,255,0.72)}
-        .gv-su-plan-free .gv-su-plan-small{color:${P.inkSoft}}
-        .gv-su-promo{margin:20px 0 0;font-size:14.5px;line-height:1.55;color:${P.inkSoft}}
-        .gv-su-promo a{color:${P.forest};font-weight:700}
-        .gv-su-faq{margin-top:28px}
+        .gv-su-plan-unl .gv-su-price span{color:rgba(255,255,255,0.82)}
+        .gv-su-price-note{margin:8px 0 0;font-size:14px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:${P.gold};min-height:1.4em}
+        .gv-su-list{list-style:none;margin:24px 0 0;padding:0;display:grid;gap:12px}
+        .gv-su-list li{display:grid;grid-template-columns:24px minmax(0,1fr);gap:12px;align-items:start;font-size:16px;line-height:1.4;font-weight:600}
+        .gv-su-plan-free .gv-su-list li{color:${P.ink}}
+        .gv-su-plan-unl .gv-su-list li{color:#FFFFFF}
+        .gv-su-tick{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;margin-top:0}
+        .gv-su-plan-free .gv-su-tick{background:${P.forest};color:${P.gold}}
+        .gv-su-plan-unl .gv-su-tick{background:${P.gold};color:${P.forest}}
+        .gv-su-plan-cta{margin-top:auto;padding-top:28px;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+        .gv-su-plan-small{margin:0;font-size:13.5px;line-height:1.45;color:${P.inkSoft}}
+        .gv-su-strip{display:grid;grid-template-columns:1fr;gap:14px 24px}
+        .gv-su-strip-item{display:flex;align-items:center;gap:14px;min-height:56px;font-size:15.5px;font-weight:700;line-height:1.3;color:${P.ink}}
+        .gv-su-promo{margin:24px 0 0;padding:0 8px;font-size:15.5px;line-height:1.5;color:${P.inkSoft}}
+        .gv-su-promo a{color:${P.forest}}
+        .gv-su-faq{margin-top:24px}
         @media (min-width:640px){
-          .gv-su-row{grid-template-columns:auto minmax(0,1fr) auto}
-          .gv-su-row-status{grid-column:auto}
+          .gv-su-strip{grid-template-columns:repeat(2,minmax(0,1fr))}
         }
         @media (min-width:820px){
-          .gv-su-plans{grid-template-columns:minmax(0,0.85fr) minmax(0,1.15fr)}
+          .gv-su-plans{grid-template-columns:minmax(0,0.9fr) minmax(0,1.1fr)}
+          .gv-su-plan-unl{margin:-10px 0}
         }
         @media (min-width:900px){
-          .gv-su-hero{grid-template-columns:minmax(0,1.15fr) minmax(0,0.85fr);gap:44px}
-          .gv-su-photo{aspect-ratio:4/5}
+          .gv-su-hero{min-height:480px}
+          .gv-su-art{left:52%;background:radial-gradient(55% 55% at 50% 50%,rgba(238,217,138,0.34) 0%,rgba(238,217,138,0.08) 45%,rgba(238,217,138,0) 72%)}
+          .gv-su-art-in{display:block;position:absolute;left:50%;top:50%;width:0;height:0}
+          .gv-su-ring{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:50%;border:1.5px solid rgba(238,217,138,0.22)}
+          .gv-su-ring-1{width:300px;height:300px}
+          .gv-su-ring-2{width:420px;height:420px;border-color:rgba(238,217,138,0.14)}
+          .gv-su-ring-3{width:540px;height:540px;border-color:rgba(238,217,138,0.08)}
+          .gv-su-sign{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center}
+        }
+        @media (min-width:1100px){
+          .gv-su-strip{grid-template-columns:repeat(5,minmax(0,1fr))}
+          .gv-su-strip-item{flex-direction:column;align-items:flex-start;gap:12px;min-height:0}
         }
         @media (prefers-reduced-motion:reduce){.gv-su-seg{transition:none}}
       `}</style>
 
-      {/* HERO */}
-      <section className="gv-su-hero" aria-labelledby="gv-su-title">
-        <div>
-          <p className="gv-su-hero-eyebrow">
-            <Emoji3D name="Infinity" size={28} fallback={InfinityIcon} fallbackColor={P.gold} />
-            Gavelling Unlimited
-          </p>
-          <h1 id="gv-su-title" className="gv-su-h1">
-            Apply to every conference.<br />
-            <em>Never count a credit.</em>
-          </h1>
-          <p className="gv-su-lead">
-            One plan that covers every application you make while it is active: <b>{monthly} a month</b> or <b>{yearly} a year</b>,
-            the same everywhere. It renews until you cancel.
-          </p>
-          <div className="gv-su-actions">
-            {unlimitedCta}
-            <ActionLink href="/pricing/credits" skin="ghost-gold">Compare with credits</ActionLink>
+      {/* HERO: forest, the gold infinity on the right */}
+      <section className="gv-su-hero gv-p-block gv-p-block-forest" aria-labelledby="gv-su-title">
+        <div className="gv-su-art" aria-hidden>
+          <div className="gv-su-art-in">
+            <span className="gv-su-ring gv-su-ring-3" />
+            <span className="gv-su-ring gv-su-ring-2" />
+            <span className="gv-su-ring gv-su-ring-1" />
+            <span className="gv-su-sign">
+              <Emoji3D name="Infinity" size={200} fallback={InfinityIcon} fallbackColor={P.gold} />
+            </span>
           </div>
-          <p className="gv-su-fine">Cancel any time and keep Unlimited until the end of the period you paid for. Credits you already hold stay in your balance.</p>
         </div>
-        <figure className="gv-su-photo" style={{ margin: 0 }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/roles/chair.webp" alt="A presiding officer raising the gavel at the dais of a green-walled assembly hall" width={2500} height={1667} decoding="async" />
-        </figure>
+        <div className="gv-su-hero-in">
+          <h1 id="gv-su-title" className="gv-su-h1">
+            <Emoji3D name="Infinity" size={48} fallback={InfinityIcon} fallbackColor={P.gold} />
+            <span>Gavelling <GoldWord tone="dark">Unlimited</GoldWord></span>
+          </h1>
+          <p className="gv-su-line">Unlock Unlimited MUN and Unlimited Gavelling</p>
+          <div className="gv-su-actions">
+            {unlimitedCta(true, true)}
+            <ActionButton skin="outline-ivory" onForest onClick={() => openCreditsPopup({ context: 'pricing' })}>Top up credits</ActionButton>
+          </div>
+          <p className="gv-su-fine">Cancel anytime and keep Unlimited until the end of the period you paid for</p>
+        </div>
       </section>
 
-      {/* WHAT UNLIMITED COVERS */}
-      <SectionHeading eyebrow="What Unlimited covers" title="One plan, and everything that follows it" lead="Applications are covered today. The rest of the plan is on its way, and every part of it will be included." />
-      <ul className="gv-su-list">
-        {BENEFITS.map((b, i) => (
-          <li key={b.title} className={`gv-su-row ${i === 0 ? 'gv-su-row-lead' : ''}`}>
-            <Emoji3D name={b.name} size={i === 0 ? 48 : 34} fallback={b.fallback} fallbackColor={P.forest} />
-            <div className="gv-su-row-text">
-              <h3>{b.title}</h3>
-              <p>{b.text}</p>
-            </div>
-            <div className="gv-su-row-status">
-              <StatusWord live={b.live} />
-            </div>
-          </li>
-        ))}
-      </ul>
+      {/* PLANS: straight under the hero */}
+      <div className="gv-su-plans-wrap gv-p-open">
+        <div className="gv-su-switch-row">
+          <div className="gv-su-switch" role="radiogroup" aria-label="Billing period">
+            {(['yearly', 'monthly'] as Period[]).map((p) => (
+              <button
+                key={p}
+                type="button"
+                role="radio"
+                aria-checked={period === p}
+                tabIndex={period === p ? 0 : -1}
+                className={`gv-su-seg ${FOCUS_RING}`}
+                onClick={() => setPeriod(p)}
+                onKeyDown={(e) => {
+                  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+                    e.preventDefault();
+                    const next: Period = p === 'yearly' ? 'monthly' : 'yearly';
+                    setPeriod(next);
+                    (e.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`[data-period="${next}"]`))?.focus();
+                  }
+                }}
+                data-period={p}
+              >
+                {p === 'yearly' ? 'Yearly' : 'Monthly'}
+                <small>{p === 'yearly' ? `${yearly} a year` : `${monthly} a month`}</small>
+              </button>
+            ))}
+          </div>
+        </div>
 
-      {/* PLANS */}
-      <SectionHeading eyebrow="Plans" title="Free, or Unlimited" lead="Both start from the same free credit. Unlimited is for people who apply often, or apply for a delegation." id="plans" />
-      <div className="gv-su-switch-wrap">
-        <div className="gv-su-switch" role="radiogroup" aria-label="Billing period">
-          {(['yearly', 'monthly'] as Period[]).map((p) => (
-            <button
-              key={p}
-              type="button"
-              role="radio"
-              aria-checked={period === p}
-              tabIndex={period === p ? 0 : -1}
-              className={`gv-su-seg ${FOCUS_RING}`}
-              onClick={() => setPeriod(p)}
-              onKeyDown={(e) => {
-                if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
-                  e.preventDefault();
-                  const next: Period = p === 'yearly' ? 'monthly' : 'yearly';
-                  setPeriod(next);
-                  (e.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`[data-period="${next}"]`))?.focus();
-                }
-              }}
-              data-period={p}
-            >
-              {p === 'yearly' ? 'Yearly' : 'Monthly'}
-            </button>
+        <div className="gv-su-plans">
+          <article className="gv-su-plan gv-su-plan-free" aria-labelledby="gv-su-plan-free">
+            <h2 id="gv-su-plan-free" className="gv-su-plan-name">Free</h2>
+            <p className="gv-su-plan-line">Everything you need to take part in MUN</p>
+            <div className="gv-su-price">
+              <b>{formatUsd(0)}</b>
+              <span>to start</span>
+            </div>
+            <ul className="gv-su-list">
+              {FREE_LIST.map((item) => (
+                <li key={item}>
+                  <span className="gv-su-tick" aria-hidden><Check size={14} strokeWidth={3.2} /></span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+            <div className="gv-su-plan-cta">
+              <ActionButton skin="forest" onClick={() => openCreditsPopup({ context: 'pricing' })}>Top up credits</ActionButton>
+              <p className="gv-su-plan-small">Applications use credits</p>
+            </div>
+          </article>
+
+          <article className="gv-su-plan gv-su-plan-unl" aria-labelledby="gv-su-plan-unl">
+            <h2 id="gv-su-plan-unl" className="gv-su-plan-name">Unlimited</h2>
+            <p className="gv-su-plan-line">Unlimited MUN and Unlimited Gavelling</p>
+            <div className="gv-su-price" aria-live="polite">
+              <b>{period === 'yearly' ? yearly : monthly}</b>
+              <span>{period === 'yearly' ? 'a year' : 'a month'}</span>
+            </div>
+            <p className="gv-su-price-note">{period === 'yearly' ? '2 months free' : `Or ${yearly} a year`}</p>
+            <ul className="gv-su-list">
+              {UNLIMITED_LIST.map((item) => (
+                <li key={item}>
+                  <span className="gv-su-tick" aria-hidden><Check size={14} strokeWidth={3.2} /></span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+            <div className="gv-su-plan-cta">
+              {unlimitedCta(true, true)}
+            </div>
+          </article>
+        </div>
+      </div>
+
+      {/* WHAT UNLIMITED INCLUDES: the strip, no heading */}
+      <section className="gv-p-block gv-p-block-white" aria-label="What Unlimited includes">
+        <div className="gv-su-strip">
+          {INCLUDED.map((i) => (
+            <div key={i.label} className="gv-su-strip-item">
+              <Emoji3D name={i.name} size={44} fallback={i.fallback} fallbackColor={P.forest} />
+              <span>{i.label}</span>
+            </div>
           ))}
         </div>
-        <span className="gv-su-switch-note" aria-live="polite">{period === 'yearly' ? 'Yearly gives you 2 months free' : `Monthly is ${monthly}, cancel whenever`}</span>
-      </div>
+      </section>
 
-      <div className="gv-su-plans">
-        <article className="gv-su-plan gv-su-plan-free" aria-labelledby="gv-su-plan-free">
-          <p id="gv-su-plan-free" className="gv-su-plan-name">Free</p>
-          <div className="gv-su-price">
-            <b>{formatUsd(0)}</b>
-            <span>to start</span>
-          </div>
-          <p className="gv-su-plan-text">Your first credit is free, then a dollar a credit. Buy them one at a time or in a bundle, and use them whenever you apply.</p>
-          <div className="gv-su-plan-cta">
-            <ActionButton skin="ghost" onClick={() => openCreditsPopup({ context: 'pricing' })}>Buy credits</ActionButton>
-            <p className="gv-su-plan-small">A rejected or withdrawn application returns its credit.</p>
-          </div>
-        </article>
-
-        <article className="gv-su-plan gv-su-plan-unl" aria-labelledby="gv-su-plan-unl">
-          <p id="gv-su-plan-unl" className="gv-su-plan-name">Unlimited</p>
-          <div className="gv-su-price">
-            <b>{period === 'yearly' ? yearly : monthly}</b>
-            <span>{period === 'yearly' ? 'a year' : 'a month'}</span>
-          </div>
-          <p className="gv-su-price-note">{period === 'yearly' ? '2 months free' : `Or ${yearly} a year, with 2 months free`}</p>
-          <p className="gv-su-plan-text">Every application covered while it is active. Renews until you cancel. Cancel any time and keep it until the end of the paid period.</p>
-          <div className="gv-su-plan-cta">
-            {unlimitedCta}
-            <p className="gv-su-plan-small">Credits you already hold stay put while you are on Unlimited.</p>
-          </div>
-        </article>
-      </div>
-      <p className="gv-su-promo">
-        Have a promo code? Redeem it in <Link href="/account/manage/promo">Manage account</Link>. A code adds credits or days of Unlimited straight away.
+      <p className="gv-su-promo gv-p-open">
+        Have a promo code? Redeem it in <Link href="/account/manage/promo" className={`gv-p-link ${FOCUS_RING}`}>Manage account</Link>
       </p>
 
-      {/* QUESTIONS */}
-      <SectionHeading title="Questions" id="questions" />
-      <div className="gv-su-faq">
-        <FaqList entries={faq} context="pricing" />
-      </div>
+      {/* QUESTIONS: white */}
+      <section className="gv-p-block gv-p-block-white" aria-labelledby="gv-su-faq-title" id="questions" style={{ scrollMarginTop: 96 }}>
+        <h2 id="gv-su-faq-title" className="gv-p-h2">Common <GoldWord tone="light">Questions</GoldWord></h2>
+        <div className="gv-su-faq">
+          <FaqList entries={faq} context="pricing" />
+        </div>
+      </section>
 
       <QuestionBox />
     </div>

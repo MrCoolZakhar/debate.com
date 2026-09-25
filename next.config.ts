@@ -30,6 +30,23 @@ const NOINDEX_ROUTES = [
 ];
 
 const nextConfig: NextConfig = {
+  // ── Moved and index-less addresses, answered by the server ──────────────────
+  // These used to be redirect-only page files. Under the CLIENT account layout
+  // a server `redirect()` page threw in dev ("'PointsPage' cannot have a
+  // negative time stamp", 25 Sep 2026), so they live here: a 308 before any
+  // React runs. Next keeps the query string (Stripe's ?unlimited=success&
+  // session_id=…, the apply flow's ?returnTo=…) and the browser keeps the hash
+  // (/my-conferences?tab=all#drafts from old emails).
+  async redirects() {
+    return [
+      { source: '/account', destination: '/account/profile', permanent: true },
+      { source: '/account/points', destination: '/account/manage/credits', permanent: true },
+      { source: '/account/manage', destination: '/account/manage/credits', permanent: true },
+      { source: '/account/unlimited', destination: '/pricing/subscription', permanent: true },
+      { source: '/my-conferences', destination: '/account/conferences', permanent: true },
+      { source: '/pricing', destination: '/pricing/credits', permanent: true },
+    ];
+  },
   async headers() {
     return [
       ...NOINDEX_ROUTES.map((source) => ({ source, headers: NOINDEX })),

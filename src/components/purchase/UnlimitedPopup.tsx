@@ -2,28 +2,36 @@
 
 // ── The Unlimited pop-up ─────────────────────────────────────────────────────
 //
-// Its own world: dark forest, gold, so the switch from Credits is felt.
-// LEFT: "Gavelling Unlimited" and the benefit list. RIGHT: Monthly / Yearly
-// (Yearly first, $30 a year is two months free), plain words that it renews
-// until cancelled and can be cancelled any time, then the payment, exactly as
-// in the Credits pop-up. Opened with `renewOnce` (the failed-renewal email's
-// /pricing/subscription?renew=once) it offers only "Pay once for a year",
-// the single place `renew: false` is ever sent.
+// Its own world: forest and gold on both sides, so the switch from Credits
+// is felt. LEFT: "Gavelling Unlimited" with the Infinity beside it and the
+// benefit list. RIGHT: Monthly / Yearly (the caller's plan opens selected,
+// Yearly by default; $30 a year is two months free), plain words that it
+// renews until cancelled and can be cancelled any time, then the payment,
+// exactly as in the Credits pop-up. Opened with `renewOnce` (the
+// failed-renewal email's /pricing/subscription?renew=once) it offers only
+// "PAY $30 ONCE", the single place `renew: false` is ever sent.
+//
+// Who may buy (owner, 25 Sep 2026): someone on a TRIAL or promo Unlimited may
+// pay now; the line above the button says the paid plan starts when the
+// current one ends. Someone on a PAID plan is told they already have it.
+// renewOnce ignores both.
 
 import { useCallback, useState } from 'react';
 import Link from 'next/link';
 import { Briefcase, Infinity as InfinityIcon, Loader2, Mail, Archive, Wrench } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
+import { Emoji3D } from '@/components/neu';
 import { openAuth } from '@/lib/authModal';
 import { unlimitedPricing } from '@/lib/payments';
 import { formatUsd } from '@/lib/creditPricing';
 import { closePurchasePopup, swapToCredits, type UnlimitedPopupRequest } from '@/lib/purchasePopup';
 import { EMBEDDED_CHECKOUT_AVAILABLE, checkoutErrorText, startUnlimitedCheckout, type UnlimitedPlan } from '@/lib/purchaseCheckout';
-import { isUnlimited, notifyUnlimitedChanged, useUnlimitedStatus } from '@/lib/unlimitedStatus';
+import { notifyUnlimitedChanged } from '@/lib/unlimitedStatus';
+import { formatPlanDate, useMySubscription } from '@/lib/mySubscription';
 import { refreshCreditsEverywhere } from '@/hooks/useCredits';
 import { notifyOk } from '@/lib/appNotify';
 import { StripeEmbeddedForm } from './StripeEmbedded';
-import { BenefitList, BrandTitle, ErrorLine, Eyebrow, GoldButton, PurchaseShell, SecureLine, SwapLine, type Benefit } from './purchaseKit';
+import { BenefitList, BrandTitle, ErrorLine, Eyebrow, GOLD, GoldButton, PurchaseShell, SwapLine, type Benefit } from './purchaseKit';
 
 const BENEFITS: Benefit[] = [
   { emoji: 'Infinity', fallback: InfinityIcon, title: 'Apply to as many conferences as you like', note: 'Every application covered while you are on Unlimited.', live: true },
@@ -36,12 +44,12 @@ const BENEFITS: Benefit[] = [
 export default function UnlimitedPopup({ request }: { request: UnlimitedPopupRequest }) {
   const { renewOnce = false } = request;
   const { user, loading: authLoading } = useAuth();
-  const status = useUnlimitedStatus();
+  const sub = useMySubscription();
   const price = unlimitedPricing(null);
   const monthlyCents = Math.round(price.monthly * 100);
   const yearlyCents = Math.round(price.yearly * 100);
 
-  const [plan, setPlan] = useState<UnlimitedPlan>('yearly');
+  const [plan, setPlan] = useState<UnlimitedPlan>(request.plan ?? 'yearly');
   const [stage, setStage] = useState<'choose' | 'pay'>('choose');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -78,15 +86,27 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
   }, [request, user?.id]);
 
   const signedOut = !authLoading && !user;
-  const alreadyOn = !renewOnce && isUnlimited(status);
+  // While the subscription row is still on its way we show nothing to buy, so
+  // someone already on a paid plan never sees a pay button flash first.
+  const checkingPlan = !renewOnce && !signedOut && sub.loading;
+  const alreadyOn = !renewOnce && sub.kind === 'paid';
+  const onTrial = !renewOnce && sub.kind === 'trial';
+  const trialLine = onTrial && sub.endsAt
+    ? <p className="gv-buy-renew">Your paid plan starts when your current Unlimited ends on <strong>{formatPlanDate(sub.endsAt)}</strong></p>
+    : null;
 
   return (
     <PurchaseShell tone="dark" label="Get Gavelling Unlimited" onClose={closePurchasePopup} testId="unlimited-popup">
       <div className="gv-buy-left">
-        <BrandTitle word="Unlimited" sub="Apply as much as you like. One plan, everything included." />
+        <BrandTitle
+          word="Unlimited"
+          tone="dark"
+          icon={<Emoji3D name="Infinity" size={44} fallback={InfinityIcon} fallbackColor={GOLD} />}
+          sub="Apply as much as you like. One plan, everything included."
+        />
         <div>
           <Eyebrow>What you get</Eyebrow>
-          <BenefitList items={BENEFITS} />
+          <BenefitList items={BENEFITS} tone="dark" />
         </div>
       </div>
 
@@ -95,16 +115,18 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
           <>
             <h3 className="gv-buy-rtitle">Log in to go Unlimited</h3>
             <p className="gv-buy-sub" style={{ margin: 0 }}>Unlimited lives on your account, so we need to know whose it is.</p>
-            <GoldButton onClick={() => { closePurchasePopup(); openAuth(); }}>Log in or sign up</GoldButton>
+            <GoldButton onClick={() => { closePurchasePopup(); openAuth(); }}>LOG IN OR SIGN UP</GoldButton>
           </>
+        ) : checkingPlan ? (
+          <p className="gv-buy-wait"><Loader2 size={15} className="animate-spin" aria-hidden /> Checking your plan…</p>
         ) : alreadyOn ? (
           <>
             <h3 className="gv-buy-rtitle">You&apos;re already on Unlimited</h3>
             <p className="gv-buy-note">
               Every application is covered. Your plan and its renewal date are in{' '}
-              <Link href="/account/manage/subscription" onClick={closePurchasePopup}>Manage account</Link>.
+              <Link href="/account/manage/subscription" onClick={closePurchasePopup}>Manage subscription</Link>.
             </p>
-            <SwapLine lead="Looking for credits?" action="Top up here." onClick={() => swapToCredits('header')} />
+            <SwapLine lead="Looking for credits?" action="Top up here" onClick={() => swapToCredits('header')} />
           </>
         ) : stage === 'pay' && checkout ? (
           <>
@@ -116,10 +138,12 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
               </span>
               <button type="button" className="gv-buy-changebtn" onClick={() => { setStage('choose'); setCheckout(null); }}>Change</button>
             </div>
-            <div className="gv-buy-form">
-              <StripeEmbeddedForm clientSecret={checkout.clientSecret} onComplete={onComplete} />
+            {trialLine}
+            <div className="gv-buy-formwell">
+              <div className="gv-buy-form">
+                <StripeEmbeddedForm clientSecret={checkout.clientSecret} onComplete={onComplete} />
+              </div>
             </div>
-            <SecureLine />
           </>
         ) : renewOnce ? (
           <>
@@ -129,14 +153,13 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
                 <span className="gv-buy-plan-name">One year</span>
                 <span className="gv-buy-plan-price">{formatUsd(yearlyCents)}</span>
                 <span className="gv-buy-plan-per">for a year of Unlimited</span>
-                <span className="gv-buy-plan-note">Nothing automatic. It ends after the year unless you come back.</span>
+                <span className="gv-buy-plan-note">Nothing automatic. It ends after the year unless you come back</span>
               </button>
             </div>
             <p className="gv-buy-renew">Your renewal did not go through, so this is a single payment: <strong>{formatUsd(yearlyCents)}, once</strong>, for the next twelve months.</p>
             {err ? <ErrorLine>{err}</ErrorLine> : null}
-            <GoldButton onClick={pay} busy={busy} busyText="Preparing your payment…">Pay {formatUsd(yearlyCents)} once</GoldButton>
+            <GoldButton onClick={pay} busy={busy} busyText="PREPARING YOUR PAYMENT…" testId="unlimited-pay">PAY {formatUsd(yearlyCents)} ONCE</GoldButton>
             {busy && !EMBEDDED_CHECKOUT_AVAILABLE ? <p className="gv-buy-wait"><Loader2 size={15} className="animate-spin" aria-hidden /> Taking you to Stripe…</p> : null}
-            <SecureLine />
           </>
         ) : (
           <>
@@ -159,13 +182,13 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
             <p className="gv-buy-renew">
               Renews {plan === 'yearly' ? 'every year' : 'every month'} until you cancel. <strong>Cancel any time</strong> and keep Unlimited until the end of the period you paid for.
             </p>
+            {trialLine}
             {err ? <ErrorLine>{err}</ErrorLine> : null}
-            <GoldButton onClick={pay} busy={busy} busyText="Preparing your payment…">
-              {plan === 'yearly' ? `Pay ${formatUsd(yearlyCents)} a year` : `Pay ${formatUsd(monthlyCents)} a month`}
+            <GoldButton onClick={pay} busy={busy} busyText="PREPARING YOUR PAYMENT…" testId="unlimited-pay">
+              {plan === 'yearly' ? `PAY ${formatUsd(yearlyCents)} A YEAR` : `PAY ${formatUsd(monthlyCents)} A MONTH`}
             </GoldButton>
             {busy && !EMBEDDED_CHECKOUT_AVAILABLE ? <p className="gv-buy-wait"><Loader2 size={15} className="animate-spin" aria-hidden /> Taking you to Stripe…</p> : null}
-            <SecureLine />
-            <SwapLine lead="Looking for credits?" action="Top up here." onClick={() => swapToCredits('header')} />
+            <SwapLine lead="Looking for credits?" action="Top up here" onClick={() => swapToCredits('header')} />
           </>
         )}
       </div>
