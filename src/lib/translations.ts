@@ -66,7 +66,7 @@ export const translations = {
     // *_accent key) in gold, no full stop on titles, taglines or captions.
     sl_h1_lead: "Run the",
     sl_h1_accent: "room",
-    sl_lede: "From roll call to the final vote",
+    sl_lede: "From initial roll call to final voting. One session, any device.",
     sl_start: "START COMMITTEE",
     sl_code_placeholder: "Session code",
     sl_join: "JOIN",
@@ -1728,7 +1728,7 @@ export const translations = {
     // --- Sessions landing (sl_*), 24 Sep 2026; reworked 25 Sep 2026 ---
     sl_h1_lead: "Dirige la",
     sl_h1_accent: "sala",
-    sl_lede: "Del pase de lista a la votación final",
+    sl_lede: "Del pase de lista inicial a la votación final. Una sesión, cualquier dispositivo.",
     sl_start: "CREAR COMITÉ",
     sl_code_placeholder: "Código de sesión",
     sl_join: "UNIRSE",
@@ -3389,7 +3389,7 @@ export const translations = {
     // --- Sessions landing (sl_*), 24 Sep 2026; reworked 25 Sep 2026 ---
     sl_h1_lead: "Dirigez la",
     sl_h1_accent: "salle",
-    sl_lede: "De l'appel au vote final",
+    sl_lede: "De l'appel initial au vote final. Une session, n'importe quel appareil.",
     sl_start: "CRÉER UN COMITÉ",
     sl_code_placeholder: "Code de session",
     sl_join: "REJOINDRE",
@@ -5050,7 +5050,7 @@ export const translations = {
     // --- Sessions landing (sl_*), 24 Sep 2026; reworked 25 Sep 2026 ---
     sl_h1_lead: "أدر",
     sl_h1_accent: "القاعة",
-    sl_lede: "من تسجيل الحضور إلى التصويت النهائي",
+    sl_lede: "من تسجيل الحضور الأول إلى التصويت النهائي. جلسة واحدة، أي جهاز.",
     sl_start: "ابدأ اللجنة",
     sl_code_placeholder: "رمز الجلسة",
     sl_join: "انضم",

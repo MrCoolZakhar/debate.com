@@ -232,7 +232,7 @@ export default function Article() {
           Gavelling takes the other side of that. The organiser is charged nothing. Participant payments run through your own Stripe Connect account, so you are merchant of record: the money is yours, and the platform fee, 5 percent, plus the card processing pass-through, is shown and recomputed server-side rather than invoiced to you later. Manual payment with proof review exists for the many delegations that pay by bank transfer. The comparison against the paid platforms, with their actual published pricing, is in <Link href="/blog/best-mun-software-2026">best MUN software in 2026</Link> and <Link href="/blog/mymun-alternative">the mymun alternative comparison</Link>.
         </p>
         <p>
-          For the committee side specifically, free tools are compared in our <Link href="/blog/free-mun-tools">free MUN tools guide</Link>, and you can open a Gavelling session with no account at <Link href="/create">/create</Link> to see what a projected speakers list looks like in your actual room before committing to anything.
+          For the committee side specifically, free tools are compared in our <Link href="/blog/free-mun-tools">free MUN tools guide</Link>, and you can open a Gavelling session with no account at <Link href="/create/sessions">/create</Link> to see what a projected speakers list looks like in your actual room before committing to anything.
         </p>
 
         <H2>Building the spreadsheet</H2>

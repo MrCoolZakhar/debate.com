@@ -237,7 +237,7 @@ export default function Article() {
         </ul>
 
         <p>
-          For the rules both circuits share, our <Link href="/blog/mun-rules-of-procedure">rules of procedure reference</Link> is the common core, and the <Link href="/blog/una-usa-rules-of-procedure">UNA-USA guide</Link> is the other half of this pair. If you are training a delegation on an unfamiliar ruleset, the cheapest way to do it is to run the procedure once rather than explain it twice: you can open a free committee at <Link href="/create">/create</Link> and put your team through a full resolution and vote in under an hour.
+          For the rules both circuits share, our <Link href="/blog/mun-rules-of-procedure">rules of procedure reference</Link> is the common core, and the <Link href="/blog/una-usa-rules-of-procedure">UNA-USA guide</Link> is the other half of this pair. If you are training a delegation on an unfamiliar ruleset, the cheapest way to do it is to run the procedure once rather than explain it twice: you can open a free committee at <Link href="/create/sessions">/create</Link> and put your team through a full resolution and vote in under an hour.
         </p>
       </ArticleLayout>
     </>

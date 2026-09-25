@@ -103,7 +103,7 @@ function ArticleCta({ pitch }: { pitch: string }) {
         </p>
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
           <Link
-            href="/create"
+            href="/create/sessions"
             className="gv-lift-dark inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-[14.5px] font-extrabold no-underline"
             style={{ background: C.gold, color: '#1C1410' }}
           >

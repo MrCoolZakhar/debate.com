@@ -15,7 +15,10 @@ const INK_SOFT = '#5A5046';
 
 export default function PricingLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen flex flex-col relative overflow-x-hidden" style={{ backgroundColor: IVORY, fontFamily: 'var(--font-brand), sans-serif' }}>
+    // overflow-x CLIP, never hidden: `hidden` makes this wrapper a scroll
+    // container and position: sticky on the rail stops working (the account
+    // rail's rule, src/app/account/layout.tsx).
+    <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: IVORY, fontFamily: 'var(--font-brand), sans-serif', overflowX: 'clip' }}>
       <style>{`
         .gv-pr-shell{position:relative;z-index:1;width:100%;max-width:1360px;margin:0 auto;padding:16px 20px 72px;display:flex;flex-direction:column;gap:20px}
         .gv-pr-main{min-width:0;width:100%}
@@ -29,7 +32,7 @@ export default function PricingLayout({ children }: { children: ReactNode }) {
         .gv-pr-tab[data-active="true"]{background:${FOREST};color:#EED98A;font-weight:800}
         @media (min-width:1024px){
           .gv-pr-shell{flex-direction:row;align-items:flex-start;gap:56px;padding:40px 32px 96px}
-          .gv-pr-rail{position:sticky;top:96px;flex:0 0 224px;width:224px}
+          .gv-pr-rail{position:sticky;top:96px;align-self:flex-start;flex:0 0 224px;width:224px;max-height:calc(100dvh - 96px);overflow-y:auto}
           .gv-pr-tabs{grid-template-columns:1fr;background:none;padding:0;gap:6px;border-radius:0;box-shadow:none}
           .gv-pr-tab{justify-content:flex-start;min-height:56px;padding:10px 18px;font-size:18px}
           .gv-pr-main{flex:1 1 auto}

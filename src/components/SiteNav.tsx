@@ -2,15 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState, useEffect, useRef, useMemo, useCallback, type CSSProperties } from 'react';
+import { useState, useEffect, useRef, useMemo, type CSSProperties } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
-import { ChevronDown, Globe, Languages, Plus } from 'lucide-react';
+import { Globe, Languages, Plus } from 'lucide-react';
 import LanguageRequestDialog from '@/components/LanguageRequestDialog';
 import { isSessionsPath } from '@/lib/sessionRoutes';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
 import BrandLogo from '@/components/BrandLogo';
-import CreateChooser, { CreateOptions } from '@/components/CreateChooser';
 import AuthLink from '@/components/auth/AuthLink';
 import { useCredits } from '@/hooks/useCredits';
 import { CreditCoin } from '@/components/CreditCoin';
@@ -22,29 +21,29 @@ import { useMyActivity, useOpenSeenState, markActivitySeen, isVisibleActivity } 
 // EXPLORE, PRICING, HELP. Written in sentence case and set in capitals by CSS
 // (textTransform), at weight 800 (900 active) with light tracking (in Albert
 // Sans anything lighter than 800 reads too thin for the nav). No stacked
-// kicker words any more. CREATE has no href: it opens the CreateChooser
-// (session or conference) instead of navigating. Home, About us and Contact
-// left the nav; the footer and the profile menu carry them.
+// kicker words any more. CREATE is a plain link to /create, the chooser page
+// (a committee or a conference; since 25 Sep 2026 the session creator lives at
+// /create/sessions). Home, About us and Contact left the nav; the footer and
+// the profile menu carry them. The five items are EQUAL columns.
 const NAV_LINKS_CONFIG: ReadonlyArray<{
   en: string; es: string; fr: string; ar: string;
-  href: string | null;
-  /** The item that opens the CREATE chooser instead of navigating. */
-  create?: true;
+  href: string;
 }> = [
   { en: 'Sessions', es: 'Sesiones', fr: 'Sessions', ar: 'الجلسات',  href: '/sessions' },
-  { en: 'Create',   es: 'Crear',    fr: 'Créer',    ar: 'إنشاء',    href: null, create: true },
+  { en: 'Create',   es: 'Crear',    fr: 'Créer',    ar: 'إنشاء',    href: '/create' },
   { en: 'Explore',  es: 'Explorar', fr: 'Explorer', ar: 'استكشف',   href: '/conferences/explore' },
   { en: 'Pricing',  es: 'Precios',  fr: 'Tarifs',   ar: 'الأسعار',  href: '/pricing/credits' },
   { en: 'Help',     es: 'Ayuda',    fr: 'Aide',     ar: 'المساعدة', href: '/help' },
 ];
 
-/** SESSIONS lights on every sessions path (isSessionsPath), EXPLORE on any
- *  public conferences page (explore, map, roles, a conference page), PRICING on
- *  every /pricing page, HELP on /help. CREATE lights while its chooser is open
- *  (decided by the caller, not here). */
+/** SESSIONS lights on every sessions path (isSessionsPath), CREATE on the
+ *  chooser and the creator under it, EXPLORE on any public conferences page
+ *  (explore, map, roles, a conference page), PRICING on every /pricing page,
+ *  HELP on /help. */
 function isNavLinkActive(pathname: string | null, href: string | null): boolean {
   if (!pathname || !href) return false;
-  if (href === '/sessions') return isSessionsPath(pathname);
+  if (href === '/sessions') return isSessionsPath(pathname) && !pathname.startsWith('/create');
+  if (href === '/create') return pathname === '/create' || pathname.startsWith('/create/');
   if (href === '/conferences/explore') return pathname.startsWith('/conferences');
   if (href === '/pricing/credits') return pathname.startsWith('/pricing');
   if (href === '/help') return pathname === '/help' || pathname.startsWith('/help/');
@@ -77,12 +76,6 @@ export default function SiteNav(props: SiteNavProps = {}) {
   // no longer read: there is ONE wordmark since 25 Sep 2026.
   const { overlay = false, hideLanguage: hideLanguageProp = false } = props;
   const pathname = usePathname();
-  // The CREATE chooser (desktop popover / phone sheet) and the inline CREATE
-  // rows in the hamburger sheet.
-  const [createOpen, setCreateOpen] = useState(false);
-  const [mobileCreateOpen, setMobileCreateOpen] = useState(false);
-  const createRef = useRef<HTMLButtonElement>(null);
-  const closeCreate = useCallback(() => setCreateOpen(false), []);
   // Languages are a sessions feature: every conferences-side page is English
   // only and shows no switcher (owner, 18 Sep 2026).
   const hideLanguage = hideLanguageProp || !isSessionsPath(pathname);
@@ -126,7 +119,6 @@ export default function SiteNav(props: SiteNavProps = {}) {
   const navLinks = NAV_LINKS_CONFIG.map(l => ({
     label: l[language],
     href: l.href,
-    create: l.create === true,
   }));
 
   // The sheet animates on max-height, so it needs a PIXEL height — but that
@@ -172,10 +164,6 @@ export default function SiteNav(props: SiteNavProps = {}) {
     document.addEventListener('mousedown', handleMouseDown);
     return () => document.removeEventListener('mousedown', handleMouseDown);
   }, []);
-
-  // The hamburger sheet's inline CREATE rows fold back up whenever the sheet
-  // closes, so the next open starts on the plain list.
-  useEffect(() => { if (!menuOpen) setMobileCreateOpen(false); }, [menuOpen]);
 
   async function handleSignOut() {
     await signOut();
@@ -224,8 +212,15 @@ export default function SiteNav(props: SiteNavProps = {}) {
       style={{ zIndex: 40, height: 72 }}
     >
         <div
-          className="flex items-center rounded-full pointer-events-auto"
+          className="rounded-full pointer-events-auto"
+          // FIVE EQUAL COLUMNS (owner, 25 Sep 2026: shorter words bunched up on
+          // the right). A grid of `1fr` columns on an auto-width pill sizes
+          // every column to the widest label, so each item has the same hit
+          // area and the same spacing, whatever the language.
           style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${navLinks.length}, 1fr)`,
+            alignItems: 'center',
             backgroundColor: 'rgba(250, 248, 243, 0.72)',
             backdropFilter: 'blur(16px)',
             WebkitBackdropFilter: 'blur(16px)',
@@ -235,17 +230,17 @@ export default function SiteNav(props: SiteNavProps = {}) {
           }}
         >
           {navLinks.map((link) => {
-            // CREATE lights while its chooser is open; the others on their path.
-            const active = link.create ? createOpen : isNavLinkActive(pathname, link.href);
+            const active = isNavLinkActive(pathname, link.href);
             const hl = hovered === link.label;
-            // One style for the link items and the CREATE button, so the pill
-            // reads as five equal items. Five one-word labels: at 1024px
-            // (1vw = 10px) each item is 12px type with 10px side padding, about
+            // One style for every item. Five one-word labels in equal columns:
+            // at 1024px (1vw = 10px) 12px type with 10px side padding, about
             // 410px of pill between a 240px logo group and a 200px account
             // group; at 1280px the clamp opens to 13.5px / 16px. Never wrap.
             const itemStyle: CSSProperties = {
               display: 'inline-flex',
               alignItems: 'center',
+              justifyContent: 'center',
+              width: '100%',
               gap: '4px',
               position: 'relative',
               whiteSpace: 'nowrap',
@@ -281,35 +276,10 @@ export default function SiteNav(props: SiteNavProps = {}) {
                 borderRadius: '2px',
               }} />
             );
-            if (link.create) {
-              return (
-                <button
-                  key={link.label}
-                  ref={createRef}
-                  type="button"
-                  aria-haspopup="dialog"
-                  aria-expanded={createOpen}
-                  onClick={() => setCreateOpen((v) => !v)}
-                  onMouseEnter={() => setHovered(link.label)}
-                  onMouseLeave={() => setHovered(null)}
-                  className={itemClass}
-                  style={itemStyle}
-                >
-                  {link.label}
-                  <ChevronDown
-                    aria-hidden
-                    size={13}
-                    strokeWidth={2.6}
-                    style={{ transform: createOpen ? 'rotate(180deg)' : 'none', transition: 'transform 200ms ease', marginTop: 1 }}
-                  />
-                  {underline}
-                </button>
-              );
-            }
             return (
               <Link
                 key={link.label}
-                href={link.href ?? '/'}
+                href={link.href}
                 onMouseEnter={() => setHovered(link.label)}
                 onMouseLeave={() => setHovered(null)}
                 aria-current={active ? 'page' : undefined}
@@ -335,14 +305,15 @@ export default function SiteNav(props: SiteNavProps = {}) {
         {/* Logo + language toggle (left side) */}
         <div className="flex items-center gap-1">
           {/* ONE wordmark (BrandLogo, /gavelling-logo.png), linked to /, white
-              over hero media. 24px tall on phones, 28px from md, sized through
-              a custom property because BrandLogo writes its height inline. */}
+              over hero media. `height` is the height of the visible WORD (the
+              file carries large transparent margins that BrandLogo crops), so
+              32px here is a normal, legible site logo in the 72px header. */}
           <span
-            className="inline-flex items-center [--logo-h:24px] md:[--logo-h:28px]"
+            className="inline-flex items-center"
             onClick={() => setMenuOpen(false)}
             style={{ filter: overlay ? 'drop-shadow(0 2px 6px rgba(0,0,0,0.35))' : undefined }}
           >
-            <BrandLogo priority height={28} tone={overlay ? 'white' : 'ink'} style={{ height: 'var(--logo-h)' }} />
+            <BrandLogo priority height={32} tone={overlay ? 'white' : 'ink'} />
           </span>
 
           {/* Language toggle (desktop only — mobile keeps its own toggle in the hamburger menu) */}
@@ -550,7 +521,7 @@ export default function SiteNav(props: SiteNavProps = {}) {
       >
         <div ref={sheetRef} className="flex flex-col px-6 py-4 gap-1">
           {navLinks.map((link) => {
-            const active = link.create ? mobileCreateOpen : isNavLinkActive(pathname, link.href);
+            const active = isNavLinkActive(pathname, link.href);
             const rowStyle: CSSProperties = {
               display: 'flex',
               alignItems: 'center',
@@ -571,40 +542,10 @@ export default function SiteNav(props: SiteNavProps = {}) {
               textAlign: 'start',
             };
             const rowClass = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-inset';
-            if (link.create) {
-              // CREATE opens its two options INLINE, right under the row, so
-              // nothing stacks over the sheet. The sheet's ResizeObserver
-              // re-measures the extra height.
-              return (
-                <div key={link.label}>
-                  <button
-                    type="button"
-                    aria-expanded={mobileCreateOpen}
-                    aria-controls="site-nav-create-options"
-                    onClick={() => setMobileCreateOpen((v) => !v)}
-                    className={rowClass}
-                    style={{ ...rowStyle, border: 'none', borderLeft: rowStyle.borderLeft, cursor: 'pointer' }}
-                  >
-                    <span className="flex-1">{link.label}</span>
-                    <ChevronDown
-                      aria-hidden
-                      size={16}
-                      strokeWidth={2.6}
-                      style={{ transform: mobileCreateOpen ? 'rotate(180deg)' : 'none', transition: 'transform 200ms ease' }}
-                    />
-                  </button>
-                  {mobileCreateOpen && (
-                    <div id="site-nav-create-options" className="px-1 pb-1 pt-0.5">
-                      <CreateOptions language={language} onNavigate={() => setMenuOpen(false)} />
-                    </div>
-                  )}
-                </div>
-              );
-            }
             return (
               <Link
                 key={link.label}
-                href={link.href ?? '/'}
+                href={link.href}
                 onClick={() => setMenuOpen(false)}
                 aria-current={active ? 'page' : undefined}
                 className={rowClass}
@@ -758,9 +699,6 @@ export default function SiteNav(props: SiteNavProps = {}) {
         </div>
       </div>
       {!hideLanguage && <LanguageRequestDialog open={requestLangOpen} onClose={() => setRequestLangOpen(false)} />}
-      {/* The CREATE chooser: a popover under the CREATE item on desktop, a
-          bottom sheet on phones. Closes on outside click, Escape, route change. */}
-      <CreateChooser open={createOpen} onClose={closeCreate} anchorRef={createRef} language={language} />
     </>
   );
 }

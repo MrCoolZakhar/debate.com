@@ -53,14 +53,12 @@ export default function SubscriptionPricingClient() {
         <RenewOnceOpener />
       </Suspense>
       <style>{`
-        .gv-su-hero{position:relative;overflow:hidden;min-height:420px;display:flex;align-items:center;isolation:isolate}
-        .gv-su-art{position:absolute;inset:0;z-index:0;pointer-events:none;background:radial-gradient(60% 70% at 88% 30%,rgba(238,217,138,0.22) 0%,rgba(238,217,138,0) 70%)}
-        .gv-su-art-in{display:none}
-        .gv-su-hero-in{position:relative;z-index:2;max-width:600px}
-        .gv-su-h1{display:flex;align-items:center;flex-wrap:wrap;gap:14px 18px;margin:0;font-size:clamp(48px,6vw,64px);font-weight:800;letter-spacing:-0.03em;line-height:1;color:#FFFFFF}
-        .gv-su-line{margin:16px 0 0;font-size:clamp(18px,1.7vw,21px);line-height:1.4;color:rgba(255,255,255,0.86)}
-        .gv-su-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:32px}
-        .gv-su-fine{margin:14px 0 0;font-size:13.5px;line-height:1.45;color:rgba(255,255,255,0.7);text-align:right}
+        .gv-su-hero{position:relative;padding:12px 8px 8px;margin-bottom:28px}
+        .gv-su-hero-in{position:relative;z-index:2;max-width:640px}
+        .gv-su-h1{display:flex;align-items:center;flex-wrap:wrap;gap:12px 16px;margin:0;font-size:clamp(42px,5.2vw,58px);font-weight:800;letter-spacing:-0.03em;line-height:1;color:${P.ink}}
+        .gv-su-line{margin:14px 0 0;font-size:clamp(17px,1.6vw,20px);line-height:1.4;font-weight:600;color:${P.forest}}
+        .gv-su-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:24px}
+        .gv-su-fine{margin:12px 0 0;font-size:13.5px;line-height:1.45;color:${P.inkSoft};text-align:left}
         .gv-su-plans-wrap{margin-top:28px}
         .gv-su-switch-row{display:flex;justify-content:center;margin-bottom:20px}
         .gv-su-switch{display:inline-grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border-radius:999px;background:${P.white};box-shadow:0 1px 0 rgba(27,56,40,0.08),0 12px 28px -24px rgba(27,56,40,0.5)}
@@ -107,16 +105,6 @@ export default function SubscriptionPricingClient() {
           .gv-su-plans{grid-template-columns:minmax(0,0.9fr) minmax(0,1.1fr)}
           .gv-su-plan-unl{margin:-10px 0}
         }
-        @media (min-width:900px){
-          .gv-su-hero{min-height:480px}
-          .gv-su-art{left:52%;background:radial-gradient(55% 55% at 50% 50%,rgba(238,217,138,0.34) 0%,rgba(238,217,138,0.08) 45%,rgba(238,217,138,0) 72%)}
-          .gv-su-art-in{display:block;position:absolute;left:50%;top:50%;width:0;height:0}
-          .gv-su-ring{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:50%;border:1.5px solid rgba(238,217,138,0.22)}
-          .gv-su-ring-1{width:300px;height:300px}
-          .gv-su-ring-2{width:420px;height:420px;border-color:rgba(238,217,138,0.14)}
-          .gv-su-ring-3{width:540px;height:540px;border-color:rgba(238,217,138,0.08)}
-          .gv-su-sign{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center}
-        }
         @media (min-width:1100px){
           .gv-su-strip{grid-template-columns:repeat(5,minmax(0,1fr))}
           .gv-su-strip-item{flex-direction:column;align-items:flex-start;gap:12px;min-height:0}
@@ -124,27 +112,18 @@ export default function SubscriptionPricingClient() {
         @media (prefers-reduced-motion:reduce){.gv-su-seg{transition:none}}
       `}</style>
 
-      {/* HERO: forest, the gold infinity on the right */}
-      <section className="gv-su-hero gv-p-block gv-p-block-forest" aria-labelledby="gv-su-title">
-        <div className="gv-su-art" aria-hidden>
-          <div className="gv-su-art-in">
-            <span className="gv-su-ring gv-su-ring-3" />
-            <span className="gv-su-ring gv-su-ring-2" />
-            <span className="gv-su-ring gv-su-ring-1" />
-            <span className="gv-su-sign">
-              <Emoji3D name="Infinity" size={200} fallback={InfinityIcon} fallbackColor={P.gold} />
-            </span>
-          </div>
-        </div>
+      {/* HERO: straight on the page, no card and no ring decoration (owner,
+          25 Sep 2026). Ink title with the gold word, the line in forest. */}
+      <section className="gv-su-hero" aria-labelledby="gv-su-title">
         <div className="gv-su-hero-in">
           <h1 id="gv-su-title" className="gv-su-h1">
-            <Emoji3D name="Infinity" size={48} fallback={InfinityIcon} fallbackColor={P.gold} />
-            <span>Gavelling <GoldWord tone="dark">Unlimited</GoldWord></span>
+            <Emoji3D name="Infinity" size={48} fallback={InfinityIcon} fallbackColor={P.goldDeep} />
+            <span>Gavelling <GoldWord tone="light">Unlimited</GoldWord></span>
           </h1>
           <p className="gv-su-line">Unlock Unlimited MUN and Unlimited Gavelling</p>
           <div className="gv-su-actions">
-            {unlimitedCta(true, true)}
-            <ActionButton skin="outline-ivory" onForest onClick={() => openCreditsPopup({ context: 'pricing' })}>Top up credits</ActionButton>
+            {unlimitedCta(true, false)}
+            <ActionButton skin="outline" onClick={() => openCreditsPopup({ context: 'pricing' })}>Top up credits</ActionButton>
           </div>
           <p className="gv-su-fine">Cancel anytime and keep Unlimited until the end of the period you paid for</p>
         </div>

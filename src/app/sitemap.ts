@@ -27,7 +27,9 @@ const url = (path: string) => (path === '/' ? SITE_URL : `${SITE_URL}${path}`);
 // Content dates of the static pages. Bump when the page's text changes.
 const STATIC_PAGES: { path: string; lastModified: string; changeFrequency: 'daily' | 'weekly' | 'monthly' | 'yearly'; priority: number }[] = [
   { path: '/sessions',          lastModified: '2026-08-13', changeFrequency: 'monthly', priority: 0.9 },
-  { path: '/create',            lastModified: '2026-09-17', changeFrequency: 'monthly', priority: 0.8 },
+  // /create is the chooser (a committee or a conference) since 25 Sep 2026; the
+  // session creator moved to /create/sessions, reached from it by a plain link.
+  { path: '/create',            lastModified: '2026-09-25', changeFrequency: 'monthly', priority: 0.8 },
   { path: '/join',              lastModified: '2026-09-16', changeFrequency: 'monthly', priority: 0.7 },
   { path: '/conferences/roles', lastModified: '2026-09-08', changeFrequency: 'weekly',  priority: 0.7 },
   { path: '/pricing/credits',   lastModified: '2026-09-24', changeFrequency: 'monthly', priority: 0.7 },

@@ -93,7 +93,7 @@ export default function RoleCards() {
               <p className="rc-line">{t(line)}</p>
               <div className="rc-act">
                 {id === 'chairs' && (
-                  <GoldButton href="/create" className="rc-cta">{t('sl_role_chairs_cta')}</GoldButton>
+                  <GoldButton href="/create/sessions" className="rc-cta">{t('sl_role_chairs_cta')}</GoldButton>
                 )}
                 {id === 'delegates' && <FindSession id={id} advisor={false} />}
                 {id === 'advisors' && (

@@ -15,11 +15,13 @@ import { pageMetadata } from '@/lib/seo';
 //
 // Indexable on purpose. It is public, needs no account, and "create a Model UN
 // committee" is exactly the intent it serves, and it is in the sitemap.
+// Since 25 Sep 2026 this segment is /create/sessions: /create itself is the
+// chooser page (a committee or a conference), which links here.
 export const metadata: Metadata = pageMetadata({
   title: 'Create a MUN Committee',
   description:
-    'Set up a Model UN committee in under a minute — delegates, topic, speaking times and voting rules. Then run it live: roll call, speakers list, motions, caucuses and voting. Free, no account needed.',
-  path: '/create',
+    'Set up a Model UN committee in under a minute: delegates, topic, speaking times and voting rules. Then run it live: roll call, speakers list, motions, caucuses and voting. Free, no account needed.',
+  path: '/create/sessions',
   keywords: [
     'create MUN committee',
     'run a MUN session',

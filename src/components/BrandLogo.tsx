@@ -10,15 +10,20 @@
 //   tone="white"  on forest
 //   tone="gold"   on forest, the pale gold
 //
-// The file was deleted by mistake on 25 Sep 2026 and is being restored; until
-// it is back the <img> falls back to the old /GavellingLogo.png lockup so no
-// page ever shows a broken image. Remove the fallback once the file is in.
+// THE FILE HAS PADDING. It is a 1920 x 1080 canvas and the visible word is a
+// 1679 x 416 box at (132, 340) inside it (measured with sharp, 25 Sep 2026).
+// Drawn naively at 28px the word was 11px tall, a sliver in the corner. So
+// `height` here means the height of the WORD: the image is scaled so the word
+// is that tall and the transparent margins are cropped away with a clipping
+// box, never by editing the image (the owner's asset stays as delivered).
 
 import Link from 'next/link';
-import { useState } from 'react';
 
 export const BRAND_LOGO_SRC = '/gavelling-logo.png';
-const FALLBACK_SRC = '/GavellingLogo.png';
+
+/** The visible word inside the canvas, in source pixels. */
+const CANVAS = { w: 1920, h: 1080 };
+const WORD = { x: 132, y: 340, w: 1679, h: 416 };
 
 const FILTERS: Record<'ink' | 'white' | 'gold', string | undefined> = {
   ink: undefined,
@@ -28,13 +33,14 @@ const FILTERS: Record<'ink' | 'white' | 'gold', string | undefined> = {
 };
 
 export function BrandLogo({
-  height = 28,
+  height = 32,
   tone = 'ink',
   href = '/',
   className,
   style,
   priority = false,
 }: {
+  /** Height of the visible WORD, in px. */
   height?: number;
   tone?: 'ink' | 'white' | 'gold';
   /** null renders the plain image with no link (inside another link, say). */
@@ -44,21 +50,43 @@ export function BrandLogo({
   /** The header logo: fetch it first, no lazy loading. */
   priority?: boolean;
 }) {
-  const [src, setSrc] = useState(BRAND_LOGO_SRC);
+  const scale = height / WORD.h;
+  const boxW = Math.round(WORD.w * scale);
   const img = (
-    /* eslint-disable-next-line @next/next/no-img-element */
-    <img
-      src={src}
-      alt="Gavelling"
-      height={height}
-      decoding="async"
-      loading={priority ? 'eager' : 'lazy'}
-      fetchPriority={priority ? 'high' : undefined}
-      draggable={false}
-      onError={() => { if (src !== FALLBACK_SRC) setSrc(FALLBACK_SRC); }}
+    <span
       className={className}
-      style={{ height, width: 'auto', display: 'block', filter: FILTERS[tone], ...style }}
-    />
+      style={{
+        display: 'inline-block',
+        position: 'relative',
+        overflow: 'hidden',
+        width: boxW,
+        height,
+        flexShrink: 0,
+        ...style,
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={BRAND_LOGO_SRC}
+        alt="Gavelling"
+        width={Math.round(CANVAS.w * scale)}
+        height={Math.round(CANVAS.h * scale)}
+        decoding="async"
+        loading={priority ? 'eager' : 'lazy'}
+        fetchPriority={priority ? 'high' : undefined}
+        draggable={false}
+        style={{
+          position: 'absolute',
+          left: -Math.round(WORD.x * scale),
+          top: -Math.round(WORD.y * scale),
+          width: Math.round(CANVAS.w * scale),
+          height: Math.round(CANVAS.h * scale),
+          maxWidth: 'none',
+          display: 'block',
+          filter: FILTERS[tone],
+        }}
+      />
+    </span>
   );
   if (href === null) return img;
   return (

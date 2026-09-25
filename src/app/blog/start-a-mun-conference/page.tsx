@@ -266,7 +266,7 @@ export default function Article() {
           </table>
         </TableWrap>
         <p>
-          On the two software lines: what takes the time in <Link href="/blog/mun-country-allocation">allocations</Link> is not the assignment itself, it is preference collection, delegation blocks, double delegations and the reallocation requests afterwards. On the committee side, free tools exist and are compared in our <Link href="/blog/free-mun-tools">free MUN tools guide</Link>. You can also open a Gavelling session at <Link href="/create">/create</Link> with no account at all and test what a projected committee looks like in your actual room before you commit to anything.
+          On the two software lines: what takes the time in <Link href="/blog/mun-country-allocation">allocations</Link> is not the assignment itself, it is preference collection, delegation blocks, double delegations and the reallocation requests afterwards. On the committee side, free tools exist and are compared in our <Link href="/blog/free-mun-tools">free MUN tools guide</Link>. You can also open a Gavelling session at <Link href="/create/sessions">/create</Link> with no account at all and test what a projected committee looks like in your actual room before you commit to anything.
         </p>
 
         <H2>Getting from year one to year two</H2>

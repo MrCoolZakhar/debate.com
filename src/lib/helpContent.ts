@@ -30,7 +30,7 @@ const SESSIONS: FaqEntry[] = [
     id: 'start-a-session',
     question: 'How do I start a committee session?',
     answer: 'Go to Create a committee. A session is free and needs no account. You get a 6-character session code for delegates and a chair code for the dais: the session code plus 4 digits, like ABC123-4821. Keep the chair code for chairs only.',
-    actions: [{ kind: 'link', label: 'Create a committee', href: '/create' }],
+    actions: [{ kind: 'link', label: 'Create a committee', href: '/create/sessions' }],
     pages: [],
     keywords: ['create', 'new', 'room', 'session code', 'chair code', 'free', 'account'],
   },

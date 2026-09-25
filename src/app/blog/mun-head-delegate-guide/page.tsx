@@ -104,7 +104,7 @@ export default function Article() {
             </tbody>
           </table>
         </TableWrap>
-        <p>The mock committee is the part most delegations skip and the part that changes results most. Run it with real procedure, a real speakers list and real timers, chair it strictly, and stop it twice to explain what just happened. Delegates do not learn procedure from a document; they learn it by losing a vote to a motion they did not understand. You can run one from a laptop with a <Link href="/create">free practice session</Link>, with the speakers list, motions and timers live on every phone in the room, which takes the administration out of it and lets you concentrate on chairing.</p>
+        <p>The mock committee is the part most delegations skip and the part that changes results most. Run it with real procedure, a real speakers list and real timers, chair it strictly, and stop it twice to explain what just happened. Delegates do not learn procedure from a document; they learn it by losing a vote to a motion they did not understand. You can run one from a laptop with a <Link href="/create/sessions">free practice session</Link>, with the speakers list, motions and timers live on every phone in the room, which takes the administration out of it and lets you concentrate on chairing.</p>
         <p>Do not personally review twenty position papers. Pair delegates to review each other against a checklist, then read the ones flagged as weak. Our <Link href="/blog/mun-position-paper-guide">position paper guide</Link> works well as that checklist, and it keeps the standard consistent when three different people are marking.</p>
 
         <H2>The head delegate at the conference</H2>

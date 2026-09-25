@@ -138,7 +138,7 @@ export default function Article() {
           <li><strong>One development conference, mid-season.</strong> Medium size, a step up in competitiveness, a different circuit if you can. Its job is to expose your second years to a harder room while there is still a season left to improve in.</li>
           <li><strong>One target conference, late.</strong> The one you have been building towards, with a selected delegation, real preparation and a serious commitment. Its job is to reward and to test.</li>
         </ol>
-        <p>Between them, run your own internal mock committees. This is where most of the actual improvement happens and it costs nothing: a free session at <Link href="/create">/create</Link> takes seconds to set up, students join on their phones with a six character code, and you can run a real speakers list, motions and a vote in a classroom hour. If you are building that training into a term plan, our <Link href="/blog/mun-conference-preparation">conference preparation guide</Link> maps the weeks before an event.</p>
+        <p>Between them, run your own internal mock committees. This is where most of the actual improvement happens and it costs nothing: a free session at <Link href="/create/sessions">/create</Link> takes seconds to set up, students join on their phones with a six character code, and you can run a real speakers list, motions and a vote in a classroom hour. If you are building that training into a term plan, our <Link href="/blog/mun-conference-preparation">conference preparation guide</Link> maps the weeks before an event.</p>
 
         <H2>A conference evaluation scorecard</H2>
         <p>Score each candidate out of 3 on each line. Anything under about 18 needs a conversation before you commit money.</p>

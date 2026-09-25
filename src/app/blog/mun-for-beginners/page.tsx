@@ -221,7 +221,7 @@ export default function Article() {
 
         <H2>Before your next one</H2>
         <p>
-          The single best preparation for a second conference is an hour of practice with actual procedure. If your club does not run mock committees, start one: you can open a free session at <Link href="/create">/create</Link>, put six people on their phones with a six character code, and run a roll call, a speakers list, a moderated caucus and a vote inside an hour. The things that felt impossible at conference stop feeling impossible after you have raised a motion badly twice in a room of friends.
+          The single best preparation for a second conference is an hour of practice with actual procedure. If your club does not run mock committees, start one: you can open a free session at <Link href="/create/sessions">/create</Link>, put six people on their phones with a six character code, and run a roll call, a speakers list, a moderated caucus and a vote inside an hour. The things that felt impossible at conference stop feeling impossible after you have raised a motion badly twice in a room of friends.
         </p>
         <p>
           Then read the <Link href="/blog/mun-glossary">glossary</Link> for the words you heard and did not ask about, the <Link href="/blog/mun-motions-explained">motions guide</Link> for the six that matter, and the <Link href="/blog/mun-common-mistakes">common mistakes</Link> chairs see every weekend. That is the whole gap between a first conference and a confident second one.

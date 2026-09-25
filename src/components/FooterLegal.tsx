@@ -118,7 +118,7 @@ export default function FooterLegal({
         {/* The session tools, a plain server-rendered way in to both from
             every public page (the homepage's extra link row that carried them
             was removed on 24 Sep 2026). */}
-        <Link href="/create" className={hubLink}>
+        <Link href="/create/sessions" className={hubLink}>
           Create a committee
         </Link>
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>

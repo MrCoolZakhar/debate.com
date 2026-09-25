@@ -39,7 +39,7 @@ export default function SiteFooter({
       `}</style>
       <div className="mx-auto w-full max-w-6xl flex flex-col items-center gap-4 md:grid md:grid-cols-3 md:gap-0 md:items-center">
         <div className="justify-self-center md:justify-self-start">
-          <BrandLogo height={26} tone="ink" />
+          <BrandLogo height={28} tone="ink" />
         </div>
         <div className="flex items-center justify-center gap-2">
           <a href="https://www.instagram.com/wearegavelling/" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="gv-foot-social">

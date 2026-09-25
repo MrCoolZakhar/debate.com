@@ -145,7 +145,7 @@ export default function Article() {
             </tbody>
           </table>
         </TableWrap>
-        <p>Change it deliberately and tell the room why, once. Changing it silently three times an hour makes a committee feel arbitrary. Keeping it at ninety seconds all weekend wastes the lever entirely. In <Link href="/create">a Gavelling session</Link> the speaking time is set per caucus and the clock is anchored to the server, so every delegate&rsquo;s phone shows the same countdown as the dais, which removes the argument about whether a speaker ran over.</p>
+        <p>Change it deliberately and tell the room why, once. Changing it silently three times an hour makes a committee feel arbitrary. Keeping it at ninety seconds all weekend wastes the lever entirely. In <Link href="/create/sessions">a Gavelling session</Link> the speaking time is set per caucus and the clock is anchored to the server, so every delegate&rsquo;s phone shows the same countdown as the dais, which removes the argument about whether a speaker ran over.</p>
 
         <H2>When to let silence sit</H2>
         <p>Not every pause is a stall. A committee that has just heard a genuinely difficult question needs a few seconds, and a chair who fills that gap trains the room to expect rescuing.</p>

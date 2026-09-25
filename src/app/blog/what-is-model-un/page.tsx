@@ -208,7 +208,7 @@ export default function Article() {
           <li>Find out whether your school or university already has a club. If it does, the first meeting is the only thing you need to do this week.</li>
           <li>If it does not, three people and a teacher is enough to start one.</li>
           <li>Read one background guide from a real conference, published by its secretariat. You will learn more from it than from another explainer.</li>
-          <li>Run a mock committee. You can open a free session on Gavelling at <Link href="/create">/create</Link>, put five friends on phones with the six character code, and get through a roll call, a speakers list and a vote in under an hour.</li>
+          <li>Run a mock committee. You can open a free session on Gavelling at <Link href="/create/sessions">/create</Link>, put five friends on phones with the six character code, and get through a roll call, a speakers list and a vote in under an hour.</li>
           <li>Look at what conferences are open near you. The <Link href="/conferences/explore">conference directory</Link> is one place to start.</li>
         </ul>
         <p>

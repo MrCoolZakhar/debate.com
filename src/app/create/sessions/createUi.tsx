@@ -28,7 +28,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Loader2, Lock, Megaphone, Plus, X } from 'lucide-react';
 import { DEFAULT_EMBLEM, emblemMonogram } from '@/components/CommitteeIdentityBadge';
-import { C, OUTFIT, SHADOW } from '../join/joinUi';
+import { C, OUTFIT, SHADOW } from '@/app/join/joinUi';
 
 export { C, OUTFIT, SHADOW };
 

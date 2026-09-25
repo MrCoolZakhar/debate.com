@@ -710,7 +710,7 @@ function JoinPageInner() {
         <div className="flex min-w-0 items-center gap-2">
           <SessionLanguageMenu />
           <Link
-            href="/create"
+            href="/create/sessions"
             aria-label={t('join_nav_create')}
             className="inline-flex h-11 items-center gap-1.5 rounded-xl px-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 active:scale-[0.96]"
             style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.forest, transitionProperty: 'transform, background-color', transitionDuration: '150ms' }}
@@ -1219,7 +1219,7 @@ function JoinPageInner() {
 
             <p className="mt-5 text-center lg:mt-3" style={{ fontFamily: OUTFIT, fontSize: 13, color: C.inkSoft }}>
               {t('join_chair_prompt')}{' '}
-              <Link href="/create" className="font-bold underline decoration-[1.5px] underline-offset-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 rounded-sm" style={{ color: C.forest }}>
+              <Link href="/create/sessions" className="font-bold underline decoration-[1.5px] underline-offset-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 rounded-sm" style={{ color: C.forest }}>
                 {t('join_create_instead')}
               </Link>
             </p>

@@ -142,7 +142,7 @@ export default function Article() {
           <li><strong>A shared live document</strong> for the world bible, editable by everyone at once.</li>
           <li><strong>A tracker</strong> of directives received, who is handling each, and its state. A simple table with delegate, received time, tier, staffer and status. Update it on receipt, not later.</li>
           <li><strong>A template file</strong> for updates and character replies, so that formatting is not a decision made 40 times a day.</li>
-          <li><strong>A way of seeing the front room.</strong> Knowing who is speaking, what motion is on the floor and how long is left in the caucus tells you when an update will land well. In a <Link href="/create">Gavelling session</Link> the committee page is open on any device with the code, so a backroom in the next room can watch the speakers list, the motions and the clock without sending anybody to look.</li>
+          <li><strong>A way of seeing the front room.</strong> Knowing who is speaking, what motion is on the floor and how long is left in the caucus tells you when an update will land well. In a <Link href="/create/sessions">Gavelling session</Link> the committee page is open on any device with the code, so a backroom in the next room can watch the speakers list, the motions and the clock without sending anybody to look.</li>
         </ul>
         <p>Paper directives work fine and many conferences prefer them, because a physical note is easy to hand up mid-session and easy to sort into piles. Whatever the medium, timestamp on arrival. Without a timestamp you will argue about who acted first, and in crisis that matters.</p>
 

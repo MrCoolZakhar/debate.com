@@ -114,7 +114,7 @@ export default function SessionsLanding() {
               <p className="sl-lede" style={{ color: INK_SOFT }}>{t('sl_lede')}</p>
 
               {/* The one big action */}
-              <button type="button" onClick={() => router.push('/create')} className="sl-start focus:outline-none">
+              <button type="button" onClick={() => router.push('/create/sessions')} className="sl-start focus:outline-none">
                 {t('sl_start')}
               </button>
 

@@ -44,7 +44,7 @@ import { useAuthModalOpen } from '@/lib/authModal';
 
 const EXCLUDED_PREFIXES = [
   '/auth', '/privacy', '/terms', '/contact', '/unsubscribe', '/api',
-  '/chair', '/delegate', '/advisor', '/voting', '/join', '/create',
+  '/chair', '/delegate', '/advisor', '/voting', '/join', '/create/sessions',
   '/account/profile',
 ];
 

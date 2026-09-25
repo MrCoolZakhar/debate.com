@@ -111,7 +111,7 @@ export default function Article() {
         <p>Make it small and structured. Ten to sixteen delegates, one topic everyone can research in twenty minutes, one or two experienced members on the dais, and a hard two-hour limit. Give every delegate a printed half-page with their country&rsquo;s position and three facts, because a first mock committee fails when half the room has nothing to say.</p>
         <p>Keep the procedure to five things: roll call, a speakers list, a moderated caucus, an unmoderated caucus and a vote. Do not teach points of order, amendments or rights of reply in the first mock. They can be added in the second.</p>
         <FactCard title="What you need to run it">
-          A room, a laptop for the dais, a phone each for the delegates and something to keep time. Gavelling sessions are free and need no account: the chair opens a session at <Link href="/create">gavelling.com/create</Link>, reads out the six-character code, and delegates join on their phones to see the speakers list and request the floor. That removes the two things that usually break a first mock committee, which are timekeeping and nobody knowing whose turn it is.
+          A room, a laptop for the dais, a phone each for the delegates and something to keep time. Gavelling sessions are free and need no account: the chair opens a session at <Link href="/create/sessions">gavelling.com/create</Link>, reads out the six-character code, and delegates join on their phones to see the speakers list and request the floor. That removes the two things that usually break a first mock committee, which are timekeeping and nobody knowing whose turn it is.
         </FactCard>
 
         <H2>Choosing a first conference</H2>

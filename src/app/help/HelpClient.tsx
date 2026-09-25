@@ -102,7 +102,7 @@ export default function HelpClient() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col relative overflow-x-hidden" style={{ background: WHITE, fontFamily: OUTFIT, color: INK }}>
+    <div className="min-h-screen flex flex-col relative" style={{ background: WHITE, fontFamily: OUTFIT, color: INK, overflowX: 'clip' }}>
       <style>{`
         .gv-help-wrap{width:100%;max-width:1120px;margin:0 auto;padding:0 20px}
 
@@ -153,7 +153,7 @@ export default function HelpClient() {
         @media (min-width:1024px){
           .gv-help-hero{padding:64px 0 44px}
           .gv-help-body{display:grid;grid-template-columns:232px minmax(0,1fr);column-gap:56px;align-items:start;padding-top:40px}
-          .gv-help-rail{position:sticky;top:96px;flex-direction:column;gap:6px;overflow:visible;margin:0;padding:0}
+          .gv-help-rail{position:sticky;top:96px;align-self:start;flex-direction:column;gap:6px;overflow:visible;margin:0;padding:0;max-height:calc(100dvh - 96px)}
           .gv-help-rail a{min-height:46px;padding:0 14px 0 12px;font-size:15px}
           .gv-help-section{padding:8px 0 8px}
           .gv-help-section + .gv-help-section{margin-top:40px;padding-top:40px}

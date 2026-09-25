@@ -144,10 +144,10 @@ export function SessionsSection() {
             Run the <GoldWord>room</GoldWord>
           </h2>
           <p style={{ fontFamily: SANS, fontSize: 'clamp(16px, 1.15vw, 19px)', lineHeight: 1.5, color: INK_70, margin: '14px auto 0', maxWidth: '420px', textWrap: 'balance' }}>
-            From roll call to the final vote
+            From initial roll call to final voting. One session, any device.
           </p>
           <div className="flex flex-col items-center" style={{ marginTop: '30px' }}>
-            <button type="button" onClick={() => router.push('/create')} className="hs-sess-cta">
+            <button type="button" onClick={() => router.push('/create/sessions')} className="hs-sess-cta">
               START COMMITTEE <ArrowRight size={19} strokeWidth={2.5} aria-hidden="true" />
             </button>
             <form className="hs-sess-join" onSubmit={(e) => { e.preventDefault(); join(); }}>

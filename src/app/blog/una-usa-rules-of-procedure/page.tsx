@@ -267,7 +267,7 @@ export default function Article() {
           The practical test of a rulebook is whether a first-time chair can resolve a dispute from it in ten seconds while forty delegates watch. If a rule takes a paragraph to explain, it will be enforced inconsistently across your committees, which is worse than not having it. Our <Link href="/blog/mun-chair-script">chair script</Link> has the exact wording for each ruling, and <Link href="/blog/how-to-chair-first-mun">how to chair your first committee</Link> covers what the dais actually does with it.
         </p>
         <p>
-          The other thing that makes a rulebook enforceable is a dais that can see the state of the room: whose speech, how long is left, which motions are on the floor and in what order. That is what a committee platform is for, and you can try one with no account at <Link href="/create">/create</Link>.
+          The other thing that makes a rulebook enforceable is a dais that can see the state of the room: whose speech, how long is left, which motions are on the floor and in what order. That is what a committee platform is for, and you can try one with no account at <Link href="/create/sessions">/create</Link>.
         </p>
       </ArticleLayout>
     </>

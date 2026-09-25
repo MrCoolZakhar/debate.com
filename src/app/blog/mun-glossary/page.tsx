@@ -294,7 +294,7 @@ export default function Article() {
           If you are new, read <Link href="/blog/what-is-model-un">what Model UN actually is</Link> first and come back here when a word stops you. If you know the activity and want the rules properly, the <Link href="/blog/mun-rules-of-procedure">rules of procedure reference</Link> is the next page. If you are about to attend, the <Link href="/blog/mun-conference-preparation">preparation checklist</Link> turns all of this into a schedule.
         </p>
         <p>
-          The fastest way to make the vocabulary stick is to use it. Open a free committee at <Link href="/create">/create</Link>, invite five people, and spend an hour raising motions badly. You will remember the difference between a point and a motion permanently after the first time a chair rules you out of order.
+          The fastest way to make the vocabulary stick is to use it. Open a free committee at <Link href="/create/sessions">/create</Link>, invite five people, and spend an hour raising motions badly. You will remember the difference between a point and a motion permanently after the first time a chair rules you out of order.
         </p>
       </ArticleLayout>
     </>
