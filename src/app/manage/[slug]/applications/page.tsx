@@ -15,6 +15,8 @@ import { fetchAllRows, chunk } from '@/lib/fetchAllRows';
 import { useAuth } from '@/components/AuthProvider';
 import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail, heldUnresolvedMessage } from '@/lib/emailEvents';
 import { queueAdHocEmail } from '@/lib/adHocEmail';
+import { readEmailAllowance, emailsShort, emailsShortSentence, isEmailAllowanceMessage } from '@/lib/emailAllowance';
+import GetMoreEmails from '../store/GetMoreEmails';
 import { summarizeUnresolved, recipientFieldsContext, unresolvedFieldLabel } from '@/lib/emailUnresolved';
 import type { EmailBlock } from '@/lib/emailBlocks';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
@@ -1913,6 +1915,8 @@ export default function ApplicationsPage() {
   const [composeSubject, setComposeSubject] = useState('');
   const [composeBody, setComposeBody] = useState('');
   const [composeError, setComposeError] = useState('');
+  // The bulk email allowance stopped this send (src/lib/emailAllowance.ts).
+  const [composeEmailsBlocked, setComposeEmailsBlocked] = useState(false);
   useScrollLock(composeOpen);
 
   // ── Secretariat accept modal. Accepting a secretariat application makes the
@@ -3643,6 +3647,7 @@ export default function ApplicationsPage() {
     setComposeSubject('');
     setComposeBody('');
     setComposeError('');
+    setComposeEmailsBlocked(false);
     setComposeOpen(true);
   }
 
@@ -3664,9 +3669,17 @@ export default function ApplicationsPage() {
       .map(content => ({ type: 'paragraph', content }));
 
     setComposeError('');
+    setComposeEmailsBlocked(false);
     setBulkEmailBusy(true);
     try {
       const supabase = getAuthedClient(session.access_token);
+      // Does this send fit the bulk allowance? Only while the cap is enforced.
+      const allowance = await readEmailAllowance(supabase, conference.id);
+      if (allowance && emailsShort(allowance, composeIds.length)) {
+        setComposeError(emailsShortSentence(composeIds.length, allowance));
+        setComposeEmailsBlocked(true);
+        return;
+      }
       const result = await queueAdHocEmail(supabase, {
         conferenceId: conference.id,
         sentBy: session.user.id,
@@ -3675,7 +3688,7 @@ export default function ApplicationsPage() {
         applicationIds: composeIds,
         recipientFilter: { source: 'applications', selection: 'manual', applicationIds: composeIds },
       });
-      if (result.error) { setComposeError(result.error); return; }
+      if (result.error) { setComposeError(result.error); setComposeEmailsBlocked(isEmailAllowanceMessage(result.error)); return; }
       const missingNote = result.skippedUnresolved > 0
         ? ` ${result.skippedUnresolved} not sent, missing ${result.unresolvedFields.map(unresolvedFieldLabel).join(', ')}.`
         : '';
@@ -5622,9 +5635,14 @@ export default function ApplicationsPage() {
               )}
 
               {composeError && (
-                <p className="mb-3" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: REVIEW_DANGER, lineHeight: 1.5 }}>
-                  {composeError}
-                </p>
+                <div className="mb-3 flex flex-wrap items-center gap-3">
+                  <p className="flex-1" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: REVIEW_DANGER, lineHeight: 1.5, margin: 0, minWidth: 200 }}>
+                    {composeError}
+                  </p>
+                  {composeEmailsBlocked && conference && (
+                    <GetMoreEmails conferenceId={conference.id} compact onBought={() => { setComposeError(''); setComposeEmailsBlocked(false); }} />
+                  )}
+                </div>
               )}
 
               <div className="flex flex-wrap items-center gap-3">

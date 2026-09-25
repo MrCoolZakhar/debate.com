@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Lock } from 'lucide-react';
 import { guideCover } from '@/lib/premiumGuides/covers';
 import type { GuideMeta } from '@/lib/premiumGuides/types';
+import GuideOwnedMark from '@/components/premiumGuides/GuideOwnedMark';
 
 /** A premium guide card: a cover photo under frosted glass, the lock, the
  *  title and promise, and the gold "Unlock with Unlimited" (the pricing page's
@@ -16,6 +17,7 @@ export default function GuideCard({ guide, headingLevel = 3 }: { guide: GuideMet
         <span className="gvg-card-top">
           <Lock size={14} strokeWidth={2.4} aria-hidden="true" />
           Premium guide · For {guide.audience.toLowerCase()}
+          <GuideOwnedMark slug={guide.slug} />
         </span>
         <H className="gvg-card-title">{guide.title}</H>
         <span className="gvg-card-promise">{guide.promise}</span>

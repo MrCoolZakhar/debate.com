@@ -9,7 +9,10 @@ import {
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
-import { getAuthedClient } from '@/lib/supabase-auth';
+import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
+import Link from 'next/link';
+import { openCreditsPopup } from '@/lib/purchasePopup';
+import { isChargedImportRole, isImportCreditsError, readImportQuote, transferIntoConference } from './importQuote';
 import { useConfirmModal, type ConfirmModalConfig, type ConfirmModalResult } from '@/components/ConfirmModal';
 import { FlagImg } from '@/components/FlagImg';
 import { NEU, NEU_GRADIENTS, NeuCard, NeuIconDisc } from '@/components/neu';
@@ -433,8 +436,13 @@ export default function ImportPage() {
     if (insertRows.length > 0) {
       const { error: insertError } = await supabase.from('applications').insert(insertRows);
       if (insertError) {
+        // The conference ran out of credits between the quote and the insert
+        // (applications_organizer_import_charge): say so, with the way to the
+        // Store, and import nothing else.
+        const note = friendlyError(insertError, 'Import failed. Please try again.');
+        if (isImportCreditsError(insertError)) setImportBlocked(note);
         for (const r of toCreate) {
-          results.push({ row: r, outcome: 'skipped', note: friendlyError(insertError, 'Import failed. Please try again.') });
+          results.push({ row: r, outcome: 'skipped', note });
         }
         // Updates are independent of the insert, so they still run below.
         toCreate.length = 0;
@@ -576,31 +584,18 @@ export default function ImportPage() {
     await loadUnclaimedCount();
   }
 
-  async function handleImportClick() {
-    const importableCount = classifiedRows.filter(r => r.cls !== 'error').length;
-    if (importableCount === 0) return;
-    const noAlloc = countWithoutAllocation(classifiedRows);
-    const baseBody = acceptMode === 'submitted'
-      ? 'This creates applications immediately (status: submitted, for the organizer to accept in Applications). Rows marked ERROR will be skipped.'
-      : 'This creates applications immediately (status: accepted, or assigned when allocated). Rows marked ERROR will be skipped.';
-    const { confirmed } = await confirm({
-      title: `Import ${importableCount} row${importableCount === 1 ? '' : 's'}?`,
-      body: noAlloc.total > 0 ? (
-        <>
-          <span className="block mb-2 font-semibold" style={{ color: '#8B2020' }}>
-            {noAlloc.total} {noAlloc.total === 1 ? 'delegate' : 'delegates'} will be imported without a committee and country.
-            {noAlloc.unresolvedCommittee > 0 && ` ${noAlloc.unresolvedCommittee} of them name a committee that did not match.`}
-          </span>
-          <span className="block mb-2">Emails that mention their country or committee will not have one to show. Cancel to fix the file, or import and assign them later.</span>
-          <span className="block">{baseBody}</span>
-        </>
-      ) : baseBody,
-      confirmLabel: noAlloc.total > 0 ? 'Import anyway' : 'Import',
-      danger: noAlloc.total > 0,
-    });
-    if (!confirmed) return;
+  // What the import costs: 1 conference credit per NEW delegate, head
+  // delegate, faculty advisor or observer row (importQuote.ts). Read once when
+  // the organiser presses Import, shown in the confirm step, and when the
+  // conference is short the credits pop-up buys the difference, moves it into
+  // the conference and runs the SAME import once (ref-guarded).
+  const [importBlocked, setImportBlocked] = useState<string | null>(null);
+  const pendingImportRef = useRef<boolean>(false);
+
+  async function runImportOnce() {
     if (importingRef.current) return;
     importingRef.current = true;
+    setImportBlocked(null);
     setPhase('importing');
     try {
       await executeImport();
@@ -608,6 +603,79 @@ export default function ImportPage() {
     } finally {
       importingRef.current = false;
     }
+  }
+
+  async function handleImportClick() {
+    const importableCount = classifiedRows.filter(r => r.cls !== 'error').length;
+    if (importableCount === 0 || !conference || !session) return;
+    const noAlloc = countWithoutAllocation(classifiedRows);
+    const chargedCount = classifiedRows.filter(r => r.cls !== 'error' && r.mode === 'create' && isChargedImportRole(r.resolved.role)).length;
+    const quote = chargedCount > 0 ? await readImportQuote(getAuthedClient(session.access_token), conference.id, chargedCount) : null;
+    const baseBody = acceptMode === 'submitted'
+      ? 'This creates applications immediately (status: submitted, for the organizer to accept in Applications). Rows marked ERROR will be skipped.'
+      : 'This creates applications immediately (status: accepted, or assigned when allocated). Rows marked ERROR will be skipped.';
+    const short = !!quote && quote.charged && quote.need_credits > 0;
+    const costLines = quote ? (
+      <span className="block mb-2" style={{ color: '#1C1410' }}>
+        <span className="block font-semibold">
+          Your total for these {chargedCount} {chargedCount === 1 ? 'delegate' : 'delegates'}: {quote.credits} {quote.credits === 1 ? 'credit' : 'credits'}
+        </span>
+        <span className="block">
+          Your conference has {quote.conference_credits} {quote.conference_credits === 1 ? 'credit' : 'credits'}.
+          {short ? ` You need ${quote.need_credits} more; they are bought and moved into the conference before the import runs.` : ''}
+          {!quote.charged ? ' Imports are not charged yet, so nothing is taken today.' : ''}
+        </span>
+      </span>
+    ) : null;
+    const { confirmed } = await confirm({
+      title: `Import ${importableCount} row${importableCount === 1 ? '' : 's'}?`,
+      body: (
+        <>
+          {noAlloc.total > 0 && (
+            <>
+              <span className="block mb-2 font-semibold" style={{ color: '#8B2020' }}>
+                {noAlloc.total} {noAlloc.total === 1 ? 'delegate' : 'delegates'} will be imported without a committee and country.
+                {noAlloc.unresolvedCommittee > 0 && ` ${noAlloc.unresolvedCommittee} of them name a committee that did not match.`}
+              </span>
+              <span className="block mb-2">Emails that mention their country or committee will not have one to show. Cancel to fix the file, or import and assign them later.</span>
+            </>
+          )}
+          {costLines}
+          <span className="block">{baseBody}</span>
+        </>
+      ),
+      confirmLabel: short ? `Add ${quote!.need_credits} ${quote!.need_credits === 1 ? 'credit' : 'credits'} and import` : noAlloc.total > 0 ? 'Import anyway' : 'Import',
+      danger: noAlloc.total > 0,
+    });
+    if (!confirmed) return;
+    if (importingRef.current) return;
+    if (short && quote) {
+      // Buy the difference, move it into the conference, then the same import.
+      pendingImportRef.current = true;
+      const need = quote.need_credits;
+      openCreditsPopup({
+        context: 'organizer',
+        preselect: need,
+        purpose: 'store',
+        onComplete: () => {
+          if (!pendingImportRef.current) return;
+          pendingImportRef.current = false;
+          void (async () => {
+            const client = await getFreshAuthedClient();
+            if (!client) { setImportBlocked('Your session has expired. Refresh the page, then import again.'); setPhase('results'); return; }
+            const moved = await transferIntoConference(client, conference.id, need);
+            if (!moved.ok) {
+              setImportBlocked(moved.message ?? 'Your credits could not be moved into the conference. Open the Store and try again.');
+              setPhase('results');
+              return;
+            }
+            await runImportOnce();
+          })();
+        },
+      });
+      return;
+    }
+    await runImportOnce();
   }
 
   async function handleSendInvites() {
@@ -924,6 +992,23 @@ export default function ImportPage() {
       {/* ── RESULTS ──────────────────────────────────────────────────────── */}
       {phase === 'results' && (
         <>
+          {importBlocked && (
+            <div
+              role="alert"
+              className="flex flex-wrap items-center gap-3 rounded-xl px-4 py-3.5 mb-5"
+              style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1.5px solid rgba(139,32,32,0.45)' }}
+            >
+              <AlertTriangle size={18} style={{ color: '#8B2020', flexShrink: 0 }} />
+              <p className="flex-1 text-sm" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.5, margin: 0, minWidth: 200 }}>{importBlocked}</p>
+              <Link
+                href={`/manage/${conference.slug}/store`}
+                className="inline-flex items-center rounded-xl py-2 px-4 text-sm font-bold focus:outline-none"
+                style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, textDecoration: 'none' }}
+              >
+                Go to Store
+              </Link>
+            </div>
+          )}
           <div className="flex flex-wrap gap-3 mb-5">
             <SummaryStat label="Imported" value={importedCount} tone="valid" />
             <SummaryStat label="Imported, no allocation" value={importedNoAllocCount} tone="warning" />

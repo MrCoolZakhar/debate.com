@@ -32,6 +32,8 @@ import { type EmailBlock, normalizeBlocks, flattenBlocksToPlainText, blocksHaveC
 import { renderEmailHtml, resolveEmailTheme, type EmailTheme } from '@/lib/emailHtml';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import { queueAdHocEmail } from '@/lib/adHocEmail';
+import { readEmailAllowance, emailsShort, emailsShortSentence, emailsUsedLine, isEmailAllowanceMessage, type EmailAllowance } from '@/lib/emailAllowance';
+import GetMoreEmails from '../store/GetMoreEmails';
 import { summarizeUnresolved, unresolvedFieldLabel } from '@/lib/emailUnresolved';
 import EmailComposer, { type PreviewCandidate } from '@/components/EmailComposer';
 import AudienceReach, {
@@ -1708,6 +1710,22 @@ function CommunicationsPageInner() {
   const [builderError, setBuilderError] = useState('');
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [sending, setSending] = useState(false);
+  // The bulk email allowance (src/lib/emailAllowance.ts): 1,000 free per
+  // conference, only builder and bulk-bar sends count. Shown as a quiet line
+  // in the builder; a send that does not fit is stopped before queueing only
+  // while the cap is enforced.
+  const [allowance, setAllowance] = useState<EmailAllowance | null>(null);
+  const [emailsBlocked, setEmailsBlocked] = useState(false);
+  const allowanceConfId = conference?.id ?? null;
+  const allowanceToken = session?.access_token ?? null;
+  useEffect(() => {
+    if (!allowanceConfId || !allowanceToken) return;
+    let cancelled = false;
+    void readEmailAllowance(getAuthedClient(allowanceToken), allowanceConfId).then(a => { if (!cancelled) setAllowance(a); });
+    return () => { cancelled = true; };
+    // Once per conference; the token is read at that moment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allowanceConfId]);
   const [openingSend, setOpeningSend] = useState(false);
   const [duplicatingIds, setDuplicatingIds] = useState<Set<string>>(new Set());
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
@@ -2996,6 +3014,19 @@ function CommunicationsPageInner() {
     const supabase = getAuthedClient(session.access_token);
     const recipientFilterPayload = buildRecipientFilterPayload();
 
+    // Does this send fit the allowance? Only when the cap is enforced; until
+    // then the numbers are information and nothing blocks.
+    const fresh = await readEmailAllowance(supabase, conference.id);
+    if (fresh) setAllowance(fresh);
+    if (fresh && emailsShort(fresh, finalRecipients.length)) {
+      setBuilderError(emailsShortSentence(finalRecipients.length, fresh));
+      setEmailsBlocked(true);
+      setSending(false);
+      setSendConfirmOpen(false);
+      return;
+    }
+    setEmailsBlocked(false);
+
     // ONE send implementation: the shared queueAdHocEmail pipeline
     // (email_sends summary → per-recipient outbox rows → delivery trigger),
     // the same one the Applications bulk bar uses. The consent gate runs in
@@ -3015,10 +3046,13 @@ function CommunicationsPageInner() {
 
     if (result.error) {
       setBuilderError(result.error);
+      // The database's own cap ("This conference has used its N emails…").
+      setEmailsBlocked(isEmailAllowanceMessage(result.error));
       setSending(false);
       setSendConfirmOpen(false);
       return;
     }
+    void readEmailAllowance(supabase, conference.id).then(a => { if (a) setAllowance(a); });
     if (result.queued === 0) {
       setBuilderError(result.skippedUnresolved > 0
         ? `Nothing was sent. ${result.skippedUnresolved} recipient${result.skippedUnresolved === 1 ? ' is' : 's are'} missing ${result.unresolvedFields.map(unresolvedFieldLabel).join(', ')}, which this email uses.`
@@ -5108,13 +5142,27 @@ function CommunicationsPageInner() {
       ════════════════════════════════════════════════════════════════════════ */}
       {builderOpen && (
         <div>
+          {allowance && conference && (
+            <p className="mb-3 text-xs" style={{ color: SOFT, fontFamily: OUTFIT }}>
+              <Link href={`/manage/${conference.slug}/store`} style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>
+                {emailsUsedLine(allowance)}
+              </Link>
+            </p>
+          )}
           {builderError && (
             <div
-              className="flex items-center gap-2 rounded-xl px-4 py-3 mb-4 text-sm"
+              className="flex flex-wrap items-center gap-2 rounded-xl px-4 py-3 mb-4 text-sm"
               style={{ backgroundColor: 'rgba(182,135,31,0.08)', border: '1px solid rgba(182,135,31,0.2)', color: GOLD_INK, fontFamily: OUTFIT }}
             >
               <AlertTriangle size={14} style={{ flexShrink: 0 }} />
-              {builderError}
+              <span className="flex-1" style={{ minWidth: 200 }}>{builderError}</span>
+              {emailsBlocked && conference && (
+                <GetMoreEmails
+                  conferenceId={conference.id}
+                  compact
+                  onBought={(a) => { if (a) setAllowance(a); setBuilderError(''); setEmailsBlocked(false); }}
+                />
+              )}
             </div>
           )}
 
