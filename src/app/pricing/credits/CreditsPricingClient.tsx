@@ -88,6 +88,10 @@ export default function CreditsPricingClient() {
         </div>
       </section>
 
+      {/* BUNDLES first, straight under the hero (owner, 25 Sep 2026), on the
+          cream ground */}
+      <BundlePicker />
+
       {/* WHAT CREDITS DO: white */}
       <section className="gv-p-block gv-p-block-white" aria-labelledby="gv-cr-uses-title">
         <h2 id="gv-cr-uses-title" className="gv-p-h2">What You Can Do With <GoldWord tone="light">Credits</GoldWord></h2>
@@ -119,9 +123,6 @@ export default function CreditsPricingClient() {
           </ul>
         </div>
       </section>
-
-      {/* BUNDLES: on the cream ground */}
-      <BundlePicker />
 
       {/* QUESTIONS: white */}
       <section className="gv-p-block gv-p-block-white" aria-labelledby="gv-cr-faq-title" id="questions" style={{ scrollMarginTop: 96 }}>

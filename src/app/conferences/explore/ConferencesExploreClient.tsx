@@ -596,12 +596,22 @@ function RailOption({
   );
 }
 
+/** Shown under Open Applications and Price when the facets read failed. */
+function FacetsNote() {
+  return (
+    <p role="status" style={{ margin: '8px 10px 0', fontSize: '11.5px', lineHeight: 1.45, color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>
+      Filters by open roles and price are unavailable right now
+    </p>
+  );
+}
+
 function FilterRail({
   searchQuery, onSearch,
   region, userCountry, userCountryCount, countries, continentLabel, onRegion,
   formatFilter, onFormat,
   levelFilter, onLevel,
   roleFilter, onToggleRole,
+  facetsUnavailable,
   priceFilter, onPrice,
   dateFilter, onDate,
   dateFrom, dateTo, onDateFrom, onDateTo,
@@ -621,6 +631,8 @@ function FilterRail({
   levelFilter: LevelFilter; onLevel: (v: LevelFilter) => void;
   /** Open applications: any selected role open right now. */
   roleFilter: ReadonlySet<RoleKey>; onToggleRole: (r: RoleKey) => void;
+  /** The facets read failed: say so under Open Applications and Price. */
+  facetsUnavailable: boolean;
   priceFilter: PriceFilter; onPrice: (v: PriceFilter) => void;
   dateFilter: DateFilter; onDate: (v: DateFilter) => void;
   dateFrom: string; dateTo: string; onDateFrom: (v: string) => void; onDateTo: (v: string) => void;
@@ -695,6 +707,7 @@ function FilterRail({
         {ROLE_OPTIONS.map(r => (
           <RailOption key={r.key} label={r.label} active={roleFilter.has(r.key)} onClick={() => onToggleRole(r.key)} />
         ))}
+        {facetsUnavailable && <FacetsNote />}
       </div>
 
       {/* Price: bucketed on an approximate USD figure; the cards keep printing
@@ -707,6 +720,7 @@ function FilterRail({
         <p style={{ margin: '6px 10px 0', fontSize: '11px', lineHeight: 1.4, color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif" }}>
           Approximate, converted to USD
         </p>
+        {facetsUnavailable && <FacetsNote />}
       </div>
 
       {/* Dates: quick buckets on the start day, or a custom range through the
@@ -869,6 +883,9 @@ export default function ConferencesExploreClient() {
   // Open roles and the approximate USD fee per conference, one RPC for the
   // whole page (explore_conference_facets, anon-callable).
   const [facets, setFacets] = useState<FacetMap>(() => new Map());
+  // True when the facets read failed: the two groups then say so instead of
+  // silently matching nothing (owner, 25 Sep 2026).
+  const [facetsFailed, setFacetsFailed] = useState(false);
 
   function toggleRole(role: RoleKey) {
     setRoleFilter(prev => {
@@ -940,8 +957,12 @@ export default function ConferencesExploreClient() {
       // read leaves the map empty: those two filters then match nothing rather
       // than something invented.
       if (confs.length > 0) {
-        const { data: facetRows } = await supabase.rpc('explore_conference_facets', { p_ids: confs.map(c => c.id) });
-        setFacets(parseFacets(facetRows));
+        const { data: facetRows, error: facetError } = await supabase.rpc('explore_conference_facets', { p_ids: confs.map(c => c.id) });
+        const parsed = parseFacets(facetRows);
+        setFacets(parsed);
+        // An error, or no rows for a non-empty directory, both mean the read
+        // did not work (the RPC answers one row per id it was given).
+        setFacetsFailed(!!facetError || parsed.size === 0);
       }
     }
     fetchConferences();
@@ -1373,6 +1394,7 @@ export default function ConferencesExploreClient() {
               formatFilter={formatFilter} onFormat={setFormatFilter}
               levelFilter={levelFilter} onLevel={setLevelFilter}
               roleFilter={roleFilter} onToggleRole={toggleRole}
+              facetsUnavailable={facetsFailed}
               priceFilter={priceFilter} onPrice={setPriceFilter}
               dateFilter={dateFilter} onDate={setDateFilter}
               dateFrom={dateFrom} dateTo={dateTo} onDateFrom={setDateFrom} onDateTo={setDateTo}

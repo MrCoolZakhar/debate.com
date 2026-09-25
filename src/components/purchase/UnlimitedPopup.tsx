@@ -102,7 +102,6 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
           word="Unlimited"
           tone="dark"
           icon={<Emoji3D name="Infinity" size={44} fallback={InfinityIcon} fallbackColor={GOLD} />}
-          sub="Apply as much as you like. One plan, everything included."
         />
         <div>
           <Eyebrow>What you get</Eyebrow>

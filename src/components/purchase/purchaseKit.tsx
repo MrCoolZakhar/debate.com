@@ -101,8 +101,10 @@ export function BrandTitle({ word, tone, icon, sub }: {
 }) {
   return (
     <div>
+      {/* The picture sits ABOVE the title, never inline before it, so the words
+          start flush with the rest of the column (owner, 25 Sep 2026). */}
+      {icon ? <span className="gv-buy-title-icon" aria-hidden>{icon}</span> : null}
       <h2 className="gv-buy-title">
-        {icon ? <span className="gv-buy-title-icon" aria-hidden>{icon}</span> : null}
         <span className="gv-buy-title-text">Gavelling <GoldWord tone={tone}>{word}</GoldWord></span>
       </h2>
       {sub ? <p className="gv-buy-sub">{sub}</p> : null}
@@ -200,10 +202,11 @@ export const PURCHASE_CSS = `
 .gv-buy-right.gv-buy-dark{background:${PANEL_GREEN};color:${DARK_INK}}
 
 /* Title: "Gavelling Word", the word in gold Playfair italic, a picture beside it. */
-.gv-buy-title{margin:0;display:flex;align-items:center;gap:10px;font-size:28px;font-weight:800;letter-spacing:-0.02em;line-height:1.08;color:${INK}}
+/* ONE title style for both pop-ups: flush left, large. */
+.gv-buy-title{margin:0;display:block;font-size:38px;font-weight:800;letter-spacing:-0.03em;line-height:1.02;color:${INK};text-wrap:balance}
 .gv-buy-dark .gv-buy-title{color:${DARK_INK}}
 .gv-buy-title-text{min-width:0}
-.gv-buy-title-icon{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center}
+.gv-buy-title-icon{display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px}
 .gv-buy-mark{display:block;width:26px;height:26px;object-fit:contain}
 .gv-buy-sub{margin:10px 0 0;font-size:15px;line-height:1.5;color:${INK_SOFT};text-wrap:pretty}
 .gv-buy-dark .gv-buy-sub{color:${DARK_SOFT}}
@@ -213,9 +216,14 @@ export const PURCHASE_CSS = `
 .gv-buy-dark .gv-buy-rtitle{color:${DARK_INK}}
 
 /* Benefits */
-.gv-buy-benefits{display:flex;flex-direction:column;gap:12px;margin:0;padding:0;list-style:none}
-.gv-buy-benefit{display:flex;align-items:center;gap:12px}
-.gv-buy-benefit-disc{width:42px;height:42px;border-radius:12px;background:${IVORY};border:1px solid ${HAIR_LIGHT};display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+/* Larger rows (owner, 25 Sep 2026): the space the captions used to take goes
+   to the benefits, which are what the left column is for. */
+.gv-buy-benefits{display:flex;flex-direction:column;gap:16px;margin:0;padding:0;list-style:none}
+.gv-buy-benefit{display:flex;align-items:center;gap:14px}
+.gv-buy-benefit-disc{width:50px;height:50px;border-radius:14px;background:${IVORY};border:1px solid ${HAIR_LIGHT};display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.gv-buy-benefit-disc img,.gv-buy-benefit-disc svg{width:28px;height:28px}
+.gv-buy-benefit-text{font-size:17px!important}
+.gv-buy-benefit-note{font-size:13.5px!important}
 .gv-buy-dark .gv-buy-benefit-disc{background:rgba(255,255,255,0.08);border-color:${HAIR_DARK}}
 .gv-buy-benefit-text{flex:1;min-width:0;font-size:15px;font-weight:600;line-height:1.3;color:${INK}}
 .gv-buy-dark .gv-buy-benefit-text{color:${DARK_INK}}

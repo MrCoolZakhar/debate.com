@@ -125,7 +125,7 @@ export function QuestionBox() {
           Every pricing answer lives in the <Link href="/help#pricing" className={`gv-p-link ${FOCUS_RING}`}>help center</Link>
         </p>
       </div>
-      <ActionLink href="/help#pricing" skin="forest">Contact us</ActionLink>
+      <ActionLink href="/contact" skin="forest">Contact us</ActionLink>
     </aside>
   );
 }

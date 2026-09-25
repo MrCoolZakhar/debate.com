@@ -155,13 +155,9 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
         <BrandTitle
           word="Credits"
           tone="light"
-          icon={
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img src="/gavelling-mark.png" alt="" width={26} height={26} className="gv-buy-mark" />
-          }
           sub={context === 'apply' && conferenceName
-            ? <>For your application to <strong style={{ fontWeight: 600, color: INK }}>{conferenceName}</strong>.</>
-            : 'Buy a few or a lot. They wait in your account until you apply.'}
+            ? <>For your application to <strong style={{ fontWeight: 600, color: INK }}>{conferenceName}</strong></>
+            : undefined}
         />
         <div>
           <Eyebrow>What they&apos;re for</Eyebrow>
