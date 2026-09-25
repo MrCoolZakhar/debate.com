@@ -171,7 +171,7 @@ export function TimelineEntry({
   const editable = !!onEdit;
   const railDate = entry.event_date
     ? new Date(`${entry.event_date}T00:00:00`).toLocaleDateString('en', { month: 'long', year: 'numeric' })
-    : '—';
+    : '–';
 
   // Faculty advisors represent a DELEGATION, so their awards render as
   // delegation awards (green disc + Users glyph via AwardChip's `delegation`
@@ -368,7 +368,7 @@ export function TimelineEntry({
                   <span style={{ color: '#1B3828', fontWeight: 700 }}>{committeeLabel(entry.committee)}</span>
                 )}
                 {entry.committee && entry.allocation && (
-                  <span aria-hidden style={{ color: '#B6A88E', fontWeight: 500 }}>—</span>
+                  <span aria-hidden style={{ color: '#B6A88E', fontWeight: 500 }}>·</span>
                 )}
                 {entry.allocation && (
                   <span style={{ color: '#5C5140', fontWeight: 600 }}>{entry.allocation}</span>
@@ -383,7 +383,7 @@ export function TimelineEntry({
               {entry.committee && <CommitteeLogo committee={entry.committee} size={22} />}
               {entry.committee && <span>{committeeLabel(entry.committee)}</span>}
               {entry.committee && entry.allocation && (
-                <span aria-hidden style={{ color: '#B6A88E', fontWeight: 500 }}>—</span>
+                <span aria-hidden style={{ color: '#B6A88E', fontWeight: 500 }}>·</span>
               )}
               {entry.allocation && (
                 <span style={{ color: '#5C5140', fontWeight: 600 }}>{entry.allocation}</span>

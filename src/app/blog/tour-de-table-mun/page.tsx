@@ -63,7 +63,7 @@ export default function Article() {
 
         <H2>How to Propose a Tour de Table</H2>
         <p>A delegate raises a placard and proposes: &quot;I move for a tour de table of [total time] with [per-speaker time] per speaker.&quot; The <Link href="/blog/mun-motions-explained">motion</Link> requires a simple majority to pass. Motions and thresholds vary by ruleset, as our <Link href="/blog/mun-procedure-styles-compared">comparison of MUN procedure styles</Link> shows. Total time should account for all present delegates. If forty delegates are present at thirty seconds each, that is twenty minutes minimum.</p>
-        <Callout>Calculate before you propose. A tour de table with sixty delegations at sixty seconds each requires sixty minutes. Chairs can divide the question if the total time is too long, running half alphabetically per session.</Callout>
+        <Callout>Calculate before you propose. A tour de table with sixty delegations at sixty seconds each requires sixty minutes. If the total time is too long, chairs can split the tour, running half the alphabet in each session.</Callout>
 
         <H2>Chairing a Tour de Table</H2>
         <p>As chair, your role is to call delegates in order and enforce the time limit strictly. With every delegation speaking, even small overruns compound into significant delays.</p>

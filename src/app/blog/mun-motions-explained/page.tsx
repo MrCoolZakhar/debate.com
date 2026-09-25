@@ -69,8 +69,8 @@ export default function Article4() {
           The process is the same for every motion type:
         </p>
         <ul>
-          <li><strong>Raise placard</strong>: wait to be recognised by the chair.</li>
-          <li><strong>State the motion</strong>: clearly and completely. For a moderated caucus, this means stating the topic, total time, and per-speaker time. Example: <em>&quot;The delegation of Brazil moves for a moderated caucus on the topic of climate financing, for a total time of 10 minutes with 90 seconds per speaker.&quot;</em></li>
+          <li><strong>Raise your placard</strong>: wait to be recognised by the chair.</li>
+          <li><strong>State the motion</strong>: say it clearly and completely. For a moderated caucus, this means stating the topic, total time, and per-speaker time. Example: <em>&quot;The delegation of Brazil moves for a moderated caucus on the topic of climate financing, for a total time of 10 minutes with 90 seconds per speaker.&quot;</em></li>
           <li><strong>Second the motion</strong>: most motions require at least one second before going to a vote. The chair asks &quot;Is there a second?&quot;</li>
           <li><strong>Vote</strong>: the chair calls a vote. Motions pass by simple majority unless otherwise specified.</li>
         </ul>
@@ -89,7 +89,7 @@ export default function Article4() {
 
         <FactCard title="Motion to Introduce a Working Paper / Draft Resolution">Formally introduces a document to the committee floor. The document must have the required number of signatories (set by conference rules). Vote threshold: simple majority.</FactCard>
 
-        <FactCard title="Motion to Move into Voting Procedure">Closes debate and moves the committee to vote on a draft resolution. Once passed, no further debate is permitted. Vote threshold: simple majority. This is a significant motion. Debate ends permanently once it passes.</FactCard>
+        <FactCard title="Motion to Move into Voting Procedure">Closes debate and moves the committee to vote on a draft resolution. Once passed, no further debate is permitted. Vote threshold: simple majority. This is a significant motion: debate on the resolution cannot resume once it passes.</FactCard>
 
         <FactCard title="Motion to Suspend the Meeting">Temporarily suspends the session (e.g. for lunch). Vote threshold: simple majority. Session resumes at the agreed time.</FactCard>
 
@@ -141,7 +141,7 @@ export default function Article4() {
           <li>Motion to Suspend the Meeting</li>
           <li>Motion for an Unmoderated Caucus</li>
           <li>Motion for a Moderated Caucus</li>
-          <li>Motion to Set the Agenda / Speakers Time</li>
+          <li>Motion to Set the Agenda / Speaking Time</li>
         </ul>
         <p>
           If two delegates raise the same type of motion simultaneously, the chair may entertain both and let the committee vote on each in sequence, or combine them into a single vote.

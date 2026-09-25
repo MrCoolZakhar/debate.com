@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { Metadata } from 'next';
 import { pageMetadata, SITE_URL } from '@/lib/seo';
 import { articles, type BlogCategory } from './posts';
@@ -7,6 +8,9 @@ import BlogCard from '@/components/blog/BlogCard';
 import BlogShelfNav from '@/components/blog/BlogShelfNav';
 import { PhotoCreditsList } from '@/components/blog/BlogPhoto';
 import type { PhotoId } from '@/components/blog/photos';
+import { listGuides } from '@/lib/premiumGuides';
+import GuideCard from '../guides/GuideCard';
+import '../guides/guides.css';
 
 export const metadata: Metadata = pageMetadata({
   title: 'MUN Resources & Guides',
@@ -63,6 +67,7 @@ export default function BlogIndexPage() {
   // cards carry a plain-text credit (a card is one link), and this list at the
   // foot is where each credit links to its source and its licence.
   const photoIds = [...new Set(articles.map((a) => a.photo).filter((p): p is PhotoId => !!p))];
+  const premiumGuides = listGuides();
 
   return (
     <>
@@ -91,6 +96,34 @@ export default function BlogIndexPage() {
               the chair at the dais, the delegate on the floor, and the secretariat keeping the day on time.
             </p>
           </header>
+
+          {/* Premium guides sit on top of the free posts (owner, 25 Sep 2026).
+              Plain <a> cards, server rendered, so every guide and /guides are
+              crawled from here (CLAUDE.md §4). The full text is behind the
+              Unlimited paywall; see src/lib/premiumGuides. */}
+          <section aria-labelledby="premium-guides" className="gvg pb-10 sm:pb-12">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
+              <h2
+                id="premium-guides"
+                className="m-0 font-extrabold"
+                style={{ color: '#1B3828', fontSize: 'clamp(21px, 3vw, 26px)', letterSpacing: '-0.014em' }}
+              >
+                Premium guides
+              </h2>
+              <Link href="/guides" className="text-[15px] font-bold underline underline-offset-4" style={{ color: '#1B3828' }}>
+                All premium guides
+              </Link>
+            </div>
+            <p className="m-0 mt-2 max-w-[62ch] text-[15px] leading-[1.55]" style={{ color: '#55483C' }}>
+              Complete playbooks for delegates, chairs and organisers. The opening sections are free to read; the rest
+              is included with Gavelling Unlimited.
+            </p>
+            <div className="gvg-cards">
+              {premiumGuides.map((g) => (
+                <GuideCard key={g.slug} guide={g} />
+              ))}
+            </div>
+          </section>
 
           {/* The lead guide. One post is the protagonist of this page; the rest
               are shelved below it (rulebook §2: every viewport has one obvious

@@ -57,7 +57,7 @@ export default function Article() {
           <li><strong>Read your country&apos;s UN voting record.</strong> The UN Digital Library and Dag Hammarskjöld Library both have full voting records. How has your country voted on similar resolutions in the last five years?</li>
           <li><strong>Find your country&apos;s official statements.</strong> Ministry of Foreign Affairs websites often publish speeches given at UN sessions. These are gold: they tell you exactly how your country phrases its positions.</li>
           <li><strong>Know the topic cold, not just your position.</strong> The best delegates can explain every major bloc&apos;s perspective, not just their own. This makes you a more effective negotiator.</li>
-          <li><strong>Read the background guide.</strong> It exists for a reason. Chairs write questions to guide. Read it and answer every question from your country&apos;s perspective.</li>
+          <li><strong>Read the background guide.</strong> It exists for a reason. Chairs write its questions to guide your research. Read it and answer every question from your country&apos;s perspective.</li>
         </ul>
 
         <PhotoFigure id="mun-jakarta-council" caption="Preparation shows at the table: delegates in a model Security Council." />
@@ -85,15 +85,15 @@ export default function Article() {
         <p>A <Link href="/blog/mun-common-mistakes">common mistake</Link> is raising your placard for every speaking slot regardless of what you have to say. Chairs and fellow delegates notice when speeches are filler. Say something substantive, or yield your time.</p>
         <ul>
           <li><strong>Respond to what was just said.</strong> The most impactful speeches directly engage with the previous speaker&apos;s argument. This shows you are listening, not just waiting to speak.</li>
-          <li><strong>Use specific data.</strong> Numbers anchor arguments. &quot;Over 800 million people lack access to safe drinking water&quot; lands harder than &quot;many people face water scarcity.&quot;</li>
-          <li><strong>Propose concrete operative clauses.</strong> Do not just describe the problem, propose a solution. This advances the committee&apos;s work and marks you as a constructive delegate.</li>
+          <li><strong>Use specific data.</strong> Numbers anchor arguments. &quot;About two billion people lack safely managed drinking water&quot; lands harder than &quot;many people face water scarcity.&quot;</li>
+          <li><strong>Propose concrete operative clauses.</strong> Do not just describe the problem: propose a solution. This advances the committee&apos;s work and marks you as a constructive delegate.</li>
         </ul>
 
         <H2>Points and Motions: Use Them Strategically</H2>
         <p>Points of information, points of order, and motions are procedural tools. Used well, they show command of the room. Used poorly, they signal desperation or inexperience. See our guide to <Link href="/blog/mun-points-explained">points in MUN</Link> for when each one is in order.</p>
         <ul>
           <li><strong>Points of information:</strong> Ask a genuine clarifying question, not a disguised speech. Chairs respect brevity.</li>
-          <li><strong>Motions for a moderated caucus:</strong> Propose one when formal debate has stalled and your bloc needs to make a specific argument in a focused setting.</li>
+          <li><strong>Motion for a moderated caucus:</strong> Propose one when formal debate has stalled and your bloc needs to make a specific argument in a focused setting.</li>
           <li><strong>Motion to extend the speakers list:</strong> Use this when you have not yet spoken and want to make sure you get a slot.</li>
         </ul>
 

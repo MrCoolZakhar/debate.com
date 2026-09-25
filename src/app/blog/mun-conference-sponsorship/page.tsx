@@ -49,7 +49,7 @@ export default function Article() {
         <p>This guide is about raising money <strong>for a conference you are hosting</strong>. If you are a school team trying to pay the fees to attend somebody else&apos;s conference, that is a different job with different funders, and it is covered in <Link href="/blog/mun-team-fundraising">our guide to MUN team fundraising</Link>. Sponsorship is the line in a <Link href="/blog/mun-conference-budget">conference budget</Link> that most secretariats assume will appear and most never seriously pursue, which is a shame, because the money is genuinely available and the number of competing requests is small.</p>
 
         <H2>What a sponsor is actually buying</H2>
-        <p>Not your cause. Sponsors are not charities, and the fastest way to lose a meeting is to open by asking a business to support education. What they are buying is access to a specific, unusually attractive audience: several hundred academically engaged 15 to 22 year olds, in one building, for two days, with their parents one conversation away, and a mailing list that will still exist next year.</p>
+        <p>Not your cause. Sponsors are not charities, and the fastest way to lose a meeting is to open by asking a business to support education. What they are buying is access to a specific, unusually attractive audience: several hundred academically engaged 15- to 22-year-olds, in one building, for two days, with their parents one conversation away, and a mailing list that will still exist next year.</p>
         <p>Say it in those terms, because it is true and because it is the sentence that makes a marketing manager pay attention. Then be precise about the audience, because precision is what separates a proposal from a leaflet:</p>
         <ul>
           <li>How many delegates, and from how many schools or universities</li>
@@ -73,7 +73,7 @@ export default function Article() {
               <tr><td>Local businesses</td><td>Goodwill and visibility among local families</td><td>Small cash, in-kind goods, catering</td></tr>
               <tr><td>NGOs and UN associations</td><td>Relevance to their mission, a platform for their topic</td><td>Speakers, materials, topic expertise, occasionally grants</td></tr>
               <tr><td>Hotels, airlines and coach companies</td><td>Volume bookings from visiting delegations</td><td>Discounted rates, which is money whether it feels like it or not</td></tr>
-              <tr><td>Bookshops, stationers, printers</td><td>Local visibility at low cost</td><td>In-kind supply, which removes whole budget lines</td></tr>
+              <tr><td>Bookshops, stationers and printers</td><td>Local visibility at low cost</td><td>In-kind supply, which removes whole budget lines</td></tr>
             </tbody>
           </table>
         </TableWrap>
@@ -82,8 +82,8 @@ export default function Article() {
         <H2>Cash, in-kind and media partnerships</H2>
         <p>Secretariats chase cash and undervalue in-kind, which is usually the wrong way round.</p>
         <p><strong>Cash</strong> is flexible and easy to account for. It is also the hardest thing to get, because it comes from a budget that somebody has to defend.</p>
-        <p><strong>In-kind</strong> removes a line rather than funding it. A printer who produces 400 delegate packs, a caterer who supplies lunch at cost, a venue that waives the hire fee, a hotel that blocks rooms at a rate your delegations can afford. Each of these is worth more to your budget than the equivalent cash, because it comes without the administration and often without the tax and receipting questions. It is also frequently easier to say yes to: a marketing budget needs approval, spare capacity does not.</p>
-        <p><strong>Media partnership</strong> means a local paper, a student publication, or an education site promotes the conference in exchange for a credit and access. No money changes hands and it directly reduces the marketing problem described in <Link href="/blog/mun-conference-marketing">our guide to filling your committees</Link>.</p>
+        <p><strong>In-kind</strong> removes a line rather than funding it. A printer who produces 400 delegate packs, a caterer who supplies lunch at cost, a venue that waives the hire fee, a hotel that blocks rooms at a rate your delegations can afford. Each of these is worth more to your budget than the equivalent cash, because it comes without the administration and often without the tax and receipting questions. It is also frequently easier to say yes to: a marketing budget needs approval; spare capacity does not.</p>
+        <p><strong>Media partnership</strong> means a local paper, a student publication, or an education site promotes the conference in exchange for a credit and access. No money changes hands, and it directly reduces the marketing problem described in <Link href="/blog/mun-conference-marketing">our guide to filling your committees</Link>.</p>
         <p>Value the in-kind in your accounts anyway, at what you would otherwise have paid. It is the only way to know whether the partnership is worth renewing, and it is the number you put in next year&apos;s proposal.</p>
 
         <H2>The tier structure</H2>
@@ -142,9 +142,9 @@ export default function Article() {
         <H2>Delivering what you sold</H2>
         <p>This is where most student-run conferences lose the renewal, and it is entirely avoidable. Sponsorship benefits are promised in October by one person and delivered in March by a team who never read the agreement.</p>
         <ul className="gv-check">
-          <li>Write every commitment into a one-page agreement, signed by both sides. Not a contract, a list.</li>
+          <li>Write every commitment into a one-page agreement, signed by both sides. Not a contract: a list.</li>
           <li>Give one named secretariat member the job of delivering sponsor benefits, and nothing else that day.</li>
-          <li>Put every deliverable in the run of show with a time, including the stand setup and the three-minute speech. Our <Link href="/blog/mun-conference-day-operations">conference day operations guide</Link> covers how that schedule is built.</li>
+          <li>Put every deliverable in the run of show with a time, including the stand set-up and the three-minute speech. Our <Link href="/blog/mun-conference-day-operations">conference day operations guide</Link> covers how that schedule is built.</li>
           <li>Photograph the evidence as it happens: the logo on the backdrop, the stand with students at it, the award being presented. Nobody can go back for these.</li>
         </ul>
 
@@ -164,7 +164,7 @@ export default function Article() {
 
         <H2>Where sponsorship sits in the budget</H2>
         <p>Treat sponsorship as the money that makes a conference better, not the money that makes it viable. A conference whose break-even depends on sponsors that have not yet signed is a conference that will cut its catering in February. Build the budget so that delegate fees cover the essential lines, and let sponsorship fund the things that are genuinely optional: better materials, a bursary fund, a guest speaker, a reduced fee for local schools. If this is your first year, our guide to <Link href="/blog/start-a-mun-conference">starting a MUN conference</Link> sets out the costs to plan for first.</p>
-        <p>One line you should not need to fund at all is the software. Gavelling charges the organiser nothing, and payments run through the organiser&apos;s own Stripe Connect account, so the conference is the merchant of record for its own fees. Where that changes the sponsorship picture is simple: it is one fewer line that has to be sold to somebody. <Link href="/blog/mun-director-guide">The director guide</Link> and <Link href="/blog/mun-conference-planning">the planning guide</Link> cover the rest of the budget this sits inside.</p>
+        <p>One line you should not need to fund at all is the software. Gavelling charges the organiser nothing, and payments run through the organiser&apos;s own Stripe Connect account, so the conference is the merchant of record for its own fees. How that changes the sponsorship picture is simple: it is one fewer line that has to be sold to somebody. <Link href="/blog/mun-director-guide">The director guide</Link> and <Link href="/blog/mun-conference-planning">the planning guide</Link> cover the rest of the budget this sits inside.</p>
       </ArticleLayout>
     </>
   );

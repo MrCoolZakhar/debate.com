@@ -2288,7 +2288,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   primary={
                     isCurrentSpeaker ? t('delegate_floor_now')
                       : inQueue ? `${myQueueIndex + 1}${ordinalSuffixFor(myQueueIndex + 1)}`
-                        : '—'
+                        : ''
                   }
                   caption={inQueue || isCurrentSpeaker ? t('delegate_in_the_queue') : t('delegate_not_in_queue')}
                 />

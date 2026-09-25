@@ -51,7 +51,7 @@ export default function Article() {
         <p>New chairs often know what needs to happen next but freeze when they have to say it out loud to a room of fifty delegates. This guide provides word-for-word chair language for every standard committee moment, from the first gavel strike to final adjournment. Adapt these to your conference&apos;s specific rules, but use them as a starting point. Our guide to the <Link href="/blog/una-usa-rules-of-procedure">UNA-USA rules of procedure</Link> is a useful reference. If this is your first time on the dais, read <Link href="/blog/how-to-chair-first-mun">how to chair your first MUN</Link> too.</p>
 
         <H2>Opening the Session</H2>
-        <ChairScript>&quot;The chair will call this session of the [Committee Name] to order. Welcome, delegates, to [Conference Name]. The topic before this committee is [Topic]. Before we begin, the chair will call roll. When your delegation is called, please respond &apos;Present&apos; or &apos;Present and Voting.&apos;&quot;</ChairScript>
+        <ChairScript>&quot;The chair will call this session of the [Committee Name] to order. Welcome, delegates, to [Conference Name]. The topic before this committee is [Topic]. Before we begin, the chair will call roll. When your delegation is called, please respond &apos;Present&apos; or &apos;Present and Voting&apos;.&quot;</ChairScript>
 
         <H2>Roll Call</H2>
         <ChairScript>&quot;[Country name]... [pause for response]. [Country name]... [pause].&quot;</ChairScript>
@@ -88,8 +88,8 @@ export default function Article() {
 
         <H2>Voting on a Resolution</H2>
         <ChairScript>&quot;The committee will now proceed to vote on Draft Resolution [number]. All those in favour, please raise your placards... all those against... abstentions... The resolution [passes/fails] with [X] in favour, [Y] against, and [Z] abstentions.&quot;</ChairScript>
-        <p>For a roll call vote:</p>
-        <ChairScript>&quot;A roll call vote has been requested. When your country is called, please state &apos;In Favour,&apos; &apos;Against,&apos; or &apos;Abstain.&apos; [Country name]...&quot;</ChairScript>
+        <p>For a roll-call vote:</p>
+        <ChairScript>&quot;A roll-call vote has been requested. When your country is called, please state &apos;In Favour&apos;, &apos;Against&apos; or &apos;Abstain&apos;. [Country name]...&quot;</ChairScript>
 
         <H2>Ruling on a Point of Order</H2>
         <p>Our guide to <Link href="/blog/mun-points-explained">MUN points explained</Link> covers each type of point.</p>

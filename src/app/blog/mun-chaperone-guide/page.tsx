@@ -91,10 +91,10 @@ export default function Article() {
           <li>Accommodation: floors, room allocation, corridors, who is where</li>
           <li>The social or evening event, named as a separate activity with its own supervision</li>
           <li>Medical: existing conditions, medication administration, nearest hospital, insurance contact</li>
-          <li>Missing student procedure, with a specific time trigger and a first action</li>
+          <li>Missing-student procedure, with a specific time trigger and a first action</li>
           <li>Student distress from committee content, which is a real risk at MUN and is usually absent from templates</li>
           <li>Safeguarding, naming the conference&apos;s lead and yours</li>
-          <li>Lone adult risk, and the mitigation of a second adult</li>
+          <li>Lone-adult risk, and the mitigation of a second adult</li>
         </ul>
         <p>Write it honestly rather than defensively. A risk assessment that lists a control you will not actually apply is worse than one that admits a risk and describes a realistic mitigation.</p>
 
@@ -146,7 +146,7 @@ export default function Article() {
 
         <H2>Medical and welfare</H2>
         <p>Know, before you leave, what your school permits you to do. In many schools a teacher may not administer any medication, including paracetamol, without specific written consent for that named medicine. Assume nothing.</p>
-        <p>What to carry: the medical forms, the insurance policy number and emergency line, a basic first aid kit, and any student medication you are holding, logged with a signature each time it is issued. What to know: the nearest hospital and the local emergency number, which differ by country and are not worth looking up during an emergency.</p>
+        <p>What to carry: the medical forms, the insurance policy number and emergency line, a basic first-aid kit, and any student medication you are holding, logged with a signature each time it is issued. What to know: the nearest hospital and the local emergency number, which differ by country and are not something to look up during an emergency.</p>
         <p>Welfare beyond medicine is the more common issue. Homesickness, exhaustion, a delegate who has been humiliated in committee, a delegate who is not eating because the food is unfamiliar. Look for the student who has gone quiet. The single best intervention is usually to take them out of the building for twenty minutes rather than to reassure them in a corridor.</p>
 
         <H2>When something goes wrong away from home</H2>
@@ -167,7 +167,7 @@ export default function Article() {
 
         <H2>Your own workload</H2>
         <p>Two days of sixteen hours, in a strange city, permanently on call. Advisors underestimate this and then make poor decisions on day two because they have slept for five hours.</p>
-        <p>Three habits help. Split the night: agree with the second adult which of you is the first call on which night, and genuinely sleep on the other one. Take a proper break during committee sessions, because your delegates are supervised by the conference at that point and you do not need to hover. And eat, which sounds trivial and is the thing most often skipped.</p>
+        <p>Three habits help. Split the night: agree with the second adult which of you is the first call on which night, and genuinely sleep on the other one. Take a proper break during committee sessions, because your delegates are in rooms run by conference staff at that point: you need to be contactable and close by, not hovering. And eat, which sounds trivial and is the thing most often skipped.</p>
         <p>Then, before the next trip, write down the three things you would change. Trip knowledge evaporates in a fortnight and rebuilding it every year is the thing that makes advisors stop volunteering. <Link href="/blog/mun-faculty-advisor-guide">The faculty advisor guide</Link> covers the programme that these trips sit inside, and <Link href="/blog/choosing-mun-conferences">the conference selection guide</Link> covers how to choose the next one so that the travel is worth it.</p>
       </ArticleLayout>
     </>

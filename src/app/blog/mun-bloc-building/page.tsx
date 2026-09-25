@@ -50,7 +50,7 @@ export default function Article() {
         <p>In Model UN, no resolution passes alone. Every passed resolution is the product of a coalition: delegates who found enough common ground to put their names on the same document and get it across the majority line. Bloc building is the skill that determines whether your ideas become committee output or stay in your notes. This is how to do it, and our guide to <Link href="/blog/mun-negotiation-tactics">MUN negotiation tactics</Link> covers the conversations that hold a bloc together.</p>
 
         <H2>Identify Your Natural Allies Before Committee Begins</H2>
-        <p>Research the country list for your committee before the conference starts. Which countries typically vote together on your topic? Regional blocs (African Group, G77, EU, ASEAN) tend to vote in patterns that are well-documented in UN voting records. This research gives you your first target list before you have said a word in committee.</p>
+        <p>Research the country list for your committee before the conference starts. Which countries typically vote together on your topic? Regional blocs (African Group, G77, EU, ASEAN) tend to vote in patterns that are well documented in UN voting records. This research gives you your first target list before you have said a word in committee.</p>
         <p>Look up the last two or three UN resolutions on your topic and find which countries voted together. These are your likely natural allies.</p>
 
         <H2>Make Your Opening Speech a Recruitment Tool</H2>
@@ -66,7 +66,7 @@ export default function Article() {
 
         <H2>Giving Up Something to Gain More</H2>
         <p>No bloc forms without compromise. The delegate who insists on their exact language in every clause will end up with a small bloc and a failed resolution. Identify your non-negotiables (the two or three clauses you will not alter) and be flexible on everything else. Offering to adopt another delegate&apos;s preferred operative clause in exchange for their sponsorship is a trade worth making almost every time.</p>
-        <Callout>A resolution with eight sponsors and broad support that passes beats a resolution with three sponsors and perfect language that fails. Always optimise for majority, not perfection.</Callout>
+        <Callout>A resolution with eight sponsors and broad support that passes beats a resolution with three sponsors and perfect language that fails. Always optimise for a majority, not perfection.</Callout>
 
         <H2>Bringing in Swing Delegates</H2>
         <p>Every committee has swing delegates: delegations whose country position is genuinely ambiguous, or who have not committed publicly. These are your best targets for expanding a coalition. Approach them with a specific offer: &quot;If we add a clause on [their priority], would you be willing to sponsor?&quot; This is more effective than a general ask to join your bloc.</p>
@@ -80,7 +80,7 @@ export default function Article() {
         <p>Give your bloc members specific roles: one drafts preambulatory language, one manages the signatory list, one handles liaison with the opposing bloc. When people have ownership of a piece of the work, they stay invested.</p>
 
         <H2>The Vote Count</H2>
-        <p>Before calling for introduction of your draft resolution, do a private head count. Go through every delegation in the room and estimate their vote: In Favour, Against, Abstain, or Unknown. If you cannot reach majority among your known supporters, do not introduce. Spend more time persuading the Unknowns first. A failed vote on your resolution is diplomatically damaging and hard to recover from.</p>
+        <p>Before calling for the introduction of your draft resolution, do a private head count. Go through every delegation in the room and estimate their vote: In Favour, Against, Abstain, or Unknown. If you cannot reach a majority among your known supporters, do not introduce. Spend more time persuading the Unknowns first. A failed vote on your resolution is diplomatically damaging and hard to recover from.</p>
       </ArticleLayout>
     </>
   );

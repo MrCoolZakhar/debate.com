@@ -62,7 +62,7 @@ export default function Article() {
         <H3>The committee room box</H3>
         <p>One identical box per room, packed by one person, checked by a second. This single habit removes more day-of friction than any other.</p>
         <FactCard title="Committee room box contents">
-          Placards for every seat. Two printed delegate lists. Spare paper and twenty pens. A gavel. The rules of procedure, printed. A laminated card with the command centre&apos;s phone number and the on-call runner&apos;s name. A power extension lead with at least four sockets. Two phone charging cables, one USB-C and one Lightning. A roll of masking tape. Blu tack. A box of tissues. A bottle of water for the dais.
+          Placards for every seat. Two printed delegate lists. Spare paper and twenty pens. A gavel. The rules of procedure, printed. A laminated card with the command centre&apos;s phone number and the on-call runner&apos;s name. A power extension lead with at least four sockets. Two phone charging cables, one USB-C and one Lightning. A roll of masking tape. Blu Tack. A box of tissues. A bottle of water for the dais.
         </FactCard>
         <H3>Assign every role in writing</H3>
         <p>Not &quot;the logistics team handles registration&quot;. Write a sheet that says who is at the registration desk at 07:30, who is on corridor duty for rooms 1 to 4, who is the runner, who is in the command centre, and who is the named <Link href="/blog/mun-safeguarding">safeguarding lead</Link>. Print it. Give everyone a copy. Ambiguity on the day resolves as nobody doing the job.</p>
@@ -74,13 +74,13 @@ export default function Article() {
         <p>Three fixes, in order of effect.</p>
         <ul>
           <li><strong>Check in delegations, not delegates.</strong> The advisor collects a single envelope containing every badge and placard for their school. One transaction for twelve people instead of twelve.</li>
-          <li><strong>Split by letter, with real signs.</strong> Three desks, A to F, G to N, O to Z, each with its own pre-sorted box. Three desks with one shared box is not three desks.</li>
+          <li><strong>Split by letter, with real signs.</strong> Three desks (A to F, G to N, O to Z), each with its own pre-sorted box. Three desks with one shared box is not three desks.</li>
           <li><strong>Separate the exceptions.</strong> One person, to the side, handles unpaid fees, walk-ins, substitutions and lost bookings. These take five minutes each and they are what blocks a queue.</li>
         </ul>
-        <p>Put a floating staff member in the queue itself, moving down the line answering questions and pointing people to the right desk. It costs one person and roughly halves perceived wait.</p>
+        <p>Put a floating staff member in the queue itself, moving down the line answering questions and pointing people to the right desk. It costs one person and roughly halves the perceived wait.</p>
 
         <H2>Opening ceremony: the shortest version that works</H2>
-        <p>The opening ceremony exists to do four things: welcome people, state the rules that matter, tell everyone where to go, and end. Twenty-five minutes is enough. Forty-five is common and is stolen from committee time.</p>
+        <p>The opening ceremony exists to do four things: welcome people, state the rules that matter, tell everyone where to go, and end. Twenty-two minutes is enough. Forty-five is common and is stolen from committee time.</p>
         <TableWrap>
           <table>
             <thead><tr><th>Minutes</th><th>Item</th></tr></thead>
@@ -131,7 +131,7 @@ export default function Article() {
             <tbody>
               <tr><td>A chair does not turn up</td><td>Have two floating chairs briefed on every committee. If you have none, the co-chair runs it and a secretariat member sits in. Never leave a room without a dais.</td></tr>
               <tr><td>A projector or screen fails</td><td>Proceed without it. Nothing in Model UN requires a projector. Chairs should be told this in the briefing so they do not stall waiting for IT.</td></tr>
-              <tr><td>Wifi collapses under 400 phones</td><td>Know this in advance. Chairs keep printed lists. If devices are central to your procedure, test at full load during the <Link href="/blog/mun-conference-venue-logistics">site visit</Link> and have a mobile hotspot per floor.</td></tr>
+              <tr><td>Wi-Fi collapses under 400 phones</td><td>Know this in advance. Chairs keep printed lists. If devices are central to your procedure, test at full load during the <Link href="/blog/mun-conference-venue-logistics">site visit</Link> and have a mobile hotspot per floor.</td></tr>
               <tr><td>A delegate is in the wrong room</td><td>Corridor staff redirect rather than sending them to registration. Give every corridor staffer the full room list.</td></tr>
               <tr><td>A delegation arrives that did not register</td><td>The exceptions desk. Seat them in under-filled committees as observers if necessary. Decide the payment question afterwards, not at the door.</td></tr>
               <tr><td>A committee is half the expected size</td><td>Merge the smallest two committees at the first break if the gap is severe, or adjust the quorum. Decide before lunch, never after.</td></tr>
@@ -152,7 +152,7 @@ export default function Article() {
         <p>Day one is about control. Day two is about energy and output, and it fails in different ways.</p>
         <p>Attendance drops. Expect five to ten per cent fewer delegates, concentrated in the first session. Chairs should re-run roll call rather than assuming yesterday&apos;s numbers, because quorum and voting thresholds move with the room.</p>
         <p>Energy drops, especially in the first session after the social. Chairs should open day two with something structured rather than an open speakers list: a short moderated caucus with a sharp question does more for a tired room than half an hour of unmoderated time.</p>
-        <p>Drafting peaks, which changes what staff do. Working papers and draft resolutions arrive in a burst, and if they arrive by email to four different addresses on four different formats, the afternoon becomes an administrative jam. Decide one submission route before the conference, tell chairs, and tell delegates in the opening ceremony. If your committees run on a platform where delegates submit directly into the room, use that and say so.</p>
+        <p>Drafting peaks, which changes what staff do. Working papers and draft resolutions arrive in a burst, and if they arrive by email to four different addresses in four different formats, the afternoon becomes an administrative jam. Decide one submission route before the conference, tell chairs, and tell delegates in the opening ceremony. If your committees run on a platform where delegates submit directly into the room, use that and say so.</p>
         <p>Voting is the other day-two pressure point. Read <Link href="/blog/mun-voting-procedures">the guide to MUN voting procedures</Link> with your chairs beforehand, because substantive votes are where a room disputes a ruling, and a chair who is improvising the threshold in front of forty delegates loses the room.</p>
 
         <H2>Closing, pack-down and the same-evening debrief</H2>

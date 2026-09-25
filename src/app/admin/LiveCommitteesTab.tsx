@@ -773,7 +773,7 @@ export default function LiveCommitteesTab() {
               </span>
               <div className="min-w-0">
                 <p style={{ fontFamily: OUTFIT, fontSize: 24, fontWeight: 900, lineHeight: 1, color: s.color, fontVariantNumeric: 'tabular-nums' }}>
-                  {rows === null ? '—' : s.v}
+                  {rows === null ? '–' : s.v}
                 </p>
                 <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: SOFT, marginTop: 4 }}>{s.label}</p>
               </div>

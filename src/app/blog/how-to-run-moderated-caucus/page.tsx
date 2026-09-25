@@ -59,19 +59,19 @@ export default function Article() {
 
 
         <H2>Step 1: Accepting the Motion</H2>
-        <p>A delegate raises a placard and proposes: &quot;I move for a moderated caucus of [total time] with [per-speaker time] per speaker on the topic of [purpose].&quot; You need at least one second. Then you put it to a vote.</p>
-        <Callout>Rule of thumb: a moderated caucus does not need a second at many conferences. Check your rules of procedure, and see our <Link href="/blog/mun-procedure-styles-compared">comparison of MUN procedure styles</Link> for how rulesets differ. At NMUN and most large conferences, you simply need a majority to pass.</Callout>
+        <p>A delegate raises a placard and proposes: &quot;I move for a moderated caucus of [total time] with [per-speaker time] per speaker on the topic of [purpose].&quot; Most conferences require a second. Then you put it to a vote.</p>
+        <Callout>Rule of thumb: most conferences require a second, but some do not. Check your rules of procedure, and see our <Link href="/blog/mun-procedure-styles-compared">comparison of MUN procedure styles</Link> for how rulesets differ. At NMUN and most large conferences, you simply need a majority to pass.</Callout>
         <p>Once it passes, announce the caucus clearly:</p>
         <ChairScript>&quot;The motion passes. The committee will now enter a moderated caucus of fifteen minutes, with ninety seconds per speaker, on the topic of climate finance mechanisms. I will now open the speakers list for this caucus.&quot;</ChairScript>
 
         <H2>Step 2: Building the Caucus Speakers List</H2>
-        <p>Ask delegates to raise their placards if they wish to speak during the caucus. Call on them in the order they raised, recording each name. In a large committee this happens fast, so have your co-chair or director assistant capture names while you manage the room. Software like Gavelling handles this automatically, letting co-chairs add speakers to the caucus queue without interrupting the chair.</p>
+        <p>Ask delegates to raise their placards if they wish to speak during the caucus. Call on them in the order they raised, recording each name. In a large committee this happens fast, so have your co-chair or assistant director capture names while you manage the room. Software like Gavelling handles this automatically, letting co-chairs add speakers to the caucus queue without interrupting the chair.</p>
         <p>You do not need to fill every available speaking slot before starting. Call the first speaker as soon as you have a few names, and continue accepting additions from the floor as the caucus runs.</p>
 
         <H2>Step 3: Running the Caucus</H2>
         <p>Call each speaker by country name: &quot;The chair recognises the delegate of Germany.&quot; Start the per-speaker timer the moment they begin. When time expires, interrupt firmly but politely:</p>
         <ChairScript>&quot;The delegate&apos;s time has expired. Thank you. The chair recognises the delegate of Brazil.&quot;</ChairScript>
-        <p>Do not let speakers run over. It is unfair to delegates who respected the limit and it erodes your authority in every subsequent session. A firm gavel tap and a calm voice are all you need.</p>
+        <p>Do not let speakers run over. It is unfair to delegates who respected the limit, and it erodes your authority in every subsequent session. A firm gavel tap and a calm voice are all you need.</p>
 
         <H3>Handling Yields</H3>
         <p>In a moderated caucus, most rules of procedure do not permit yielding time to other delegates. If your conference rules allow it, a delegate may yield remaining time to another delegate or to the chair. If it is not permitted, state so briefly when a delegate attempts to yield. Our <Link href="/blog/una-usa-rules-of-procedure">UNA-USA rules of procedure</Link> guide covers yields in more detail.</p>
@@ -80,7 +80,7 @@ export default function Article() {
         <p>If a delegate strays far from the caucus topic, it is appropriate to note: &quot;The chair reminds the delegate that this caucus is on the topic of [purpose] and asks the delegate to direct their remarks accordingly.&quot; Do this sparingly (it can feel heavy-handed), but use it when a speaker is clearly wasting the committee&apos;s time.</p>
 
         <H2>Step 4: Managing the Clock</H2>
-        <p>Track both the per-speaker timer and the total caucus time simultaneously. When the total time is almost exhausted, give the committee a heads-up: &quot;The committee has approximately two minutes remaining in this moderated caucus.&quot; This allows delegates to wrap arguments and prevents abrupt endings mid-speech.</p>
+        <p>Track both the per-speaker timer and the total caucus time simultaneously. When the total time is almost exhausted, give the committee a heads-up: &quot;The committee has approximately two minutes remaining in this moderated caucus.&quot; This allows delegates to wrap up their arguments and prevents abrupt endings mid-speech.</p>
         <p>If the caucus time expires mid-speech, you have two options: end it immediately and revert to the GSL, or (if your rules allow) ask whether the committee wishes to extend the caucus by a short additional period. Technically any extension requires a new motion, but many chairs handle short overruns graciously.</p>
 
         <H2>Step 5: Closing the Caucus</H2>

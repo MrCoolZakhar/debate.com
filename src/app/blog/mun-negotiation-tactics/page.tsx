@@ -98,7 +98,7 @@ export default function Article() {
         <p>The asymmetry worth understanding: your drafting labour and your speaking slots cost you almost nothing and are worth a lot to somebody else. Spend them early and generously. Your vote costs you nothing to promise and is worth little until the end. Do not promise it early in exchange for something real.</p>
 
         <H2>Working with a delegation opposed to you</H2>
-        <p>The most useful negotiating skill in MUN and the one most delegates never develop, because the instinct is to spend two days with people who already agree.</p>
+        <p>This is the most useful negotiating skill in MUN, and the one most delegates never develop, because the instinct is to spend two days with people who already agree.</p>
         <p>A sequence that works:</p>
         <ol>
           <li><strong>Open with their interest, not yours.</strong> &ldquo;Your delegation is worried about the compliance costs falling on producers. Is that right?&rdquo; You have now demonstrated that you listened, which distinguishes you from everyone else who has approached them.</li>
@@ -142,7 +142,7 @@ export default function Article() {
         <p>What you give first sets the price of everything after it. Two rules that hold in most committees.</p>
         <p><strong>Give cheap things early and visibly.</strong> Sponsorship, a speaking slot, an agreement to drop a preambulatory clause. Early generosity buys you a reputation as someone to work with, which is worth more over two days than the thing you gave away.</p>
         <p><strong>Give expensive things late and in exchange.</strong> Never concede your core mechanism in the first session because somebody asked firmly. Concessions made under time pressure in the final hour are worth the most, which is why holding one real concession for the last session is good practice rather than cynicism.</p>
-        <p>And always concede with a name attached: &ldquo;we can accept voluntary participation if the review conference is in three years rather than five&rdquo;. A concession given without an ask is not a concession, it is a donation, and it teaches the room that asking you firmly enough works.</p>
+        <p>And always concede with a name attached: &ldquo;we can accept voluntary participation if the review conference is in three years rather than five&rdquo;. A concession given without an ask is not a concession; it is a donation, and it teaches the room that asking you firmly enough works.</p>
 
         <H2>The small states bloc</H2>
         <p>The coalition that outperforms expectations in almost every committee is the one made of delegations nobody courted: the unengaged group from your map, plus the small states who are not on anyone&rsquo;s list.</p>
@@ -151,7 +151,7 @@ export default function Article() {
 
         <H2>Staying in character while being genuinely persuasive</H2>
         <p>The tension every delegate feels: your country&rsquo;s real position is obstructive, and you want to be useful in the room.</p>
-        <p>Resolve it by separating what your country wants from what you are willing to build. A delegation can hold an unhelpful position on the substance and still be the most constructive person in committee: chairing the drafting process, proposing procedural compromises, brokering between two blocs it belongs to neither of, and writing the definitions everyone can accept. That is exactly what obstructive states do in the real institution, and it is rewarded.</p>
+        <p>Resolve it by separating what your country wants from what you are willing to build. A delegation can hold an unhelpful position on the substance and still be the most constructive person in committee: chairing the drafting process, proposing procedural compromises, brokering between two blocs when it belongs to neither, and writing the definitions everyone can accept. That is exactly what obstructive states do in the real institution, and it is rewarded.</p>
         <p>What is not available is abandoning the position because it is inconvenient. A chair reading your position paper and then hearing you advocate the opposite has learned something about you, and it is not good. Our <Link href="/blog/mun-position-paper-guide">position paper guide</Link> covers doing the research that makes this line easy to walk.</p>
 
         <H2>What a chair reads as diplomacy, and what they read as bullying</H2>

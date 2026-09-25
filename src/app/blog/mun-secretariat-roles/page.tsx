@@ -96,7 +96,7 @@ export default function Article() {
             </tbody>
           </table>
         </TableWrap>
-        <p className="gv-note">Excludes chairs and crisis staff, which scale with the number of committees rather than with the secretariat.</p>
+        <p className="gv-note">Excludes chairs and crisis staff, who scale with the number of committees rather than with the secretariat.</p>
         <p>Safe merges at small scale: Logistics into Director-General, Technology into Marketing, Press into Marketing, Hospitality into Delegate Affairs. Merges to avoid at any scale: Finance into anything, and Academics into the Secretary-General, which produces a Secretary-General who spends the whole year reviewing background guides and never does their actual job.</p>
         <Callout>Count backwards from the weekend, not forwards from ambition. If nobody on your list can name who unlocks the building on Saturday morning, you have an org chart rather than a team.</Callout>
 
@@ -109,7 +109,7 @@ export default function Article() {
           <li><strong>Your society or school more broadly.</strong> Finance, Logistics and Technology do not require MUN experience and are often better filled by someone who has run something else.</li>
           <li><strong>Cross-conference role boards,</strong> which is where you find people for the hard-to-fill roles and where experienced staff look between conferences. Gavelling&rsquo;s <Link href="/conferences/roles">roles board</Link> carries chair and staff openings across conferences.</li>
         </ol>
-        <p>What to ask on the application. Keep it short, four questions, and make them predictive:</p>
+        <p>What to ask on the application. Keep it short (four questions) and make them predictive:</p>
         <ul>
           <li>Which role, and why that one rather than the others. Tests whether they read the descriptions.</li>
           <li>Describe something you organised and what went wrong with it. Tests whether they notice failure, which is the whole job.</li>
@@ -147,7 +147,7 @@ export default function Article() {
             </tbody>
           </table>
         </TableWrap>
-        <p>Set the money threshold low enough to be real. At a 300-delegate conference, anything above a few hundred in your currency needing two people is not bureaucracy, it is the thing that makes the accounts explicable to your host institution afterwards.</p>
+        <p>Set the money threshold low enough to be real. At a 300-delegate conference, anything above a few hundred in your currency needing two people is not bureaucracy. It is the thing that makes the accounts explicable to your host institution afterwards.</p>
         <p>The whole-list email rule exists because a badly worded message to 600 delegates cannot be recalled, and the commonest cause is a well-meaning USG sending it at eleven at night. One reader, always.</p>
 
         <H2>Access control, and who should see the finances</H2>

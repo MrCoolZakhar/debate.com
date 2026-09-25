@@ -51,13 +51,13 @@ export default function Article() {
         <p>The point of order is one of the most misused procedures in Model UN. Raised correctly, it demonstrates procedural mastery and earns chairs&apos; respect. Raised incorrectly, or too frequently, it signals inexperience, irritates the room, and wastes everyone&apos;s time. This guide clarifies exactly what a point of order is, when it applies, and how both delegates and chairs should handle it. For every other point, see our guide to <Link href="/blog/mun-points-explained">MUN points explained</Link>.</p>
 
         <H2>What Is a Point of Order?</H2>
-        <p>A point of order is raised when a delegate believes the chair has made a procedural error: specifically, that the rules of procedure are being violated. It is the only point that can interrupt a speaker mid-speech (at most conferences). Our <Link href="/blog/mun-procedure-styles-compared">comparison of MUN procedure styles</Link> shows where the rules differ. This exceptional power comes with a correspondingly high bar: it must address a genuine procedural violation, not a substantive disagreement.</p>
+        <p>A point of order is raised when a delegate believes the chair has made a procedural error: specifically, that the rules of procedure are being violated. Under most rules it cannot interrupt a speaker mid-speech: it waits until the speech ends, unless your conference&apos;s rules say otherwise. The one point that usually can interrupt is a point of personal privilege, and only for audibility. Our <Link href="/blog/mun-procedure-styles-compared">comparison of MUN procedure styles</Link> shows where the rules differ. Because it challenges the chair directly, it comes with a high bar: it must address a genuine procedural violation, not a substantive disagreement.</p>
         <Callout>The test is simple: does the chair&apos;s action or ruling violate a specific rule in the rules of procedure document? If yes, a point of order is appropriate. If you simply disagree with the chair&apos;s judgement call, it is not.</Callout>
 
         <H2>Valid Reasons to Raise a Point of Order</H2>
         <ul>
           <li>The chair has called the wrong country from the speakers list (factual error)</li>
-          <li>The chair has allowed a motion that is out of order under the rules (e.g., a motion that requires a second has not received one)</li>
+          <li>The chair has allowed a motion that is out of order under the rules (e.g. a motion that requires a second has not received one)</li>
           <li>The chair has stated a vote threshold incorrectly</li>
           <li>The chair has allowed a speaker to run significantly over time without intervention</li>
           <li>The committee is conducting business without quorum</li>
@@ -89,14 +89,14 @@ export default function Article() {
 
         <H2>Point of Order vs. Other Points</H2>
         <ul>
-          <li><strong>Point of Order:</strong> Procedural violation by the chair. Can interrupt a speaker. Chair must rule immediately.</li>
-          <li><strong>Point of Personal Privilege:</strong> Delegate&apos;s ability to participate is impaired (cannot hear, room too cold). Cannot interrupt a speaker (usually). Chair addresses the issue.</li>
+          <li><strong>Point of Order:</strong> Procedural violation by the chair. Under most rules it cannot interrupt a speaker. Chair must rule immediately.</li>
+          <li><strong>Point of Personal Privilege:</strong> Delegate&apos;s ability to participate is impaired (cannot hear, room too cold). Under most rules it may interrupt a speaker, but only for audibility. Chair addresses the issue.</li>
           <li><strong>Point of Information to the Chair:</strong> A question about procedure directed to the chair. Cannot interrupt a speaker. Chair answers or defers.</li>
           <li><strong>Point of Information to the Delegate:</strong> A question directed to the delegate currently speaking, subject to their acceptance. Must be brief.</li>
         </ul>
 
         <H2>The Credibility Cost</H2>
-        <p>Every point of order you raise is a signal to the chair and to the committee. Raise one legitimate point of order and your procedural knowledge is respected. Raise three spurious ones in a single session and you become the delegate who cried wolf, and future valid points are greeted with skepticism. Use this tool deliberately, not reflexively.</p>
+        <p>Every point of order you raise is a signal to the chair and to the committee. Raise one legitimate point of order and your procedural knowledge is respected. Raise three spurious ones in a single session and you become the delegate who cried wolf, and future valid points are greeted with scepticism. Use this tool deliberately, not reflexively.</p>
       </ArticleLayout>
     </>
   );

@@ -88,7 +88,7 @@ export default function Article() {
 
         <FactCard title="Opening, 90 seconds, Brazil">
           <p>Honourable Chair, fellow delegates.</p>
-          <p>Brazil holds nearly a fifth of the world&rsquo;s fresh water and still has citizens without a safe supply. That is the paradox this committee should sit with, because it tells us the problem is not scarcity. It is investment, governance and distance.</p>
+          <p>Brazil holds about 12 per cent of the world&rsquo;s fresh water and still has citizens without a safe supply. That is the paradox this committee should sit with, because it tells us the problem is not scarcity. It is investment, governance and distance.</p>
           <p>Brazil brings three positions to this debate.</p>
           <p>First, on finance. Middle-income countries are the majority of the affected population and are routinely excluded from concessional financing because our national averages look adequate. Brazil asks that any financing clause in this resolution use sub-national indicators.</p>
           <p>Second, on sanitation. This committee will spend most of its time on drinking water, because water is easier to talk about. Sanitation is where the disease burden sits and where investment is weakest. Brazil will move a caucus on it.</p>
@@ -123,7 +123,7 @@ export default function Article() {
         <p><strong>Why the three work together.</strong> The first brings a mechanism. The second improves it, which is how you get named as a co-sponsor. The third objects early and says why, which is more useful than objecting at the vote. None of the three restates their country&rsquo;s general position: the caucus topic is narrow and the speeches stay inside it, which is the discipline most delegates lack. Our guide on <Link href="/blog/how-to-run-moderated-caucus">how a moderated caucus runs</Link> covers the chair&rsquo;s side of the same exchange.</p>
 
         <H2>The speech before a vote</H2>
-        <p>The job changes completely here. You are not explaining your position, you are moving a specific group of undecided delegations. Name them, give them a reason and give them a way to say yes. Our <Link href="/blog/mun-negotiation-tactics">negotiation guide</Link> covers the conversations around it.</p>
+        <p>The job changes completely here. You are not explaining your position. You are moving a specific group of undecided delegations. Name them, give them a reason and give them a way to say yes. Our <Link href="/blog/mun-negotiation-tactics">negotiation guide</Link> covers the conversations around it.</p>
         <FactCard title="Persuasion, 60 seconds, sponsor of the draft">
           <p>Chair, delegates, this vote is narrower than it looks.</p>
           <p>Every delegation in this room agrees that safe water is a right. The question in front of us is whether we send a text that funds it or a text that restates it.</p>
@@ -156,7 +156,7 @@ export default function Article() {
         <p><strong>Why it works.</strong> It concedes the true part immediately, which removes the attack, and then converts the concession into the argument. Answer in two sentences. Do not make a second speech, do not say &ldquo;that is a very good question&rdquo;, and never say &ldquo;I will address that later&rdquo;.</p>
 
         <H2>The same content at 30, 60 and 90 seconds</H2>
-        <p>Length does not change what you say, it changes how much evidence you carry. Here is one argument at three lengths.</p>
+        <p>Length does not change what you say: it changes how much evidence you carry. Here is one argument at three lengths.</p>
         <TableWrap>
           <table>
             <thead><tr><th>Length</th><th>What fits</th><th>Cut first</th></tr></thead>
@@ -170,7 +170,7 @@ export default function Article() {
         <FactCard title="Thirty seconds">
           <p>Chair. Sanitation carries the disease burden and receives the smaller share of investment. Kenya asks that the financing clause set a floor for sanitation rather than folding it into a single water figure. We will move a caucus on it and we would welcome co-sponsors. Thank you.</p>
         </FactCard>
-        <p>That is a complete speech. If your ninety-second speech does not contain those four sentences, it is not longer, it is padded.</p>
+        <p>That is a complete speech. If your ninety-second speech does not contain those four sentences, it is not longer. It is padded.</p>
 
         <H2>Moves that work, and three that do not</H2>
         <p><strong>Work:</strong> naming a delegation you agree with, because it builds a bloc in public. Quoting a dated primary source, because almost nobody does. Conceding one point before arguing, because it makes the rest credible. Ending with an instruction: send me a note, second my motion, meet me at the back.</p>

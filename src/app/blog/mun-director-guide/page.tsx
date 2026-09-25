@@ -65,7 +65,7 @@ export default function Article() {
         <H3>Choose Your Committees</H3>
         <p>Select a committee roster that balances accessibility (GA committees most delegates can prepare for) with prestige (specialised agencies, Security Council, crisis committees). A typical medium-sized conference might have three to five GA committees, one UNSC, one specialised agency, and one crisis committee.</p>
         <H3>Choose Your Topics</H3>
-        <p>Good MUN topics are: timely (connected to real current events), debatable (genuine disagreement between country blocs), and actionable (the committee can actually do something about it). Avoid topics that are too resolved (unanimous agreement on causes and solutions) or too intractable (no possible middle ground).</p>
+        <p>Good MUN topics are timely (connected to real current events), debatable (genuine disagreement between country blocs), and actionable (the committee can actually do something about it). Avoid topics that are too resolved (unanimous agreement on causes and solutions) or too intractable (no possible middle ground).</p>
         <Callout>Test a topic by trying to outline three clearly different bloc positions. If you cannot, the topic is either too consensus-heavy or too niche. Strong topics produce natural bloc diversity.</Callout>
 
         <H2>Four Months Out: Building Your Team</H2>
@@ -85,12 +85,12 @@ export default function Article() {
         <ul>
           <li><strong>Confirm delegate registrations</strong> and assign countries. Try to match country allocations to school or team size, since larger delegations should get more committee slots.</li>
           <li><strong>Confirm venue layouts</strong>: committee room sizes, projector availability, power access, WiFi.</li>
-          <li><strong>Set up committee management software.</strong> Gavelling allows directors to create committee sessions in advance, with co-chair access codes, delegate lists, and settings pre-configured before conference day.</li>
+          <li><strong>Set up committee management software.</strong> Gavelling allows directors to create committee sessions in advance, with one chair code for the whole dais, delegate lists, and settings pre-configured before conference day.</li>
           <li><strong>Brief your dais team in full.</strong> Run a mock committee session with your chairs if possible.</li>
         </ul>
 
         <H2>Conference Day: Director Operations</H2>
-        <p>On conference day, your primary job is problem-solving. Committees will have issues: a chair goes absent, a room has no projector, two committees request the same delegate for a joint crisis session. Keep a live list of all open issues and assign team members to resolve them.</p>
+        <p>On conference day, your primary job is problem-solving. Committees will have issues: a chair drops out, a room has no projector, two committees request the same delegate for a joint crisis session. Keep a live list of all open issues and assign team members to resolve them.</p>
         <p>Visit every committee room at least once per session. A brief appearance from the director signals to delegates that the secretariat cares about quality. It also lets you catch problems (a committee that is too quiet, a chair who is struggling, a bloc that has completely stalled) before they become crises.</p>
 
         <H2>Awards</H2>

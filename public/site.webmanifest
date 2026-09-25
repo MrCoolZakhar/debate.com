@@ -1,7 +1,7 @@
 {
   "name": "Gavelling",
   "short_name": "Gavelling",
-  "description": "Modern MUN committee software — roll call, speakers list, motions, and voting.",
+  "description": "Modern MUN committee software: roll call, speakers list, motions, and voting.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#EDE7D8",

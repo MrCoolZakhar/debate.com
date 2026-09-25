@@ -421,7 +421,7 @@ export function FlagOrdinalDisc({
         {/* An em-dash standing in for "no position" is noise at hero size — it
             reads as a redaction bar over the crest. When there is no ordinal the
             caption carries the whole message on its own. */}
-        {primary !== '—' && (
+        {primary !== '' && (
           <span
             style={{
               fontFamily: OUTFIT, fontWeight: 900, color: '#FFFFFF',
@@ -440,7 +440,7 @@ export function FlagOrdinalDisc({
             fontFamily: OUTFIT, fontWeight: 800, color: 'rgba(255,255,255,0.94)',
             /* Bigger when it is carrying the message alone, but still clearly
                subordinate to an ordinal when one is present. */
-            fontSize: Math.max(8, size * (primary === '—' ? 0.095 : 0.075)),
+            fontSize: Math.max(8, size * (primary === '' ? 0.095 : 0.075)),
             letterSpacing: '0.08em',
             textTransform: 'uppercase', textAlign: 'center', lineHeight: 1.15,
             textShadow: '0 1px 4px rgba(0,0,0,0.6)', maxInlineSize: '86%',

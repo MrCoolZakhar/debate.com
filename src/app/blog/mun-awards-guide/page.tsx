@@ -56,7 +56,7 @@ export default function Article() {
           <li><strong>Best Delegate:</strong> The single highest-performing delegate in the committee. Usually one per committee.</li>
           <li><strong>Outstanding Delegate:</strong> Strong performance, clearly above average. One to two per committee.</li>
           <li><strong>Honourable Mention:</strong> Good performance with notable contributions. Two to four per committee.</li>
-          <li><strong>Verbal Commendation:</strong> Recognised for specific contributions: a particularly good speech, strong position paper, or key amendment.</li>
+          <li><strong>Verbal Commendation:</strong> Recognised for specific contributions: a particularly good speech, a strong position paper or a key amendment.</li>
           <li><strong>Best Position Paper:</strong> Some conferences award separately for the pre-submitted position paper.</li>
         </ul>
 
@@ -88,7 +88,7 @@ export default function Article() {
         </ul>
 
         <H2>A Note on Fairness</H2>
-        <p>Not every conference awards fairly. Some chair teams are inconsistent. Some conferences heavily weight country prestige. Do not interpret a missed award as a definitive judgment of your performance. Ask your faculty advisor or the dais for feedback and use it to improve. The delegates who improve most consistently between conferences are the ones who become the strongest. When you do win one, here is how to list <Link href="/blog/mun-on-your-cv">MUN on your CV</Link>.</p>
+        <p>Not every conference awards fairly. Some chair teams are inconsistent. Some conferences heavily weight country prestige. Do not interpret a missed award as a definitive judgement of your performance. Ask your faculty advisor or the dais for feedback and use it to improve. The delegates who improve most consistently between conferences are the ones who become the strongest. When you do win one, here is how to list <Link href="/blog/mun-on-your-cv">MUN on your CV</Link>.</p>
 
         <H2>Awards as a Chair</H2>
         <p>For chairs: track delegates throughout the conference, not just at the end. Note specific moments: a standout speech, a key amendment proposal, a bloc merger they brokered. When you sit down to make award decisions, concrete examples beat vague impressions every time. Gavelling&apos;s delegate stats panel tracks speaking time and participation metrics that can support your qualitative notes.</p>

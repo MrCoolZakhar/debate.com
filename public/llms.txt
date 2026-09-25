@@ -4,22 +4,22 @@ Gavelling is a web platform for the global Model UN (MUN) community: a conferenc
 
 ## What Gavelling Does
 
-Gavelling Conferences (live since July 2026) is the conference layer: a public directory where delegates find and apply to real MUN conferences worldwide (browse by country, date, fee, and level, or on a world map), plus end-to-end management for organisers — delegate applications, smart country-role allocations, delegation management for schools and societies, study guide distribution, position paper review, payments and financial aid, chair and staff recruitment, awards, and a shareable MUN CV that records each delegate's conferences and awards.
+Gavelling Conferences (live since July 2026) is the conference layer: a public directory where delegates find and apply to real MUN conferences worldwide (browse by country, date, fee, and level, or on a world map), plus end-to-end management for organisers: delegate applications, smart country-role allocations, delegation management for schools and societies, study guide distribution, position paper review, payments and financial aid, chair and staff recruitment, awards, and a shareable MUN CV that records each delegate's conferences and awards.
 
 Gavelling Sessions manages real-time MUN committee sessions: roll call with quorum tracking, General Speakers List (GSL) with timer, Moderated Caucus, Unmoderated Caucus, motions, voting, live delegate chat, and resolution document viewing.
 
 ## Who Uses It
 
-MUN delegates looking for their next conference; organisers and secretariats running conferences; chairs, co-chairs, and faculty advisors running committee sessions — at high school and university level, active in 18+ countries.
+MUN delegates looking for their next conference; organisers and secretariats running conferences; chairs, co-chairs, and faculty advisors running committee sessions, at high school and university level, active in 18+ countries.
 
 ## Key MUN Terms (for context)
 
-- GSL: General Speakers List — primary debate mechanism in MUN
-- TdT: Temps des tours — French MUN equivalent of GSL
-- Mod caucus: Moderated Caucus — structured debate with per-speaker time limits
-- Unmod caucus: Unmoderated Caucus — informal negotiation period
-- RTR: Right to Reply — delegate's right to respond to a personal attack
-- P+V: Present and Voting — stronger attendance commitment than "Present"; delegate cannot abstain
+- GSL (General Speakers List): primary debate mechanism in MUN
+- TdT (Temps des tours): French MUN equivalent of GSL
+- Mod caucus (Moderated Caucus): structured debate with per-speaker time limits
+- Unmod caucus (Unmoderated Caucus): informal negotiation period
+- RTR (Right to Reply): delegate's right to respond to a personal attack
+- P+V (Present and Voting): stronger attendance commitment than "Present"; delegate cannot abstain
 - Quorum: Minimum number of delegates required to conduct official business
 - Working papers / Draft resolutions: Collaborative delegate documents proposed for committee adoption
 - Operative / Preambulatory clauses: Two sections of a MUN resolution
@@ -38,7 +38,7 @@ Free to use. Listing a conference is free for organisers. No account required fo
 
 ## Technology
 
-Web app built with Next.js and Supabase. Works on any modern browser on desktop, tablet, or mobile — no installation required.
+Web app built with Next.js and Supabase. Works on any modern browser on desktop, tablet, or mobile, with no installation required.
 
 ## About
 
@@ -52,11 +52,11 @@ Instagram: @wearegavelling
 
 ## Pages
 
-- https://gavelling.com — Home: find Model UN conferences
-- https://gavelling.com/conferences/explore — Browse and filter all listed MUN conferences
-- https://gavelling.com/conferences/map — MUN conferences on a world map
-- https://gavelling.com/conferences/roles — Chair, secretariat, and staff openings
-- https://gavelling.com/sessions — Committee session software for chairs and delegates
-- https://gavelling.com/blog — Guides on chairing, motions, resolutions, and MUN strategy
-- https://gavelling.com/about — About the team
-- https://gavelling.com/contact — Contact
+- https://gavelling.com (Home): find Model UN conferences
+- https://gavelling.com/conferences/explore: Browse and filter all listed MUN conferences
+- https://gavelling.com/conferences/map: MUN conferences on a world map
+- https://gavelling.com/conferences/roles: Chair, secretariat, and staff openings
+- https://gavelling.com/sessions: Committee session software for chairs and delegates
+- https://gavelling.com/blog: Guides on chairing, motions, resolutions, and MUN strategy
+- https://gavelling.com/about: About the team
+- https://gavelling.com/contact: Contact

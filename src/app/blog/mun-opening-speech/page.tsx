@@ -75,12 +75,12 @@ export default function Article() {
             &quot;The delegate of Germany rises to address one of the defining failures of the last decade: the developed world&apos;s broken promise of $100 billion annually in climate finance. Germany recognises its own obligations here; we have not always delivered. But recognition without action is insufficient. Germany strongly supports a new, binding climate finance architecture with transparent reporting requirements, loss-and-damage provisions, and meaningful technology transfer to the developing world. Germany invites all delegations, particularly fellow Annex II parties, to join us in drafting a resolution that closes the accountability gap. The time for aspirational language has passed.&quot;
           </p>
         </div>
-        <p className="gv-note">Word count: 112. Approximate length at moderate pace: 55 seconds.</p>
+        <p className="gv-note">Word count: 96. Approximate length at moderate pace: 40 seconds, which leaves room to slow down on the key line.</p>
 
         <H2>Example Opening Speech: Refugee Protection</H2>
         <div className="gv-script">
           <p>
-            &quot;One hundred and seventeen million people are currently displaced from their homes, a record that shames the international community. Jordan, as the country hosting the highest number of refugees per capita in the world, does not speak about this crisis abstractly. We live it. Jordan calls upon this committee to adopt a binding burden-sharing mechanism that distributes refugee admission quotas equitably among all member states, not just the neighbours of conflict zones. We are prepared to co-sponsor a working paper on this framework and urge delegations from the European Union and the Gulf states to join us at the table.&quot;
+            &quot;More than one hundred and twenty million people are currently displaced from their homes, a record that shames the international community. Jordan, as one of the countries hosting the most refugees per capita in the world, does not speak about this crisis abstractly. We live it. Jordan calls upon this committee to adopt a binding burden-sharing mechanism that distributes refugee admission quotas equitably among all member states, not just the neighbours of conflict zones. We are prepared to co-sponsor a working paper on this framework and urge delegations from the European Union and the Gulf states to join us at the table.&quot;
           </p>
         </div>
 
@@ -89,13 +89,13 @@ export default function Article() {
           <li><strong>Starting with &quot;The delegation of X is honoured/pleased/proud to...&quot;</strong>: every delegate uses this. It wastes your first five seconds.</li>
           <li><strong>Explaining the topic.</strong> Everyone in the room knows what climate change is. Skip the background.</li>
           <li><strong>No concrete position.</strong> &quot;X supports international cooperation&quot; tells the room nothing.</li>
-          <li><strong>No call to action.</strong> If you do not invite people to work with you, they will work with someone who did.</li>
+          <li><strong>No call to action.</strong> If you do not invite people to work with you, they will work with someone who does.</li>
           <li><strong>Reading word-for-word without eye contact.</strong> Know your speech well enough to look up frequently. Our <Link href="/blog/mun-public-speaking-tips">public speaking tips</Link> help with delivery.</li>
         </ul>
         <p>Our <Link href="/blog/mun-common-mistakes">common mistakes guide</Link> covers the errors chairs see beyond the speech.</p>
 
         <H2>Getting on the GSL Early</H2>
-        <p>Raise your placard the moment the chair opens the <Link href="/blog/general-speakers-list-guide">speakers list</Link>. Early slots matter, because delegates make bloc decisions based on what they hear in the first few speeches. Speaking fifth versus speaking fortieth is a significant advantage.</p>
+        <p>Raise your placard the moment the chair opens the <Link href="/blog/general-speakers-list-guide">speakers list</Link>. Early slots matter, because delegates make bloc decisions based on what they hear in the first few speeches. Speaking fifth rather than fortieth is a significant advantage.</p>
       </ArticleLayout>
     </>
   );

@@ -7,7 +7,7 @@ import { H2, H3, Callout, FactCard, TableWrap } from '@/components/blog/prose';
 export const metadata: Metadata = pageMetadata({
   title: 'MUN Press Corps: How a Press Committee Works and How to Win in One',
   description:
-    'The two press models, what a press delegate does all day, the article forms, interviewing without disrupting a room, and how to run a press committee',
+    'The two press models, what a press delegate does all day, the article forms, interviewing without disrupting a room, and how to run a press committee.',
   path: '/blog/mun-press-corps-guide',
   ogDescription: 'How a Model UN press corps works, and how press delegates are actually judged.',
   type: 'article',
@@ -109,12 +109,12 @@ export default function Article() {
           <li><strong>A printed newspaper</strong>, produced overnight and handed out at breakfast. The highest impact and the most work, and it needs a hard evening deadline and someone who can lay out pages.</li>
           <li><strong>A live blog or conference website</strong>, updated all day. Best for live coverage, and the easiest to run.</li>
           <li><strong>Social media accounts</strong> run by the press corps. Fast, but a poor showcase for long-form work and the hardest to moderate.</li>
-          <li><strong>A published archive</strong> collected after the conference. Good for portfolios, no impact during the weekend.</li>
+          <li><strong>A published archive</strong> collected after the conference. Good for portfolios, but no impact during the weekend.</li>
         </ul>
         <p>Whichever you use, the deadline is the discipline. A press committee without a published deadline produces nothing, because there is always another interview to do. Set the deadline earlier than you think and publish whatever exists at that moment.</p>
 
         <H2>How press delegates are judged</H2>
-        <p>Differently from every other committee, which is why press awards sometimes look arbitrary to delegates who have never done it. A good press director assesses five things. For how ordinary committees are scored, compare our <Link href="/blog/mun-judging-rubric">MUN judging rubric</Link>.</p>
+        <p>They are judged differently from every other committee, which is why press awards sometimes look arbitrary to delegates who have never done it. A good press director assesses five things. For how ordinary committees are scored, compare our <Link href="/blog/mun-judging-rubric">MUN judging rubric</Link>.</p>
         <TableWrap>
           <table>
             <thead><tr><th>Criterion</th><th>What it looks like</th></tr></thead>
@@ -151,7 +151,7 @@ export default function Article() {
 
         <H2>Why a press corps improves the whole conference</H2>
         <p>If you are a <Link href="/blog/mun-secretariat-roles">secretariat member</Link> deciding whether to add one, the argument is practical rather than sentimental. A press corps gives you an academic role for delegates who are strong writers but hate public speaking, which is a real and under-served group. It produces a record of the weekend that you can publish afterwards, which is marketing you did not have to write. It gives your social media something to post that is not a photograph of a lectern. And it changes delegate behaviour for the better: a committee that knows it is being covered is a committee where people check their facts.</p>
-        <p>The costs are modest: a director, a room with tables and power, a publication route, and a place in the programme for the press to be distributed. Start with six to ten reporters in year one and grow it once you know your publication route works. Our <Link href="/blog/mun-conference-planning">conference planning guide</Link> covers where it fits in the timeline, and if you want to see how established conferences structure their committee line-ups before adding one, the <Link href="/conferences/explore">conference directory</Link> is a quick comparison. For the committee mechanics themselves, you can set up a room and try the whole thing with your club free at <Link href="/create/sessions">gavelling.com/create</Link>, press corps included, and find out what a reporter can actually see from the back of the room.</p>
+        <p>The costs are modest: a director, a room with tables and power, a publication route, and a place in the programme for the press to be distributed. Start with six to ten reporters in year one and grow it once you know your publication route works. Our <Link href="/blog/mun-conference-planning">conference planning guide</Link> covers where it fits in the timeline, and if you want to see how established conferences structure their committee line-ups before adding one, the <Link href="/conferences/explore">conference directory</Link> is a quick comparison. For the committee mechanics themselves, you can set up a room and try the whole thing with your club free at <Link href="/create/sessions">gavelling.com/create/sessions</Link> and find out what a reporter can actually see from the back of the room.</p>
       </ArticleLayout>
     </>
   );

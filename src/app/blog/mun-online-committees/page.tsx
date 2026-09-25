@@ -50,25 +50,25 @@ export default function Article() {
         <p>Online MUN has moved from a pandemic emergency measure to a permanent fixture of the global MUN landscape. Conferences in 2026 range from fully in-person to fully virtual to <Link href="/blog/host-hybrid-mun-conference">hybrid models</Link> where some delegates attend in-room and others join remotely. Each format presents distinct challenges for chairs and delegates. This guide covers how to make online committee sessions work.</p>
 
         <H2>Why Online MUN Is Genuinely Harder</H2>
-        <p>Running a committee remotely is not simply a physical committee moved to video call. The mechanics are different in ways that catch many chairs off guard:</p>
+        <p>Running a committee remotely is not simply a physical committee moved to a video call. The mechanics are different in ways that catch many chairs off guard:</p>
         <ul>
           <li><strong>You cannot see the room.</strong> In person, a chair sees sixty faces and knows instantly if energy has dropped or if two delegates are negotiating. On video, you see twenty thumbnails and miss most non-verbal information.</li>
           <li><strong>Placard raises do not work.</strong> You need a replacement mechanism for delegates to signal they want to speak.</li>
-          <li><strong>Unmoderated caucuses are awkward.</strong> Breaking 60 people into negotiating groups on video call requires breakout room management that most chairs are not prepared for.</li>
+          <li><strong>Unmoderated caucuses are awkward.</strong> Breaking 60 people into negotiating groups on a video call requires breakout room management that most chairs are not prepared for.</li>
           <li><strong>Technical issues consume committee time.</strong> Audio drops, connection problems, and screen share failures collectively steal significant minutes from every session.</li>
         </ul>
 
         <H2>Essential Setup for Online Chairs</H2>
         <p>Our <Link href="/blog/mun-technology-guide">MUN technology guide</Link> covers the wider tool choice.</p>
         <ul>
-          <li><strong>A reliable committee management platform.</strong> Gavelling works equally well for online committees: delegates join via their phone or laptop, add themselves to the speakers list digitally, and see the timer in real time. This replaces placard raises entirely.</li>
+          <li><strong>A reliable committee management platform.</strong> Gavelling works equally well for online committees: delegates join via their phone or laptop, request a place on the speakers list digitally (the chair approves each request), and see the timer in real time. This replaces placard raises entirely.</li>
           <li><strong>A stable video conferencing platform.</strong> Zoom is standard at most online conferences. Microsoft Teams and Google Meet are alternatives. Have a backup plan for your backup plan, because these platforms still fail.</li>
-          <li><strong>A dedicated co-chair to manage tech.</strong> One chair runs debate; the other manages the waiting room, mutes unmuted delegates, manages breakout rooms, and handles technical support tickets. Never try to do both alone.</li>
+          <li><strong>A dedicated co-chair to manage tech.</strong> One chair runs debate; the other manages the waiting room, mutes unmuted delegates, runs breakout rooms and handles technical support tickets. Never try to do both alone.</li>
           <li><strong>A clear &quot;raise hand&quot; protocol.</strong> Use Zoom&apos;s raise hand feature or a reaction emoji as the replacement for placard raises. Announce the protocol at the start of every session.</li>
         </ul>
 
         <H2>Managing the GSL Online</H2>
-        <p>Opening the <Link href="/blog/general-speakers-list-guide">speakers list</Link> online works best through a committee management platform rather than a video chat chat box. Delegates request to speak through Gavelling, which queues them in order. The chair does not need to monitor a scrolling chat feed and can focus on the delegate currently speaking.</p>
+        <p>Opening the <Link href="/blog/general-speakers-list-guide">speakers list</Link> online works best through a committee management platform rather than the video call&apos;s chat box. Delegates request to speak through Gavelling, and each request the chair approves joins the list in order. The chair does not need to monitor a scrolling chat feed and can focus on the delegate currently speaking.</p>
         <Callout>Never use the video chat box as your speakers list. It scrolls, names get lost, and the chair ends up missing delegates. Use a dedicated platform.</Callout>
 
         <H2>Online Moderated Caucuses</H2>
@@ -88,7 +88,7 @@ export default function Article() {
           <li><strong>More frequent caucuses.</strong> Alternate formal debate and caucus periods more often than you would in person.</li>
           <li><strong>Call on delegates by name, not just country.</strong> This keeps people alert, since anyone might be next.</li>
           <li><strong>Use the chat.</strong> Drop document links, ask for real-time reactions, have co-chairs answer questions in the chat while you chair.</li>
-          <li><strong>Shorter sessions with breaks.</strong> Four-hour online committee sessions are brutal. Two hours, break, two hours is far more productive.</li>
+          <li><strong>Shorter sessions with breaks.</strong> Four-hour online committee sessions are brutal. Two hours, a break, then two more hours is far more productive.</li>
         </ul>
 
         <H2>Hybrid Committees</H2>

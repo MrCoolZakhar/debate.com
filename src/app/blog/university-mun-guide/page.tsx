@@ -17,7 +17,7 @@ const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
   headline: 'University Model UN: How It Differs From High School MUN',
-  description: 'What changes at university level Model UN, and how to arrive ready instead of surprised.',
+  description: 'What changes in university-level Model UN, and how to arrive ready instead of surprised.',
   url: 'https://gavelling.com/blog/university-mun-guide',
   datePublished: '2026-09-20',
   dateModified: '2026-09-20',
@@ -64,13 +64,13 @@ export default function Article() {
             </tbody>
           </table>
         </TableWrap>
-        <p>The single biggest change is the last row of the preparation column. At school, knowing your country&apos;s position is enough to be strong. At university it is the entry requirement, and what distinguishes delegates is knowing the institution: what this body can actually do, what it has done, what its funding mechanism is, and which of the proposals in the room are outside its mandate. A delegate who can say &quot;this committee has no authority to do that, but it can recommend it to the General Assembly, and here is the precedent&quot; wins arguments that better speakers lose.</p>
+        <p>The single biggest change is in preparation. At school, knowing your country&apos;s position is enough to be strong. At university it is the entry requirement, and what distinguishes delegates is knowing the institution: what this body can actually do, what it has done, what its funding mechanism is, and which of the proposals in the room are outside its mandate. A delegate who can say &quot;this committee has no authority to do that, but it can recommend it to the General Assembly, and here is the precedent&quot; wins arguments that better speakers lose.</p>
 
         <H2>Committee types you will meet more of</H2>
         <p>General Assembly committees still exist and are still where most first-year delegates should start. But the university circuit is weighted differently.</p>
         <ul>
           <li><strong>Specialised agencies and bodies.</strong> WHO, IAEA, UNHCR, ECOSOC commissions, regional bodies, ICJ and other legal committees. Smaller, more technical, and they reward reading the actual mandate.</li>
-          <li><strong>Crisis committees.</strong> Far more common than at school, often running in parallel with a backroom staff of several people. Speeches matter less, directives and private notes matter more.</li>
+          <li><strong>Crisis committees.</strong> Far more common than at school, often running in parallel with a backroom staff of several people. Speeches matter less; directives and private notes matter more.</li>
           <li><strong>Historical committees.</strong> Set at a date in the past, with the information available then. The discipline is not using hindsight, and chairs notice immediately when you do.</li>
           <li><strong>Joint crisis committees.</strong> Two or more rooms acting against each other in a shared world, with a backroom mediating. The most demanding format on the circuit.</li>
           <li><strong>Cabinets and non-state bodies.</strong> You represent a person with personal powers rather than a state, which changes everything about how you negotiate.</li>
@@ -79,7 +79,7 @@ export default function Article() {
 
         <H2>How a university society actually works</H2>
         <p>Most societies do three separate things, and confusing them is why new members think the society is not for them.</p>
-        <FactCard title="The three halves of a society">
+        <FactCard title="The three parts of a society">
           <ul>
             <li><strong>Training and internal debates.</strong> Weekly, open to everyone, no selection. This is the front door.</li>
             <li><strong>The travel team.</strong> A selected squad that attends external conferences, often with subsidised costs.</li>
@@ -115,7 +115,7 @@ export default function Article() {
         </TableWrap>
         <p>Two practical points. First, the society&apos;s own conference is usually its largest income source, which is why organising it matters so much and why the finance role on an organising committee is real work. Second, ask about hardship funding before you decide you cannot afford a conference. Many societies have a quiet subsidy that is never advertised, and many students&apos; unions have an access fund that applies to society activities.</p>
 
-        <H2>Chairing and staffing arrives sooner than you expect</H2>
+        <H2>Chairing and staffing arrive sooner than you expect</H2>
         <p>At school, chairing is for the final year. At university, second-year students chair regularly and first-years staff crisis backrooms, run logistics or serve on a secretariat. This happens because conferences need dozens of staff and there are only three or four year groups to draw on.</p>
         <p>Take it earlier rather than later. Chairing is the fastest way to understand procedure properly, it is what makes your <Link href="/blog/mun-on-your-cv">CV entry</Link> a leadership entry rather than a participation one, and it is the qualification that gets you invited to chair at other conferences, which is how people travel on the circuit without paying delegate fees. Our guide on <Link href="/blog/how-to-become-a-mun-chair">how to become a MUN chair</Link> covers applying. Our <Link href="/blog/how-to-chair-first-mun">first-time chair guide</Link> and <Link href="/blog/mun-chair-script">chair script</Link> are the two things worth reading before your first committee, and you can rehearse the mechanics free in a <Link href="/create/sessions">practice session</Link> before you stand in front of thirty people.</p>
 

@@ -362,7 +362,7 @@ export function EmblemPicker({ value, onPick, onUpload, onReset, uploading, canR
       {/* No emblem at all: the type-toned seal the committee would ship with. */}
       {!value && !uploading && (
         <span className="flex items-center gap-2 self-center ps-1" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 600, color: C.muted }}>
-          <MonogramMedallion text={monogramText || '—'} tone={tone} size={26} />
+          <MonogramMedallion text={monogramText || '–'} tone={tone} size={26} />
           Initials, until you pick one
         </span>
       )}

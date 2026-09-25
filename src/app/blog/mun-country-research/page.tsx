@@ -46,7 +46,7 @@ export default function Article() {
         slug="mun-country-research"
         pitch="Gavelling gives every delegate the topic, the speakers list and the committee’s documents on their own phone, so the one page you prepared is the only paper you carry."
       >
-        <p>Most delegates research the country. The good ones research the position. Those are different jobs: the first produces a page of facts about population and GDP that will never be spoken aloud, the second produces three sentences you can defend under attack for two days. This is the method, in the order that works, with the primary sources that make a chair believe you.</p>
+        <p>Most delegates research the country. The good ones research the position. Those are different jobs: the first produces a page of facts about population and GDP that will never be spoken aloud; the second produces three sentences you can defend under attack for two days. This is the method, in the order that works, with the primary sources that make a chair believe you.</p>
 
         <H2>The mistake: facts instead of a position</H2>
         <p>A <Link href="/blog/mun-country-profiles">country profile</Link> is background. A position is a claim of the form: <em>on this specific question, my government wants this outcome, for this reason, and will not accept that.</em> It is what your position paper argues, what your speech asserts and what you trade away in negotiation.</p>
@@ -56,7 +56,7 @@ export default function Article() {
         <H2>The profile that actually matters</H2>
         <p>Keep it to six things, each chosen because it predicts how a state votes rather than because it is interesting.</p>
         <ul>
-          <li><strong>Government type and who decides foreign policy.</strong> A parliamentary democracy with a coalition, a one-party state and a monarchy make commitments differently and at different speed.</li>
+          <li><strong>Government type and who decides foreign policy.</strong> A parliamentary democracy with a coalition, a one-party state and a monarchy make commitments differently and at different speeds.</li>
           <li><strong>The economy in one line, focused on dependence.</strong> Not GDP. What does this country sell, to whom, and what would it lose if the committee acted?</li>
           <li><strong>Alliances and dependencies.</strong> Treaty alliances, major aid donors, major creditors, the two or three capitals this government does not like to surprise.</li>
           <li><strong>Region and neighbours.</strong> Including the neighbour it has a live dispute with, because that shapes votes on sovereignty and intervention far more than ideology does.</li>
@@ -147,7 +147,7 @@ export default function Article() {
             </tbody>
           </table>
         </TableWrap>
-        <p className="gv-note">Record the date and the document reference for anything you intend to quote. &ldquo;A 2019 resolution&rdquo; is weak. A resolution number and a vote count is not.</p>
+        <p className="gv-note">Record the date and the document reference for anything you intend to quote. &ldquo;A 2019 resolution&rdquo; is weak. A resolution number and a vote count are not.</p>
 
         <H2>The one page you take into committee</H2>
         <p>Everything above compresses into a single sheet. If it does not fit on one side, you have not finished thinking.</p>

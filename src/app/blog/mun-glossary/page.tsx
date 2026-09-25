@@ -7,7 +7,7 @@ import { H2, H3, Callout, TableWrap } from '@/components/blog/prose';
 export const metadata: Metadata = pageMetadata({
   title: 'MUN Glossary: Every Term, Explained Plainly',
   description:
-    'Every word you will hear in a committee room, defined in one sentence, with what it means in practice and the terms people get wrong',
+    'Every word you will hear in a committee room, defined in one sentence, with what it means in practice and the terms people get wrong.',
   path: '/blog/mun-glossary',
   ogDescription: 'Every Model UN term, defined in one sentence, with what it means in practice.',
   type: 'article',
@@ -85,7 +85,7 @@ export default function Article() {
             ['Roll call', 'The chair reads every country to record attendance.', 'You answer "present" or "present and voting". Choose deliberately.'],
             ['Present', 'Attending, and free to abstain on substantive votes.', 'The default answer, and almost always the right one.'],
             ['Present and voting', 'Attending, and giving up the right to abstain.', 'You must vote yes or no on every resolution. Do not say it by accident.'],
-            ['Setting the agenda', 'The opening vote on which of two topics is debated first.', 'Looks trivial, decides your whole conference if you only researched one topic.'],
+            ['Setting the agenda', 'The opening vote on which of two topics is debated first.', 'Looks trivial, but decides your whole conference if you only researched one topic.'],
             ['GSL', 'General Speakers List: the standing queue of speeches on the topic as a whole.', 'The default state of the room. Everything else is an interruption of it.'],
             ['Moderated caucus', 'A short structured debate on one narrow sub-topic with its own speaker queue.', 'Needs a topic, a total time and a per-speaker time when you propose it.'],
             ['Unmoderated caucus', 'Formal rules suspended for a set period so delegates can talk freely.', 'Where the blocs and the drafts are actually built. Often shortened to "unmod".'],
@@ -99,8 +99,8 @@ export default function Article() {
             ['Dais', 'The front table where the chairs sit, and the chairs collectively.', '"Send it to the dais" means give it to the chairs.'],
             ['Yield', 'Giving the remainder of your speaking time to someone or something.', 'Three kinds: to another delegate, to questions, or to the chair. UNA-USA circuit mainly.'],
             ['Right of reply', 'A short rebuttal granted when a delegation has been attacked or misrepresented.', 'Not for disagreements. See the full guide linked below.'],
-            ['Tour de table', 'A round in which every delegation speaks in turn.', 'Common in European and simulation style committees. Slow but fair.'],
-            ['Lobbying', 'The THIMUN name for the drafting period before formal debate.', 'A whole session, sometimes a whole day, not a fifteen minute break.'],
+            ['Tour de table', 'A round in which every delegation speaks in turn.', 'Common in European and simulation-style committees. Slow but fair.'],
+            ['Lobbying', 'The THIMUN name for the drafting period before formal debate.', 'A whole session, sometimes a whole day, not a fifteen-minute break.'],
           ]}
         />
         <p>
@@ -113,11 +113,11 @@ export default function Article() {
         </p>
         <Terms
           rows={[
-            ['Point of order', 'A claim that the chair or a delegate has broken the rules.', 'May interrupt a speaker. Use it for a real procedural error, never to score a point.'],
+            ['Point of order', 'A claim that the chair or a delegate has broken the rules.', 'Under most rules it waits for the speaker to finish. Use it for a real procedural error, never to score a point.'],
             ['Point of parliamentary inquiry', 'A question about the rules or what is currently in order.', 'May not interrupt a speaker. The honest beginner question, and chairs like it.'],
             ['Point of personal privilege', 'A request about your ability to participate: audibility, temperature, leaving the room.', 'The only point that may interrupt a speaker for audibility. Not a debating device.'],
             ['Point of information', 'A question put to the delegate who just spoke.', 'On the THIMUN circuit this is the engine of debate, not an afterthought.'],
-            ['Follow up', "A second question to the same speaker, at the chair's discretion.", 'Ask for it explicitly. The answer is often no when the queue is long.'],
+            ['Follow-up', "A second question to the same speaker, at the chair's discretion.", 'Ask for it explicitly. The answer is often no when the queue is long.'],
           ]}
         />
         <p>
@@ -127,7 +127,7 @@ export default function Article() {
         <H2>Documents</H2>
         <Terms
           rows={[
-            ['Position paper', "A one or two page statement of your country's stance, submitted before the conference.", 'At many conferences this is an award eligibility requirement. Check the deadline.'],
+            ['Position paper', "A one- or two-page statement of your country's stance, submitted before the conference.", 'At many conferences this is an award eligibility requirement. Check the deadline.'],
             ['Working paper', 'An unofficial draft circulated during committee.', 'Not binding, not formatted strictly, and the fastest way to become a sponsor.'],
             ['Draft resolution', 'A working paper the chair has accepted for formal debate.', 'Numbered, formatted, and amendable. Often abbreviated DR.'],
             ['Resolution', 'A draft resolution that has passed.', 'Only after the vote. Calling your draft "the resolution" early is a beginner tell.'],
@@ -156,8 +156,8 @@ export default function Article() {
             ['Vice chair', 'The second chair, usually handling the speakers list and documents.', 'Often the person who actually decides whether your paper is formatted correctly.'],
             ['Rapporteur', 'The dais member keeping the record and the roll.', 'Sometimes the same person as the vice chair.'],
             ['Crisis director', 'The person running the back room of a crisis committee.', 'Decides what your directive achieves.'],
-            ['Secretary General', 'The student leading the conference.', 'Abbreviated SG. Opens and closes the conference.'],
-            ['USG', 'Under Secretary General: a secretariat member owning one portfolio.', 'USG Academics, USG Delegate Affairs, USG Logistics, and so on.'],
+            ['Secretary-General', 'The student leading the conference.', 'Abbreviated SG. Opens and closes the conference.'],
+            ['USG', 'Under-Secretary-General: a secretariat member owning one portfolio.', 'USG Academics, USG Delegate Affairs, USG Logistics, and so on.'],
             ['Secretariat', 'The organising team collectively.', 'The people to email when something has gone wrong.'],
             ['Faculty advisor', 'The teacher accompanying a school delegation.', 'Does not debate. Can raise welfare and safeguarding issues with the secretariat.'],
             ['Head delegate', 'The student leading a school or university delegation.', 'Usually handles logistics, preparation and the awards conversation afterwards.'],
@@ -175,15 +175,15 @@ export default function Article() {
             ['Procedural vote', 'A vote on how the committee operates.', 'No abstentions. Every delegate present must vote.'],
             ['Substantive vote', 'A vote on a resolution or an amendment.', 'Abstentions allowed, unless you answered present and voting.'],
             ['Simple majority', 'More than half of those voting.', 'The default threshold for most motions and most GA resolutions.'],
-            ['Two thirds majority', 'Two thirds of those voting.', 'Common for closing debate, and for resolutions at some conferences.'],
+            ['Two-thirds majority', 'Two thirds of those voting.', 'Common for closing debate, and for resolutions at some conferences.'],
             ['Abstain', 'Declining to vote yes or no on a substantive question.', 'Not a no. At most conferences abstentions are excluded from the denominator.'],
-            ['Pass', 'Declining to vote when your name is called in a roll call vote.', 'You are asked again at the end of the roll, and must then vote yes or no.'],
-            ['Roll call vote', 'Voting country by country, in order, aloud.', 'Slow and public. The record everyone remembers.'],
+            ['Pass', 'Declining to vote when your name is called in a roll-call vote.', 'You are asked again at the end of the roll, and must then vote yes or no.'],
+            ['Roll-call vote', 'Voting country by country, in order, aloud.', 'Slow and public. The record everyone remembers.'],
             ['Placard vote', 'Voting by raising placards, counted by the dais.', 'The fast default for procedural votes.'],
             ['Voting with rights', 'Voting yes or no and requesting time to explain afterwards.', 'You speak after the vote closes, briefly, on why you broke with expectation.'],
             ['Division of the question', 'A motion to vote on parts of a resolution separately.', 'Rare, powerful, and usually a sign a bloc has fractured.'],
             ['Veto', 'A vote against by a permanent member of the Security Council, which defeats the draft.', 'Only in UNSC simulations. An abstention is not a veto.'],
-            ['P5', 'The five permanent members: China, France, Russia, the United Kingdom, the United States.', 'Their agreement is the only route to a passed UNSC resolution.'],
+            ['P5', 'The five permanent members: China, France, Russia, the United Kingdom, the United States.', 'Any one of them can block a UNSC resolution by voting against. An abstention does not block.'],
           ]}
         />
         <p>
@@ -193,7 +193,7 @@ export default function Article() {
         <H2>Crisis</H2>
         <Terms
           rows={[
-            ['Crisis committee', 'A small committee responding to a developing scenario in real time.', 'Usually 10 to 25 seats, individual characters rather than countries.'],
+            ['Crisis committee', 'A small committee responding to a developing scenario in real time.', 'Usually 10 to 25 seats, with individual characters rather than countries.'],
             ['Frontroom', 'The committee room itself.', 'Where debate and public directives happen.'],
             ['Backroom', 'The staff room where the crisis is run.', 'Reads your private directives and decides what the world does next.'],
             ['Crisis update', 'A new development announced to the committee.', 'Often a direct response to something a delegate did. Listen for your own name.'],
@@ -201,7 +201,7 @@ export default function Article() {
             ['Private directive', "An individual action using your character's own powers.", 'Also called a personal directive. Stay inside your portfolio or it fails.'],
             ['Portfolio powers', 'What your assigned character can actually do.', 'A finance minister cannot order an airstrike. Check before you write.'],
             ['Joint crisis committee', 'Two or more crisis committees affecting each other.', 'Abbreviated JCC. Your enemy is another room of real delegates.'],
-            ['Arc', 'A sequence of related directives building toward a goal.', 'The difference between a memorable crisis delegate and a noisy one.'],
+            ['Arc', 'A sequence of related directives building towards a goal.', 'The difference between a memorable crisis delegate and a noisy one.'],
           ]}
         />
         <p>
@@ -212,8 +212,8 @@ export default function Article() {
         <Terms
           rows={[
             ['Allocation', 'The country or character you are assigned.', 'Sometimes chosen by preference, sometimes assigned on experience.'],
-            ['Delegation fee', 'A per school or per society charge, separate from per delegate fees.', 'Read what it includes before you compare two conferences.'],
-            ['Early bird', 'A reduced fee for registering before a cut-off.', 'Usually 10 to 20 percent off, and a real cash flow tool for organisers.'],
+            ['Delegation fee', 'A per-school or per-society charge, separate from per-delegate fees.', 'Read what it includes before you compare two conferences.'],
+            ['Early bird', 'A reduced fee for registering before a cut-off.', 'Usually 10 to 20 per cent off, and a real cash-flow tool for organisers.'],
             ['Opening ceremony', 'The formal start of the conference.', 'Keynote, SG speech, and the only time every delegate is in one room.'],
             ['Closing ceremony', 'The formal end, where awards are announced.', 'Bring your placard. Some conferences make you collect awards in person.'],
             ['Best Delegate', 'The top award in a committee.', 'Usually one per committee, sometimes with Outstanding Delegate below it.'],
@@ -277,7 +277,7 @@ export default function Article() {
 
         <H3>Abstain is not the same as pass</H3>
         <p>
-          Abstaining is a recorded decision not to take a side on a substantive question, and it is usually excluded from the majority calculation. Passing, in a roll call vote, is deferring your answer: you are called again at the end of the roll and must then vote yes or no. You cannot pass twice, and you cannot pass and then abstain.
+          Abstaining is a recorded decision not to take a side on a substantive question, and it is usually excluded from the majority calculation. Passing, in a roll-call vote, is deferring your answer: you are called again at the end of the roll and must then vote yes or no. You cannot pass twice, and you cannot pass and then abstain.
         </p>
 
         <H3>Moderated is not unmoderated</H3>

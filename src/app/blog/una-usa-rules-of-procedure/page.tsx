@@ -80,7 +80,7 @@ export default function Article() {
           &quot;There is a motion on the floor to set the agenda to Topic A. The chair will hear two speakers in favour and two against. We will then move directly to a vote by placard. Are there any speakers in favour?&quot;
         </ChairScript>
         <Callout>
-          The agenda vote is where a prepared delegate gets a free early win. You are not arguing the topic, you are arguing sequence: dependency, urgency and what this body has a mandate to do first. Thirty seconds of that beats ninety seconds of topic summary.
+          The agenda vote is where a prepared delegate gets a free early win. You are not arguing the topic; you are arguing sequence: dependency, urgency and what this body has a mandate to do first. Thirty seconds of that beats ninety seconds of topic summary.
         </Callout>
 
         <H2>The general speakers list</H2>
@@ -149,7 +149,7 @@ export default function Article() {
           </table>
         </TableWrap>
         <p>
-          Two things worth knowing about this list. Within a category, more disruptive still wins: a twenty minute unmoderated caucus is taken before a ten minute one. And closure of debate at two thirds is the one genuinely high threshold in the ruleset, because it permanently ends debate and no conference wants that done by a bare majority.
+          Two things worth knowing about this list. Within a category, more disruptive still wins: a twenty-minute unmoderated caucus is taken before a ten-minute one. And closure of debate at two thirds is the one genuinely high threshold in the ruleset, because it permanently ends debate and no conference wants that done by a bare majority.
         </p>
 
         <H2>Caucuses</H2>
@@ -165,13 +165,13 @@ export default function Article() {
         </p>
         <H3>Unmoderated caucus</H3>
         <p>
-          Formal rules suspended for a stated total time. Only one parameter is required. Delegates move freely. This is where drafting and bloc building happen, and our <Link href="/blog/unmoderated-caucus-guide">unmoderated caucus guide</Link> covers what to do with it.
+          Formal rules suspended for a stated total time. Only one parameter is required. Delegates move freely. This is where drafting and bloc-building happen, and our <Link href="/blog/unmoderated-caucus-guide">unmoderated caucus guide</Link> covers what to do with it.
         </p>
 
         <H2>Points</H2>
         <ul>
-          <li><strong>Point of personal privilege.</strong> About your ability to participate: audibility, temperature, needing to leave. It is the only point that may interrupt a speaker, and only for audibility. Using it to make a substantive remark is a misuse chairs notice.</li>
-          <li><strong>Point of order.</strong> A claim that the rules have been broken by the chair or by a delegate. May interrupt a speaker at some conferences and not at others. It is not a debating device, and the <Link href="/blog/mun-points-of-order">points of order guide</Link> sets out what genuinely qualifies.</li>
+          <li><strong>Point of personal privilege.</strong> About your ability to participate: audibility, temperature, needing to leave. Under most rules it is the only point that may interrupt a speaker, and only for audibility. Using it to make a substantive remark is a misuse chairs notice.</li>
+          <li><strong>Point of order.</strong> A claim that the rules have been broken by the chair or by a delegate. Under most rules it may not interrupt a speaker, though some conferences allow it. It is not a debating device, and the <Link href="/blog/mun-points-of-order">points of order guide</Link> sets out what genuinely qualifies.</li>
           <li><strong>Point of parliamentary inquiry.</strong> A question to the chair about the rules or what is currently in order. May not interrupt a speaker. The honest beginner question, and chairs would rather answer it than rule you out of order twice.</li>
           <li><strong>Point of information.</strong> A question to a delegate who has yielded to questions, or to the chair. Must be a question. Our guide to <Link href="/blog/mun-points-explained">MUN points explained</Link> covers each one in more depth.</li>
         </ul>

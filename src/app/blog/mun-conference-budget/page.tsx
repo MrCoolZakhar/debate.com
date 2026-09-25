@@ -80,7 +80,7 @@ export default function Article() {
               {[
                 ['Venue', 'Room hire or internal charge', 'Committed', '0 to 4,000'],
                 ['Venue', 'Technical: AV, projectors, microphones', 'Committed', '0 to 900'],
-                ['Venue', 'Security, caretaking, out of hours access', 'Committed', '0 to 600'],
+                ['Venue', 'Security, caretaking, out-of-hours access', 'Committed', '0 to 600'],
                 ['Venue', 'Cleaning', 'Committed', '0 to 400'],
                 ['Catering', 'Lunch, per delegate per day', 'Per delegate', '6 to 18 each'],
                 ['Catering', 'Refreshment breaks', 'Per delegate', '2 to 5 each'],
@@ -179,7 +179,7 @@ export default function Article() {
           Read the last row rather than the fee. The small conference breaks even at 81 percent of target, which means a disappointing year is survivable. The large one does not break even at its target at all: at a 60 euro fee it needs 547 delegates to cover 14,000 of committed cost, so either the fee rises, the venue cost falls, or sponsorship closes the gap. That is the entire argument for starting small, expressed as arithmetic.
         </p>
         <Callout>
-          Calculate your break-even headcount before you set the fee, and write it on the first line of the spreadsheet. If it is above 85 percent of your realistic target, you do not have a budget, you have a bet.
+          Calculate your break-even headcount before you set the fee, and write it on the first line of the spreadsheet. If it is above 85 percent of your realistic target, you do not have a budget: you have a bet.
         </Callout>
 
         <H2>The four costs first-timers forget</H2>
@@ -197,7 +197,7 @@ export default function Article() {
         </p>
         <H3>4. The gap between registered and paid</H3>
         <p>
-          Some registered delegates never pay and some paid delegates never arrive. At a first conference expect a meaningful gap between the three numbers of registered, paid and attended, and find out what yours is so you can plan around it next year. Budget catering against paid, not registered, and set your <Link href="/blog/mun-conference-registration-payments">payment deadline</Link> before your catering numbers deadline so the two agree.
+          Some registered delegates never pay and some paid delegates never arrive. At a first conference expect a meaningful gap between the three numbers (registered, paid and attended), and find out what yours is so you can plan around it next year. Budget catering against paid, not registered, and set your <Link href="/blog/mun-conference-registration-payments">payment deadline</Link> before your catering numbers deadline so the two agree.
         </p>
 
         <H2>Fee structures that work</H2>
@@ -218,7 +218,7 @@ export default function Article() {
           <li><strong>When does the venue balance fall due relative to your registration deadline?</strong> If the balance is due before registration closes, you are paying with money you do not have yet. Negotiate the balance date, or move the early bird earlier.</li>
         </ul>
         <p>
-          Stage deposits where you can: a deposit on booking, a second at numbers confirmation, the balance after the event is a common and very reasonable ask for a venue that wants repeat business from a conference that intends to run annually. Say that out loud when negotiating.
+          Stage deposits where you can. A deposit on booking, a second at numbers confirmation and the balance after the event is a common and very reasonable ask for a venue that wants repeat business from a conference that intends to run annually. Say that out loud when negotiating.
         </p>
 
         <H2>What software costs, and the per-user trap</H2>
@@ -229,7 +229,7 @@ export default function Article() {
           Some conference platforms charge the organiser per participant per day. That model scales against you precisely as the conference succeeds: a good year, where registration overshoots, raises your bill at the moment you are least able to renegotiate. It is also a committed cost signed months before you know your headcount, which is the worst category for a first-year budget.
         </p>
         <p>
-          Gavelling takes the other side of that. The organiser is charged nothing. Participant payments run through your own Stripe Connect account, so you are merchant of record: the money is yours, and the platform fee, 5 percent, plus the card processing pass-through, is shown and recomputed server-side rather than invoiced to you later. Manual payment with proof review exists for the many delegations that pay by bank transfer. The comparison against the paid platforms, with their actual published pricing, is in <Link href="/blog/best-mun-software-2026">best MUN software in 2026</Link> and <Link href="/blog/mymun-alternative">the mymun alternative comparison</Link>.
+          Gavelling takes the other side of that. The organiser is charged nothing. Participant payments run through your own Stripe Connect account, so you are merchant of record: the money is yours. There is no platform fee: the participant pays exactly the invoice amount, recomputed server-side, and Stripe&apos;s own processing fee comes out of your Stripe account as it would with any Stripe account. Manual payment with proof review is a first-class route, not a fallback, for the many delegations that pay by bank transfer. The comparison against the paid platforms, with their actual published pricing, is in <Link href="/blog/best-mun-software-2026">best MUN software in 2026</Link> and <Link href="/blog/mymun-alternative">the mymun alternative comparison</Link>.
         </p>
         <p>
           For the committee side specifically, free tools are compared in our <Link href="/blog/free-mun-tools">free MUN tools guide</Link>, and you can open a Gavelling session with no account at <Link href="/create/sessions">/create</Link> to see what a projected speakers list looks like in your actual room before committing to anything.

@@ -88,7 +88,7 @@ export default function Article1() {
         </ul>
         <H3>Calculating quorum</H3>
         <p>
-          Quorum is typically 50% + 1 of total delegations. If you have 20 delegations, you need at least 11 present to proceed. If quorum is not met, the chair typically recesses the session briefly and takes attendance again after a short wait. If quorum still cannot be met, the session may be postponed.
+          Quorum is typically 50% + 1 of total delegations. If you have 20 delegations, you need at least 11 present to proceed. If quorum is not met, the chair usually recesses the session briefly and takes attendance again after a short wait. If quorum still cannot be met, the session may be postponed.
         </p>
 
         <H2>3. Setting the Agenda</H2>
@@ -105,7 +105,7 @@ export default function Article1() {
         </p>
         <H3>How delegates add themselves</H3>
         <p>
-          Delegates raise their placard when the chair asks for additions to the GSL. The chair (or co-chair) notes each delegation in order. In Gavelling, delegates can request to speak directly from their device and the chair approves additions with one tap.
+          Delegates raise their placard when the chair asks for additions to the GSL. The chair (or co-chair) notes each delegation in order. In Gavelling, delegates can request to speak directly from their device, and the chair approves additions with one tap.
         </p>
         <H3>Speaking time</H3>
         <p>
@@ -168,7 +168,7 @@ export default function Article1() {
           At the end of a session, a delegate typically motions to adjourn the meeting. The chair calls the vote and, if passed, formally closes the session with a gavel strike. A brief closing statement from the chair, thanking delegates for their participation and summarising what was accomplished, leaves the committee on a positive note.
         </p>
         <p>
-          If you used Gavelling, the session data (speaker history, votes, chat, documents) is archived automatically and accessible for post-conference review or delegate feedback. If your conference gives awards, see our <Link href="/blog/mun-judging-rubric" style={{ color: '#1B3828', fontWeight: 600 }}>MUN judging rubric</Link>.
+          If you used Gavelling, download the session record (a spreadsheet with the history, scores, speeches, attendance and documents) from the End View or the scoreboard for post-conference review. Do it straight away: a standalone room is deleted about an hour after it ends (a suspended one after 36 to 72 hours), while a conference room is kept. If your conference gives awards, see our <Link href="/blog/mun-judging-rubric" style={{ color: '#1B3828', fontWeight: 600 }}>MUN judging rubric</Link>.
         </p>
       </ArticleLayout>
     </>

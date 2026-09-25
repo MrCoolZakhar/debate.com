@@ -8,7 +8,7 @@ import Link from 'next/link';
 export const metadata: Metadata = pageMetadata({
   title: 'How to Write a MUN Resolution: Clauses, Format & Examples',
   description:
-    'Learn how to write a Model UN resolution from scratch: preambulatory clauses, operative clauses, correct format, sponsor rules, and amendment process.',
+    'Learn how to write a Model UN resolution from scratch: preambulatory clauses, operative clauses, correct format, sponsor rules and the amendment process.',
   path: '/blog/mun-resolution-writing',
   ogDescription:
     'The complete guide to drafting MUN resolutions that pass.',
@@ -65,7 +65,7 @@ export default function Article() {
         <p><em>Committee: General Assembly Third Committee | Topic: Protection of Refugees | Sponsors: Germany, Canada, Kenya | Signatories: Brazil, India, Sweden...</em></p>
 
         <H3>Preambulatory Clauses</H3>
-        <p>Preambulatory clauses come first and provide context and justification. They begin with a present participle (a gerund) and end with a comma. They explain why the committee is acting, citing previous resolutions, existing international law, or recognising the scale of the problem.</p>
+        <p>Preambulatory clauses come first and provide context and justification. They begin with a participle, usually a present participle, and end with a comma. They explain why the committee is acting, citing previous resolutions, existing international law, or recognising the scale of the problem.</p>
         <p>Common preambulatory phrases:</p>
         <ul>
           <li><em>Recalling:</em> past UN resolutions on this topic</li>
@@ -78,14 +78,14 @@ export default function Article() {
         <Callout>Preambulatory clauses are italicised in formal resolution format. They do not create obligations; they only set context. Keep them tight. Three to five is usually enough.</Callout>
 
         <H3>Operative Clauses</H3>
-        <p>Operative clauses are the resolution&apos;s actual content. They begin with a strong verb in the third person and end with a semicolon, except the final one which ends with a period. They are numbered and are what gets debated, amended, and voted on.</p>
+        <p>Operative clauses are the resolution&apos;s actual content. They begin with a strong verb in the third person and end with a semicolon, except the final one, which ends with a full stop. They are numbered and are what gets debated, amended, and voted on.</p>
         <p>Common operative phrases:</p>
         <ul>
           <li><em>Calls upon:</em> requests but does not require action</li>
           <li><em>Urges:</em> stronger than calls upon</li>
           <li><em>Strongly urges:</em> even stronger</li>
           <li><em>Decides:</em> binding, used when the body has authority to mandate</li>
-          <li><em>Requests:</em> asks another body (e.g. Secretary-General) to take action</li>
+          <li><em>Requests:</em> asks another body (e.g. the Secretary-General) to take action</li>
           <li><em>Encourages:</em> soft language for sensitive topics</li>
           <li><em>Establishes:</em> creates a new mechanism or body</li>
           <li><em>Recommends:</em> suggests action without requiring it</li>

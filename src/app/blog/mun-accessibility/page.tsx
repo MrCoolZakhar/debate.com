@@ -8,7 +8,7 @@ import { H2, Callout, ChairScript, FactCard, TableWrap } from '@/components/blog
 export const metadata: Metadata = pageMetadata({
   title: 'Accessible MUN Conferences: A Practical Inclusion Guide for Organisers',
   description:
-    'What to change so your conference is genuinely attendable: venue, documents, committee procedure, cost, and the access statement that increases attendance',
+    'What to change so your conference is genuinely attendable: venue, documents, committee procedure, cost, and the access statement that increases attendance.',
   path: '/blog/mun-accessibility',
   ogDescription: 'Venue, documents, procedure and cost: making a MUN conference genuinely attendable.',
   type: 'article',
@@ -45,7 +45,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <ArticleLayout
         slug="mun-accessibility"
-        pitch="Gavelling puts the speakers list, the timer and every document on each delegate phone, so nobody has to read a projector from the back row."
+        pitch="Gavelling puts the speakers list, the timer and every document on each delegate's phone, so nobody has to read a projector from the back row."
       >
         <p>Most Model UN conferences are not inaccessible on purpose. They are inaccessible because nobody asked. The room with the step was booked because it was free, the schedule has no gaps because the programme was ambitious, and the background guides are scanned PDFs because that is what the chair had. Almost every fix in this guide is cheap, most of them are free, and several of them make the conference better for everybody who attends.</p>
 
@@ -64,7 +64,7 @@ export default function Article() {
           <li>Step-free route from the nearest drop-off point and from public transport, not just from the car park</li>
           <li>Lift capacity and location, plus what happens if it fails. Book ground-floor rooms for the committees you know need them</li>
           <li>Door widths and whether heavy fire doors are held open or need to be pushed</li>
-          <li>Accessible toilets: how many, on which floors, and are they locked</li>
+          <li>Accessible toilets: how many, on which floors, and whether they are locked</li>
           <li>Committee rooms with removable chairs, so a wheelchair user takes a place at the table rather than a space at the end of it</li>
           <li>A seat near the door for anyone who may need to leave and return without crossing the room</li>
           <li>Lunch queues: seating that does not require standing with a tray, and a route through</li>
@@ -93,7 +93,7 @@ export default function Article() {
         <H2>Neurodivergent delegates</H2>
         <p>Much of what autistic and ADHD delegates find hard about MUN is not the debate. It is the sensory load, the unpredictability, and the unmoderated caucus.</p>
         <ul>
-          <li><strong>A quiet room.</strong> Signposted, open all day, no phones out loud, not the same room as the staff base. Say in the programme that it exists and that using it is normal.</li>
+          <li><strong>A quiet room.</strong> Signposted, open all day, no phones on speaker, not the same room as the staff base. Say in the programme that it exists and that using it is normal.</li>
           <li><strong>A predictable schedule.</strong> <Link href="/blog/mun-conference-day-operations">Publish timings</Link> and stick to them. If a session overruns, say by how long. &quot;We will resume at 14:10&quot; is workable. &quot;Shortly&quot; is not.</li>
           <li><strong>Written procedure.</strong> Publish the rules of procedure in writing and keep a one-page version in every committee room, so nobody has to ask what is happening or guess from context.</li>
           <li><strong>Warn before change.</strong> A chair who says &quot;in two minutes we will move to voting procedure&quot; costs nothing and helps a lot of people.</li>
@@ -110,7 +110,7 @@ export default function Article() {
           <li>Never call on someone who has not put themselves on the list</li>
           <li>Take a written question or a submitted point as a valid way to contribute</li>
         </ul>
-        <ChairScript>&quot;Before we begin the general speakers list, a note. Every delegate here is welcome to read from prepared notes. Speaking time is ninety seconds and the clock is on the screen. If you would like to be added to the list, raise your placard now or message the dais at any time.&quot;</ChairScript>
+        <ChairScript>&quot;Before we begin the General Speakers List, a note. Every delegate here is welcome to read from prepared notes. Speaking time is ninety seconds and the clock is on the screen. If you would like to be added to the list, raise your placard now or message the dais at any time.&quot;</ChairScript>
 
         <H2>Language and speaking speed</H2>
         <p>At most international conferences, a large share of the room is debating in a second or third language, at speed, in a register full of jargon. That is an access issue even though it is rarely filed as one.</p>

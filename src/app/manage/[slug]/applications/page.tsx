@@ -954,7 +954,7 @@ function committeeFull(c: { name: string; abbreviation: string | null } | null |
  *  "Disarmament and International Security Committee" → "DISEC" + full name.
  *  Short names (or ones with no distinct abbreviation) stay as-is, name only. */
 function committeeDisplay(c: { name: string; abbreviation: string | null } | null | undefined): { primary: string; secondary: string | null } {
-  if (!c) return { primary: '—', secondary: null };
+  if (!c) return { primary: '–', secondary: null };
   const hasAbbr = !!c.abbreviation && c.abbreviation.toUpperCase() !== c.name.toUpperCase();
   const isLong = c.name.length > 16 || c.name.trim().split(/\s+/).length >= 3;
   if (hasAbbr && isLong) return { primary: c.abbreviation!, secondary: c.name };
@@ -1128,7 +1128,7 @@ function InfoHint({ label, text }: { label: string; text: string }) {
 
 /** Committee shorthand, abbreviation when set, else a monogram of the name. */
 function committeeAbbr(c: { name: string; abbreviation: string | null } | null | undefined): string {
-  if (!c) return '—';
+  if (!c) return '–';
   if (c.abbreviation) return c.abbreviation;
   const mono = c.name
     .split(/\s+/)
@@ -4495,7 +4495,7 @@ export default function ApplicationsPage() {
                         )}
                       </span>
                     ) : (
-                      <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontStyle: 'italic', color: NEU.inkSoft, minHeight: MID_BLOCK_H, display: 'flex', alignItems: 'center' }}>—</span>
+                      <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontStyle: 'italic', color: NEU.inkSoft, minHeight: MID_BLOCK_H, display: 'flex', alignItems: 'center' }}>–</span>
                     )}
 
                     {app.status === 'rejected' && app.organizer_note && (

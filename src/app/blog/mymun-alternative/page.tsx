@@ -7,7 +7,7 @@ import { H2, H3, TableWrap } from '@/components/blog/prose';
 export const metadata: Metadata = pageMetadata({
   title: 'mymun Alternative 2026: mymun and MUN Command vs Gavelling',
   description:
-    'MUN Command is mymun’s software, and the two brands are converging. What mymun costs (€1 per user per day), what its free tier does not save, where it genuinely beats Gavelling, and where Gavelling — free to the conference — wins.',
+    'MUN Command is mymun’s software, and the two brands are converging. What mymun costs (€1 per user per day), what its free tier does not save, where it genuinely beats Gavelling, and where Gavelling, free to the conference, wins.',
   path: '/blog/mymun-alternative',
   keywords: [
     'mymun',
@@ -23,7 +23,7 @@ export const metadata: Metadata = pageMetadata({
     'MUN committee software',
   ],
   ogDescription:
-    'MUN Command is mymun’s software. What it costs, what its free tier loses, and how Gavelling compares — including where mymun wins.',
+    'MUN Command is mymun’s software. What it costs, what its free tier loses, and how Gavelling compares, including where mymun wins.',
   type: 'article',
 });
 
@@ -77,7 +77,7 @@ const faqSchema = {
       name: 'What is the best free alternative to mymun and MUN Command?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'Gavelling (gavelling.com) covers both halves of the same job — live committee sessions and full conference administration — and charges the conference nothing for the software. Sessions persist to a real database, so a chair can close a laptop mid-committee and reopen it, and delegates join with a six-character code on any device with no account and no download. Where mymun is ahead: native iOS, iPad and Android apps, eight interface languages against Gavelling’s four, in-app motions raised by delegates, and a countries-by-committees allocation matrix.',
+        text: 'Gavelling (gavelling.com) covers both halves of the same job (live committee sessions and full conference administration) and charges the conference nothing for the software. Sessions persist to a real database, so a chair can close a laptop mid-committee and reopen it, and delegates join with a six-character code on any device with no account and no download. Where mymun is ahead: native iOS, iPad and Android apps, eight interface languages against Gavelling’s four, in-app motions raised by delegates, and a countries-by-committees allocation matrix.',
       },
     },
     {
@@ -106,19 +106,19 @@ export default function MymunAlternative() {
           If you have been searching for <strong>MUN Command</strong> and keep landing on <strong>mymun</strong>, you are not lost. They are the same operation, and this page is the comparison nobody at either company is going to write for you: what mymun actually costs a conference, what its free tier quietly does not do, the places where it is genuinely better than <strong>Gavelling</strong>, and the places where it is not.
         </p>
         <p>
-          We build Gavelling, so read this with that in mind. We have tried to make it the kind of comparison we would want if we were the ones choosing — every number sourced, every concession made in plain language, and an open invitation at the bottom to correct anything that is wrong.
+          We build Gavelling, so read this with that in mind. We have tried to make it the kind of comparison we would want if we were the ones choosing: every number sourced, every concession made in plain language, and an open invitation at the bottom to correct anything that is wrong.
         </p>
 
         <H2>First: mymun and MUN Command are the same thing</H2>
         <p>
-          <strong>mymun</strong> is the parent platform — conference listings, applications, delegate profiles, the administrative layer a conference organiser lives in. <strong>MUN Command</strong> (also written <strong>MUNCommand</strong>) is the live-session half of that same product: the software a chair actually runs a committee on, given its own name, its own product page on mymun.com, and for a while its own social accounts.
+          <strong>mymun</strong> is the parent platform: conference listings, applications, delegate profiles, the administrative layer a conference organiser lives in. <strong>MUN Command</strong> (also written <strong>MUNCommand</strong>) is the live-session half of that same product: the software a chair actually runs a committee on, given its own name, its own product page on mymun.com, and for a while its own social accounts.
         </p>
         <p>
-          That separate branding worked. MUN Command is the name chairs remember and search for, which is why more people google &ldquo;muncommand&rdquo; than google the company that makes it. But the two are now converging under the mymun name: the MUN Command social accounts point followers to the main mymun account rather than posting on their own.
+          That separate branding worked. MUN Command is the name chairs remember and search for, which is why more people google &ldquo;muncommand&rdquo; than the company that makes it. But the two are now converging under the mymun name: the MUN Command social accounts point followers to the main mymun account rather than posting on their own.
         </p>
         <div className="gv-callout gv-callout-plain">
           <p>
-            <strong>Short version:</strong> if you are evaluating &ldquo;MUN Command&rdquo; and &ldquo;mymun&rdquo; as two products, stop — you are evaluating one company with two halves. The session app and the conference platform are sold separately and priced separately, and that pricing split is the first thing worth understanding.
+            <strong>Short version:</strong> if you are evaluating &ldquo;MUN Command&rdquo; and &ldquo;mymun&rdquo; as two products, stop. You are evaluating one company with two halves. The session app and the conference platform are sold separately and priced separately, and that pricing split is the first thing worth understanding.
           </p>
         </div>
 
@@ -127,7 +127,7 @@ export default function MymunAlternative() {
           mymun&rsquo;s pricing is refreshingly legible, which is more than can be said for most edtech: <strong>€1 per user per day</strong>, free for up to 10 users. A student treasurer can work out the line item before committing, and that is a real virtue.
         </p>
         <p>
-          The problem is not the clarity. It is the shape. Per-user-per-day pricing scales against the two things a conference is trying to grow — how many people come and how long they stay:
+          The problem is not the clarity. It is the shape. Per-user-per-day pricing scales against the two things a conference is trying to grow: how many people come and how long they stay:
         </p>
         <TableWrap>
           <table>
@@ -155,10 +155,10 @@ export default function MymunAlternative() {
           </table>
         </TableWrap>
         <p className="gv-note">
-          Arithmetic from mymun&rsquo;s own published rate of €1 per user per day, free up to 10 users. Figures are indicative — your final invoice depends on how mymun counts a &ldquo;user&rdquo; and a &ldquo;day&rdquo;, which is worth asking them directly before you budget.
+          Arithmetic from mymun&rsquo;s own published rate of €1 per user per day, free up to 10 users. Figures are indicative. Your final invoice depends on how mymun counts a &ldquo;user&rdquo; and a &ldquo;day&rdquo;, which is worth asking them directly before you budget.
         </p>
         <p>
-          Three thousand euros is not an abstraction at that scale. It is a venue deposit, or a printing run, or roughly a dozen financial-aid places for delegates who could not otherwise attend. Whether that is good value is your call, not ours — but it should be a decision you make deliberately rather than one you discover in week eleven of planning.
+          Three thousand euros is not an abstraction at that scale. It is a venue deposit, or a printing run, or roughly a dozen financial-aid places for delegates who could not otherwise attend. Whether that is good value is your call, not ours, but it should be a decision you make deliberately rather than one you discover in week eleven of planning.
         </p>
 
         <H3>The free tier has a footnote that matters</H3>
@@ -166,22 +166,22 @@ export default function MymunAlternative() {
           mymun&rsquo;s free <strong>Session App</strong> gives you 3 modes of debate and 3 motion types, against 11 modes and 21 motion types on the paid tier. That is a legible, honest upgrade trigger and we have no complaint about it.
         </p>
         <p>
-          The line we would flag to any chair is a different one, printed on their own pricing page: <strong>&ldquo;Changes are not saved automatically.&rdquo;</strong> A chair who arrives via a link and never reads the pricing page will not know that until a browser tab dies in front of forty delegates. Gavelling&rsquo;s free sessions write every roll-call status, every speakers-list position and every motion to a real database and sync it across devices in realtime — there is no persistence tier to buy, because there is no tier where persistence is off.
+          The line we would flag to any chair is a different one, printed on their own pricing page: <strong>&ldquo;Changes are not saved automatically.&rdquo;</strong> A chair who arrives via a link and never reads the pricing page will not know that until a browser tab dies in front of forty delegates. Gavelling&rsquo;s free sessions write every roll-call status, every speakers-list position and every motion to a real database and sync it across devices in realtime. There is no persistence tier to buy, because there is no tier where persistence is off.
         </p>
 
         <H2>Where mymun and MUN Command are genuinely better</H2>
         <p>
-          This is the section most comparison pages skip. mymun has been at this far longer than we have, and there are things it does that we simply cannot match today. If any of these are decisive for you, buy mymun — that is the correct answer and we would rather you got it here than found out in March.
+          This is the section most comparison pages skip. mymun has been at this far longer than we have, and there are things it does that we simply cannot match today. If any of these are decisive for you, buy mymun. That is the correct answer and we would rather you got it here than found out in March.
         </p>
         <ul>
           <li>
-            <strong>Native iOS, iPad and Android apps.</strong> Gavelling has none. Being a delegate is a phone job — eight hours, one device, a room full of people — and a native app gets an app-switcher slot, drops the browser chrome and holds state through backgrounding in a way a web page does not. Gavelling runs in the browser on any device with nothing to install, which is an advantage on conference morning and a disadvantage for the eight hours after it.
+            <strong>Native iOS, iPad and Android apps.</strong> Gavelling has none. Being a delegate is a phone job (eight hours, one device, a room full of people), and a native app gets an app-switcher slot, drops the browser chrome and holds state through backgrounding in a way a web page does not. Gavelling runs in the browser on any device with nothing to install, which is an advantage on conference morning and a disadvantage for the eight hours after it.
           </li>
           <li>
             <strong>Offline support.</strong> mymun advertises offline operation with sync on reconnect. Gavelling has no offline mode at all: it is installable to a home screen, but a committee room with dead Wi-Fi is a committee room where Gavelling stops updating. A venue with known-bad connectivity is a genuine reason to pick them.
           </li>
           <li>
-            <strong>Delegates can raise motions from their own device.</strong> On mymun this is a headline feature, and it is a real one — it moves work off the dais and stops the chair being a typist. On Gavelling, motions are chair-entered only; delegates can request a speaking slot and request to join, but a motion still goes through the dais. This is the single feature gap we get asked about most, and it is on our list.
+            <strong>Delegates can raise motions from their own device.</strong> On mymun this is a headline feature, and it is a real one: it moves work off the dais and stops the chair being a typist. On Gavelling, motions are chair-entered only; delegates can request a speaking slot and request to join, but a motion still goes through the dais. This is the single feature gap we get asked about most, and it is on our list.
           </li>
           <li>
             <strong>Eight interface languages against our four.</strong> Gavelling ships English, Spanish, French and Arabic. If your conference runs in a language outside that set, mymun covers more ground and there is no clever way for us to spin that.
@@ -193,7 +193,7 @@ export default function MymunAlternative() {
             <strong>Fill rings on the committees board.</strong> Their committee cards show seats <em>taken</em> against capacity as a donut, so the under-filled committee is findable in peripheral vision six weeks out. Gavelling&rsquo;s committee cards currently show capacity only.
           </li>
           <li>
-            <strong>An applications queue built for hundreds of repetitions.</strong> Their unified To Do list — chairs, delegates and whole delegations in one stream, an unread-style count badge in the sidebar, oversized accept/reject targets, payment state on the row — is designed for the thousandth decision, not the first. Gavelling&rsquo;s applications page carries more context per applicant, but theirs is faster to grind through at volume.
+            <strong>An applications queue built for hundreds of repetitions.</strong> Their unified To Do list (chairs, delegates and whole delegations in one stream, an unread-style count badge in the sidebar, oversized accept/reject targets, payment state on the row) is designed for the thousandth decision, not the first. Gavelling&rsquo;s applications page carries more context per applicant, but theirs is faster to grind through at volume.
           </li>
           <li>
             <strong>Reach and incumbency.</strong> mymun is where a lot of delegates already have profiles and where a lot of conferences already list. That network is real and it is not something a feature table captures.
@@ -202,12 +202,12 @@ export default function MymunAlternative() {
 
         <H2>Where Gavelling is different</H2>
         <p>
-          <Link href="/">Gavelling</Link> covers the same two layers — the live committee and the conference around it — with a different set of choices. Everything below is a description of software that exists today, not a roadmap.
+          <Link href="/">Gavelling</Link> covers the same two layers, the live committee and the conference around it, with a different set of choices. Everything below is a description of software that exists today, not a roadmap.
         </p>
 
         <H3>The conference is not the customer</H3>
         <p>
-          Gavelling charges the conference nothing for the software, at any size, for any number of days. Delegate fees run through the conference&rsquo;s own Stripe account — the conference is merchant of record, the money lands in its own bank, and Stripe&rsquo;s standard processing fee applies. Gavelling does not take a cut of it.
+          Gavelling charges the conference nothing for the software, at any size, for any number of days. Delegate fees run through the conference&rsquo;s own Stripe account: the conference is merchant of record, the money lands in its own bank, and Stripe&rsquo;s standard processing fee applies. Gavelling does not take a cut of it.
         </p>
         <p>
           This is not charity and it is worth being straight about the model: Gavelling earns on the individual side, through optional applicant credits and an optional personal subscription. What it does not do is put a price on your attendance, which means nobody is ever choosing between an extra committee and the software bill.
@@ -218,24 +218,24 @@ export default function MymunAlternative() {
           mymun sells one-click import from its conference platform into MUN Command, because they are two systems. In Gavelling there is nothing to import: creating a committee mints its live session, generates the join code and the chair code, and seats one delegate row per country on the roster. The committee your organiser built in February is the committee your chair opens in March.
         </p>
         <p>
-          A Live Status board shows every committee in the conference at once — phase, current speaker, present count, queue depth, motions and documents — so the Secretariat can see the whole floor without walking it.
+          A Live Status board shows every committee in the conference at once (phase, current speaker, present count, queue depth, motions and documents), so the Secretariat can see the whole floor without walking it.
         </p>
 
         <H3>Allocation that explains itself</H3>
         <ul>
-          <li><strong>Scored suggestions with reason tags.</strong> Each proposed allocation carries a fit score and the reasons behind it — first choice, country pick, experience match, high priority, completes a double delegation, delegation over-concentration — so an organiser can accept or overrule with the reasoning visible rather than guessing.</li>
+          <li><strong>Scored suggestions with reason tags.</strong> Each proposed allocation carries a fit score and the reasons behind it (first choice, country pick, experience match, high priority, completes a double delegation, delegation over-concentration), so an organiser can accept or overrule with the reasoning visible rather than guessing.</li>
           <li><strong>Per-seat importance tiers.</strong> An open P5 seat and an open Vanuatu seat are not the same problem. Importance is stored on the seat and drives ordering, scoring and the open-seats readout.</li>
           <li><strong>Real double-delegation modelling.</strong> Two seats per country, tracked separately, with conflict detection that stops a delegate being dropped into the second seat of a country held by another school.</li>
-          <li><strong>Whole delegations allocated as a block</strong>, taking the country and both seats of a double slot in one action — for a conference with seventy delegations, that is the difference between seventy decisions and seven hundred.</li>
+          <li><strong>Whole delegations allocated as a block</strong>, taking the country and both seats of a double slot in one action. For a conference with seventy delegations, that is the difference between seventy decisions and seven hundred.</li>
           <li><strong>Bulk CSV and XLSX allocation import</strong>, resolving committee, country and seat, deduplicated against existing allocations.</li>
         </ul>
 
         <H3>Money handled like money, not like a checkbox</H3>
         <ul>
-          <li>Separate invoices, payments and payment-batch records with transaction, ledger and history views — an actual ledger, not a paid/unpaid flag.</li>
+          <li>Separate invoices, payments and payment-batch records with transaction, ledger and history views: an actual ledger, not a paid/unpaid flag.</li>
           <li><strong>Manual payment-proof review.</strong> A delegate uploads a bank transfer receipt; an organiser opens it through a short-lived signed URL and approves or rejects it. Only 44 countries have Stripe Connect, so for a large share of the world this is not a nice-to-have.</li>
           <li>Phased fees, per-role fees, percentage and flat vouchers, an application fee, arbitrary add-ons, and financial aid with partial grants surfaced in the review modal where the accept/reject decision is actually made.</li>
-          <li>A hard readiness gate: applications cannot open and the conference cannot publish until delegates have somewhere to pay — including the free-conference case.</li>
+          <li>A hard readiness gate: applications cannot open and the conference cannot publish until delegates have somewhere to pay, including the free-conference case.</li>
         </ul>
 
         <H3>Sessions that survive the day</H3>
@@ -243,12 +243,12 @@ export default function MymunAlternative() {
           <li><strong>Free sessions persist.</strong> Create a committee with no account at all and it is a real database row, joinable from any device, syncing in realtime.</li>
           <li><strong>Delegates join with a six-character code.</strong> No account, no download, no app store queue during roll call.</li>
           <li>Roll call with a live present/present-and-voting readout and an optional hard quorum threshold; General Speakers List with a countdown anchored to wall-clock time rather than a per-second write; moderated caucus with its own queue that never touches the GSL; unmoderated caucus, Consultation of the Whole and Tour de Table; Right of Reply on its own independent clock.</li>
-          <li>A motion queue automatically ranked by disruptiveness, with the ranking itself drag-reorderable by the chair — because one committee&rsquo;s rules of procedure are not another&rsquo;s.</li>
+          <li>A motion queue automatically ranked by disruptiveness, with the ranking itself drag-reorderable by the chair, because one committee&rsquo;s rules of procedure are not another&rsquo;s.</li>
           <li>Voting with configurable thresholds, abstentions in or out of the denominator, quorum, P5 veto, custom veto countries and unanimous mode, plus a timed rights-speakers round sequenced after the roll.</li>
-          <li>Working papers and draft resolutions with a full introduction flow — reading time, presentation, Q&amp;A, then the vote.</li>
-          <li>Delegate–chair chat with direct messages, and a switch to turn chat off entirely for committees that would rather not.</li>
+          <li>Working papers and draft resolutions with a full introduction flow: reading time, presentation, Q&amp;A, then the vote.</li>
+          <li>Delegate-to-chair chat with direct messages, and a switch to turn chat off entirely for committees that would rather not.</li>
           <li>Multi-chair done properly: a claim-at-will gavel, view-only co-chairs, and a single-winner suspend/resume lock with take-over so two chairs on two laptops cannot deadlock the committee.</li>
-          <li>A configurable scoring ledger — nine built-in point sources plus custom ones, subjective ranking factors, a blend control, CSV export, and a switch to hide scores from delegates.</li>
+          <li>A configurable scoring ledger: ten built-in point sources, subjective ranking factors, a blend control, and the full session record as an .xlsx download.</li>
           <li>A guided in-product chair tutorial that spotlights the real interface and advances when the chair performs the step.</li>
           <li>Renameable everything: all seven motion types and both document types, so your rules of procedure keep their own vocabulary.</li>
         </ul>
@@ -265,26 +265,26 @@ export default function MymunAlternative() {
             </thead>
             <tbody>
               {[
-                ['Cost to the conference', 'Free — no per-user, per-day or per-committee fee', '€1 per user per day (free ≤ 10 users)'],
-                ['Free tier saves your session', 'Yes — every session persists to a database', 'No — "changes are not saved automatically"'],
-                ['Free tier procedure limits', 'None — full toolkit on every session', '3 modes of debate, 3 motion types'],
-                ['Delegate accounts for a session', 'Not required — join by 6-character code', 'Platform accounts'],
-                ['Native mobile apps', 'No — browser only', 'Yes — iOS, iPad, Android'],
+                ['Cost to the conference', 'Free, with no per-user, per-day or per-committee fee', '€1 per user per day (free ≤ 10 users)'],
+                ['Free tier saves your session', 'Yes, every session persists to a database', 'No: "changes are not saved automatically"'],
+                ['Free tier procedure limits', 'None: full toolkit on every session', '3 modes of debate, 3 motion types'],
+                ['Delegate accounts for a session', 'Not required: join by 6-character code', 'Platform accounts'],
+                ['Native mobile apps', 'No, browser only', 'Yes: iOS, iPad, Android'],
                 ['Offline support', 'No', 'Yes'],
-                ['Delegates raise motions in-app', 'No — chair-entered', 'Yes'],
+                ['Delegates raise motions in-app', 'No, chair-entered', 'Yes'],
                 ['Interface languages', '4 (EN, ES, FR, AR)', '8'],
                 ['Motion types', '7, all renameable, plus a free-text custom motion', '21 on the paid tier'],
-                ['Conference → live session', 'Same object — no import step', 'One-click import between two systems'],
+                ['Conference → live session', 'Same object, no import step', 'One-click import between two systems'],
                 ['Scored allocation with reasons', 'Yes', 'Not observed'],
                 ['Seat importance tiers', 'Yes', 'No seat dimension'],
                 ['Countries × committees matrix', 'No', 'Yes'],
-                ['Fill rings on committee cards', 'No — capacity only', 'Yes'],
+                ['Fill rings on committee cards', 'No, capacity only', 'Yes'],
                 ['Invoice ledger + manual payment proof', 'Yes', 'Payment status on the row'],
                 ['Financial aid, vouchers, phased fees', 'Yes', 'Not observed'],
                 ['Per-organiser section permissions', 'Yes', 'Not observed'],
                 ['Live status across all committees', 'Yes', 'Not observed'],
-                ['Crisis committee tooling', 'No — standard procedure only', 'Crisis positions in the allocation grid'],
-                ['Public conference directory', 'Yes — directory and world map', 'Yes — mymun listings'],
+                ['Crisis committee tooling', 'No, standard procedure only', 'Crisis positions in the allocation grid'],
+                ['Public conference directory', 'Yes: directory and world map', 'Yes: mymun listings'],
               ].map(([feat, g, m]) => (
                 <tr key={feat}>
                   <td><strong>{feat}</strong></td>
@@ -304,7 +304,7 @@ export default function MymunAlternative() {
           &ldquo;11 modes of debate&rdquo; and &ldquo;21 motion types&rdquo; are the numbers mymun leads with, and 21 beats 7 in a table. It is worth asking what those numbers buy in the room. Twenty-one motion types is a menu a chair scrolls while forty delegates wait, and the eight seconds between a placard going up and the room going quiet is the actual design constraint.
         </p>
         <p>
-          Gavelling&rsquo;s answer is fewer types that are renameable and re-rankable: your committee calls a moderated caucus whatever your rules of procedure call it, the disruptiveness order is whatever your chair says it is, and anything genuinely bespoke goes through a free-text custom motion. That is a deliberate trade, not a shortfall we are hiding — but if your rules of procedure depend on a specific named motion with specific mechanics, count the ones you actually use and check both products against that list rather than against each other&rsquo;s marketing.
+          Gavelling&rsquo;s answer is fewer types that are renameable and re-rankable: your committee calls a moderated caucus whatever your rules of procedure call it, the disruptiveness order is whatever your chair says it is, and anything genuinely bespoke goes through a free-text custom motion. That is a deliberate trade, not a shortfall we are hiding. But if your rules of procedure depend on a specific named motion with specific mechanics, count the ones you actually use and check both products against that list rather than against each other&rsquo;s marketing.
         </p>
 
         <H2>Which one you should pick</H2>
@@ -313,7 +313,7 @@ export default function MymunAlternative() {
           <li>Your delegates need native apps, or your venue&rsquo;s connectivity means offline is non-negotiable.</li>
           <li>You want delegates raising motions from their own phones today.</li>
           <li>Your conference runs in a language outside English, Spanish, French and Arabic.</li>
-          <li>You run heavy crisis committees — neither tool is a crisis platform, but Gavelling has no crisis-specific features at all.</li>
+          <li>You run heavy crisis committees. Neither tool is a crisis platform, but Gavelling has no crisis-specific features at all.</li>
           <li>You are already embedded in mymun listings and profiles, and the per-user fee is comfortably inside your budget.</li>
         </ul>
         <H3>Choose Gavelling if</H3>
@@ -321,7 +321,7 @@ export default function MymunAlternative() {
           <li>You would rather spend €600 to €3,000 on your conference than on your software.</li>
           <li>You want one system for applications, <Link href="/blog/mun-country-allocation">allocation</Link>, <Link href="/blog/mun-conference-registration-payments">payments</Link> and the live committee, with no import step between the last two.</li>
           <li>Your delegates pay by bank transfer as often as by card, and you need real invoices and payment-proof review rather than a paid checkbox.</li>
-          <li>You want your chairs to be able to open a free session tonight, mid-week, to practise — and still have it there tomorrow.</li>
+          <li>You want your chairs to be able to open a free session tonight, mid-week, to practise, and still have it there tomorrow.</li>
           <li>Your allocation is the hard part, and you want the software to explain its suggestions rather than just accept your clicks.</li>
         </ul>
 

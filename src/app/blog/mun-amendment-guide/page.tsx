@@ -62,20 +62,20 @@ export default function Article() {
           <li>Strengthen a weak clause after the resolution has been introduced</li>
           <li>Add a signatory nation as a new sponsor in exchange for their support</li>
         </ul>
-        <Callout>Strategic use: offer to accept a friendly amendment from a swing vote delegate in exchange for their In Favour vote. You get their vote; they get their language in the resolution. Both sides win.</Callout>
+        <Callout>Strategic use: offer to accept a friendly amendment from a swing-vote delegate in exchange for their In Favour vote. You get their vote; they get their language in the resolution. Both sides win.</Callout>
 
         <H2>Unfriendly Amendments</H2>
         <p>An unfriendly amendment is one where at least one sponsor objects to the change. It must be put to a committee vote. If the amendment passes, the resolution text is updated. If it fails, the original text stands.</p>
         <p>Unfriendly amendments require a minimum number of sponsors to submit (check your conference&apos;s rules). They are voted on separately, in reverse order of submission, before the main resolution vote.</p>
 
         <H3>Offensive Use</H3>
-        <p>Submit an unfriendly amendment to an opponent&apos;s resolution to force them to vote against something their bloc publicly supports. For example, if the resolution is on refugee protection and you amend it to include binding refugee quotas, you may force a veto from nations that oppose binding commitments, publicly exposing their position.</p>
+        <p>Submit an unfriendly amendment to an opponent&apos;s resolution to force them to vote against something their bloc publicly supports. For example, if the resolution is on refugee protection and you amend it to include binding refugee quotas, you may force nations that oppose binding commitments to vote against it (or, in the Security Council, a permanent member to veto it), publicly exposing their position.</p>
 
         <H3>Defensive Use</H3>
         <p>If someone submits an unfriendly amendment to your resolution that you find unacceptable, you can lobby against it in debate and ensure your sponsor bloc votes it down. Alternatively, consider withdrawing the clause they are targeting and replacing it with a friendly amendment version that is slightly weaker but still acceptable to you. This takes the vote off the table entirely.</p>
 
         <H2>Amendment Voting Order</H2>
-        <p>Multiple amendments to the same resolution are voted on in reverse chronological order: the most recently submitted amendment is voted on first. This allows the committee to consider the most recent proposed changes before those that came before. If you want your amendment to have priority, submit it last.</p>
+        <p>Multiple amendments to the same resolution are voted on in reverse chronological order: the most recently submitted amendment is voted on first. This lets the committee consider the latest proposed changes before earlier ones. If you want your amendment to have priority, submit it last.</p>
 
         <H2>How to Submit an Amendment</H2>
         <p>The exact process varies by conference (our <Link href="/blog/thimun-rules-of-procedure">THIMUN rules of procedure</Link> guide covers one very different approach), but generally:</p>

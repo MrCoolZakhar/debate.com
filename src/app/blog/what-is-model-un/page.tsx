@@ -53,7 +53,7 @@ export default function Article() {
 
         <H2>What a committee room actually looks like</H2>
         <p>
-          Picture a school hall or a university seminar room. Tables are arranged in a horseshoe or in rows. In front of every delegate is a card with a country name on it, called a placard, which you raise to be recognised. At the front is a raised table or a lectern called the dais, where two or three chairs sit. Behind them, usually, a projected screen showing the speakers list and a countdown clock.
+          Picture a school hall or a university seminar room. Tables are arranged in a horseshoe or in rows. In front of every delegate is a card with a country name on it, called a placard, which you raise to be recognised. At the front is a raised table or a lectern called the dais, where two or three chairs sit. Behind them there is usually a projected screen showing the speakers list and a countdown clock.
         </p>
         <p>
           Committees range from about 15 delegates in a Security Council to 150 or more in a large General Assembly simulation. Most of what you will attend sits between 25 and 50. Our guide to <Link href="/blog/mun-committee-types">MUN committee types</Link> covers the options. Everyone is in business dress. It is quieter than you expect during formal debate and much louder than you expect the moment the chair suspends it.
@@ -67,7 +67,7 @@ export default function Article() {
 
         <H2>The day, in order</H2>
         <p>
-          Nearly every committee, on nearly every circuit, runs the same skeleton. The names differ, the order rarely does.
+          Nearly every committee, on nearly every circuit, runs the same skeleton. The names differ; the order rarely does.
         </p>
 
         <TableWrap>
@@ -82,7 +82,7 @@ export default function Article() {
             <tbody>
               {[
                 ['Roll call', 'The chair reads every country and records who is in the room', 'Answer "present" or "present and voting"'],
-                ['Setting the agenda', 'If the committee has two topics, delegates vote which is debated first', 'Speak for the topic you are ready on'],
+                ['Setting the agenda', 'If the committee has two topics, delegates vote on which is debated first', 'Speak for the topic you are ready on'],
                 ['General speakers list', 'A long queue of speeches on the topic as a whole', 'Add your name early and speak'],
                 ['Moderated caucus', 'Short structured debate on one narrow sub-topic', 'Raise a motion, then speak on it'],
                 ['Unmoderated caucus', 'Formal rules suspended, delegates move and talk freely', 'Find allies and start writing'],
@@ -121,7 +121,7 @@ export default function Article() {
         </p>
 
         <Callout>
-          If you remember one thing: the resolution is the product, the speeches are the marketing. Delegates who speak beautifully and never write are remembered fondly and rarely win anything.
+          If you remember one thing: the resolution is the product; the speeches are the marketing. Delegates who speak beautifully and never write are remembered fondly and rarely win anything.
         </Callout>
 
         <H2>What a delegate is actually being asked to do</H2>
@@ -135,7 +135,7 @@ export default function Article() {
           The line most conferences draw is this: represent the policy, never the prejudice. Chairs will stop a delegate who uses a national position as cover for something offensive, and most conference handbooks say so explicitly.
         </p>
 
-        <H2>Three things that surprise first timers</H2>
+        <H2>Three things that surprise first-timers</H2>
         <ul>
           <li>
             <strong>You are not debating your own opinion.</strong> Delegates arrive ready to argue what they believe and are handed a country that believes the opposite. That is the point, and it is the part that actually teaches you something.
@@ -144,16 +144,16 @@ export default function Article() {
             <strong>Most of the real work happens in unmoderated caucus.</strong> Formal debate sets the terms. Blocs, drafts and votes are built standing up in the corner of the room with a laptop open.
           </li>
           <li>
-            <strong>Procedure is a tool, not a test.</strong> Beginners treat the rules as a hazing ritual. Experienced delegates treat them as levers: a well timed motion for a moderated caucus can rescue an hour. Our <Link href="/blog/mun-motions-explained">guide to motions</Link> is the shortest route from intimidated to fluent.
+            <strong>Procedure is a tool, not a test.</strong> Beginners treat the rules as a hazing ritual. Experienced delegates treat them as levers: a well-timed motion for a moderated caucus can rescue an hour. Our <Link href="/blog/mun-motions-explained">guide to motions</Link> is the shortest route from intimidated to fluent.
           </li>
         </ul>
 
         <H2>Who runs it</H2>
         <p>
-          <strong>Chairs</strong> sit on the dais and run the committee: recognising speakers, ruling on motions, keeping time and, at most conferences, deciding awards. A committee usually has a chair and one or two vice chairs or a rapporteur. If that appeals, read <Link href="/blog/how-to-chair-first-mun">how to chair your first committee</Link>.
+          <strong>Chairs</strong> sit on the dais and run the committee: recognising speakers, ruling on motions, keeping time and, at most conferences, deciding awards. A committee usually has a chair and one or two vice-chairs or a rapporteur. If that appeals, read <Link href="/blog/how-to-chair-first-mun">how to chair your first committee</Link>.
         </p>
         <p>
-          The <strong>secretariat</strong> runs the conference: applications, allocations, committees, logistics, money and the closing ceremony. It is led by a Secretary General with under secretaries general for specific portfolios. <strong>Crisis staff</strong> exist only in crisis committees, where they sit in a back room and respond to delegates&apos; directives with new developments. <strong>Faculty advisors</strong> are the teachers who travel with a school delegation; they do not participate in debate.
+          The <strong>secretariat</strong> runs the conference: applications, allocations, committees, logistics, money and the closing ceremony. It is led by a Secretary-General with Under-Secretaries-General for specific portfolios. <strong>Crisis staff</strong> exist only in crisis committees, where they sit in a back room and respond to delegates&apos; directives with new developments. <strong>Faculty advisors</strong> are the teachers who travel with a school delegation; they do not participate in debate.
         </p>
 
         <ChairScript>
@@ -168,7 +168,7 @@ export default function Article() {
           <strong>Online and hybrid committees</strong> settled into a permanent minority of the calendar after 2020. They are cheaper and more accessible, and worse at the one thing that matters most, which is the unmoderated caucus. If you are running one, our guide to <Link href="/blog/mun-online-committees">chairing remotely</Link> is written for exactly that problem.
         </p>
         <p>
-          Procedure differs by circuit too. North American conferences mostly run a UNA-USA derived ruleset with caucuses and motions. THIMUN affiliated conferences in Europe and Asia run a resolution centred model with lobbying and points of information instead. Neither is harder, but arriving with the wrong one is disorienting. Our <Link href="/blog/mun-rules-of-procedure">rules of procedure reference</Link> covers the shared core.
+          Procedure differs by circuit too. North American conferences mostly run a UNA-USA-derived ruleset with caucuses and motions. THIMUN-affiliated conferences in Europe and Asia run a resolution-centred model with lobbying and points of information instead. Neither is harder, but arriving with the wrong one is disorienting. Our <Link href="/blog/mun-rules-of-procedure">rules of procedure reference</Link> covers the shared core.
         </p>
 
         <H2>Questions people ask before their first one</H2>
@@ -206,9 +206,9 @@ export default function Article() {
         <H2>Where to start this month</H2>
         <ul className="gv-check">
           <li>Find out whether your school or university already has a club. If it does, the first meeting is the only thing you need to do this week.</li>
-          <li>If it does not, three people and a teacher is enough to start one.</li>
+          <li>If it does not, three people and a teacher are enough to start one.</li>
           <li>Read one background guide from a real conference, published by its secretariat. You will learn more from it than from another explainer.</li>
-          <li>Run a mock committee. You can open a free session on Gavelling at <Link href="/create/sessions">/create</Link>, put five friends on phones with the six character code, and get through a roll call, a speakers list and a vote in under an hour.</li>
+          <li>Run a mock committee. You can open a free session on Gavelling at <Link href="/create/sessions">/create</Link>, put five friends on phones with the six-character code, and get through a roll call, a speakers list and a vote in under an hour.</li>
           <li>Look at what conferences are open near you. The <Link href="/conferences/explore">conference directory</Link> is one place to start.</li>
         </ul>
         <p>

@@ -486,7 +486,7 @@ export default function VariantStagefront({
                       flight. The old +100/+30 offsets made a zero impossible;
                       without them, a real "0 conferences" would flash on every
                       first paint. An em dash holds the space instead. */}
-                  {stat.n === null ? '—' : stat.n.toLocaleString()}
+                  {stat.n === null ? '–' : stat.n.toLocaleString()}
                 </span>
                 <span
                   style={{

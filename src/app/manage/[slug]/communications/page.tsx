@@ -1521,7 +1521,7 @@ function Console({
                 : 'Nothing sent yet'}
             </span>
             <span className="uppercase flex-shrink-0" style={{ color: attempted > 0 ? CONSOLE_INK[meterTone] : SOFT }}>
-              {attempted > 0 ? `${pct}%` : '—'}
+              {attempted > 0 ? `${pct}%` : '–'}
             </span>
           </div>
         </div>
@@ -2459,7 +2459,7 @@ function CommunicationsPageInner() {
         return {
           id: a.id,
           name: a.profiles?.display_name ?? a.invited_name ?? 'Unknown',
-          sub: detail || (a.profiles?.email ?? a.invited_email ?? '—'),
+          sub: detail || (a.profiles?.email ?? a.invited_email ?? '–'),
           avatarUrl: a.profiles?.avatar_url ?? null,
           userId: a.user_id,
           registered: !!a.profiles,
@@ -2484,7 +2484,7 @@ function CommunicationsPageInner() {
     () => manualMatches.map(a => ({
       id: a.id,
       name: a.profiles?.display_name ?? a.invited_name ?? 'Unknown',
-      sub: a.profiles?.email ?? a.invited_email ?? '—',
+      sub: a.profiles?.email ?? a.invited_email ?? '–',
     })),
     [manualMatches]
   );
@@ -3493,7 +3493,7 @@ function CommunicationsPageInner() {
                   <span className="block text-xs font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{name}</span>
                 )}
                 <span className="block truncate" style={{ fontSize: name ? 10.5 : 12, color: name ? SOFT : '#1C1410', fontFamily: OUTFIT }}>
-                  {r.recipient_email ?? '—'}
+                  {r.recipient_email ?? '–'}
                 </span>
               </span>
             </span>
@@ -4374,10 +4374,10 @@ function CommunicationsPageInner() {
                         SWAP DETAILS
                       </p>
                       <p className="text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                        {selectedRequest.metadata.member_a ?? 'Member A'}: {selectedRequest.metadata.before?.a ?? '—'} → {selectedRequest.metadata.after?.a ?? '—'}
+                        {selectedRequest.metadata.member_a ?? 'Member A'}: {selectedRequest.metadata.before?.a ?? '–'} → {selectedRequest.metadata.after?.a ?? '–'}
                       </p>
                       <p className="text-sm mt-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                        {selectedRequest.metadata.member_b ?? 'Member B'}: {selectedRequest.metadata.before?.b ?? '—'} → {selectedRequest.metadata.after?.b ?? '—'}
+                        {selectedRequest.metadata.member_b ?? 'Member B'}: {selectedRequest.metadata.before?.b ?? '–'} → {selectedRequest.metadata.after?.b ?? '–'}
                       </p>
                       {swapError && (
                         <p className="text-xs mt-3" style={{ color: RED, fontFamily: OUTFIT }}>{swapError}</p>

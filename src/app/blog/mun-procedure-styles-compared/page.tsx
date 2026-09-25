@@ -7,7 +7,7 @@ import { H2, H3, Callout, FactCard, TableWrap } from '@/components/blog/prose';
 export const metadata: Metadata = pageMetadata({
   title: 'THIMUN vs UNA-USA vs Harvard Style: MUN Procedures Compared',
   description:
-    'The three main families of Model UN procedure side by side, what transfers between them, what actively misleads you, and which to run at your own conference',
+    'The three main families of Model UN procedure side by side, what transfers between them, what actively misleads you, and which to run at your own conference.',
   path: '/blog/mun-procedure-styles-compared',
   ogDescription: 'The three main MUN procedure families side by side, and which one to run.',
   type: 'article',
@@ -104,8 +104,8 @@ export default function Article() {
         <H3>Misleads you</H3>
         <ul>
           <li><strong>Assuming caucus exists.</strong> A UNA-USA delegate at a THIMUN conference who motions for an unmoderated caucus has told the room they have not read the rules.</li>
-          <li><strong>Assuming your paper can be yours.</strong> In THIMUN the target is one merged resolution, so refusing to merge is not strategy, it is a failure to participate.</li>
-          <li><strong>Assuming several resolutions can pass.</strong> In many UNA-USA committees one does, and the fight is for which.</li>
+          <li><strong>Assuming your paper can be yours.</strong> In THIMUN the target is one merged resolution, so refusing to merge is not strategy but a failure to participate.</li>
+          <li><strong>Assuming several resolutions can pass.</strong> In many UNA-USA committees one does, and the fight is over which.</li>
           <li><strong>Points of information.</strong> In THIMUN they are the main event. In UNA-USA rooms a question reaches a speaker only through a yield, and shouting one is a procedural mistake.</li>
           <li><strong>Speaking volume as a proxy for performance.</strong> The college circuit rewards visible dominance far more than THIMUN, which frequently penalises it.</li>
           <li><strong>Directness.</strong> &quot;You are wrong&quot; is normal in some rooms and a chair&apos;s correction in others. The safe default anywhere is the third person.</li>
@@ -117,7 +117,7 @@ export default function Article() {
         <p>A crisis committee is small, usually between fifteen and thirty positions, and delegates represent individuals with personal powers rather than states. The public floor runs on a stripped-down version of UNA-USA procedure, usually just a speakers list and frequent moderated caucus. The substance is elsewhere: in directives written and passed by the room, and in private notes sent to a backroom that responds by changing the world. Formal debate is often the least important part of the day.</p>
         <p>What this means procedurally: shorter speeches, faster motions, directives instead of resolutions, and a chair who is managing a story as much as a queue. If your conference is adding a crisis committee, do not simply lend it the GA rulebook. Our <Link href="/blog/mun-crisis-committee-guide">crisis committee guide</Link> covers how the two rooms work together.</p>
 
-        <H2>Hybrids, which is most conferences</H2>
+        <H2>Hybrids, which is what most conferences run</H2>
         <p>Almost nobody runs a family purely. The common hybrids are worth naming because they are what you will actually meet.</p>
         <ul>
           <li><strong>THIMUN mechanics with awards.</strong> Very common at THIMUN-affiliated conferences outside the Netherlands, and it changes delegate behaviour more than organisers expect.</li>
@@ -133,7 +133,7 @@ export default function Article() {
             <thead><tr><th>If this is true</th><th>Lean towards</th></tr></thead>
             <tbody>
               <tr><td>Most delegates are first-timers</td><td>UNA-USA, simplified. The GSL gives everybody a guaranteed turn</td></tr>
-              <tr><td>Committees are large, over 40 delegations</td><td>THIMUN style lobbying, or long scheduled drafting blocks</td></tr>
+              <tr><td>Committees are large, over 40 delegations</td><td>THIMUN-style lobbying, or long scheduled drafting blocks</td></tr>
               <tr><td>Your chairs are inexperienced</td><td>Fewer motion types, published thresholds, a written script</td></tr>
               <tr><td>Your region already runs one style</td><td>That style. Delegates arrive prepared and advisors trust you</td></tr>
               <tr><td>You want collaboration over competition</td><td>THIMUN style, one merged resolution, awards de-emphasised</td></tr>

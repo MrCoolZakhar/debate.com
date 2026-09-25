@@ -9,7 +9,7 @@ export const metadata: Metadata = pageMetadata({
   description:
     'The whole job of founding a Model UN conference, from the first meeting to the closing gavel, with what it genuinely costs and what you can skip in year one',
   path: '/blog/start-a-mun-conference',
-  ogDescription: 'How to found a Model UN conference: scope, approval, team, money and the eight month calendar.',
+  ogDescription: 'How to found a Model UN conference: scope, approval, team, money and the eight-month calendar.',
   type: 'article',
 });
 
@@ -17,7 +17,7 @@ const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
   headline: 'How to Start a MUN Conference From Scratch',
-  description: 'How to found a Model UN conference: scope, approval, team, money and the eight month calendar.',
+  description: 'How to found a Model UN conference: scope, approval, team, money and the eight-month calendar.',
   url: 'https://gavelling.com/blog/start-a-mun-conference',
   datePublished: '2026-09-20',
   dateModified: '2026-09-20',
@@ -55,7 +55,7 @@ export default function Article() {
           Two numbers determine everything else: how many delegates, and how many days. Fix them first, because venue, budget, committee count, chair recruitment and staffing all follow from them and none of them can be worked out in the other order.
         </p>
         <p>
-          The honest advice is to be much smaller than you want to be. A first conference of 500 delegates over four days is a common ambition and an uncommon success. What fails is not enthusiasm, it is that a founding team learns twelve new jobs at once and any one of them going wrong at that scale is unrecoverable.
+          The honest advice is to be much smaller than you want to be. A first conference of 500 delegates over four days is a common ambition and an uncommon success. What fails is not enthusiasm. It is that a founding team learns twelve new jobs at once and any one of them going wrong at that scale is unrecoverable.
         </p>
 
         <FactCard title="Year one scope that works">
@@ -138,12 +138,12 @@ export default function Article() {
           The students&apos; union or the society office is normally the gatekeeper, with room bookings and catering as separate approvals that each have their own lead time. Ask specifically about three things: whether an external event requires a risk assessment, whether the union must be the contracting party for the venue, and whether society funds can carry a balance across the academic year. That last one decides whether you can hold a surplus into year two or have to spend it.
         </p>
         <p>
-          In both cases, put a one page proposal in front of them rather than a conversation: what it is, when, how many people, what it costs the institution, what the institution gets, and who is responsible. Approvals move much faster against a document.
+          In both cases, put a one-page proposal in front of them rather than a conversation: what it is, when, how many people, what it costs the institution, what the institution gets, and who is responsible. Approvals move much faster against a document.
         </p>
 
         <H2>Money in year one</H2>
         <p>
-          The trap that kills first-year conferences is not the total cost. It is the timing: a substantial portion of your costs are committed before any delegate fee arrives, and if registration underperforms there is no way to unwind them.
+          The trap that kills first-year conferences is not the total cost. It is the timing: a substantial portion of your costs is committed before any delegate fee arrives, and if registration underperforms there is no way to unwind them.
         </p>
         <TableWrap>
           <table>
@@ -197,7 +197,7 @@ export default function Article() {
           Recruit chairs before you finalise topics. A chair who chooses their own topic within your slate writes a much better background guide than one handed a topic in February. The <Link href="/conferences/roles">chair and staff job board</Link> is one place to advertise, alongside your own society and the nearby universities.
         </p>
 
-        <H2>The eight month calendar</H2>
+        <H2>The eight-month calendar</H2>
         <TableWrap>
           <table>
             <thead>
@@ -250,7 +250,7 @@ export default function Article() {
               {[
                 ['Website', 'Buy a domain, use a simple builder or a conference page on a platform. Do not build one.'],
                 ['Applications and allocations', 'Use software. This is the single most spreadsheet-destroying job in the conference.'],
-                ['Taking payment', 'Use a real payment flow with invoices. Bank transfers into a personal account is how reconciliation fails.'],
+                ['Taking payment', 'Use a real payment flow with invoices. Bank transfers into a personal account are how reconciliation fails.'],
                 ['Badges and placards', 'By hand. It is one evening with a laminator and it is fine.'],
                 ['Committee software', 'Use something free. A projected speakers list and timer changes how a room feels.'],
                 ['Photography and media', 'Skip, or one volunteer with a phone. Year two problem.'],
@@ -266,7 +266,7 @@ export default function Article() {
           </table>
         </TableWrap>
         <p>
-          On the two software lines: what takes the time in <Link href="/blog/mun-country-allocation">allocations</Link> is not the assignment itself, it is preference collection, delegation blocks, double delegations and the reallocation requests afterwards. On the committee side, free tools exist and are compared in our <Link href="/blog/free-mun-tools">free MUN tools guide</Link>. You can also open a Gavelling session at <Link href="/create/sessions">/create</Link> with no account at all and test what a projected committee looks like in your actual room before you commit to anything.
+          On the two software lines: what takes the time in <Link href="/blog/mun-country-allocation">allocations</Link> is not the assignment itself but preference collection, delegation blocks, double delegations and the reallocation requests afterwards. On the committee side, free tools exist and are compared in our <Link href="/blog/free-mun-tools">free MUN tools guide</Link>. You can also open a Gavelling session at <Link href="/create/sessions">/create</Link> with no account at all and test what a projected committee looks like in your actual room before you commit to anything.
         </p>
 
         <H2>Getting from year one to year two</H2>
@@ -274,7 +274,7 @@ export default function Article() {
           The most valuable hour of the whole project is the one immediately after the closing ceremony, when everything is still in your head. Do it before people go home.
         </p>
         <ul className="gv-check">
-          <li><strong>Write the handover document while tired.</strong> Every supplier with a contact name, every price paid, every deadline that turned out to be real, every thing you would do differently. Six pages beats a perfect document written in October that never gets written.</li>
+          <li><strong>Write the handover document while tired.</strong> Every supplier with a contact name, every price paid, every deadline that turned out to be real, everything you would do differently. Six pages beats a perfect document written in October that never gets written.</li>
           <li><strong>Record the numbers.</strong> Applications received, delegates registered, delegates who actually arrived, fees collected, costs paid. The gap between registered and attended is the number you will most want next year and the one nobody records.</li>
           <li><strong>Survey delegates and advisors while they are on site.</strong> A paper form at the closing ceremony gets a response rate an email never will.</li>
           <li><strong>Name your successor before the team disperses.</strong> Conferences die in year three, when the founders graduate and nobody was brought in below them.</li>
@@ -283,7 +283,7 @@ export default function Article() {
 
         <H2>Start here this week</H2>
         <p>
-          Three things, in this order. Find out who at your institution actually approves an event of this size, and ask them what they would need to see. Write the one page proposal. Name four other people who will do this with you, and put the five roles above next to their names.
+          Three things, in this order. Find out who at your institution actually approves an event of this size, and ask them what they would need to see. Write the one-page proposal. Name four other people who will do this with you, and put the five roles above next to their names.
         </p>
         <p>
           When it is approved, switch to the <Link href="/blog/mun-conference-planning">planning timeline</Link> for the week-by-week execution, and read the <Link href="/blog/mun-conference-budget">budget guide</Link> before you set a fee. It is also worth looking at what other conferences in your region charge and offer: the <Link href="/conferences/explore">conference directory</Link> is a reasonable place to see how the field prices itself.

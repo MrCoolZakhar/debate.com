@@ -176,7 +176,7 @@ function CoverageHint() {
             <p style={{ marginTop: 6 }}>
               <strong>Approximate:</strong> decisions (accepted / rejected / withdrawn) carry
               the row&apos;s last-updated time, not the moment of the decision, and only the
-              current status is knowable — earlier decisions on the same application are
+              current status is knowable. Earlier decisions on the same application are
               lost. Set-up progress is represented by committees being added, conferences
               created and published; the other set-up steps are computed state, never events.
             </p>
@@ -325,7 +325,7 @@ export default function ActivityTab() {
                 <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl"
                      style={{ backgroundColor: PANEL, border: `1px solid ${LINE}` }}>
                   <span style={{ width: 46, flexShrink: 0, fontFamily: MONO, fontSize: 11, color: MUTED, fontVariantNumeric: 'tabular-nums' }}
-                        title={approx ? 'Approximate time — see "How complete is this?"' : new Date(ev.occurred_at).toLocaleString('en-GB')}>
+                        title={approx ? 'Approximate time. See "How complete is this?"' : new Date(ev.occurred_at).toLocaleString('en-GB')}>
                     {approx ? '~' : ''}{fmtTime(ev.occurred_at)}
                   </span>
 

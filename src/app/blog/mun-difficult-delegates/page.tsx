@@ -7,7 +7,7 @@ import { H2, H3, Callout, ChairScript, FactCard } from '@/components/blog/prose'
 export const metadata: Metadata = pageMetadata({
   title: 'How to Handle Difficult Delegates: Eight Problems and the Exact Intervention',
   description:
-    'The eight delegates who derail a committee, the smallest fix for each, the words to say from the dais, and the point at which it stops being yours to handle',
+    'The eight delegates who derail a committee, the smallest fix for each, the words to say from the dais, and the point at which it stops being yours to handle.',
   path: '/blog/mun-difficult-delegates',
   ogDescription: 'The eight delegates who derail a committee, and the exact intervention for each.',
   type: 'article',
@@ -55,10 +55,10 @@ export default function Article() {
         <Callout>The question to ask before every intervention: is this a debate problem, a behaviour problem, or a welfare problem? Debate problems are solved with procedure. Behaviour problems are solved with a private word. Welfare problems are not yours to solve at all, and are covered at the end of this guide.</Callout>
 
         <H2>The delegate who takes every speaking slot</H2>
-        <p>Usually a strong delegate who has correctly worked out that speaking often is rewarded. The room is not being sabotaged, it is being crowded out, which is a debate problem and therefore a procedural fix.</p>
+        <p>Usually a strong delegate who has correctly worked out that speaking often is rewarded. The room is not being sabotaged but crowded out, which is a debate problem and therefore a procedural fix.</p>
         <p><strong>The fix.</strong> Use the structure you already have. When you open a moderated caucus, say that the dais will prioritise delegations that have not yet spoken on this sub-topic. That is entirely normal chair discretion in recognising speakers and nobody can object to it. Cap speaking time at the lower end. If the General Speakers List is being filled by the same four placards, take a fresh list.</p>
         <ChairScript>&ldquo;For this caucus the dais will give preference to delegations that have not yet addressed this sub-topic. Delegates who have already spoken will be recognised once the list has turned over.&rdquo;</ChairScript>
-        <p>Then say the useful thing privately at the break. A dominant delegate almost always believes volume is the metric. Telling them that the dais values the quality of their contribution and their ability to bring others in is not a rebuke, it is a tip, and most of them adjust immediately because they want to do well.</p>
+        <p>Then say the useful thing privately at the break. A dominant delegate almost always believes volume is the metric. Telling them that the dais values the quality of their contribution and their ability to bring others in is not a rebuke but a tip, and most of them adjust immediately because they want to do well.</p>
 
         <H2>The rules lawyer</H2>
         <p>Points of order used as a weapon, points of parliamentary inquiry that are really speeches, motions raised to interrupt an opponent&rsquo;s momentum. The room slows to a crawl and quieter delegates stop trying.</p>
@@ -68,8 +68,8 @@ export default function Article() {
 
         <H2>The delegate who has not spoken in four hours</H2>
         <p>The most common problem in the room and the one chairs most often ignore, because silence is not disruptive. It is still a failure: that delegate paid the same fee.</p>
-        <p><strong>The fix, in escalating order.</strong> First, a structure that lowers the cost of speaking: a round the table where every delegation speaks for thirty seconds removes the decision to volunteer entirely. Second, a private word at the break, which is where the real work happens. Ask what committee they have done before and what they are finding hard, then give them a specific, small job: &ldquo;in the next caucus, raise the funding question, sixty seconds, nothing else.&rdquo; A defined task is far easier than an open invitation.</p>
-        <p>Third, seat them. Walk over during unmoderated caucus and introduce them to a bloc by name, then leave. Many silent delegates are not unprepared, they simply cannot find a way into a group that formed in the first twenty minutes.</p>
+        <p><strong>The fix, in escalating order.</strong> First, a structure that lowers the cost of speaking: a round the table where every delegation speaks for thirty seconds removes the decision to volunteer entirely. Second, a private word at the break, which is where the real work happens. Ask which committees they have done before and what they are finding hard, then give them a specific, small job: &ldquo;in the next caucus, raise the funding question, sixty seconds, nothing else.&rdquo; A defined task is far easier than an open invitation.</p>
+        <p>Third, seat them. Walk over during unmoderated caucus and introduce them to a bloc by name, then leave. Many silent delegates are not unprepared: they simply cannot find a way into a group that formed in the first twenty minutes.</p>
         <FactCard title="What not to do">
           Do not call on a silent delegate without warning to make a point about participation. It is the single most reliable way to ensure they never speak again. If you want to call on them, tell them at the break that you are going to, and tell them what the question will be.
         </FactCard>
@@ -88,7 +88,7 @@ export default function Article() {
         <p>Then involve the secretariat. Do not handle a serious incident alone, do not negotiate it at the front of the room, and write down what was said and when while you still remember the words.</p>
 
         <H2>The delegate who is drowning</H2>
-        <p>Visibly out of their depth: no position paper, no idea what a motion is, and a growing certainty that everyone else knows something they do not. They are not a problem to be managed, they are the reason the activity exists.</p>
+        <p>Visibly out of their depth: no position paper, no idea what a motion is, and a growing certainty that everyone else knows something they do not. They are not a problem to be managed. They are the reason the activity exists.</p>
         <p><strong>The fix.</strong> Be direct and kind at the first break. Tell them the thing nobody says out loud: almost nobody understands procedure on their first day, and the dais will help. Give them three concrete items, no more: the sentence to say when raising a placard, the name of one delegate they should work with, and the single question they should ask in the next caucus.</p>
         <p>Then follow up. If you told a delegate to raise the funding question and they did, say so afterwards. A first-timer who gets one thing right on Friday is a different delegate on Saturday. This matters more than almost anything else you do that weekend, and it is also the part of chairing that <Link href="/blog/how-to-chair-first-mun">new chairs</Link> most often forget they are allowed to do.</p>
 

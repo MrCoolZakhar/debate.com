@@ -45,7 +45,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <ArticleLayout
         slug="mun-working-paper-guide"
-        pitch="Gavelling lets delegates submit working papers directly to the chair during committee, no paper required."
+        pitch="Gavelling lets delegates submit working papers directly to the chair during committee, with no paper required."
       >
 
         <p>A working paper is the informal predecessor to a draft resolution. It is where the real work of MUN happens: messy, collaborative, and often written in the chaos of an <Link href="/blog/unmoderated-caucus-guide">unmoderated caucus</Link> on someone&apos;s laptop. Knowing how to write one quickly, structure it correctly, and merge it strategically with other blocs is one of the most valuable skills in MUN.</p>
@@ -59,7 +59,7 @@ export default function Article() {
         <p>Many committees skip the working paper stage and go straight to draft resolutions. Others use working papers extensively before formalising. Know which approach your conference expects.</p>
 
         <H2>When to Start Drafting</H2>
-        <p>Start earlier than feels necessary. The bloc that has a working paper to show at the first unmoderated caucus immediately attracts other delegates. A blank Google Doc with three bullet points still outperforms nothing.</p>
+        <p>Start earlier than feels necessary. The bloc that has a working paper to show at the first unmoderated caucus immediately attracts other delegates. A rough Google Doc with three bullet points still beats nothing.</p>
         <Callout>Draft in Google Docs or a shared document. Do not draft in a Word file on one person&apos;s laptop. The moment they leave the room, your whole bloc is stalled.</Callout>
 
         <H2>What to Put in a Working Paper</H2>
@@ -72,7 +72,7 @@ export default function Article() {
         <p>At the working paper stage, you do not need to worry about perfect formatting. What matters is that the ideas are clear, the clauses are specific, and the document reflects your bloc&apos;s actual positions.</p>
 
         <H2>Getting Sponsors and Signatories</H2>
-        <p>To convert a working paper into a draft resolution, you need a minimum number of sponsors (countries that helped write it and fully support it) and signatories (countries that want the document debated, but may not support its passage). Check your conference&apos;s requirements, as these vary widely.</p>
+        <p>To convert a working paper into a draft resolution, you need a minimum number of sponsors (countries that helped write it and fully support it) and signatories (countries that want the document debated but may not support its passage). Check your conference&apos;s requirements, as these vary widely.</p>
         <ul>
           <li><strong>Sponsors</strong> generally cannot vote against their own resolution without withdrawing sponsorship first.</li>
           <li><strong>Signatories</strong> carry no obligation to vote in favour.</li>

@@ -66,7 +66,7 @@ const faqSchema = {
       name: 'What is the best alternative to Muncoordinated?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'Gavelling (gavelling.com) is a free alternative to Muncoordinated with a broader scope: alongside live committee tools (roll call with quorum, speakers list with timer, caucuses, motion queue, voting, delegate chat) it includes a real-time delegate view, a faculty advisor view, and a full conference management layer — applications, country allocations, payments, study guides, and a public conference directory.',
+        text: 'Gavelling (gavelling.com) is a free alternative to Muncoordinated with a broader scope: alongside live committee tools (roll call with quorum, speakers list with timer, caucuses, motion queue, voting, delegate chat) it includes a real-time delegate view, a faculty advisor view, and a full conference management layer: applications, country allocations, payments, study guides, and a public conference directory.',
       },
     },
     {
@@ -74,7 +74,7 @@ const faqSchema = {
       name: 'What is the difference between Muncoordinated and Gavelling?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'Both are free browser-based MUN tools. Muncoordinated is an open-source, director-focused committee tool maintained by the community. Gavelling is an actively developed platform where delegates join with a code and get their own live view (queue position, documents, chat), and which also handles conference management end to end — registration, allocations, payments, and discovery — which Muncoordinated does not cover.',
+        text: 'Both are free browser-based MUN tools. Muncoordinated is an open-source, director-focused committee tool maintained by the community. Gavelling is an actively developed platform where delegates join with a code and get their own live view (queue position, documents, chat), and which also handles conference management end to end (registration, allocations, payments, and discovery), which Muncoordinated does not cover.',
       },
     },
   ],
@@ -92,12 +92,12 @@ export default function MuncoordinatedAlternative() {
       >
 
         <p>
-          <strong>Muncoordinated</strong> (sometimes written <strong>MUN Coordinated</strong>) has earned real goodwill in the Model UN community: it is free, open-source, and has removed the cost barrier to digital committee management for years. If you are choosing between it and <strong>Gavelling</strong> — also free — the decision comes down to scope and philosophy, not price. Here is the honest breakdown.
+          <strong>Muncoordinated</strong> (sometimes written <strong>MUN Coordinated</strong>) has earned real goodwill in the Model UN community: it is free, open-source, and has removed the cost barrier to digital committee management for years. If you are choosing between it and <strong>Gavelling</strong>, also free, the decision comes down to scope and philosophy, not price. Here is the honest breakdown.
         </p>
 
         <H2>What Muncoordinated does well</H2>
         <ul>
-          <li><strong>Genuinely free and open-source.</strong> Every feature is available at no cost, and the code is public — anyone can inspect it or contribute.</li>
+          <li><strong>Genuinely free and open-source.</strong> Every feature is available at no cost, and the code is public: anyone can inspect it or contribute.</li>
           <li><strong>Multi-director collaboration.</strong> Several directors can manage the same committee simultaneously from a shared account.</li>
           <li><strong>Persistence.</strong> Committee activity saves to the server, so day two picks up where day one ended.</li>
           <li><strong>Runs in the browser.</strong> No installation for the dais.</li>
@@ -105,12 +105,12 @@ export default function MuncoordinatedAlternative() {
 
         <H2>Where the scope differs</H2>
         <p>
-          Muncoordinated is a <em>committee-room tool for the dais</em>: the directors run the software and the room watches a projection. That is a deliberate, lightweight design — and its limits are exactly where Gavelling starts:
+          Muncoordinated is a <em>committee-room tool for the dais</em>: the directors run the software and the room watches a projection. That is a deliberate, lightweight design, and its limits are exactly where Gavelling starts:
         </p>
         <ul>
           <li><strong>Delegates get their own live view.</strong> On Gavelling, every delegate joins with a 6-character code and sees their queue position, the current speaker, documents, and a direct chat line to the dais from their own device. No more &quot;am I still on the list?&quot;</li>
           <li><strong>Faculty advisors get a view too.</strong> A read-only observer mode shows advisors their whole delegation live.</li>
-          <li><strong>A full conference layer.</strong> Delegate applications, <Link href="/blog/mun-country-allocation" style={{ color: '#1B3828', fontWeight: 600 }}>smart country-role allocation</Link>, delegation management for schools, <Link href="/blog/mun-conference-registration-payments" style={{ color: '#1B3828', fontWeight: 600 }}>payments and financial aid</Link>, study guide distribution, position paper review, staff recruitment, awards, and a public conference directory with a world map. Muncoordinated, as a community project, does not attempt registration, payments, or conference logistics.</li>
+          <li><strong>A full conference layer.</strong> Delegate applications, <Link href="/blog/mun-country-allocation" style={{ color: '#1B3828', fontWeight: 600 }}>smart country-role allocation</Link>, delegation management for schools, <Link href="/blog/mun-conference-registration-payments" style={{ color: '#1B3828', fontWeight: 600 }}>payments and financial aid</Link>, study guide distribution, position paper review, staff recruitment, a shareable MUN CV (awards are coming soon), and a public conference directory with a world map. Muncoordinated, as a community project, does not attempt registration, payments, or conference logistics.</li>
           <li><strong>Active product development.</strong> Gavelling ships new features continuously as a maintained product; Muncoordinated advances at the pace of community contribution, and support is community-based.</li>
         </ul>
 
@@ -128,14 +128,14 @@ export default function MuncoordinatedAlternative() {
               {[
                 ['Price', 'Free', 'Free (open-source)'],
                 ['Runs in browser', '✓', '✓'],
-                ['Live delegate view on own device', '✓ — join by code', 'Dais-focused'],
-                ['Faculty advisor view', '✓', '—'],
-                ['Delegate–chair chat', '✓', '—'],
-                ['Conference registration & applications', '✓', '—'],
-                ['Country-role allocation', '✓', '—'],
-                ['Payments & financial aid', '✓', '—'],
-                ['Public conference directory', '✓', '—'],
-                ['Open source', '—', '✓'],
+                ['Live delegate view on own device', '✓ (join by code)', 'Dais-focused'],
+                ['Faculty advisor view', '✓', '✗'],
+                ['Delegate-to-chair chat', '✓', '✗'],
+                ['Conference registration & applications', '✓', '✗'],
+                ['Country-role allocation', '✓', '✗'],
+                ['Payments & financial aid', '✓', '✗'],
+                ['Public conference directory', '✓', '✗'],
+                ['Open source', '✗', '✓'],
                 ['Support', 'Maintained product', 'Community-based'],
               ].map(([feat, g, m]) => (
                 <tr key={feat}>
@@ -158,7 +158,7 @@ export default function MuncoordinatedAlternative() {
 
         <H2>When Gavelling is the better pick</H2>
         <p>
-          If you want delegates and advisors in the loop live, or you are <Link href="/blog/start-a-mun-conference" style={{ color: '#1B3828', fontWeight: 600 }}>running an actual conference</Link> — applications, allocations, fees, study guides — rather than a single committee room, Gavelling covers the whole lifecycle in one free platform. There is no paid tier waiting behind the free one.
+          If you want delegates and advisors in the loop live, or you are <Link href="/blog/start-a-mun-conference" style={{ color: '#1B3828', fontWeight: 600 }}>running an actual conference</Link> (applications, allocations, fees, study guides) rather than a single committee room, Gavelling covers the whole lifecycle in one free platform. There is no paid tier waiting behind the free one.
         </p>
 
         <p>

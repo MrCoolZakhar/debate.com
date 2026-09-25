@@ -68,7 +68,7 @@ const faqSchema = {
       name: 'What is the best free MUN software?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'Gavelling and Muncoordinated are both fully free. Gavelling covers the whole conference lifecycle — live sessions with a real-time delegate view plus registration, country allocation, payments, and a public conference directory. Muncoordinated is free and open-source but focuses on the dais side of a single committee room.',
+        text: 'Gavelling and Muncoordinated are both fully free. Gavelling covers the whole conference lifecycle: live sessions with a real-time delegate view plus registration, country allocation, payments, and a public conference directory. Muncoordinated is free and open-source but focuses on the dais side of a single committee room.',
       },
     },
     {
@@ -76,7 +76,7 @@ const faqSchema = {
       name: 'Is there a free alternative to MUN Command?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: "Yes. Gavelling offers both live committee management and end-to-end conference management free, with no per-user or per-day fees — compared with MUN Command's Conference App at €1 per user per day. Delegates join Gavelling sessions with a 6-character code, no account or download required.",
+        text: "Yes. Gavelling offers both live committee management and end-to-end conference management free, with no per-user or per-day fees, compared with MUN Command's Conference App at €1 per user per day. Delegates join Gavelling sessions with a 6-character code, no account or download required.",
       },
     },
     {
@@ -84,7 +84,7 @@ const faqSchema = {
       name: 'What software do MUN conferences use to run committees?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'In 2026 most digital conferences use a dedicated platform — Gavelling, MUN Command, or Muncoordinated — to run roll call, the General Speakers List, caucus timers, motions, and voting. Some conferences still use Google Sheets with a timer app, and a few legacy setups use the desktop program wxMUN, though both approaches lack a live delegate view and real-time sync.',
+        text: 'In 2026 most digital conferences use a dedicated platform (Gavelling, MUN Command or Muncoordinated) to run roll call, the General Speakers List, caucus timers, motions, and voting. Some conferences still use Google Sheets with a timer app, and a few legacy setups use the desktop program wxMUN, though both approaches lack a live delegate view and real-time sync.',
       },
     },
   ],
@@ -115,7 +115,7 @@ export default function Article2() {
         <ul>
           <li><strong>Roll call</strong>: manually ticking a roster, then re-counting to check quorum, takes 5–10 minutes in a large committee.</li>
           <li><strong>Speakers list</strong>: a paper list is invisible to delegates. They can&apos;t see their position, which creates repeated interruptions (&quot;Am I still on the list?&quot;).</li>
-          <li><strong>Timer</strong>: a phone stopwatch requires someone to watch it constantly. It can&apos;t automatically advance to the next speaker.</li>
+          <li><strong>Timer</strong>: a phone stopwatch requires someone to watch it constantly. It doesn&apos;t know who is next on the list.</li>
           <li><strong>Voting</strong>: counting raised placards by hand is error-prone, especially in large GA committees.</li>
           <li><strong>Co-chair coordination</strong>: two chairs running the same session from different devices with no shared state leads to conflicts.</li>
         </ul>
@@ -127,7 +127,7 @@ export default function Article2() {
         <ul>
           <li><strong>Real-time multi-device sync</strong>: chair, co-chair, and delegates all see the same live state.</li>
           <li><strong>Roll call with quorum tracking</strong>: automatic quorum calculation, bulk status updates.</li>
-          <li><strong>GSL with built-in timer</strong>: automatic speaker advancement, time warnings, speaker queue visible to all.</li>
+          <li><strong>GSL with built-in timer</strong>: one press of Next seats the next speaker, a clock that runs itself, time warnings, speaker queue visible to all.</li>
           <li><strong>Caucus management</strong>: moderated and unmoderated caucus timers, separate speaker queues for mod caucuses.</li>
           <li><strong>Motion and voting support</strong>: motion queue, configurable voting thresholds, P5 veto mode.</li>
           <li><strong>No-download delegate access</strong>: delegates should be able to join on any device without installing anything.</li>
@@ -136,7 +136,7 @@ export default function Article2() {
 
         <H2>3. Option 1: Gavelling (gavelling.com)</H2>
         <p>
-          <strong>Gavelling</strong> is a free, no-download web platform built by MUN practitioners that covers both halves of the job: running live committee sessions and managing the conference around them. Delegates join a session with a 6-character code on any device — no account, no install — and get their own live view of the queue, documents, and a chat line to the dais.
+          <strong>Gavelling</strong> is a free, no-download web platform built by MUN practitioners that covers both halves of the job: running live committee sessions and managing the conference around them. Delegates join a session with a 6-character code on any device (no account, no install) and get their own live view of the queue, documents, and a chat line to the dais.
         </p>
         <H3>What it includes</H3>
         <ul>
@@ -154,25 +154,25 @@ export default function Article2() {
         </ul>
         <H3>Conferences layer (live)</H3>
         <p>
-          Gavelling Conferences adds end-to-end conference management at no cost: delegate applications, <Link href="/blog/mun-country-allocation" style={{ color: '#1B3828', fontWeight: 600 }}>smart country-role allocations</Link>, delegation management for schools, <Link href="/blog/mun-conference-registration-payments" style={{ color: '#1B3828', fontWeight: 600 }}>payments and financial aid</Link>, study guide distribution, position paper review, chair and staff recruitment, awards, a shareable MUN CV for every delegate, and a public conference directory where delegates <Link href="/conferences/explore" style={{ color: '#1B3828', fontWeight: 600 }}>find and apply to conferences worldwide</Link>.
+          Gavelling Conferences adds end-to-end conference management at no cost: delegate applications, <Link href="/blog/mun-country-allocation" style={{ color: '#1B3828', fontWeight: 600 }}>smart country-role allocations</Link>, delegation management for schools, <Link href="/blog/mun-conference-registration-payments" style={{ color: '#1B3828', fontWeight: 600 }}>payments and financial aid</Link>, study guide distribution, position paper review, chair and staff recruitment, a shareable MUN CV for every delegate (awards are coming soon), and a public conference directory where delegates <Link href="/conferences/explore" style={{ color: '#1B3828', fontWeight: 600 }}>find and apply to conferences worldwide</Link>.
         </p>
         <H3>Limitations</H3>
         <p>
           Gavelling is a newer platform. Crisis committee support (crisis arcs, press releases, directives) is on the roadmap but not yet available. If your conference runs primarily crisis committees, check back closer to the end of 2026.
         </p>
-        <p><strong>Best for:</strong> any conference running standard GA, UNSC, or specialised committees wanting a professional digital setup at zero cost.</p>
+        <p><strong>Best for:</strong> any conference running standard GA, UNSC, or specialised committees that want a professional digital setup at zero cost.</p>
         <p><strong>Price:</strong> Free.</p>
 
         <H2>4. Option 2: MUN Command (mymun.com)</H2>
         <p>
-          <strong>MUN Command</strong> (often written <strong>MUNCommand</strong>) is the conference software from the mymun team and the most established paid platform in the space. It offers 20+ debate modes, live statistics, document sharing, built-in chat, and dedicated interfaces for chairs, delegates, organizers, and faculty advisors — with native iOS and Android apps alongside the browser version.
+          <strong>MUN Command</strong> (often written <strong>MUNCommand</strong>) is the conference software from the mymun team and the most established paid platform in the space. It offers 20+ debate modes, live statistics, document sharing, built-in chat, and dedicated interfaces for chairs, delegates, organisers and faculty advisors, with native iOS and Android apps alongside the browser version.
         </p>
         <H3>Pricing</H3>
         <p>
-          The free Session App is limited (3 debate modes, 3 motion types at the time of writing). The full Conference App costs <strong>€1 per user per day</strong>, free for up to 10 users — so a 200-delegate, 3-day conference is looking at roughly €600 in software fees.
+          The free Session App is limited (3 debate modes, 3 motion types at the time of writing). The full Conference App costs <strong>€1 per user per day</strong>, free for up to 10 users, so a 200-delegate, 3-day conference is looking at roughly €600 in software fees.
         </p>
         <p>
-          MUN Command and mymun are the same operation — MUN Command is mymun&apos;s session software, and the two brands are converging under the mymun name.
+          MUN Command and mymun are the same operation: MUN Command is mymun&apos;s session software, and the two brands are converging under the mymun name.
         </p>
         <p>
           <strong>Best for:</strong> conferences already in the mymun ecosystem that want native mobile apps and are comfortable with per-delegate pricing.<br />
@@ -185,7 +185,7 @@ export default function Article2() {
           <strong>Muncoordinated</strong> (sometimes written <strong>MUN Coordinated</strong>) is a free, open-source, browser-based committee tool with a long track record. Multiple directors can run the same committee from a shared account, and committee data persists between sessions. It is dais-focused by design: the directors drive the software, and the room follows along.
         </p>
         <p>
-          Its limits mirror its scope: no live per-delegate view on delegates&apos; own devices, no faculty advisor view, and — as a community project — no conference-management layer (registration, payments, allocations) and community-based support.
+          Its limits mirror its scope: no live per-delegate view on delegates&apos; own devices, no faculty advisor view and, as a community project, no conference-management layer (registration, payments, allocations) and only community-based support.
         </p>
         <p>
           <strong>Best for:</strong> single committee rooms that want a minimal, open-source dais tool.<br />
@@ -195,7 +195,7 @@ export default function Article2() {
 
         <H2>6. Option 4: wxMUN (desktop)</H2>
         <p>
-          <strong>wxMUN</strong> is a free, open-source desktop program (written in C++ with the wxWidgets toolkit) that manages speakers lists, caucuses, and voting offline. Running fully offline is its distinctive strength — useful in venues with unreliable internet — but it lives on one machine: no delegate devices, no multi-chair sync, no conference layer, and development activity has been quiet for years.
+          <strong>wxMUN</strong> is a free, open-source desktop program (written in C++ with the wxWidgets toolkit) that manages speakers lists, caucuses, and voting offline. Running fully offline is its distinctive strength (useful in venues with unreliable internet), but it lives on one machine: no delegate devices, no multi-chair sync, no conference layer, and development activity has been quiet for years.
         </p>
         <p>
           <strong>Best for:</strong> offline venues and legacy setups.<br /><strong>Price:</strong> Free.
@@ -228,14 +228,14 @@ export default function Article2() {
         <p>
           Most chairs who use a timer app still use Google Sheets alongside it, which means you are maintaining two separate tools and a mental model to bridge them.
         </p>
-        <p><strong>Best for:</strong> as a supplement to paper procedures when no other option is available.<br /><strong>Price:</strong> Typically free.</p>
+        <p><strong>Best for:</strong> supplementing paper procedures when no other option is available.<br /><strong>Price:</strong> Typically free.</p>
 
         <H2>9. Option 7: In-House Conference Tools</H2>
         <p>
           A small number of large, well-resourced conferences have built their own internal committee management tools, typically as web apps or internal dashboards maintained by their technology team. These tools are tailored to their specific rules of procedure and are not available externally.
         </p>
         <p>
-          This option is not realistic for most conferences. Building and maintaining a bespoke MUN platform requires a dedicated engineering team, ongoing maintenance, and significant time investment that could otherwise go toward the conference programme itself.
+          This option is not realistic for most conferences. Building and maintaining a bespoke MUN platform requires a dedicated engineering team, ongoing maintenance, and significant time investment that could otherwise go towards the conference programme itself.
         </p>
 
         <H2>10. Comparison Table</H2>
@@ -257,7 +257,7 @@ export default function Article2() {
                 ['Quorum tracking', '✓', '✓', '✓', 'Manual'],
                 ['Caucus management', '✓', '✓', '✓', 'Timer only'],
                 ['Voting module', '✓', '✓', '✓', 'Manual'],
-                ['Delegate–chair chat', '✓', '✓', '✗', '✗'],
+                ['Delegate-to-chair chat', '✓', '✓', '✗', '✗'],
                 ['Faculty advisor view', '✓', '✓', '✗', '✗'],
                 ['No delegate accounts needed', '✓', '✗', 'n/a (dais only)', '✓'],
                 ['Conference registration & payments', '✓', 'Partial', '✗', '✗'],
@@ -283,10 +283,10 @@ export default function Article2() {
 
         <H2>11. Verdict</H2>
         <p>
-          For most conferences in 2026, <strong>Gavelling</strong> is the strongest overall pick: it is the only platform that covers live committee sessions <em>and</em> full conference management (applications, allocations, payments, discovery) completely free, with delegates joining by code on any device — no accounts, no downloads, no per-delegate fees.
+          For most conferences in 2026, <strong>Gavelling</strong> is the strongest overall pick: it is the only platform that covers live committee sessions <em>and</em> full conference management (applications, allocations, payments, discovery) completely free, with delegates joining by code on any device: no accounts, no downloads, no per-delegate fees.
         </p>
         <p>
-          <strong>MUN Command</strong> is a genuinely capable paid alternative — its debate-mode depth and native apps are real advantages if the €1 per user per day fits your budget. <strong>Muncoordinated</strong> remains the best minimal open-source dais tool. Google Sheets and timer apps still work for small informal sessions, but for anything delegates will remember, a dedicated platform is the professional choice.
+          <strong>MUN Command</strong> is a genuinely capable paid alternative: its debate-mode depth and native apps are real advantages if the €1 per user per day fits your budget. <strong>Muncoordinated</strong> remains the best minimal open-source dais tool. Google Sheets and timer apps still work for small informal sessions, but for anything delegates will remember, a dedicated platform is the professional choice.
         </p>
         <p>
           See also: <Link href="/blog/how-to-run-mun-committee" style={{ color: '#1B3828', fontWeight: 600 }}>How to Run a MUN Committee</Link> for a complete guide to session procedure, and <Link href="/blog/start-a-mun-conference" style={{ color: '#1B3828', fontWeight: 600 }}>How to Start a MUN Conference From Scratch</Link> if you are organising one.

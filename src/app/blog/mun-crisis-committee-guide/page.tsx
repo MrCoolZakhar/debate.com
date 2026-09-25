@@ -51,13 +51,13 @@ export default function Article() {
         <p>Crisis committees are the most dynamic format in Model UN. Where General Assembly committees debate policy over hours or days, crisis committees react to rapidly evolving fictional scenarios in real time. They demand faster thinking, stronger individual character play, and a completely different set of skills from standard MUN. Here is everything you need to know. If you are chairing or staffing one, read <Link href="/blog/how-to-run-crisis-committee">how to run a crisis committee</Link>.</p>
 
         <H2>What Is a Crisis Committee?</H2>
-        <p>A crisis committee is a small MUN committee, typically ten to twenty delegates, in which a fictional or historically-based scenario unfolds in real time throughout the conference. The committee might be a cabinet, a corporate board, a historical council of war, or an intelligence agency. Crisis updates (called &quot;crisis updates&quot; or &quot;news flashes&quot;) arrive from the crisis staff, and the committee must respond through <Link href="/blog/mun-crisis-directive-guide">formal directives</Link> and resolutions.</p>
-        <p>Unlike GA committees where you represent a country, in crisis you often represent a named individual with a specific role, agenda, and portfolio of assets.</p>
+        <p>A crisis committee is a small MUN committee, typically ten to twenty delegates, in which a fictional or historically based scenario unfolds in real time throughout the conference. The committee might be a cabinet, a corporate board, a historical council of war, or an intelligence agency. Crisis updates (sometimes called &quot;news flashes&quot;) arrive from the crisis staff, and the committee must respond through <Link href="/blog/mun-crisis-directive-guide">formal directives</Link> and resolutions.</p>
+        <p>Unlike in GA committees, where you represent a country, in crisis you often represent a named individual with a specific role, agenda, and portfolio of assets.</p>
 
         <H2>Frontroom vs. Backroom</H2>
         <p>Crisis committees operate on two tracks simultaneously:</p>
         <H3>Frontroom (Committee)</H3>
-        <p>The formal committee session where delegates debate, pass directives, and respond to crisis updates collectively. It looks similar to a standard MUN committee (speakers lists, motions, caucuses) but moves faster and the content reacts to live updates.</p>
+        <p>The formal committee session where delegates debate, pass directives, and respond to crisis updates collectively. It looks similar to a standard MUN committee (speakers lists, motions, caucuses) but it moves faster, and the content reacts to live updates.</p>
         <H3>Backroom (Personal Portfolio)</H3>
         <p>Each delegate also has a personal portfolio: the resources, relationships, and powers specific to their character. During unmoderated caucuses, delegates submit personal directives to the crisis staff: secret orders to assets, private communications, covert operations. The crisis staff evaluates these directives and may grant, deny, or modify the outcomes, feeding the results back into the scenario. Our <Link href="/blog/mun-crisis-backroom-guide">crisis backroom guide</Link> explains how that side works.</p>
         <Callout>The best crisis delegates play both games simultaneously: leading frontroom debate while running a strategic backroom operation that advances their character&apos;s personal agenda.</Callout>
@@ -82,9 +82,9 @@ export default function Article() {
         <p>For how crisis compares with other formats, see our guide to <Link href="/blog/mun-committee-types">MUN committee types</Link>.</p>
         <ul>
           <li><strong>Cabinet crisis:</strong> The committee is a national cabinet managing a domestic or international emergency.</li>
-          <li><strong>Historical crisis:</strong> A council set in a historical moment (the Cuban Missile Crisis, WWII-era cabinet, Cold War intelligence committee).</li>
+          <li><strong>Historical crisis:</strong> A council set in a historical moment (the Cuban Missile Crisis, a WWII-era cabinet, a Cold War intelligence committee).</li>
           <li><strong>Corporate crisis:</strong> A board of directors navigating a scandal, merger, or market collapse.</li>
-          <li><strong>Continuous crisis (JCC):</strong> Two linked committees, Joint Crisis Committees, that interact with each other through the crisis staff, often representing opposing sides of a conflict.</li>
+          <li><strong>Joint crisis (JCC):</strong> Two or more linked committees, Joint Crisis Committees, that interact with each other through the crisis staff, often representing opposing sides of a conflict.</li>
         </ul>
       </ArticleLayout>
     </>

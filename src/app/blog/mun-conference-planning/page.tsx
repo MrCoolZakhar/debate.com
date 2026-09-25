@@ -55,16 +55,16 @@ export default function Article() {
 
         <H2>Eight Months Out: Foundation</H2>
         <ul>
-          <li><strong>Book your venue.</strong> Our guide to <Link href="/blog/mun-conference-venue-logistics">venue logistics</Link> covers this step in detail. School cafeterias, library halls, university rooms, whatever you can secure. You need one room per committee plus a space for opening and closing ceremonies.</li>
+          <li><strong>Book your venue.</strong> Our guide to <Link href="/blog/mun-conference-venue-logistics">venue logistics</Link> covers this step in detail. School cafeterias, library halls, university rooms: whatever you can secure. You need one room per committee plus a space for opening and closing ceremonies.</li>
           <li><strong>Set your date.</strong> Avoid exam periods, major holidays, and dates that clash with other regional conferences that would compete for delegates.</li>
           <li><strong>Form your secretariat.</strong> At minimum: a Secretary-General (overall lead), a Director-General (operations), committee directors for each committee, and a communications/registration lead. See <Link href="/blog/mun-secretariat-roles">MUN secretariat roles</Link> for what each one does.</li>
-          <li><strong>Choose your conference name and branding.</strong> Register a domain, set up a simple website or Google Form for interest registration.</li>
+          <li><strong>Choose your conference name and branding.</strong> Register a domain and set up a simple website or Google Form for interest registration.</li>
         </ul>
 
         <H2>Six Months Out: Academic Planning</H2>
         <ul>
           <li><strong>Finalise your committee list and topics.</strong> For each committee, choose one topic that is timely, debatable, and appropriate for your expected delegate experience level.</li>
-          <li><strong>Write your rules of procedure document.</strong> You can adapt from NMUN&apos;s publicly available rules or write your own simplified version. The important thing is that it exists and is consistent across committees.</li>
+          <li><strong>Write your rules of procedure document.</strong> You can adapt NMUN&apos;s publicly available rules or write your own simplified version. The important thing is that it exists and is consistent across committees.</li>
           <li><strong>Recruit and brief your dais team.</strong> Each committee needs a chair and at least one co-chair. Find experienced MUN delegates from your school or network.</li>
           <li><strong>Open delegate registration.</strong> Set a registration fee if needed to cover venue and catering costs. Our <Link href="/blog/mun-conference-budget">MUN conference budget</Link> guide helps you work out the number.</li>
         </ul>
@@ -92,10 +92,10 @@ export default function Article() {
         <H2>Conference Week: Final Checks</H2>
         <ul>
           <li>Confirm venue access and room setup</li>
-          <li>Test all technology (projectors, WiFi, committee management software)</li>
+          <li>Test all technology (projectors, Wi-Fi, committee management software)</li>
           <li>Brief your full secretariat team: everyone should know their role and their fallback if something goes wrong</li>
           <li>Prepare printed name placards if using physical ones</li>
-          <li>Prepare awards certificates and materials</li>
+          <li>Prepare award certificates and materials</li>
         </ul>
 
         <H2>Conference Day</H2>

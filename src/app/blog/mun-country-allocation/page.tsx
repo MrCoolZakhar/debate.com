@@ -92,7 +92,7 @@ export default function Article() {
         <p>The default that causes the fewest complaints: no more than two or three students from one school in the same committee, and no more than one committee per two students for advisors who ask for concentration. Whichever you choose, apply it consistently and publish the rule with the allocation, because a school that sees another school with four delegates in the flagship committee will ask.</p>
 
         <H2>Crisis and cabinet allocation is a different job</H2>
-        <p>Character allocation does not fit the country model. Seats are named people with unequal power, a finance minister is not interchangeable with a press baron, and delegates cannot rank characters sensibly because they do not know the scenario.</p>
+        <p>Character allocation does not fit the country model. Seats are named people with unequal power: a finance minister is not interchangeable with a press baron, and delegates cannot rank characters sensibly because they do not know the scenario.</p>
         <p>The method that works is a short application: a writing sample or one paragraph on why they want the room, read by the crisis director, who assigns characters personally. Give the strongest portfolios to delegates who have done crisis before, and be careful with portfolios that are structurally weak, because a delegate with no resources and no information has a bad weekend no matter how good they are. If a character sheet is unavoidably thin, either cut it or give it a hidden advantage the backroom knows about.</p>
 
         <H2>The reallocation requests, and how to prevent most of them</H2>
@@ -119,7 +119,7 @@ export default function Article() {
         <p>What never goes in a public spreadsheet: delegate names against schools against contact details. A shared read-only sheet of the full allocation is convenient and it publishes a list of minors and their locations. Send per-delegation, keep the master private, and if you must publish something public, publish committee country lists with no names on them.</p>
 
         <H2>By hand or with software</H2>
-        <p>Allocation by spreadsheet is entirely possible and many good conferences do it. What costs the time is not the decision-making, it is the bookkeeping around it: chasing preference forms, matching payments to people, rebuilding the sheet after a school withdraws four delegates, and sending several hundred individual emails without sending the wrong one to the wrong person.</p>
+        <p>Allocation by spreadsheet is entirely possible and many good conferences do it. What costs the time is not the decision-making: it is the bookkeeping around it: chasing preference forms, matching payments to people, rebuilding the sheet after a school withdraws four delegates, and sending several hundred individual emails without sending the wrong one to the wrong person.</p>
         <TableWrap>
           <table>
             <thead><tr><th>Task</th><th>By hand</th><th>With a platform</th></tr></thead>

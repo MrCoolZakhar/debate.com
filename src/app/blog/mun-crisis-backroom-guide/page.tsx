@@ -53,7 +53,7 @@ export default function Article() {
         <p>Three words: continuity, consistency, pace.</p>
         <p><strong>Continuity</strong> means the world remembers. If a delegate blew up a bridge in session one, the bridge is still down in session four, and the trade figures a different delegate asked about reflect it. Backrooms that lose continuity produce delegates who stop believing their actions matter, and a crisis committee where actions do not matter is just a badly run General Assembly.</p>
         <p><strong>Consistency</strong> means two similar directives from two delegates get comparable answers, whichever staffer picked them up. This is harder than it sounds with four people writing in parallel, and it is the main thing a world bible exists to protect.</p>
-        <p><strong>Pace</strong> means the room always has something to react to, and never so much that reacting is pointless. The backroom controls the tempo of the entire committee, and the front room chair can only work with what you send them.</p>
+        <p><strong>Pace</strong> means the room always has something to react to, and never so much that reacting is pointless. The backroom controls the tempo of the entire committee, and the front-room chair can only work with what you send them.</p>
         <Callout>The backroom&rsquo;s product is not cleverness. It is a world that behaves the same way on Sunday morning as it did on Friday night, and that answers people fast enough for them to keep playing.</Callout>
 
         <H2>Triage: which directives get what</H2>
@@ -153,7 +153,7 @@ export default function Article() {
           <li><strong>Drop to short responses across the board.</strong> Everyone gets two lines. Two lines to everyone beats a paragraph to a third of the room.</li>
           <li><strong>Batch by theme.</strong> Six directives about the same border become one update that resolves all six. Faster, and it is better for the room because it produces a single visible consequence.</li>
           <li><strong>Say so.</strong> Have the chair announce that responses are running behind and will arrive this session. Delegates handle a stated delay well and an unexplained silence badly.</li>
-          <li><strong>Slow the front room, do not speed the backroom.</strong> Ask the chair for a longer unmoderated caucus or a longer committee-wide directive debate. Buying fifteen minutes is easier than writing twice as fast.</li>
+          <li><strong>Slow the front room; do not speed up the backroom.</strong> Ask the chair for a longer unmoderated caucus or a longer committee-wide directive debate. Buying fifteen minutes is easier than writing twice as fast.</li>
         </ol>
 
         <H2>Being the staffer everyone wants</H2>

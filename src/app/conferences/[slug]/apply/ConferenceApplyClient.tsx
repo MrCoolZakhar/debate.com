@@ -5022,7 +5022,7 @@ function ConferenceApplyInner() {
       ? null
       : delegationLocked
       ? (existingApp!.is_independent ? 'Independent' : (lockedSocietyName ?? 'Your saved delegation'))
-      : isIndependent ? 'Independent' : (societyInput.trim() || '—');
+      : isIndependent ? 'Independent' : (societyInput.trim() || '–');
     const isTrialPlan = financeProfile.subscription_plan === 'unlimited_trial';
     const tierLabel = isTrialPlan ? 'Free trial' : hasUnlimited ? 'Unlimited' : 'Free';
     const costLabel = isExemptRole
@@ -5114,7 +5114,7 @@ function ConferenceApplyInner() {
               {!skipExperience && (
                 <div>
                   <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.15em', color: NEU.muted, marginBottom: 3 }}>EXPERIENCE</p>
-                  <p className="capitalize" style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13.5, color: NEU.ink }}>{experienceLevel || '—'}</p>
+                  <p className="capitalize" style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13.5, color: NEU.ink }}>{experienceLevel || '–'}</p>
                 </div>
               )}
 
@@ -5213,7 +5213,7 @@ function ConferenceApplyInner() {
 
               {!isExemptRole && !hasUnlimited && !poolCovered && (
                 <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-                  You have {creditBalanceLoading || creditBalance === null ? '—' : creditBalance} credit{creditBalance === 1 ? '' : 's'}.
+                  You have {creditBalanceLoading || creditBalance === null ? '–' : creditBalance} credit{creditBalance === 1 ? '' : 's'}.
                 </p>
               )}
 

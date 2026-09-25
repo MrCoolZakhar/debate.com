@@ -30,7 +30,7 @@ export function medallionTone(committeeType: string | null | undefined): Medalli
 
 // `tone` wins when given; `isCrisis` is kept for the existing callers.
 export function MonogramMedallion({ text, isCrisis = false, tone, size }: { text: string; isCrisis?: boolean; tone?: MedallionTone; size: number }) {
-  const monogram = text.replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase() || '—';
+  const monogram = text.replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase() || '–';
   const resolved: MedallionTone = tone ?? (isCrisis ? 'crisis' : 'forest');
   return (
     <div

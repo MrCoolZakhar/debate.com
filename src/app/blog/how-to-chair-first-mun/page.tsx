@@ -58,7 +58,7 @@ export default function Article5() {
 
         <H2>1. You Don&apos;t Need to Know Everything</H2>
         <p>
-          The most common mistake first-time chairs make is trying to memorise every edge case in the rules of procedure before their first session. That leads to either paralysis or over-confidence, and neither is useful.
+          The most common mistake first-time chairs make is trying to memorise every edge case in the rules of procedure before their first session. That leads to either paralysis or overconfidence, and neither is useful.
         </p>
         <p>
           What you do need:
@@ -183,9 +183,9 @@ export default function Article5() {
         <H2>8. After the Session</H2>
         <ul>
           <li><strong>Debrief with your co-chair.</strong> What went well? What would you do differently? This 10-minute conversation is how you improve.</li>
-          <li><strong>Review delegate feedback.</strong> Gavelling collects optional delegate feedback at session end. Reading it, even the harsh comments, accelerates your development faster than anything else.</li>
+          <li><strong>Review delegate feedback.</strong> Ask delegates for a few lines of feedback at the end, on paper or a short form. Reading it, even the harsh comments, speeds up your development more than anything else.</li>
           <li><strong>Prepare for awards.</strong> If your conference gives awards, see our <Link href="/blog/mun-judging-rubric" style={{ color: '#1B3828', fontWeight: 600 }}>MUN judging rubric</Link>.</li>
-          <li><strong>Archive your notes.</strong> Gavelling stores the session record automatically: speaker history, motions, votes, chat. This is useful for writing committee reports and for your own review.</li>
+          <li><strong>Archive your notes.</strong> Before you close the laptop, download the session record from the End View or the scoreboard: one spreadsheet with the history, scores, speeches, attendance and documents. A standalone room is deleted about an hour after it ends. The record is useful for writing committee reports and for your own review.</li>
         </ul>
 
         <div className="gv-callout gv-callout-plain">

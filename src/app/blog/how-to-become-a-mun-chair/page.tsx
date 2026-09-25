@@ -49,7 +49,7 @@ export default function Article() {
         <p>Most guides to chairing start on the morning of the conference, with a gavel already in your hand. This one ends there. It is about the four months before: finding the openings, writing an application that a tired secretariat reads properly, surviving the interview, and turning a yes into a dais you are actually ready for.</p>
 
         <H2>What chairing actually asks of you</H2>
-        <p>The visible part is two days in a room. The invisible part is much larger, and the reason chair applications have a drop-out problem.</p>
+        <p>The visible part is two days in a room. The invisible part is much larger, and it is the reason chair applications have a drop-out problem.</p>
         <p>A typical single-topic committee at a mid-sized conference costs a chair somewhere between 40 and 80 hours before anyone arrives. The background guide is most of it: researching a topic you probably did not pick, writing 15 to 25 pages, taking a round of secretariat edits, and delivering it to a deadline that sits weeks before the conference so delegates have time to read it. Add the position paper marking, the delegate questions in your inbox, the pre-conference calls with your co-chair and the academic team, and the hours you will spend rereading the rules of procedure of a conference that is not the one you usually attend.</p>
         <p>Then there is the room itself. Chairing is not public speaking, which surprises delegates who apply because they were good at speaking. It is closer to refereeing: keeping time, keeping the queue honest, ruling on motions in the second you are asked, tracking who has contributed what, and staying neutral while forty people try to read your face. If you have never watched a chair closely, spend one conference doing nothing else.</p>
         <Callout>The honest question to ask yourself is not whether you would enjoy holding a gavel. It is whether you would enjoy writing 20 pages about maritime delimitation in your exam term, because that is the part you sign up for first.</Callout>
@@ -107,7 +107,7 @@ export default function Article() {
           <li><strong>Can you explain a conflict without taking a side?</strong> Write the strongest version of both positions. A sample that argues is a sample that will produce a guide delegates cannot use.</li>
           <li><strong>Do you cite?</strong> Name the resolution number, the treaty article, the agency report. &ldquo;The UN has addressed this several times&rdquo; is what an unprepared delegate writes.</li>
           <li><strong>Is it structured?</strong> Subheadings, short paragraphs, one idea each. Reviewers skim first and read second.</li>
-          <li><strong>Is it the right length?</strong> If they asked for 800 words, send 800. Sending 2,000 is not enthusiasm, it is a preview of the 45-page guide you will hand in late.</li>
+          <li><strong>Is it the right length?</strong> If they asked for 800 words, send 800. Sending 2,000 is not enthusiasm; it is a preview of the 45-page guide you will hand in late.</li>
         </ol>
         <p>Write the sample as if it were a real section of a real guide, because the best ones are reused. Our full method is in <Link href="/blog/mun-background-guide-writing">how to write a MUN background guide</Link>.</p>
 
@@ -121,7 +121,7 @@ export default function Article() {
         <p>The weak answer is &ldquo;confidence&rdquo; or &ldquo;knowing the rules&rdquo;. The strong answer names the trade-off: a chair has to be visible enough to hold the room and invisible enough that the debate belongs to the delegates. Give an example of a chair you watched do it.</p>
 
         <H3>3. &ldquo;A delegate raises a point of order and you know they are wrong. What do you do?&rdquo;</H3>
-        <p>They want to see you rule, immediately, and move on. &ldquo;The chair rules the point not well taken, the committee will continue.&rdquo; Not a debate, not an apology. Our <Link href="/blog/mun-points-explained">guide to the four points</Link> and the <Link href="/blog/mun-points-of-order">point of order</Link> in particular give you the exact wording.</p>
+        <p>They want to see you rule, immediately, and move on. &ldquo;The chair rules the point not well taken. The committee will continue.&rdquo; Not a debate, not an apology. Our <Link href="/blog/mun-points-explained">guide to the four points</Link> and our guide to the <Link href="/blog/mun-points-of-order">point of order</Link> in particular give you the exact wording.</p>
 
         <H3>4. &ldquo;Your committee has gone silent. It is 40 minutes into the first session.&rdquo;</H3>
         <p>A diagnostic answer beats a menu. Say what you would check first (is it a quiet room or a lost room), then name two interventions and when you would abandon each.</p>

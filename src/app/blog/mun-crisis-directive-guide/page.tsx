@@ -7,7 +7,7 @@ import { H2, H3, Callout, FactCard, TableWrap } from '@/components/blog/prose';
 export const metadata: Metadata = pageMetadata({
   title: 'How to Write a MUN Crisis Directive: Three Kinds, Four Worked Examples',
   description:
-    'What a directive is, the difference between public, private and press, and full annotated examples with the backroom response each one earns',
+    'What a directive is, the differences between public, private and press directives, and full annotated examples with the backroom response each one earns.',
   path: '/blog/mun-crisis-directive-guide',
   ogDescription: 'The three kinds of crisis directive, with full worked examples and the backroom response each earns.',
   type: 'article',
@@ -58,7 +58,7 @@ export default function Article() {
         <FactCard title="Public directive: the shape">
           A title. A sponsor list. Then numbered operative clauses, each one an order with an actor, an action and a limit. No preambulatory clauses in most rooms. Half a page is normal. A page is long.
         </FactCard>
-        <p>The single most common failure in a public directive is scope. A cabinet of a state can order that state&rsquo;s army, treasury and ministries. It cannot order another country&rsquo;s army, and it cannot order an outcome. &ldquo;Resolves to end the insurgency&rdquo; is not an order, it is a wish. &ldquo;Orders the 3rd Division to secure the two bridges north of the capital and hold them for seventy-two hours&rdquo; is an order, because a general could receive it and obey it.</p>
+        <p>The single most common failure in a public directive is scope. A cabinet of a state can order that state&rsquo;s army, treasury and ministries. It cannot order another country&rsquo;s army, and it cannot order an outcome. &ldquo;Resolves to end the insurgency&rdquo; is not an order: it is a wish. &ldquo;Orders the 3rd Division to secure the two bridges north of the capital and hold them for seventy-two hours&rdquo; is an order, because a general could receive it and obey it.</p>
 
         <H3>Worked example: a public directive</H3>
         <FactCard title="DIRECTIVE 4.1: SECURING THE NORTHERN CORRIDOR">
@@ -103,7 +103,7 @@ export default function Article() {
 
         <H2>The most useful directive nobody writes: the information request</H2>
         <p>You are allowed to ask. A private directive that asks a precise question is cheap, fast and almost always answered, because answering it gives the backroom a chance to develop the story.</p>
-        <p>The rule is that it must be something your character could plausibly find out and could not simply infer. &ldquo;Who is behind the attack?&rdquo; is a guess disguised as a question, and you will get a vague answer. &ldquo;Which units were on leave in the northern district on the night of the attack, and who signed the leave orders?&rdquo; is a question a minister could have answered by an official in a day, and the answer will contain a name.</p>
+        <p>The rule is that it must be something your character could plausibly find out and could not simply infer. &ldquo;Who is behind the attack?&rdquo; is a guess disguised as a question, and you will get a vague answer. &ldquo;Which units were on leave in the northern district on the night of the attack, and who signed the leave orders?&rdquo; is a question a minister could have an official answer in a day, and the answer will contain a name.</p>
         <p>Send two or three of these in the first hour. While everyone else is drafting speeches, you will be the only person in the room who knows anything specific.</p>
 
         <H2>Specific, active, short: the same directive rewritten twice</H2>

@@ -68,7 +68,7 @@ export default function Article() {
         </TableWrap>
         <p>So a conference with eight committees, one of them crisis, needs roughly eight committee rooms plus a backroom, a hall, and five or six ancillary spaces. Sixteen rooms, not eight. That is the calculation that determines whether a school building is big enough.</p>
         <H3>Delegate count per room</H3>
-        <p>Plan on committee sizes of 20 to 45 for general assembly committees, 15 to 20 for specialised agencies, and 15 for a Security Council. Then size the room at roughly one and a half times the committee&apos;s seated footprint, because delegates need to move during unmoderated caucus and a room packed to capacity makes that impossible. A classroom that seats 30 in exam rows is not a room for 30 delegates.</p>
+        <p>Plan on committee sizes of 20 to 45 for General Assembly committees, 15 to 20 for specialised agencies, and 15 for a Security Council. Then size the room at roughly one and a half times the committee&apos;s seated footprint, because delegates need to move during unmoderated caucus and a room packed to capacity makes that impossible. A classroom that seats 30 in exam rows is not a room for 30 delegates.</p>
         <Callout>Book one more committee room than you think you need. It becomes the overflow, the second crisis room, the interview room or the place you move a committee whose air conditioning has failed. It is the cheapest insurance in the whole budget.</Callout>
 
         <H2>What each committee room must have</H2>
@@ -78,14 +78,14 @@ export default function Article() {
           <li><strong>A door that closes</strong>, and walls that do not transmit the next committee&apos;s vote.</li>
           <li><strong>Power.</strong> At least two working sockets reachable from the dais. Laptops and a timer run all day.</li>
           <li><strong>A projector or screen</strong>, useful but never essential. Plan for the committee to work without it.</li>
-          <li><strong>Wifi that survives 40 phones</strong>, which is the one that actually fails. More on this below.</li>
+          <li><strong>Wi-Fi that survives 40 phones</strong>, which is the one that actually fails. More on this below.</li>
           <li><strong>Natural light and controllable heat</strong>, or a window that opens. Forty people in a sealed room for three hours is genuinely unpleasant by the afternoon.</li>
           <li><strong>A wall or door for the committee sign</strong> that the venue will allow you to attach something to.</li>
         </ul>
-        <H3>The wifi problem, stated properly</H3>
-        <p>A venue that says it has wifi is telling you about bandwidth. Your problem is not bandwidth, it is the number of simultaneous client connections and the access point density. Four hundred phones plus laptops in a building designed for a hundred staff will saturate the access points regardless of the internet connection behind them, and the failure looks like everything working in the foyer and nothing working in room 6.</p>
+        <H3>The Wi-Fi problem, stated properly</H3>
+        <p>A venue that says it has Wi-Fi is telling you about bandwidth. Your problem is not bandwidth: it is the number of simultaneous client connections and the access point density. Four hundred phones plus laptops in a building designed for a hundred staff will saturate the access points regardless of the internet connection behind them, and the failure looks like everything working in the foyer and nothing working in room 6.</p>
         <p>Ask three specific questions on the site visit: how many access points serve the committee rooms, what the per-access-point client limit is, and whether the network has been used for an event of this size before. Then test, standing in the furthest committee room, with several devices.</p>
-        <p>Design so that a wifi failure is an inconvenience rather than a collapse. If your committees run on software, make sure it works on delegates&apos; own phones over mobile data rather than requiring a shared connection. Gavelling sessions are joined with a six character code on any phone, with no app to install, which means a room with weak venue wifi falls back to mobile data rather than falling back to paper. Whatever you use, chairs should still carry printed delegate lists, and that rule should be in the chair briefing.</p>
+        <p>Design so that a Wi-Fi failure is an inconvenience rather than a collapse. If your committees run on software, make sure it works on delegates&apos; own phones over mobile data rather than requiring a shared connection. Gavelling sessions are joined with a six-character code on any phone, with no app to install, which means a room with weak venue Wi-Fi falls back to mobile data rather than falling back to paper. Whatever you use, chairs should still carry printed delegate lists, and that rule should be in the chair briefing.</p>
 
         <H2>The plenary, which is the expensive room</H2>
         <p>You need it for the opening ceremony and the closing ceremony, which is perhaps fifty minutes of use, and you will usually pay for it for the whole day or the whole conference. Three ways to reduce that.</p>
@@ -103,11 +103,11 @@ export default function Article() {
             <tbody>
               <tr><td>Cost</td><td>Usually free or internal recharge</td><td>Low to moderate</td><td>High, and the largest budget line</td></tr>
               <tr><td>Liability and insurance</td><td>Held by your institution, which is the simplest position</td><td>Negotiated. Get it in writing.</td><td>Yours, and you will need event insurance</td></tr>
-              <tr><td>Access and setup time</td><td>Flexible</td><td>Restricted</td><td>Contractual, often charged by the hour</td></tr>
+              <tr><td>Access and set-up time</td><td>Flexible</td><td>Restricted</td><td>Contractual, often charged by the hour</td></tr>
               <tr><td>Room suitability</td><td>Classrooms, often with fixed furniture</td><td>Varies</td><td>Designed for events, usually best</td></tr>
               <tr><td>Weekend access</td><td>Needs a caretaker, and that cost is real</td><td>Same</td><td>Included</td></tr>
               <tr><td>Catering</td><td>Your own kitchen or external</td><td>Theirs, usually mandatory</td><td>Theirs, usually mandatory and expensive</td></tr>
-              <tr><td>Best for</td><td>First and second year conferences</td><td>Growing conferences, and a partnership worth having</td><td>Established conferences with a budget and a reputation to match</td></tr>
+              <tr><td>Best for</td><td>First- and second-year conferences</td><td>Growing conferences, and a partnership worth having</td><td>Established conferences with a budget and a reputation to match</td></tr>
             </tbody>
           </table>
         </TableWrap>
@@ -121,7 +121,7 @@ export default function Article() {
           <p><strong>Routes.</strong> Walk from the entrance to the furthest committee room and time it. Walk from the hall to the lunch space. Note every point where someone would have to guess which way to go.</p>
           <p><strong>Accessibility.</strong> Step-free route from the street to every committee room, the hall and the lunch space. Lift capacity and whether it is available at weekends. Accessible toilets on each floor in use. Door widths.</p>
           <p><strong>Toilets.</strong> Count them, per floor, against 400 people at a fifteen-minute break.</p>
-          <p><strong>Technology.</strong> Test wifi in the furthest room with several devices. Turn on a projector yourself. Find out who fixes it at the weekend.</p>
+          <p><strong>Technology.</strong> Test Wi-Fi in the furthest room with several devices. Turn on a projector yourself. Find out who fixes it at the weekend.</p>
           <p><strong>Acoustics.</strong> Stand at the back of a committee room while someone speaks from the dais without amplification.</p>
           <p><strong>Practicalities.</strong> Where deliveries arrive. Where bins are. Where a first aid room is. Where you would put a lost property table. Where staff can eat.</p>
           <p><strong>People.</strong> Meet the caretaker or facilities manager. They will matter more on the day than the person who signs the contract.</p>
@@ -130,10 +130,10 @@ export default function Article() {
         <H2>The contract, and what to ask before you sign</H2>
         <p>Even an internal booking at your own school should be confirmed in writing with these points answered. With a commercial venue they are the contract.</p>
         <ul>
-          <li><strong>Dates and hours, including setup and pack-down.</strong> If you need the building from 07:00 and it opens at 08:30, your conference starts at 10:00.</li>
+          <li><strong>Dates and hours, including set-up and pack-down.</strong> If you need the building from 07:00 and it opens at 08:30, your conference starts at 10:00.</li>
           <li><strong>Exactly which rooms</strong>, by name or number, not &quot;eight classrooms&quot;.</li>
           <li><strong>Cancellation terms</strong>, with the dates and the percentages. What happens if the conference is cancelled at eight weeks, and at two.</li>
-          <li><strong>What is included</strong>: furniture setup, cleaning, staffing, heating on a weekend, wifi, AV, parking.</li>
+          <li><strong>What is included</strong>: furniture set-up, cleaning, staffing, heating on a weekend, Wi-Fi, AV, parking.</li>
           <li><strong>What is charged extra</strong>, and at what rate. Overtime after a stated hour is the usual surprise.</li>
           <li><strong>Damage and deposits.</strong> Who inspects, when, and against what record. Photograph every room before you use it.</li>
           <li><strong>Insurance</strong>: what they require you to hold, and what their own policy covers.</li>
@@ -163,7 +163,7 @@ export default function Article() {
 
         <H2>Signage, which is cheap and always under-done</H2>
         <p>The test is simple: could a delegate who has never been in this building, with no phone, get from the front door to committee room 7? If the answer requires them to ask someone, put up more signs.</p>
-        <p>What to print: a sign on every committee room door with the committee name and number, a large one. An arrow at every corridor junction and every staircase. A list of committees and rooms at the entrance, at the foot of each staircase and outside the hall. Toilets, lunch, quiet room and registration, each signed from the entrance. And a schedule, in large print, in at least three places.</p>
+        <p>What to print: a large sign on every committee room door with the committee name and number. An arrow at every corridor junction and every staircase. A list of committees and rooms at the entrance, at the foot of each staircase and outside the hall. Toilets, lunch, quiet room and registration, each signed from the entrance. And a schedule, in large print, in at least three places.</p>
         <p>Print them a week ahead in the venue&apos;s permitted format, and check with the caretaker what you may attach them with. Also put a human at the two junctions where people will still get it wrong, because they will.</p>
 
         <H2>Technology to bring, hire or assume will fail</H2>
@@ -178,7 +178,7 @@ export default function Article() {
               <tr><td>Printing</td><td>Everything printed before the day. Assume no working printer on site.</td></tr>
               <tr><td>Spare laptop</td><td>One, charged, in the command centre.</td></tr>
               <tr><td>Phone chargers</td><td>Two cables per room. Chairs run their committee from a device for eight hours.</td></tr>
-              <tr><td>Mobile hotspot</td><td>One per floor as the wifi fallback for the dais.</td></tr>
+              <tr><td>Mobile hotspot</td><td>One per floor as the Wi-Fi fallback for the dais.</td></tr>
             </tbody>
           </table>
         </TableWrap>
@@ -186,7 +186,7 @@ export default function Article() {
 
         <H2>The room nobody books</H2>
         <p>Staff space. Your chairs and the rest of your <Link href="/blog/mun-secretariat-roles">secretariat</Link> need one. Your chairs will be in a room with forty delegates for eight hours across two days, making rulings in public. They need somewhere with a door, coffee, a table and no delegates, and if you do not provide it they will decompress in a corridor where delegates can hear them, which is a different problem.</p>
-        <p>Book it, stock it, and put the chair briefing in it on the morning of day one. Then use it for the same-evening debrief. It is the smallest room in the building and it does more for the quality of your chairs than any amount of briefing document.</p>
+        <p>Book it, stock it, and put the chair briefing in it on the morning of day one. Then use it for the same-evening debrief. It is the smallest room in the building and it does more for the quality of your chairs than any amount of briefing documents.</p>
         <p>Once the venue is fixed, the rest of the operational day builds on it: <Link href="/blog/mun-conference-day-operations">the conference day operations guide</Link> covers the run of show, and <Link href="/blog/mun-conference-planning">the planning guide</Link> covers the months around this decision.</p>
       </ArticleLayout>
     </>

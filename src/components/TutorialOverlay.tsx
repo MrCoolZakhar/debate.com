@@ -1007,7 +1007,7 @@ function ScoreboardTutorialCard({ committee, language, box }: {
   const sample = committee.delegates.slice(0, 2);
   const live = sample[0]?.country ?? '';
   const next = sample[1]?.country ?? '';
-  const nameOf = (country: string) => (country ? getCountryDisplayName(country, language) : '—');
+  const nameOf = (country: string) => (country ? getCountryDisplayName(country, language) : '–');
 
   const H: React.CSSProperties = {
     fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#1B3828',
@@ -1215,7 +1215,7 @@ function FeedbackDockMock({
           >
             <SeatFlag country={nextCountry} size={15} className="shrink-0" />
             <span className="shrink-0 font-semibold" style={{ fontSize: 11, color: '#1C1410' }}>{nextName}</span>
-            <span className="flex-1 min-w-0 truncate" style={{ fontSize: 10.5, color: '#6A5A4A' }}>— {nextNote}</span>
+            <span className="flex-1 min-w-0 truncate" style={{ fontSize: 10.5, color: '#6A5A4A' }}>· {nextNote}</span>
             <span className="shrink-0 font-black" style={{ fontSize: 11, color: '#1B3828' }}>✓</span>
           </div>
           {factors.length > 0 && <div className="shrink-0" style={{ width: GRID_W, opacity: 0.72 }}>{grid(false)}</div>}

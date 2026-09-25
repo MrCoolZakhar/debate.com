@@ -71,7 +71,7 @@ export default function Article() {
 
         <H2>Session 3: The research race</H2>
         <p><strong>Objective:</strong> they can find a country&apos;s position in twenty minutes.</p>
-        <p>Ten minutes on where to look, following <Link href="/blog/mun-country-research">our country research method</Link>: the country&apos;s own foreign ministry and UN mission pages, its statements in the UN Digital Library, the voting record on relevant resolutions, its regional bloc, and reputable news. Emphasise that the mission statement page is the single most useful source and almost nobody uses it.</p>
+        <p>Ten minutes on where to look, following <Link href="/blog/mun-country-research">our country research method</Link>: the country&apos;s own foreign ministry and UN mission pages, its statements in the UN Digital Library, the voting record on relevant resolutions, its regional bloc, and reputable news. Emphasise that the mission&apos;s statements page is the single most useful source and almost nobody uses it.</p>
         <p>Then run it as a race. Give the whole room the same topic and twenty minutes. Each student must return with four things written down: their country&apos;s stated position in one sentence, one quotation from an official source with a link, how they voted on a relevant resolution, and one country that agrees with them. Five minutes to share, fastest and best first.</p>
         <p>Set the expectation now that a source means a link, because the habit is easier to build than to repair.</p>
         <p className="gv-note">Worked if: most students have a real quotation from an official source, not a news summary.</p>
@@ -96,7 +96,7 @@ export default function Article() {
         <p><strong>Objective:</strong> they can be recognised, get on the speakers list, and raise a motion.</p>
         <p>This is where the club stops being a discussion group. Ten minutes on four things only: the speakers list, how to get on it, what a motion is, and how you vote on one. Nothing else. Not points of information, not yields, not amendments.</p>
         <p>Then run a real forty-minute committee on a topic they already researched, with you chairing, running an actual speakers list and actually taking motions. Correct procedure in the moment, out loud, and move on.</p>
-        <p>Run it on real software rather than a list on the whiteboard, because the software is what they will meet at the conference and it removes the administrative burden from you. A free anonymous session takes under a minute to create at <Link href="/create/sessions">/create</Link>: you get a six character code, the students join on their own phones, and the speakers list, the timer and the motions are all live in front of them. There is nothing to install, no accounts, and it costs nothing. From here to session ten, run every practice this way.</p>
+        <p>Run it on real software rather than a list on the whiteboard, because the software is what they will meet at the conference and it removes the administrative burden from you. A free anonymous session takes under a minute to create at <Link href="/create/sessions">/create</Link>: you get a six-character code, the students join on their own phones, and the speakers list, the timer and the motions are all live in front of them. There is nothing to install, no accounts, and it costs nothing. From here to session ten, run every practice this way.</p>
         <p><Link href="/blog/general-speakers-list-guide">The GSL guide</Link> is the reference for the mechanics you are teaching.</p>
         <p className="gv-note">Worked if: a student raises a correctly worded motion without prompting.</p>
 
@@ -144,12 +144,12 @@ export default function Article() {
               <tr><td>1</td><td>They come back</td><td>Silly debate, thirty seconds each</td></tr>
               <tr><td>2</td><td>Representation</td><td>Country statements on one proposition</td></tr>
               <tr><td>3</td><td>Research</td><td>Twenty-minute research race</td></tr>
-              <tr><td>4</td><td>Position paper</td><td>Written in the room, peer marked</td></tr>
+              <tr><td>4</td><td>Position paper</td><td>Written in the room, peer-marked</td></tr>
               <tr><td>5</td><td>Speaking</td><td>Sixty-second speeches, twice round</td></tr>
               <tr><td>6</td><td>Speakers list and motions</td><td>Live committee on software</td></tr>
               <tr><td>7</td><td>Caucuses and voting</td><td>Structured committee with real motions</td></tr>
               <tr><td>8</td><td>Clauses</td><td>Group drafting, then challenge</td></tr>
-              <tr><td>9</td><td>The whole thing</td><td>Two-hour mock committee, student chaired</td></tr>
+              <tr><td>9</td><td>The whole thing</td><td>Two-hour mock committee, student-chaired</td></tr>
               <tr><td>10</td><td>Conference readiness</td><td>Logistics, expectations, personal goals</td></tr>
             </tbody>
           </table>

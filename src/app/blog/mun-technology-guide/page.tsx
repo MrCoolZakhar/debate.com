@@ -72,13 +72,14 @@ export default function Article() {
         <p>In large committee rooms, projecting the current speakers list and timer is a significant quality-of-life improvement for delegates. Gavelling&apos;s chair view can be mirrored to a projector, so delegates at the back of a 100-person room can see exactly who is speaking and how much time remains. This reduces the number of times delegates ask the chair &quot;who is next?&quot;</p>
 
         <H2>Voting Technology</H2>
-        <p>For roll call <Link href="/blog/mun-voting-procedures">votes</Link>, manually recording each country&apos;s vote in alphabetical order while maintaining committee order is error-prone. Dedicated voting screens (Gavelling&apos;s /voting page routes delegates through their individual vote on any device) make the process faster and produce an automatic tally that eliminates counting errors.</p>
+        <p>In roll-call <Link href="/blog/mun-voting-procedures">votes</Link>, recording each country&apos;s vote by hand in alphabetical order while keeping the room in order is error-prone. Dedicated voting screens (Gavelling&apos;s /voting page takes the chair through the roll call one delegation at a time, and when the chair turns on device voting, each delegation votes on its own phone) make the process faster and produce an automatic tally that eliminates counting errors.</p>
 
         <H2>Research Tools for Delegates</H2>
         <ul>
           <li><strong>UN Digital Library (digitallibrary.un.org):</strong> Full text of all UN resolutions and voting records. Free and publicly accessible.</li>
           <li><strong>UN Voting Data:</strong> Searchable by country and resolution, showing how each member state has voted.</li>
           <li><strong>CIA World Factbook:</strong> Quick country statistics and background.</li>
+          <li><strong>UN data portal (data.un.org):</strong> Official UN statistics by country.</li>
           <li><strong>Google Scholar:</strong> Academic papers on international law, humanitarian issues, and development topics for position paper citations.</li>
         </ul>
         <p>Our guide to <Link href="/blog/mun-country-research">MUN country research</Link> shows how to use sources like these.</p>

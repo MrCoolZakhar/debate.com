@@ -45,7 +45,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <ArticleLayout
         slug="mun-right-of-reply"
-        pitch="Gavelling lets chairs grant right of reply and insert delegates at the top of the list instantly."
+        pitch="Gavelling lets chairs grant a timed right of reply instantly, without touching the speakers list."
       >
 
         <p>The right of reply is one of the most misunderstood procedures in Model UN. Delegates invoke it too freely, chairs grant it too rarely, and neither side is quite sure of the rules. This guide clarifies exactly what the right of reply is, when it applies, and how to use it effectively.</p>
@@ -83,7 +83,7 @@ export default function Article() {
         <ChairScript>&quot;The delegation of Canada invokes the right of reply to correct a factual error. The previous speaker claimed Canada voted against Resolution 73/254. Canada&apos;s voting record shows we voted In Favour. The delegation requests that the record reflect this correction. Thank you.&quot;</ChairScript>
 
         <H2>Chair&apos;s Discretion</H2>
-        <p>Chairs have significant discretion over whether to grant a right of reply and how much time to allow. In Gavelling, chairs can grant a right of reply and insert the delegate at the top of the speakers list with a custom time override, typically shorter than the standard speech time. This keeps the process clean without derailing the committee&apos;s rhythm.</p>
+        <p>Chairs have significant discretion over whether to grant a right of reply and how much time to allow. In Gavelling, chairs grant a right of reply as a separate timed reply, usually shorter than a standard speech, which never touches the speakers list. This keeps the process clean without derailing the committee&apos;s rhythm.</p>
         <p>Good chairs use the right of reply sparingly. When it is granted for genuinely inappropriate statements, it carries weight. When it is granted for every policy disagreement, it becomes noise.</p>
 
         <H2>The Reply to the Reply</H2>

@@ -7,7 +7,7 @@ import { H2, H3, Callout, FactCard, TableWrap } from '@/components/blog/prose';
 export const metadata: Metadata = pageMetadata({
   title: 'MUN Position Paper Examples: Three Full Papers, Annotated',
   description:
-    'Three complete Model UN position papers at three quality levels, with the chair notes on each and the exact reason the weak one scores low',
+    'Three complete Model UN position papers at three quality levels, with the chair notes on each and the exact reason the weak one scores low.',
   path: '/blog/mun-position-paper-examples',
   ogDescription: 'Three complete position papers, annotated with what a chair marks against.',
   type: 'article',
@@ -47,7 +47,7 @@ export default function Article() {
         pitch="Chairs read papers before the gavel and judge the room during it. Gavelling keeps the record of both in one place."
       >
         <p>
-          A format guide tells you a position paper has three parts. It does not tell you what a good one sounds like, which is the thing you actually need at eleven at night with a deadline tomorrow. Below are three complete papers, written for this guide, with the notes a chair would write in the margin of each. If you want the rules of format, mistakes and structure first, read the <Link href="/blog/mun-position-paper-guide">position paper guide</Link> and come back. This page is the artefact, that page is the method.
+          A format guide tells you a position paper has three parts. It does not tell you what a good one sounds like, which is the thing you actually need at eleven at night with a deadline tomorrow. Below are three complete papers, written for this guide, with the notes a chair would write in the margin of each. If you want the rules of format, mistakes and structure first, read the <Link href="/blog/mun-position-paper-guide">position paper guide</Link> and come back. This page is the artefact; that page is the method.
         </p>
 
         <H2>What a chair is actually marking</H2>
@@ -85,7 +85,7 @@ export default function Article() {
 
         <H2>Paper 1: a General Assembly topic, strong</H2>
         <p className="gv-note">
-          Committee: Disarmament and International Security Committee. Topic: lethal autonomous weapons systems. Delegation: the Republic of Austria. Written for this guide. Roughly 400 words, which is normal for a one page limit.
+          Committee: Disarmament and International Security Committee. Topic: lethal autonomous weapons systems. Delegation: the Republic of Austria. Written for this guide. Roughly 400 words, which is normal for a one-page limit.
         </p>
 
         <H3>The paper</H3>
@@ -101,7 +101,7 @@ export default function Article() {
           The Group of Governmental Experts convened under the Convention on Certain Conventional Weapons has met on this question since 2017 and affirmed eleven guiding principles in 2019. Those principles restate existing international humanitarian law. They create no obligation, no verification and no threshold. Austria has argued consistently that a consensus-bound forum in which a small number of developing states can block a mandate is structurally incapable of producing an instrument, which is why Austria brought the question to this General Assembly and why the Assembly has now requested the Secretary-General to seek the views of Member States.
         </p>
         <p>
-          Austria&apos;s position rests on a legal argument, not a technological one. The obligations of distinction, proportionality and precaution in attack attach to a human being who can be held responsible. A system that selects a target without meaningful human control does not remove the obligation, it removes the person who carries it, and with them the possibility of accountability. Austria therefore rejects the argument that autonomy is a matter of degree to be managed nationally.
+          Austria&apos;s position rests on a legal argument, not a technological one. The obligations of distinction, proportionality and precaution in attack attach to a human being who can be held responsible. A system that selects a target without meaningful human control does not remove the obligation; it removes the person who carries it, and with them the possibility of accountability. Austria therefore rejects the argument that autonomy is a matter of degree to be managed nationally.
         </p>
         <p>
           Austria proposes that this committee recommend: first, the opening of negotiations on a legally binding instrument with a defined timeline, sitting under the General Assembly rather than requiring consensus in the Convention framework; second, a two-tier structure prohibiting systems that cannot be used in compliance with international humanitarian law and systems that target persons directly, and regulating the remainder through positive obligations on human control; third, a national review requirement under Article 36 of Additional Protocol I, with reporting to a standing body; fourth, a definition built on the function of target selection and engagement, not on a list of technologies, which any national procurement cycle would outpace.
@@ -189,7 +189,7 @@ export default function Article() {
 
         <H3>Chair notes</H3>
         <ul>
-          <li><strong>Paragraphs one and two are the background guide.</strong> The chair wrote the background guide. Roughly forty percent of this paper tells the chair something the chair already knows.</li>
+          <li><strong>Paragraphs one and two are the background guide.</strong> The chair wrote the background guide. Roughly forty per cent of this paper tells the chair something the chair already knows.</li>
           <li><strong>Find and replace test: fails completely.</strong> Swap Canada for Norway, Kenya or Chile and nothing reads oddly. There is no position here, only a tone.</li>
           <li><strong>&quot;Killer robots&quot; in the first sentence.</strong> Campaign language, not diplomatic language. It signals one advocacy website as the source.</li>
           <li><strong>No instrument, no date, no vote, no treaty, no body.</strong> The only near-specific is &quot;various meetings&quot;.</li>

@@ -7,7 +7,7 @@ import { H2, Callout, FactCard, TableWrap } from '@/components/blog/prose';
 export const metadata: Metadata = pageMetadata({
   title: 'Common MUN Mistakes: 25 Errors Chairs See Every Weekend',
   description:
-    'The research, writing, speaking, procedure and bloc mistakes that cost delegates the room, each with the specific thing to do instead',
+    'The research, writing, speaking, procedure and bloc mistakes that cost delegates the room, each with the specific thing to do instead.',
   path: '/blog/mun-common-mistakes',
   ogDescription: 'The 25 mistakes chairs see every weekend, sorted by what they cost you.',
   type: 'article',
@@ -56,7 +56,7 @@ export default function Article() {
         <p><strong>1. Representing yourself instead of your country.</strong> The definitional error. You argue what you believe rather than what your government has said, and the moment a chair checks, the position collapses. <em>Instead:</em> find one dated statement or one vote and build outwards from it. Our <Link href="/blog/mun-country-research">country research guide</Link> is the method.</p>
         <p><strong>2. Researching the country, not the position.</strong> A page of population and GDP that never appears in a single speech. <em>Instead:</em> write the question the committee is deciding first, then research only what bears on it.</p>
         <p><strong>3. Ignoring the voting record.</strong> Delegates assume a position from a country&rsquo;s reputation and are contradicted by a vote taken three years ago. <em>Instead:</em> find how your country voted on the two nearest comparable resolutions before you write anything.</p>
-        <p><strong>4. One source, usually an encyclopaedia.</strong> It shows within twenty seconds of a follow-up question. <em>Instead:</em> at least one primary source: a mission statement, a treaty reservation, a general debate speech.</p>
+        <p><strong>4. One source, usually an encyclopaedia.</strong> It shows within twenty seconds of a follow-up question. <em>Instead:</em> at least one primary source: a statement from your country&rsquo;s UN mission, a treaty reservation, a general debate speech.</p>
         <p><strong>5. Unsourced numbers in a speech.</strong> A statistic with no year invites the one question you cannot answer. <em>Instead:</em> carry the date and the source with the number, or make the point without it.</p>
         <p><strong>6. Reading the background guide and nothing else.</strong> It means you know exactly what every other delegate knows. <em>Instead:</em> treat the guide as the floor and its further reading list as the actual assignment.</p>
 
@@ -77,7 +77,7 @@ export default function Article() {
         <p><strong>18. Mocking another delegation.</strong> It plays to the three people already with you and costs you the rest of the room and the dais.</p>
 
         <H2>Procedure mistakes</H2>
-        <p><strong>19. Motions raised in the wrong order or the wrong moment.</strong> Motioning for an unmoderated caucus thirty seconds after one ended, or raising a motion while a speaker holds the floor. <em>Instead:</em> learn what your conference ranks as most disruptive, and wait for the chair to open the floor. Our <Link href="/blog/mun-motions-explained">motions guide</Link> lists them in precedence order.</p>
+        <p><strong>19. Motions raised in the wrong order or at the wrong moment.</strong> Motioning for an unmoderated caucus thirty seconds after one ended, or raising a motion while a speaker holds the floor. <em>Instead:</em> learn what your conference ranks as most disruptive, and wait for the chair to open the floor. Our <Link href="/blog/mun-motions-explained">motions guide</Link> lists them in precedence order.</p>
         <p><strong>20. Points used as weapons.</strong> A point of order raised to interrupt an opponent is transparent from the dais and chairs rule against it fast. <em>Instead:</em> a point of order is for a procedural error only. <Link href="/blog/mun-points-of-order">What qualifies</Link> is narrower than most delegates think.</p>
         <p><strong>21. The right of reply used for a policy disagreement.</strong> It is for a misrepresentation of your country, not for an argument you dislike. <em>Instead:</em> answer it in your next speech, which is more persuasive anyway. See <Link href="/blog/mun-right-of-reply">right of reply</Link>.</p>
         <p><strong>22. Abstaining without meaning to.</strong> Delegates who declared present-and-voting cannot abstain on substantive votes at most conferences, and delegates who meant to signal a reservation sometimes abstain on a resolution they wanted. <em>Instead:</em> know what you declared at roll call and what it commits you to. Our <Link href="/blog/mun-voting-procedures">voting guide</Link> covers the thresholds and what an abstention does to them.</p>
@@ -126,7 +126,7 @@ export default function Article() {
         <FactCard title="The five-minute self-check, at lunch on day one">
           Have I said anything that only my country would say? Has anyone written my words into a paper? Do I know who is undecided in this room? Do I know what I will concede? Has a chair heard me say something specific and dated? Any two &ldquo;no&rdquo; answers tell you where to spend the afternoon.
         </FactCard>
-        <p>If you are preparing rather than recovering, work forwards instead: our <Link href="/blog/mun-conference-preparation">pre-conference checklist</Link> prevents most of the research and writing group, and <Link href="/blog/mun-delegate-tips">delegate tips</Link> is the positive version of this page. If you have made most of these mistakes and want to see the room from the other side, the fastest cure is chairing, and open positions are listed on the <Link href="/conferences/roles">Gavelling roles board</Link>.</p>
+        <p>If you are preparing rather than recovering, work forwards instead: our <Link href="/blog/mun-conference-preparation">pre-conference checklist</Link> prevents most of the research and writing mistakes, and <Link href="/blog/mun-delegate-tips">delegate tips</Link> is the positive version of this page. If you have made most of these mistakes and want to see the room from the other side, the fastest cure is chairing, and open positions are listed on the <Link href="/conferences/roles">Gavelling roles board</Link>.</p>
       </ArticleLayout>
     </>
   );

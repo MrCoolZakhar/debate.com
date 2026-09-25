@@ -287,7 +287,7 @@ export default function FinancialsOverviewPage() {
                       minWidth: 64, textAlign: 'right', marginLeft: 'auto',
                     }}
                   >
-                    {waived ? disp(fee) : amount === null ? '—' : disp(amount)}
+                    {waived ? disp(fee) : amount === null ? '–' : disp(amount)}
                     {discounted && !waived && (
                       <BadgePercent size={11} strokeWidth={2.5} style={{ display: 'inline', marginLeft: 4, color: NEU.deepGold, verticalAlign: '-1.5px' }} />
                     )}

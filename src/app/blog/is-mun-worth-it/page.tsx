@@ -7,7 +7,7 @@ import { H2, Callout, FactCard, TableWrap } from '@/components/blog/prose';
 export const metadata: Metadata = pageMetadata({
   title: 'Is Model UN Worth It? An Honest Answer',
   description:
-    'What Model UN is genuinely worth on an application and in working life, which skills really transfer, and when it is a waste of your weekends',
+    'What Model UN is genuinely worth on an application and in working life, which skills really transfer, and when it is a waste of your weekends.',
   path: '/blog/is-mun-worth-it',
   ogDescription: 'What Model UN is genuinely worth, and when it is a waste of your time.',
   type: 'article',
@@ -70,14 +70,14 @@ export default function Article() {
           <li><strong>Writing to a brief that is not your own.</strong> A position paper requires you to argue a position you may not hold, in a fixed format, to a word limit, to a deadline. That is most professional writing.</li>
           <li><strong>Negotiating with people who disagree.</strong> Merging two working papers is a real negotiation with a real cost: your clause or theirs. Delegates learn to trade and to know what they are trading.</li>
           <li><strong>Reading a room.</strong> Knowing who is actually deciding, who is only talking, and when a bloc has quietly settled is a genuine and unusual skill for a seventeen-year-old.</li>
-          <li><strong>Running a complicated thing.</strong> This only comes from chairing or organising, not from delegating, and it is far and away the most valuable thing on offer. Budgets, volunteers, deadlines, angry emails and something happening on the day whatever you do.</li>
+          <li><strong>Running a complicated thing.</strong> This comes only from chairing or organising, not from delegating, and it is far and away the most valuable thing on offer. Budgets, volunteers, deadlines, angry emails and something happening on the day whatever you do.</li>
         </ul>
 
         <H2>The skills people claim and cannot show</H2>
         <p>Written honestly, the list is short but worth saying out loud.</p>
-        <p><strong>Knowledge of international relations.</strong> You learn one topic, at conference depth, several times. That is real but it is not a discipline, and a university interviewer who works in the field will find the edge of it in about ninety seconds. Claim the topic you researched, not the subject.</p>
+        <p><strong>Knowledge of international relations.</strong> You learn one topic, at conference depth, several times. That is real, but it is not a discipline, and a university interviewer who works in the field will find the edge of it in about ninety seconds. Claim the topic you researched, not the subject.</p>
         <p><strong>Diplomacy.</strong> Model UN rewards being persuasive in a room with a two-day horizon and no consequences. Actual diplomacy is slow, consequence-heavy and mostly written. The overlap is real but smaller than the name suggests.</p>
-        <p><strong>Research skills.</strong> Delegates who use the UN Digital Library, the treaty collection and mission statements are genuinely learning to find primary sources. Delegates who read three articles and a Wikipedia page are not, and the activity does not force the difference. Our <Link href="/blog/mun-country-research">country research guide</Link> is the line between the two.</p>
+        <p><strong>Research skills.</strong> Delegates who use the UN Digital Library, the treaty collection and mission statements are genuinely learning to find primary sources. Delegates who read three articles and a Wikipedia page are not, and the activity does not force the difference. Our <Link href="/blog/mun-country-research">country research guide</Link> shows the difference between the two.</p>
 
         <H2>Claim against reality</H2>
         <TableWrap>
@@ -99,7 +99,7 @@ export default function Article() {
         <p>Three cases, stated plainly.</p>
         <p><strong>It is displacing depth in the thing you actually care about.</strong> If you are a serious musician, coder or athlete, MUN takes weekends at exactly the times that matter. The general point beats the specific one here: a reader would rather see one thing pursued a long way than four pursued a short way.</p>
         <p><strong>You are only there for the certificate.</strong> A delegate who has decided in advance that the point is the award tends to learn very little and to be unpleasant to sit next to. Chairs notice both.</p>
-        <p><strong>The cost is a real strain.</strong> Conference fees, travel, accommodation and formal clothing add up, and the largest international conferences are expensive. If it hurts, do fewer and better conferences, ask about financial aid because most conferences quietly have some, and put the saved weekends into running something at your own school, which costs almost nothing and is worth more anyway.</p>
+        <p><strong>The cost is a real strain.</strong> Conference fees, travel, accommodation and formal clothing add up, and the largest international conferences are expensive. If it hurts, do fewer, better conferences, ask about financial aid because most conferences quietly have some, and put the saved weekends into running something at your own school, which costs almost nothing and is worth more anyway.</p>
 
         <H2>How to make it count</H2>
         <p>A rough progression, useful whether you have one year left or four.</p>

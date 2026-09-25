@@ -67,8 +67,8 @@ export default function Article() {
         <p>Nerves are not the enemy. Unmanaged nerves are. A small amount of adrenaline actually improves performance. Here is how to keep it manageable:</p>
         <ul>
           <li><strong>Breathe before you stand.</strong> Take two slow breaths before getting up. This lowers your heart rate noticeably and gives your voice time to settle.</li>
-          <li><strong>Plant your feet.</strong> Stand with feet shoulder-width apart. Do not sway or shift weight. It signals nervousness to the audience even when your voice sounds fine.</li>
-          <li><strong>Speak slower than feels natural.</strong> When nervous, people speed up. Consciously slow down by about 20%. It feels odd from the inside but sounds authoritative from the outside.</li>
+          <li><strong>Plant your feet.</strong> Stand with feet shoulder-width apart. Do not sway or shift your weight. Both signal nervousness to the audience even when your voice sounds fine.</li>
+          <li><strong>Speak more slowly than feels natural.</strong> When nervous, people speed up. Consciously slow down by about 20%. It feels odd from the inside but sounds authoritative from the outside.</li>
           <li><strong>Know your first sentence cold.</strong> Most nervousness peaks in the first ten seconds. If you know your opener word-for-word, the rest becomes easier once you are into it.</li>
         </ul>
 

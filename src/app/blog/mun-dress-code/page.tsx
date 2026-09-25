@@ -7,7 +7,7 @@ import { H2, Callout, FactCard, TableWrap } from '@/components/blog/prose';
 export const metadata: Metadata = pageMetadata({
   title: 'What to Wear to Model UN: The Dress Code, Explained Plainly',
   description:
-    'What western business attire actually means, a workable outfit on a student budget, the shoe mistake everyone makes once, and what chairs really notice',
+    'What Western business attire actually means, a workable outfit on a student budget, the shoe mistake everyone makes once, and what chairs really notice.',
   path: '/blog/mun-dress-code',
   ogDescription: 'Western business attire, explained plainly, on a student budget.',
   type: 'article',
@@ -48,7 +48,7 @@ export default function Article() {
       >
         <p>Nobody has ever won <Link href="/blog/mun-awards-guide">Best Delegate</Link> because of a jacket. Plenty of delegates have spent <Link href="/blog/mun-for-beginners">their first conference</Link> quietly anxious about clothes instead of thinking about their country, which is a waste of a weekend. Here is what the dress code actually requires, what it does not, and what it costs. If you are still working out <Link href="/blog/what-is-model-un">what Model UN is</Link>, start there.</p>
 
-        <H2>What &quot;western business attire&quot; means in practice</H2>
+        <H2>What &quot;Western business attire&quot; means in practice</H2>
         <p>The phrase in your conference handbook sounds more demanding than it is. It means office formal: the clothes an adult would wear to a job interview at a bank or a government department. Nothing more specific than that.</p>
         <p>In practice the room will be full of dark blazers, plain shirts, tailored trousers or a knee-length skirt, and closed shoes. That is the whole convention.</p>
         <p>It does not require a suit that matches. It does not require a tie. It does not require expensive fabric, a new purchase, or the same colour as anyone else. It does not require heels, and it never has. A conference that tells you otherwise has written its own stricter rule and should say so in writing.</p>
@@ -71,8 +71,8 @@ export default function Article() {
         <p>School uniform, if yours includes a blazer, is usually acceptable and is what many delegations wear. Ask your faculty advisor rather than assuming either way. A plain dark jumper over a shirt is fine in any committee that is not the closing ceremony. And the jacket can come off once you are seated and the room has warmed up, because it will.</p>
         <p>One word on fit, which is the only part that costs nothing and changes everything: sleeves that end at the wrist bone and trousers that end at the shoe. If a borrowed blazer is close but long in the sleeve, a safety pin in the lining takes two minutes and is invisible from a metre away.</p>
 
-        <H2>Shoes, which is the mistake everyone makes once</H2>
-        <p>A conference day is six to nine hours on your feet more than you expect: registration, corridors, lunch queues, unmoderated caucus standing in a corner arguing about a preambulatory clause, then a ceremony. Delegates who buy shoes the week before spend Sunday in pain and the caucus sitting down, which is where delegates stop being part of a bloc.</p>
+        <H2>Shoes: the mistake everyone makes once</H2>
+        <p>A conference day is six to nine hours, and you spend more of it on your feet than you expect: registration, corridors, lunch queues, unmoderated caucus standing in a corner arguing about a preambulatory clause, then a ceremony. Delegates who buy shoes the week before spend Sunday in pain and sit down through the caucus, which is how delegates stop being part of a bloc.</p>
         <ul className="gv-check">
           <li>Wear shoes you have already walked in for a full day</li>
           <li>If they are new, break them in over at least a week before the conference</li>
@@ -85,7 +85,7 @@ export default function Article() {
         <p>Stated plainly, without moralising, because the list is short and the reason is the same for all of it: the simulation asks everyone to look like a delegation rather than like themselves on a Saturday.</p>
         <ul>
           <li>Jeans, shorts, leggings as trousers, tracksuits, sportswear</li>
-          <li>Trainers, sandals, flip-flops, and in most handbooks open-toe shoes</li>
+          <li>Trainers, sandals, flip-flops and, in most handbooks, open-toe shoes</li>
           <li>T-shirts, hoodies, anything with a visible logo or slogan</li>
           <li>Hats and caps indoors, other than religious head coverings, which are always fine</li>
           <li>Very short hemlines or anything a handbook would call revealing, though see the note below</li>

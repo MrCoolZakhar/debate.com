@@ -76,7 +76,7 @@ export default function Article() {
         <p>Four things make them leave. A fee that is not published. A date that is not confirmed. A contact form that produced no reply last time they used it. And a page that was clearly last updated for a previous year, which is the single most common one. If your homepage still says 2025, an advisor assumes the conference may not be running.</p>
 
         <H3>Respond fast, and say so</H3>
-        <p>The advisor emails three conferences on the same evening. The one that replies within two days gets the delegation, more often than the one with the better committees. Put a realistic response time on your contact page and then beat it. This costs nothing and is the highest-leverage marketing decision a small secretariat makes.</p>
+        <p>The advisor emails three conferences on the same evening. The one that replies within two days gets the delegation more often than the one with the better committees. Put a realistic response time on your contact page and then beat it. This costs nothing and is the highest-leverage marketing decision a small secretariat makes.</p>
 
         <H2>The outreach email that gets a reply</H2>
         <p>Cold email to schools works, but only when it is short, specific and clearly written by a person. The pattern below is worth adapting. It is about 140 words, which is the point.</p>
@@ -147,7 +147,7 @@ export default function Article() {
           <li><strong>Delegations committed</strong> and <strong>delegates registered</strong>, plotted against the same week last year if you have one.</li>
           <li><strong>Where each delegation came from</strong>, captured with one question on the registration form: how did you hear about us? Three months of answers will surprise you and will redirect next year&apos;s effort.</li>
         </ol>
-        <p>Gavelling deliberately runs no analytics or tracking of any kind, so if you use it the registration form question is your source of truth. That is a reasonable trade for most conferences: the answer you want is which channel produced a delegation, and a free-text question answers it better than a pixel does.</p>
+        <p>Gavelling deliberately runs no third-party analytics or tracking. It does show organisers anonymous page-view counts for their own conference page, by source (no cookies, no IP addresses stored), but it cannot follow a person from a post to an application, so the registration form question is still your source of truth. That is a reasonable trade for most conferences: the answer you want is which channel produced a delegation, and a free-text question answers it better than a pixel does.</p>
 
         <H2>A twelve-month marketing calendar</H2>
         <TableWrap>

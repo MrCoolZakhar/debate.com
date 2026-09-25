@@ -798,7 +798,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
                     common case and it should read exactly as it always did. A lone note
                     written by SOMEONE ELSE must still carry their name, or you cannot tell
                     your own note from a colleague's. */}
-                {notes.length === 1 && notes[0].isMine ? `— ${notes[0].content}` : notes.map((n, ni) => (
+                {notes.length === 1 && notes[0].isMine ? `· ${notes[0].content}` : notes.map((n, ni) => (
                   <span key={ni}>
                     {ni > 0 && <span style={{ color: '#B8AE9C' }}> / </span>}
                     <span style={{ fontWeight: 700, color: '#1B3828' }}>{n.chairName}: </span>

@@ -82,7 +82,7 @@ export default function Article() {
         <H2>Collecting slates from chairs</H2>
         <p>Set the deadline before the ceremony, not at it. A slate that arrives while the hall is filling cannot be checked, and an unchecked slate is how the same school ends up with Best Delegate in six committees.</p>
         <FactCard title="A workable slate deadline">
-          Chairs submit no later than 60 minutes before the ceremony begins, from the room, on the form you gave them. Session ends 90 minutes before the ceremony. The 30 minutes in between is the only time a secretariat has to read fourteen slates.
+          Session ends 90 minutes before the ceremony. Chairs submit no later than 60 minutes before it begins, from the room, on the form you gave them. That gives chairs 30 minutes to write the slate, and the secretariat the last 60 minutes to read fourteen of them.
         </FactCard>
         <p>Ask for exactly four fields per recipient and nothing else: the award, the delegation, the delegate name as they want it read aloud, and one line of evidence. The evidence line is the part that does the work. It gives you something to say when a faculty advisor asks why, it forces a chair to think past their favourite speaker, and it takes fifteen seconds to write.</p>
         <p>Good evidence lines are specific: &quot;wrote and defended operative clauses 4 to 7 of the passed resolution, and brokered the merger of the two working papers on day two&quot;. Bad ones are adjectives: &quot;excellent throughout&quot;. Tell chairs that in the briefing and show them one of each.</p>

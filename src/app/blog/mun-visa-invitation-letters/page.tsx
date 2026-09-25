@@ -129,7 +129,7 @@ export default function Article() {
               <tr><td>Who keeps the bank charges?</td><td>State it explicitly. Usually the sender</td></tr>
               <tr><td>Can the seat be transferred?</td><td>Yes, to another member of the same delegation, up to a stated date</td></tr>
               <tr><td>Remote participation?</td><td>Only if you can genuinely run it well. If not, say no rather than offering a poor version</td></tr>
-              <tr><td>Reallocating the country</td><td>Keep a short waiting list, and know your cutoff date for reissuing an allocation</td></tr>
+              <tr><td>Reallocating the country</td><td>Keep a short waiting list, and know your cut-off date for reissuing an allocation</td></tr>
             </tbody>
           </table>
         </TableWrap>

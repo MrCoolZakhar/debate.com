@@ -8,7 +8,7 @@
 
 import { Suspense, useState } from 'react';
 import Link from 'next/link';
-import { Briefcase, Check, FolderArchive, Infinity as InfinityIcon, Mail, Ticket, Wrench } from 'lucide-react';
+import { BookOpen, Briefcase, Check, FolderArchive, Infinity as InfinityIcon, Mail, Ticket, Wrench } from 'lucide-react';
 import { Emoji3D, OUTFIT } from '@/components/neu';
 import { GoldWord } from '@/components/BrandHeading';
 import { formatUsd } from '@/lib/creditPricing';
@@ -20,10 +20,11 @@ import FaqList from '@/components/pricing/FaqList';
 import RenewOnceOpener from '@/components/pricing/RenewOnceOpener';
 import { ActionButton, ActionLink, FOCUS_RING, P, PricingStyles, QuestionBox } from '@/components/pricing/pricingKit';
 
-const INCLUDED = [
+const INCLUDED: { name: string; fallback: typeof Ticket; label: string; href?: string }[] = [
   { name: 'Ticket', fallback: Ticket, label: 'Every application covered' },
   { name: 'Briefcase', fallback: Briefcase, label: 'Premium job board roles' },
   { name: 'File cabinet', fallback: FolderArchive, label: 'Your MUN archive' },
+  { name: 'Books', fallback: BookOpen, label: 'Premium MUN guides', href: '/guides' },
   { name: 'Toolbox', fallback: Wrench, label: 'Tools for your upcoming conferences' },
   { name: 'Envelope', fallback: Mail, label: 'Unlimited email builder for organizers' },
 ];
@@ -106,7 +107,7 @@ export default function SubscriptionPricingClient() {
           .gv-su-plan-unl{margin:-10px 0}
         }
         @media (min-width:1100px){
-          .gv-su-strip{grid-template-columns:repeat(5,minmax(0,1fr))}
+          .gv-su-strip{grid-template-columns:repeat(6,minmax(0,1fr))}
           .gv-su-strip-item{flex-direction:column;align-items:flex-start;gap:12px;min-height:0}
         }
         @media (prefers-reduced-motion:reduce){.gv-su-seg{transition:none}}
@@ -210,7 +211,7 @@ export default function SubscriptionPricingClient() {
           {INCLUDED.map((i) => (
             <div key={i.label} className="gv-su-strip-item">
               <Emoji3D name={i.name} size={44} fallback={i.fallback} fallbackColor={P.forest} />
-              <span>{i.label}</span>
+              {i.href ? <Link href={i.href} className={`gv-p-link ${FOCUS_RING}`}>{i.label}</Link> : <span>{i.label}</span>}
             </div>
           ))}
         </div>

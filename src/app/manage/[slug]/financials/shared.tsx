@@ -93,7 +93,7 @@ export function roleTone(role: string) {
 
 /** Committee shorthand, abbreviation when set, else a monogram of the name. */
 export function committeeAbbr(c: { name: string; abbreviation: string | null } | null): string {
-  if (!c) return '—';
+  if (!c) return '–';
   if (c.abbreviation) return c.abbreviation;
   const mono = c.name
     .split(/\s+/)

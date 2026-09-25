@@ -46,7 +46,7 @@ export default function Article() {
         slug="choosing-mun-conferences"
         pitch="Browse conferences by date, city and committee on a directory and a map, then see the real conference page rather than a listing."
       >
-        <p>Most teams choose conferences the same way every year: the one they went to last year, plus whichever one somebody&apos;s friend mentioned. That produces a season that is either too easy to develop anyone or too hard to be enjoyable, and often both at once for different students. This guide is about choosing deliberately: the four things that actually differ between conferences, how to read one before you commit money, and how to build a season of three that leaves your team better than it found them.</p>
+        <p>Most teams choose conferences the same way every year: the one they went to last year, plus whichever one somebody&apos;s friend mentioned. That produces a season that is either too easy to develop anyone or too hard to be enjoyable, and often both at once for different students. This guide is about choosing deliberately: the four things that actually differ between conferences, how to read one before you commit money, and how to build a season of three that leaves your team better than it found it.</p>
 
         <H2>The four axes</H2>
         <p>Every conference you are considering differs on four axes, and confusing them is how teams end up disappointed.</p>
@@ -79,7 +79,7 @@ export default function Article() {
         <H3>Read the rules of procedure</H3>
         <p>Not for pleasure, but to check that they exist, that they are specific about voting thresholds and motions, and that you recognise the system. If there are no published rules, the rules will be invented in the room by an 18-year-old chair, which your delegates will find out at 09:30 on day one. Our <Link href="/blog/mun-rules-of-procedure">rules of procedure reference</Link> is a good comparison point for what a complete set contains.</p>
         <H3>Test the secretariat</H3>
-        <p>Send one genuine question: can a delegation of nine be split across three committees, or what the fee includes. The speed and quality of the reply is the best available proxy for how the conference will be run. A conference that takes eleven days to answer an advisor in October will not be reachable in March.</p>
+        <p>Send one genuine question, such as whether a delegation of nine can be split across three committees, or what the fee includes. The speed and quality of the reply is the best available proxy for how the conference will be run. A conference that takes eleven days to answer an advisor in October will not be reachable in March.</p>
         <H3>Look at last year</H3>
         <p>Photographs of full rooms, a published list of attending schools, an award list, a social account with posts from the actual conference rather than only from the run-up. All of these are evidence that the event happened at the size it claimed.</p>
 
@@ -135,10 +135,10 @@ export default function Article() {
         <p>A structure that works for most school teams and scales up or down.</p>
         <ol>
           <li><strong>One local, early.</strong> Cheap, small, low stakes, ideally in the autumn. Everyone goes, including students who joined three weeks ago. Its job is to turn club members into delegates.</li>
-          <li><strong>One development conference, mid-season.</strong> Medium size, a step up in competitiveness, a different circuit if you can. Its job is to expose your second years to a harder room while there is still a season left to improve in.</li>
+          <li><strong>One development conference, mid-season.</strong> Medium size, a step up in competitiveness, a different circuit if you can. Its job is to expose your second-years to a harder room while there is still a season left to improve in.</li>
           <li><strong>One target conference, late.</strong> The one you have been building towards, with a selected delegation, real preparation and a serious commitment. Its job is to reward and to test.</li>
         </ol>
-        <p>Between them, run your own internal mock committees. This is where most of the actual improvement happens and it costs nothing: a free session at <Link href="/create/sessions">/create</Link> takes seconds to set up, students join on their phones with a six character code, and you can run a real speakers list, motions and a vote in a classroom hour. If you are building that training into a term plan, our <Link href="/blog/mun-conference-preparation">conference preparation guide</Link> maps the weeks before an event.</p>
+        <p>Between them, run your own internal mock committees. This is where most of the actual improvement happens and it costs nothing: a free session at <Link href="/create/sessions">/create</Link> takes seconds to set up, students join on their phones with a six-character code, and you can run a real speakers list, motions and a vote in a classroom hour. If you are building that training into a term plan, our <Link href="/blog/mun-conference-preparation">conference preparation guide</Link> maps the weeks before an event.</p>
 
         <H2>A conference evaluation scorecard</H2>
         <p>Score each candidate out of 3 on each line. Anything under about 18 needs a conversation before you commit money.</p>

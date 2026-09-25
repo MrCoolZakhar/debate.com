@@ -58,7 +58,7 @@ export default function Article() {
           <li><strong>Cost to the school:</strong> a room, and nothing else in year one. Say that explicitly.</li>
           <li><strong>Safeguarding and trips,</strong> which is what they are actually worried about. Note that conference attendance follows the school&rsquo;s existing trip procedure and requires staff accompaniment.</li>
           <li><strong>Who is doing it:</strong> you, named, with a second name so it is not one person.</li>
-          <li><strong>The first term plan,</strong> as eight lines. Having it already written is what makes the difference between a yes and &ldquo;come back to me&rdquo;. Our <Link href="/blog/mun-club-curriculum">MUN club curriculum</Link> has a session-by-session plan you can adapt.</li>
+          <li><strong>The first-term plan,</strong> as eight lines. Having it already written is what makes the difference between a yes and &ldquo;come back to me&rdquo;. Our <Link href="/blog/mun-club-curriculum">MUN club curriculum</Link> has a session-by-session plan you can adapt.</li>
         </ul>
         <Callout>Ask for the smallest possible thing first: a room, a weekly slot and permission to advertise. Do not ask for money, a trip or a budget line in the same conversation. Get the club existing, run it for a term, then ask for the trip with attendance numbers in your hand.</Callout>
 
@@ -75,7 +75,7 @@ export default function Article() {
           <li><strong>Quiet students with strong opinions.</strong> Model UN gives structure to speaking, which is exactly what a lot of quiet people need.</li>
           <li><strong>One or two older students with social pull.</strong> An older year group attending makes the club legitimate for everyone else.</li>
         </ul>
-        <p>Practical recruiting: a poster with a date and a room on it, one announcement in assembly, and a personal invitation to about fifteen named people. The personal invitation does most of the work. Expect roughly half of the people who say they will come to come, and about half of those to still be attending in week six. A club with twelve regulars is a functioning club.</p>
+        <p>Practical recruiting: a poster with a date and a room on it, one announcement in assembly, and a personal invitation to about fifteen named people. The personal invitation does most of the work. Expect roughly half of the people who say they will come to turn up, and about half of those to still be attending in week six. A club with twelve regulars is a functioning club.</p>
 
         <H2>The first meeting decides whether there is a second</H2>
         <p>The single biggest mistake is spending the first meeting explaining procedure. Nobody has ever been recruited by a diagram of motion precedence.</p>

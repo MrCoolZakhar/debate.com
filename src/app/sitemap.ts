@@ -4,6 +4,7 @@ import { articles } from './blog/posts';
 import { SITE_URL } from '@/lib/seo';
 import { isListedConference } from '@/lib/publicConferences';
 import { countryHubs } from '@/lib/countryHubs';
+import { listGuides } from '@/lib/premiumGuides';
 
 // ── The sitemap: every indexable URL, exactly as it canonicalises ────────────
 //
@@ -116,6 +117,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // rather than hardcoded: a hand-kept date here went stale every time a post
     // was added, which is the same "lastmod that lies" problem as above.
     { url: url('/blog'), lastModified: newestPost, changeFrequency: 'weekly', priority: 0.9 },
+    // Premium guides: the public page of each (title, teaser, contents) is
+    // indexable; the paywalled body is marked with isAccessibleForFree false.
+    // Linked from /blog and /guides by plain <a> cards.
+    ...(() => {
+      const guides = listGuides();
+      const newestGuide = guides.map((g) => g.updated).sort().at(-1) ?? '2026-09-25';
+      return [
+        { url: url('/guides'), lastModified: new Date(newestGuide), changeFrequency: 'monthly' as const, priority: 0.8 },
+        ...guides.map((g) => ({
+          url: url(`/guides/${g.slug}`),
+          lastModified: new Date(g.updated),
+          changeFrequency: 'monthly' as const,
+          priority: 0.8,
+        })),
+      ];
+    })(),
     ...STATIC_PAGES.map((p) => ({
       url: url(p.path),
       lastModified: new Date(p.lastModified),

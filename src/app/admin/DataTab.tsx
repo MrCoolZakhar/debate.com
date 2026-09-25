@@ -1181,7 +1181,7 @@ export default function DataTab() {
                       {er.recipient || 'no recipient'}
                     </span>
                     <span className="truncate flex-1 min-w-0" style={{ fontFamily: MONO, fontSize: 10, color: NEU.inkSoft }} title={er.error ?? ''}>
-                      {er.error || er.subject || '—'}
+                      {er.error || er.subject || '–'}
                     </span>
                     <span style={{ fontFamily: MONO, fontSize: 10, color: NEU.muted, flexShrink: 0, ...NUM }}>{ago(er.at)}</span>
                   </div>

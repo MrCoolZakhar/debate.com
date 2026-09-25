@@ -1107,9 +1107,9 @@ function RowTable({ rows, committees }: { rows: ClassifiedImportRow[]; committee
               <tr key={r.rowNumber} style={{ borderTop: '1px solid #F0EDE6', backgroundColor: '#FAF8F3' }}>
                 <td className="px-3 py-2.5 text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>{r.rowNumber}</td>
                 <td className="px-3 py-2.5"><ClassPill cls={r.cls} /></td>
-                <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.raw.email || '—'}</td>
-                <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.raw.name || '—'}</td>
-                <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.resolved.role ? roleLabel(r.resolved.role) : (r.raw.role || '—')}</td>
+                <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.raw.email || '–'}</td>
+                <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.raw.name || '–'}</td>
+                <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.resolved.role ? roleLabel(r.resolved.role) : (r.raw.role || '–')}</td>
                 <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.resolved.societyName ?? <em style={{ color: '#9A8A78' }}>Independent</em>}</td>
                 <td className="px-3 py-2.5 text-xs capitalize" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.resolved.paymentStatus}</td>
                 <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
@@ -1133,7 +1133,7 @@ function RowTable({ rows, committees }: { rows: ClassifiedImportRow[]; committee
                       <AlertTriangle size={11} style={{ flexShrink: 0 }} />
                       {r.raw.committee}{r.raw.country ? `, ${r.raw.country}` : ''}
                     </span>
-                  ) : '—'}
+                  ) : '–'}
                   {r.resolved.committeeLabel && (r.resolved.committeeMatchedVia === 'parenthetical' || r.resolved.committeeMatchedVia === 'normalised') && (
                     <span className="block mt-0.5" style={{ fontSize: 10.5, color: '#9A8A78' }} title={r.raw.committee}>
                       matched from &ldquo;{r.raw.committee.trim().length > 42 ? `${r.raw.committee.trim().slice(0, 40)}…` : r.raw.committee.trim()}&rdquo;
@@ -1147,7 +1147,7 @@ function RowTable({ rows, committees }: { rows: ClassifiedImportRow[]; committee
                         <li key={i} className="text-xs" style={{ color: r.cls === 'error' ? '#8B2020' : '#9A6B2F', fontFamily: OUTFIT }}>{m}</li>
                       ))}
                     </ul>
-                  ) : <span className="text-xs" style={{ color: '#9A8A78' }}>—</span>}
+                  ) : <span className="text-xs" style={{ color: '#9A8A78' }}>–</span>}
                 </td>
               </tr>
               );
@@ -1195,10 +1195,10 @@ function ResultTable({ rows }: { rows: ResultRow[] }) {
                       {s.label}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.row.raw.email || '—'}</td>
-                  <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.row.raw.name || '—'}</td>
-                  <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.row.resolved.role ? roleLabel(r.row.resolved.role) : (r.row.raw.role || '—')}</td>
-                  <td className="px-3 py-2.5 text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT, maxWidth: 320 }}>{r.note ?? '—'}</td>
+                  <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.row.raw.email || '–'}</td>
+                  <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.row.raw.name || '–'}</td>
+                  <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.row.resolved.role ? roleLabel(r.row.resolved.role) : (r.row.raw.role || '–')}</td>
+                  <td className="px-3 py-2.5 text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT, maxWidth: 320 }}>{r.note ?? '–'}</td>
                 </tr>
               );
             })}
@@ -1390,7 +1390,7 @@ function ImportedDelegatesTab({ conference, session, confirm, fixApplicationId }
                 const isFixTarget = r.id === fixApplicationId;
                 return (
                   <tr id={`imported-row-${r.id}`} key={r.id} style={{ borderTop: '1px solid #F0EDE6', backgroundColor: isFixTarget ? 'rgba(238,217,138,0.30)' : '#FAF8F3' }}>
-                    <td className="px-3 py-2.5 text-xs font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.invited_name || '—'}</td>
+                    <td className="px-3 py-2.5 text-xs font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.invited_name || '–'}</td>
                     <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                       {claimed ? (
                         r.invited_email

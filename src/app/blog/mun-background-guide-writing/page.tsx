@@ -50,11 +50,11 @@ export default function Article() {
 
         <H2>What the guide is for</H2>
         <p>Picture the delegate who reads it. They are fifteen or nineteen, they have been allocated a country they had to look up, and they have one evening. They will read your guide once, skim it once more on the train, and arrive with three facts and an instinct.</p>
-        <p>Everything about how you write follows from that. The guide succeeds if it produces a room where nobody has to spend the first hour establishing what the committee is arguing about, and where the arguments made are the real ones rather than the obvious ones. It fails if it is accurate, thorough, well cited and 46 pages, because then nobody has read it and the first session is a seminar you have to teach from the dais.</p>
+        <p>Everything about how you write follows from that. The guide succeeds if it produces a room where nobody has to spend the first hour establishing what the committee is arguing about, and where the arguments made are the real ones rather than the obvious ones. It fails if it is accurate, thorough, well-cited and 46 pages, because then nobody has read it and the first session is a seminar you have to teach from the dais.</p>
         <Callout>Write for the delegate who will read it once. Every sentence that only makes sense to someone who has read the whole guide twice is a sentence to cut.</Callout>
 
         <H2>The standard structure and what each part is worth</H2>
-        <p>Circuits vary, but almost every guide that works contains these parts in this order. The page budget below is for a single-topic committee at a two or three day conference. A two-topic committee repeats the topic block and keeps everything else the same length.</p>
+        <p>Circuits vary, but almost every guide that works contains these parts in this order. The page budget below is for a single-topic committee at a two- or three-day conference. A two-topic committee repeats the topic block and keeps everything else the same length.</p>
         <TableWrap>
           <table>
             <thead>
@@ -68,7 +68,7 @@ export default function Article() {
               <tr><td>Current situation</td><td>2 to 3</td><td>Where things stand now, with dates and numbers</td></tr>
               <tr><td>International action so far</td><td>1.5 to 2</td><td>Resolutions, treaties, agencies, and what each failed to fix</td></tr>
               <tr><td>Bloc positions</td><td>1.5 to 2</td><td>Who wants what, and why they cannot all have it</td></tr>
-              <tr><td>Questions a resolution must answer</td><td>0.5 to 1</td><td>The most used page in the document</td></tr>
+              <tr><td>Questions a resolution must answer</td><td>0.5 to 1</td><td>The most-used page in the document</td></tr>
               <tr><td>Further reading</td><td>0.5</td><td>Five to ten sources, annotated</td></tr>
               <tr><td>Bibliography</td><td>1 to 2</td><td>Everything you cited</td></tr>
             </tbody>
@@ -79,7 +79,7 @@ export default function Article() {
         <H2>The chair&rsquo;s letter</H2>
         <p>Half a page. It has exactly two jobs, and most letters do neither.</p>
         <p>The first is to be human. Name, what you study or where you go to school, how you came to MUN, and one sentence on why this topic. Delegates arrive nervous and the letter is the first evidence about whether the dais will be pleasant. Two hundred words of warmth does more for your committee than a paragraph listing your awards, which reads as a warning.</p>
-        <p>The second is to set expectations you will actually hold. Say what you value: research over volume, engagement across blocs, papers that make concessions. Say what the rules will be about the things chairs usually leave implicit, for example whether you will take points of information, whether notes are passed, and when position papers are due. A delegate who reads &ldquo;I would rather hear three well sourced speeches from you than ten&rdquo; behaves differently for two days.</p>
+        <p>The second is to set expectations you will actually hold. Say what you value: research over volume, engagement across blocs, papers that make concessions. Say what the rules will be about the things chairs usually leave implicit, for example whether you will take points of information, whether notes are passed, and when position papers are due. A delegate who reads &ldquo;I would rather hear three well-sourced speeches from you than ten&rdquo; behaves differently for two days.</p>
         <p>End with your email and a genuine invitation to use it. Then answer it.</p>
 
         <H2>Committee mandate: one page you cannot skip</H2>
@@ -121,7 +121,7 @@ export default function Article() {
         <Callout>If you can predict the final resolution from your own bloc section, it is too prescriptive. Rewrite it as interests and let the room do the arithmetic.</Callout>
 
         <H2>Questions a resolution must answer</H2>
-        <p>Six to ten questions, half a page, and by some distance the most used part of the guide. Delegates write position papers against it, blocs use it as a drafting checklist, and you will use it from the dais when the committee wanders.</p>
+        <p>Six to ten questions, half a page, and by some distance the most-used part of the guide. Delegates write position papers against it, blocs use it as a drafting checklist, and you will use it from the dais when the committee wanders.</p>
         <p>Good questions are specific enough to be answerable in an operative clause and open enough to have more than one answer:</p>
         <ul>
           <li>&ldquo;Which body should verify compliance, and who funds it?&rdquo;</li>
@@ -178,7 +178,7 @@ export default function Article() {
         <p>Many conferences are now writing down a policy on AI assistance for background guides, and more will by next season. The sensible version, and the one most secretariats are converging on, distinguishes drafting help from sourcing: using a model to restructure a paragraph you wrote is unremarkable, and using one to generate facts, citations or resolution numbers is not, because it fabricates them confidently and delegates then cite the fabrication in committee. If your conference has a policy, follow it and say in the bibliography what you used. If it does not, verify every number and every document reference against the primary source yourself before it ships. That is the standard your delegates will be held to in their position papers, and it is the one that protects you when a delegate quotes your guide back at you from the floor.</p>
 
         <H2>After it is published</H2>
-        <p>The guide is not finished when it ships, it is finished when the conference ends. Keep a short list of every question delegates email you, because those are the gaps, and the same gaps will appear next year. Reread your own questions-a-resolution-must-answer page the night before the conference: it is the fastest way back into a topic you wrote six weeks ago, and it is what you will steer the committee with when debate drifts. If you want the rest of the preparation in order, <Link href="/blog/how-to-chair-first-mun">how to chair your first MUN committee</Link> picks up where this leaves off, and <Link href="/blog/how-to-become-a-mun-chair">how to become a MUN chair</Link> covers the application that got you here.</p>
+        <p>The guide is not finished when it ships; it is finished when the conference ends. Keep a short list of every question delegates email you, because those are the gaps, and the same gaps will appear next year. Reread your own questions-a-resolution-must-answer page the night before the conference: it is the fastest way back into a topic you wrote six weeks ago, and it is what you will steer the committee with when debate drifts. If you want the rest of the preparation in order, <Link href="/blog/how-to-chair-first-mun">how to chair your first MUN committee</Link> picks up where this leaves off, and <Link href="/blog/how-to-become-a-mun-chair">how to become a MUN chair</Link> covers the application that got you here.</p>
       </ArticleLayout>
     </>
   );

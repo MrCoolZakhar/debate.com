@@ -7,7 +7,7 @@ import { H2, H3, Callout, FactCard, TableWrap } from '@/components/blog/prose';
 export const metadata: Metadata = pageMetadata({
   title: 'Model UN Committee Types Explained: Which One Should You Pick?',
   description:
-    'Every kind of committee on a conference list, what debate actually feels like in each, and who it suits',
+    'Every kind of committee on a conference list, what debate actually feels like in each, and who it suits.',
   path: '/blog/mun-committee-types',
   ogDescription: 'Every Model UN committee type, what debate feels like inside it, and who it suits.',
   type: 'article',
@@ -71,7 +71,7 @@ export default function Article() {
         <p>The Economic and Social Council has 54 members, elected by the General Assembly. Beneath it sit the functional commissions and the specialised agencies, and conferences use them to build medium-sized rooms with a sharper technical focus: the Commission on the Status of Women, the Commission on Narcotic Drugs, the World Health Organization, UNESCO, the International Labour Organization, UNEP, the IAEA Board of Governors, UNHCR.</p>
         <p>These rooms are usually 20 to 50 seats. The debate is more expert and less rhetorical. A speech that would pass in a GA committee, general and values-driven, lands flat here. A speech that names a mechanism, a funding route or a reporting requirement does well.</p>
         <p>Two quirks worth knowing. The ILO seats governments, employers and workers rather than governments alone, so a conference simulating it may allocate you a trade union rather than a state. The IAEA Board of Governors is a 35-member body with its own designation rules, so a conference using it will publish a fixed seat list that is not a normal country slate.</p>
-        <p><strong>Best for:</strong> delegates who like research and want their preparation to visibly pay off. Genuinely underrated: the ratio of speaking time to delegates is much better than a GA and the awards competition is often thinner.</p>
+        <p><strong>Best for:</strong> delegates who like research and want their preparation to visibly pay off. Genuinely underrated: the ratio of speaking time to delegates is much better than in a GA, and the awards competition is often thinner.</p>
 
         <H2>The Security Council</H2>
         <p>Fifteen seats: five permanent members with the veto, ten elected members serving two-year terms. On substantive matters a decision needs nine affirmative votes and no negative vote from a permanent member, under Article 27(3) of the Charter. Procedural matters need nine votes and are not subject to the veto. Decisions taken under Chapter VII bind member states, which is why the Council is the only Model UN room where the resolution you write would, in the real world, have teeth.</p>
@@ -80,7 +80,7 @@ export default function Article() {
         <p><strong>Best for:</strong> confident speakers who can negotiate in real time and tolerate being contradicted. A hard first committee, and a very good second one.</p>
 
         <H2>Regional bodies</H2>
-        <p>The European Union, the African Union, ASEAN, the Organization of American States, the Arab League, NATO, CARICOM. Conferences use these for 15 to 40 seat rooms with a shared regional frame.</p>
+        <p>The European Union, the African Union, ASEAN, the Organization of American States, the Arab League, NATO, CARICOM. Conferences use these for 15- to 40-seat rooms with a shared regional frame.</p>
         <p>They are not small General Assemblies, and treating them as one is the classic error. Each has its own decision rule, and the decision rule is the whole character of the room:</p>
         <ul>
           <li><strong>EU</strong>: much Council business runs on qualified majority voting, which requires both a majority of member states and a share of the Union population. A conference simulating it may weight your vote by population. Sensitive areas still run on unanimity.</li>
@@ -124,7 +124,7 @@ export default function Article() {
               </tr>
             </thead>
             <tbody>
-              <tr><td>General Assembly</td><td>40 to 150</td><td>Standard, GSL heavy</td><td>Draft resolutions</td><td>First conference, patient writers</td></tr>
+              <tr><td>General Assembly</td><td>40 to 150</td><td>Standard, GSL-heavy</td><td>Draft resolutions</td><td>First conference, patient writers</td></tr>
               <tr><td>ECOSOC and agencies</td><td>20 to 50</td><td>Standard, more caucus</td><td>Draft resolutions</td><td>Researchers, technical topics</td></tr>
               <tr><td>Security Council</td><td>15</td><td>Modified, near-continuous caucus</td><td>Binding resolutions</td><td>Confident negotiators</td></tr>
               <tr><td>Regional body</td><td>15 to 40</td><td>Varies: consensus or weighted vote</td><td>Communiqués, resolutions</td><td>Delegates who read the rules first</td></tr>
@@ -143,7 +143,7 @@ export default function Article() {
           Rank by room shape first, topic second, prestige never. Put the committee whose size and pace match how you like to work at the top, then break ties with the topic you would enjoy reading about for six weeks. The flagship committee is the one everyone ranks first, so ranking it first is the least likely way to get it.
         </FactCard>
         <p>Three practical points. Conferences allocate against experience as well as preference, so an honest experience answer gets you a better fit than an inflated one. A double delegation, where two people share one country, is a different experience again: you get half the speaking slots and a partner to draft with, which suits a nervous first-timer well. And if a committee is listed with a character sheet rather than a country slate, assume crisis procedure whatever the name says.</p>
-        <p>Once you know the room, the preparation diverges sharply. A GA committee rewards a deep read of your country&rsquo;s <Link href="/blog/mun-country-research">voting record and stated position</Link>, a crisis cabinet rewards knowing exactly what your character can order without asking anyone. Both reward <Link href="/blog/mun-conference-preparation">arriving prepared</Link> in the specific way the room uses.</p>
+        <p>Once you know the room, the preparation diverges sharply. A GA committee rewards a deep read of your country&rsquo;s <Link href="/blog/mun-country-research">voting record and stated position</Link>; a crisis cabinet rewards knowing exactly what your character can order without asking anyone. Both reward <Link href="/blog/mun-conference-preparation">arriving prepared</Link> in the specific way the room uses.</p>
         <p>If you are still choosing a conference rather than a committee, the <Link href="/conferences/explore">conference directory</Link> lists what each one is running, and the committee list tells you more about a conference than the promotional page does.</p>
       </ArticleLayout>
     </>

@@ -48,7 +48,7 @@ export default function Article() {
         pitch="Gavelling shows the floor, the clock and the motion on every delegate’s phone, so points get raised about the right things."
       >
         <p>A point is a request. A motion is a proposal. That single distinction clears up most of the confusion, because a point never changes what the committee is doing: it asks the chair to fix something, to explain something, or to let you ask a question. There are four of them in common use, and this guide gives you each one, whether it can interrupt a speaker, the words to say, and where the circuits disagree.</p>
-        <p>One caution before the table. Every rule below varies by conference. The rules of procedure your conference publishes always wins over anything here, and reading them once before you arrive takes fifteen minutes and saves you from the single most common cause of a chair ruling against you.</p>
+        <p>One caution before the table. Every rule below varies by conference. The rules of procedure your conference publishes always win over anything here, and reading them once before you arrive takes fifteen minutes and saves you from the single most common cause of a chair ruling against you.</p>
 
         <H2>The four points at a glance</H2>
         <TableWrap>
@@ -57,7 +57,7 @@ export default function Article() {
               <tr><th>Point</th><th>Asks the chair to</th><th>Directed at</th><th>May interrupt a speaker</th></tr>
             </thead>
             <tbody>
-              <tr><td>Point of Order</td><td>Correct a breach of the rules</td><td>The chair</td><td>Yes, in most rulesets</td></tr>
+              <tr><td>Point of Order</td><td>Correct a breach of the rules</td><td>The chair</td><td>Not under most rules, unless your rules allow it</td></tr>
               <tr><td>Point of Parliamentary Inquiry</td><td>Explain a rule or procedure</td><td>The chair</td><td>No</td></tr>
               <tr><td>Point of Personal Privilege</td><td>Fix something impairing your participation</td><td>The chair</td><td>Only for audibility, in most rulesets</td></tr>
               <tr><td>Point of Information</td><td>Let you put a question to the speaker</td><td>The speaker</td><td>No</td></tr>
@@ -90,7 +90,7 @@ export default function Article() {
 
         <H2>Point of Personal Privilege</H2>
         <FactCard title="Point of Personal Privilege">
-          Raised when something is impairing your ability to participate: you cannot hear, the room is too hot or too cold, there is noise outside, you need to leave the room. In most rulesets it is the one point besides a point of order that may interrupt a speaker, and only when the problem is that you cannot hear them.
+          Raised when something is impairing your ability to participate: you cannot hear, the room is too hot or too cold, there is noise outside, you need to leave the room. In most rulesets it is the one point that may interrupt a speaker, and only when the problem is that you cannot hear them.
         </FactCard>
         <p>That carve-out exists for an obvious reason. If you cannot hear the speech, waiting politely until it finishes defeats the purpose. Everything else waits.</p>
         <ChairScript>&ldquo;Point of personal privilege. The delegate is inaudible from the back of the room.&rdquo;</ChairScript>
@@ -101,7 +101,7 @@ export default function Article() {
         <FactCard title="Point of Information">
           A question put to the delegate who has just spoken, or who is speaking, subject to their willingness to take it. It is the engine of THIMUN-style debate and optional or absent on parts of the North American circuit.
         </FactCard>
-        <p>On the THIMUN circuit the sequence is standard: a delegate finishes their speech, the chair asks whether they are open to points of information, and if so the chair takes placards and recognises questioners in turn. The speaker answers each in turn. Follow-up questions are usually allowed only at the chair&rsquo;s discretion.</p>
+        <p>On the THIMUN circuit the sequence is standard: a delegate finishes their speech, the chair asks whether they are open to points of information, and if so the chair takes placards and recognises questioners in turn. The speaker answers each one. Follow-up questions are usually allowed only at the chair&rsquo;s discretion.</p>
         <ChairScript>&ldquo;Is the delegate open to any points of information? The chair recognises the delegate of Ghana.&rdquo;</ChairScript>
         <p>A point of information must be a question. The habit chairs most often have to correct is the delegate who uses it to deliver a thirty-second argument ending in &ldquo;does the delegate not agree?&rdquo;. Rulesets that permit it usually permit one sentence.</p>
         <p>On the North American circuit the general speakers list more often runs on yields: a delegate may yield their remaining time to questions, to another delegate, or to the chair. Where that is the model, points of information exist only inside the yield and the term is often reserved for the procedural question to the chair. See <Link href="/blog/general-speakers-list-guide">the general speakers list guide</Link> for how yields work in practice.</p>
@@ -154,7 +154,7 @@ export default function Article() {
             </tbody>
           </table>
         </TableWrap>
-        <p>If you move between circuits, the two things that will catch you out are points of information and yields, because each circuit uses one where the other uses the other. Our <Link href="/blog/mun-rules-of-procedure">rules of procedure reference</Link> sets out the wider differences.</p>
+        <p>If you move between circuits, the two things that will catch you out are points of information and yields, because each circuit relies on the one the other barely uses. Our <Link href="/blog/mun-rules-of-procedure">rules of procedure reference</Link> sets out the wider differences.</p>
 
         <H2>Three points delegates invent</H2>
         <p>These come up at every conference and, in most rulesets, none of them exists.</p>

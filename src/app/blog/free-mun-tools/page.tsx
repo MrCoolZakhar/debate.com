@@ -54,7 +54,7 @@ export default function Article() {
         <p>Before comparing tools, it helps to list what a chair actually needs during committee:</p>
         <ul>
           <li><strong>Speakers list management</strong>: adding, removing, reordering delegates on the <Link href="/blog/general-speakers-list-guide">GSL</Link></li>
-          <li><strong>Speaker timer</strong>: per-speech countdown with automatic advance to the next speaker</li>
+          <li><strong>Speaker timer</strong>: per-speech countdown, and one press of Next seats the next speaker</li>
           <li><strong>Roll call</strong>: tracking which delegates are present, present and voting, or absent</li>
           <li><strong>Caucus management</strong>: separate caucus queue, caucus timer, total time tracking</li>
           <li><strong>Motions tracking</strong>: logging pending motions and their disruptiveness order</li>
@@ -72,13 +72,13 @@ export default function Article() {
         <p>Google Sheets works for prepared chairs with reliable co-chairs. It falls apart in large committees with fast motion turnover or when co-chair coordination breaks down.</p>
 
         <H2>Phone Timers and Stopwatches</H2>
-        <p>Every chair has a phone timer. Most use it as a backup, not a primary tool, because it only tracks one thing at a time. A phone timer cannot simultaneously track speaker time, caucus total time, and per-caucus-speaker time. For simple committees with slow debate, it is sufficient. For anything above twenty delegates or with active caucus cycles, it is a liability.</p>
+        <p>Every chair has a phone timer. Most use it as a backup, not a primary tool, because it tracks only one thing at a time. A phone timer cannot simultaneously track speaker time, caucus total time, and per-caucus-speaker time. For simple committees with slow debate, it is sufficient. For anything above twenty delegates or with active caucus cycles, it is a liability.</p>
 
         <H2>PowerPoint / Keynote Displays</H2>
         <p>Some large conferences use custom PowerPoint presentations displayed on a projector to show the current speaker, queue, and timer. These require someone dedicated to updating slides in real time, effectively a third dais member whose sole job is clicking through slides. Functional at scale, impractical for smaller committees.</p>
 
         <H2>openMUN and Other Open-Source Tools</H2>
-        <p>Several open-source MUN tools exist but most are unmaintained or require technical setup (running a local server, installing dependencies). For a <Link href="/blog/start-mun-club">school MUN club</Link> or an advisor without technical resources, these are not practical options.</p>
+        <p>Several open-source MUN tools exist, but most are unmaintained or require technical setup (running a local server, installing dependencies). For a <Link href="/blog/start-mun-club">school MUN club</Link> or an advisor without technical resources, these are not practical options.</p>
 
         <H2>What We Recommend</H2>
         <p>For the vast majority of conferences (school MUN, regional conferences, even large university conferences), Gavelling covers everything needed without cost, setup, or technical expertise. The only scenario where a custom solution makes sense is a very large conference (300+ delegates) with extremely specific technical requirements and a dedicated IT team.</p>

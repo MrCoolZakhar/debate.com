@@ -68,7 +68,7 @@ export default function Article() {
         <ul>
           <li><strong>No formal speakers list in many simulations.</strong> Chairs often run debate more conversationally, recognising delegates to speak without a formal queue.</li>
           <li><strong>More unmoderated caucus time.</strong> With only fifteen delegates, the whole committee can effectively negotiate in the room.</li>
-          <li><strong>Faster document cycles.</strong> Working papers emerge and merge much faster in a fifteen-person room than a hundred-person GA.</li>
+          <li><strong>Faster document cycles.</strong> Working papers emerge and merge much faster in a fifteen-person room than in a hundred-person GA.</li>
           <li><strong>Consultations of the whole.</strong> Many UNSC simulations use &quot;consultations of the whole&quot;: a semi-informal full-committee discussion without a strict speakers list.</li>
         </ul>
 
@@ -76,7 +76,7 @@ export default function Article() {
         <p>If you hold a P5 seat, you are the most powerful delegate in the room. Use it wisely:</p>
         <ul>
           <li><strong>Your veto threat is leverage.</strong> You rarely need to actually veto; the threat alone shapes resolution language. Use it in negotiations to extract concessions.</li>
-          <li><strong>P5 coordination is critical.</strong> If the other P5 members are voting in a block against you, no resolution passes that you oppose. Align with at least some P5 members early.</li>
+          <li><strong>P5 coordination is critical.</strong> You can block any draft alone, but you cannot pass one alone: it needs nine votes and no veto from the other four. Align with at least some P5 members early.</li>
           <li><strong>Abstentions are a diplomatic tool.</strong> Publicly abstaining rather than vetoing signals that you have reservations but are not actively blocking progress. This is a real-world diplomatic move worth simulating.</li>
         </ul>
 
@@ -86,9 +86,9 @@ export default function Article() {
         <H2>Chairing a Security Council Simulation</H2>
         <p>Chairing UNSC is more like moderating a high-stakes negotiation than running a formal debate. Your key responsibilities:</p>
         <ul>
-          <li><strong>Read the room constantly.</strong> With fifteen delegates, you can see every reaction, every side conversation. Use this to gauge when to push toward a vote or open another unmod.</li>
+          <li><strong>Read the room constantly.</strong> With fifteen delegates, you can see every reaction, every side conversation. Use this to gauge when to push towards a vote or open another unmod.</li>
           <li><strong>Manage P5 personalities carefully.</strong> P5 delegates tend to dominate. Ensure non-permanent members have genuine speaking opportunities. Our guide to <Link href="/blog/mun-difficult-delegates">handling difficult delegates</Link> can help.</li>
-          <li><strong>Know the veto math.</strong> Before calling a vote, mentally count: do the sponsors have nine votes? Is any P5 threatening a veto? Calling a doomed vote wastes the committee&apos;s time.</li>
+          <li><strong>Know the veto maths.</strong> Before calling a vote, mentally count: do the sponsors have nine votes? Is any P5 threatening a veto? Calling a doomed vote wastes the committee&apos;s time.</li>
         </ul>
 
         <H2>Common Topics for UNSC Simulations</H2>

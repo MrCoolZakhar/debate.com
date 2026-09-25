@@ -58,7 +58,7 @@ export default function Article() {
         <p>Most working rubrics reduce to these five. Use different names if your conference does, but cover all five, because each one catches a kind of contribution the others miss.</p>
 
         <FactCard title="1. Research and accuracy">
-          Does the delegate know the file? Can they name the instrument, the number, the agency, the date? Do they represent their country&rsquo;s actual position, including the parts that are inconvenient for the coalition they joined? The test is not volume of facts, it is whether their facts survive contact with a hostile question.
+          Does the delegate know the file? Can they name the instrument, the number, the agency, the date? Do they represent their country&rsquo;s actual position, including the parts that are inconvenient for the coalition they joined? The test is not the volume of facts but whether their facts survive contact with a hostile question.
         </FactCard>
         <FactCard title="2. Speaking">
           Structure, clarity, use of the time given, and whether the speech advanced the debate or restated it. A delegate who speaks four times and moves the room each time scores above one who speaks twelve times and repeats the opening speech.
@@ -110,7 +110,7 @@ export default function Article() {
 
         <H2>Qualitative judgement, written down at the time</H2>
         <p>The best delegate in the room is frequently not the loudest. They are often the one who made a merger possible, or who conceded a clause at the moment it unlocked twelve votes, or who asked the question that exposed a proposal that would not have worked. None of that appears in a count, and almost none of it survives until Sunday evening unless you write it down within a minute of it happening.</p>
-        <p>The technique that works is a one-line note, on the delegation, with the moment attached. Not &ldquo;good speech&rdquo;. Something like: &ldquo;Kenya, GSL 2: named the financing gap the rest of the room was avoiding, cited the 2023 review by number.&rdquo; Ten words, and in three days it is still evidence.</p>
+        <p>The technique that works is a one-line note, on the delegation, with the moment attached. Not &ldquo;good speech&rdquo;. Something like: &ldquo;Kenya, GSL 2: named the financing gap the rest of the room was avoiding, cited the 2023 review by number.&rdquo; Twenty words, and in three days it is still evidence.</p>
         <p>Write between three and eight of these per delegation across a conference. Fewer and you cannot distinguish the middle of the field, which is where awards are actually decided. More and you were taking notes instead of chairing.</p>
 
         <H2>Taking notes without losing the room</H2>
@@ -157,7 +157,7 @@ export default function Article() {
 
         <H2>Handing the slate to the secretariat</H2>
         <p>Most conferences ask the dais to submit a slate for ratification rather than announcing awards themselves. Send it with a short note, two or three sentences per award, naming specific moments. This does three jobs: it lets the secretariat spot a committee where the standard has drifted, it gives whoever runs the ceremony something true to say, and it is the document that exists if the result is questioned weeks later.</p>
-        <p>Keep your notes until the conference is over and the results are published. If your record lives in a session tool, keep the room open until then rather than closing it the moment the gavel falls.</p>
+        <p>Keep your notes until the conference is over and the results are published. If your record lives in a session tool, save it before you leave. In Gavelling, download the session record from the End View or the scoreboard: a standalone room is deleted about an hour after it ends, though a conference room is kept.</p>
 
         <H2>What to do with the rubric next year</H2>
         <p>After the conference, spend fifteen minutes on two questions. Which criterion did you never actually use, and which behaviour did your weights accidentally encourage? The second is the more useful. If your committee spent two days queueing for the speakers list and barely negotiated, your weights told them to. Change them, publish the change in your chair&rsquo;s letter, and watch the room behave differently.</p>

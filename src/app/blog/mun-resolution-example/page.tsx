@@ -77,7 +77,7 @@ export default function Article() {
         <p><em>Recalling further</em> Sustainable Development Goal 4 and the commitment to inclusive and equitable quality education for all,</p>
         <p><em>Noting</em> that the education of children displaced by conflict and disaster is interrupted for periods measured in years rather than months,</p>
         <p><em>Deeply concerned</em> that displaced children face barriers to enrolment arising from documentation requirements, language of instruction and the non-recognition of prior learning,</p>
-        <p><em>Recognizing</em> the substantial and sustained burden borne by host communities, which in most cases are themselves in low and middle income countries,</p>
+        <p><em>Recognizing</em> the substantial and sustained burden borne by host communities, which in most cases are themselves in low- and middle-income countries,</p>
         <p><em>Bearing in mind</em> that education in emergencies has historically received a small share of humanitarian funding relative to its share of need,</p>
         <ol>
           <li><em>Calls upon</em> Member States to admit displaced children to national education systems irrespective of the documentation the child is able to produce, and to accept alternative evidence of prior schooling where records are unavailable;</li>
@@ -90,7 +90,7 @@ export default function Article() {
           <li><em>Invites</em> regional organisations to conclude arrangements for the mutual recognition of school certificates issued to displaced children;</li>
           <li><em>Decides</em> to remain seized of the matter.</li>
         </ol>
-        <p className="gv-note">Nine operative clauses, six preambulatory. That is a realistic size for a paper that has to survive amendment: a twenty clause resolution is mostly a list of things nobody will defend.</p>
+        <p className="gv-note">Nine operative clauses, six preambulatory. That is a realistic size for a paper that has to survive amendment: a twenty-clause resolution is mostly a list of things nobody will defend.</p>
 
         <H2>The preamble, annotated</H2>
         <p>
@@ -123,7 +123,7 @@ export default function Article() {
         </FactCard>
 
         <FactCard title="4. Transitional language instruction within one academic year">
-          <p><strong>What it costs:</strong> teacher time and money. Note &quot;encourages&quot;, the softest verb in the paper, and a specific benchmark. Specificity is what stops this being one of the twelve empty phrases.</p>
+          <p><strong>What it costs:</strong> teacher time and money. Note &quot;encourages&quot;, the softest verb in the paper, and a specific benchmark. Specificity is what stops this being an empty phrase.</p>
           <p><strong>Who votes against:</strong> few openly. Expect an amendment striking &quot;within one academic year&quot;, which is a perfectly rational attack on the only measurable thing in the clause.</p>
         </FactCard>
 
@@ -138,7 +138,7 @@ export default function Article() {
         </FactCard>
 
         <FactCard title="7. Accreditation of displaced teachers">
-          <p><strong>What it costs:</strong> touches professional licensing, which is usually a sub-national competence. Written as compile and disseminate good practice for exactly that reason.</p>
+          <p><strong>What it costs:</strong> touches professional licensing, which is usually a sub-national competence. Written as &quot;compile and disseminate good practice&quot; for exactly that reason.</p>
           <p><strong>Who votes against:</strong> nobody. It is also the clause most likely to be cited as the paper&apos;s original contribution, because most competing drafts will not have thought of it.</p>
         </FactCard>
 

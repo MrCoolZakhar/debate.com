@@ -52,7 +52,7 @@ export default function Article() {
         <p>A position paper is your entry ticket to serious MUN. Many conferences require one before committee even begins. Done well, it forces you to clarify your country&apos;s stance before walking in the door, and signals to chairs that you are prepared to lead. Done poorly, it reads like a Wikipedia summary with a flag at the top. This guide shows you how to write one that actually matters, and our <Link href="/blog/mun-position-paper-examples">position paper examples</Link> show finished papers, annotated.</p>
 
         <H2>What Is a MUN Position Paper?</H2>
-        <p>A position paper is a one-to-two page document written from your assigned country&apos;s perspective on the committee topic(s). It is submitted to the dais before the conference and may be graded as part of your overall award. Its purpose is to articulate your country&apos;s official stance, the reasoning behind it, and the solutions your delegation will advocate for.</p>
+        <p>A position paper is a one- to two-page document written from your assigned country&apos;s perspective on the committee topic(s). It is submitted to the dais before the conference and may be graded as part of your overall award. Its purpose is to articulate your country&apos;s official stance, the reasoning behind it, and the solutions your delegation will advocate for.</p>
 
         <PhotoFigure id="mun-delegate-notes" caption="Your position paper becomes your notes once debate starts." />
 
@@ -64,7 +64,7 @@ export default function Article() {
         <p>At the top of the paper include: Committee name, Topic, Country, Delegate name(s), and School/Institution. Keep this concise; it should not take up more than four lines.</p>
 
         <H3>Section 1: Country Background and Topic Overview</H3>
-        <p>Briefly establish your country&apos;s relevant context. Our <Link href="/blog/mun-country-profiles">country profiles</Link> are a starting point. This is not a history lesson. It is a tight paragraph explaining why this issue matters to your country specifically. For example, if the topic is climate change adaptation, and you represent Bangladesh, you would note that Bangladesh is among the most climate-vulnerable nations on earth, with 17% of its territory at risk from a one-metre sea level rise.</p>
+        <p>Briefly establish your country&apos;s relevant context. Our <Link href="/blog/mun-country-profiles">country profiles</Link> are a starting point. This is not a history lesson. It is a tight paragraph explaining why this issue matters to your country specifically. For example, if the topic is climate change adaptation and you represent Bangladesh, you would note that Bangladesh is among the most climate-vulnerable nations on earth, with 17% of its territory at risk from a one-metre sea level rise.</p>
 
         <H3>Section 2: Country Position</H3>
         <p>State your country&apos;s position explicitly. Not what you personally think, but what the government of your assigned country officially supports. Reference actual UN votes, treaties your country has signed, or statements from ministers. This is where research pays off. Our <Link href="/blog/mun-country-research">country research method</Link> shows where to find it.</p>
@@ -78,8 +78,9 @@ export default function Article() {
           <li><strong>UN Digital Library (digitallibrary.un.org):</strong> Full text of resolutions, voting records, and official UN documents.</li>
           <li><strong>Ministry of Foreign Affairs websites:</strong> Official government positions, speeches, and policy documents.</li>
           <li><strong>CIA World Factbook:</strong> Quick country background data.</li>
+          <li><strong>UN data portal (data.un.org):</strong> Official UN statistics by country.</li>
           <li><strong>UN Treaty Collection:</strong> Which treaties has your country signed or ratified?</li>
-          <li><strong>Reliefweb, OCHA, UNHCR:</strong> For humanitarian and refugee topics.</li>
+          <li><strong>ReliefWeb, OCHA, UNHCR:</strong> For humanitarian and refugee topics.</li>
         </ul>
 
         <H2>Common Mistakes to Avoid</H2>
@@ -88,7 +89,7 @@ export default function Article() {
           <li><strong>Padding with general topic information.</strong> Chairs have read fifty position papers. They do not need a paragraph explaining what climate change is. Get to your country&apos;s stance fast.</li>
           <li><strong>Proposing things your country opposes.</strong> Surprising as it sounds, delegates often propose solutions that contradict their country&apos;s actual UN votes. Check the voting record.</li>
           <li><strong>No citations.</strong> Every factual claim should have a source. Footnotes are fine.</li>
-          <li><strong>Exceeding the page limit.</strong> If the limit is one page, one page. Chairs penalise papers that ignore instructions.</li>
+          <li><strong>Exceeding the page limit.</strong> If the limit is one page, write one page. Chairs penalise papers that ignore instructions.</li>
         </ul>
 
         <H2>Using Your Position Paper in Committee</H2>

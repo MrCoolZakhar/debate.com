@@ -1154,7 +1154,7 @@ function ConferenceRow({
             corner="tr"
             tone={r.is_public ? 'live' : 'draft'}
             active={filters.state.size === 1 && filters.state.has(r.is_public ? 'live' : 'draft')}
-            title={r.is_public ? 'Live — filter to live conferences' : 'Draft, not published — filter to drafts'}
+            title={r.is_public ? 'Live: filter to live conferences' : 'Draft, not published: filter to drafts'}
             ariaLabel={r.is_public ? 'Filter to live conferences' : 'Filter to draft conferences'}
             onFilter={() => onFilterState(r.is_public ? 'live' : 'draft')}
           >
@@ -1167,7 +1167,7 @@ function ConferenceRow({
               corner="bl"
               tone="plain"
               active={filters.country.size === 1 && filters.country.has(r.country)}
-              title={`${r.country} — filter to this country`}
+              title={`${r.country}: filter to this country`}
               ariaLabel={`Filter to ${r.country}`}
               onFilter={() => onFilterCountry(r.country as string)}
             >

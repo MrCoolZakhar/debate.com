@@ -18,7 +18,7 @@
 
 import { useCallback, useState } from 'react';
 import Link from 'next/link';
-import { Briefcase, Infinity as InfinityIcon, Loader2, Mail, Archive, Wrench } from 'lucide-react';
+import { BookOpen, Briefcase, Infinity as InfinityIcon, Loader2, Mail, Archive, Wrench } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { Emoji3D } from '@/components/neu';
 import { openAuth } from '@/lib/authModal';
@@ -35,6 +35,7 @@ import { BenefitList, BrandTitle, ErrorLine, Eyebrow, GOLD, GoldButton, Purchase
 
 const BENEFITS: Benefit[] = [
   { emoji: 'Infinity', fallback: InfinityIcon, title: 'Apply to as many conferences as you like', note: 'Every application covered while you are on Unlimited.', live: true },
+  { emoji: 'Books', fallback: BookOpen, title: 'Premium MUN guides', note: 'In-depth playbooks for delegates, chairs and organisers.', live: true },
   { emoji: 'File cabinet', fallback: Archive, title: 'Your MUN archive', note: 'Every conference, committee and award, kept for you.', live: false },
   { emoji: 'Toolbox', fallback: Wrench, title: 'Tools for your upcoming conferences', live: false },
   { emoji: 'Envelope', fallback: Mail, title: 'Unlimited email builder for organizers', live: false },

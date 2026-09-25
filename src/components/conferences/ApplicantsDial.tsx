@@ -163,7 +163,7 @@ export default function ApplicantsDial({
               fontSize: size * 0.085, fontVariantNumeric: 'tabular-nums',
             }}
           >
-            /{target > 0 ? target.toLocaleString() : '—'}
+            /{target > 0 ? target.toLocaleString() : '–'}
           </span>
           <span
             style={{

@@ -63,8 +63,8 @@ export default function Article() {
         <H2>Points</H2>
         <p>Points are interruptions made by delegates to address procedural issues or seek information. They take priority over motions and can be raised at any time except while another delegate has the floor (with one exception). Our guide to <Link href="/blog/mun-points-explained">MUN points explained</Link> covers each one in more depth.</p>
         <ul>
-          <li><strong>Point of Order:</strong> Raised when a delegate believes the chair has made a procedural error. The chair must rule on it immediately. This is the only point that can interrupt a speaker.</li>
-          <li><strong>Point of Personal Privilege:</strong> Raised when a delegate&apos;s ability to participate is impaired: they cannot hear, the room is too hot, etc. Cannot interrupt a speaker at most conferences.</li>
+          <li><strong>Point of Order:</strong> Raised when a delegate believes the chair has made a procedural error. The chair must rule on it immediately. Under most rules it cannot interrupt a speaker.</li>
+          <li><strong>Point of Personal Privilege:</strong> Raised when a delegate&apos;s ability to participate is impaired: they cannot hear, the room is too hot, etc. Under most rules it may interrupt a speaker, but only for audibility.</li>
           <li><strong>Point of Information to the Chair:</strong> A question directed to the chair about procedure.</li>
           <li><strong>Point of Information to the Delegate:</strong> A question posed to the delegate currently speaking (subject to the speaker&apos;s acceptance).</li>
         </ul>
@@ -80,7 +80,7 @@ export default function Article() {
           <li><strong>Motion for a Moderated Caucus:</strong> Structured debate period with a fixed topic, total time, and per-speaker time.</li>
           <li><strong>Motion for an Unmoderated Caucus:</strong> Informal recess from debate.</li>
           <li><strong>Motion to Suspend the Meeting:</strong> Ends the current session; resumes later.</li>
-          <li><strong>Motion to Adjourn the Meeting:</strong> Ends all debate permanently on the current topic.</li>
+          <li><strong>Motion to Adjourn the Meeting:</strong> Ends the meeting, usually for the rest of the conference. (A motion to adjourn debate is different: it sets the current topic aside.)</li>
         </ul>
 
         <H3>Substantive Motions</H3>
@@ -91,7 +91,7 @@ export default function Article() {
         </ul>
 
         <H2>Yields</H2>
-        <p>When a delegate finishes their GSL speech before time expires, they may yield remaining time:</p>
+        <p>When a delegate finishes their GSL speech before time expires, they may yield the remaining time:</p>
         <ul>
           <li><strong>Yield to another delegate:</strong> The remaining time passes to a named delegate. That delegate may not yield further.</li>
           <li><strong>Yield to questions:</strong> Other delegates may ask points of information; the speaker responds within the remaining time.</li>

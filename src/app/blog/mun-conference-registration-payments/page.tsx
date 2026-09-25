@@ -53,7 +53,7 @@ export default function Article() {
         <ul>
           <li><strong>The individual delegate.</strong> Pays by card, on a phone, usually late at night, often not from the country your bank is in. Wants a receipt immediately.</li>
           <li><strong>The school or university.</strong> Pays by bank transfer against an invoice, through a finance office that has never heard of your conference, on a payment run that happens fortnightly. Cannot pay a person, only an institution.</li>
-          <li><strong>The society or delegation.</strong> Somewhere between the two. One student holds a society card and pays for fourteen people, then needs a single document to reclaim it from their students union.</li>
+          <li><strong>The society or delegation.</strong> Somewhere between the two. One student holds a society card and pays for fourteen people, then needs a single document to reclaim it from their students&apos; union.</li>
         </ul>
         <p>Design for all three from the start. A conference that only accepts cards excludes most institutional payers outside the handful of countries where school finance offices use cards at all. A conference that only invoices makes an individual delegate wait two weeks for a seat.</p>
 
@@ -81,11 +81,11 @@ export default function Article() {
           <li><strong>The platform is merchant of record.</strong> Money lands in the platform&rsquo;s account and is paid out to you later, sometimes after the conference. Simpler to set up, and it means a third party is holding your delegates&rsquo; money and setting the terms on which you see it.</li>
           <li><strong>You are merchant of record.</strong> You connect your own payment account, the money lands in it directly, your name is on the statement, and you own the relationship with your delegates and with your bank.</li>
         </ul>
-        <p>Gavelling uses the second model: payments run through the organiser&rsquo;s own Stripe account via Stripe Connect, so the society or school is the merchant of record and the funds are theirs from the moment they settle. The platform fee is 5 per cent, plus the card processing cost passed through at cost, and the organiser is never charged a per-delegate or per-day licence.</p>
+        <p>Gavelling uses the second model: payments run through the organiser&rsquo;s own Stripe account via Stripe Connect, so the society or school is the merchant of record and the funds are theirs from the moment they settle. There is no platform fee: the participant pays exactly the invoice amount, Stripe&rsquo;s own processing fee comes out of the organiser&rsquo;s Stripe account as with any Stripe account, and the organiser is never charged a per-delegate or per-day licence.</p>
         <p>Whatever you use, work out your all-in cost per transaction before you set the fee, and decide explicitly whether you absorb it or add it. Both are defensible. Silently absorbing it and discovering the gap in week ten is not.</p>
 
         <H2>Bank transfer and manual payment</H2>
-        <p>Outside the countries card processing reaches easily, bank transfer is not the fallback, it is the main route. Handle it as a first-class flow rather than an exception managed in a shared inbox.</p>
+        <p>Outside the countries card processing reaches easily, bank transfer is not the fallback: it is the main route. Handle it as a first-class flow rather than an exception managed in a shared inbox.</p>
         <p>What a workable manual process needs:</p>
         <ul>
           <li><strong>A unique reference per payer</strong>, short and on the invoice. Without it you will have four transfers of the same amount and no idea whose they are.</li>
@@ -121,7 +121,7 @@ export default function Article() {
 
         <H2>A refund policy you can publish</H2>
         <p>Write it before the first payment, put it on the registration page, and repeat it in the acceptance email. A policy that appears only after someone asks for a refund reads as invention, however reasonable it is.</p>
-        <FactCard title="Sample refund policy, adapt to your conference">
+        <FactCard title="Sample refund policy (adapt to your conference)">
           <p><strong>1. Cancellation tiers.</strong> Cancellations received more than 60 days before the first day of the conference: full refund less a non-refundable administration charge of [amount]. Between 60 and 30 days: 50 per cent refund. Fewer than 30 days, or non-attendance: no refund.</p>
           <p><strong>2. Substitution.</strong> A delegation may replace a registered delegate with another delegate from the same institution at no charge up to 7 days before the conference, by written notice. The replacement takes the original allocation.</p>
           <p><strong>3. Payment charges.</strong> Refunds are made by the original payment method, in the currency invoiced. Bank charges and currency differences are not refunded.</p>
@@ -143,7 +143,7 @@ export default function Article() {
         <p>Keep one exception in your pocket: a school that tells you early that their payment run is slow, with a date, is not a problem. A school that says nothing is.</p>
 
         <H2>Reconciliation after the conference</H2>
-        <p>Close the books within two weeks, while people still remember. What the treasurer, and eventually your school or students union, will ask for:</p>
+        <p>Close the books within two weeks, while people still remember. What the treasurer, and eventually your school or students&apos; union, will ask for:</p>
         <ul>
           <li>Total invoiced, total received, total outstanding, and the gap explained line by line.</li>
           <li>Refunds issued, with reasons.</li>

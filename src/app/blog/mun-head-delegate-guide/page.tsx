@@ -7,7 +7,7 @@ import { H2, H3, Callout, FactCard, TableWrap } from '@/components/blog/prose';
 export const metadata: Metadata = pageMetadata({
   title: 'MUN Head Delegate Guide: Leading a School Delegation',
   description:
-    'The job nobody writes down: selecting a delegation, distributing assignments, running preparation, holding the team together at a conference, and handing it over',
+    'The job nobody writes down: selecting a delegation, distributing assignments, running preparation, holding the team together at a conference, and handing it over.',
   path: '/blog/mun-head-delegate-guide',
   ogDescription: 'Selecting, preparing and holding together a Model UN delegation.',
   type: 'article',
@@ -117,7 +117,7 @@ export default function Article() {
           <li><strong>Never negotiate with a chair on a delegate&apos;s behalf.</strong> If something is genuinely wrong, it goes to the faculty advisor, who goes to the secretariat.</li>
         </ul>
         <H3>The daily rhythm</H3>
-        <p>Three fixed points, short, every day, is more effective than one long meeting.</p>
+        <p>Three fixed points, short, every day, are more effective than one long meeting.</p>
         <ul className="gv-check">
           <li><strong>Morning brief, ten minutes.</strong> What today looks like, what each person is trying to achieve today, one reminder. Not a speech.</li>
           <li><strong>Lunch check-in, informal.</strong> Sit with different people each day. Ask what is stuck rather than how it is going.</li>
@@ -130,7 +130,7 @@ export default function Article() {
         <p>Instead, diagnose. Struggling almost always means one of four things, and the response is different for each.</p>
         <ul>
           <li><strong>They cannot get on the speakers list.</strong> Mechanical, and the easiest to fix. Tell them to put their placard up the moment the list opens, and to send the dais a note rather than waiting to be noticed.</li>
-          <li><strong>They are speaking but nobody is listening.</strong> Usually no specific proposal. Give them one sentence to end every speech with: &quot;my delegation proposes X, and we are drafting it now, come and find us&quot;.</li>
+          <li><strong>They are speaking but nobody is listening.</strong> Usually no specific proposal. Give them one sentence to end every speech with: &quot;my delegation proposes X, and we are drafting it now. Come and find us&quot;.</li>
           <li><strong>They are not in a bloc.</strong> The hardest to fix from outside. Tell them to find the person writing the most and offer to write a section, which is how <Link href="/blog/mun-bloc-building">blocs actually form</Link>.</li>
           <li><strong>They are overwhelmed.</strong> Not a tactics problem. Shrink the goal to one thing for the next session and tell them the rest of the weekend is off the table.</li>
         </ul>
@@ -167,7 +167,7 @@ export default function Article() {
         <p>Then name your successor early and give them real work before they take over: let them run one preparation session, one selection trial and one conference brief while you are still there to catch the mistakes. Deciding the succession in the last week produces a head delegate who learns everything you learned, in the same order, at the same cost.</p>
 
         <H2>Your own performance, honestly</H2>
-        <p>It will suffer, and you should decide by how much before the conference rather than resenting it afterwards. Two approaches work. Either accept a quieter conference, take a general assembly committee rather than a crisis seat, and treat the delegation as your event. Or protect your own committee, delegate the daily rhythm to a deputy, and be explicit with the team that the deputy is the first point of contact.</p>
+        <p>It will suffer, and you should decide by how much before the conference rather than resenting it afterwards. Two approaches work. Either accept a quieter conference, take a General Assembly committee rather than a crisis seat, and treat the delegation as your event. Or protect your own committee, delegate the daily rhythm to a deputy, and be explicit with the team that the deputy is the first point of contact.</p>
         <p>What does not work is pretending you can do both at full intensity. That is the head delegate who misses their own committee&apos;s drafting window at eleven on Saturday morning because somebody could not find the lunch hall, and who is then irritable with a team that has no idea why. Pick one, say which, and let people plan around it. If you are still choosing which conferences your delegation should aim at this year, the <Link href="/conferences/explore">conference directory</Link> is a reasonable place to start comparing dates, sizes and fees before you take a shortlist to your advisor.</p>
       </ArticleLayout>
     </>

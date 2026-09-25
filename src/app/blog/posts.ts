@@ -358,7 +358,7 @@ export const articles: BlogPost[] = [
     slug: 'mun-faculty-advisor-guide',
     photo: 'mun-athens-delegation',
     title: 'MUN Faculty Advisor Guide: How to Prepare and Support Your Team',
-    description: 'Building a MUN program, choosing conferences, reviewing position papers, and supporting delegates at the event.',
+    description: 'Building a MUN programme, choosing conferences, reviewing position papers, and supporting delegates at the event.',
     category: 'organisers',
     date: '2026-06-07',
     readingMinutes: 11,

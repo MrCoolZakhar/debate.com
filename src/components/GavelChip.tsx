@@ -269,7 +269,7 @@ export default function GavelChip({
             ) : showOffline ? (
               <>{t('gavel_chair_offline')} <span className="font-black">{t('gavel_take_over')}</span></>
             ) : (
-              <>{t('gavel_chairing_label')} <span className="font-black">{headChairName ?? '—'}</span></>
+              <>{t('gavel_chairing_label')} <span className="font-black">{headChairName ?? '–'}</span></>
             )}
           </span>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"

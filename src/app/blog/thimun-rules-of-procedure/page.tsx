@@ -119,7 +119,7 @@ export default function Article() {
           Submitted in writing to the chair during debate on the resolution, in the required form: add, strike, or amend a numbered operative clause. The chair decides when to take it. The submitter speaks in favour, debate time is set for and against the amendment, and the house votes. A passed amendment changes the resolution immediately and debate on the resolution resumes.
         </FactCard>
         <p>
-          <strong>Amendments to the second degree</strong> are amendments to an amendment currently on the floor, and they are normal here rather than exotic. They are debated and voted before the amendment they modify, and only then does the house return to the amendment itself. Used well, a second degree amendment rescues a good amendment that went one clause too far. Used badly, it is how a committee loses forty minutes.
+          <strong>Amendments to the second degree</strong> are amendments to an amendment currently on the floor, and they are normal here rather than exotic. They are debated and voted before the amendment they modify, and only then does the house return to the amendment itself. Used well, a second-degree amendment rescues a good amendment that went one clause too far. Used badly, it is how a committee loses forty minutes.
         </p>
         <p>
           Preambulatory clauses are generally not amendable. That is worth knowing in both directions: it protects your preamble, and it means a preambulatory clause you dislike cannot be removed, only outvoted with the whole resolution. The general mechanics of friendly and unfriendly amendments are covered in our <Link href="/blog/mun-amendment-guide">amendments guide</Link>; the THIMUN difference is that the friendly category matters much less, because the chair takes amendments to the floor rather than the sponsors accepting them privately.
@@ -135,7 +135,7 @@ export default function Article() {
         <ul>
           <li><strong>Being open to points is a choice with consequences.</strong> A delegate who declines all points looks unable to defend the speech. A delegate open to any and all points in a hostile room can lose three minutes badly.</li>
           <li><strong>A follow-up</strong> is a second question to the same speaker and is granted at the chair&apos;s discretion. Ask for it explicitly and expect a no when the queue is long.</li>
-          <li><strong>Questions must be questions.</strong> &quot;Does the delegate not agree that their proposal is unfunded?&quot; is legitimate. A thirty second statement ending in &quot;what does the delegate think?&quot; will be cut off by a good chair.</li>
+          <li><strong>Questions must be questions.</strong> &quot;Does the delegate not agree that their proposal is unfunded?&quot; is legitimate. A thirty-second statement ending in &quot;what does the delegate think?&quot; will be cut off by a good chair.</li>
           <li><strong>Answer in one or two sentences.</strong> The temptation is to make another speech. Resist it: the crisp answer is what wins the exchange, and the rambling answer invites three more questions.</li>
         </ul>
         <p>
@@ -193,7 +193,7 @@ export default function Article() {
             </thead>
             <tbody>
               {[
-                ['Unmoderated caucus', 'Lobbying', 'A scheduled block at the start, not a fifteen minute break'],
+                ['Unmoderated caucus', 'Lobbying', 'A scheduled block at the start, not a fifteen-minute break'],
                 ['Moderated caucus', 'No equivalent', 'Extend debate time on the resolution instead'],
                 ['General speakers list', 'Recognition by the chair', 'No standing queue; the chair balances for and against'],
                 ['Working paper', 'Draft resolution before approval', 'The approval panel is the gate'],

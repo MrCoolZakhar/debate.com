@@ -49,7 +49,7 @@ export default function Article() {
         <p>Procedure can be working perfectly while debate is dead. The speakers list is populated, motions pass, the timer runs, and nothing is happening. This is a different problem from not knowing the rules, and it is the problem that actually defines a chair. What follows is a diagnosis first, then eleven interventions with the words to use, because the right move in a silent room is close to the opposite of the right move in a chaotic one.</p>
 
         <H2>Diagnose before you intervene</H2>
-        <p>Three kinds of stall, and they need opposite treatment. Take ninety seconds to decide which you have before you reach for anything.</p>
+        <p>Four kinds of stall, and they need opposite treatment. Take ninety seconds to decide which you have before you reach for anything.</p>
         <TableWrap>
           <table>
             <thead>
@@ -77,7 +77,7 @@ export default function Article() {
         <H3>2. Call on placards directly</H3>
         <p>In a silent room, ask a named delegation a specific question rather than asking the room for volunteers. Choose someone whose position paper you read and whose position you know, so the question is answerable.</p>
         <ChairScript>&ldquo;The chair recognises the delegate of Chile. Your position paper raised the financing question. Would you share with the committee how your delegation would fund the mechanism under discussion?&rdquo;</ChairScript>
-        <p>Never do this to a delegate who looks frightened, and never twice in a row to the same person. Two or three of these usually breaks the ice, after which the list fills on its own.</p>
+        <p>Never do this to a delegate who looks frightened, and never twice in a row to the same person. Two or three of these usually break the ice, after which the list fills on its own.</p>
 
         <H3>3. A tour de table</H3>
         <p>Every delegation speaks in turn for a short fixed time, 45 or 60 seconds. It removes the decision to speak entirely, which is exactly what a quiet room needs, and it gives you a map of the committee. Expensive in time at a large committee, so use it in the first session or not at all. Full mechanics in our <Link href="/blog/tour-de-table-mun">tour de table guide</Link>.</p>
@@ -114,8 +114,8 @@ export default function Article() {
 
         <H3>9. Refuse motions</H3>
         <p>Chairs have discretion over which motions to entertain, and in a chaotic room that discretion is the main tool. You do not have to take every motion on the floor.</p>
-        <ChairScript>&ldquo;The chair will not entertain further motions until the current speakers list is exhausted. Delegates wishing to change the mode of debate may raise them at that point.&rdquo;</ChairScript>
-        <p>Say it once, clearly, and then hold it. Our reference on <Link href="/blog/mun-motions-explained">motions</Link> sets out which ones are genuinely at the chair&rsquo;s discretion under common rulesets, which varies more than delegates assume.</p>
+        <ChairScript>&ldquo;The chair will not entertain further motions until the current speakers list is exhausted. Delegates wishing to change the mode of debate may raise motions at that point.&rdquo;</ChairScript>
+        <p>Say it once, clearly, and then hold it. Our reference on <Link href="/blog/mun-motions-explained">motions</Link> sets out which ones are genuinely at the chair&rsquo;s discretion under common rulesets; this varies more than delegates assume.</p>
 
         <H3>10. Take unmoderated caucus away</H3>
         <p>In a committee where unmod has become social time, stop granting it. Run the session in moderated caucus, with topics you have narrowed, until papers appear. It is unpopular for twenty minutes and then the committee produces something.</p>
@@ -153,7 +153,7 @@ export default function Article() {
         <p>The silence that is a real stall has a different quality: people are looking at their phones or at each other rather than thinking. That is worth acting on immediately.</p>
 
         <H2>The chair&rsquo;s own speech</H2>
-        <p>You are allowed to address the committee substantively. You should almost never do it. Every time a chair speaks about the topic, delegates recalibrate toward what the chair appeared to want, and the debate becomes a performance for the dais.</p>
+        <p>You are allowed to address the committee substantively. You should almost never do it. Every time a chair speaks about the topic, delegates recalibrate towards what the chair appeared to want, and the debate becomes a performance for the dais.</p>
         <p>Two legitimate uses. Correcting a factual error that the whole room has adopted and is now building resolutions on: state the correction plainly, cite the source, and stop. And clarifying the committee&rsquo;s mandate when delegates are drafting something the body cannot do.</p>
         <ChairScript>&ldquo;A point of clarification from the chair. This committee makes recommendations; it cannot authorise deployment. Delegates should frame operative clauses accordingly.&rdquo;</ChairScript>
         <p>Both are under thirty seconds and neither expresses a preference about the outcome.</p>
@@ -168,7 +168,7 @@ export default function Article() {
         </ul>
 
         <H2>The last hour</H2>
-        <p>A different problem entirely. The last hour of a conference is not about energy, it is about landing the committee somewhere, and the failure mode is a room that runs out of time mid-amendment and votes on nothing.</p>
+        <p>A different problem entirely. The last hour of a conference is not about energy: it is about landing the committee somewhere, and the failure mode is a room that runs out of time mid-amendment and votes on nothing.</p>
         <p>Work backwards from the end and announce the schedule.</p>
         <ChairScript>&ldquo;The committee has one hour remaining. The chair will close the speakers list at the half hour and move to voting procedure with twenty minutes remaining. Delegates should submit final amendments now.&rdquo;</ChairScript>
         <p>Then hold it, including against a popular motion to extend debate. Twenty minutes is not generous for voting on a draft resolution with amendments, especially if your conference votes clause by clause: our <Link href="/blog/mun-voting-procedures">voting procedures guide</Link> sets out the order and what each step costs in time. A committee that passed something it argued about will forgive a chair for cutting debate short. A committee that ran out of time will not.</p>

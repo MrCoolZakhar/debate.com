@@ -69,7 +69,7 @@ export default function Article() {
           <li><strong>Find your natural bloc.</strong> Identify delegates with similar positions from their opening speeches and approach them directly.</li>
           <li><strong>Start a working paper.</strong> Even a rough outline (three <Link href="/blog/mun-clause-phrases">operative clauses</Link> on a shared doc or notepad) gives your bloc something to rally around.</li>
           <li><strong>Approach opposing blocs.</strong> Real diplomacy happens here, and our guide to <Link href="/blog/mun-negotiation-tactics">MUN negotiation tactics</Link> covers how to handle it. You will not move an opposing bloc during formal debate. One short conversation in an unmod can shift the whole dynamic.</li>
-          <li><strong>Talk to the chair.</strong> Chairs are accessible during unmods. If you have a procedural question, a complaint about bloc dynamics, or want to flag an issue, this is the moment.</li>
+          <li><strong>Talk to the chair.</strong> Chairs are accessible during unmods. If you have a procedural question or a complaint about bloc dynamics, or you want to flag an issue, this is the moment.</li>
         </ul>
 
         <H2>How Long Should an Unmoderated Caucus Be?</H2>

@@ -44,7 +44,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <ArticleLayout
         slug="how-to-run-crisis-committee"
-        pitch="Gavelling runs the front room while your backroom writes: timers, speakers, motions and directives in one place, free."
+        pitch="Gavelling runs the front room while your backroom writes: timers, speakers, motions and documents in one place, free."
       >
         <p>Someone has handed you a crisis committee. This guide is for the staff side of the wall: designing an arc before the conference, dividing the three jobs, pacing updates so the room neither stalls nor drowns, and recovering when the story dies on Saturday afternoon. If you want the delegate&rsquo;s view of the same room, read <Link href="/blog/mun-crisis-committee-guide">how crisis committees work</Link> first.</p>
 
@@ -72,7 +72,7 @@ export default function Article() {
         <p>Written in advance, held in a folder, released when the pace requires them rather than on a clock. Each escalation should raise the cost of doing nothing and invalidate part of what the committee has already decided. The classic shape: the first escalation widens the problem geographically, the second turns a technical problem into a political one, the third threatens a delegate&rsquo;s own position rather than the committee&rsquo;s.</p>
 
         <H3>Two branch points</H3>
-        <p>Moments where you decide in advance what happens if the committee does X versus Y. Prepared branches are what let you respond to real decisions quickly. Without them you improvise, and improvised consequences drift toward whatever the loudest delegate proposed.</p>
+        <p>Moments where you decide in advance what happens if the committee does X versus Y. Prepared branches are what let you respond to real decisions quickly. Without them you improvise, and improvised consequences drift towards whatever the loudest delegate proposed.</p>
 
         <H3>The ending you will probably not use</H3>
         <p>Write it anyway. It tells you what the arc is about, which is what you need when everything goes sideways on day two. Expect the real ending to be something your committee invented, and be pleased when it is.</p>
@@ -100,7 +100,7 @@ export default function Article() {
           </table>
         </TableWrap>
         <p className="gv-note">Roughly one update every 20 to 25 minutes in the middle sessions. Adjust to the room rather than the table.</p>
-        <p>The rule that saves more committees than any other: stop updating before the end. A crisis room needs the last half hour to arrive somewhere, and an update at minute 200 of 210 simply denies them an ending.</p>
+        <p>The rule that saves more committees than any other: stop updating before the end. A crisis room needs the last half hour to arrive somewhere, and an update at minute 200 of 210 simply denies delegates an ending.</p>
 
         <H2>Crisis procedure: what survives and what is dropped</H2>
         <p>Crisis rooms are smaller, faster and more informal than a General Assembly committee, and the procedure follows. What is kept:</p>
@@ -146,7 +146,7 @@ export default function Article() {
         <ul>
           <li><strong>Consequence, not refusal.</strong> The delegate who accumulates power attracts attention: a rival moves against them, their own faction gets nervous, a journalist starts asking questions. This is better drama and it is self-correcting.</li>
           <li><strong>Seed the quiet delegates.</strong> Send an unprompted note into the room: an aide asking for instructions, an opportunity that belongs specifically to their character. A delegate who receives a note writes one back.</li>
-          <li><strong>Update toward the middle of the room.</strong> If three delegates dominate, write the next escalation into the portfolios of the ones who have not moved.</li>
+          <li><strong>Update towards the middle of the room.</strong> If three delegates dominate, write the next escalation into the portfolios of the ones who have not moved.</li>
           <li><strong>Talk to the front room chair at the break.</strong> They can put a quiet delegate on the speakers list, or set a moderated caucus topic that only a few people can speak to.</li>
         </ul>
         <p>For the room-management side of this, our guide to <Link href="/blog/mun-controlling-the-floor">keeping debate moving</Link> applies to crisis with almost no change.</p>
@@ -170,7 +170,7 @@ export default function Article() {
           <li><strong>A shared world document</strong> updated in real time, which both backrooms read before writing anything.</li>
           <li><strong>A synchronised update schedule.</strong> If room A learns something at 14:10, room B learns it, or learns a deliberately partial version, at 14:10 too.</li>
           <li><strong>An explicit rule on cross-room communication:</strong> who may write to whom, whether messages are delivered verbatim, and how long they take.</li>
-          <li><strong>A joint session</strong> if the arc allows it, which is the payoff delegates remember. Plan it into the schedule, do not decide it on the day.</li>
+          <li><strong>A joint session</strong> if the arc allows it, which is the payoff delegates remember. Plan it into the schedule; do not decide it on the day.</li>
         </ul>
 
         <H2>Historical committees and hindsight</H2>

@@ -7,7 +7,7 @@ import { H2, H3, Callout, TableWrap } from '@/components/blog/prose';
 export const metadata: Metadata = pageMetadata({
   title: 'Preambulatory and Operative Clauses: The Complete Phrase List',
   description:
-    'Every accepted preambulatory and operative phrase, what each one commits the committee to, and which verbs a General Assembly committee is not allowed to use',
+    'Every accepted preambulatory and operative phrase, what each one commits the committee to, and which verbs a General Assembly committee is not allowed to use.',
   path: '/blog/mun-clause-phrases',
   ogDescription: 'Every preambulatory and operative phrase, with what each one commits the committee to.',
   type: 'article',
@@ -129,7 +129,7 @@ export default function Article() {
             ['Deeply disturbed', 'Deeply disturbed by the continued targeting of medical facilities,'],
             ['Deploring', 'Deploring the use of force against civilian populations,'],
             ['Regretting', 'Regretting that the requested information has not been provided,'],
-            ['Contemplating', 'Contemplating the long term consequences of inaction on this question,'],
+            ['Contemplating', 'Contemplating the long-term consequences of inaction on this question,'],
           ]}
         />
 
@@ -193,7 +193,7 @@ export default function Article() {
 
         <Phrases
           title="Medium: the everyday operative verbs"
-          note="Ninety percent of a good General Assembly resolution is built from these four."
+          note="Ninety per cent of a good General Assembly resolution is built from these four."
           items={[
             ['Calls upon', 'Calls upon all States to refrain from any measure inconsistent with the present resolution;'],
             ['Urges', 'Urges States that have not yet done so to ratify the instrument;'],
@@ -289,7 +289,7 @@ export default function Article() {
         <ul>
           <li><strong>Preambulatory clauses end in a comma.</strong> Every one. They are not numbered. In UN documents the opening phrase is italicised.</li>
           <li><strong>Operative clauses are numbered and end in a semicolon.</strong> The final operative clause ends in a full stop. In UN documents the opening verb is italicised and the clause is indented.</li>
-          <li><strong>Sub-clauses use letters, sub-sub-clauses use roman numerals.</strong> A sub-clause ends in a comma, or a semicolon before the next numbered clause.</li>
+          <li><strong>Sub-clauses use letters, sub-sub-clauses use Roman numerals.</strong> A sub-clause ends in a comma, or a semicolon before the next numbered clause.</li>
         </ul>
         <p>The three formatting errors chairs actually send papers back for:</p>
         <ul>

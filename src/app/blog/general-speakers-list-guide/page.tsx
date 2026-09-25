@@ -71,11 +71,11 @@ export default function Article3() {
         <H2>2. How the GSL Works, Step by Step</H2>
         <H3>Opening the list</H3>
         <p>
-          After the agenda is set, the chair declares the GSL open and asks delegates who wish to speak to raise their placards. The chair (or co-chair) notes each delegation in the order their placard was raised and adds them to the list. In practice, this happens quickly. Most delegates raise immediately, so the chair moves through the room efficiently.
+          After the agenda is set, the chair declares the GSL open and asks delegates who wish to speak to raise their placards. The chair (or co-chair) notes each delegation in the order their placard was raised and adds them to the list. In practice, this happens quickly. Most delegates raise their placards immediately, so the chair moves through the room efficiently.
         </p>
         <H3>Adding to the list</H3>
         <p>
-          The list stays open throughout the session. At any point between speakers, delegates may raise their placard to be added. In most rules of procedure, a delegate can only appear on the GSL once at a time; they cannot queue twice.
+          The list stays open throughout the session. At any point between speakers, delegates may raise their placard to be added. In most rules of procedure, a delegate can appear on the GSL only once at a time; they cannot queue twice.
         </p>
         <p>
           In Gavelling, delegates can request to speak directly from their device. The chair sees the request and approves with one tap, eliminating the placard-watching overhead for the chair and making it easier for delegates in large rooms to register.
@@ -86,7 +86,7 @@ export default function Article3() {
         </p>
         <H3>After speaking</H3>
         <p>
-          When the delegate finishes, they yield their remaining time (see below) and the chair calls the next speaker. The current speaker is removed from the list and cannot re-add themselves until it is their turn again, though most rules of procedure allow re-adding after speaking.
+          When the delegate finishes, they yield their remaining time (see below) and the chair calls the next speaker. The speaker is removed from the list. Most rules of procedure let them add their name again once they have spoken.
         </p>
 
         <H2>3. Yielding Remaining Time</H2>
@@ -149,7 +149,7 @@ export default function Article3() {
           <li><strong>Unmoderated Caucus</strong>: best for informal negotiation, bloc-building, and working paper drafting.</li>
         </ul>
         <p>
-          A healthy committee session alternates between GSL debate and caucuses. Too much GSL without caucuses can feel rigid; too many caucuses without GSL debate loses the formal record.
+          A healthy committee session alternates between GSL debate and caucuses. Too much GSL without caucuses can feel rigid; too many caucuses without GSL debate lose the formal record.
         </p>
         <p>
           See also: <Link href="/blog/mun-motions-explained" style={{ color: '#1B3828', fontWeight: 600 }}>MUN Motions Explained</Link> for how caucus motions are proposed and voted on.

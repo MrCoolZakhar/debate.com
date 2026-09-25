@@ -120,7 +120,7 @@ export default function Article() {
         <p>Lead times are long, usually two to six months, so grants fund next year&apos;s season and not this one. Apply in the autumn for the spring.</p>
 
         <H2>Local business sponsorship</H2>
-        <p>A local business is buying visibility and goodwill among families in its catchment. Be concrete about what it gets: a logo on the team&apos;s materials and social posts, a mention in the school newsletter, a photograph with the students, and a thank you at an assembly. Small amounts, 100 to 500, are normal, and three of those funds a coach.</p>
+        <p>A local business is buying visibility and goodwill among families in its catchment. Be concrete about what it gets: a logo on the team&apos;s materials and social posts, a mention in the school newsletter, a photograph with the students, and a thank you at an assembly. Small amounts, 100 to 500, are normal, and three of those fund a coach.</p>
         <p>Approach in person where you can, with two students and the one-page case. Ask for a named person rather than the shop. And agree with your school first which categories are acceptable, because that conversation is much worse when it happens after a gambling company has offered you 800.</p>
 
         <H2>Alumni: the source almost nobody asks</H2>
@@ -145,7 +145,7 @@ export default function Article() {
           </table>
         </TableWrap>
         <H3>The mock conference that pays for itself</H3>
-        <p>Running a small <Link href="/blog/start-a-mun-conference">one-day mock conference</Link> for your own school, or for feeder schools, raises money at a modest <Link href="/blog/mun-conference-budget">per-delegate fee</Link>, trains your delegates, and recruits next year&apos;s club. The barrier used to be that you needed software, printed everything and a lot of staff. You do not: a free anonymous session can be created at <Link href="/create/sessions">/create</Link> in under a minute, delegates join on their phones with a six character code, and there is nothing to install and no account to make. That removes the main fixed cost from the idea, which is why it is worth mentioning here rather than in a product page. Pair it with <Link href="/blog/mun-conference-planning">the conference planning guide</Link> if it grows beyond one room.</p>
+        <p>Running a small <Link href="/blog/start-a-mun-conference">one-day mock conference</Link> for your own school, or for feeder schools, raises money at a modest <Link href="/blog/mun-conference-budget">per-delegate fee</Link>, trains your delegates, and recruits next year&apos;s club. The barrier used to be that you needed software, printed everything and a lot of staff. You do not: a free anonymous session can be created at <Link href="/create/sessions">/create</Link> in under a minute, delegates join on their phones with a six-character code, and there is nothing to install and no account to make. That removes the main fixed cost from the idea, which is why it is worth mentioning here rather than in a product page. Pair it with <Link href="/blog/mun-conference-planning">the conference planning guide</Link> if it grows beyond one room.</p>
 
         <H2>Crowdfunding, and its social cost</H2>
         <p>Crowdfunding works for a clear, bounded, emotionally legible goal: one team, one trip, a photograph, a deadline. It works badly as a general fund, and it has a cost that people underestimate, which is that it asks your students&apos; families and friends for money in public. For some students that is fine. For others it is the reason they will quietly drop out.</p>
@@ -154,13 +154,13 @@ export default function Article() {
         <H2>The money almost nobody claims: conference financial aid</H2>
         <p>Most conferences of any size have a financial aid route, a fee waiver, or a scholarship for delegates who cannot pay, and a large share of them go unclaimed every year because nobody asks. This is the highest return per hour on the entire list: one email, sent before the fee deadline.</p>
         <p>What to write: who you are, how many delegates, what you can pay, what you need, and whether there is anything you can offer in exchange. Many conferences will trade a reduced fee for your school providing a chair or a volunteer, which is a good deal on both sides.</p>
-        <p>Gavelling&apos;s conference tools include a financial aid section for organisers, so on conferences that use it there is a defined route rather than an inbox. Either way, the rule is the same: ask before the deadline, ask a named person, and ask early, because aid budgets are allocated first-come.</p>
+        <p>Gavelling&apos;s conference tools include a financial aid section for organisers, so on conferences that use it there is a defined route rather than an inbox. Either way, the rule is the same: ask before the deadline, ask a named person, and ask early, because aid budgets are allocated on a first-come, first-served basis.</p>
         <Callout>Ask every conference, every year, even the ones you assume are too expensive to bother. The worst outcome is a polite no, and the going rate for an email is the cost of an email.</Callout>
 
         <H2>Spending less, which counts as raising more</H2>
         <ul>
-          <li><strong>Pick one expensive conference per season, not three.</strong> A local conference and a regional one costs a fraction of two international ones and develops delegates just as well. Our guide to <Link href="/blog/choosing-mun-conferences">choosing MUN conferences</Link> helps you plan the season.</li>
-          <li><strong>Share transport with another school.</strong> Two delegations on one coach halves the largest variable line for both.</li>
+          <li><strong>Pick one expensive conference per season, not three.</strong> A local conference and a regional one cost a fraction of two international ones and develops delegates just as well. Our guide to <Link href="/blog/choosing-mun-conferences">choosing MUN conferences</Link> helps you plan the season.</li>
+          <li><strong>Share transport with another school.</strong> Two delegations on one coach halve the largest variable line for both.</li>
           <li><strong>Book accommodation in fours.</strong> The difference between twins and quads over three nights is often larger than any single fundraiser you will run.</li>
           <li><strong>Register in the early-bird window.</strong> A 15 to 20 per cent saving for filling in a form in October rather than January is the easiest money in this guide.</li>
           <li><strong>Use online conferences for development.</strong> They have no travel cost, they suit first-year delegates, and they let you run a larger squad. <Link href="/blog/mun-online-committees">Our guide to online committees</Link> covers what they are and are not good for.</li>
