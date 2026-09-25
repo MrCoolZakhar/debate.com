@@ -47,6 +47,7 @@ import { LogoDisc } from '@/components/LogoDisc';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { formatConferenceDates } from '@/lib/conferenceDates';
 import VerifiedCheck from '@/components/VerifiedCheck';
+import { CircleFlag } from '@/components/CircleFlag';
 
 // Photo-forward hero cards: kill the Ken Burns zoom + hover lift for users who
 // asked the OS for less motion. Scoped to the hero tier's own class names.
@@ -108,6 +109,7 @@ function formatDateRangeDense(start: string | null, end: string | null): string 
 
 export function ConferenceCard({
   conf, hovered, onHover, onLeave, onClick, compact = false, heroCompact = false, goldGlow = false, applied = false, member = false,
+  showFlag = true, wrapTitle = true,
 }: {
   conf: CardConference;
   hovered: boolean;
@@ -125,6 +127,12 @@ export function ConferenceCard({
   /** The signed-in viewer is already PART of this conference (organiser, chair
    *  or accepted/assigned delegate), the CTA becomes VIEW →. Wins over applied. */
   member?: boolean;
+  /** Classic tier only: a round country flag before the location line (on by
+   *  default; the owner wants a flag on every conference card, 25 Sep 2026). */
+  showFlag?: boolean;
+  /** Classic tier only: the heading wraps to a second line instead of an
+   *  ellipsis (CLAUDE.md §8, never cut a name). On by default. */
+  wrapTitle?: boolean;
 }) {
   const countryObj = getCountryByName(conf.country);
   // "Oxford, GB", ISO country code instead of the full country name (or flag)
@@ -464,12 +472,13 @@ export function ConferenceCard({
             display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0,
           }}
         >
-          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{headingLabel}</span>
+          <span style={wrapTitle ? { minWidth: 0, overflowWrap: 'anywhere' } : { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{headingLabel}</span>
           <VerifiedCheck verified={!!conf.is_verified} size={dense ? 17 : 21} title="Verified conference" />
         </h3>
 
         {/* Location */}
         <div className={`flex items-center gap-1.5 ${heroCompact ? 'mb-1.5' : compact ? 'mb-3' : 'mb-4'}`}>
+          {showFlag && <CircleFlag country={conf.country} size={18} decorative />}
           <span className="text-[13px]" style={{ color: '#6B5F52', fontFamily: "var(--font-brand), sans-serif", fontWeight: 500 }}>
             {conf.city}, {countryCode}
           </span>

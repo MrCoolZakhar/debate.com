@@ -79,12 +79,12 @@ export function SessionsSection() {
         .hs-sess-laptop img, .hs-sess-phone img { display: block; width: 100%; height: auto; }
         .hs-sess-cta {
           display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 60px;
-          padding: 0 clamp(30px, 2.4vw, 42px); border: 0; border-radius: 9999px; cursor: pointer;
-          background: ${FOREST}; color: ${PALE_GOLD}; box-shadow: 0 16px 32px rgba(27,56,40,0.24);
-          font: 800 clamp(15px, 1.1vw, 17px)/1 ${SANS}; letter-spacing: 0.08em; text-transform: uppercase;
+          padding: 0 clamp(30px, 2.4vw, 42px); border: 0; border-radius: 12px; cursor: pointer;
+          background: linear-gradient(90deg, #1B3828 0%, #2A5A3C 55%, #1E4A31 100%); color: #FFFFFF; box-shadow: 0 16px 32px rgba(27,56,40,0.24);
+          font: 700 clamp(16px, 1.15vw, 18px)/1 ${SANS};
           transition: transform 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
         }
-        .hs-sess-cta:hover { transform: translateY(-2px); background-color: #2A5A3C; box-shadow: 0 20px 38px rgba(27,56,40,0.30); }
+        .hs-sess-cta:hover { transform: translateY(-2px); box-shadow: 0 20px 38px rgba(27,56,40,0.30); }
         .hs-sess-cta:active { transform: scale(0.97); }
         .hs-sess-cta:focus { outline: none; }
         .hs-sess-cta:focus-visible { outline: 2px solid ${GOLD}; outline-offset: 3px; }
@@ -101,8 +101,8 @@ export function SessionsSection() {
         }
         .hs-sess-join-box input::placeholder { letter-spacing: 0; text-transform: none; font-weight: 500; color: ${INK_55}; }
         .hs-sess-join-box button {
-          height: 40px; min-width: 44px; padding: 0 18px; border: 0; border-radius: 9999px; cursor: pointer;
-          background: ${FOREST}; color: ${PALE_GOLD}; font: 800 13.5px/1 ${SANS}; letter-spacing: 0.08em; text-transform: uppercase;
+          width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 9999px; cursor: pointer;
+          background: ${FOREST}; color: #FFFFFF;
           transition: background-color 160ms ease;
         }
         .hs-sess-join-box button:hover { background: #2A5A3C; }
@@ -148,7 +148,7 @@ export function SessionsSection() {
           </p>
           <div className="flex flex-col items-center" style={{ marginTop: '30px' }}>
             <button type="button" onClick={() => router.push('/create/sessions')} className="hs-sess-cta">
-              START COMMITTEE <ArrowRight size={19} strokeWidth={2.5} aria-hidden="true" />
+              Start a committee
             </button>
             <form className="hs-sess-join" onSubmit={(e) => { e.preventDefault(); join(); }}>
               <span className="hs-sess-join-box">
@@ -163,8 +163,8 @@ export function SessionsSection() {
                   autoComplete="off"
                   spellCheck={false}
                 />
-                <button type="submit" disabled={code.trim().length === 0}>
-                  JOIN
+                <button type="submit" disabled={code.trim().length === 0} aria-label="Join">
+                  <ArrowRight size={18} strokeWidth={2.6} aria-hidden="true" />
                 </button>
               </span>
             </form>
@@ -302,7 +302,7 @@ export function AboutCards() {
                 <span
                   aria-hidden="true"
                   className="flex flex-shrink-0 items-center justify-center rounded-full"
-                  style={{ width: 38, height: 38, backgroundColor: FOREST, color: PALE_GOLD, boxShadow: '0 6px 14px rgba(27,56,40,0.20)' }}
+                  style={{ width: 38, height: 38, backgroundColor: PALE_GOLD, color: FOREST, boxShadow: 'inset 0 0 0 1.5px rgba(27,56,40,0.18)' }}
                 >
                   <Icon size={18} strokeWidth={2.1} />
                 </span>
@@ -367,40 +367,40 @@ export function LearnMunSection({ guides }: { guides: HomeGuide[] }) {
     <section
       className="px-5 md:px-14"
       aria-labelledby="hs-learn-heading"
-      style={{ backgroundColor: FOREST, paddingTop: 'clamp(64px, 6vw, 100px)', paddingBottom: 'clamp(72px, 6vw, 108px)' }}
+      style={{ backgroundColor: '#FFFFFF', paddingTop: 'clamp(64px, 6vw, 100px)', paddingBottom: 'clamp(72px, 6vw, 108px)' }}
     >
       <style>{`
         .hs-guide { transition: transform 200ms ease, box-shadow 200ms ease; }
-        .hs-guide:hover { transform: translateY(-3px); box-shadow: 0 0 0 1px rgba(238,217,138,0.35), 0 26px 48px rgba(0,0,0,0.32) !important; }
-        .hs-guide:focus-visible { outline: 2px solid ${PALE_GOLD}; outline-offset: 4px; }
+        .hs-guide:hover { transform: translateY(-3px); box-shadow: 0 0 0 1px rgba(27,56,40,0.10), 0 26px 48px rgba(27,56,40,0.16) !important; }
+        .hs-guide:focus-visible { outline: 2px solid ${FOREST}; outline-offset: 4px; }
         .hs-guide:hover .hs-guide-go { transform: translateX(3px); }
         .hs-guide-go { transition: transform 200ms ease; }
-        .hs-learn-all { color: ${PALE_GOLD}; transition: color 160ms ease; }
-        .hs-learn-all:hover { color: #FFFFFF; }
-        .hs-learn-all:focus-visible { outline: 2px solid ${PALE_GOLD}; outline-offset: 3px; border-radius: 4px; }
+        .hs-learn-all { color: ${FOREST}; transition: color 160ms ease; }
+        .hs-learn-all:hover { color: ${INK}; }
+        .hs-learn-all:focus-visible { outline: 2px solid ${FOREST}; outline-offset: 3px; border-radius: 4px; }
       `}</style>
       <div className="mx-auto" style={{ maxWidth: '1280px' }}>
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
           <div>
-            <p className="inline-flex items-center gap-2" style={{ ...eyebrow, color: PALE_GOLD, margin: '0 0 8px 0' }}>
+            <p className="inline-flex items-center gap-2" style={{ ...eyebrow, color: GOLD, margin: '0 0 8px 0' }}>
               <BookOpen size={14} strokeWidth={2.25} aria-hidden="true" /> MUN guides
             </p>
             <h2
               id="hs-learn-heading"
-              style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(28px, 3vw, 48px)', letterSpacing: '-0.015em', color: '#FFFFFF', margin: '0 0 6px 0', textWrap: 'balance' }}
+              style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(28px, 3vw, 48px)', letterSpacing: '-0.015em', color: INK, margin: '0 0 6px 0', textWrap: 'balance' }}
             >
-              Learn <GoldWord tone="dark">MUN</GoldWord>
+              Learn <GoldWord>MUN</GoldWord>
             </h2>
-            <p style={{ fontFamily: SANS, fontSize: 'clamp(15px, 1.05vw, 18px)', lineHeight: 1.6, color: 'rgba(237,231,216,0.78)', margin: 0 }}>
+            <p style={{ fontFamily: SANS, fontSize: 'clamp(15px, 1.05vw, 18px)', lineHeight: 1.6, color: INK_70, margin: 0 }}>
               Explore guides written to sharpen your MUN
             </p>
           </div>
           <Link
             href="/blog"
             className="hs-learn-all inline-flex min-h-11 items-center gap-1.5 self-start sm:self-auto focus:outline-none"
-            style={{ ...textLink, fontSize: '14px', letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}
+            style={{ ...textLink, fontSize: '15px', whiteSpace: 'nowrap' }}
           >
-            ALL GUIDES <ArrowRight size={15} strokeWidth={2.5} aria-hidden="true" />
+            All guides
           </Link>
         </div>
 
@@ -414,7 +414,7 @@ export function LearnMunSection({ guides }: { guides: HomeGuide[] }) {
                 href={`/blog/${g.slug}`}
                 title={g.title}
                 className="hs-guide flex w-full flex-col overflow-hidden focus:outline-none"
-                style={{ borderRadius: 22, backgroundColor: CARD, textDecoration: 'none', boxShadow: '0 0 0 1px rgba(238,217,138,0.18), 0 16px 34px rgba(0,0,0,0.26)' }}
+                style={{ borderRadius: 22, backgroundColor: CARD, textDecoration: 'none', boxShadow: '0 0 0 1px rgba(27,56,40,0.08), 0 14px 30px rgba(27,56,40,0.10)' }}
               >
                 <div style={{ aspectRatio: '16 / 9', backgroundColor: '#E4DCCA' }}>
                   {g.photo ? (
@@ -436,8 +436,8 @@ export function LearnMunSection({ guides }: { guides: HomeGuide[] }) {
                     <span className="inline-flex items-center gap-1.5" style={{ fontFamily: SANS, fontSize: '13px', fontWeight: 600, color: INK_55, fontVariantNumeric: 'tabular-nums' }}>
                       <Clock size={13} strokeWidth={2.25} aria-hidden="true" /> {g.readingMinutes} min read
                     </span>
-                    <span className="hs-guide-go inline-flex items-center gap-1" style={{ fontFamily: SANS, fontSize: '13px', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: GOLD }}>
-                      READ <ArrowRight size={14} strokeWidth={2.5} aria-hidden="true" />
+                    <span className="hs-guide-go inline-flex items-center gap-1" style={{ fontFamily: SANS, fontSize: '14px', fontWeight: 800, color: FOREST, textDecoration: 'underline', textUnderlineOffset: '3px' }}>
+                      Read
                     </span>
                   </div>
                 </div>

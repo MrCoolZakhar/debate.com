@@ -75,24 +75,24 @@ const ROLE_SLIDES: RoleSlide[] = [
     blurb: 'The machine behind the weekend: run applications, allocations, delegations and communications from one place. The whole show, zero fees.',
     image: '/roles/secretariat.webp',
     imageAlt: 'Secretariat staff coordinating a conference',
-    primary: { label: 'SEE OPEN ROLES', href: '/conferences/roles' },
-    secondary: { label: 'LIST YOUR CONFERENCE', href: '/conferences/new' },
+    primary: { label: 'See open roles', href: '/conferences/roles' },
+    secondary: { label: 'List your conference', href: '/conferences/new' },
   },
   {
     role: 'Chairs',
     blurb: 'Gavel in hand: scoring, motions and the speakers list, run live from one dashboard.',
     image: '/roles/chair-card.webp',
     imageAlt: 'A chair presiding over committee from the dais',
-    primary: { label: 'EXPLORE CHAIRING OPPORTUNITIES', href: '/conferences/roles' },
-    secondary: { label: 'VIEW YOUR CONFERENCES', href: '/account/conferences?tab=chair' },
+    primary: { label: 'Explore chairing roles', href: '/conferences/roles' },
+    secondary: { label: 'Your conferences', href: '/account/conferences?tab=chair' },
   },
   {
     role: 'Delegates',
     blurb: 'Browse the circuit, apply once with your Gavelling profile, and build a MUN CV that writes itself.',
     image: '/roles/delegate.jpg',
     imageAlt: 'A delegate speaking from their seat in committee',
-    primary: { label: 'EXPLORE CONFERENCES', href: '/conferences/explore' },
-    secondary: { label: 'VIEW YOUR CONFERENCES', href: '/account/conferences?tab=delegate' },
+    primary: { label: 'Explore conferences', href: '/conferences/explore' },
+    secondary: { label: 'Your conferences', href: '/account/conferences?tab=delegate' },
   },
 ];
 
@@ -468,32 +468,27 @@ export default function VariantStagefront({
               // public_conference_stats — every conference on Gavelling, not
               // only the published ones these cards are drawn from. The
               // delegates figure keeps its display-only launch offset.
-              { n: stats?.total_conferences ?? (conferences.length || null), label: 'Conferences on the board' },
-              { n: conferences.reduce((s, c) => s + (c.expected_delegates || 0), 0) + 20000, label: 'Delegates expected' },
-              { n: stats?.countries ?? (new Set(conferences.map(c => c.country)).size || null), label: 'Countries' },
+              { n: stats?.total_conferences ?? (conferences.length || null), label: 'conferences' },
+              { n: conferences.reduce((s, c) => s + (c.expected_delegates || 0), 0) + 20000, label: 'delegates' },
+              { n: stats?.countries ?? (new Set(conferences.map(c => c.country)).size || null), label: 'countries' },
             ].map((stat, i) => (
               <div
                 key={stat.label}
-                className={`flex flex-col items-center text-center sm:px-14 md:px-20 ${i > 0 ? 'sm:border-l sm:border-[#DDD4C0]' : ''}`}
+                className={`flex items-baseline justify-center gap-3 sm:px-10 md:px-16 ${i > 0 ? 'sm:border-l sm:border-[#DDD4C0]' : ''}`}
               >
                 <span
                   style={{
                     fontFamily: SANS, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
-                    fontSize: 'clamp(38px, 4.5vw, 74px)', lineHeight: 1, color: FOREST, letterSpacing: '-0.01em',
+                    fontSize: 'clamp(38px, 4.5vw, 74px)', lineHeight: 1, color: FOREST, letterSpacing: '-0.02em',
                   }}
                 >
                   {/* Null while both the RPC and the card fetch are still in
-                      flight. The old +100/+30 offsets made a zero impossible;
-                      without them, a real "0 conferences" would flash on every
-                      first paint. An em dash holds the space instead. */}
+                      flight; a dash holds the space instead of a false zero. */}
                   {stat.n === null ? '–' : stat.n.toLocaleString()}
                 </span>
-                <span
-                  style={{
-                    fontFamily: SANS, fontWeight: 700, fontSize: 'clamp(11.5px, 0.75vw, 13.5px)', letterSpacing: '0.14em',
-                    textTransform: 'uppercase', color: GOLD, marginTop: '10px',
-                  }}
-                >
+                {/* The word beside the number (owner's taste board: "big number,
+                    word beside", 25 Sep 2026), not an uppercase gold label under it. */}
+                <span style={{ fontFamily: SANS, fontWeight: 600, fontSize: 'clamp(16px, 1.3vw, 22px)', color: INK }}>
                   {stat.label}
                 </span>
               </div>
@@ -537,7 +532,7 @@ export default function VariantStagefront({
                   className="inline-flex min-h-11 items-center gap-1.5 self-start sm:self-auto rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
                   style={{ fontFamily: SANS, fontSize: '14px', fontWeight: 800, color: FOREST, textDecoration: 'underline', textUnderlineOffset: '4px', textDecorationThickness: '1.5px', whiteSpace: 'nowrap' }}
                 >
-                  See every conference <ArrowRight size={15} strokeWidth={2.5} aria-hidden="true" />
+                  See every conference
                 </Link>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5 md:gap-6" style={{ marginTop: '32px' }}>
@@ -558,119 +553,41 @@ export default function VariantStagefront({
           </section>
         )}
 
-        {/* ── Section: MUN Across the Globe, copied verbatim from production ── */}
+        {/* ── MUN across the globe. Was a full-width forest band; the owner voted
+            forest bands "DEFINITELY NOT" (taste board, 25 Sep 2026), so it is
+            now white with the globe video in a rounded frame beside the copy. */}
         <section
-          className="relative"
-          style={{
-            backgroundColor: '#1B3828',
-            minHeight: '100dvh',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-          }}
+          className="px-6 md:px-14"
+          aria-labelledby="sf-globe-heading"
+          style={{ backgroundColor: '#FFFFFF', paddingTop: 'clamp(64px, 6vw, 104px)', paddingBottom: 'clamp(64px, 6vw, 104px)' }}
         >
-          <div
-            style={{
-              position: 'absolute',
-              right: 0,
-              top: 0,
-              bottom: 0,
-              width: '52%',
-              height: '100%',
-              overflow: 'hidden',
-              pointerEvents: 'none',
-            }}
-          >
-            <DeferredGlobeVideo />
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                background: 'radial-gradient(ellipse 80% 85% at 65% 50%, transparent 35%, rgba(27,56,40,0.45) 58%, rgba(27,56,40,0.82) 75%, #1B3828 95%)',
-              }}
-            />
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                background: 'linear-gradient(to right, #1B3828 0%, #1B3828 4%, rgba(27,56,40,0.6) 14%, transparent 28%)',
-              }}
-            />
-          </div>
-
-          <div
-            style={{
-              position: 'relative',
-              zIndex: 10,
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center',
-              paddingLeft: 56,
-              paddingRight: 56,
-              paddingTop: 100,
-              paddingBottom: 40,
-              maxWidth: 'clamp(600px, 44vw, 820px)',
-              flex: 1,
-            }}
-          >
-            <h2 style={{ margin: 0 }}>
-              <span
-                style={{
-                  display: 'block',
-                  color: 'white',
-                  fontSize: 'clamp(48px, 5.5vw, 104px)',
-                  fontFamily: "var(--font-brand), sans-serif",
-                  fontWeight: 900,
-                  lineHeight: 1.0,
-                }}
+          <div className="mx-auto flex flex-col lg:flex-row lg:items-center gap-10 lg:gap-16" style={{ maxWidth: '1320px' }}>
+            <div className="flex-1" style={{ maxWidth: '560px' }}>
+              <h2
+                id="sf-globe-heading"
+                style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(34px, 4vw, 72px)', lineHeight: 1.02, letterSpacing: '-0.02em', color: INK, margin: 0, textWrap: 'balance' }}
               >
-                MUN Across
-              </span>
-              <span
-                style={{
-                  display: 'block',
-                  color: '#EED98A',
-                  fontSize: 'clamp(48px, 5.5vw, 104px)',
-                  fontFamily: "var(--font-brand), sans-serif",
-                  fontWeight: 900,
-                  lineHeight: 1.0,
-                }}
+                MUN across the <GoldWord>globe</GoldWord>
+              </h2>
+              <p style={{ marginTop: 20, marginBottom: 32, fontSize: 'clamp(16px, 1.1vw, 19px)', lineHeight: 1.65, color: INK_55, fontFamily: SANS }}>
+                {stats
+                  ? `${stats.total_conferences} conferences across every continent. From The Hague to Singapore, Tokyo to New York`
+                  : 'From The Hague to Singapore, Tokyo to New York. Explore conferences on every continent'}
+              </p>
+              <Link
+                href="/conferences/map"
+                className="inline-flex items-center justify-center min-h-12 px-6 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2 transition-colors hover:bg-[#F7F4EC]"
+                style={{ fontFamily: SANS, fontWeight: 700, fontSize: '16px', color: INK, backgroundColor: '#FFFFFF', boxShadow: `inset 0 0 0 1.5px ${INK}`, textDecoration: 'none' }}
               >
-                the Globe
-              </span>
-            </h2>
-            <p
-              style={{
-                marginTop: 24,
-                marginBottom: 40,
-                fontSize: 'clamp(16px, 1.1vw, 19px)',
-                lineHeight: 1.7,
-                color: 'rgba(237,231,216,0.75)',
-                maxWidth: 'clamp(440px, 32vw, 560px)',
-                fontFamily: "var(--font-brand), sans-serif",
-              }}
+                Open the conference map
+              </Link>
+            </div>
+            <div
+              className="relative w-full lg:flex-1 overflow-hidden"
+              style={{ aspectRatio: '4 / 3', maxHeight: '560px', borderRadius: 24, backgroundColor: '#1B3828', boxShadow: '0 30px 60px -30px rgba(27,56,40,0.45)' }}
             >
-              {stats
-                ? `${stats.total_conferences} conferences across every continent. From The Hague to Singapore, Tokyo to New York. Find your next destination.`
-                : 'From The Hague to Singapore, Tokyo to New York. Explore conferences on every continent and find your next destination.'}
-            </p>
-            <Link
-              href="/conferences/map"
-              className="inline-block rounded-2xl py-4 px-8 font-bold text-sm tracking-widest transition-colors focus:outline-none"
-              style={{
-                border: '1.5px solid rgba(238,217,138,0.4)',
-                color: '#EED98A',
-                backgroundColor: 'transparent',
-                fontFamily: "var(--font-brand), sans-serif",
-                letterSpacing: '0.08em',
-                textDecoration: 'none',
-                alignSelf: 'flex-start',
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.08)'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-            >
-              EXPLORE CONFERENCES WORLDWIDE →
-            </Link>
+              <DeferredGlobeVideo />
+            </div>
           </div>
         </section>
 
@@ -807,26 +724,23 @@ function HeroSearchBar({ conferences }: { conferences: LabConference[] }) {
           type="button"
           onClick={submit}
           aria-label={q ? 'Search conferences' : 'Discover all conferences'}
-          className="inline-flex items-center justify-center gap-2 flex-shrink-0"
+          title={q ? 'Search conferences' : 'Discover all conferences'}
+          className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A] focus-visible:ring-offset-2"
           style={{
-            fontFamily: SANS,
-            fontSize: 'clamp(14px, 1vw, 16px)',
-            fontWeight: 800,
-            letterSpacing: '0.03em',
+            width: 'clamp(44px, 3.2vw, 50px)',
+            height: 'clamp(44px, 3.2vw, 50px)',
             color: '#14100B',
             backgroundColor: PALE_GOLD,
             border: 'none',
             cursor: 'pointer',
             borderRadius: '9999px',
-            padding: 'clamp(11px, 0.9vw, 14px) clamp(18px, 1.5vw, 26px)',
-            whiteSpace: 'nowrap',
+            padding: 0,
             transition: 'transform 160ms ease, background-color 160ms ease',
           }}
           onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.backgroundColor = '#F3E3A1'; }}
           onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.backgroundColor = PALE_GOLD; }}
         >
-          <Search size={16} strokeWidth={2.75} className="sm:hidden" aria-hidden="true" />
-          <span className="hidden sm:inline">{q ? 'SEARCH' : 'DISCOVER ALL'}</span>
+          <Search size={20} strokeWidth={2.75} aria-hidden="true" />
         </button>
       </div>
 
@@ -1045,8 +959,8 @@ function RoleCarousel({ slides }: { slides: RoleSlide[] }) {
                     onClick={(e) => e.stopPropagation()}
                     tabIndex={isActive ? 0 : -1}
                     style={{
-                      fontFamily: SANS, fontWeight: 800, fontSize: '13px', letterSpacing: '0.04em',
-                      color: '#14100B', backgroundColor: PALE_GOLD, padding: '13px 22px', borderRadius: '9999px',
+                      fontFamily: SANS, fontWeight: 700, fontSize: '15px',
+                      color: '#14100B', backgroundColor: PALE_GOLD, padding: '13px 22px', borderRadius: '12px',
                       textDecoration: 'none', boxShadow: '0 10px 26px rgba(0,0,0,0.3)',
                       transition: 'transform 160ms ease, background-color 160ms ease',
                     }}
@@ -1061,8 +975,8 @@ function RoleCarousel({ slides }: { slides: RoleSlide[] }) {
                       onClick={(e) => e.stopPropagation()}
                       tabIndex={isActive ? 0 : -1}
                       style={{
-                        fontFamily: SANS, fontWeight: 700, fontSize: '13px', letterSpacing: '0.04em',
-                        color: CREAM, backgroundColor: 'transparent', padding: '12px 21px', borderRadius: '9999px',
+                        fontFamily: SANS, fontWeight: 700, fontSize: '15px',
+                        color: CREAM, backgroundColor: 'transparent', padding: '12px 21px', borderRadius: '12px',
                         textDecoration: 'none', border: '1.5px solid rgba(250,248,243,0.55)',
                         transition: 'background-color 160ms ease, border-color 160ms ease',
                       }}
