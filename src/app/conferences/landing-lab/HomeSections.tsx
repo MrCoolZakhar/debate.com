@@ -114,21 +114,29 @@ export function SessionsSection() {
           .hs-sess-join-box { flex: 1; }
           .hs-sess-join-box input { flex: 1; min-width: 0; width: auto; }
         }
+        /* Desktop: one continuous page with the hero above (owner, 25 Sep 2026:
+           "the phone overlaps at the top with the hero and the laptop goes
+           below; make the laptop bigger"). The copy sits top left, the laptop
+           large beneath it, and the phone on the right rises over the hero's
+           faded bottom edge. The section paints above the hero (z-index) so
+           the phone is never under it. */
         @media (min-width: 1024px) {
+          .hs-sess { z-index: 2; overflow: visible; }
           .hs-sess-stage {
-            display: grid; align-items: center; gap: 0;
-            grid-template-columns: minmax(0, 1.05fr) minmax(380px, 480px) minmax(0, 0.62fr); max-width: 1440px; margin: 0 auto; padding: 0 clamp(16px, 3vw, 48px);
+            display: grid; align-items: start; gap: 0 clamp(24px, 3vw, 56px);
+            grid-template-columns: minmax(0, 1.7fr) minmax(0, 0.75fr); max-width: 1440px; margin: 0 auto; padding: 0 clamp(16px, 3vw, 48px);
           }
           .hs-sess-devices { display: contents; }
+          .hs-sess-copy { grid-column: 1; grid-row: 1; padding: 0 12px; max-width: none; }
           .hs-sess-laptop {
-            grid-column: 1; grid-row: 1; width: 100%; margin-left: 0;
-            transform: perspective(1800px) rotateY(12deg) rotateZ(-1deg); transform-origin: right center;
+            grid-column: 1; grid-row: 2; width: min(100%, 980px); margin: clamp(20px, 2.4vw, 40px) auto 0;
+            transform: none;
           }
-          .hs-sess-copy { grid-column: 2; grid-row: 1; padding: 0 12px; max-width: none; }
           .hs-sess-phone {
-            grid-column: 3; grid-row: 1; position: relative; right: auto; bottom: auto;
-            width: min(92%, 330px); margin: 40px 0 0 clamp(0px, 3vw - 24px, 32px); transform: rotate(6deg);
+            grid-column: 2; grid-row: 1 / span 2; position: relative; right: auto; bottom: auto; align-self: start;
+            width: min(100%, 360px); margin: clamp(-260px, -16vw, -160px) auto 0; transform: rotate(5deg);
           }
+        }
         }
       `}</style>
 

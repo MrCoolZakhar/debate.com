@@ -322,7 +322,7 @@ export default function VariantStagefront({
               className="absolute inset-0"
               style={{
                 background:
-                  'linear-gradient(to bottom, rgba(8,18,13,0.52) 0%, rgba(8,18,13,0.4) 30%, rgba(8,18,13,0.62) 62%, rgba(10,22,16,0.9) 92%, #FAF8F3 100%)',
+                  'linear-gradient(to bottom, rgba(8,18,13,0.52) 0%, rgba(8,18,13,0.4) 30%, rgba(8,18,13,0.62) 58%, rgba(10,22,16,0.72) 72%, rgba(120,120,108,0.55) 86%, #FAF8F3 100%)',
               }}
             />
             <div
@@ -331,6 +331,8 @@ export default function VariantStagefront({
                 background: 'radial-gradient(ellipse 120% 80% at 50% 28%, transparent 40%, rgba(6,14,10,0.5) 76%, rgba(6,14,10,0.72) 100%)',
               }}
             />
+            {/* Seamless hand-off to the cream section below, where the phone rises into the hero. */}
+            <div className="absolute inset-x-0 bottom-0" style={{ height: '30%', background: 'linear-gradient(to bottom, rgba(250,248,243,0) 0%, rgba(250,248,243,0.55) 55%, #FAF8F3 100%)' }} />
           </div>
 
           <SiteNav overlay brand="conferences" />
