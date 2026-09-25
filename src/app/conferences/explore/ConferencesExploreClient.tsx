@@ -14,7 +14,7 @@ import { Emoji3D } from '@/components/neu';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase } from '@/lib/supabase';
-import { getCountryByName, UN_COUNTRIES, fold, countryIdentity, countryMatchRank } from '@/lib/countries';
+import { getCountryByName, getCountryByCode, UN_COUNTRIES, fold, countryIdentity, countryMatchRank } from '@/lib/countries';
 import { FlagImg } from '@/components/FlagImg';
 import { currencySymbol, formatFeeAmountCompact } from '@/lib/utils';
 import { fetchDelegatePrices, withDelegatePrice, TBD_PRICE, type DelegatePrice } from '@/lib/publicFees';
@@ -24,6 +24,12 @@ import { ConferenceCard } from '../ConferenceCard';
 import VerifiedCheck from '@/components/VerifiedCheck';
 import { LogoDisc } from '@/components/LogoDisc';
 import { isListedConference } from '@/lib/publicConferences';
+import { DatePicker } from '@/components/DatePicker';
+import {
+  DATE_OPTIONS, PRICE_OPTIONS, ROLE_OPTIONS, matchesDateBucket, matchesDateRange, matchesPrice, matchesRoles,
+  parseFacets, readExploreQuery, writeExploreQuery, toDateOnly,
+  type DateFilter, type FacetMap, type PriceFilter, type RoleKey,
+} from './exploreFilters';
 
 // ── Continent maps ─────────────────────────────────────────────────────────────
 
@@ -103,7 +109,9 @@ const BIG_CONFERENCE_DELEGATES = 500;
 const BIG_CONFERENCE_LIMIT = 4;
 
 /** How many countries the rail shows before the "Show all" expander. */
-const COUNTRY_VISIBLE_CAP = 9;
+// Five, so the whole rail fits a laptop screen with every group in reach; the
+// "Show all" expands inside the rail, which scrolls on its own (owner, 25 Sep 2026).
+const COUNTRY_VISIBLE_CAP = 5;
 
 // Small lucide icons that showcase HOW a conference happens, so a row reads at
 // a glance: format (where it meets) and student level (who it is for).
@@ -593,6 +601,10 @@ function FilterRail({
   region, userCountry, userCountryCount, countries, continentLabel, onRegion,
   formatFilter, onFormat,
   levelFilter, onLevel,
+  roleFilter, onToggleRole,
+  priceFilter, onPrice,
+  dateFilter, onDate,
+  dateFrom, dateTo, onDateFrom, onDateTo,
   hasActiveFilters, onClear,
 }: {
   searchQuery: string; onSearch: (v: string) => void;
@@ -607,10 +619,16 @@ function FilterRail({
   onRegion: (r: string) => void;
   formatFilter: FormatFilter; onFormat: (v: FormatFilter) => void;
   levelFilter: LevelFilter; onLevel: (v: LevelFilter) => void;
+  /** Open applications: any selected role open right now. */
+  roleFilter: ReadonlySet<RoleKey>; onToggleRole: (r: RoleKey) => void;
+  priceFilter: PriceFilter; onPrice: (v: PriceFilter) => void;
+  dateFilter: DateFilter; onDate: (v: DateFilter) => void;
+  dateFrom: string; dateTo: string; onDateFrom: (v: string) => void; onDateTo: (v: string) => void;
   hasActiveFilters: boolean; onClear: () => void;
 }) {
   const userCode = userCountry ? getCountryByName(userCountry)?.code : undefined;
   const [showAllCountries, setShowAllCountries] = useState(false);
+  const todayIso = toDateOnly(new Date());
 
   const selectedCountryId = region.startsWith(COUNTRY_PREFIX) ? region.slice(COUNTRY_PREFIX.length) : null;
 
@@ -670,6 +688,46 @@ function FilterRail({
         </div>
       </div>
 
+      {/* Open applications: which roles a person could apply for today. A
+          conference matches when ANY ticked role is open. */}
+      <div style={group} role="listbox" aria-label="Open applications" aria-multiselectable="true">
+        <RailHeading>Open Applications</RailHeading>
+        {ROLE_OPTIONS.map(r => (
+          <RailOption key={r.key} label={r.label} active={roleFilter.has(r.key)} onClick={() => onToggleRole(r.key)} />
+        ))}
+      </div>
+
+      {/* Price: bucketed on an approximate USD figure; the cards keep printing
+          the real fee in the conference's own currency. */}
+      <div style={group} role="listbox" aria-label="Price">
+        <RailHeading>Price</RailHeading>
+        {PRICE_OPTIONS.map(p => (
+          <RailOption key={p.key || 'any'} label={p.label} active={priceFilter === p.key} onClick={() => onPrice(p.key)} icon={p.key === '' ? undefined : Ticket} />
+        ))}
+        <p style={{ margin: '6px 10px 0', fontSize: '11px', lineHeight: 1.4, color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif" }}>
+          Approximate, converted to USD
+        </p>
+      </div>
+
+      {/* Dates: quick buckets on the start day, or a custom range through the
+          shared DatePicker (date-only values, never a bare new Date()). */}
+      <div style={group} role="listbox" aria-label="Dates">
+        <RailHeading>Dates</RailHeading>
+        {DATE_OPTIONS.map(d => (
+          <RailOption key={d.key || 'any'} label={d.label} active={dateFilter === d.key && !dateFrom && !dateTo} onClick={() => { onDate(d.key); onDateFrom(''); onDateTo(''); }} icon={d.key === '' ? undefined : CalendarDays} />
+        ))}
+        <div className="gv-explore-range" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '8px' }}>
+          <div>
+            <p style={{ margin: '0 0 4px 2px', fontSize: '10px', fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif" }}>From</p>
+            <DatePicker value={dateFrom} onChange={(iso) => { onDateFrom(iso); onDate(''); }} min={todayIso} max={dateTo || undefined} placeholder="Any" />
+          </div>
+          <div>
+            <p style={{ margin: '0 0 4px 2px', fontSize: '10px', fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif" }}>To</p>
+            <DatePicker value={dateTo} onChange={(iso) => { onDateTo(iso); onDate(''); }} min={dateFrom || todayIso} placeholder="Any" />
+          </div>
+        </div>
+      </div>
+
       {/* Country — derived from the conferences on the page, so every row here
           has something behind it. Sorted by count, then alphabetically. */}
       <div style={group} role="listbox" aria-label="Country">
@@ -722,8 +780,8 @@ function FilterRail({
             style={{
               marginTop: '4px', padding: '7px 10px', borderRadius: '10px',
               background: 'transparent', border: 'none', cursor: 'pointer',
-              fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '11.5px',
-              letterSpacing: '0.04em', color: '#B6871F',
+              fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '11px',
+              letterSpacing: '0.08em', textTransform: 'uppercase', color: '#B6871F',
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
@@ -791,11 +849,34 @@ export default function ConferencesExploreClient() {
   // Seed the search from a ?search= hand-off (the landing-page hero search
   // navigates here with the visitor's query) so the list filters immediately.
   // The on-page search box then owns the value as usual.
-  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('search') ?? '');
+  // Every filter is seeded from the URL and written back to it below, so a
+  // filtered view can be shared (src/app/conferences/explore/exploreFilters.ts).
+  const initialQuery = useMemo(() => readExploreQuery(searchParams), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [searchQuery, setSearchQuery] = useState(initialQuery.search);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [formatFilter, setFormatFilter] = useState<FormatFilter>('');
-  const [levelFilter, setLevelFilter] = useState<LevelFilter>('');
+  const [formatFilter, setFormatFilter] = useState<FormatFilter>(
+    initialQuery.format === 'in-person' || initialQuery.format === 'online' ? initialQuery.format : '',
+  );
+  const [levelFilter, setLevelFilter] = useState<LevelFilter>(
+    initialQuery.level === 'school' || initialQuery.level === 'university' ? initialQuery.level : '',
+  );
+  const [roleFilter, setRoleFilter] = useState<Set<RoleKey>>(() => new Set(initialQuery.roles));
+  const [priceFilter, setPriceFilter] = useState<PriceFilter>(initialQuery.price);
+  const [dateFilter, setDateFilter] = useState<DateFilter>(initialQuery.when);
+  const [dateFrom, setDateFrom] = useState(initialQuery.from);
+  const [dateTo, setDateTo] = useState(initialQuery.to);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  // Open roles and the approximate USD fee per conference, one RPC for the
+  // whole page (explore_conference_facets, anon-callable).
+  const [facets, setFacets] = useState<FacetMap>(() => new Map());
+
+  function toggleRole(role: RoleKey) {
+    setRoleFilter(prev => {
+      const next = new Set(prev);
+      if (next.has(role)) next.delete(role); else next.add(role);
+      return next;
+    });
+  }
 
   // Region: '' = everywhere, 'country' = the visitor's own country, 'country:<id>'
   // = a country picked in the rail, else a continent key (only reachable from
@@ -820,7 +901,7 @@ export default function ConferencesExploreClient() {
   }
 
   // Date sort, soonest-first by default, one click flips to latest-first.
-  const [dateSort, setDateSort] = useState<DateSort>('asc');
+  const [dateSort, setDateSort] = useState<DateSort>(initialQuery.sort);
 
   // Grid / list view, restored from localStorage after mount (SSR-safe).
   const [view, setView] = useState<ExploreView>('grid');
@@ -852,9 +933,39 @@ export default function ConferencesExploreClient() {
       const prices = await fetchDelegatePrices(supabase, confs);
       setConferences(confs.map(c => withDelegatePrice(c, prices)));
       setLoading(false);
+
+      // One call for every listed id: which roles are open right now and the
+      // approximate USD fee, for the Open Applications and Price filters. The
+      // anon client, so a signed-out visitor gets the same answer. A failed
+      // read leaves the map empty: those two filters then match nothing rather
+      // than something invented.
+      if (confs.length > 0) {
+        const { data: facetRows } = await supabase.rpc('explore_conference_facets', { p_ids: confs.map(c => c.id) });
+        setFacets(parseFacets(facetRows));
+      }
     }
     fetchConferences();
   }, []);
+
+  // The address bar follows the filters (replaceState, so Back is not
+  // flooded). Region keys keep their existing spelling so the world map's
+  // ?continent= deep link and ?country= still work in both directions.
+  useEffect(() => {
+    const continent = region && region !== 'country' && !region.startsWith(COUNTRY_PREFIX) ? region : null;
+    // The state holds the ISO identity; the URL carries the country NAME, which
+    // is what the initial `countryIdentity(searchParams.get('country'))` read
+    // expects (an ISO code alone would fold to lower case and never match).
+    const countryId = region.startsWith(COUNTRY_PREFIX) ? region.slice(COUNTRY_PREFIX.length) : null;
+    const country = countryId ? (getCountryByCode(countryId)?.name ?? countryId) : null;
+    const next = writeExploreQuery({
+      search: searchQuery, format: formatFilter, level: levelFilter,
+      roles: [...roleFilter], price: priceFilter, when: dateFilter, from: dateFrom, to: dateTo,
+      sort: dateSort, continent, country,
+    });
+    const current = window.location.search;
+    if (next === current) return;
+    window.history.replaceState(window.history.state, '', window.location.pathname + next + window.location.hash);
+  }, [searchQuery, formatFilter, levelFilter, roleFilter, priceFilter, dateFilter, dateFrom, dateTo, dateSort, region]);
 
   // Visitor's country, /api/geo (Vercel edge headers), falling back to a
   // keyless IP lookup in local dev. Best-effort; null keeps region = ALL.
@@ -1009,8 +1120,14 @@ export default function ConferencesExploreClient() {
     // 'hybrid' answers to both format filters; 'both' to either level filter.
     if (!matchesFormat(c.format, formatFilter)) return false;
     if (!matchesLevel(c.student_level, levelFilter)) return false;
+    // Open applications, price and dates, AND across groups like the rest.
+    const facet = facets.get(c.id);
+    if (!matchesRoles(facet, roleFilter)) return false;
+    if (!matchesPrice(facet, priceFilter)) return false;
+    if (!matchesDateBucket(c.start_date, dateFilter)) return false;
+    if (!matchesDateRange(c.start_date, dateFrom, dateTo)) return false;
     return true;
-  }), [conferences, searchQuery, formatFilter, levelFilter]);
+  }), [conferences, searchQuery, formatFilter, levelFilter, facets, roleFilter, priceFilter, dateFilter, dateFrom, dateTo]);
 
   // Countries actually represented in the results. Keyed by ISO identity so a
   // row saved as "Turkey" and one saved as "Türkiye" are one country, labelled
@@ -1096,12 +1213,19 @@ export default function ConferencesExploreClient() {
   function clearFilters() {
     setFormatFilter('');
     setLevelFilter('');
+    setRoleFilter(new Set());
+    setPriceFilter('');
+    setDateFilter('');
+    setDateFrom('');
+    setDateTo('');
     setRegion('');
     setRegionTouched(true);
     setSearchQuery('');
   }
 
-  const hasActiveFilters = !!formatFilter || !!levelFilter || !!searchQuery || (!!region && region !== 'country');
+  const hasActiveFilters =
+    !!formatFilter || !!levelFilter || !!searchQuery || (!!region && region !== 'country')
+    || roleFilter.size > 0 || !!priceFilter || !!dateFilter || !!dateFrom || !!dateTo;
 
   const userCode = userCountry ? getCountryByName(userCountry)?.code : undefined;
 
@@ -1171,7 +1295,6 @@ export default function ConferencesExploreClient() {
               >
                 Explore{' '}
                 <span style={{ color: '#1B3828' }}>Conferences</span>
-                <span style={{ color: '#B6871F' }}>.</span>
               </h1>
               <p
                 className="mt-2.5"
@@ -1179,7 +1302,7 @@ export default function ConferencesExploreClient() {
               >
                 {headlineCount === null
                   ? 'Loading the directory…'
-                  : `${headlineCount} conference${headlineCount === 1 ? '' : 's'} across every continent. Find where you debate next.`}
+                  : `${headlineCount} conference${headlineCount === 1 ? '' : 's'} across every continent, find where you debate next`}
               </p>
             </div>
 
@@ -1204,6 +1327,12 @@ export default function ConferencesExploreClient() {
         </header>
 
         {/* ── Directory: filter rail beside the grid ───────────────── */}
+        <style>{`
+          @media (min-width: 1024px) {
+            .gv-explore-rail { max-height: calc(100dvh - 100px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+            .gv-explore-rail::-webkit-scrollbar { display: none; }
+          }
+        `}</style>
         <main className="flex-1 px-6 md:px-10 pb-16 flex flex-col lg:flex-row" style={{ gap: '26px', alignItems: 'flex-start' }}>
 
           {/* Mobile: the rail folds behind one button rather than pushing the
@@ -1226,8 +1355,11 @@ export default function ConferencesExploreClient() {
           <aside
             aria-label="Filters"
             // Full width on a phone (where it is a disclosed panel), a fixed
-            // 250px rail from lg up (where it sits beside the grid).
-            className={`${filtersOpen ? 'block' : 'hidden'} lg:block lg:sticky lg:top-[84px] lg:max-w-[250px] flex-shrink-0`}
+            // 250px rail from lg up (where it sits beside the grid). The rail
+            // is PINNED and fits the viewport: it scrolls on its own inside
+            // `calc(100dvh - 100px)`, so every group is reachable without
+            // scrolling the results (owner, 25 Sep 2026).
+            className={`gv-explore-rail ${filtersOpen ? 'block' : 'hidden'} lg:block lg:sticky lg:top-[84px] lg:max-w-[250px] flex-shrink-0`}
             style={{ width: '100%' }}
           >
             <FilterRail
@@ -1240,6 +1372,10 @@ export default function ConferencesExploreClient() {
               onRegion={changeRegion}
               formatFilter={formatFilter} onFormat={setFormatFilter}
               levelFilter={levelFilter} onLevel={setLevelFilter}
+              roleFilter={roleFilter} onToggleRole={toggleRole}
+              priceFilter={priceFilter} onPrice={setPriceFilter}
+              dateFilter={dateFilter} onDate={setDateFilter}
+              dateFrom={dateFrom} dateTo={dateTo} onDateFrom={setDateFrom} onDateTo={setDateTo}
               hasActiveFilters={hasActiveFilters} onClear={clearFilters}
             />
           </aside>
@@ -1321,7 +1457,7 @@ export default function ConferencesExploreClient() {
                   No conferences in {userCountry} yet
                 </h2>
                 <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-                  Be the first to bring one home, or browse the worldwide directory.
+                  Be the first to bring one home, or browse the worldwide directory
                 </p>
                 <button
                   onClick={() => changeRegion('')}
@@ -1345,8 +1481,8 @@ export default function ConferencesExploreClient() {
                 </h2>
                 <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", maxWidth: '360px' }}>
                   {hasActiveFilters
-                    ? 'Try a different search, a wider region, or clear the filters to see the whole directory.'
-                    : 'Gavelling Conferences is launching soon. Be the first to list your conference.'}
+                    ? 'Try a different search, a wider region, or clear the filters to see the whole directory'
+                    : 'Gavelling Conferences is launching soon. Be the first to list your conference'}
                 </p>
                 <button
                   onClick={() => (hasActiveFilters ? clearFilters() : router.push('/conferences/new'))}
@@ -1418,7 +1554,7 @@ export default function ConferencesExploreClient() {
                     color: '#8A7D6C', margin: 0,
                   }}
                 >
-                  Outside your filter, {BIG_CONFERENCE_DELEGATES}+ delegates expected.
+                  Outside your filter, {BIG_CONFERENCE_DELEGATES}+ delegates expected
                 </p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" style={{ gap: '20px' }}>
