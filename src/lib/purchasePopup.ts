@@ -31,8 +31,9 @@ export interface CreditsPopupRequest {
   onComplete?: () => void;
   /** Why the pop-up opened, when a flow ran short. 'import': a delegation
    *  leader importing delegates (pay page); the pop-up says they are short
-   *  and lists importing as a live use. */
-  purpose?: 'import';
+   *  and lists importing as a live use. 'store': a Conference Store purchase
+   *  ran short; the pop-up says so and the purchase finishes after paying. */
+  purpose?: 'import' | 'store';
   /** With purpose 'import': the delegation the delegates are imported into. */
   delegationName?: string;
 }

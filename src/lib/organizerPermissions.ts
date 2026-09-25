@@ -27,7 +27,7 @@
 
 import {
   Building2, Users, MapPin, FileText, Mail, CreditCard,
-  Settings, Briefcase, Upload, type LucideIcon,
+  Settings, Briefcase, Upload, Store, type LucideIcon,
 } from 'lucide-react';
 
 export type PermissionMap = Record<string, boolean>;
@@ -52,10 +52,16 @@ export const ORGANIZER_SECTIONS: OrganizerSection[] = [
   { key: 'financials',    label: 'Financials',   icon: CreditCard, blurb: 'Fees, add-ons, vouchers, invoices, payouts and financial aid.' },
   { key: 'job_board',     label: 'Job Board',    icon: Briefcase,  blurb: 'Post and manage secretariat and staff openings.' },
   { key: 'import',        label: 'Import',       icon: Upload,     blurb: 'Bulk-import delegates and send them claim links.' },
+  { key: 'store',         label: 'Store',        icon: Store,      blurb: 'Spend conference credits on spotlights, email packs and sponsoring delegates\' credits.' },
   { key: 'settings',      label: 'Settings',     icon: Settings,   blurb: 'Conference identity, application windows, privacy and this team page.' },
 ];
 
 export const SECTION_KEYS = ORGANIZER_SECTIONS.map(s => s.key);
+
+/** Sections added after bundles were stored. A super admin or admin saved
+ *  before one existed has no key for it, and must still read as that bundle
+ *  (the database already lets `team` holders into the Store). */
+const LATER_SECTION_KEYS = new Set(['store']);
 
 /** Capabilities that are not a page, and are enforced in the database. */
 export const TEAM_KEY = 'team';
@@ -125,7 +131,7 @@ export function bundlePermissions(id: BundleId, custom?: PermissionMap): Permiss
 /** Which bundle a stored permission blob corresponds to, for display. */
 export function detectBundle(p: PermissionMap | undefined): BundleId {
   const perms = p ?? {};
-  const allSections = SECTION_KEYS.every(k => perms[k] === true);
+  const allSections = SECTION_KEYS.every(k => perms[k] === true || LATER_SECTION_KEYS.has(k));
   if (allSections && perms[TEAM_KEY] === true) return 'super_admin';
   if (allSections && perms[FINANCIALS_READONLY_KEY] === true) return 'admin';
   return 'custom';

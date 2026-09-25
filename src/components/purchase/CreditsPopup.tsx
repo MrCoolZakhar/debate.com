@@ -159,7 +159,7 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
         <BrandTitle
           word="Credits"
           tone="light"
-          sub={forImport
+          sub={forImport || purpose === 'store'
             ? <>It seems you don&apos;t have enough credits for this</>
             : context === 'apply' && conferenceName
             ? <>For your application to <strong style={{ fontWeight: 600, color: INK }}>{conferenceName}</strong></>

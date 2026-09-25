@@ -6,7 +6,7 @@ import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
 import {
   LayoutDashboard, Building2, Users, MapPin, FileText,
-  Mail, CreditCard, Settings, Briefcase, Menu, X, Radio, Upload, HeartHandshake,
+  Mail, CreditCard, Settings, Briefcase, Menu, X, Radio, Upload, HeartHandshake, Store,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -243,6 +243,12 @@ const NAV_SECTIONS = (slug: string, badges: NavBadges = NO_BADGES): NavSection[]
     items: [
       { icon: CreditCard,     label: 'Financials',    href: `/manage/${slug}/financials`,    external: false, badge: 0 },
       { icon: HeartHandshake, label: 'Financial Aid', href: `/manage/${slug}/financial-aid`, external: false, badge: badges.financialAid },
+    ],
+  },
+  {
+    header: 'STORE',
+    items: [
+      { icon: Store, label: 'Store', href: `/manage/${slug}/store`, external: false, badge: 0 },
     ],
   },
   // POST CONFERENCE / Awards used to sit here. Awards are now a tab inside
@@ -1066,10 +1072,14 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     communications: 'email_builder', financials: 'financials',
     'financial-aid': 'financials',
     settings: 'settings', jobs: 'job_board',
+    store: 'store',
   };
   const currentSegment = pathname.split('/')[3] ?? '';
   const sectionKey = SECTION_PERMS[currentSegment];
-  const sectionBlocked = !!conference && !isOwner && !!sectionKey && permissions[sectionKey] !== true;
+  // The Store is also open to `team` holders, as can_use_store() is in the
+  // database, so a super admin saved before the Store existed keeps it.
+  const sectionBlocked = !!conference && !isOwner && !!sectionKey && permissions[sectionKey] !== true
+    && !(sectionKey === 'store' && permissions.team === true);
 
   if (sectionBlocked) {
     return (

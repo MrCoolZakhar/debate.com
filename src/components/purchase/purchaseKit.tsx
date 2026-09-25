@@ -58,8 +58,14 @@ type LucideIcon = React.ComponentType<{ size?: number; strokeWidth?: number; sty
 
 /** The dialog: backdrop, panel, close. `label` is its accessible name. */
 export function PurchaseShell({
-  tone, label, onClose, children, testId,
-}: { tone: Tone; label: string; onClose: () => void; children: React.ReactNode; testId?: string }) {
+  tone, label, onClose, children, testId, panelClass, aside,
+}: {
+  tone: Tone; label: string; onClose: () => void; children: React.ReactNode; testId?: string;
+  /** Extra class on the panel (a narrower Store dialog, say). */
+  panelClass?: string;
+  /** Drawn OUTSIDE the panel, a sibling before it (the Spotlight bookmarks). */
+  aside?: React.ReactNode;
+}) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   useModalEscape(onClose, true);
   useScrollLock(true);
@@ -72,13 +78,14 @@ export function PurchaseShell({
   if (typeof document === 'undefined') return null;
   return createPortal(
     <div className="gv-buy-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      {aside}
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={label}
         tabIndex={-1}
-        className={`gv-buy-panel${tone === 'dark' ? ' gv-buy-dark' : ''}`}
+        className={`gv-buy-panel${tone === 'dark' ? ' gv-buy-dark' : ''}${panelClass ? ` ${panelClass}` : ''}`}
         data-tone={tone}
         data-testid={testId}
       >
