@@ -508,7 +508,7 @@ function renderIdentityRow(
 
   // object-fit:contain on a light chip — a logo is a mark, not a portrait, so
   // it must never be cropped. NEVER point this at a Gavelling wide lockup
-  // (/GavellingLogo.png, /Conferences.webp): if a Gavelling fallback is ever
+  // (/gavelling-lockup.png, /gavelling-lockup.webp): if a Gavelling fallback is ever
   // wanted it must be the square mark, `${siteUrl}/gavelling-mark.png`.
   // See public/README.md.
   const logo = (display: 'block' | 'inline-block') =>

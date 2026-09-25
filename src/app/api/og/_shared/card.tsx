@@ -57,7 +57,7 @@ export const INK = '#1C1410';
 // `readFileSync(process.cwd() + '/public/…')` that works perfectly in `next dev`
 // returns ENOENT in production.
 //
-// It is the SQUARE mark, never `/GavellingLogo.png`. That file is an 800x200
+// It is the SQUARE mark, never `/gavelling-lockup.png`. That file is an 800x200
 // lockup whose square crop reads as a crescent "C" — see the note in
 // `src/lib/seo.ts`. Here the container is square, so the square mark is the
 // only correct file.

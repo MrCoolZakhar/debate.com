@@ -19,11 +19,17 @@
 
 import Link from 'next/link';
 
-export const BRAND_LOGO_SRC = '/gavelling-logo.png';
+// 25 Sep 2026 (owner, later the same day): the logo is the full lockup, gavel +
+// wreath, GAVELLING, "The #1 MUN Ecosystem" (public/gavelling-logo-ecosystem.png,
+// 1920 x 1080 canvas, delivered as is). Never type the word as text (CLAUDE.md §8).
+export const BRAND_LOGO_SRC = '/gavelling-logo-ecosystem.png';
 
 /** The visible word inside the canvas, in source pixels. */
 const CANVAS = { w: 1920, h: 1080 };
-const WORD = { x: 132, y: 340, w: 1679, h: 416 };
+const WORD = { x: 88, y: 318, w: 1660, h: 409 };
+/** Callers pass the height the plain word used to have. The lockup is two lines
+ *  plus the gavel, so it is drawn this much taller to keep GAVELLING about as big. */
+const LOCKUP_SCALE = 1.75;
 
 const FILTERS: Record<'ink' | 'white' | 'gold', string | undefined> = {
   ink: undefined,
@@ -50,7 +56,8 @@ export function BrandLogo({
   /** The header logo: fetch it first, no lazy loading. */
   priority?: boolean;
 }) {
-  const scale = height / WORD.h;
+  const boxH = Math.round(height * LOCKUP_SCALE);
+  const scale = boxH / WORD.h;
   const boxW = Math.round(WORD.w * scale);
   const img = (
     <span
@@ -60,7 +67,7 @@ export function BrandLogo({
         position: 'relative',
         overflow: 'hidden',
         width: boxW,
-        height,
+        height: boxH,
         flexShrink: 0,
         ...style,
       }}

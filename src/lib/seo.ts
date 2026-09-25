@@ -58,7 +58,7 @@ const OG_IMAGE_ALT = 'Gavelling: MUN Conferences & Committee Software';
 //
 // THE SQUARE MARK, NOT THE WIDE LOCKUP. This distinction has cost us real time.
 //
-// `/GavellingLogo.png` is an 800x200 LOCKUP: the gavel-and-wreath mark sits on
+// `/gavelling-lockup.png` is an 800x200 LOCKUP: the gavel-and-wreath mark sits on
 // the left, and the word "GAVELLING" starts at roughly x=185. Structured-data
 // consumers (Google knowledge panels, rich results, link unfurlers) render
 // `Organization.logo` as a SMALL SQUARE and crop it. A left-anchored square
@@ -68,7 +68,7 @@ const OG_IMAGE_ALT = 'Gavelling: MUN Conferences & Committee Software';
 // right file cropped wrong.
 //
 // So: anywhere the container is SQUARE, ROUND or CROPPING, use the square mark
-// below. `/GavellingLogo.png` is correct only in a genuinely wide, contained
+// below. `/gavelling-lockup.png` is correct only in a genuinely wide, contained
 // header lockup (`object-contain` with `w-auto`/`h-auto`).
 //
 // Canonical square mark: /gavelling-mark.png (512x512, transparent, byte-

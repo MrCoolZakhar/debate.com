@@ -24,7 +24,7 @@ export default function SessionsHeaderLogo({
 
   const img = (
     <Image
-      src="/GavellingLogo.png"
+      src="/gavelling-lockup.png"
       alt="Gavelling"
       width={width}
       height={height}
