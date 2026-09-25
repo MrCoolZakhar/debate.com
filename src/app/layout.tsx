@@ -9,6 +9,7 @@ import SetupReminderGate from '@/components/SetupReminderGate';
 import CompleteBasicsGate from '@/components/CompleteBasicsGate';
 import LiveRoomsGate from '@/components/liveRooms/LiveRoomsGate';
 import AuthModalHost from '@/components/auth/AuthModal';
+import PurchasePopupHost from '@/components/purchase/PurchasePopupHost';
 import { DOM_TRANSLATION_GUARD } from '@/lib/domTranslationGuard';
 import { Albert_Sans } from 'next/font/google';
 
@@ -143,6 +144,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <LanguageProvider>
             {children}
             <DemoGate />
+            {/* Buying credits or Unlimited is a pop-up on every page
+                (src/lib/purchasePopup.ts). Mounted BEFORE the auth host so a
+                sign-in prompt raised from inside it renders on top. */}
+            <PurchasePopupHost />
             {/* "Log in or sign up" is a pop-up on every page (src/lib/authModal.ts).
                 While it is open the three gates below stand down. */}
             <AuthModalHost />

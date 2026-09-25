@@ -32,7 +32,7 @@
  * A `gv-drafts-changed` window event forces a refetch, mirroring the
  * `gv-inbox-read-changed` pattern the organiser sidebar badge uses
  * (`src/app/manage/[slug]/layout.tsx:625`). Deleting a draft from
- * /my-conferences fires it, so the badge drops without a reload.
+ * /account/conferences fires it, so the badge drops without a reload.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';

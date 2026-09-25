@@ -3,7 +3,10 @@
 import { useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { User, ScrollText, CalendarDays, Coins, CalendarCheck, ArrowRight, FileClock, type LucideIcon } from 'lucide-react';
+import {
+  User, ScrollText, CalendarDays, CalendarCheck, FileClock, ArrowLeft, Coins, Infinity as InfinityIcon, Ticket,
+  type LucideIcon,
+} from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { useUnlimitedStatus, isUnlimited } from '@/lib/unlimitedStatus';
 import { useDraftCount } from '@/hooks/useDraftCount';
@@ -12,18 +15,64 @@ import Loader from '@/components/Loader';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
-type NavLink = { label: string; href: string; Icon: LucideIcon; highlight?: boolean; badge?: number };
+const FONT = "var(--font-brand), sans-serif";
+const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2';
 
-const NAV_LINKS: NavLink[] = [
-  { label: 'MY PROFILE', href: '/account/profile', Icon: User },
+// The rail sits under the 72px site header with a little air above it.
+const HEADER_PX = 72;
+const RAIL_TOP = HEADER_PX + 16;
+const RAIL_WIDTH = 248;
+
+type NavLink = {
+  label: string;
+  href: string;
+  Icon: LucideIcon;
+  /** How "is this the current page" is decided. `prefix` also matches child paths. */
+  match?: 'exact' | 'prefix';
+  /** My conferences reads a touch warmer than the rest, with no stripe. */
+  warm?: boolean;
+  badge?: number;
+  /** The "Back to profile" row at the top of the Manage account menu. */
+  back?: boolean;
+};
+
+const ACCOUNT_LINKS: NavLink[] = [
+  { label: 'My profile', href: '/account/profile', Icon: User },
   { label: 'MUN CV', href: '/account/cv', Icon: ScrollText },
-  { label: 'CONFERENCE CALENDAR', href: '/account/calendar', Icon: CalendarDays },
-  { label: 'CREDITS & SUBSCRIPTION', href: '/account/unlimited', Icon: Coins },
+  { label: 'Conference calendar', href: '/account/calendar', Icon: CalendarDays },
+  { label: 'My conferences', href: '/account/conferences', Icon: CalendarCheck, match: 'prefix', warm: true },
 ];
 
-// My Conferences is a headline destination — it lives in its own gold-accented
-// floating block below the nav list and sign-out, not as another nav row.
-const CONFERENCES_HREF = '/account/conferences';
+const MANAGE_LINKS: NavLink[] = [
+  { label: 'Back to profile', href: '/account/profile', Icon: ArrowLeft, back: true },
+  { label: 'Credits and usage', href: '/account/manage/credits', Icon: Coins, match: 'prefix' },
+  { label: 'Subscription', href: '/account/manage/subscription', Icon: InfinityIcon, match: 'prefix' },
+  { label: 'Promo code', href: '/account/manage/promo', Icon: Ticket, match: 'prefix' },
+];
+
+function isActive(link: NavLink, pathname: string): boolean {
+  if (link.back) return false;
+  // Query strings and hashes are not part of `pathname`, so the drafts row
+  // (same page as My conferences, a different anchor) never lights up on its own.
+  const path = link.href.split(/[?#]/)[0];
+  return link.match === 'prefix' ? pathname.startsWith(path) : pathname === path;
+}
+
+function Badge({ n }: { n: number }) {
+  return (
+    <span
+      className="flex-shrink-0 inline-flex items-center justify-center rounded-full"
+      style={{
+        minWidth: 20, height: 20, padding: '0 6px', fontSize: 11, fontWeight: 700,
+        fontFamily: FONT, fontVariantNumeric: 'tabular-nums',
+        backgroundColor: 'rgba(182,135,31,0.18)', color: '#7A5A20',
+      }}
+      aria-label={`${n} to complete`}
+    >
+      {n}
+    </span>
+  );
+}
 
 export default function AccountLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -32,19 +81,19 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
   const unlimitedStatus = useUnlimitedStatus();
   const { count: draftCount } = useDraftCount();
 
-  // This is a NAV rail, not a conference list — so unlike ProfileDropdown and
-  // the mobile sheet (which now carry one UNFINISHED entry per draft inside
-  // YOUR CONFERENCES), the drafts stay a single destination row here. What is
-  // kept in parity is the trigger and the number: the row appears only when
-  // there is something to finish, and carries the same count badge, off the
-  // same `useDraftCount` hook.
-  const navLinks: NavLink[] = draftCount && draftCount > 0
+  const inManage = pathname.startsWith('/account/manage');
+
+  // Drafts to complete is a single destination row (the profile menu lists
+  // one entry per draft; this rail does not), shown only while there is
+  // something to finish, with the same count off the same hook.
+  const accountLinks: NavLink[] = draftCount && draftCount > 0
     ? [
-        ...NAV_LINKS.slice(0, 2),
-        { label: 'DRAFTS TO COMPLETE', href: '/my-conferences?tab=all#drafts', Icon: FileClock, badge: draftCount },
-        ...NAV_LINKS.slice(2),
+        ...ACCOUNT_LINKS,
+        { label: 'Drafts to complete', href: '/account/conferences?tab=all#drafts', Icon: FileClock, badge: draftCount },
       ]
-    : NAV_LINKS;
+    : ACCOUNT_LINKS;
+
+  const navLinks = inManage ? MANAGE_LINKS : accountLinks;
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -52,20 +101,16 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
     }
   }, [authLoading, user, router, pathname]);
 
-  // Bring the current tab into the rail. Without it, CONFERENCE CALENDAR and
-  // CREDITS & SUBSCRIPTION sat off the right edge of a 375px screen, cut
-  // mid-word, so the two pages that need the rail most never showed which one
-  // you were on. `inline: 'nearest'` leaves MY PROFILE where it is (already
-  // visible) instead of yanking the rail for no reason, and `block: 'nearest'`
-  // keeps it from scrolling the PAGE as well. Read-only: it touches the rail's
-  // scrollLeft and nothing else.
+  // Bring the current tab of the phone rail into view. `inline: 'nearest'`
+  // leaves an already visible tab where it is, `block: 'nearest'` keeps it
+  // from scrolling the page. Read-only: it touches the rail's scrollLeft only.
   const tabRailRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const rail = tabRailRef.current;
     if (!rail) return;
     const active = rail.querySelector('[data-acct-tab="active"]');
     active?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
-  }, [pathname, draftCount]);
+  }, [pathname, draftCount, inManage]);
 
   if (authLoading) {
     return (
@@ -80,6 +125,8 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
   const avatarInitial = (
     profile?.display_name?.[0] ?? user.email?.[0] ?? '?'
   ).toUpperCase();
+  const displayName = profile?.display_name ?? user.email?.split('@')[0] ?? '';
+  const email = profile?.email ?? user.email ?? '';
 
   async function handleSignOut() {
     await signOut();
@@ -103,344 +150,173 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
       <div className="relative z-10">
         <SiteNav />
 
-        <div className="max-w-[1000px] mx-auto px-6 py-10">
+        <style>{`
+          .gv-acct-tabs{scrollbar-width:none;-ms-overflow-style:none}
+          .gv-acct-tabs::-webkit-scrollbar{display:none}
+          .gv-acct-row{transition:background-color 150ms ease-out,color 150ms ease-out}
+          .gv-acct-row:hover{background-color:rgba(27,56,40,0.05);color:#1C1410}
+          .gv-acct-row[data-active="true"]{background-color:rgba(27,56,40,0.09);color:#1B3828}
+          .gv-acct-row[data-warm="true"]{background-color:rgba(238,217,138,0.22);color:#5E4416}
+          .gv-acct-row[data-warm="true"]:hover{background-color:rgba(238,217,138,0.34)}
+          .gv-acct-row[data-warm="true"][data-active="true"]{background-color:rgba(182,135,31,0.22);color:#4A3410}
+          .gv-acct-signout{transition:background-color 150ms ease-out}
+          .gv-acct-signout:hover{background-color:rgba(139,32,32,0.07)}
+        `}</style>
 
-          {/* Mobile tab bar.
-              It is a horizontal scroller, so on a phone it must LOOK like one
-              and behave like one (18 Sep 2026 phone audit):
-              - it bleeds to the screen edges (`-mx-6 px-6`), because a strip
-                that stops at the page gutter reads as a cut-off row rather
-                than a rail you can push;
-              - its scrollbar is hidden, because the native bar drew a grey
-                slab straight over the active tab's 2px underline and that is
-                what made "the scrolling at the top" look broken;
-              - `overscroll-x: contain` so pushing the rail never turns into a
-                page-level rubber band;
-              - rows are 44px tall (they were 34) and the type is 13px (it was
-                12), so the first thing under a thumb is actually tappable;
-              - and the ACTIVE tab is scrolled into view on mount, because on
-                /calendar and /unlimited the current tab sat off the right edge
-                cut mid-word, so the page never told you where you were. */}
-          <style>{`.gv-acct-tabs{scrollbar-width:none;-ms-overflow-style:none}.gv-acct-tabs::-webkit-scrollbar{display:none}`}</style>
-          <div
-            ref={tabRailRef}
-            className="gv-acct-tabs md:hidden flex overflow-x-auto gap-0 mb-6 -mx-6 px-6"
-            style={{ borderBottom: '1px solid #DDD4C0', overscrollBehaviorX: 'contain' }}
-          >
-            {navLinks.map((link) => {
-              const active = pathname === link.href;
-              const accent = link.highlight ? '#B6871F' : '#1B3828';
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  data-acct-tab={active ? 'active' : undefined}
-                  className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 text-[13px] font-bold focus:outline-none"
-                  style={{
-                    minHeight: 44,
-                    color: active ? accent : link.highlight ? '#B6871F' : '#9A8A78',
-                    borderBottom: active ? `2px solid ${accent}` : '2px solid transparent',
-                    textDecoration: 'none',
-                    letterSpacing: '0.05em',
-                    fontFamily: "var(--font-brand), sans-serif",
-                    whiteSpace: 'nowrap',
-                    transition: 'color 150ms ease',
-                  }}
-                >
-                  <link.Icon size={13} strokeWidth={2.4} />
-                  {link.label}
-                  {link.badge !== undefined && (
-                    <span
-                      className="inline-flex items-center justify-center rounded-full"
-                      style={{
-                        minWidth: 18, height: 18, padding: '0 5px', fontSize: 10, fontWeight: 700,
-                        fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums',
-                        backgroundColor: 'rgba(182,135,31,0.16)', color: '#8A6614',
-                      }}
-                    >
-                      {link.badge}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
-            {(() => {
-              const confActive = pathname.startsWith('/account/conferences');
-              return (
-                <Link
-                  href={CONFERENCES_HREF}
-                  data-acct-tab={confActive ? 'active' : undefined}
-                  className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 text-[13px] font-bold focus:outline-none"
-                  style={{
-                    minHeight: 44,
-                    color: '#B6871F',
-                    borderBottom: confActive ? '2px solid #B6871F' : '2px solid transparent',
-                    textDecoration: 'none',
-                    letterSpacing: '0.05em',
-                    fontFamily: "var(--font-brand), sans-serif",
-                    whiteSpace: 'nowrap',
-                    transition: 'color 150ms ease',
-                  }}
-                >
-                  <CalendarCheck size={13} strokeWidth={2.4} />
-                  MY CONFERENCES
-                </Link>
-              );
-            })()}
-          </div>
-
-          {/* Sidebar (desktop only) + content.
-              The content column is rendered ONCE. It used to be rendered twice
-              (a `hidden md:flex` desktop tree and an `md:hidden` mobile tree),
-              which on a phone mounted every account page twice: two copies of
-              every Supabase fetch, two of every effect, duplicate element ids,
-              and, worst of all, two of every PORTAL. A portal escapes its
-              `display:none` parent, so the hidden desktop copy's nationality
-              menu, date picker and delete dialog could paint over the phone
-              screen on top of the visible one's. One tree, one of each. */}
-          <div className="flex md:gap-8 items-start">
-            {/* Sidebar */}
-            <div className="hidden md:block" style={{ width: '220px', flexShrink: 0 }}>
-              <div className="sticky flex flex-col gap-3" style={{ top: '88px' }}>
-              <div
-                className="rounded-[22px] p-5"
+        {/* Mobile tab bar. A horizontal scroller that bleeds to the screen
+            edges, hides its scrollbar (the native bar drew over the active
+            underline), contains its overscroll, and scrolls the current tab
+            into view on mount. Rows are 44px so a thumb can hit them. */}
+        <div
+          ref={tabRailRef}
+          className="gv-acct-tabs md:hidden flex overflow-x-auto gap-0 px-4"
+          style={{ borderBottom: '1px solid #DDD4C0', overscrollBehaviorX: 'contain' }}
+          aria-label={inManage ? 'Manage account' : 'Account'}
+        >
+          {navLinks.map((link) => {
+            const active = isActive(link, pathname);
+            const color = active ? '#1B3828' : link.warm ? '#7A5A20' : '#5A5046';
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                data-acct-tab={active ? 'active' : undefined}
+                aria-current={active ? 'page' : undefined}
+                className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 ${FOCUS}`}
                 style={{
-                  background: 'linear-gradient(180deg, rgba(252,250,246,0.95) 0%, rgba(245,241,232,0.9) 100%)',
-                  backdropFilter: 'blur(16px) saturate(1.5)',
-                  WebkitBackdropFilter: 'blur(16px) saturate(1.5)',
-                  border: '1px solid #D8CDB6',
-                  boxShadow: '0 2px 4px rgba(27,56,40,0.05), 0 18px 44px rgba(27,56,40,0.11), inset 0 1px 0 rgba(255,255,255,0.7)',
+                  minHeight: 44,
+                  color,
+                  borderBottom: active ? '2px solid #1B3828' : '2px solid transparent',
+                  textDecoration: 'none',
+                  fontFamily: FONT,
+                  fontSize: 14,
+                  fontWeight: active ? 700 : 600,
+                  whiteSpace: 'nowrap',
+                  transition: 'color 150ms ease-out',
                 }}
               >
-                {/* Avatar */}
-                <div className="flex justify-center">
-                  {profile?.avatar_url ? (
-                    <img
-                      src={profile.avatar_url}
-                      alt="Avatar"
-                      className="rounded-full object-cover"
-                      style={{ width: '64px', height: '64px', border: '2px solid #DDD4C0' }}
-                    />
-                  ) : (
-                    <div
-                      className="rounded-full flex items-center justify-center font-black text-2xl"
-                      style={{
-                        width: '64px',
-                        height: '64px',
-                        backgroundColor: 'rgba(27,56,40,0.1)',
-                        border: '2px solid #DDD4C0',
-                        color: '#1B3828',
-                        fontFamily: "var(--font-brand), sans-serif",
-                      }}
-                    >
-                      {avatarInitial}
-                    </div>
-                  )}
-                </div>
+                <link.Icon size={14} strokeWidth={2.4} aria-hidden />
+                {link.label}
+                {link.badge !== undefined && <Badge n={link.badge} />}
+              </Link>
+            );
+          })}
+        </div>
 
-                <p
-                  className="font-semibold text-sm text-center mt-3"
-                  style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}
-                >
-                  {profile?.display_name ?? user.email?.split('@')[0] ?? ''}
-                </p>
-
-                <p
-                  className="text-xs text-center mt-0.5"
-                  style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", fontWeight: 500 }}
-                >
-                  {profile?.email ?? user.email ?? ''}
-                </p>
-
-                {isUnlimited(unlimitedStatus) && (
-                  <div className="flex justify-center mt-2">
-                    <span
-                      className="rounded-full px-2 py-0.5"
-                      style={{
-                        backgroundColor: 'rgba(238,217,138,0.22)',
-                        border: '1px solid rgba(182,135,31,0.4)',
-                        color: '#B6871F',
-                        fontFamily: "var(--font-brand), sans-serif",
-                        fontWeight: 700,
-                        fontSize: '11px',
-                        letterSpacing: '0.12em',
-                      }}
-                    >
-                      ✦ UNLIMITED
-                    </span>
+        {/* Rail on the left edge, content column flexible. The content is
+            rendered ONCE (a hidden desktop tree plus a visible mobile tree used
+            to mount every page twice, portals included). */}
+        <div className="flex items-start">
+          <aside
+            className="hidden md:block flex-shrink-0"
+            style={{ width: RAIL_WIDTH, paddingLeft: 24, paddingRight: 12 }}
+            aria-label={inManage ? 'Manage account' : 'Account'}
+          >
+            <div className="sticky flex flex-col" style={{ top: RAIL_TOP, paddingTop: 16 }}>
+              {/* Who */}
+              <div className="flex items-center gap-3 px-3 pb-4">
+                {profile?.avatar_url ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={profile.avatar_url}
+                    alt=""
+                    className="rounded-full object-cover flex-shrink-0"
+                    style={{ width: 44, height: 44 }}
+                  />
+                ) : (
+                  <div
+                    className="rounded-full flex items-center justify-center flex-shrink-0"
+                    style={{
+                      width: 44, height: 44,
+                      backgroundColor: 'rgba(27,56,40,0.1)',
+                      color: '#1B3828',
+                      fontFamily: FONT, fontWeight: 800, fontSize: 18,
+                    }}
+                    aria-hidden
+                  >
+                    {avatarInitial}
                   </div>
                 )}
-
-                <div className="mt-4 mb-3" style={{ borderTop: '1px solid rgba(221,212,192,0.7)' }} />
-
-                <p
-                  className="px-3 mb-1.5"
-                  style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '11px', letterSpacing: '0.14em', color: '#B6871F', textTransform: 'uppercase' }}
-                >
-                  ACCOUNT
-                </p>
-
-                <nav className="flex flex-col gap-1">
-                  {navLinks.map((link) => {
-                    const active = pathname === link.href;
-
-                    // MY CONFERENCES is a key destination — it gets a warmer,
-                    // always-on gold treatment so it stands out from the rest.
-                    if (link.highlight) {
-                      const activeBg = 'linear-gradient(135deg, rgba(238,217,138,0.34), rgba(182,135,31,0.16))';
-                      const idleBg = 'linear-gradient(135deg, rgba(238,217,138,0.20), rgba(182,135,31,0.08))';
-                      return (
-                        <Link
-                          key={link.href}
-                          href={link.href}
-                          className="group flex items-center gap-2 w-full py-2.5 px-3 rounded-xl text-sm font-bold focus:outline-none"
-                          style={{
-                            border: '1px solid rgba(182,135,31,0.45)',
-                            background: active ? activeBg : idleBg,
-                            color: '#7A5A20',
-                            textDecoration: 'none',
-                            fontFamily: "var(--font-brand), sans-serif",
-                            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.55)',
-                            transition: 'background 150ms ease, box-shadow 150ms ease',
-                          }}
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = activeBg; }}
-                          onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = idleBg; }}
-                        >
-                          <span
-                            className="inline-flex items-center justify-center flex-shrink-0"
-                            style={{ width: 24, height: 24, borderRadius: 8, background: 'linear-gradient(150deg, #EED98A, #B6871F)', boxShadow: '0 2px 6px rgba(182,135,31,0.4)' }}
-                          >
-                            <link.Icon size={13} strokeWidth={2.6} style={{ color: '#FAF8F3' }} />
-                          </span>
-                          <span className="flex-1">{link.label}</span>
-                          <ArrowRight size={14} strokeWidth={2.6} style={{ color: '#B6871F' }} />
-                        </Link>
-                      );
-                    }
-
-                    return (
-                      <Link
-                        key={link.href}
-                        href={link.href}
-                        className="flex items-center gap-2.5 w-full py-2 px-3 rounded-xl text-sm font-semibold focus:outline-none"
-                        style={{
-                          borderLeft: active ? '3px solid #1B3828' : '3px solid transparent',
-                          backgroundColor: active ? 'rgba(27,56,40,0.08)' : 'transparent',
-                          color: active ? '#1B3828' : '#9A8A78',
-                          textDecoration: 'none',
-                          fontFamily: "var(--font-brand), sans-serif",
-                          transition: 'background-color 150ms ease, color 150ms ease',
-                        }}
-                        onMouseEnter={(e) => {
-                          if (!active) {
-                            (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)';
-                            (e.currentTarget as HTMLElement).style.color = '#1C1410';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (!active) {
-                            (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-                            (e.currentTarget as HTMLElement).style.color = '#9A8A78';
-                          }
-                        }}
-                      >
-                        <link.Icon size={15} strokeWidth={2.2} style={{ color: active ? '#1B3828' : '#9A8A78', flexShrink: 0 }} />
-                        <span className="flex-1">{link.label}</span>
-                        {link.badge !== undefined && (
-                          <span
-                            className="flex-shrink-0 inline-flex items-center justify-center rounded-full"
-                            style={{
-                              minWidth: 18, height: 18, padding: '0 5px', fontSize: 10, fontWeight: 700,
-                              fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums',
-                              backgroundColor: 'rgba(182,135,31,0.16)', color: '#8A6614',
-                            }}
-                          >
-                            {link.badge}
-                          </span>
-                        )}
-                      </Link>
-                    );
-                  })}
-                </nav>
-
-                <div className="mt-2 mb-2" style={{ borderTop: '1px solid rgba(221,212,192,0.7)' }} />
-
-                <button
-                  onClick={handleSignOut}
-                  className="w-full text-xs font-semibold rounded-xl py-2 px-3 text-left focus:outline-none"
-                  style={{
-                    color: '#8B2020',
-                    backgroundColor: 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontFamily: "var(--font-brand), sans-serif",
-                    transition: 'background-color 150ms ease',
-                  }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.06)'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                >
-                  SIGN OUT
-                </button>
-              </div>
-
-              {/* Floating "My Conferences" block — its own gold-accented card,
-                  set apart from the nav list and sign-out above it. */}
-              {(() => {
-                const confActive = pathname.startsWith('/account/conferences');
-                const activeBg = 'linear-gradient(135deg, rgba(238,217,138,0.42), rgba(182,135,31,0.20))';
-                const idleBg = 'linear-gradient(135deg, rgba(238,217,138,0.22), rgba(182,135,31,0.10))';
-                return (
-                  <Link
-                    href="/account/conferences"
-                    className="group flex items-center gap-2.5 focus:outline-none"
-                    style={{
-                      padding: '13px 14px',
-                      borderRadius: 18,
-                      border: '1px solid rgba(182,135,31,0.5)',
-                      background: confActive ? activeBg : idleBg,
-                      boxShadow: confActive
-                        ? '0 6px 18px rgba(182,135,31,0.26), inset 0 1px 0 rgba(255,255,255,0.6)'
-                        : '0 4px 14px rgba(182,135,31,0.16), inset 0 1px 0 rgba(255,255,255,0.55)',
-                      textDecoration: 'none',
-                      transition: 'background 160ms ease, box-shadow 160ms ease, transform 160ms ease',
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
-                      if (!confActive) (e.currentTarget as HTMLElement).style.background = activeBg;
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
-                      if (!confActive) (e.currentTarget as HTMLElement).style.background = idleBg;
-                    }}
-                  >
+                <div className="min-w-0">
+                  <p className="truncate" style={{ margin: 0, color: '#1C1410', fontFamily: FONT, fontWeight: 700, fontSize: 14, lineHeight: 1.3 }}>
+                    {displayName}
+                  </p>
+                  <p className="truncate" style={{ margin: 0, color: '#5A5046', fontFamily: FONT, fontWeight: 500, fontSize: 12, lineHeight: 1.4 }}>
+                    {email}
+                  </p>
+                  {isUnlimited(unlimitedStatus) && (
                     <span
-                      className="inline-flex items-center justify-center flex-shrink-0"
-                      style={{ width: 34, height: 34, borderRadius: 11, background: 'linear-gradient(150deg, #EED98A, #B6871F)', boxShadow: '0 3px 9px rgba(182,135,31,0.42)' }}
+                      className="inline-flex items-center rounded-full mt-1"
+                      style={{
+                        padding: '1px 8px',
+                        backgroundColor: 'rgba(238,217,138,0.3)',
+                        color: '#7A5A20',
+                        fontFamily: FONT, fontWeight: 700, fontSize: 10.5, letterSpacing: '0.12em',
+                      }}
                     >
-                      <CalendarCheck size={17} strokeWidth={2.5} style={{ color: '#FAF8F3' }} />
+                      UNLIMITED
                     </span>
-                    <span className="flex-1 min-w-0">
-                      <span className="block" style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '11px', letterSpacing: '0.14em', color: '#B6871F', textTransform: 'uppercase' }}>
-                        YOUR HUB
-                      </span>
-                      <span className="block" style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '14px', color: '#7A5A20', letterSpacing: '0.01em' }}>
-                        My Conferences
-                      </span>
-                    </span>
-                    <ArrowRight
-                      size={15}
-                      strokeWidth={2.6}
-                      className="transition-transform group-hover:translate-x-0.5"
-                      style={{ color: '#B6871F', flexShrink: 0 }}
-                    />
-                  </Link>
-                );
-              })()}
+                  )}
+                </div>
               </div>
-            </div>
 
-            {/* Content */}
-            <div className="flex-1 min-w-0">
+              <nav className="flex flex-col gap-0.5">
+                {navLinks.map((link) => {
+                  const active = isActive(link, pathname);
+                  return (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      data-active={active ? 'true' : 'false'}
+                      data-warm={link.warm ? 'true' : undefined}
+                      aria-current={active ? 'page' : undefined}
+                      className={`gv-acct-row flex items-center gap-2.5 rounded-xl px-3 ${FOCUS}`}
+                      style={{
+                        minHeight: 44,
+                        color: '#5A5046',
+                        textDecoration: 'none',
+                        fontFamily: FONT,
+                        fontSize: 14,
+                        fontWeight: active ? 700 : link.back ? 500 : 600,
+                        marginBottom: link.back ? 8 : 0,
+                      }}
+                    >
+                      <link.Icon size={16} strokeWidth={2.2} aria-hidden style={{ flexShrink: 0 }} />
+                      <span className="flex-1 min-w-0 truncate">{link.label}</span>
+                      {link.badge !== undefined && <Badge n={link.badge} />}
+                    </Link>
+                  );
+                })}
+              </nav>
+
+              <div className="mt-3 mb-1 mx-3" style={{ borderTop: '1px solid rgba(221,212,192,0.8)' }} />
+
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className={`gv-acct-signout w-full rounded-xl px-3 text-left ${FOCUS}`}
+                style={{
+                  minHeight: 44,
+                  color: '#8B2020',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: FONT,
+                  fontSize: 13,
+                  fontWeight: 600,
+                }}
+              >
+                Sign out
+              </button>
+            </div>
+          </aside>
+
+          {/* Content column: flexible, its own measure, its own gutters. */}
+          <div className="flex-1 min-w-0">
+            <div
+              className="w-full px-5 py-8 md:px-8 md:py-10 lg:px-10"
+              style={{ maxWidth: 1100 }}
+            >
               {children}
             </div>
           </div>

@@ -20,7 +20,7 @@
  * applications row says how many are new in orange.
  *
  * Renders nothing when there is nothing (or when the read failed). At most six
- * rows, then a quiet "N more" line to /my-conferences.
+ * rows, then a quiet "N more" line to /account/conferences.
  */
 
 import Link from 'next/link';
@@ -187,7 +187,7 @@ function InviteRow({ item, sheet, onNavigate }: { item: ActivityItem; sheet: boo
       return;
     }
     setDone(accept ? 'accepted' : 'declined');
-    if (accept) setDoneHref(chair ? '/my-conferences?tab=chair&chairInvite=accepted' : result.slug ? `/manage/${result.slug}` : null);
+    if (accept) setDoneHref(chair ? '/account/conferences?tab=chair&chairInvite=accepted' : result.slug ? `/manage/${result.slug}` : null);
     // The row stays with its answer for a moment, then the list re-reads.
     window.setTimeout(() => removeActivityItem(user.id, item.id), accept ? 6000 : 2500);
   }
@@ -380,7 +380,7 @@ export default function ActivityNotices({
       </ul>
       {more > 0 && (
         <Link
-          href="/my-conferences"
+          href="/account/conferences"
           onClick={onNavigate}
           className="block px-4 py-1.5 font-semibold focus:outline-none hover:underline"
           style={{ color: '#1B3828', fontSize: 11, textDecoration: 'none' }}

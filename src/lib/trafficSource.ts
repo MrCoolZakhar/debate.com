@@ -29,7 +29,7 @@
 //   - landed on another Gavelling page people discover conferences from
 //     (home, Explore, map, country hubs, /conferences/all, roles, blog,
 //     another conference): 'gavelling';
-//   - landed on the visitor's own surfaces (/my-conferences, /account,
+//   - landed on the visitor's own surfaces (/account/conferences, /account,
 //     /manage, drafts, invites, session rooms): nothing is decided.
 // "Nothing is decided" keeps what was stored and keeps looking.
 

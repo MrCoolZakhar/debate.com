@@ -7,7 +7,7 @@
 // one (invoices.due_date), and a button to /conferences/<slug>/pay.
 //
 // Two shapes: `PayNowCard` for one conference (the participant page) and
-// `PaymentsDueSection` for every conference (/my-conferences). Both render
+// `PaymentsDueSection` for every conference (/account/conferences). Both render
 // nothing when nothing is owed, and nothing on a failed read (the /pay page
 // stays reachable from the application card either way).
 
@@ -125,7 +125,7 @@ export function PayNowCard({ userId, conferenceId }: { userId: string | null; co
   );
 }
 
-/** Every conference, on /my-conferences. */
+/** Every conference, on /account/conferences. */
 export function PaymentsDueSection({ userId }: { userId: string | null }) {
   const rows = useOpenBalances(userId, null);
   if (!rows || rows.length === 0) return null;

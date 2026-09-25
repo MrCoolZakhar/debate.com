@@ -279,7 +279,7 @@ function OrganiserSection() {
             Zero platform fees for organisers. Gavelling handles registration, allocations, document management, session integration, and automated communications.
           </p>
           <Link
-            href="/my-conferences"
+            href="/account/conferences"
             className="inline-block rounded-2xl py-4 px-8 font-bold text-sm tracking-widest transition-colors focus:outline-none"
             style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', textDecoration: 'none' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}

@@ -594,7 +594,7 @@ function OrganizerInvitesSection({ invites, onRespond }: { invites: OrganizerInv
 // The applicant-side mirror of the organiser "Drafts" section further down this
 // file: same Eyebrow + muted CountChip + helper-copy anatomy, one pattern.
 //
-// Anchored `id="drafts"` so the profile menu's /my-conferences?tab=all#drafts
+// Anchored `id="drafts"` so the profile menu's /account/conferences?tab=all#drafts
 // lands here.
 
 /** "3 minutes ago" / "2 days ago" — coarse on purpose, this is a nudge. */

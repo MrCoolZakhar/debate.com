@@ -313,7 +313,7 @@ function SetupReminderModal({
 
           {others > 0 && (
             <p className="text-center" style={{ margin: '14px 0 0', fontSize: 12.5, color: NEU.inkSoft }}>
-              <Link href="/my-conferences" onClick={onClose} className="focus:outline-none" style={{ color: NEU.inkSoft, textDecoration: 'underline', textUnderlineOffset: 3 }}>
+              <Link href="/account/conferences" onClick={onClose} className="focus:outline-none" style={{ color: NEU.inkSoft, textDecoration: 'underline', textUnderlineOffset: 3 }}>
                 and {others} more in your conferences
               </Link>
             </p>

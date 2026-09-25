@@ -242,7 +242,7 @@ export default function OrganizerInvitePage() {
               <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.55 }}>
                 {invite?.error ?? error ?? "This invite link isn't valid. It may have been mistyped or already removed."}
               </p>
-              <Link href="/my-conferences" className="inline-flex items-center gap-2 rounded-full py-2.5 px-5 font-bold text-sm focus:outline-none" style={primaryPillStyle}>
+              <Link href="/account/conferences" className="inline-flex items-center gap-2 rounded-full py-2.5 px-5 font-bold text-sm focus:outline-none" style={primaryPillStyle}>
                 GO TO MY CONFERENCES
               </Link>
             </>
@@ -257,7 +257,7 @@ export default function OrganizerInvitePage() {
                 <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.55 }}>
                   {resolvedCopy.body}
                 </p>
-                <Link href="/my-conferences" className="inline-flex items-center gap-2 rounded-full py-2.5 px-5 font-bold text-sm focus:outline-none" style={primaryPillStyle}>
+                <Link href="/account/conferences" className="inline-flex items-center gap-2 rounded-full py-2.5 px-5 font-bold text-sm focus:outline-none" style={primaryPillStyle}>
                   GO TO MY CONFERENCES
                 </Link>
               </div>

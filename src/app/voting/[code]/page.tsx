@@ -1014,7 +1014,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       <div className="min-h-screen" style={{ backgroundColor: '#EDE7D8' }}>
         <ChairDeviceKickModal
           onUseThisDevice={deviceLock.takeBack}
-          onLeave={() => router.push(committee.sessionOrigin === 'conference' ? '/my-conferences' : '/join')}
+          onLeave={() => router.push(committee.sessionOrigin === 'conference' ? '/account/conferences' : '/join')}
         />
       </div>
     );

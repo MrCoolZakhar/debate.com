@@ -1507,7 +1507,7 @@ function ModeratedCaucusMain({
 function ChairAwardsCta({ code, label, className, style }: {
   code: string; label: string; className?: string; style?: React.CSSProperties;
 }) {
-  const [href, setHref] = useState('/my-conferences');
+  const [href, setHref] = useState('/account/conferences');
   useEffect(() => {
     let cancelled = false;
     resolveChairAwardsHref(code).then((h) => { if (!cancelled) setHref(h); });
@@ -3812,7 +3812,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       <div className="min-h-screen" style={{ backgroundColor: '#EDE7D8' }}>
         <ChairDeviceKickModal
           onUseThisDevice={takeBackDevice}
-          onLeave={() => router.push(committee.sessionOrigin === 'conference' ? '/my-conferences' : '/join')}
+          onLeave={() => router.push(committee.sessionOrigin === 'conference' ? '/account/conferences' : '/join')}
         />
       </div>
     );

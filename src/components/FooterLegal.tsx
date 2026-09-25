@@ -95,6 +95,16 @@ export default function FooterLegal({
           For organisers
         </Link>
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
+        {/* Pricing and the help center are public, indexable pages; this is
+            their plain server-rendered crawl path from every public footer. */}
+        <Link href="/pricing/credits" className={hubLink}>
+          Pricing
+        </Link>
+        <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
+        <Link href="/help" className={hubLink}>
+          Help center
+        </Link>
+        <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
         {/* The session tools, a plain server-rendered way in to both from
             every public page (the homepage's extra link row that carried them
             was removed on 24 Sep 2026). */}

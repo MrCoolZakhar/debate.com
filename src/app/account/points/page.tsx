@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 
-// Gavelling Points was retired (prompt 48); this old route now just forwards
-// visitors to Credits & Subscription, which is where this address used to lead.
+// Gavelling Points was retired (prompt 48). This old address now forwards to
+// Credits and usage under Manage account, where the balance and history live.
 export default function PointsPage() {
-  redirect('/account/unlimited');
+  redirect('/account/manage/credits');
 }

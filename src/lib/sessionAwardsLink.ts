@@ -6,11 +6,11 @@
 //
 // Resolution is anonymous on purpose: `conference_committees.session_code` → the
 // conference slug. That row is readable to anon only for public conferences, so for a
-// private conference (or a transient failure) we fall back to /my-conferences, the
+// private conference (or a transient failure) we fall back to /account/conferences, the
 // signed-in chair's hub, which lists every committee they chair. Never throws.
 import { supabase } from '@/lib/supabase';
 
-const FALLBACK_HREF = '/my-conferences';
+const FALLBACK_HREF = '/account/conferences';
 const cache = new Map<string, Promise<string>>();
 
 export function chairAwardsHrefForSlug(slug: string): string {

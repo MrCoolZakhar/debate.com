@@ -2389,8 +2389,8 @@ function PayInvoiceAndActions({
         <ActionRow
           icon={Coins}
           gradient={NEU_GRADIENTS.gold}
-          title="Buy Delegation Credits"
-          subtitle={canBuyDelegationStuff ? (creditsOpen ? 'Hide' : 'Fund your delegation pool') : 'Delegation leaders only'}
+          title="Buy credits"
+          subtitle={canBuyDelegationStuff ? (creditsOpen ? 'Hide' : "For your own applications and your delegation's") : 'Delegation leaders only'}
           dimmed={!canBuyDelegationStuff}
           onClick={() => {
             if (!canBuyDelegationStuff) { setStubMessage('Only delegation leaders can buy spots or credits.'); return; }

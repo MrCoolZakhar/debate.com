@@ -44,6 +44,14 @@
  * The invitation and draft rows were therefore taken OUT of "YOUR CONFERENCES"
  * so nothing is listed twice. The avatar (ProfileAvatarMenu) carries the count.
  * Opening the menu stamps informational items (a new allocation) as seen.
+ *
+ * THE ROWS, TOP TO BOTTOM
+ * Header (avatar, name, email); Live now; Needs your attention; then MY
+ * PROFILE, MANAGE ACCOUNT (the credit count at its right edge and a + that
+ * opens the buy-credits pop-up), PRICING (a Free / Unlimited badge, and on Free
+ * an up arrow that opens the Unlimited pop-up); YOUR CONFERENCES (three rows,
+ * then "All conferences" or "Create a conference"); SIGN OUT. The MUN CV and
+ * calendar rows moved to the account area's own menu.
  */
 
 import Link from 'next/link';
@@ -51,9 +59,10 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { compareStartDate, hasConcluded } from '@/lib/conferenceDates';
-import { User, FileText, CalendarDays, Sparkles, LogOut, ArrowRight, Plus } from 'lucide-react';
-import { CreditCoin } from '@/components/CreditCoin';
+import { User, Settings2, Tag, ArrowUp, LogOut, ArrowRight, Plus } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import { useCredits } from '@/hooks/useCredits';
+import { openCreditsPopup, openUnlimitedPopup } from '@/lib/purchasePopup';
 import LiveNowMenuSection from '@/components/liveRooms/LiveNowMenuSection';
 import ActivityNotices from '@/components/profile/ActivityNotices';
 import { useMyActivity, useOpenSeenState, markActivitySeen, isVisibleActivity } from '@/lib/myActivity';
@@ -94,6 +103,14 @@ interface NavConference {
 /** Roles that get the standing line: everyone who attends as a participant
  *  rather than running the room. */
 const STANDING_ROLES = new Set(['delegate', 'head-delegate', 'faculty-advisor', 'observer']);
+
+/** Type of the plain menu rows (MY PROFILE, MANAGE ACCOUNT, PRICING). */
+const ROW_TEXT: React.CSSProperties = {
+  color: '#1C1410',
+  fontFamily: "var(--font-brand), sans-serif",
+  letterSpacing: '0.05em',
+  fontSize: '12px',
+};
 
 /** Attention, most urgent first: money the conference is waiting for, then work
  *  an organiser owes their applicants, then a decision this person is waiting
@@ -142,6 +159,11 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
   // Unlimited is read from subscriptions (my_unlimited_status), never the dead
   // profiles.unlimited_status column. null = not known yet.
   const unlimitedStatus = useUnlimitedStatus();
+  // The credit count shown on the MANAGE ACCOUNT row (refreshes itself after a purchase).
+  const { balance: creditBalance, loading: creditsLoading } = useCredits();
+  const creditText = creditsLoading || creditBalance === null
+    ? '–'
+    : `${creditBalance} ${creditBalance === 1 ? 'credit' : 'credits'}`;
   // Imported registrations for this account's verified address attach on
   // the first page of a visit (src/lib/importClaim.ts).
   useClaimImportedOnLoad(authLoading ? null : user?.id ?? null);
@@ -244,7 +266,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
   // applying as a delegate put a conference NOWHERE in this menu: not under
   // drafts (it is submitted), not here (it is not accepted). The person who had
   // just applied had no way back to the conference they applied to. Rejected
-  // and withdrawn stay out — /my-conferences is where a closed application is
+  // and withdrawn stay out: /account/conferences is where a closed application is
   // reviewed and resubmitted.
   useEffect(() => {
     if (!open || confsFetched.current) return;
@@ -312,7 +334,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
 
         // Finished conferences leave the menu. This is a "where am I going
         // next" list, and a season of concluded ones pushes the live ones off
-        // the bottom (it renders only the first five).
+        // the bottom (it renders only the first three).
         //
         // hasConcluded, not a start_date test: a conference is over the day
         // AFTER its last day, so a start_date comparison would hide one that
@@ -421,16 +443,17 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
     })();
   }, [open, user, session]);
 
-  /** The five rows the menu has room for. Order on screen is always soonest
-   *  first — that is what this list is for. The choice of WHICH five is where
+  /** The three rows the menu has room for (five until the account area grew
+   *  its own conferences page). Order on screen is always soonest
+   *  first, that is what this list is for. The choice of WHICH three is where
    *  outstanding business counts: a conference that needs this person must not
    *  fall off the bottom behind ones that do not, so anything marked is taken
-   *  into the five first and the five are then put back into date order. With
-   *  five or fewer conferences this changes nothing at all. */
+   *  into the three first and the three are then put back into date order. With
+   *  three or fewer conferences this changes nothing at all. */
   const visibleConfs = useMemo(() => {
     const all = myConfs ?? [];
-    if (all.length <= 5) return all;
-    const picked = [...all.filter(c => c.attention), ...all.filter(c => !c.attention)].slice(0, 5);
+    if (all.length <= 3) return all;
+    const picked = [...all.filter(c => c.attention), ...all.filter(c => !c.attention)].slice(0, 3);
     return picked.sort((a, b) => compareStartDate(a.start_date, b.start_date));
   }, [myConfs]);
 
@@ -525,83 +548,124 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
             </>
           )}
 
-          {/* Menu rows */}
+          {/* Menu rows. MANAGE ACCOUNT and PRICING each carry a small action
+              button at their right edge (buy credits, go Unlimited) that opens a
+              pop-up instead of navigating. A <button> cannot sit inside an <a>,
+              so those rows are a flex wrapper holding the <Link> and the
+              <button> side by side; the hover wash is on the wrapper so the row
+              still reads as one. */}
           <div className="py-1">
-            {([
-              { label: 'MY PROFILE', href: '/account/profile', icon: User },
-              { label: 'MUN CV', href: '/account/cv', icon: FileText },
-              // No DRAFTS row here any more — unfinished applications are the
-              // first entries of YOUR CONFERENCES below, where the conference
-              // they belong to is.
-              { label: 'CONFERENCE CALENDAR', href: '/account/calendar', icon: CalendarDays },
-            ] as { label: string; href: string; icon: typeof User }[]).map((item) => {
-              const RowIcon = item.icon;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setOpen(false)}
-                  className="flex items-center gap-2.5 px-4 py-2 font-bold transition-colors"
-                  style={{
-                    color: '#1C1410',
-                    fontFamily: "var(--font-brand), sans-serif",
-                    letterSpacing: '0.05em',
-                    fontSize: '12px',
-                    textDecoration: 'none',
-                  }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                >
-                  <RowIcon size={15} strokeWidth={2.1} style={{ color: '#9A8A78', flexShrink: 0 }} />
-                  <span className="flex-1">{item.label}</span>
-                </Link>
-              );
-            })}
+            {/* MY PROFILE */}
+            <Link
+              href="/account/profile"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2.5 px-4 py-2 font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-inset"
+              style={{ ...ROW_TEXT, textDecoration: 'none' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+            >
+              <User size={15} strokeWidth={2.1} style={{ color: '#9A8A78', flexShrink: 0 }} />
+              <span className="flex-1">MY PROFILE</span>
+            </Link>
 
-            {profile && unlimitedStatus !== null && !isUnlimited(unlimitedStatus) ? (
+            {/* MANAGE ACCOUNT, with the credit count and a + to buy more */}
+            <div
+              className="flex items-center transition-colors"
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+            >
               <Link
-                href="/account/unlimited"
+                href="/account/manage/credits"
                 onClick={() => setOpen(false)}
-                className="flex items-center gap-2.5 px-4 py-2 font-bold transition-colors"
-                style={{
-                  color: '#1B3828',
-                  fontFamily: "var(--font-brand), sans-serif",
-                  letterSpacing: '0.05em',
-                  fontSize: '12px',
-                  textDecoration: 'none',
-                }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                className="flex flex-1 min-w-0 items-center gap-2.5 pl-4 pr-1 py-2 font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-inset"
+                style={{ ...ROW_TEXT, textDecoration: 'none' }}
               >
-                <Sparkles size={15} strokeWidth={2.1} style={{ color: '#9A8A78', flexShrink: 0 }} />
-                <span className="flex-1">UPGRADE TO UNLIMITED</span>
-                <span style={{ color: '#B6871F' }}>✦</span>
-              </Link>
-            ) : profile && isUnlimited(unlimitedStatus) ? (
-              <Link
-                href="/account/unlimited"
-                onClick={() => setOpen(false)}
-                className="flex items-center gap-2.5 px-4 py-2 font-bold transition-colors"
-                style={{
-                  color: '#1C1410',
-                  fontFamily: "var(--font-brand), sans-serif",
-                  letterSpacing: '0.05em',
-                  fontSize: '12px',
-                  textDecoration: 'none',
-                }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-              >
-                <CreditCoin size={16} />
-                <span className="flex-1">CREDITS &amp; SUBSCRIPTION</span>
+                <Settings2 size={15} strokeWidth={2.1} style={{ color: '#9A8A78', flexShrink: 0 }} />
+                <span className="flex-1">MANAGE ACCOUNT</span>
                 <span
-                  className="text-[10px] font-black px-1.5 py-0.5 rounded-full"
-                  style={{ backgroundColor: '#EED98A', color: '#1B3828', letterSpacing: '0.04em' }}
+                  className="shrink-0"
+                  style={{ color: '#5A4E46', fontSize: '11px', fontWeight: 600, letterSpacing: '0.02em', fontVariantNumeric: 'tabular-nums' }}
                 >
-                  ✦
+                  {creditText}
                 </span>
               </Link>
-            ) : null}
+              <button
+                type="button"
+                aria-label="Buy credits"
+                title="Buy credits"
+                onClick={(e) => { e.stopPropagation(); setOpen(false); openCreditsPopup({ context: 'header' }); }}
+                className="flex items-center justify-center shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-inset"
+                // A 32px pressable box drawing an 18px gold disc; keeps the row
+                // at its height while giving the + something to press.
+                style={{ width: 32, height: 32, marginRight: 8, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
+              >
+                <span
+                  aria-hidden
+                  className="flex items-center justify-center rounded-full"
+                  style={{ width: 18, height: 18, backgroundColor: '#EED98A', color: '#1B3828' }}
+                >
+                  <Plus size={12} strokeWidth={3} />
+                </span>
+              </button>
+            </div>
+
+            {/* PRICING, with the plan badge; on Free, an arrow to go Unlimited */}
+            <div
+              className="flex items-center transition-colors"
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+            >
+              <Link
+                href="/pricing/credits"
+                onClick={() => setOpen(false)}
+                className="flex flex-1 min-w-0 items-center gap-2.5 pl-4 py-2 font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-inset"
+                style={{
+                  ...ROW_TEXT,
+                  textDecoration: 'none',
+                  // With no arrow button beside it the badge keeps the row's own inset.
+                  paddingRight: unlimitedStatus !== null && !isUnlimited(unlimitedStatus) ? 4 : 16,
+                }}
+              >
+                <Tag size={15} strokeWidth={2.1} style={{ color: '#9A8A78', flexShrink: 0 }} />
+                <span className="flex-1">PRICING</span>
+                {/* No badge while the status is not known yet. */}
+                {unlimitedStatus !== null && (
+                  isUnlimited(unlimitedStatus) ? (
+                    <span
+                      className="shrink-0 rounded-full"
+                      style={{ backgroundColor: '#EED98A', color: '#1B3828', fontSize: '10px', fontWeight: 800, letterSpacing: '0.04em', padding: '2px 8px' }}
+                    >
+                      Unlimited
+                    </span>
+                  ) : (
+                    <span
+                      className="shrink-0 rounded-full"
+                      style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: '#1C1410', fontSize: '10px', fontWeight: 800, letterSpacing: '0.04em', padding: '2px 8px' }}
+                    >
+                      Free
+                    </span>
+                  )
+                )}
+              </Link>
+              {unlimitedStatus !== null && !isUnlimited(unlimitedStatus) && (
+                <button
+                  type="button"
+                  aria-label="Go Unlimited"
+                  title="Go Unlimited"
+                  onClick={(e) => { e.stopPropagation(); setOpen(false); openUnlimitedPopup(); }}
+                  className="flex items-center justify-center shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-inset"
+                  style={{ width: 32, height: 32, marginRight: 8, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
+                >
+                  <span
+                    aria-hidden
+                    className="flex items-center justify-center rounded-full"
+                    style={{ width: 18, height: 18, backgroundColor: '#1B3828', color: '#EED98A' }}
+                  >
+                    <ArrowUp size={12} strokeWidth={3} />
+                  </span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Your conferences, lazily fetched. Invitations and drafts live in
@@ -754,7 +818,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                       </Link>
                     ) : (
                       <Link
-                        href="/my-conferences"
+                        href="/account/conferences"
                         onClick={() => setOpen(false)}
                         className="flex items-center gap-2.5 px-4 py-2 font-bold transition-colors"
                         style={{ color: '#1B3828', fontSize: '11px', letterSpacing: '0.05em', fontFamily: "var(--font-brand), sans-serif", textDecoration: 'none' }}

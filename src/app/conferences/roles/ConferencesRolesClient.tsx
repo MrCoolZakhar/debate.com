@@ -1194,7 +1194,7 @@ export default function ConferencesRolesClient() {
                   <p className="text-sm mb-6" style={{ color: MUTED, fontFamily: OUTFIT, maxWidth: 440 }}>
                     Conferences will post open positions here. Check back soon.
                   </p>
-                  <NeuButton onClick={() => router.push('/my-conferences')} gradient={NEU_GRADIENTS.forest}>
+                  <NeuButton onClick={() => router.push('/account/conferences')} gradient={NEU_GRADIENTS.forest}>
                     LIST YOUR CONFERENCE
                     <ArrowRight size={14} strokeWidth={2.6} />
                   </NeuButton>

@@ -47,18 +47,35 @@ export function forgetUnlimitedStatus(userId?: string) {
   if (userId) cache.delete(userId); else cache.clear();
 }
 
+// Every mounted reader (profile menu badge, Manage account, the pop-ups)
+// re-reads when a purchase, a promo code or a cancellation changes the plan.
+const listeners = new Set<() => void>();
+
+/** Forget the cache AND tell every mounted useUnlimitedStatus to re-read. */
+export function notifyUnlimitedChanged(userId?: string) {
+  forgetUnlimitedStatus(userId);
+  listeners.forEach(l => l());
+}
+
 /** null while unknown (signed out, or the first read is in flight). */
 export function useUnlimitedStatus(): UnlimitedStatus | null {
   const { user } = useAuth();
   const userId = user?.id ?? null;
   const [state, setState] = useState<{ userId: string | null; value: UnlimitedStatus | null }>({ userId: null, value: null });
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    const l = () => setTick(t => t + 1);
+    listeners.add(l);
+    return () => { listeners.delete(l); };
+  }, []);
 
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
     read(userId).then(v => { if (!cancelled) setState({ userId, value: v }); });
     return () => { cancelled = true; };
-  }, [userId]);
+  }, [userId, tick]);
 
   return userId && state.userId === userId ? state.value : null;
 }

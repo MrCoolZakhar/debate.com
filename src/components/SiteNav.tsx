@@ -5,13 +5,14 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
-import { Globe, Languages } from 'lucide-react';
+import { Globe, Languages, Plus } from 'lucide-react';
 import LanguageRequestDialog from '@/components/LanguageRequestDialog';
 import { isSessionsPath } from '@/lib/sessionRoutes';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
 import AuthLink from '@/components/auth/AuthLink';
 import { useCredits } from '@/hooks/useCredits';
 import { CreditCoin } from '@/components/CreditCoin';
+import { openCreditsPopup } from '@/lib/purchasePopup';
 import ActivityNotices from '@/components/profile/ActivityNotices';
 import { useMyActivity, useOpenSeenState, markActivitySeen, isVisibleActivity } from '@/lib/myActivity';
 
@@ -25,6 +26,8 @@ const NAV_LINKS_CONFIG = [
   // "Explore Conferences", stacked like "Start Session" (owner, 25 Sep 2026).
   { en: 'Conferences', es: 'Conferencias', fr: 'Conférences',     ar: 'المؤتمرات',  href: '/conferences/explore',
     kicker: { en: 'Explore', es: 'Explorar', fr: 'Explorer', ar: 'استكشف' } },
+  // PRICING leads to the credits page and stays lit on every /pricing page.
+  { en: 'Pricing',     es: 'Precios',      fr: 'Tarifs',          ar: 'الأسعار',    href: '/pricing/credits' },
   // HOME sits in the middle of the pill and is the lit item on the landing page
   // the moment someone opens it (owner, 25 Sep 2026).
   { en: 'Home',        es: 'Inicio',       fr: 'Accueil',         ar: 'الرئيسية',   href: '/' },
@@ -37,6 +40,7 @@ const NAV_LINKS_CONFIG = [
 function isNavLinkActive(pathname: string | null, href: string): boolean {
   if (!pathname) return false;
   if (href === '/conferences/explore') return pathname.startsWith('/conferences');
+  if (href === '/pricing/credits') return pathname.startsWith('/pricing');
   return pathname === href;
 }
 
@@ -158,7 +162,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
   // manage header and auth card use. Sessions pages get the "GAVELLING SESSIONS
   // APP" logo (/GavellingSessionsApp.png). This mirrors the wordmark text the
   // nav already switches per context.
-  const CONFERENCES_PREFIXES = ['/conferences', '/manage', '/account', '/auth', '/my-conferences', '/invites'];
+  const CONFERENCES_PREFIXES = ['/conferences', '/manage', '/account', '/auth', '/account/conferences', '/invites'];
   // `!pathname` defaults to the CONFERENCES lockup on purpose. usePathname() can
   // resolve to null while a page is being statically prerendered, and when that
   // happened the homepage baked the SESSIONS logo into its static HTML — every
@@ -204,7 +208,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
     UPDATE 24 Sep 2026 (owner: "the nav pill now doesn't move with the page as it
     scrolls, fix"): the pill is FIXED again, at the same 72px band it sits in at scroll
     top, z-40. The collisions below are handled at the sticky bars instead: on desktop
-    (lg+, the only widths the pill exists at: five items since 25 Sep 2026 need 1024px, so 768 to 1023 use the phone menu) every sticky bar on a page with this nav
+    (lg+, the only widths the pill exists at: six items (PRICING joined the five of 25 Sep 2026) need 1024px, so 768 to 1023 use the phone menu) every sticky bar on a page with this nav
     sticks at 84px or lower (conference page tabs and rail, explore filters; roles and
     account already did). A NEW sticky bar on a page with SiteNav must do the same.
 
@@ -249,11 +253,13 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
                   display: 'inline-flex',
                   alignItems: 'center',
                   position: 'relative',
-                  // Five items since 25 Sep 2026 (HOME in the middle): never wrap a
-                  // label, and tighten the padding on narrower desktops.
+                  // Six items since PRICING joined (Session, Conferences, Pricing,
+                  // Home, About us, Contact): never wrap a label, and tighten the
+                  // padding and the type on narrower desktops so all six fit
+                  // between the logo and the account controls at 1280px.
                   whiteSpace: 'nowrap',
-                  padding: '8px clamp(9px, 1.15vw, 16px)',
-                  fontSize: 'clamp(12px, 0.95vw, 13.5px)',
+                  padding: '8px clamp(7px, 1vw, 16px)',
+                  fontSize: 'clamp(11.5px, 0.95vw, 13.5px)',
                   fontWeight: active ? 900 : 800,
                   letterSpacing: '0.04em',
                   textTransform: 'uppercase',
@@ -431,30 +437,64 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
         {/* Desktop right actions */}
         <div className="hidden lg:flex items-center gap-3">
 
-          {/* Credit chip */}
+          {/* Credit chip: ONE pill holding two controls. The coin and the number
+              are a link to Manage account; the small gold + at the right end
+              opens the buy-credits pop-up without leaving the page. They are
+              siblings (a <button> inside an <a> is invalid HTML), styled as one
+              pill on the wrapper, which also keeps the `data-credits-chip`
+              spotlight target of CreditsWelcomeModal. */}
           {user && (
-            <Link
-              href="/account/unlimited"
+            <div
               data-credits-chip
-              className="relative flex items-center gap-1.5 focus:outline-none"
+              className="relative flex items-center"
               style={{
                 backgroundColor: '#1B3828',
                 color: '#EED98A',
                 borderRadius: '9999px',
-                padding: '7px 14px',
-                fontSize: '13px',
-                fontWeight: 700,
-                letterSpacing: '0.04em',
-                fontFamily: "var(--font-brand), sans-serif",
-                textDecoration: 'none',
+                padding: '3px 4px 3px 0',
                 transition: 'background-color 150ms ease',
               }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
             >
-              <CreditCoin size={16} />
-              <span style={{ fontVariantNumeric: 'tabular-nums' }}>{creditsLoading || creditBalance === null ? '—' : creditBalance}</span>
-            </Link>
+              <Link
+                href="/account/manage/credits"
+                aria-label="Manage account"
+                className="flex items-center gap-1.5 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2"
+                style={{
+                  color: '#EED98A',
+                  padding: '4px 6px 4px 14px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  fontFamily: "var(--font-brand), sans-serif",
+                  textDecoration: 'none',
+                }}
+              >
+                <CreditCoin size={16} />
+                <span style={{ fontVariantNumeric: 'tabular-nums' }}>{creditsLoading || creditBalance === null ? '–' : creditBalance}</span>
+              </Link>
+              <button
+                type="button"
+                aria-label="Buy credits"
+                title="Buy credits"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); openCreditsPopup({ context: 'header' }); }}
+                // 22px disc; on a touch screen a pseudo-element widens the hit
+                // area to 44px without changing what is drawn.
+                className="relative flex items-center justify-center rounded-full shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2 [@media(pointer:coarse)]:before:absolute [@media(pointer:coarse)]:before:-inset-[11px] [@media(pointer:coarse)]:before:content-['']"
+                style={{
+                  width: 22,
+                  height: 22,
+                  backgroundColor: '#EED98A',
+                  color: '#1B3828',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 0,
+                }}
+              >
+                <Plus size={13} strokeWidth={3} aria-hidden />
+              </button>
+            </div>
           )}
 
           {/* Auth section */}
@@ -620,26 +660,53 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage: h
                   organiser work, each row a link to where it is done. */}
               <ActivityNotices items={sheetAttention} variant="sheet" onNavigate={() => setMenuOpen(false)} />
 
-              <Link
-                href="/account/unlimited"
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-2 focus:outline-none"
+              {/* The phone's credit counter: the same two controls as the desktop
+                  chip. Coin + number + "Manage account" is the link; the + at the
+                  right edge closes the sheet and opens the buy-credits pop-up. */}
+              <div
+                className="flex items-center"
                 style={{
-                  padding: '10px 16px',
                   margin: '0 0 4px',
                   borderRadius: '10px',
                   backgroundColor: 'rgba(27, 56, 40, 0.07)',
-                  textDecoration: 'none',
                 }}
               >
-                <CreditCoin size={16} />
-                <span style={{ fontSize: '13px', fontWeight: 800, color: '#1B3828', fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums' }}>
-                  {creditsLoading || creditBalance === null ? '—' : creditBalance}
-                </span>
-                <span style={{ marginLeft: 'auto', fontSize: '12px', fontWeight: 700, color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.02em' }}>
-                  Credits &amp; Subscription
-                </span>
-              </Link>
+                <Link
+                  href="/account/manage/credits"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex flex-1 min-w-0 items-center gap-2 rounded-[10px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2"
+                  style={{
+                    padding: '12px 8px 12px 16px',
+                    minHeight: 44,
+                    textDecoration: 'none',
+                  }}
+                >
+                  <CreditCoin size={16} />
+                  <span style={{ fontSize: '13px', fontWeight: 800, color: '#1B3828', fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums' }}>
+                    {creditsLoading || creditBalance === null ? '–' : creditBalance}
+                  </span>
+                  <span className="truncate" style={{ marginLeft: 'auto', fontSize: '12px', fontWeight: 700, color: '#5A4E46', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.02em' }}>
+                    Manage account
+                  </span>
+                </Link>
+                <button
+                  type="button"
+                  aria-label="Buy credits"
+                  title="Buy credits"
+                  onClick={() => { setMenuOpen(false); openCreditsPopup({ context: 'header' }); }}
+                  // A 44x44 tap target drawing a 24px gold disc.
+                  className="flex items-center justify-center shrink-0 rounded-[10px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2"
+                  style={{ width: 44, height: 44, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
+                >
+                  <span
+                    aria-hidden
+                    className="flex items-center justify-center rounded-full"
+                    style={{ width: 24, height: 24, backgroundColor: '#EED98A', color: '#1B3828' }}
+                  >
+                    <Plus size={14} strokeWidth={3} />
+                  </span>
+                </button>
+              </div>
 
               <button
                 onClick={handleSignOut}

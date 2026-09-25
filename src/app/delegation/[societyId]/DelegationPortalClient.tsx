@@ -251,7 +251,7 @@ export default function DelegationPortalClient() {
                 Try again
               </button>
             )}
-            <Link href="/my-conferences" className="focus:outline-none focus-visible:ring-2"
+            <Link href="/account/conferences" className="focus:outline-none focus-visible:ring-2"
               style={{ padding: '10px 16px', borderRadius: 12, border: NEU.hairline, color: NEU.forest, fontFamily: OUTFIT, fontWeight: 700, textDecoration: 'none' }}>
               My conferences
             </Link>
@@ -268,7 +268,7 @@ export default function DelegationPortalClient() {
     <Shell>
       {modal}
       <div className="flex items-center justify-between gap-3 mb-4">
-        <Link href="/my-conferences" className="inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2"
+        <Link href="/account/conferences" className="inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2"
           style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
           <ArrowLeft size={15} strokeWidth={2.4} aria-hidden /> My conferences
         </Link>

@@ -17,7 +17,7 @@ import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { formatFee } from '@/lib/utils';
 import { Pill, LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { experienceProgress, EXPERIENCE_BANDS } from '@/lib/munExperience';
-import { creditPricing, extractFunctionErrorMessage } from '@/lib/payments';
+import { openCreditsPopup, openUnlimitedPopup } from '@/lib/purchasePopup';
 import { computeCheckout, activePhaseFee, type VoucherInput, type FeePhase } from '@/lib/finance';
 import { queueParticipantEventEmail } from '@/lib/emailEvents';
 import { reportBlocked } from '@/lib/reportCrash';
@@ -29,7 +29,7 @@ import {
   loadApplyDraft, saveApplyDraft, discardApplyDraft,
   saveApplyDraftOnTeardown, resyncDraftRevision,
   draftHasContent, newDraftClientId, fingerprintDraft,
-  draftWorthResumePrompt, markApplyCheckoutRoundTrip, consumeApplyCheckoutRoundTrip,
+  draftWorthResumePrompt, consumeApplyCheckoutRoundTrip,
 } from '@/lib/applyDraft';
 import ResumeDraftDialog from './ResumeDraftDialog';
 import {
@@ -65,7 +65,7 @@ import { readFirstTouch, ensureFirstTouch } from '@/lib/trafficSource';
 import {
   Gavel, Users, Sprout,
   GraduationCap, Trophy, Crown, Sparkles,
-  MapPin, Landmark, Check, X, Plus, Minus, ArrowRight, CalendarClock,
+  MapPin, Landmark, Check, X, Plus, ArrowRight, CalendarClock,
   Ticket, Infinity as InfinityIcon, Globe, Lock, ChevronUp, ChevronDown,
   Info, Coins, Pencil, Ban,
 } from 'lucide-react';
@@ -767,102 +767,55 @@ function RankedRow({
   );
 }
 
+/** Inline text button inside the red out-of-credits strips. */
+const CREDIT_STRIP_LINK: React.CSSProperties = {
+  color: '#8B2020', textDecoration: 'underline', textUnderlineOffset: 3,
+  background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer',
+};
+
 /**
- * Image-forward option card for the Overview upgrade surface (buy credits /
- * upgrade to Unlimited). A photo header carries a hover effect: on hover the
- * image darkens under a translucent scrim and a descriptive line fades in over
- * it. The footer slot holds the live controls (stepper + buy, or an upgrade
- * button). Consistent with the onboarding/apply neu photography.
+ * Small pill button for the "Need more credits?" row, in the wizard's own
+ * button idiom (WizardFooter): a filled forest pill for the primary action, an
+ * outlined one beside it. Each opens a global purchase pop-up; no price here.
  */
-function UpgradePhotoCard({
-  image, eyebrow, title, hoverText, accent, children,
+function CreditPillButton({
+  label, onClick, primary = false, icon,
 }: {
-  image: string;
-  eyebrow: string;
-  title: string;
-  hoverText: string;
-  accent: string;
-  children: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  primary?: boolean;
+  icon?: React.ReactNode;
 }) {
-  const [hovered, setHovered] = useState(false);
+  const [hover, setHover] = useState(false);
+  const [pressed, setPressed] = useState(false);
   return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      className="flex flex-col overflow-hidden"
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => { setHover(false); setPressed(false); }}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      className="inline-flex items-center gap-2 focus:outline-none"
       style={{
-        borderRadius: 20,
-        backgroundColor: NEU.surface,
-        boxShadow: hovered ? NEU.outHover : NEU.out,
-        border: `1.5px solid ${accent}33`,
-        transition: `box-shadow 240ms ${EASE}, transform 240ms ${EASE}`,
-        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
+        fontFamily: OUTFIT,
+        fontWeight: 800,
+        fontSize: 13,
+        letterSpacing: '0.05em',
+        padding: '10px 20px',
+        borderRadius: 999,
+        border: primary ? 'none' : `1.5px solid color-mix(in srgb, ${NEU.forest} 28%, transparent)`,
+        cursor: 'pointer',
+        color: primary ? NEU.gold : NEU.forest,
+        background: primary ? NEU.forest : NEU.surface,
+        boxShadow: hover ? NEU.outSmHover : NEU.outSm,
+        transform: `${hover ? 'translateY(-1px)' : 'translateY(0)'}${pressed ? ' scale(0.96)' : ''}`,
+        transition: `box-shadow 220ms ${EASE}, transform 160ms ${EASE}`,
       }}
     >
-      {/* Photo header + hover reveal */}
-      <div className="relative" style={{ height: 118, overflow: 'hidden' }}>
-        <div
-          aria-hidden
-          className="absolute inset-0"
-          style={{
-            backgroundImage: `url(${image})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            transform: hovered ? 'scale(1.05)' : 'scale(1)',
-            transition: `transform 500ms ${EASE}, filter 300ms ${EASE}`,
-            filter: hovered ? 'saturate(1.05)' : 'saturate(0.9)',
-          }}
-        />
-        {/* Darkening scrim — deepens on hover */}
-        <div
-          aria-hidden
-          className="absolute inset-0"
-          style={{
-            background: hovered
-              ? 'linear-gradient(180deg, rgba(16,28,21,0.42) 0%, rgba(16,28,21,0.72) 100%)'
-              : 'linear-gradient(180deg, rgba(16,28,21,0.10) 0%, rgba(16,28,21,0.40) 100%)',
-            transition: `background 300ms ${EASE}`,
-          }}
-        />
-        {/* Eyebrow + title, fades out on hover so the description can take over */}
-        <div
-          className="absolute left-0 right-0 bottom-0 px-4 pb-3"
-          style={{
-            zIndex: 1,
-            opacity: hovered ? 0 : 1,
-            transform: hovered ? 'translateY(-4px)' : 'translateY(0)',
-            transition: `opacity 220ms ${EASE}, transform 220ms ${EASE}`,
-          }}
-        >
-          <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 9.5, letterSpacing: '0.16em', color: 'var(--gv-on-main)', marginBottom: 2 }}>
-            {eyebrow}
-          </p>
-          <p style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 17, color: '#FAF8F3', lineHeight: 1.1, textShadow: '0 1px 6px rgba(16,28,21,0.5)' }}>
-            {title}
-          </p>
-        </div>
-        {/* Descriptive copy, cross-fades in over the darkened image on hover */}
-        <div
-          className="absolute inset-0 flex items-center px-4 py-3"
-          style={{
-            zIndex: 2,
-            opacity: hovered ? 1 : 0,
-            transform: hovered ? 'translateY(0)' : 'translateY(6px)',
-            transition: `opacity 260ms ${EASE}, transform 260ms ${EASE}`,
-            pointerEvents: 'none',
-          }}
-        >
-          <p style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 12.5, color: '#FAF8F3', lineHeight: 1.5, textShadow: '0 1px 6px rgba(16,28,21,0.6)' }}>
-            {hoverText}
-          </p>
-        </div>
-      </div>
-
-      {/* Live controls */}
-      <div className="p-4">
-        {children}
-      </div>
-    </div>
+      {icon}
+      {label}
+    </button>
   );
 }
 
@@ -3083,8 +3036,11 @@ function ConferenceApplyInner() {
       if (creditError) reportBlocked('consume application credit', creditError, { conferenceSlug: slug, role });
       const creditResult = credit as { ok?: boolean; consumed?: boolean; need_credit?: boolean } | null;
       if (creditResult?.need_credit) {
-        setSubmitError("You're out of credits. Buy more or upgrade your subscription, then try submitting again.");
+        setSubmitError("You're out of credits. Add one and submit again.");
         setSubmitting(false);
+        // Open the credits pop-up at once; its onComplete clears this error
+        // once the balance has been re-read, so Submit works straight away.
+        goBuyCredits();
         return;
       }
       refreshCredits();
@@ -3274,7 +3230,7 @@ function ConferenceApplyInner() {
       if (!result?.ok) throw new UserFacingError(result?.error ?? 'Could not withdraw your application. Please try again.');
       refreshCredits();
       await discardDraft(supabase);
-      router.push('/my-conferences');
+      router.push('/account/conferences');
     } catch (err: unknown) {
       setWithdrawError(friendlyError(err, 'Could not withdraw your application. Please try again.'));
       setWithdrawing(false);
@@ -3282,115 +3238,37 @@ function ConferenceApplyInner() {
   }
 
   /**
-   * Flush the draft before a checkout / upgrade round trip hands the browser
-   * to Stripe. This is the ONE place a draft save is awaited: the page is
-   * about to be replaced, so there is no keystroke left to block, and the
-   * whole point of the round trip is coming back to what they had.
-   *
-   * Previously this wrote a two-hour localStorage snapshot. The server draft
-   * beats it on every axis — it survives the TTL, a failed or abandoned
-   * Stripe redirect, a different browser, and it cannot leak into the next
-   * person to use a shared machine. Never let a failure here stop the
-   * applicant from going to buy a credit.
+   * Save the draft before a purchase pop-up opens. The person never leaves the
+   * page any more (the pop-ups take the payment in place), so this is only a
+   * safety net: a save that fails must never stop them from buying a credit.
    */
   async function flushDraftBeforeCheckout() {
-    // Coming back from checkout is not a new visit: skip the resume prompt once.
-    markApplyCheckoutRoundTrip(slug, role);
-    try { await saveDraftNow(); } catch { /* best effort, never block checkout */ }
+    try { await saveDraftNow(); } catch { /* best effort, never block a purchase */ }
   }
 
-  async function goBuyCredits() {
-    await flushDraftBeforeCheckout();
-    router.push(`/account/unlimited?returnTo=${encodeURIComponent(`/conferences/${slug}/apply?role=${role}`)}`);
+  /** What every purchase pop-up does once the balance has been re-read. */
+  function afterPurchase() {
+    refreshCredits();
+    setSubmitError('');
+    setResubmitNeedsCredit(false);
   }
 
-  // ── Inline credit purchase (Overview step) ───────────────────────────────
-  // The applicant can top up credits without leaving the apply flow: a simple
-  // quantity stepper wired to the SAME create-credit-checkout edge function the
-  // account + delegation buy-credit surfaces use. Region price comes from the
-  // buyer's geo (creditPricing), and we snapshot the application first so the
-  // returnTo round trip restores them to Overview.
-  const [geoCountry, setGeoCountry] = useState<string | null>(null);
-  useEffect(() => {
-    fetch('/api/geo')
-      .then(r => r.json())
-      .then(g => setGeoCountry((g?.countryCode as string | null) ?? null))
-      .catch(() => {});
-  }, []);
-  const [creditQty, setCreditQty] = useState(1);
-  const [buyingCredits, setBuyingCredits] = useState(false);
-  const [buyCreditsError, setBuyCreditsError] = useState('');
-  const [upgradingUnlimited, setUpgradingUnlimited] = useState(false);
-  const [unlimitedError, setUnlimitedError] = useState('');
-  const CREDIT_MAX_QTY = 20;
-
-  async function handleBuyCreditsInline() {
-    if (buyingCredits) return;
-    setBuyingCredits(true);
-    setBuyCreditsError('');
-    await flushDraftBeforeCheckout();
-    const supabase = await getFreshAuthedClient();
-    if (!supabase) {
-      setBuyingCredits(false);
-      setBuyCreditsError('Your session has expired, please refresh and sign in again.');
-      return;
-    }
-    const { data, error } = await supabase.functions.invoke('create-credit-checkout', {
-      body: {
-        kind: 'credits',
-        quantity: creditQty,
-        returnTo: `/conferences/${slug}/apply?role=${role}`,
-        ...(geoCountry ? { country: geoCountry } : {}),
-      },
+  // ── Buying credits / going Unlimited: the global pop-ups ─────────────────
+  // Both open in place (src/lib/purchasePopup.ts); nothing here calls a
+  // checkout function or sends the person to another page.
+  function goBuyCredits() {
+    void flushDraftBeforeCheckout();
+    openCreditsPopup({
+      context: 'apply',
+      conferenceName: conference?.full_name || conference?.acronym || undefined,
+      preselect: 1,
+      onComplete: afterPurchase,
     });
-    if (error) {
-      setBuyingCredits(false);
-      setBuyCreditsError(await extractFunctionErrorMessage(error));
-      return;
-    }
-    const result = data as { ok?: boolean; url?: string; error?: string } | null;
-    if (!result?.ok || !result.url) {
-      setBuyingCredits(false);
-      setBuyCreditsError(result?.error || 'Could not start checkout. Please try again.');
-      return;
-    }
-    window.location.assign(result.url);
   }
 
-  /** Upgrade to Gavelling Unlimited inline, mirroring handleBuyCreditsInline:
-   *  invokes the subscription checkout function directly rather than routing
-   *  to /account/unlimited, so the applicant never leaves the apply flow. */
-  async function goUnlimited() {
-    if (upgradingUnlimited) return;
-    setUpgradingUnlimited(true);
-    setUnlimitedError('');
-    await flushDraftBeforeCheckout();
-    try {
-      const supabase = await getFreshAuthedClient();
-      if (!supabase) {
-        setUnlimitedError('Your session has expired, please refresh and sign in again.');
-        return;
-      }
-      const { data, error } = await supabase.functions.invoke('create-subscription-checkout', {
-        body: {
-          plan: 'monthly',
-          returnTo: `/conferences/${slug}/apply?role=${role}`,
-          ...(geoCountry ? { country: geoCountry } : {}),
-        },
-      });
-      if (error) {
-        setUnlimitedError(await extractFunctionErrorMessage(error));
-        return;
-      }
-      const result = data as { ok?: boolean; url?: string; error?: string } | null;
-      if (!result?.ok || !result.url) {
-        setUnlimitedError(result?.error || 'Could not start checkout. Please try again.');
-        return;
-      }
-      window.location.assign(result.url);
-    } finally {
-      setUpgradingUnlimited(false);
-    }
+  function goUnlimitedPopup() {
+    void flushDraftBeforeCheckout();
+    openUnlimitedPopup({ onComplete: afterPurchase });
   }
 
   // ── Step render helpers ───────────────────────────────────────────────────
@@ -5247,14 +5125,14 @@ function ConferenceApplyInner() {
               <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(139,32,32,0.06)', border: '1.5px solid rgba(139,32,32,0.22)' }}>
                 <p className="text-sm font-semibold" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
                   Out of credits?{' '}
-                  <button
-                    type="button"
-                    onClick={goBuyCredits}
-                    className="focus:outline-none"
-                    style={{ color: '#8B2020', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer' }}
-                  >
-                    Buy more or upgrade your subscription!
+                  <button type="button" onClick={goBuyCredits} className="focus:outline-none" style={CREDIT_STRIP_LINK}>
+                    Buy credits
                   </button>
+                  {' '}or{' '}
+                  <button type="button" onClick={goUnlimitedPopup} className="focus:outline-none" style={CREDIT_STRIP_LINK}>
+                    go Unlimited
+                  </button>
+                  {' '}to continue.
                 </p>
               </div>
             )}
@@ -5262,134 +5140,35 @@ function ConferenceApplyInner() {
             {resubmitNeedsCredit && (
               <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(139,32,32,0.06)', border: '1.5px solid rgba(139,32,32,0.22)' }}>
                 <p className="text-sm font-semibold" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
-                  You need a credit to resubmit.{' '}
-                  <button
-                    type="button"
-                    onClick={goBuyCredits}
-                    className="focus:outline-none"
-                    style={{ color: '#8B2020', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer' }}
-                  >
-                    Buy more or upgrade your subscription!
+                  Out of credits?{' '}
+                  <button type="button" onClick={goBuyCredits} className="focus:outline-none" style={CREDIT_STRIP_LINK}>
+                    Buy credits
                   </button>
+                  {' '}or{' '}
+                  <button type="button" onClick={goUnlimitedPopup} className="focus:outline-none" style={CREDIT_STRIP_LINK}>
+                    go Unlimited
+                  </button>
+                  {' '}to continue.
                 </p>
               </div>
             )}
           </>
         )}
 
-        {/* ── Inline top-up + upgrade — add credits or move to Gavelling
-            Unlimited without leaving the application. Only shown when this role
-            actually spends credits (never for sponsored / exempt / already-
-            Unlimited / edit resubmits), so it stays additive to the summary
-            above and never interferes with Submit. ── */}
-        {!creditsSponsored && !isExemptRole && !hasUnlimited && !isEditMode && !guestGate && (() => {
-          const creditPrice = creditPricing(geoCountry);
-          const creditTotal = Math.round(creditPrice.each * creditQty * 100) / 100;
-          return (
-            <div className="mb-4">
-              <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.2em', color: NEU.muted, marginBottom: 12 }}>
-                NEED MORE CREDITS?
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                {/* Add credits — quantity stepper + direct checkout */}
-                <UpgradePhotoCard
-                  image="/onboarding/laptop-01.jpg"
-                  eyebrow="TOP UP"
-                  title="Add credits"
-                  hoverText="Each credit gives one delegate fee-free access to one conference. Unused credits never expire."
-                  accent={NEU.deepGold}
-                >
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <div className="flex items-center gap-1 rounded-full" style={{ backgroundColor: NEU.base, padding: 4, boxShadow: NEU.inSm }}>
-                      <button
-                        type="button"
-                        onClick={() => setCreditQty(q => Math.max(1, q - 1))}
-                        disabled={buyingCredits || creditQty <= 1}
-                        aria-label="Fewer credits"
-                        className="flex items-center justify-center rounded-full focus:outline-none"
-                        style={{ width: 26, height: 26, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', cursor: buyingCredits || creditQty <= 1 ? 'default' : 'pointer', opacity: buyingCredits || creditQty <= 1 ? 0.5 : 1 }}
-                      >
-                        <Minus size={13} strokeWidth={2.6} style={{ color: NEU.ink }} />
-                      </button>
-                      <span className="text-center font-bold text-sm" style={{ width: 26, fontFamily: OUTFIT, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>
-                        {creditQty}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setCreditQty(q => Math.min(CREDIT_MAX_QTY, q + 1))}
-                        disabled={buyingCredits || creditQty >= CREDIT_MAX_QTY}
-                        aria-label="More credits"
-                        className="flex items-center justify-center rounded-full focus:outline-none"
-                        style={{ width: 26, height: 26, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', cursor: buyingCredits || creditQty >= CREDIT_MAX_QTY ? 'default' : 'pointer', opacity: buyingCredits || creditQty >= CREDIT_MAX_QTY ? 0.5 : 1 }}
-                      >
-                        <Plus size={13} strokeWidth={2.6} style={{ color: NEU.ink }} />
-                      </button>
-                    </div>
-                    <span className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT, whiteSpace: 'nowrap' }}>
-                      {formatFee(creditPrice.each, creditPrice.currency)} each
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleBuyCreditsInline}
-                    disabled={buyingCredits}
-                    className="w-full rounded-xl py-2.5 font-bold text-xs focus:outline-none"
-                    style={{
-                      backgroundColor: buyingCredits ? 'color-mix(in srgb, var(--gv-main) 14%, transparent)' : NEU.forest,
-                      color: buyingCredits ? NEU.muted : NEU.gold,
-                      fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none',
-                      boxShadow: NEU.outSm, cursor: buyingCredits ? 'default' : 'pointer',
-                    }}
-                  >
-                    {buyingCredits ? 'STARTING CHECKOUT…' : `BUY FOR ${formatFee(creditTotal, creditPrice.currency)}`}
-                  </button>
-                </UpgradePhotoCard>
-
-                {/* Upgrade to Gavelling Unlimited — existing subscription flow */}
-                <UpgradePhotoCard
-                  image="/onboarding/globe-01.jpg"
-                  eyebrow="GO UNLIMITED"
-                  title="Gavelling Unlimited"
-                  hoverText="Apply to unlimited conferences with no per-application credits. One subscription covers it all."
-                  accent="var(--gv-accent)"
-                >
-                  <div className="flex items-center gap-1.5 mb-3">
-                    <InfinityIcon size={15} strokeWidth={2.4} style={{ color: 'var(--gv-accent)' }} />
-                    <span className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.4 }}>
-                      Never spend a credit again.
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={goUnlimited}
-                    disabled={upgradingUnlimited}
-                    className="w-full rounded-xl py-2.5 font-bold text-xs focus:outline-none"
-                    style={{
-                      background: upgradingUnlimited ? 'color-mix(in srgb, var(--gv-accent) 40%, transparent)' : 'linear-gradient(135deg, var(--gv-accent), var(--gv-accent))',
-                      color: '#3A2A08',
-                      fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none',
-                      boxShadow: NEU.outSm, cursor: upgradingUnlimited ? 'default' : 'pointer',
-                    }}
-                  >
-                    {upgradingUnlimited ? 'OPENING…' : 'UPGRADE'}
-                  </button>
-                  <Link
-                    href="/account/unlimited"
-                    className="block text-center text-[11px] mt-2"
-                    style={{ color: NEU.muted, fontFamily: OUTFIT, textDecoration: 'underline', textUnderlineOffset: 2 }}
-                  >
-                    Yearly billing available in your account settings.
-                  </Link>
-                </UpgradePhotoCard>
-              </div>
-              {(buyCreditsError || unlimitedError) && (
-                <p className="text-xs mt-2.5 text-center" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
-                  {buyCreditsError || unlimitedError}
-                </p>
-              )}
+        {/* Need more credits? Two quiet buttons that open the global purchase
+            pop-ups (prices live there). Only when this role actually spends
+            credits: never for sponsored / exempt / Unlimited / edit resubmits. */}
+        {!creditsSponsored && !isExemptRole && !hasUnlimited && !isEditMode && !guestGate && (
+          <div className="mb-4">
+            <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.2em', color: NEU.inkSoft, marginBottom: 10 }}>
+              NEED MORE CREDITS?
+            </p>
+            <div className="flex flex-wrap gap-2.5">
+              <CreditPillButton label="Buy credits" onClick={goBuyCredits} primary />
+              <CreditPillButton label="Go Unlimited" onClick={goUnlimitedPopup} icon={<InfinityIcon size={15} strokeWidth={2.4} />} />
             </div>
-          );
-        })()}
+          </div>
+        )}
 
         {submitError && (
           <p className="mb-4 text-sm text-center" style={{ color: '#8B2020', fontFamily: OUTFIT }}>

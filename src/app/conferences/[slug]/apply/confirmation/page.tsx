@@ -356,7 +356,7 @@ export default function ConfirmationPage() {
               We could not load this conference right now. Your submission was saved.
             </p>
             <Link
-              href="/my-conferences"
+              href="/account/conferences"
               className="mt-6 focus:outline-none"
               style={{
                 fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, letterSpacing: '0.06em',

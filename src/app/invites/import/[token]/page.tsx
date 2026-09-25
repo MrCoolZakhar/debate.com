@@ -216,7 +216,7 @@ export default function ImportInvitePage() {
         <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.55 }}>
           This invitation has already been claimed. If that was you, your conference is waiting in My Conferences.
         </p>
-        <Link href="/my-conferences" className="inline-flex items-center gap-2 rounded-full py-2.5 px-5 font-bold text-sm focus:outline-none" style={primaryPillStyle}>
+        <Link href="/account/conferences" className="inline-flex items-center gap-2 rounded-full py-2.5 px-5 font-bold text-sm focus:outline-none" style={primaryPillStyle}>
           GO TO MY CONFERENCES
         </Link>
       </CardShell>

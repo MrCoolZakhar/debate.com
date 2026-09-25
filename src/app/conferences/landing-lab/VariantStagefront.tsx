@@ -83,7 +83,7 @@ const ROLE_SLIDES: RoleSlide[] = [
     image: '/roles/chair-card.webp',
     imageAlt: 'A chair presiding over committee from the dais',
     primary: { label: 'Explore chairing opportunities', href: '/conferences/roles' },
-    secondary: { label: 'View your conferences', href: '/my-conferences?tab=chair' },
+    secondary: { label: 'View your conferences', href: '/account/conferences?tab=chair' },
   },
   {
     role: 'Delegates',
@@ -91,7 +91,7 @@ const ROLE_SLIDES: RoleSlide[] = [
     image: '/roles/delegate.jpg',
     imageAlt: 'A delegate speaking from their seat in committee',
     primary: { label: 'Explore conferences', href: '/conferences/explore' },
-    secondary: { label: 'View your conferences', href: '/my-conferences?tab=delegate' },
+    secondary: { label: 'View your conferences', href: '/account/conferences?tab=delegate' },
   },
 ];
 
