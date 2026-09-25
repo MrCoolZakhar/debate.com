@@ -29,13 +29,15 @@ const CANVAS = { w: 1920, h: 1080 };
 const WORD = { x: 88, y: 318, w: 1660, h: 409 };
 /** Callers pass the height the plain word used to have. The lockup is two lines
  *  plus the gavel, so it is drawn this much taller to keep GAVELLING about as big. */
-const LOCKUP_SCALE = 1.75;
+const LOCKUP_SCALE = 1.25; // was 1.75: the owner found it "way too big" (25 Sep 2026)
 
+// Always the original colours (owner, 25 Sep 2026: "it's white right now - can you
+// make it original colour"). `tone` is still accepted so callers compile, but no
+// surface recolours the logo any more.
 const FILTERS: Record<'ink' | 'white' | 'gold', string | undefined> = {
   ink: undefined,
-  white: 'brightness(0) invert(1)',
-  // #EED98A: invert to white, then tint through sepia and a hue nudge.
-  gold: 'brightness(0) invert(1) sepia(0.6) saturate(2.2) hue-rotate(5deg) brightness(0.97)',
+  white: undefined,
+  gold: undefined,
 };
 
 export function BrandLogo({
