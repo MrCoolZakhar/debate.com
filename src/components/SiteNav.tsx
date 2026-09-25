@@ -25,12 +25,18 @@ import { useMyActivity, useOpenSeenState, markActivitySeen, isVisibleActivity } 
 // (a committee or a conference; since 25 Sep 2026 the session creator lives at
 // /create/sessions). Home, About us and Contact left the nav; the footer and
 // the profile menu carry them. The five items are EQUAL columns.
+// Two items carry a small kicker word stacked above them (owner, 25 Sep 2026:
+// "'start' session with the start being smaller on top, the same with 'list
+// your' conference"). They replace the old Sessions and Create items: Start /
+// Session goes to the sessions landing, List your / Conference straight into
+// creating a conference. The /create chooser is still reachable from those.
 const NAV_LINKS_CONFIG: ReadonlyArray<{
   en: string; es: string; fr: string; ar: string;
+  kicker?: { en: string; es: string; fr: string; ar: string };
   href: string;
 }> = [
-  { en: 'Sessions', es: 'Sesiones', fr: 'Sessions', ar: 'الجلسات',  href: '/sessions' },
-  { en: 'Create',   es: 'Crear',    fr: 'Créer',    ar: 'إنشاء',    href: '/create' },
+  { en: 'Session', es: 'Sesión', fr: 'Session', ar: 'جلسة', kicker: { en: 'Start', es: 'Iniciar', fr: 'Lancer', ar: 'ابدأ' }, href: '/sessions' },
+  { en: 'Conference', es: 'Conferencia', fr: 'Conférence', ar: 'مؤتمر', kicker: { en: 'List your', es: 'Publica tu', fr: 'Publiez votre', ar: 'أضف' }, href: '/conferences/new' },
   { en: 'Explore',  es: 'Explorar', fr: 'Explorer', ar: 'استكشف',   href: '/conferences/explore' },
   { en: 'Pricing',  es: 'Precios',  fr: 'Tarifs',   ar: 'الأسعار',  href: '/pricing/credits' },
   { en: 'Help',     es: 'Ayuda',    fr: 'Aide',     ar: 'المساعدة', href: '/help' },
@@ -43,8 +49,8 @@ const NAV_LINKS_CONFIG: ReadonlyArray<{
 function isNavLinkActive(pathname: string | null, href: string | null): boolean {
   if (!pathname || !href) return false;
   if (href === '/sessions') return isSessionsPath(pathname) && !pathname.startsWith('/create');
-  if (href === '/create') return pathname === '/create' || pathname.startsWith('/create/');
-  if (href === '/conferences/explore') return pathname.startsWith('/conferences');
+  if (href === '/conferences/new') return pathname.startsWith('/conferences/new');
+  if (href === '/conferences/explore') return pathname.startsWith('/conferences') && !pathname.startsWith('/conferences/new');
   if (href === '/pricing/credits') return pathname.startsWith('/pricing');
   if (href === '/help') return pathname === '/help' || pathname.startsWith('/help/');
   return pathname === href;
@@ -118,6 +124,7 @@ export default function SiteNav(props: SiteNavProps = {}) {
   const t = useT();
   const navLinks = NAV_LINKS_CONFIG.map(l => ({
     label: l[language],
+    kicker: l.kicker ? l.kicker[language] : null,
     href: l.href,
   }));
 
@@ -283,8 +290,11 @@ export default function SiteNav(props: SiteNavProps = {}) {
                 onMouseLeave={() => setHovered(null)}
                 aria-current={active ? 'page' : undefined}
                 className={itemClass}
-                style={itemStyle}
+                style={link.kicker ? { ...itemStyle, flexDirection: 'column', gap: 0, lineHeight: 1.05, paddingTop: 5, paddingBottom: 7 } : itemStyle}
               >
+                {link.kicker && (
+                  <span style={{ fontSize: '10.5px', fontWeight: 600, color: 'rgba(28, 20, 16, 0.5)', letterSpacing: 0 }}>{link.kicker}</span>
+                )}
                 {link.label}
                 {underline}
               </Link>
@@ -548,7 +558,7 @@ export default function SiteNav(props: SiteNavProps = {}) {
                 className={rowClass}
                 style={rowStyle}
               >
-                {link.label}
+                {link.kicker ? `${link.kicker} ${link.label.toLowerCase()}` : link.label}
               </Link>
             );
           })}
