@@ -64,7 +64,6 @@ export async function POST(req: NextRequest) {
           ...(movedFrom ? [`https://${HOST}/conferences/${movedFrom}`] : []),
           // The listing surfaces changed too — nudge them along with the page.
           `https://${HOST}/conferences/explore`,
-          `https://${HOST}/conferences/map`,
         ],
       }),
     });

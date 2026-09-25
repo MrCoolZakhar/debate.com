@@ -11,7 +11,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Infinity as InfinityIcon, Loader2, Lock, RotateCcw } from 'lucide-react';
+import { Loader2, Lock, RotateCcw } from 'lucide-react';
+import { GoldButton, GoldButtonStyles } from '@/components/GoldButton';
 import { useAuth } from '@/components/AuthProvider';
 import { openAuth } from '@/lib/authModal';
 import { openUnlimitedPopup } from '@/lib/purchasePopup';
@@ -97,57 +98,91 @@ export default function PremiumBody({
   } else if (!user || (load.kind === 'refused' && load.reason === 'signin')) {
     line = `The rest of ${title} is included with Gavelling Unlimited. Sign in to read it if you are on Unlimited, or to join.`;
     action = (
-      <button type="button" className="gvg-btn gvg-btn-gold" onClick={() => openAuth({ next })}>
-        Sign in
-      </button>
+      <GoldButton onClick={() => openAuth({ next })}>
+        <Lock size={16} strokeWidth={2.5} aria-hidden="true" />
+        Sign in to unlock
+      </GoldButton>
     );
   } else if (load.kind === 'error') {
     heading = 'The rest of the guide did not load';
     line = load.message;
     action = (
-      <button type="button" className="gvg-btn gvg-btn-gold" onClick={() => setAttempt((a) => a + 1)}>
+      <GoldButton onClick={() => setAttempt((a) => a + 1)}>
         <RotateCcw size={17} strokeWidth={2.4} aria-hidden="true" />
         Try again
-      </button>
+      </GoldButton>
     );
   } else {
     action = (
-      <button type="button" className="gvg-btn gvg-btn-gold" onClick={() => openUnlimitedPopup()}>
-        <InfinityIcon size={18} strokeWidth={2.4} aria-hidden="true" />
-        Go Unlimited
-      </button>
+      <GoldButton onClick={() => openUnlimitedPopup()}>
+        <Lock size={16} strokeWidth={2.5} aria-hidden="true" />
+        Unlock with Unlimited
+      </GoldButton>
     );
   }
 
   return (
     <>
+      <GoldButtonStyles />
       {/* Empty until the body loads: Google's paywall markup points here. */}
       <div className="premium-body" hidden />
-      <section className="gvg-paywall" aria-labelledby="gvg-paywall-title" aria-busy={checking || undefined}>
-        <div className="gvg-paywall-mark" aria-hidden="true">
-          {checking ? <Loader2 size={26} className="gvg-spin" /> : <Lock size={26} strokeWidth={2.2} />}
+      {/* The rest of the page, frosted over and chained shut. The shapes under
+          the frost are placeholders built from the locked section titles; the
+          guide's own text never reaches this page without Unlimited. */}
+      <section className="gvg-lock" aria-labelledby="gvg-paywall-title" aria-busy={checking || undefined}>
+        <div className="gvg-lock-ghost" aria-hidden="true">
+          {(lockedSections.length ? lockedSections : ['', '', '']).slice(0, 5).map((t, i) => (
+            <div key={i}>
+              <h3>{t || 'Section'}</h3>
+              {[92, 100, 86, 97, 74].map((w, j) => <i key={j} style={{ width: `${(w + i * 7 + j * 3) % 40 + 60}%` }} />)}
+            </div>
+          ))}
         </div>
-        <h2 id="gvg-paywall-title" className="gvg-paywall-title">{heading}</h2>
-        <p className="gvg-paywall-line">{line}</p>
-        {action ? (
-          <div className="gvg-paywall-actions">
-            {action}
-            <Link href="/pricing/subscription" className="gvg-btn gvg-btn-quiet">
-              What Unlimited includes
-            </Link>
+        <div className="gvg-lock-frost" aria-hidden="true" />
+        <Chains />
+        <div className="gvg-lock-card">
+          <div className="gvg-paywall-mark" aria-hidden="true">
+            {checking ? <Loader2 size={28} className="gvg-spin" /> : <Lock size={28} strokeWidth={2.3} />}
           </div>
-        ) : null}
-        {lockedSections.length > 0 ? (
-          <div className="gvg-paywall-list">
-            <p className="gvg-paywall-list-title">Still to read</p>
-            <ol>
-              {lockedSections.map((s) => (
-                <li key={s}>{s}</li>
-              ))}
-            </ol>
-          </div>
-        ) : null}
+          <h2 id="gvg-paywall-title" className="gvg-paywall-title">{heading}</h2>
+          <p className="gvg-paywall-line">{line}</p>
+          {action ? (
+            <div className="gvg-paywall-actions">
+              {action}
+              <Link href="/pricing/subscription">What Unlimited includes</Link>
+            </div>
+          ) : null}
+        </div>
       </section>
     </>
+  );
+}
+
+/** Two chains crossing the locked page, drawn as interlocking links. */
+function Chains() {
+  const link = (i: number) => (
+    <g key={i} transform={`translate(${i * 34} 0)`}>
+      <rect x="0" y="-9" width="40" height="18" rx="9" fill="none" stroke="url(#gvgChainMetal)" strokeWidth="5" />
+      <rect x="17" y="-3" width="40" height="6" rx="3" fill="none" stroke="url(#gvgChainMetal)" strokeWidth="5" opacity="0.9" />
+    </g>
+  );
+  const run = Array.from({ length: 48 }, (_, i) => link(i));
+  return (
+    <svg className="gvg-lock-chains" viewBox="0 0 1000 760" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <defs>
+        <linearGradient id="gvgChainMetal" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#F4E4A6" />
+          <stop offset="0.5" stopColor="#B6871F" />
+          <stop offset="1" stopColor="#7A5812" />
+        </linearGradient>
+        <filter id="gvgChainShadow" x="-10%" y="-10%" width="120%" height="120%">
+          <feDropShadow dx="0" dy="4" stdDeviation="4" floodColor="#1C1410" floodOpacity="0.28" />
+        </filter>
+      </defs>
+      <g filter="url(#gvgChainShadow)" opacity="0.92">
+        <g transform="translate(-220 60) rotate(24)">{run}</g>
+        <g transform="translate(-220 690) rotate(-24)">{run}</g>
+      </g>
+    </svg>
   );
 }

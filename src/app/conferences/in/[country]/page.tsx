@@ -100,9 +100,7 @@ export default async function CountryHubPage({ params }: { params: Promise<{ cou
         </div>
         <p style={{ marginTop: 32, fontSize: 14, color: '#5C5140' }}>
           Looking further afield?{' '}
-          <Link href="/conferences/explore" className="hover:text-[#0F3A28]" style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Explore every conference</Link>
-          {' '}or{' '}
-          <Link href="/conferences/map" className="hover:text-[#0F3A28]" style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>see them on the map</Link>.
+          <Link href="/conferences/explore" className="hover:text-[#0F3A28]" style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Explore every conference</Link>.
         </p>
       </main>
       <SiteFooter />

@@ -55,7 +55,6 @@ const ROUTES = [
   { path: '/create' },
   { path: '/join' },
   { path: '/conferences/explore' },
-  { path: '/conferences/map' },
   { path: '/conferences/roles' },
   { path: '/conferences/new' },
   { path: '/conferences', redirectsTo: '/' },

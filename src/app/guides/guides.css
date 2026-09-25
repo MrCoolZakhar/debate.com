@@ -58,15 +58,25 @@
 .gvg-table th { text-align: left; padding: 10px 14px; background: var(--gvg-forest); color: #FFFFFF; font-weight: 700; }
 .gvg-table td { padding: 10px 14px; border-top: 1px solid var(--gvg-rule); vertical-align: top; }
 
-.gvg-paywall { position: relative; margin: 40px 0 0; padding: 30px 26px; border-radius: 24px; background: var(--gvg-forest); color: #FFFFFF; box-shadow: 0 28px 56px -32px rgba(20,48,31,0.8); }
-.gvg-paywall::before { content: ''; position: absolute; left: 0; right: 0; top: -120px; height: 120px; pointer-events: none; background: linear-gradient(to bottom, rgba(237,231,216,0), #EDE7D8); }
-.gvg-paywall-mark { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; border-radius: 50%; background: var(--gvg-gold); color: var(--gvg-forest); }
-.gvg-paywall-title { margin: 16px 0 0; font-size: clamp(24px, 3.4vw, 30px); font-weight: 800; line-height: 1.15; letter-spacing: -0.015em; color: #FFFFFF; }
-.gvg-paywall-line { margin: 10px 0 0; max-width: 56ch; font-size: 16.5px; line-height: 1.55; color: rgba(255,255,255,0.86); }
-.gvg-paywall-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
-.gvg-paywall-list { margin-top: 26px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,0.14); }
-.gvg-paywall-list-title { margin: 0 0 8px; font-size: 13px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gvg-gold); }
-.gvg-paywall-list ol { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; font-size: 15.5px; line-height: 1.45; color: rgba(255,255,255,0.9); }
+/* The locked rest of a guide (owner, 25 Sep 2026): frosted and blurred over
+   the whole remaining page, with chains across it and the gold unlock button.
+   The "text" under the frost is placeholder shapes, never the guide itself
+   (the premium body is not in the HTML until the server says Unlimited). */
+.gvg-lock { position: relative; margin: 36px 0 0; min-height: 760px; border-radius: 24px; overflow: hidden; }
+.gvg-lock-ghost { position: absolute; inset: 0; padding: 28px 8px; filter: blur(6px); opacity: 0.75; pointer-events: none; user-select: none; }
+.gvg-lock-ghost h3 { margin: 26px 0 12px; font-size: 24px; font-weight: 800; color: var(--gvg-ink); }
+.gvg-lock-ghost i { display: block; height: 12px; margin: 10px 0; border-radius: 6px; background: rgba(28,20,16,0.28); }
+.gvg-lock-frost { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(237,231,216,0.15), rgba(237,231,216,0.55) 30%, rgba(237,231,216,0.7)); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.gvg-lock-chains { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.gvg-lock-card { position: relative; z-index: 2; max-width: 420px; margin: 230px auto 0; padding: 26px 24px 22px; border-radius: 20px; text-align: center; background: rgba(255,253,248,0.78); -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.7), 0 22px 50px -18px rgba(20,48,31,0.45); }
+.gvg-paywall-mark { display: inline-flex; align-items: center; justify-content: center; width: 60px; height: 60px; border-radius: 50%; color: #1C1410; background: linear-gradient(135deg, #F4E4A6 0%, #EED98A 38%, #D6B24C 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.65), 0 10px 22px -8px rgba(182,135,31,0.6); }
+.gvg-paywall-title { margin: 14px 0 0; font-size: clamp(22px, 3vw, 28px); font-weight: 800; line-height: 1.15; letter-spacing: -0.015em; color: var(--gvg-ink); }
+.gvg-paywall-line { margin: 8px auto 0; max-width: 46ch; font-size: 15.5px; line-height: 1.55; color: var(--gvg-ink-soft); }
+.gvg-paywall-actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px 18px; margin-top: 18px; }
+.gvg-paywall-actions a:not(.gv-gold-cta) { font-weight: 700; color: var(--gvg-forest); text-decoration: underline; text-underline-offset: 3px; }
+.gvg-paywall-list { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--gvg-rule); text-align: left; }
+.gvg-paywall-list-title { margin: 0 0 8px; font-size: 13px; font-weight: 800; color: var(--gvg-gold-deep); }
+.gvg-paywall-list ol { margin: 0; padding-left: 1.3em; display: grid; gap: 5px; font-size: 15px; line-height: 1.45; color: var(--gvg-ink); }
 
 .gvg-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 22px; border-radius: 999px; border: none; font-family: inherit; font-size: 15.5px; font-weight: 800; cursor: pointer; text-decoration: none; transition: transform 140ms ease-out, background-color 160ms ease-out; }
 .gvg-btn:focus { outline: none; }
@@ -87,13 +97,17 @@
 .gvg-cards { display: grid; gap: 16px; margin-top: 20px; }
 @media (min-width: 640px) { .gvg-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 1000px) { .gvg-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-.gvg-card { display: flex; flex-direction: column; gap: 10px; padding: 22px; border-radius: 20px; background: var(--gvg-forest); color: #FFFFFF; text-decoration: none; box-shadow: 0 22px 44px -30px rgba(20,48,31,0.75); transition: transform 180ms ease-out; }
+/* Premium guide cards (owner, 25 Sep 2026): a cover photo under frosted
+   glass, the lock, and the gold button from the pricing page. */
+.gvg-card { position: relative; display: flex; flex-direction: column; justify-content: flex-end; min-height: 340px; overflow: hidden; border-radius: 20px; text-decoration: none; color: var(--gvg-ink); box-shadow: 0 0 0 1.5px rgba(184,148,58,0.5), 0 18px 38px -22px rgba(20,48,31,0.55); transition: transform 180ms ease-out; }
 .gvg-card:hover { transform: translateY(-2px); }
 .gvg-card:focus { outline: none; }
-.gvg-card:focus-visible { box-shadow: 0 0 0 3px var(--gvg-gold); }
-.gvg-card-top { display: flex; align-items: center; gap: 10px; font-size: 12.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gvg-gold); }
-.gvg-card-title { margin: 0; font-size: 19.5px; font-weight: 800; line-height: 1.25; color: #FFFFFF; text-wrap: balance; }
-.gvg-card-promise { margin: 0; font-size: 15px; line-height: 1.5; color: rgba(255,255,255,0.84); }
-.gvg-card-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: auto; padding-top: 8px; font-size: 13.5px; color: rgba(255,255,255,0.78); }
-.gvg-card-foot span { display: inline-flex; align-items: center; gap: 6px; }
+.gvg-card:focus-visible { box-shadow: 0 0 0 3px var(--gvg-forest); }
+.gvg-card-cover { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.gvg-card-glass { position: relative; display: flex; flex-direction: column; gap: 6px; margin: 12px; padding: 16px 16px 14px; border-radius: 14px; background: rgba(255,253,248,0.62); -webkit-backdrop-filter: blur(14px) saturate(1.2); backdrop-filter: blur(14px) saturate(1.2); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.6), 0 8px 24px rgba(15,26,19,0.18); }
+.gvg-card-top { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 800; color: var(--gvg-gold-deep); }
+.gvg-card-title { margin: 0; font-size: 19px; font-weight: 800; line-height: 1.22; letter-spacing: -0.01em; color: var(--gvg-ink); text-wrap: balance; }
+.gvg-card-promise { font-size: 14px; line-height: 1.5; color: #3A3128; }
+.gvg-gold { display: inline-flex; align-items: center; justify-content: center; gap: 8px; align-self: flex-start; min-height: 44px; margin-top: 8px; padding: 0 18px; border-radius: 12px; color: #1C1410; font-size: 14px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; background: linear-gradient(135deg, #F4E4A6 0%, #EED98A 38%, #D6B24C 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.65), 0 1px 2px rgba(120,86,14,0.25), 0 8px 20px -6px rgba(182,135,31,0.55); }
+.gvg-card:hover .gvg-gold { background: linear-gradient(135deg, #F8EBB8 0%, #F1DE97 38%, #DDB955 100%); }
 @media (prefers-reduced-motion: reduce) { .gvg-card { transition: none; } .gvg-card:hover { transform: none; } }

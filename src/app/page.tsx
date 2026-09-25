@@ -5,6 +5,7 @@ import { fetchListedConferences, fetchPlatformStats } from '@/lib/listedConferen
 import { articles } from './blog/posts';
 import type { HomeGuide } from './conferences/landing-lab/HomeSections';
 import { listGuides } from '@/lib/premiumGuides';
+import { guideCover } from '@/lib/premiumGuides/covers';
 
 // The cards and the trust counts are read here, on the
 // server, so they are real in the HTML (they used to render "—" until a
@@ -37,7 +38,7 @@ export const metadata: Metadata = pageMetadata({
 // No extra link row under the page (removed 24 Sep 2026: it read as a second
 // footer). Every hub it carried is reached by a plain server-rendered <a> on
 // this page already: the site nav (/sessions, /about, /contact), the page's own
-// sections (/conferences/explore, /conferences/map, /conferences/roles,
+// sections (/conferences/explore, /conferences/roles,
 // /organisers) and FooterLegal (/conferences/all, /blog, /create, /join).
 
 const organizationSchema = {
@@ -103,7 +104,7 @@ const blogGuides: HomeGuide[] = HOME_GUIDE_SLUGS.flatMap(slug => {
 // The sponsorship playbook is the landing page's premium guide (owner, 25 Sep 2026).
 const premiumPick = listGuides().find(g => g.slug === 'sponsorship-playbook') ?? listGuides()[0];
 const homeGuides: HomeGuide[] = premiumPick
-  ? [...blogGuides, { slug: premiumPick.slug, title: premiumPick.title, description: premiumPick.description, readingMinutes: premiumPick.readingMinutes, premium: true }]
+  ? [...blogGuides, { slug: premiumPick.slug, title: premiumPick.title, description: premiumPick.description, readingMinutes: premiumPick.readingMinutes, premium: true, cover: guideCover(premiumPick.slug) }]
   : blogGuides;
 
 export default async function HomePage() {

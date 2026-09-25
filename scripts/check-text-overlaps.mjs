@@ -10,7 +10,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const BASE = process.argv.find((a) => a.startsWith('--base='))?.slice(7) || process.env.BASE || 'http://localhost:3000';
-const DEFAULT_ROUTES = ['/', '/sessions', '/about', '/contact', '/conferences/explore', '/conferences/map', '/conferences/roles', '/organisers', '/blog', '/join', '/create', '/privacy', '/terms'];
+const DEFAULT_ROUTES = ['/', '/sessions', '/about', '/contact', '/conferences/explore', '/conferences/roles', '/organisers', '/blog', '/join', '/create', '/privacy', '/terms'];
 const ROUTES = process.env.ROUTES ? process.env.ROUTES.split(',').filter(Boolean) : DEFAULT_ROUTES;
 const OUT = process.env.OUT || '';
 const VIEWPORTS = [

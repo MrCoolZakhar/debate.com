@@ -293,6 +293,8 @@ export interface HomeGuide {
   /** A premium guide (Unlimited): links to /guides/<slug>, shown with its
    *  title and description only, no photo. */
   premium?: boolean;
+  /** Cover photo behind the frosted glass of a premium card. */
+  cover?: string;
 }
 
 /** "How to Write a MUN Position Paper: Format, Tips & Examples" → the part
@@ -362,7 +364,7 @@ export function LearnMunSection({ guides }: { guides: HomeGuide[] }) {
                 style={{ borderRadius: 18, minHeight: 300, textDecoration: 'none', boxShadow: '0 0 0 1.5px rgba(184,148,58,0.55), 0 16px 34px rgba(27,56,40,0.16)' }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/landing/organiser-desk.jpg" alt="" aria-hidden="true" loading="lazy" className="absolute inset-0 h-full w-full" style={{ objectFit: 'cover' }} />
+                <img src={g.cover ?? '/landing/organiser-desk.jpg'} alt="" aria-hidden="true" loading="lazy" className="absolute inset-0 h-full w-full" style={{ objectFit: 'cover' }} />
                 <div
                   className="relative"
                   style={{
@@ -386,7 +388,7 @@ export function LearnMunSection({ guides }: { guides: HomeGuide[] }) {
                   </p>
                   <span
                     className="inline-flex items-center justify-center gap-2"
-                    style={{ marginTop: 14, height: 42, padding: '0 18px', borderRadius: 10, background: 'linear-gradient(90deg, #1B3828 0%, #2A5A3C 55%, #1E4A31 100%)', color: '#FFFFFF', fontFamily: SANS, fontWeight: 700, fontSize: '15px' }}
+                    style={{ marginTop: 14, minHeight: 44, padding: '0 18px', borderRadius: 12, background: 'linear-gradient(135deg, #F4E4A6 0%, #EED98A 38%, #D6B24C 100%)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.65), 0 1px 2px rgba(120,86,14,0.25), 0 8px 20px -6px rgba(182,135,31,0.55)', color: '#1C1410', fontFamily: SANS, fontWeight: 800, fontSize: '14px', letterSpacing: '0.06em', textTransform: 'uppercase' }}
                   >
                     <Lock size={15} strokeWidth={2.4} aria-hidden="true" /> Unlock with Unlimited
                   </span>

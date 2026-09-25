@@ -567,44 +567,6 @@ export default function VariantStagefront({
           </section>
         )}
 
-        {/* ── MUN across the globe. Was a full-width forest band; the owner voted
-            forest bands "DEFINITELY NOT" (taste board, 25 Sep 2026), so it is
-            now white with the globe video in a rounded frame beside the copy. */}
-        <section
-          className="px-6 md:px-14"
-          aria-labelledby="sf-globe-heading"
-          style={{ backgroundColor: '#FFFFFF', paddingTop: 'clamp(40px, 4vw, 64px)', paddingBottom: 'clamp(40px, 4vw, 64px)' }}
-        >
-          <div className="mx-auto flex flex-col lg:flex-row lg:items-center gap-10 lg:gap-16" style={{ maxWidth: '1320px' }}>
-            <div className="flex-1" style={{ maxWidth: '560px' }}>
-              <h2
-                id="sf-globe-heading"
-                style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(28px, 3vw, 48px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: INK, margin: 0, textWrap: 'balance' }}
-              >
-                MUN across the <GoldWord>globe</GoldWord>
-              </h2>
-              <p style={{ marginTop: 14, marginBottom: 24, fontSize: 'clamp(15px, 1.05vw, 18px)', lineHeight: 1.65, color: INK_55, fontFamily: SANS }}>
-                {stats
-                  ? `${stats.total_conferences} conferences across every continent. From The Hague to Singapore, Tokyo to New York`
-                  : 'From The Hague to Singapore, Tokyo to New York. Explore conferences on every continent'}
-              </p>
-              <Link
-                href="/conferences/map"
-                className="inline-flex items-center justify-center min-h-12 px-6 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2 transition-colors hover:bg-[#F7F4EC]"
-                style={{ fontFamily: SANS, fontWeight: 700, fontSize: '16px', color: INK, backgroundColor: '#FFFFFF', boxShadow: `inset 0 0 0 1.5px ${INK}`, textDecoration: 'none' }}
-              >
-                Open the conference map
-              </Link>
-            </div>
-            <div
-              className="relative w-full lg:flex-1 overflow-hidden"
-              style={{ aspectRatio: '16 / 10', maxHeight: '400px', borderRadius: 20, backgroundColor: '#1B3828', boxShadow: '0 30px 60px -30px rgba(27,56,40,0.45)' }}
-            >
-              <DeferredGlobeVideo />
-            </div>
-          </div>
-        </section>
-
         {/* ── "What is Model UN?" (the SEO explainer, text unchanged) beside
             "What is Gavelling?", the last thing before the footer (owner,
             25 Sep 2026) ────────────────────────────────────────────────── */}
@@ -618,50 +580,6 @@ export default function VariantStagefront({
 
 // ── Local pieces ─────────────────────────────────────────────────────────────
 
-/**
- * The globe section's looping video is ~14 MB. Loaded eagerly it started
- * downloading on page load and saturated the connection, starving the hero
- * image, the Supabase fetches and next/link route prefetches — the whole page
- * (and navigating away from it) felt blocked. Defer it: render the <video>
- * with no src and preload="none", and only attach the src once the section
- * scrolls near the viewport (600px lookahead so it's usually already playing
- * by the time it's visible). Visual output is identical.
- */
-function DeferredGlobeVideo() {
-  const holder = useRef<HTMLDivElement>(null);
-  const [load, setLoad] = useState(false);
-
-  useEffect(() => {
-    const el = holder.current;
-    if (!el) return;
-    if (typeof IntersectionObserver === 'undefined') { setLoad(true); return; }
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setLoad(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: '600px 0px' },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  return (
-    <div ref={holder} style={{ width: '100%', height: '100%' }}>
-      <video
-        src={load ? '/map/interactive_globe.mp4' : undefined}
-        autoPlay
-        loop
-        muted
-        playsInline
-        preload="none"
-        style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '30% center', display: 'block', opacity: 0.82 }}
-      />
-    </div>
-  );
-}
 
 // Prominent hero search field. Finds conferences by NAME or LOCATION the same
 // way the Explore directory does — on submit it navigates to /conferences/explore

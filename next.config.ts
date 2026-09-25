@@ -45,6 +45,8 @@ const nextConfig: NextConfig = {
       { source: '/account/unlimited', destination: '/pricing/subscription', permanent: true },
       { source: '/my-conferences', destination: '/account/conferences', permanent: true },
       { source: '/pricing', destination: '/pricing/credits', permanent: true },
+      // The conference map is archived (src/app/_archive/conferences-map, 25 Sep 2026).
+      { source: '/conferences/map', destination: '/conferences/explore', permanent: false },
     ];
   },
   async headers() {

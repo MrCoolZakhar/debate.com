@@ -54,7 +54,6 @@ Instagram: @wearegavelling
 
 - https://gavelling.com (Home): find Model UN conferences
 - https://gavelling.com/conferences/explore: Browse and filter all listed MUN conferences
-- https://gavelling.com/conferences/map: MUN conferences on a world map
 - https://gavelling.com/conferences/roles: Chair, secretariat, and staff openings
 - https://gavelling.com/sessions: Committee session software for chairs and delegates
 - https://gavelling.com/blog: Guides on chairing, motions, resolutions, and MUN strategy
