@@ -233,7 +233,7 @@ export default function SiteNav(props: SiteNavProps = {}) {
             WebkitBackdropFilter: 'blur(16px)',
             border: '1px solid rgba(221, 212, 192, 0.85)',
             boxShadow: '0 8px 32px rgba(27, 56, 40, 0.12), 0 2px 8px rgba(27, 56, 40, 0.08)',
-            padding: '6px 8px',
+            padding: '3px 6px',
           }}
         >
           {navLinks.map((link) => {
@@ -251,8 +251,8 @@ export default function SiteNav(props: SiteNavProps = {}) {
               gap: '4px',
               position: 'relative',
               whiteSpace: 'nowrap',
-              minHeight: 44,
-              padding: '8px clamp(10px, 1.1vw, 16px)',
+              minHeight: 36,
+              padding: '4px clamp(10px, 1.1vw, 16px)',
               fontSize: 'clamp(14px, 1.05vw, 15.5px)',
               fontWeight: active ? 800 : 600,
               letterSpacing: '0',
@@ -271,7 +271,7 @@ export default function SiteNav(props: SiteNavProps = {}) {
             const underline = (
               <span aria-hidden style={{
                 position: 'absolute',
-                bottom: '5px',
+                bottom: '1px',
                 left: '30%',
                 right: '30%',
                 height: '2px',
@@ -290,7 +290,7 @@ export default function SiteNav(props: SiteNavProps = {}) {
                 onMouseLeave={() => setHovered(null)}
                 aria-current={active ? 'page' : undefined}
                 className={itemClass}
-                style={link.kicker ? { ...itemStyle, flexDirection: 'column', gap: 0, lineHeight: 1.05, paddingTop: 5, paddingBottom: 7 } : itemStyle}
+                style={link.kicker ? { ...itemStyle, flexDirection: 'column', gap: 0, lineHeight: 1, paddingTop: 2, paddingBottom: 4 } : itemStyle}
               >
                 {link.kicker && (
                   <span style={{ fontSize: '10.5px', fontWeight: 600, color: 'rgba(28, 20, 16, 0.5)', letterSpacing: 0 }}>{link.kicker}</span>
