@@ -10,6 +10,7 @@ import LanguageRequestDialog from '@/components/LanguageRequestDialog';
 import { isSessionsPath } from '@/lib/sessionRoutes';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
 import BrandLogo from '@/components/BrandLogo';
+import MobileTabBar from '@/components/MobileTabBar';
 import AuthLink from '@/components/auth/AuthLink';
 import { useCredits } from '@/hooks/useCredits';
 import { CreditCoin } from '@/components/CreditCoin';
@@ -514,6 +515,7 @@ export default function SiteNav(props: SiteNavProps = {}) {
         </button>
         </div>
       </nav>
+      <MobileTabBar />
 
       {/* Mobile dropdown menu.
           In overlay mode the <nav> is absolutely positioned (out of flow), so a
