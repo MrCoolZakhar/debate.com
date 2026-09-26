@@ -10,7 +10,7 @@
 
 import { useCallback, useState } from 'react';
 import Link from 'next/link';
-import { Store } from 'lucide-react';
+import { Check, Store } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { NEU, NEU_GRADIENTS, OUTFIT, NeuIconDisc } from '@/components/neu';
 import { GoldWord } from '@/components/BrandHeading';
@@ -28,6 +28,7 @@ import SpotlightPopup from './SpotlightPopup';
 import SponsorshipPopup from './SponsorshipPopup';
 import EmailsPopup from './EmailsPopup';
 import YourSpotlights from './YourSpotlights';
+import YourPurchases from './YourPurchases';
 import EmailPacks from './EmailPacks';
 import { openCreditsPopup } from '@/lib/purchasePopup';
 
@@ -258,29 +259,41 @@ export default function StorePage() {
                   ...(b.unlimitedEmails ? ['Unlimited emails'] : []),
                   ...(b.extraCredits ? [`${b.extraCredits} extra credits`] : []),
                 ];
+                // The credit bundle cards' design (25 Sep 2026): a shorter photo,
+                // a bigger white body, the price with the struck full price, then
+                // what is included, one item per line with a check.
                 return (
-                  <button key={b.kind} type="button" className="gv-st-product" onClick={() => setPopup({ kind: 'bundle', bundle: b })} aria-label={`${b.name} bundle, ${b.price} credits`}>
-                    <div className="gv-st-product-img">
+                  <button key={b.kind} type="button" className="gv-st-bundle" data-best={b.best || undefined} onClick={() => setPopup({ kind: 'bundle', bundle: b })} aria-label={`${b.name} bundle, ${b.price} credits`}>
+                    <div className="gv-st-bundle-img">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={BUNDLE_PHOTOS[b.kind].src} alt="" style={{ objectPosition: BUNDLE_PHOTOS[b.kind].position }} loading="lazy" />
                       <span className="gv-st-product-scrim" aria-hidden />
                       {b.best && <span className="gv-st-flag">Best value</span>}
                       <span className="gv-st-product-name">{b.name}</span>
                     </div>
-                    <div className="gv-st-product-foot">
-                      <span className="gv-st-product-price">
-                        {b.price} credits{list !== null && list > b.price ? <span className="gv-st-product-was">{list}</span> : null}
-                        <small>{parts.join(' + ')}</small>
-                      </span>
+                    <div className="gv-st-bundle-body">
+                      <p className="gv-st-bundle-price">
+                        <b>{b.price}</b> credits
+                        {list !== null && list > b.price ? <span className="gv-st-product-was">{list}</span> : null}
+                      </p>
+                      <ul className="gv-st-bundle-list">
+                        {parts.map(pt => (
+                          <li key={pt}><Check size={14} strokeWidth={3} aria-hidden />{pt}</li>
+                        ))}
+                      </ul>
+                      {!b.cancellable && <span className="gv-st-bundle-nr">Non-refundable</span>}
                     </div>
-                    {!b.cancellable && <p className="gv-st-product-note">Cannot be cancelled once booked</p>}
                   </button>
                 );
               })}
             </div>
           </section>
 
-          <YourSpotlights spotlights={data.spotlights} stats={data.stats} onChanged={() => afterBuy()} />
+          {/* Your Spotlights and Your Purchases, side by side (stacked on phones). */}
+          <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))' }}>
+            <YourSpotlights spotlights={data.spotlights} stats={data.stats} onChanged={() => afterBuy()} />
+            <YourPurchases conferenceId={conference.id} refreshKey={packsKey} />
+          </div>
 
           <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 12.5, color: INK_SOFT }}>
             Spotlight prices come from the Store&rsquo;s price list; credits are bought at the site&rsquo;s bundle prices.

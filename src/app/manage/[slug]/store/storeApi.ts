@@ -81,7 +81,13 @@ export interface SpotlightStat {
   clicks: number;
 }
 
-export interface CalendarDay { day: string; taken: number; capacity: number }
+export interface CalendarDay {
+  day: string;
+  taken: number;
+  capacity: number;
+  /** This conference already has that placement booked on this day. */
+  mine?: boolean;
+}
 
 export interface Reach { days_counted: number; views_per_week: number | null; ready: boolean }
 

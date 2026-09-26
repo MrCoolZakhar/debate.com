@@ -23,6 +23,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, Compass, Flag, Globe, Home, X } from 'lucide-react';
 import { GoldWord } from '@/components/BrandHeading';
+import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import { notifyOk } from '@/lib/appNotify';
 import { PurchaseShell, ErrorLine, GoldButton, Eyebrow, INK, INK_SOFT, FOREST, GOLD, IVORY } from '@/components/purchase/purchaseKit';
 import {
@@ -34,6 +35,8 @@ import { OUTFIT } from '@/components/neu';
 
 const MAX_DAYS = 28;
 const DESC_MAX = 120;
+/** The database's own sentence for a link, an email or profanity; the client checks links and emails first. */
+const DESC_REFUSAL = 'Message is not valid. Description does not allow links or profanity.';
 
 export interface SpotlightConference {
   id: string;
@@ -89,15 +92,17 @@ function sell(p: Placement, conf: SpotlightConference, continent: string | null)
 
 // ── Calendar ───────────────────────────────────────────────────────────────
 
-type DayState = 'ok' | 'full' | 'off';
+type DayState = 'ok' | 'full' | 'off' | 'mine';
 
 function Calendar({
-  month, onMonth, minDay, maxDay, fullDays, loading, ranges, pending, onPick,
+  month, onMonth, minDay, maxDay, fullDays, mineDays, loading, ranges, pending, onPick,
 }: {
   month: string; // YYYY-MM-01
   onMonth: (next: string) => void;
   minDay: string; maxDay: string;
   fullDays: Set<string>;
+  /** Days this conference already has this placement booked: "Yours". */
+  mineDays: Set<string>;
   loading: boolean;
   ranges: Range[];
   pending: string | null;
@@ -124,7 +129,7 @@ function Calendar({
         {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => <span key={i} className="gv-sp-cal-dow" aria-hidden>{d}</span>)}
         {cells.map((d, i) => {
           if (!d) return <span key={`e${i}`} />;
-          const state: DayState = d < minDay || d > maxDay ? 'off' : fullDays.has(d) ? 'full' : 'ok';
+          const state: DayState = d < minDay || d > maxDay ? 'off' : mineDays.has(d) ? 'mine' : fullDays.has(d) ? 'full' : 'ok';
           const sel = inRange(d);
           const isPending = pending === d;
           return (
@@ -138,10 +143,12 @@ function Calendar({
               data-pending={isPending || undefined}
               disabled={state !== 'ok'}
               aria-selected={sel}
-              aria-label={`${fmtDay(d, true)}${state === 'full' ? ', taken' : sel ? ', chosen' : ''}`}
+              aria-label={`${fmtDay(d, true)}${state === 'mine' ? ', already yours' : state === 'full' ? ', taken' : sel ? ', chosen' : ''}`}
+              title={state === 'mine' ? 'Yours: your conference already has this spotlight on this day' : undefined}
               onClick={() => onPick(d)}
             >
               {Number(d.slice(8, 10))}
+              {state === 'mine' && <span className="gv-sp-day-mine" aria-hidden>Yours</span>}
             </button>
           );
         })}
@@ -187,6 +194,51 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
   const [descErr, setDescErr] = useState('');
   const [extraFull, setExtraFull] = useState<Set<string>>(() => new Set());
 
+  // ── 10-minute date holds (single spotlights; 25 Sep 2026) ────────────────
+  // "Next: customise" holds the chosen days with hold_spotlight_days; the
+  // countdown shows at the top right; closing, going back to Dates, switching
+  // placement or running out releases it. Bundles hold nothing: their booking
+  // RPC takes no hold, so a hold would count against the organiser's own days.
+  const [hold, setHold] = useState<{ id: string; expiresAt: number } | null>(null);
+  const holdRef = useRef<string | null>(null);
+  holdRef.current = hold?.id ?? null;
+  const [holdBusy, setHoldBusy] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const releaseHold = useCallback((id: string | null | undefined) => {
+    if (!id) return;
+    void (async () => {
+      try {
+        const client = await authedClient();
+        await client.rpc('release_spotlight_hold', { p_hold: id });
+      } catch { /* the hold expires by itself in 10 minutes */ }
+    })();
+  }, []);
+  const dropHold = useCallback(() => {
+    releaseHold(holdRef.current);
+    holdRef.current = null;
+    setHold(null);
+  }, [releaseHold]);
+  // Release on unmount (the pop-up closing any way at all).
+  useEffect(() => () => { releaseHold(holdRef.current); }, [releaseHold]);
+  // The countdown: one tick a second, only while a hold is live.
+  useEffect(() => {
+    if (!hold) return;
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [hold]);
+  const holdLeftMs = hold ? Math.max(0, hold.expiresAt - nowMs) : 0;
+  const holdExpired = !!hold && holdLeftMs <= 0;
+  useEffect(() => {
+    if (!holdExpired) return;
+    const t = setTimeout(() => {
+      dropHold();
+      setStepIx(0);
+      setErr('Your 10 minutes ran out, so the days were released. Pick them again.');
+    }, 0);
+    return () => clearTimeout(t);
+  }, [holdExpired, dropHold]);
+  const holdClock = `${String(Math.floor(holdLeftMs / 60000)).padStart(2, '0')}:${String(Math.floor((holdLeftMs % 60000) / 1000)).padStart(2, '0')}`;
+
   // Calendar and reach caches, keyed by placement (+ month for the calendar).
   const [calendar, setCalendar] = useState<Record<string, CalendarDay[]>>({});
   const [calLoading, setCalLoading] = useState(false);
@@ -206,7 +258,10 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
     (async () => {
       try {
         const client = await authedClient();
-        const { data } = await client.rpc('spotlight_calendar', { p_placement: placement, p_target: target, p_from: from, p_to: to });
+        const { data } = await client.rpc('spotlight_calendar', {
+          p_placement: placement, p_target: target, p_from: from, p_to: to,
+          p_conf: conference.id, p_hold: holdRef.current,
+        });
         if (cancelled) return;
         setCalendar(c => ({ ...c, [calKey]: Array.isArray(data) ? (data as CalendarDay[]) : [] }));
       } finally {
@@ -214,7 +269,7 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
       }
     })();
     return () => { cancelled = true; };
-  }, [calKey, placement, target, month, today, lastDay, calendar, onDescription]);
+  }, [calKey, placement, target, month, today, lastDay, calendar, onDescription, conference.id]);
 
   useEffect(() => {
     if (reach[placement]) return;
@@ -237,6 +292,14 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
     for (const d of extraFull) if (d.startsWith(placement + '|')) s.add(d.slice(placement.length + 1));
     return s;
   }, [calendar, placement, extraFull]);
+  const mineDays = useMemo(() => {
+    const s = new Set<string>();
+    for (const key of Object.keys(calendar)) {
+      if (!key.startsWith(placement + '|')) continue;
+      for (const row of calendar[key]) if (row.mine) s.add(row.day.slice(0, 10));
+    }
+    return s;
+  }, [calendar, placement]);
 
   const chosen = useMemo(() => ranges[placement] ?? [], [ranges, placement]);
   const chosenDays = totalDays(chosen);
@@ -297,7 +360,7 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
     const t = d.trim();
     if (t.length < 1) return 'Write a line about your conference first.';
     if (t.length > DESC_MAX) return `Keep it to ${DESC_MAX} characters.`;
-    if (/https?:\/\/|www\.|@/i.test(t)) return 'Leave links and emails out; people will click through to your page.';
+    if (/https?:\/\/|www\.|@/i.test(t)) return DESC_REFUSAL;
     return '';
   };
 
@@ -313,10 +376,12 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
           p_items: bundle.items.map(it => ({ placement: it.placement, ranges: ranges[it.placement] ?? [] })),
           p_description: description.trim(),
         })
-      : rpcCall('book_spotlight', { p_conf: conference.id, p_placement: placement, p_ranges: chosen, p_description: description.trim() });
+      : rpcCall('book_spotlight', { p_conf: conference.id, p_placement: placement, p_ranges: chosen, p_description: description.trim(), p_hold: holdRef.current });
     run(call, {
       onDone: () => {
         bookedRef.current = true;
+        // book_spotlight removed the hold itself; nothing to release.
+        holdRef.current = null;
         notifyOk(bundle ? `${bundle.name} booked. Your spotlights are on the way.` : `${NAMES[placement]} Spotlight booked for ${weeksLabel(chosenDays)}.`, 'store');
         onBooked();
         onClose();
@@ -337,6 +402,37 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
     });
   };
 
+  /** Single spotlight: hold the chosen days for 10 minutes, then Customise.
+   *  A refusal stays on Dates with the sentence and marks the taken days. */
+  const goCustomise = async () => {
+    if (holdBusy) return;
+    setHoldBusy(true);
+    setErr('');
+    try {
+      const client = await authedClient();
+      const { data, error } = await client.rpc('hold_spotlight_days', { p_conf: conference.id, p_placement: placement, p_ranges: chosen });
+      if (error) throw error;
+      const a = (data ?? {}) as { ok?: boolean; hold_id?: string; expires_at?: string; message?: string; taken_days?: string[] };
+      if (a.ok === true && a.hold_id && a.expires_at) {
+        setNowMs(Date.now());
+        setHold({ id: a.hold_id, expiresAt: new Date(a.expires_at).getTime() });
+        setStepIx(items.length);
+        setPending(null);
+        return;
+      }
+      if (Array.isArray(a.taken_days) && a.taken_days.length > 0) {
+        const takenSet = new Set(a.taken_days.map(d => d.slice(0, 10)));
+        setExtraFull(prev => { const n = new Set(prev); takenSet.forEach(d => n.add(`${placement}|${d}`)); return n; });
+        setRanges(rs => ({ ...rs, [placement]: (rs[placement] ?? []).filter(rg => !a.taken_days!.some(d => d >= rg.from && d <= rg.to)) }));
+      }
+      setErr(plainOrFallback(a.message, 'Those days could not be saved. Try again in a moment.'));
+    } catch (e) {
+      setErr(friendlyError(e, 'Those days could not be saved. Try again in a moment.'));
+    } finally {
+      setHoldBusy(false);
+    }
+  };
+
   const r = reach[placement];
   const s = sell(placement, conference, continent);
   const needsTarget = target === null;
@@ -350,7 +446,7 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
     <div className="gv-sp-tabs" role="tablist" aria-label="Spotlight placements" aria-orientation="vertical">
       {(bundle ? bundle.items.map(it => it.placement) : PLACEMENTS).map((p) => {
         const Icon = ICONS[p];
-        const active = p === placement && !onDescription;
+        const active = p === placement;
         return (
           <button
             key={p}
@@ -361,7 +457,11 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
             data-active={active || undefined}
             onClick={() => {
               if (bundle) { setStepIx(bundle.items.findIndex(it => it.placement === p)); }
-              else { setPlacementIx(PLACEMENTS.indexOf(p)); setStepIx(0); }
+              else {
+                if (p !== placement) dropHold();
+                if (hold && p === placement) return;
+                setPlacementIx(PLACEMENTS.indexOf(p)); setStepIx(0);
+              }
               setPending(null); setErr('');
             }}
           >
@@ -420,13 +520,25 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
           <div className="gv-sp-stepline" aria-label="Steps">
             {[...items.map((it, i) => ({ k: `p${i}`, label: bundle ? NAMES[it.placement] : 'Dates', done: bundle ? totalDays(ranges[it.placement] ?? []) === it.days : chosenDays > 0, ix: i })),
               { k: 'd', label: 'Customise', done: description.trim().length > 0, ix: items.length }].map(st => (
-              <button key={st.k} type="button" className="gv-sp-step" data-active={st.ix === stepIx || undefined} data-done={st.done || undefined} onClick={() => { setStepIx(st.ix); setPending(null); setErr(''); }}>
+              <button key={st.k} type="button" className="gv-sp-step" data-active={st.ix === stepIx || undefined} data-done={st.done || undefined} onClick={() => {
+                if (st.ix === stepIx) return;
+                if (st.ix < items.length) dropHold();
+                else if (!bundle && !hold) { void goCustomise(); return; }
+                setStepIx(st.ix); setPending(null); setErr('');
+              }}>
                 <span className="gv-sp-step-dot">{st.done ? <Check size={12} strokeWidth={3} /> : st.ix + 1}</span>
                 {st.label}
               </button>
             ))}
           </div>
-          <h3 className="gv-buy-rtitle">{stepTitle}</h3>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <h3 className="gv-buy-rtitle">{stepTitle}</h3>
+            {hold && onDescription && !holdExpired && (
+              <span className="gv-sp-hold" role="timer" aria-live="off" aria-label={`Dates saved for ${holdClock}`}>
+                Dates saved for <b>{holdClock}</b>
+              </span>
+            )}
+          </div>
 
           {!bookable ? (
             <p className="gv-buy-note">Publish your conference with its dates before booking a spotlight.</p>
@@ -452,11 +564,12 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
                 rows={3}
                 placeholder="Three days of debate in the heart of the city, for 400 delegates"
                 onChange={(e) => { setDescription(e.target.value); setDescErr(''); }}
+                onBlur={() => { const pr = descProblem(description); if (pr === DESC_REFUSAL) setDescErr(pr); }}
                 aria-describedby="gv-sp-count"
                 aria-invalid={!!descErr}
               />
               <p id="gv-sp-count" className="gv-sp-count" data-over={description.length > DESC_MAX || undefined}>{description.length} of {DESC_MAX}</p>
-              {descErr ? <ErrorLine>{descErr}</ErrorLine> : null}
+              {descErr ? <p role="alert" className="gv-sp-desc-err">{descErr}</p> : null}
             </div>
           ) : (
             <>
@@ -469,6 +582,7 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
                 minDay={today}
                 maxDay={lastDay}
                 fullDays={fullDays}
+                mineDays={mineDays}
                 loading={calLoading}
                 ranges={chosen}
                 pending={pending}
@@ -509,11 +623,19 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
             <span className="gv-sp-total-unit">credits</span>
           </div>
           {onDescription ? (
-            <GoldButton onClick={book} busy={busy} busyText="Booking…" disabled={!bookable || !allChosen || descProblem(description) !== ''}>
+            <GoldButton onClick={book} busy={busy} busyText="Booking…" disabled={!bookable || !allChosen || descProblem(description) !== '' || !!descErr}>
               {`Book for ${total ?? '…'} credits`}
             </GoldButton>
           ) : (
-            <GoldButton onClick={() => { setStepIx(stepIx + 1); setPending(null); setErr(''); }} disabled={!bookable || !stepReady || chosenDays === 0}>
+            <GoldButton
+              onClick={() => {
+                if (!bundle && stepIx + 1 >= items.length) { void goCustomise(); return; }
+                setStepIx(stepIx + 1); setPending(null); setErr('');
+              }}
+              busy={holdBusy}
+              busyText="Saving your dates…"
+              disabled={!bookable || !stepReady || chosenDays === 0}
+            >
               {stepIx + 1 < items.length ? `Next: ${NAMES[items[stepIx + 1].placement]}` : 'Next: customise'}
             </GoldButton>
           )}
@@ -565,6 +687,12 @@ const SPOT_CSS = `
 .gv-sp-day{height:38px;border-radius:10px;border:none;background:transparent;font-family:${OUTFIT};font-size:14px;font-weight:700;color:${INK};cursor:pointer;font-variant-numeric:tabular-nums}
 .gv-sp-day:hover:not(:disabled){background:rgba(27,56,40,0.08)}
 .gv-sp-day[data-state="off"]{color:rgba(28,20,16,0.25);cursor:default}
+.gv-sp-day{position:relative}
+.gv-sp-day[data-state="mine"]{background:rgba(238,217,138,0.28);color:#6B4F12;cursor:not-allowed}
+.gv-sp-day-mine{position:absolute;left:0;right:0;bottom:1px;font-size:8px;font-weight:800;letter-spacing:0.02em;line-height:1;color:#8A6414}
+.gv-sp-hold{display:inline-flex;align-items:center;gap:4px;min-height:28px;padding:0 10px;border-radius:999px;background:rgba(238,217,138,0.25);font-size:12.5px;font-weight:600;color:${INK};font-variant-numeric:tabular-nums;margin-right:40px}
+.gv-sp-hold b{font-weight:800}
+.gv-sp-desc-err{margin:0;font-size:13.5px;line-height:1.45;font-weight:600;color:#8B2020}
 .gv-sp-day[data-state="full"]{color:rgba(28,20,16,0.4);text-decoration:line-through;cursor:not-allowed;background:repeating-linear-gradient(135deg,transparent 0 4px,rgba(28,20,16,0.06) 4px 6px)}
 .gv-sp-day[data-sel]{background:${FOREST};color:${GOLD}}
 .gv-sp-day[data-pending]{box-shadow:inset 0 0 0 2px ${FOREST}}

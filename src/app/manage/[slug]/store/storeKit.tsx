@@ -82,6 +82,31 @@ export const STORE_CSS = `
 .gv-st-flag{position:absolute;top:12px;left:12px;font-size:10.5px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;padding:4px 9px;border-radius:999px;background:${GOLD};color:${INK};box-shadow:0 2px 6px rgba(0,0,0,0.25)}
 .gv-st-product-hint{position:absolute;top:12px;right:12px;z-index:2}
 
+/* The two bottom cards' summary buttons (Your Spotlights, Your Purchases) */
+.gv-st-summary{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:none;border-radius:14px;background:${IVORY};cursor:pointer;text-align:left;font-family:${OUTFIT};transition:background-color 140ms ease}
+.gv-st-summary:hover{background:#F3EEE2}
+.gv-st-summary:focus{outline:none}
+.gv-st-summary:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
+.gv-st-summary-big{display:block;font-size:18px;font-weight:800;color:${INK}}
+.gv-st-summary-sub{display:block;margin-top:2px;font-size:13px;color:${INK_SOFT};font-variant-numeric:tabular-nums}
+
+/* Bundle cards, in the credit bundle cards' manner (25 Sep 2026) */
+.gv-st-bundle{position:relative;display:flex;flex-direction:column;border-radius:22px;overflow:hidden;background:#FFFFFF;cursor:pointer;text-align:left;border:none;padding:0;font-family:${OUTFIT};box-shadow:0 1px 0 rgba(27,56,40,0.08),0 18px 40px -30px rgba(27,56,40,0.45);transition:transform 200ms cubic-bezier(0.22,1,0.36,1),box-shadow 200ms ease}
+.gv-st-bundle:hover{transform:translateY(-3px)}
+.gv-st-bundle:focus{outline:none}
+.gv-st-bundle:focus-visible{box-shadow:0 0 0 3px #FFFFFF,0 0 0 7px ${FOREST}}
+.gv-st-bundle[data-best]{box-shadow:0 0 0 2px ${GOLD},0 0 0 3px rgba(182,135,31,0.45),0 10px 30px rgba(238,217,138,0.45),0 20px 44px -26px rgba(182,135,31,0.6)}
+.gv-st-bundle-img{position:relative;aspect-ratio:16/8;overflow:hidden;background:#14301F;flex:0 0 auto}
+.gv-st-bundle-img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;transition:transform 400ms cubic-bezier(0.22,1,0.36,1)}
+.gv-st-bundle:hover .gv-st-bundle-img img{transform:scale(1.04)}
+.gv-st-bundle-body{position:relative;flex:1 1 auto;display:flex;flex-direction:column;gap:10px;padding:14px 16px 30px;background:#FFFFFF}
+.gv-st-bundle-price{margin:0;font-size:14px;font-weight:600;color:${INK_SOFT};font-variant-numeric:tabular-nums}
+.gv-st-bundle-price b{font-size:26px;font-weight:900;letter-spacing:-0.02em;color:${INK};margin-right:4px}
+.gv-st-bundle-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.gv-st-bundle-list li{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;color:${INK};line-height:1.3}
+.gv-st-bundle-list li svg{flex-shrink:0;color:${FOREST}}
+.gv-st-bundle-nr{position:absolute;right:14px;bottom:10px;font-size:11px;font-style:italic;color:${INK_SOFT}}
+
 /* Meter */
 .gv-st-meter{height:8px;border-radius:999px;background:rgba(27,56,40,0.1);overflow:hidden}
 .gv-st-meter > span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#1B3828,#2A5A3C)}
