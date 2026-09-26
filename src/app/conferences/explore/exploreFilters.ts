@@ -141,7 +141,7 @@ export function matchesDateRange(startDate: string | null | undefined, from: str
 
 // ── The URL ──────────────────────────────────────────────────────────────────
 // Every active filter is in the query so a filtered view can be shared:
-//   ?search= ?continent= ?country= (as before) ?format= ?level= ?roles=a,b
+//   ?search= ?continent= ?country= (repeatable) ?format= ?level= ?roles=a,b
 //   ?price= ?when= ?from= ?to= ?sort=desc
 
 export interface ExploreQuery {
@@ -179,11 +179,12 @@ export function readExploreQuery(sp: { get(name: string): string | null }): Expl
 
 /** The query string for the current filters, '' when nothing is set. Keeps
  *  the region keys the page already owns (`continent`, `country`). */
-export function writeExploreQuery(q: ExploreQuery & { continent?: string | null; country?: string | null }): string {
+export function writeExploreQuery(q: ExploreQuery & { continent?: string | null; country?: string | string[] | null }): string {
   const p = new URLSearchParams();
   if (q.search) p.set('search', q.search);
   if (q.continent) p.set('continent', q.continent);
-  if (q.country) p.set('country', q.country);
+  // Several countries: one ?country= per country, in the order chosen.
+  for (const c of Array.isArray(q.country) ? q.country : q.country ? [q.country] : []) p.append('country', c);
   if (q.format) p.set('format', q.format);
   if (q.level) p.set('level', q.level);
   if (q.roles.length) p.set('roles', q.roles.join(','));

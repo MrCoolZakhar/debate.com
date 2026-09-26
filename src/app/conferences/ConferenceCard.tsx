@@ -328,7 +328,6 @@ export function ConferenceCard({
                 {currencySymbol(price.currency)}{formatFeeAmountCompact(price.amount)}
               </span>
             )}
-            {creditSponsored && <CreditSponsoredMark tone="dark" size="sm" />}
             {conf.expected_delegates > 0 && (
               <span className="flex items-center gap-1">
                 <Users size={13} style={{ color: 'rgba(237,231,216,0.66)', flexShrink: 0 }} />
@@ -340,6 +339,9 @@ export function ConferenceCard({
           </div>
           <div className="flex-shrink-0"><ApplyButton applied={applied} member={member} /></div>
         </div>
+        {/* Credit sponsored: a quiet line of its own under the facts, so it
+            never meets the name, the logo or the fee */}
+        {creditSponsored && <CreditSponsoredMark tone="dark" size="xs" style={{ marginTop: 5 }} />}
       </div>
     </article>
   ) : (
@@ -421,12 +423,12 @@ export function ConferenceCard({
             <SpotlightTag size="sm" />
           </span>
         )}
-        {/* Format chip (moves under the tag on a spotlight) */}
-        {conf.format && (
+        {/* Format chip; a spotlight card drops it and the Spotlight tag
+            takes the corner (the format stays in the filters) */}
+        {conf.format && !spotlight && (
           <span
-            className={spotlight ? 'absolute right-3' : 'absolute top-3 right-3'}
+            className="absolute top-3 right-3"
             style={{
-              top: spotlight ? '38px' : undefined,
               fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: dense ? '8.5px' : '9px', letterSpacing: dense ? '0.09em' : '0.12em',
               color: '#FAF8F3', backgroundColor: 'rgba(20,36,27,0.45)',
               backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
@@ -438,20 +440,6 @@ export function ConferenceCard({
           </span>
         )}
       </div>
-
-      {/* "Credit sponsored", right beside the fee bubble */}
-      {creditSponsored && (
-        <div
-          style={{
-            position: 'absolute', zIndex: 2, right: dense ? '14px' : '18px',
-            top: `${(compact ? 72 : 104) + 22}px`,
-            backgroundColor: '#FAF8F3', borderRadius: 9999, padding: '2px 8px',
-            boxShadow: '0 2px 8px rgba(27,56,40,0.12)',
-          }}
-        >
-          <CreditSponsoredMark size="sm" />
-        </div>
-      )}
 
       {/* Fee bubble, straddles the seam between the banner photo and the
           card body, right-hand side, with the real currency symbol */}
@@ -516,11 +504,13 @@ export function ConferenceCard({
         </h3>
 
         {/* Location */}
-        <div className={`flex items-center gap-1.5 ${heroCompact ? 'mb-1.5' : compact ? 'mb-3' : 'mb-4'}`}>
+        <div className={`flex items-center flex-wrap gap-x-1.5 gap-y-1 ${heroCompact ? 'mb-1.5' : compact ? 'mb-3' : 'mb-4'}`}>
           {showFlag && <CircleFlag country={conf.country} size={18} decorative />}
           <span className="text-[13px]" style={{ color: '#6B5F52', fontFamily: "var(--font-brand), sans-serif", fontWeight: 500 }}>
             {conf.city}, {countryCode}
           </span>
+          {/* Credit sponsored, in the meta row: never over the name, logo or fee */}
+          {creditSponsored && <CreditSponsoredMark size="xs" style={{ marginLeft: 'auto' }} />}
         </div>
 
         {/* Foot row */}

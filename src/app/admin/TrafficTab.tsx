@@ -29,12 +29,37 @@ interface Traffic {
 
 type Days = 7 | 30 | 90;
 
+interface PageSeries { page: string | null; pages: string[]; by_day: { day: string; views: number }[] }
+
+// The daily chart's page filter: page FAMILIES (the part of the page key
+// before any '/'), matched by admin_site_page_series(p_days, p_page), where
+// 'guides' also counts 'guides/<slug>'. Any other family the server saw in the
+// window is appended with its key as the label.
+const PAGE_FAMILIES: { key: string; label: string }[] = [
+  { key: 'home', label: 'Home' },
+  { key: 'explore', label: 'Explore' },
+  { key: 'sessions', label: 'Sessions' },
+  { key: 'map', label: 'Map' },
+  { key: 'create', label: 'Create' },
+  { key: 'conference', label: 'Conference pages' },
+  { key: 'guides', label: 'Guides' },
+  { key: 'blog', label: 'Blog' },
+  { key: 'pricing', label: 'Pricing' },
+  { key: 'help', label: 'Help' },
+  { key: 'join', label: 'Join' },
+];
+const familyLabel = (k: string) => PAGE_FAMILIES.find(f => f.key === k)?.label ?? k.charAt(0).toUpperCase() + k.slice(1);
+
 export default function TrafficTab() {
   const { session, loading: authLoading } = useAuth();
   const [days, setDays] = useState<Days>(30);
   const [t, setT] = useState<Traffic | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // null = Whole site.
+  const [page, setPage] = useState<string | null>(null);
+  const [series, setSeries] = useState<{ key: string; data: PageSeries } | null>(null);
+  const [seriesError, setSeriesError] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading || !session) return;
@@ -53,10 +78,33 @@ export default function TrafficTab() {
     return () => { alive = false; };
   }, [authLoading, session, days]);
 
+  // The daily chart: one read per (window, page family).
+  const seriesKey = `${days}|${page ?? ''}`;
+  useEffect(() => {
+    if (authLoading || !session) return;
+    let alive = true;
+    const supabase = getAuthedClient(session.access_token);
+    void supabase.rpc('admin_site_page_series', { p_days: days, p_page: page }).then(({ data, error: e }) => {
+      if (!alive) return;
+      if (e) { setSeriesError(e.message); return; }
+      setSeriesError(null);
+      setSeries({ key: `${days}|${page ?? ''}`, data: data as PageSeries });
+    });
+    return () => { alive = false; };
+  }, [authLoading, session, days, page]);
+
   if (error) return <p style={{ fontFamily: OUTFIT, color: '#8B2020', fontSize: 13 }}>{error}</p>;
   if (!t) return <div className="py-16 flex justify-center"><Loader /></div>;
 
-  const totalViews = t.by_day.reduce((n, d) => n + d.views, 0);
+  const current = series && series.key === seriesKey ? series.data : null;
+  // Whole site falls back to admin_site_traffic's own series until the page read lands.
+  const dayPoints = current?.by_day ?? (page === null ? t.by_day : []);
+  const totalViews = dayPoints.reduce((n, d) => n + d.views, 0);
+  const familyKeys = [
+    ...PAGE_FAMILIES.map(f => f.key),
+    ...(series?.data.pages ?? []).filter(k => k && !PAGE_FAMILIES.some(f => f.key === k)),
+  ];
+  const chartTitle = page === null ? 'Daily views: Whole site' : `Daily views: ${familyLabel(page)}`;
   const totalSpotViews = t.spotlights.reduce((n, s) => n + s.views, 0);
   const totalSpotClicks = t.spotlights.reduce((n, s) => n + s.clicks, 0);
 
@@ -87,8 +135,32 @@ export default function TrafficTab() {
         </p>
       </div>
 
-      <Section icon={BarChart3} gradient={NEU_GRADIENTS.forest} title="Page views by day" kicker={`${int(totalViews)} views in ${days} days`}>
-        <DayChart points={t.by_day} days={days} />
+      <Section icon={BarChart3} gradient={NEU_GRADIENTS.forest} title={chartTitle} kicker={`${int(totalViews)} views in ${days} days`}>
+        <div role="radiogroup" aria-label="Page" className="flex flex-wrap gap-1 mb-3">
+          {[null, ...familyKeys].map(k => (
+            <button
+              key={k ?? '__site'}
+              type="button"
+              role="radio"
+              aria-checked={page === k}
+              onClick={() => setPage(k)}
+              className="focus:outline-none"
+              style={{
+                fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, padding: '5px 10px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                backgroundColor: page === k ? NEU.forest : 'rgba(27,56,40,0.07)', color: page === k ? '#FFFFFF' : NEU.ink,
+              }}
+            >
+              {k === null ? 'Whole site' : familyLabel(k)}
+            </button>
+          ))}
+        </div>
+        {seriesError ? (
+          <p style={{ fontFamily: OUTFIT, color: '#8B2020', fontSize: 12 }}>{seriesError}</p>
+        ) : !current && page !== null ? (
+          <div className="py-10 flex justify-center"><Loader /></div>
+        ) : (
+          <DayChart points={dayPoints} days={days} label={chartTitle} />
+        )}
       </Section>
 
       <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))' }}>
@@ -195,7 +267,20 @@ function RankedBars({ rows }: { rows: { key: string; label: string; n: number }[
 
 /** Daily bars with a dashed 7-day mean, like the Data tab's growth chart. Days
  *  with no row are drawn as zero so the axis is a real calendar. */
-function DayChart({ points, days }: { points: { day: string; views: number }[]; days: number }) {
+/** Whole-number gridlines with no repeats: a 1, 2 or 5 step (times a power of
+ *  ten, never under 1) that reaches the maximum. All zero draws 0 and 1. */
+function dayTicks(max: number): { top: number; ticks: number[] } {
+  if (max <= 0) return { top: 1, ticks: [0, 1] };
+  const raw = max / 4;
+  const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = Math.max(1, [1, 2, 5, 10].map(m => m * pow).find(v => v >= raw) ?? 10 * pow);
+  const top = Math.ceil(max / step) * step;
+  const ticks: number[] = [];
+  for (let v = 0; v <= top; v += step) ticks.push(v);
+  return { top, ticks };
+}
+
+function DayChart({ points, days, label }: { points: { day: string; views: number }[]; days: number; label: string }) {
   const byDay = new Map(points.map(p => [p.day.slice(0, 10), p.views]));
   const series: { d: string; v: number }[] = [];
   const today = new Date();
@@ -206,7 +291,8 @@ function DayChart({ points, days }: { points: { day: string; views: number }[]; 
     series.push({ d: iso, v: byDay.get(iso) ?? 0 });
   }
   const W = 720, H = 160, padL = 34, padB = 22, padT = 10;
-  const max = Math.max(1, ...series.map(s => s.v));
+  const { top: max, ticks } = dayTicks(Math.max(0, ...series.map(s => s.v)));
+  const empty = series.every(s => s.v === 0);
   const innerW = W - padL - 6, innerH = H - padT - padB;
   const bw = innerW / series.length;
   const y = (v: number) => padT + innerH - (v / max) * innerH;
@@ -215,12 +301,11 @@ function DayChart({ points, days }: { points: { day: string; views: number }[]; 
     return slice.reduce((n, s) => n + s.v, 0) / slice.length;
   });
   const meanPts = mean.map((m, i) => ({ x: padL + bw * i + bw / 2, y: y(m) }));
-  const ticks = [0, Math.round(max / 2), max];
   return (
     <div style={{ overflowX: 'auto' }}>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ minWidth: 420, display: 'block', fontFamily: OUTFIT }} role="img" aria-label={`Page views per day over ${days} days`}>
-        {ticks.map(tk => (
-          <g key={tk}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ minWidth: 420, display: 'block', fontFamily: OUTFIT }} role="img" aria-label={`${label}, per day over ${days} days`}>
+        {ticks.map((tk, i) => (
+          <g key={`${i}-${tk}`}>
             <line x1={padL} x2={W - 6} y1={y(tk)} y2={y(tk)} stroke="#DDD4C0" strokeDasharray="2 3" />
             <text x={padL - 6} y={y(tk) + 3} fontSize="9" textAnchor="end" fill={NEU.inkSoft}>{int(tk)}</text>
           </g>
@@ -235,7 +320,9 @@ function DayChart({ points, days }: { points: { day: string; views: number }[]; 
           <text key={`t${s.d}`} x={padL + bw * i + bw / 2} y={H - 6} fontSize="9" textAnchor="middle" fill={NEU.inkSoft}>{s.d.slice(5)}</text>
         ))}
       </svg>
-      <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.inkSoft, marginTop: 4 }}>Bars are the daily count; the dashed line is the 7-day mean.</p>
+      <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.inkSoft, marginTop: 4 }}>
+        {empty ? 'No views in this window.' : 'Bars are the daily count; the dashed line is the 7-day mean.'}
+      </p>
     </div>
   );
 }

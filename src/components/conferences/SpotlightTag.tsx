@@ -39,17 +39,19 @@ export function SpotlightTag({ size = 'md', style }: { size?: 'sm' | 'md'; style
 
 /** "Credit sponsored" with a heart. `tone` names the ground it sits on. */
 export function CreditSponsoredMark({ tone = 'light', size = 'md', style }: {
-  tone?: 'light' | 'dark'; size?: 'sm' | 'md'; style?: React.CSSProperties;
+  /** xs: the quiet 10.5px line used on conference cards and list rows. */
+  tone?: 'light' | 'dark'; size?: 'xs' | 'sm' | 'md'; style?: React.CSSProperties;
 }) {
-  const sm = size === 'sm';
+  const xs = size === 'xs';
+  const sm = size === 'sm' || xs;
   const color = tone === 'dark' ? '#FFD1D8' : '#8B2020';
   return (
     <span
       title="The conference pays your Gavelling credit. Applying costs you nothing."
       className="inline-flex items-center gap-1"
-      style={{ fontFamily: FONT, fontWeight: 700, fontSize: sm ? 11 : 12, color, whiteSpace: 'nowrap', lineHeight: 1.2, ...style }}
+      style={{ fontFamily: FONT, fontWeight: xs ? 600 : 700, fontSize: xs ? 10.5 : sm ? 11 : 12, color, whiteSpace: 'nowrap', lineHeight: 1.2, ...style }}
     >
-      <Heart size={sm ? 11 : 13} strokeWidth={2.4} fill={tone === 'dark' ? 'rgba(255,209,216,0.5)' : 'rgba(139,32,32,0.18)'} aria-hidden />
+      <Heart size={xs ? 10 : sm ? 11 : 13} strokeWidth={2.4} fill={tone === 'dark' ? 'rgba(255,209,216,0.5)' : 'rgba(139,32,32,0.18)'} aria-hidden />
       Credit sponsored
     </span>
   );
