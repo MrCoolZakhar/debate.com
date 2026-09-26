@@ -9,3 +9,8 @@ here when the owner takes a feature off the site but wants the code kept.
   every link, the sitemap entry and the homepage globe section were removed. To
   bring it back, move the folder to `src/app/conferences/map/`, remove the
   redirect, and add the sitemap entry and links back.
+- `session-format-select/`: the "Select your format" screen (Regular Debate, Model United
+  Nations, Crisis Committee) that opened `/create/sessions`, archived on 26 Sep 2026 at the
+  owner's request. The session creator now opens straight on building the committee, and its
+  Back button goes back (or to `/sessions`). The file is `.txt` so it is not compiled; the
+  restore steps are at its top. The card videos (`/card_*.mp4`) are still in `public/`.

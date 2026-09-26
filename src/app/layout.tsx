@@ -14,6 +14,7 @@ import SiteViewBeacon from '@/components/SiteViewBeacon';
 import Script from 'next/script';
 import { DOM_TRANSLATION_GUARD } from '@/lib/domTranslationGuard';
 import { Inter } from 'next/font/google';
+import SessionsRouteFlag from '@/components/SessionsRouteFlag';
 
 // THE typeface: Inter everywhere (owner, 26 Sep 2026: Albert Sans felt "too
 // weird"; Inter is the closest open face to the SF Pro Macs showed before).
@@ -31,6 +32,14 @@ const brandFont = Inter({
   variable: '--font-brand',
   display: 'swap',
 });
+
+// Inter one weight lighter everywhere except Gavelling Sessions (26 Sep 2026).
+// Every inline weight and its Tailwind class reads one step lighter.
+const LIGHTER_WEIGHTS_CSS = ([['900', '800', 'font-black'], ['800', '700', 'font-extrabold'], ['700', '600', 'font-bold'], ['600', '500', 'font-semibold']] as const)
+  .map(([w, n, cls]) => `[style*="font-weight:${w}"],[style*="font-weight: ${w}"],.${cls}{font-weight:${n}!important}`)
+  .join('');
+const SESSION_PATHS = ['/create/sessions', '/join', '/chair', '/delegate', '/advisor', '/voting', '/sessions'];
+const LIGHTER_WEIGHTS_SCRIPT = `(function(){var p=location.pathname;var s=${JSON.stringify(SESSION_PATHS)}.some(function(x){return p===x||p.indexOf(x+'/')===0});var e=document.createElement('style');e.id='gv-lighter-weights';e.media=s?'not all':'all';e.textContent=${JSON.stringify(LIGHTER_WEIGHTS_CSS)};document.head.appendChild(e)})();`;
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://gavelling.com'),
@@ -149,6 +158,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             tag while rendering a React component" warning a raw <script> in
             <head> gave (25 Sep 2026). */}
         <Script id="gv-dom-guard" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: DOM_TRANSLATION_GUARD }} />
+        {/* Inter one weight lighter everywhere except Gavelling Sessions (owner,
+            26 Sep 2026: "do it for the rest", "do not change anything about
+            sessions"): 900 reads 800, 800 700, 700 600, 600 500. The rules live in
+            <style id="gv-lighter-weights">, added before first paint and switched
+            off on a Sessions path (media "not all") here and by SessionsRouteFlag
+            on client navigation. A <style> in head, not an attribute on <html>, so
+            hydration never sees a mismatch. The paths mirror src/lib/sessionRoutes.ts. */}
+        <Script id="gv-sessions-flag" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: LIGHTER_WEIGHTS_SCRIPT }} />
+        <SessionsRouteFlag />
         <AuthProvider>
           <LanguageProvider>
             {children}

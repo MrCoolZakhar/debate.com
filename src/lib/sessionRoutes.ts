@@ -7,6 +7,7 @@
  */
 // /create itself is the site's chooser page (a committee or a conference,
 // 25 Sep 2026); the session creator lives at /create/sessions.
+// Mirrored by the inline gv-sessions-flag script (lighter weights) in src/app/layout.tsx: change both.
 const SESSION_PREFIXES = ['/create/sessions', '/join', '/chair', '/delegate', '/advisor', '/voting', '/sessions'];
 
 export function isSessionsPath(pathname: string | null | undefined): boolean {

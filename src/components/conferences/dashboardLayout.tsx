@@ -27,13 +27,6 @@ import Link from 'next/link';
 /** Scoped CSS for the grid. Plain CSS because the fit mode is a width AND a
  *  height media query, which reads far better here than as Tailwind variants. */
 export const DASH_CSS = `
-/* Inter weights to match the owner's sample (26 Sep 2026, dashboard only, for
-   comparison): every weight one step lighter, so 900 numbers read 800, 800
-   titles 700, 700 labels 600, 600 text 500. Remove this block to go back. */
-.gv-dash [style*="font-weight: 900"], .gv-dash .font-black { font-weight: 800 !important; }
-.gv-dash [style*="font-weight: 800"], .gv-dash .font-extrabold { font-weight: 700 !important; }
-.gv-dash [style*="font-weight: 700"], .gv-dash .font-bold { font-weight: 600 !important; }
-.gv-dash [style*="font-weight: 600"], .gv-dash .font-semibold { font-weight: 500 !important; }
 .gv-dash { display: flex; flex-direction: column; min-height: calc(100vh - 56px); padding: 14px 20px 20px; }
 .gv-dash-grid { display: flex; flex-direction: column; gap: 14px; }
 .gv-dash-col1 { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
