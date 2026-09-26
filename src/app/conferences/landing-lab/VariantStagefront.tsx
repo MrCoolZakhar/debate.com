@@ -300,8 +300,8 @@ export default function VariantStagefront({
             aria-hidden="true"
             style={{
               overflow: 'hidden',
-              WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0.985) 60%, rgba(0,0,0,0.94) 65%, rgba(0,0,0,0.86) 70%, rgba(0,0,0,0.75) 75%, rgba(0,0,0,0.61) 80%, rgba(0,0,0,0.45) 85%, rgba(0,0,0,0.31) 89%, rgba(0,0,0,0.17) 93%, rgba(0,0,0,0.07) 96%, rgba(0,0,0,0.02) 98%, rgba(0,0,0,0) 100%)',
-              maskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0.985) 60%, rgba(0,0,0,0.94) 65%, rgba(0,0,0,0.86) 70%, rgba(0,0,0,0.75) 75%, rgba(0,0,0,0.61) 80%, rgba(0,0,0,0.45) 85%, rgba(0,0,0,0.31) 89%, rgba(0,0,0,0.17) 93%, rgba(0,0,0,0.07) 96%, rgba(0,0,0,0.02) 98%, rgba(0,0,0,0) 100%)',
+              WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 76.0%, rgba(0,0,0,0.985) 78.7%, rgba(0,0,0,0.94) 81.3%, rgba(0,0,0,0.86) 84.0%, rgba(0,0,0,0.75) 86.7%, rgba(0,0,0,0.61) 89.3%, rgba(0,0,0,0.45) 92.0%, rgba(0,0,0,0.31) 94.1%, rgba(0,0,0,0.17) 96.3%, rgba(0,0,0,0.07) 97.9%, rgba(0,0,0,0.02) 98.9%, rgba(0,0,0,0) 100.0%)',
+              maskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 76.0%, rgba(0,0,0,0.985) 78.7%, rgba(0,0,0,0.94) 81.3%, rgba(0,0,0,0.86) 84.0%, rgba(0,0,0,0.75) 86.7%, rgba(0,0,0,0.61) 89.3%, rgba(0,0,0,0.45) 92.0%, rgba(0,0,0,0.31) 94.1%, rgba(0,0,0,0.17) 96.3%, rgba(0,0,0,0.07) 97.9%, rgba(0,0,0,0.02) 98.9%, rgba(0,0,0,0) 100.0%)',
             }}
           >
             <Image
