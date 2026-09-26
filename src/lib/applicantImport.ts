@@ -271,10 +271,12 @@ function mapPayment(raw: string): { status: 'paid' | 'unpaid' | 'waived'; unknow
   return { status: 'unpaid', unknown: true };
 }
 
-function mapRole(raw: string): { role: ImportableRole | null; isChair: boolean } {
+function mapRole(raw: string): { role: ImportableRole | null; isChair: boolean; blank: boolean } {
   const v = raw.trim().toLowerCase().replace(/\s+/g, ' ');
-  if (v === 'chair') return { role: null, isChair: true };
-  return { role: ROLE_ALIASES[v] ?? null, isChair: false };
+  // A blank role is never defaulted to delegate: it is its own error.
+  if (!v) return { role: null, isChair: false, blank: true };
+  if (v === 'chair') return { role: null, isChair: true, blank: false };
+  return { role: ROLE_ALIASES[v] ?? null, isChair: false, blank: false };
 }
 
 export function classifyImportRows(rows: ParsedImportRow[], ctx: ClassifyContext): ClassifiedImportRow[] {
@@ -293,11 +295,13 @@ export function classifyImportRows(rows: ParsedImportRow[], ctx: ClassifyContext
       reasons.push({ severity: 'error', message: 'Missing name.' });
     }
 
-    const { role, isChair } = mapRole(raw.role);
+    const { role, isChair, blank: roleBlank } = mapRole(raw.role);
     if (isChair) {
       reasons.push({ severity: 'error', message: "Chairs aren't importable. Invite chairs from Committees instead." });
+    } else if (roleBlank) {
+      reasons.push({ severity: 'error', message: 'Add a role: delegate, head delegate, faculty advisor or observer.' });
     } else if (!role) {
-      reasons.push({ severity: 'error', message: `Unknown role "${raw.role}".` });
+      reasons.push({ severity: 'error', message: `Unknown role "${raw.role.trim()}". Use delegate, head delegate, faculty advisor or observer.` });
     }
 
     // Re-importing an existing delegate UPDATES them rather than failing. The
@@ -426,7 +430,8 @@ export function classifyImportRows(rows: ParsedImportRow[], ctx: ClassifyContext
 
     const payment = mapPayment(raw.payment);
     if (payment.unknown) {
-      reasons.push({ severity: 'warning', message: `Unknown payment value "${raw.payment}", defaulting to unpaid.` });
+      // An unknown value is an error, never a silent unpaid (a blank stays unpaid).
+      reasons.push({ severity: 'error', message: `Unknown payment value "${raw.payment.trim()}". Use paid, unpaid or waived, or leave it blank for unpaid.` });
     }
 
     // ── Update-specific rules ────────────────────────────────────────────────

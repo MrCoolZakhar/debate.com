@@ -194,32 +194,34 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
   const [descErr, setDescErr] = useState('');
   const [extraFull, setExtraFull] = useState<Set<string>>(() => new Set());
 
-  // ── 10-minute date holds (single spotlights; 25 Sep 2026) ────────────────
-  // "Next: customise" holds the chosen days with hold_spotlight_days; the
-  // countdown shows at the top right; closing, going back to Dates, switching
-  // placement or running out releases it. Bundles hold nothing: their booking
-  // RPC takes no hold, so a hold would count against the organiser's own days.
-  const [hold, setHold] = useState<{ id: string; expiresAt: number } | null>(null);
-  const holdRef = useRef<string | null>(null);
-  holdRef.current = hold?.id ?? null;
+  // ── 10-minute date holds (25 Sep 2026) ───────────────────────────────────
+  // Moving on to Customise holds the chosen days with hold_spotlight_days,
+  // ONE hold per placement (a single spotlight has one, a bundle one per
+  // placement); the countdown shows the earliest expiry at the top right;
+  // closing, going back to a dates step, switching placement or running out
+  // releases every hold. book_spotlight takes the hold as p_hold,
+  // book_spotlight_bundle takes all of them as p_holds.
+  const [hold, setHold] = useState<{ byPlacement: Record<string, string>; expiresAt: number } | null>(null);
+  const holdRef = useRef<Record<string, string>>({});
+  holdRef.current = hold?.byPlacement ?? {};
   const [holdBusy, setHoldBusy] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const releaseHold = useCallback((id: string | null | undefined) => {
-    if (!id) return;
+  const releaseHolds = useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
     void (async () => {
       try {
         const client = await authedClient();
-        await client.rpc('release_spotlight_hold', { p_hold: id });
-      } catch { /* the hold expires by itself in 10 minutes */ }
+        await Promise.all(ids.map(id => client.rpc('release_spotlight_hold', { p_hold: id })));
+      } catch { /* a hold expires by itself in 10 minutes */ }
     })();
   }, []);
   const dropHold = useCallback(() => {
-    releaseHold(holdRef.current);
-    holdRef.current = null;
+    releaseHolds(Object.values(holdRef.current));
+    holdRef.current = {};
     setHold(null);
-  }, [releaseHold]);
+  }, [releaseHolds]);
   // Release on unmount (the pop-up closing any way at all).
-  useEffect(() => () => { releaseHold(holdRef.current); }, [releaseHold]);
+  useEffect(() => () => { releaseHolds(Object.values(holdRef.current)); }, [releaseHolds]);
   // The countdown: one tick a second, only while a hold is live.
   useEffect(() => {
     if (!hold) return;
@@ -260,7 +262,7 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
         const client = await authedClient();
         const { data } = await client.rpc('spotlight_calendar', {
           p_placement: placement, p_target: target, p_from: from, p_to: to,
-          p_conf: conference.id, p_hold: holdRef.current,
+          p_conf: conference.id, p_hold: holdRef.current[placement] ?? null,
         });
         if (cancelled) return;
         setCalendar(c => ({ ...c, [calKey]: Array.isArray(data) ? (data as CalendarDay[]) : [] }));
@@ -375,13 +377,14 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
           p_conf: conference.id, p_kind: bundle.kind,
           p_items: bundle.items.map(it => ({ placement: it.placement, ranges: ranges[it.placement] ?? [] })),
           p_description: description.trim(),
+          p_holds: Object.values(holdRef.current),
         })
-      : rpcCall('book_spotlight', { p_conf: conference.id, p_placement: placement, p_ranges: chosen, p_description: description.trim(), p_hold: holdRef.current });
+      : rpcCall('book_spotlight', { p_conf: conference.id, p_placement: placement, p_ranges: chosen, p_description: description.trim(), p_hold: holdRef.current[placement] ?? null });
     run(call, {
       onDone: () => {
         bookedRef.current = true;
-        // book_spotlight removed the hold itself; nothing to release.
-        holdRef.current = null;
+        // The booking removed its holds itself; nothing to release.
+        holdRef.current = {};
         notifyOk(bundle ? `${bundle.name} booked. Your spotlights are on the way.` : `${NAMES[placement]} Spotlight booked for ${weeksLabel(chosenDays)}.`, 'store');
         onBooked();
         onClose();
@@ -402,31 +405,53 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
     });
   };
 
-  /** Single spotlight: hold the chosen days for 10 minutes, then Customise.
-   *  A refusal stays on Dates with the sentence and marks the taken days. */
+  /** Hold every placement's chosen days for 10 minutes (one hold per
+   *  placement), then Customise. A refusal releases whatever was already
+   *  held, marks the taken days on that placement's step and goes there. */
   const goCustomise = async () => {
     if (holdBusy) return;
+    if (bundle && !allChosen) {
+      // A bundle holds all of its placements at once: send them to the first
+      // placement that still needs its days.
+      const ix = bundle.items.findIndex(it => totalDays(ranges[it.placement] ?? []) !== it.days);
+      setStepIx(Math.max(0, ix));
+      if (ix >= 0) setErr(`${NAMES[bundle.items[ix].placement]} needs exactly ${bundle.items[ix].days} days in this bundle.`);
+      return;
+    }
     setHoldBusy(true);
     setErr('');
+    const list: { p: Placement; r: Range[]; ix: number }[] = bundle
+      ? bundle.items.map((it, ix) => ({ p: it.placement, r: ranges[it.placement] ?? [], ix }))
+      : [{ p: placement, r: chosen, ix: 0 }];
+    const got: Record<string, string> = {};
+    let earliest = Infinity;
     try {
       const client = await authedClient();
-      const { data, error } = await client.rpc('hold_spotlight_days', { p_conf: conference.id, p_placement: placement, p_ranges: chosen });
-      if (error) throw error;
-      const a = (data ?? {}) as { ok?: boolean; hold_id?: string; expires_at?: string; message?: string; taken_days?: string[] };
-      if (a.ok === true && a.hold_id && a.expires_at) {
-        setNowMs(Date.now());
-        setHold({ id: a.hold_id, expiresAt: new Date(a.expires_at).getTime() });
-        setStepIx(items.length);
-        setPending(null);
+      for (const item of list) {
+        const { data, error } = await client.rpc('hold_spotlight_days', { p_conf: conference.id, p_placement: item.p, p_ranges: item.r });
+        if (error) throw error;
+        const a = (data ?? {}) as { ok?: boolean; hold_id?: string; expires_at?: string; message?: string; taken_days?: string[] };
+        if (a.ok === true && a.hold_id && a.expires_at) {
+          got[item.p] = a.hold_id;
+          earliest = Math.min(earliest, new Date(a.expires_at).getTime());
+          continue;
+        }
+        releaseHolds(Object.values(got));
+        if (Array.isArray(a.taken_days) && a.taken_days.length > 0) {
+          const takenSet = new Set(a.taken_days.map(d => d.slice(0, 10)));
+          setExtraFull(prev => { const n = new Set(prev); takenSet.forEach(d => n.add(`${item.p}|${d}`)); return n; });
+          setRanges(rs => ({ ...rs, [item.p]: (rs[item.p] ?? []).filter(rg => !a.taken_days!.some(d => d >= rg.from && d <= rg.to)) }));
+        }
+        if (bundle) setStepIx(item.ix);
+        setErr(plainOrFallback(a.message, 'Those days could not be saved. Try again in a moment.'));
         return;
       }
-      if (Array.isArray(a.taken_days) && a.taken_days.length > 0) {
-        const takenSet = new Set(a.taken_days.map(d => d.slice(0, 10)));
-        setExtraFull(prev => { const n = new Set(prev); takenSet.forEach(d => n.add(`${placement}|${d}`)); return n; });
-        setRanges(rs => ({ ...rs, [placement]: (rs[placement] ?? []).filter(rg => !a.taken_days!.some(d => d >= rg.from && d <= rg.to)) }));
-      }
-      setErr(plainOrFallback(a.message, 'Those days could not be saved. Try again in a moment.'));
+      setNowMs(Date.now());
+      setHold({ byPlacement: got, expiresAt: earliest });
+      setStepIx(items.length);
+      setPending(null);
     } catch (e) {
+      releaseHolds(Object.values(got));
       setErr(friendlyError(e, 'Those days could not be saved. Try again in a moment.'));
     } finally {
       setHoldBusy(false);
@@ -456,7 +481,8 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
             className="gv-sp-tab"
             data-active={active || undefined}
             onClick={() => {
-              if (bundle) { setStepIx(bundle.items.findIndex(it => it.placement === p)); }
+              // Back to a dates step: every hold is let go.
+              if (bundle) { dropHold(); setStepIx(bundle.items.findIndex(it => it.placement === p)); }
               else {
                 if (p !== placement) dropHold();
                 if (hold && p === placement) return;
@@ -523,7 +549,7 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
               <button key={st.k} type="button" className="gv-sp-step" data-active={st.ix === stepIx || undefined} data-done={st.done || undefined} onClick={() => {
                 if (st.ix === stepIx) return;
                 if (st.ix < items.length) dropHold();
-                else if (!bundle && !hold) { void goCustomise(); return; }
+                else if (!hold) { if (allChosen) void goCustomise(); return; }
                 setStepIx(st.ix); setPending(null); setErr('');
               }}>
                 <span className="gv-sp-step-dot">{st.done ? <Check size={12} strokeWidth={3} /> : st.ix + 1}</span>
@@ -629,7 +655,7 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
           ) : (
             <GoldButton
               onClick={() => {
-                if (!bundle && stepIx + 1 >= items.length) { void goCustomise(); return; }
+                if (stepIx + 1 >= items.length) { void goCustomise(); return; }
                 setStepIx(stepIx + 1); setPending(null); setErr('');
               }}
               busy={holdBusy}

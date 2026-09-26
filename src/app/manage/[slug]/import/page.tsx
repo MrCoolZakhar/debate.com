@@ -13,6 +13,9 @@ import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import Link from 'next/link';
 import { openCreditsPopup } from '@/lib/purchasePopup';
 import { isChargedImportRole, isImportCreditsError, readImportQuote, transferIntoConference } from './importQuote';
+import {
+  GavellingImportPopup, ImportFlagDialog, hasImportFlags, type ImportFlags, type ImportInvoice,
+} from './ImportCheckout';
 import { useConfirmModal, type ConfirmModalConfig, type ConfirmModalResult } from '@/components/ConfirmModal';
 import { FlagImg } from '@/components/FlagImg';
 import { NEU, NEU_GRADIENTS, NeuCard, NeuIconDisc } from '@/components/neu';
@@ -605,77 +608,118 @@ export default function ImportPage() {
     }
   }
 
-  async function handleImportClick() {
+  // Step 1, the flag (only when there is something to flag), then step 2,
+  // Gavelling Import: the invoice and the one button. Credits come from
+  // Conference Credits first, then the organiser's own (moved in with
+  // store_transfer_in), then a purchase of exactly what is still missing.
+  const [flags, setFlags] = useState<ImportFlags | null>(null);
+  const [invoice, setInvoice] = useState<ImportInvoice | null>(null);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [checkoutErr, setCheckoutErr] = useState<string | null>(null);
+
+  function handleImportClick() {
     const importableCount = classifiedRows.filter(r => r.cls !== 'error').length;
     if (importableCount === 0 || !conference || !session) return;
     const noAlloc = countWithoutAllocation(classifiedRows);
-    const chargedCount = classifiedRows.filter(r => r.cls !== 'error' && r.mode === 'create' && isChargedImportRole(r.resolved.role)).length;
-    const quote = chargedCount > 0 ? await readImportQuote(getAuthedClient(session.access_token), conference.id, chargedCount) : null;
-    const baseBody = acceptMode === 'submitted'
-      ? 'This creates applications immediately (status: submitted, for the organizer to accept in Applications). Rows marked ERROR will be skipped.'
-      : 'This creates applications immediately (status: accepted, or assigned when allocated). Rows marked ERROR will be skipped.';
-    const short = !!quote && quote.charged && quote.need_credits > 0;
-    const costLines = quote ? (
-      <span className="block mb-2" style={{ color: '#1C1410' }}>
-        <span className="block font-semibold">
-          Your total for these {chargedCount} {chargedCount === 1 ? 'delegate' : 'delegates'}: {quote.credits} {quote.credits === 1 ? 'credit' : 'credits'}
-        </span>
-        <span className="block">
-          Your conference has {quote.conference_credits} {quote.conference_credits === 1 ? 'credit' : 'credits'}.
-          {short ? ` You need ${quote.need_credits} more; they are bought and moved into the conference before the import runs.` : ''}
-          {!quote.charged ? ' Imports are not charged yet, so nothing is taken today.' : ''}
-        </span>
-      </span>
-    ) : null;
-    const { confirmed } = await confirm({
-      title: `Import ${importableCount} row${importableCount === 1 ? '' : 's'}?`,
-      body: (
-        <>
-          {noAlloc.total > 0 && (
-            <>
-              <span className="block mb-2 font-semibold" style={{ color: '#8B2020' }}>
-                {noAlloc.total} {noAlloc.total === 1 ? 'delegate' : 'delegates'} will be imported without a committee and country.
-                {noAlloc.unresolvedCommittee > 0 && ` ${noAlloc.unresolvedCommittee} of them name a committee that did not match.`}
-              </span>
-              <span className="block mb-2">Emails that mention their country or committee will not have one to show. Cancel to fix the file, or import and assign them later.</span>
-            </>
-          )}
-          {costLines}
-          <span className="block">{baseBody}</span>
-        </>
-      ),
-      confirmLabel: short ? `Add ${quote!.need_credits} ${quote!.need_credits === 1 ? 'credit' : 'credits'} and import` : noAlloc.total > 0 ? 'Import anyway' : 'Import',
-      danger: noAlloc.total > 0,
+    const f: ImportFlags = {
+      noAlloc: noAlloc.total,
+      unresolvedCommittee: noAlloc.unresolvedCommittee,
+      warnings: classifiedRows.filter(r => r.cls === 'warning').length,
+      errors: classifiedRows.filter(r => r.cls === 'error').length,
+    };
+    if (hasImportFlags(f)) { setFlags(f); return; }
+    void openCheckout();
+  }
+
+  async function openCheckout() {
+    setFlags(null);
+    if (!conference || !session) return;
+    const importable = classifiedRows.filter(r => r.cls !== 'error');
+    const chargedRows = importable.filter(r => r.mode === 'create' && isChargedImportRole(r.resolved.role));
+    const byRole = new Map<string, number>();
+    for (const r of chargedRows) {
+      const k = r.resolved.role ?? 'delegate';
+      byRole.set(k, (byRole.get(k) ?? 0) + 1);
+    }
+    const ROLE_ORDER = ['delegate', 'head-delegate', 'faculty-advisor', 'observer'];
+    const WORDS: Record<string, [string, string]> = {
+      delegate: ['delegate', 'delegates'], 'head-delegate': ['head delegate', 'head delegates'],
+      'faculty-advisor': ['faculty advisor', 'faculty advisors'], observer: ['observer', 'observers'],
+    };
+    const charged = ROLE_ORDER.filter(k => byRole.has(k)).map(k => {
+      const n = byRole.get(k)!;
+      return { role: (WORDS[k] ?? [k, k])[n === 1 ? 0 : 1], count: n };
     });
-    if (!confirmed) return;
-    if (importingRef.current) return;
-    if (short && quote) {
-      // Buy the difference, move it into the conference, then the same import.
-      pendingImportRef.current = true;
-      const need = quote.need_credits;
-      openCreditsPopup({
-        context: 'organizer',
-        preselect: need,
-        purpose: 'store',
-        onComplete: () => {
-          if (!pendingImportRef.current) return;
-          pendingImportRef.current = false;
-          void (async () => {
-            const client = await getFreshAuthedClient();
-            if (!client) { setImportBlocked('Your session has expired. Refresh the page, then import again.'); setPhase('results'); return; }
-            const moved = await transferIntoConference(client, conference.id, need);
-            if (!moved.ok) {
-              setImportBlocked(moved.message ?? 'Your credits could not be moved into the conference. Open the Store and try again.');
-              setPhase('results');
-              return;
-            }
-            await runImportOnce();
-          })();
-        },
-      });
+    const client = getAuthedClient(session.access_token);
+    const [quote, store] = await Promise.all([
+      chargedRows.length > 0 ? readImportQuote(client, conference.id, chargedRows.length) : Promise.resolve(null),
+      client.rpc('my_store', { p_conf: conference.id }).then(({ data }) => data as { your_credits?: number } | null, () => null),
+    ]);
+    const total = quote ? quote.credits : chargedRows.length;
+    const conf = quote ? Math.min(quote.conference_credits, total) : 0;
+    const own = Math.min(Math.max(0, typeof store?.your_credits === 'number' ? store.your_credits : 0), total - conf);
+    setCheckoutErr(null);
+    setInvoice({
+      charged,
+      updates: importable.filter(r => r.mode === 'update').length,
+      rows: importable.length,
+      // Not charged yet (before launch), or the quote could not be read: the
+      // database's own refusal is still the backstop at insert.
+      free: !quote || !quote.charged,
+      total,
+      fromConference: conf,
+      fromOwn: own,
+      toBuy: Math.max(0, total - conf - own),
+      acceptMode,
+    });
+  }
+
+  async function handleCheckoutPay() {
+    const inv = invoice;
+    if (!inv || !conference || importingRef.current || checkoutBusy) return;
+    setCheckoutErr(null);
+    if (inv.free || inv.total === 0) { setInvoice(null); await runImportOnce(); return; }
+    if (inv.toBuy === 0) {
+      setCheckoutBusy(true);
+      try {
+        if (inv.fromOwn > 0) {
+          const client = await getFreshAuthedClient();
+          if (!client) { setCheckoutErr('Your session has expired. Refresh the page, then import again.'); return; }
+          const moved = await transferIntoConference(client, conference.id, inv.fromOwn);
+          if (!moved.ok) { setCheckoutErr(moved.message ?? 'Your credits could not be moved into the conference. Open the Store and try again.'); return; }
+        }
+        setInvoice(null);
+        await runImportOnce();
+      } finally {
+        setCheckoutBusy(false);
+      }
       return;
     }
-    await runImportOnce();
+    // Short: buy exactly what is missing, then move the organiser's own part
+    // plus the purchase into the conference and run the SAME import once.
+    pendingImportRef.current = true;
+    const move = inv.fromOwn + inv.toBuy;
+    setInvoice(null);
+    openCreditsPopup({
+      context: 'organizer',
+      preselect: inv.toBuy,
+      purpose: 'import',
+      onComplete: () => {
+        if (!pendingImportRef.current) return;
+        pendingImportRef.current = false;
+        void (async () => {
+          const client = await getFreshAuthedClient();
+          if (!client) { setImportBlocked('Your session has expired. Refresh the page, then import again.'); setPhase('results'); return; }
+          const moved = await transferIntoConference(client, conference.id, move);
+          if (!moved.ok) {
+            setImportBlocked(moved.message ?? 'Your credits could not be moved into the conference. Open the Store and try again.');
+            setPhase('results');
+            return;
+          }
+          await runImportOnce();
+        })();
+      },
+    });
   }
 
   async function handleSendInvites() {
@@ -861,13 +905,14 @@ export default function ImportPage() {
               <div className="mt-4 pt-4" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
                 <p className="text-xs font-bold mb-2" style={{ color: '#6B5F52', fontFamily: OUTFIT, letterSpacing: '0.1em' }}>COLUMNS</p>
                 <div className="flex flex-col gap-1" style={{ fontSize: 12, color: '#4A4238', fontFamily: OUTFIT, lineHeight: 1.5 }}>
-                  <p><strong style={{ color: NEU.ink }}>email, name</strong>: required.</p>
-                  <p><strong style={{ color: NEU.ink }}>role</strong>: delegate, head delegate, faculty advisor, or observer. Chairs use the invite flow in Committees.</p>
+                  <p><strong style={{ color: NEU.ink }}>email<Req />, name<Req /></strong>: the person&apos;s address and full name.</p>
+                  <p><strong style={{ color: NEU.ink }}>role<Req /></strong>: delegate, head delegate, faculty advisor, or observer. Chairs use the invite flow in Committees.</p>
                   <p><strong style={{ color: NEU.ink }}>delegation</strong>: society or school name. Blank means independent.</p>
-                  <p><strong style={{ color: NEU.ink }}>payment</strong>: paid, unpaid, or waived. Defaults to unpaid.</p>
+                  <p><strong style={{ color: NEU.ink }}>payment</strong>: paid, unpaid, or waived. Blank means unpaid.</p>
                   <p><strong style={{ color: NEU.ink }}>committee</strong>: an existing committee&apos;s name or abbreviation.</p>
                   <p><strong style={{ color: NEU.ink }}>country</strong>: a name from the committee&apos;s roster, a country (France) or, for crisis committees, a character (Fidel Castro).</p>
                   <p><strong style={{ color: NEU.ink }}>seat</strong>: optional. In a double-delegation committee, list the country once per delegate and the seats fill in order. France twice gives you seats 1 and 2. Only set this if you want to pin who sits in which seat.</p>
+                  <p style={{ marginTop: 4, fontWeight: 700, color: '#8B2020' }}>* Required</p>
                 </div>
               </div>
             </NeuCard>
@@ -1063,12 +1108,29 @@ export default function ImportPage() {
       )}
 
       {confirmModal}
+      {flags && (
+        <ImportFlagDialog flags={flags} onCancel={() => setFlags(null)} onContinue={() => { void openCheckout(); }} />
+      )}
+      {invoice && (
+        <GavellingImportPopup
+          invoice={invoice}
+          busy={checkoutBusy}
+          err={checkoutErr}
+          onClose={() => { if (!checkoutBusy) setInvoice(null); }}
+          onPay={() => { void handleCheckoutPay(); }}
+        />
+      )}
       </div>
     </div>
   );
 }
 
 // ── Tab switcher ─────────────────────────────────────────────────────────────
+
+/** The red asterisk on a required column. */
+function Req() {
+  return <span aria-label="required" style={{ color: '#8B2020', fontWeight: 800, marginLeft: 1 }}>*</span>;
+}
 
 function ImportTabSwitcher({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
   return (
