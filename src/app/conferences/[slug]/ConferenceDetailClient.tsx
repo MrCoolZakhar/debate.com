@@ -1856,51 +1856,58 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 </div>
               )}
 
-              {/* Floating glass tab pill */}
-              {/* lg+: below the fixed nav pill (SiteNav), which occupies the top 72px. */}
-              <div className="sticky z-30 mb-7 top-3 lg:top-[84px]">
-                <div
-                  className="inline-flex items-center gap-1 p-1"
-                  style={{
-                    backgroundColor: 'rgba(250,248,243,0.72)',
-                    backdropFilter: 'blur(18px) saturate(1.5)',
-                    WebkitBackdropFilter: 'blur(18px) saturate(1.5)',
-                    border: '1px solid color-mix(in srgb, var(--gv-border) 85%, transparent)',
-                    borderRadius: '9999px',
-                    boxShadow: '0 8px 28px color-mix(in srgb, var(--gv-main) 10%, transparent)',
-                  }}
-                >
-                  {/* Real anchors, so the tab a visitor is on is still copyable,
-                      middle-clickable and openable in a new tab — but a plain
+              {/* The view switcher (26 Sep 2026, owner: the floating glass pill
+                  covered content while scrolling). A bar across the top of the
+                  content column with the page's own SOLID ground and a hairline
+                  under it: it stays in place (under the fixed nav pill from lg,
+                  at the very top on phones) and the page scrolls underneath it,
+                  never under a see-through layer. Same three destinations, same
+                  active state; each is an icon with its word. */}
+              <div
+                className="sticky z-30 mb-7 top-0 lg:top-[76px]"
+                style={{
+                  backgroundColor: 'var(--gv-bg)',
+                  padding: '10px 0',
+                  borderBottom: '1px solid color-mix(in srgb, var(--gv-border) 80%, transparent)',
+                }}
+              >
+                <nav aria-label="Conference views" className="flex items-center gap-1.5">
+                  {/* Real anchors, so the view a visitor is on is still copyable,
+                      middle-clickable and openable in a new tab, but a plain
                       left click is handled in place by showTab and never
                       navigates. Modified clicks fall through to the browser. */}
                   {([
                     { key: 'overview' as const, label: 'Overview', icon: Landmark },
                     { key: 'participant' as const, label: 'You', icon: UserRound },
                     { key: 'reviews' as const, label: 'Reviews', icon: Star },
-                  ]).map(({ key, label, icon: TabIcon }) => (
-                    <a
-                      key={key}
-                      href={tabHref(key, key === 'participant' ? activeRole : null)}
-                      onClick={(e) => {
-                        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-                        e.preventDefault();
-                        showTab(key, key === 'participant' ? activeRole : null);
-                      }}
-                      aria-label={label}
-                      aria-current={activeTab === key ? 'page' : undefined}
-                      title={label}
-                      className="relative flex items-center justify-center rounded-full focus:outline-none"
-                      style={
-                        activeTab === key
-                          ? { width: '72px', height: '46px', backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', boxShadow: '0 2px 10px color-mix(in srgb, var(--gv-main) 32%, transparent)', textDecoration: 'none', transition: `width 260ms ${EASE}, background-color 260ms ${EASE}, color 260ms ${EASE}, box-shadow 260ms ${EASE}` }
-                          : { width: '72px', height: '46px', backgroundColor: 'transparent', color: '#8A7D6C', textDecoration: 'none', transition: `width 260ms ${EASE}, background-color 260ms ${EASE}, color 260ms ${EASE}, box-shadow 260ms ${EASE}` }
-                      }
-                    >
-                      <TabIcon size={21} strokeWidth={1.9} />
-                    </a>
-                  ))}
-                </div>
+                  ]).map(({ key, label, icon: TabIcon }) => {
+                    const on = activeTab === key;
+                    return (
+                      <a
+                        key={key}
+                        href={tabHref(key, key === 'participant' ? activeRole : null)}
+                        onClick={(e) => {
+                          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                          e.preventDefault();
+                          showTab(key, key === 'participant' ? activeRole : null);
+                        }}
+                        aria-current={on ? 'page' : undefined}
+                        className="inline-flex items-center gap-2 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                        style={{
+                          minHeight: 44, padding: '0 16px',
+                          backgroundColor: on ? 'var(--gv-main)' : 'transparent',
+                          color: on ? 'var(--gv-on-main)' : '#6B5F52',
+                          fontFamily: "var(--font-brand), sans-serif", fontSize: 14.5, fontWeight: 700,
+                          textDecoration: 'none',
+                          transition: `background-color 200ms ${EASE}, color 200ms ${EASE}`,
+                        }}
+                      >
+                        <TabIcon size={19} strokeWidth={2} aria-hidden />
+                        {label}
+                      </a>
+                    );
+                  })}
+                </nav>
               </div>
 
               {/* Tab panes. Only the active one is mounted (as before), but the

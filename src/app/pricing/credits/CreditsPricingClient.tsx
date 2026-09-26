@@ -66,15 +66,18 @@ export default function CreditsPricingClient() {
           /* The title keeps its own column (never under the film); the film
              takes everything to its right and runs to the shell's edge. */
           .gv-cr-hero{grid-template-columns:minmax(0,480px) minmax(0,1fr);gap:24px}
-          /* The gavel film, bigger and hugging the right side, melting into the
-             ivory through a mask (as the devices on the /sessions hero do):
-             its left edge and its foot fade out, nothing is painted over it. */
-          .gv-cr-filmwrap{display:block;position:relative;justify-self:stretch;width:calc(100% + 32px);margin-right:-32px;aspect-ratio:16/10;
-            -webkit-mask-image:linear-gradient(to right,transparent 0%,#000 34%),linear-gradient(to bottom,transparent 0%,#000 12%,#000 72%,transparent 100%);
-            -webkit-mask-composite:source-in;
-            mask-image:linear-gradient(to right,transparent 0%,#000 34%),linear-gradient(to bottom,transparent 0%,#000 12%,#000 72%,transparent 100%);
-            mask-composite:intersect}
-          .gv-cr-film{display:block;width:100%;height:100%;object-fit:cover;object-position:60% 50%;filter:saturate(0.9)}
+          /* The gavel film (26 Sep 2026): bigger, hugging the right edge of
+             the content, centred on the hero, and melted into the page on
+             EVERY side. The mask is radial to the box's closest side, so all
+             four edges reach fully transparent, and the film is multiplied
+             onto the ivory, so its light grey ground takes the page's colour
+             and no rectangle edge can show. Mask and blend sit on the video
+             itself (a masked wrapper would isolate the blend). The extra
+             width reaches left into the column gap only, where the film is
+             already transparent; the title and buttons keep their column. */
+          .gv-cr-filmwrap{display:block;position:relative;align-self:center;justify-self:stretch;width:calc(100% + 32px + 56px);margin-left:-56px;margin-right:-32px;aspect-ratio:16/10}
+          .gv-cr-film{display:block;width:100%;height:100%;object-fit:cover;object-position:60% 50%;filter:saturate(0.9);mix-blend-mode:multiply;
+            -webkit-mask-image:radial-gradient(closest-side,#000 58%,transparent 100%);mask-image:radial-gradient(closest-side,#000 58%,transparent 100%)}
         }
         @media (prefers-reduced-motion:reduce){.gv-cr-filmwrap{display:none}}
       `}</style>

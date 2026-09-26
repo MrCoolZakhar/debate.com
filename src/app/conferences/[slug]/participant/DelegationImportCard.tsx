@@ -440,9 +440,9 @@ export default function DelegationImportCard({
   const importPart = (
     <>
       <div className="flex flex-wrap gap-x-7 gap-y-3">
-        <Stat n={data.free_spots} label={data.free_spots === 1 ? 'pledged spot free' : 'pledged spots free'} />
-        <Stat n={data.pledged} label={data.pledged === 1 ? 'spot pledged' : 'spots pledged'} />
-        <Stat n={data.balance} label={data.balance === 1 ? 'credit of yours' : 'credits of yours'} />
+        <Stat n={data.free_spots} label={data.free_spots === 1 ? 'open pledged spot' : 'open pledged spots'} />
+        <Stat n={data.pledged} label={data.pledged === 1 ? 'total pledged spot' : 'total pledged spots'} />
+        {/* The leader's credits are the coin pill at the top of the pop-up (26 Sep 2026). */}
       </div>
 
       {/* The list */}
