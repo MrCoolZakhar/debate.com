@@ -17,6 +17,8 @@
 // renewOnce ignores both.
 
 import { useCallback, useState } from 'react';
+import { GoldWord } from '@/components/BrandHeading';
+import { formatLongDate, manageErrorText, manageSubscription, notifyPlanChanged, useUnlimitedDetail } from '@/lib/subscriptionManage';
 import Link from 'next/link';
 import { BookOpen, Briefcase, Infinity as InfinityIcon, Loader2, Archive } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -43,6 +45,14 @@ const BENEFITS: Benefit[] = [
   { emoji: 'Briefcase', fallback: Briefcase, title: 'Premium job board roles', live: false },
 ];
 
+// Resume mode: the benefits a touch more prominent, and the one sentence-case button.
+const RESUME_CSS = `
+.gv-buy-benefits-hl .gv-buy-benefit-disc{background:rgba(238,217,138,0.16);border-color:rgba(238,217,138,0.5)}
+.gv-buy-benefits-hl .gv-buy-benefit-text{color:#FFFFFF;font-size:18px!important;font-weight:700}
+.gv-buy-benefits-hl .gv-buy-benefits{gap:18px}
+[data-testid="unlimited-resume"]{text-transform:none;letter-spacing:0.01em}
+`;
+
 export default function UnlimitedPopup({ request }: { request: UnlimitedPopupRequest }) {
   const { renewOnce = false } = request;
   const { user, loading: authLoading } = useAuth();
@@ -56,6 +66,34 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [checkout, setCheckout] = useState<{ clientSecret: string; plan: UnlimitedPlan; recurring: boolean } | null>(null);
+
+  // Resume mode (25 Sep 2026): a plan cancelled at period end can be resumed
+  // here, wherever the pop-up was opened from, with no checkout and no plan
+  // picker. "Come Back to Unlimited" is the normal buy flow after a lapse.
+  const { detail } = useUnlimitedDetail();
+  const resumeMode = !renewOnce && !!detail?.can_resume;
+  const comeBack = !renewOnce && !!detail && detail.status === 'none' && !!detail.lapsed_plan;
+  const [resumeBusy, setResumeBusy] = useState(false);
+  const [resumeErr, setResumeErr] = useState('');
+
+  async function resume() {
+    if (resumeBusy) return;
+    setResumeBusy(true);
+    setResumeErr('');
+    try {
+      await manageSubscription({ action: 'resume' });
+      // Re-read the status, then continue exactly as a purchase would.
+      notifyPlanChanged(user?.id);
+      closePurchasePopup();
+      notifyOk('Welcome back. Unlimited renews as before.', 'purchase');
+      refreshCreditsEverywhere();
+      request.onComplete?.();
+    } catch (e) {
+      setResumeErr(manageErrorText(e, 'resume'));
+    } finally {
+      setResumeBusy(false);
+    }
+  }
 
   const effectivePlan: UnlimitedPlan = renewOnce ? 'yearly' : plan;
   const amountCents = effectivePlan === 'monthly' ? monthlyCents : yearlyCents;
@@ -98,21 +136,49 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
     : null;
 
   return (
-    <PurchaseShell tone="dark" label="Get Gavelling Unlimited" onClose={closePurchasePopup} testId="unlimited-popup">
+    <PurchaseShell tone="dark" label={resumeMode ? 'Resume Unlimited' : comeBack ? 'Come back to Gavelling Unlimited' : 'Get Gavelling Unlimited'} onClose={closePurchasePopup} testId="unlimited-popup">
+      <style>{RESUME_CSS}</style>
       <div className="gv-buy-left">
-        <BrandTitle
-          word="Unlimited"
-          tone="dark"
-          icon={<Emoji3D name="Infinity" size={44} fallback={InfinityIcon} fallbackColor={GOLD} />}
-        />
-        <div>
-          <Eyebrow>What you get</Eyebrow>
+        {resumeMode || comeBack ? (
+          <div>
+            <span className="gv-buy-title-icon" aria-hidden><Emoji3D name="Infinity" size={44} fallback={InfinityIcon} fallbackColor={GOLD} /></span>
+            <h2 className="gv-buy-title">
+              <span className="gv-buy-title-text">
+                {resumeMode ? <>Resume <GoldWord tone="dark">Unlimited</GoldWord></> : <>Come Back to <GoldWord tone="dark">Unlimited</GoldWord></>}
+              </span>
+            </h2>
+            {resumeMode ? (
+              <p className="gv-buy-sub">
+                {formatLongDate(detail?.current_period_end)
+                  ? `You still have Unlimited until ${formatLongDate(detail?.current_period_end)}. Resume now and keep everything.`
+                  : 'You still have Unlimited until the end of your period. Resume now and keep everything.'}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <BrandTitle
+            word="Unlimited"
+            tone="dark"
+            icon={<Emoji3D name="Infinity" size={44} fallback={InfinityIcon} fallbackColor={GOLD} />}
+          />
+        )}
+        <div className={resumeMode ? 'gv-buy-benefits-hl' : undefined}>
+          <Eyebrow>{resumeMode ? 'What you keep' : 'What you get'}</Eyebrow>
           <BenefitList items={BENEFITS} tone="dark" />
         </div>
       </div>
 
       <div className="gv-buy-right">
-        {signedOut ? (
+        {resumeMode ? (
+          <>
+            <h3 className="gv-buy-rtitle">Pick Up Where You Left Off</h3>
+            <p className="gv-buy-renew">
+              Your plan renews again on <strong>{formatLongDate(detail?.current_period_end) ?? 'its usual date'}</strong>, as before. Nothing to pay today.
+            </p>
+            {resumeErr ? <ErrorLine>{resumeErr}</ErrorLine> : null}
+            <GoldButton onClick={() => { void resume(); }} busy={resumeBusy} busyText="Resuming…" testId="unlimited-resume">Resume subscription</GoldButton>
+          </>
+        ) : signedOut ? (
           <>
             <h3 className="gv-buy-rtitle">Log in to go Unlimited</h3>
             <p className="gv-buy-sub" style={{ margin: 0 }}>Unlimited lives on your account, so we need to know whose it is.</p>
