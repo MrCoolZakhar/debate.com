@@ -27,7 +27,8 @@ import { supabaseAuthClient } from '@/lib/supabase-auth';
 import { reportBlocked } from '@/lib/reportCrash';
 import SiteNav from '@/components/SiteNav';
 import { Eyebrow, OUTFIT } from '@/app/account/accountUi';
-import { NEU, NEU_GRADIENTS, NeuIconDisc, NeuButton } from '@/components/neu';
+import { NEU, NEU_GRADIENTS, NeuIconDisc } from '@/components/neu';
+import { GoldButton, GoldButtonStyles } from '@/components/GoldButton';
 import { formatConferenceDates } from '@/lib/conferenceDates';
 
 const MONO_STACK = "var(--font-brand), sans-serif";
@@ -283,14 +284,19 @@ export default function ImportInvitePage() {
       {/* CTAs */}
       {user ? (
         <>
-          <NeuButton
-            gradient={NEU_GRADIENTS.gold}
+          {/* The site's one gold button (GoldButton), sentence case like
+              every new button (owner, 25 Sep 2026). */}
+          <GoldButtonStyles />
+          <GoldButton
+            block
             disabled={claiming}
+            busy={claiming}
+            busyText="Claiming…"
             onClick={handleClaim}
-            style={{ width: '100%' }}
+            style={{ textTransform: 'none', letterSpacing: '0.01em' }}
           >
-            {claiming ? 'CLAIMING...' : 'CLAIM MY REGISTRATION'}
-          </NeuButton>
+            Claim my registration
+          </GoldButton>
           {claimError && (
             <p className="text-xs mt-3" style={{ color: DANGER, fontFamily: OUTFIT, lineHeight: 1.55 }}>
               {claimError}

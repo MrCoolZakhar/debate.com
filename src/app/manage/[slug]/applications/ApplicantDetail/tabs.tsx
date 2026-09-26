@@ -228,7 +228,7 @@ export function OverviewTab({
                 countryCode={delegation.countryCode}
                 members={delegation.members}
                 country={delegation.country}
-                lead={delegation.isHead ? 'this applicant' : delegation.lead}
+                lead={delegation.isHead ? 'This Applicant' : delegation.lead}
                 leadRole={delegation.leadRole}
               />
               {onOpenDelegation && (

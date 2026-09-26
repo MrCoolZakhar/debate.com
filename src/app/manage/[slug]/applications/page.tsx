@@ -6,8 +6,7 @@ import {
   ArrowRight, BadgeCheck, Ban, Briefcase, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
   Download, Eye, Filter, Gavel, GraduationCap, HandCoins, Inbox, Info, Landmark, LogOut,
   Loader2, Mail, MoreHorizontal, PencilLine, Plus, RotateCcw, Search, Send, SlidersHorizontal, Trash2, Undo2, User, UserRoundCheck,
-  UserX, Users, Wallet, X,
-} from 'lucide-react';
+  UserX, Users, Wallet, X, UsersRound } from 'lucide-react';
 import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
@@ -4343,6 +4342,19 @@ export default function ApplicationsPage() {
                         {!app.user_id && <NotRegisteredChip />}
                       </div>
                       {email && <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.muted, marginTop: 2, fontWeight: 500 }}>{email}</p>}
+                      {/* A delegation leader imported this applicant. Keyed on
+                          the application id (conference_leader_imports returns
+                          claimed rows too), never on invited_email, so it stays
+                          after the delegate claims the invitation. */}
+                      {leaderImports.get(app.id) && (
+                        <span
+                          className="inline-flex items-center gap-1.5 mt-1.5 [overflow-wrap:anywhere]"
+                          style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.07)', borderRadius: 8, padding: '3px 9px' }}
+                        >
+                          <UsersRound size={12} strokeWidth={2.4} aria-hidden style={{ flexShrink: 0 }} />
+                          Imported by {leaderImports.get(app.id)}
+                        </span>
+                      )}
 
                       {app.societies?.name && (() => {
                         // The delegation as its own identity: a round initials
@@ -4359,7 +4371,7 @@ export default function ApplicationsPage() {
                             countryCode={app.societies.country_code}
                             nameSize={14.5}
                             members={d?.members ?? null}
-                            lead={leads ? 'this applicant' : (d?.lead ?? null)}
+                            lead={leads ? 'This Applicant' : (d?.lead ?? null)}
                             leadRole={d?.leadRole ?? null}
                           />
                         );

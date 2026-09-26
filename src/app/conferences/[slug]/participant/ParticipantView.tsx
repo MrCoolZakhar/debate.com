@@ -368,6 +368,7 @@ export default function ParticipantView({
             ) : selected.role === 'faculty-advisor' ? (
               <AdvisorParticipant
                 conferenceId={conferenceId}
+                conferenceSlug={conferenceSlug}
                 conferenceStartDate={conferenceStartDate}
                 application={selected}
                 allocationSwapMode={allocationSwapMode}

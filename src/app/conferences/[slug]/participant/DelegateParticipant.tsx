@@ -43,19 +43,23 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
         <PositionPaperCard conferenceId={conferenceId} conferenceSlug={conferenceSlug} myAllocation={myAllocation} />
       </div>
 
-      <DelegationPlacard
-        societyId={application.society_id}
-        paymentStatus={application.payment_status}
-        selfPaid={application.self_paid}
-        amountPaid={application.amount_paid}
-      />
-
-      {/* Head delegates additionally get the full delegation panel below their own view */}
-      {application.role === 'head-delegate' && application.society_id && (
+      {/* One delegation card for everyone in a delegation (25 Sep 2026): the
+          roster, grouped and paged, the viewer first. A delegate sees only
+          their own allocation and payment; leaders see everything. An
+          independent delegate keeps the plain placard. */}
+      {application.society_id ? (
         <DelegationPanel
           conferenceId={conferenceId}
+          conferenceSlug={conferenceSlug}
           societyId={application.society_id}
           allocationSwapMode={allocationSwapMode}
+        />
+      ) : (
+        <DelegationPlacard
+          societyId={application.society_id}
+          paymentStatus={application.payment_status}
+          selfPaid={application.self_paid}
+          amountPaid={application.amount_paid}
         />
       )}
     </div>

@@ -29,7 +29,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, ChevronDown, ChevronUp, Clock, Coins, CreditCard, GraduationCap, HandCoins, ImageUp,
-  Lock, Mail, Minus, Plus, Receipt, ShoppingBag, UserPlus, Users2, Wallet, X,
+  Lock, Mail, Minus, Plus, Receipt, ShoppingBag, Users2, Wallet, X,
 } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
@@ -54,7 +54,6 @@ import { getGateState, roleLabel, statusPriority } from '../participant/shared';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import AidRequestModal from '../participant/AidRequestModal';
 import DelegationCreditsCard from '../participant/DelegationCreditsCard';
-import DelegationImportCard, { useDelegationImport } from '../participant/DelegationImportCard';
 import PledgeInvoicingCard from '../participant/PledgeInvoicingCard';
 import { safeStorageKey } from '@/lib/storageKey';
 
@@ -1731,7 +1730,7 @@ function PayInvoiceAndActions({
    *  should vanish from the list right away, not wait on a round trip). */
   onInvoiceRemoved: (invoiceId: string) => void;
 }) {
-  const { session, user } = useAuth();
+  const { session } = useAuth();
   const aidBlocks: FormBlock[] = normalizeBlocks(conference.aid_questions);
   const currency = roleConfig?.fee_currency ?? conference.fee_currency;
   const { amount: resolvedFee, phase } = activePhaseFee({ fee_amount: roleConfig?.fee_amount ?? 0, fee_phases: roleConfig?.fee_phases ?? null });
@@ -1794,12 +1793,8 @@ function PayInvoiceAndActions({
   const [addonsModalOpen, setAddonsModalOpen] = useState(false);
   const [creditsOpen, setCreditsOpen] = useState(false);
   const [spotsOpen, setSpotsOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
+  // Kept so ?open=spots (prompt 67) can scroll to the Add Delegation Spots row.
   const spotsRowRef = useRef<HTMLDivElement | null>(null);
-  // Delegation imports: the row exists only while the conference allows it
-  // and this person leads the delegation (my_delegation_import decides both).
-  const delegationImport = useDelegationImport(canBuyDelegationStuff && leaderApp?.society_id ? leaderApp.society_id : null);
-  const importAvailable = !!delegationImport.leader?.enabled;
   const [advisorModalOpen, setAdvisorModalOpen] = useState(false);
   // Left column: Current Invoices (what's owed or awaiting review) vs
   // Payments (the full payment_batches history, every method). Settled
@@ -2418,30 +2413,6 @@ function PayInvoiceAndActions({
         )}
         {canBuyDelegationStuff && leaderApp && creditsOpen && <DelegationCreditsCard societyId={leaderApp.society_id as string} />}
 
-        {canBuyDelegationStuff && leaderApp && importAvailable && (
-          // A delegation leader brings their own delegates in, one credit each.
-          <ActionRow
-            icon={UserPlus}
-            gradient={NEU_GRADIENTS.forest}
-            title="Import Your Delegates"
-            subtitle={importOpen ? 'Hide' : 'Invite delegates by name and email'}
-            onClick={() => setImportOpen(v => !v)}
-          />
-        )}
-        {canBuyDelegationStuff && leaderApp && importAvailable && importOpen && delegationImport.leader && (
-          <DelegationImportCard
-            societyId={leaderApp.society_id as string}
-            data={delegationImport.leader}
-            reload={delegationImport.reload}
-            conferenceAcronym={conference.acronym?.trim() || conference.full_name}
-            userEmail={user?.email ?? null}
-            onPledgeMore={() => {
-              setSpotsOpen(true);
-              requestAnimationFrame(() => spotsRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-            }}
-            onImported={onInvoicesChanged}
-          />
-        )}
       </div>
 
       {stubMessage && (

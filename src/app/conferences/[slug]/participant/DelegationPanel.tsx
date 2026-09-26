@@ -1,7 +1,17 @@
 'use client';
 
-// Delegation panel, shared between the advisor view and the head-delegate
-// view (rendered below their own R2 delegate view). Read-only-style mirror
+// Delegation panel: ONE card for advisors, head delegates AND plain delegates
+// (25 Sep 2026). The roster comes from my_delegation_roster(p_society), which
+// any member of the delegation may call: members are grouped Advisors / Head
+// Delegates / Delegates, the viewer first in their own group with a gold edge
+// and "You", paged (advisors 3, head delegates 3, delegates 5 a page, the
+// viewer always on page 1). A plain delegate sees their OWN allocation and
+// payment chip only; everyone else shows photo, name and role. Leaders keep
+// everything below (payment chips, paid spots, pledges, swaps) and, while the
+// conference allows leader imports, an "Import delegates" button that opens
+// DelegationImportPopup.
+//
+// Leader extras, as before: a read-only-style mirror
 // of the organizer's delegation view: advisors row, head delegates row,
 // delegates list, paid-spots counter, pledges block, plus the allocation
 // swap control (item C). Visibility of every row here is granted by the
@@ -12,7 +22,11 @@
 // client.
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ArrowLeftRight, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ArrowLeftRight, ChevronLeft, ChevronRight, UserPlus, X } from 'lucide-react';
+import { getFreshAuthedClient } from '@/lib/supabase-auth';
+import { useDelegationImport } from './DelegationImportCard';
+import DelegationImportPopup from './DelegationImportPopup';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { loadSlotArtIndex, artFromIndex, slotArtKey, type SlotArtIndex } from '@/lib/slotGroups';
@@ -23,7 +37,7 @@ import { NEU, NeuButton } from '@/components/neu';
 import ProfileLink from '@/components/ProfileLink';
 import Loader from '@/components/Loader';
 import { queueParticipantEventEmail } from '@/lib/emailEvents';
-import { friendlyError } from '@/lib/friendlyError';
+import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import {
   POOL_MEMBER_SELECT, pledgeSatisfied, pledgeText, MemberAvatar,
   type PoolMember,
@@ -68,10 +82,49 @@ function pledgeStatusLabel(m: PoolMember): string {
   return pledgeSatisfied(m) ? 'covered ✓' : 'pending';
 }
 
+// ── The roster (my_delegation_roster) ───────────────────────────────────────
+
+type RosterRole = 'faculty-advisor' | 'head-delegate' | 'delegate';
+
+interface RosterMember {
+  application_id: string;
+  is_me: boolean;
+  claimed: boolean;
+  name: string;
+  avatar_url: string | null;
+  role: RosterRole;
+  status: string;
+  payment_status: string | null;
+  allocation: {
+    committee: string | null;
+    committee_abbr: string | null;
+    country_name: string | null;
+    country_code: string | null;
+    sent: boolean | null;
+  } | null;
+}
+
+interface Roster {
+  society_name: string | null;
+  is_leader: boolean;
+  members: RosterMember[];
+}
+
+const ROLE_WORD: Record<RosterRole, string> = {
+  'faculty-advisor': 'Faculty Advisor',
+  'head-delegate': 'Head Delegate',
+  delegate: 'Delegate',
+};
+
+/** The viewer's own row, the same on every view: a gold edge and "You". */
+const GOLD_EDGE = '#B6871F';
+
 // ── Member row ───────────────────────────────────────────────────────────────
 
-function MemberRow({ member, swapMode, swapSelectable, swapSelected, onToggleSwap, covered, seatLogo }: {
-  member: PoolMember;
+function RosterRow({ member, pool, swapMode, swapSelectable, swapSelected, onToggleSwap, covered, seatLogo }: {
+  member: RosterMember;
+  /** The leader's own read of this application (swap, CV link, attending). */
+  pool?: PoolMember;
   swapMode: boolean;
   swapSelectable: boolean;
   swapSelected: boolean;
@@ -80,18 +133,23 @@ function MemberRow({ member, swapMode, swapSelectable, swapSelected, onToggleSwa
   /** The seat's own or group crest, drawn instead of the flag when set. */
   seatLogo?: string | null;
 }) {
-  const name = member.profiles?.display_name ?? 'Unknown';
-  const chip = derivePaymentChip(member.payment_status ?? 'unpaid', !!member.self_paid, 0);
-  const alloc = allocationLabel(member);
-  const dimmed = member.attending === false;
+  // payment_status and allocation arrive only for the viewer's own row, or
+  // for every row when the viewer leads the delegation.
+  const chip = member.payment_status
+    ? derivePaymentChip(member.payment_status, !!pool?.self_paid, 0)
+    : null;
+  const committeeWord = member.allocation ? (member.allocation.committee_abbr || member.allocation.committee) : null;
+  const alloc = committeeWord ? `${committeeWord}: ${member.allocation?.country_name ?? ''}` : null;
+  const dimmed = pool?.attending === false;
+  const me = member.is_me;
 
   return (
     <div
       onClick={() => { if (swapMode && swapSelectable) onToggleSwap(); }}
       className="relative flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors"
       style={{
-        backgroundColor: swapSelected ? 'rgba(61,122,82,0.08)' : '#FAF8F3',
-        border: `1.5px solid ${swapSelected ? '#1B3828' : '#DDD4C0'}`,
+        backgroundColor: swapSelected ? 'rgba(61,122,82,0.08)' : me ? 'rgba(238,217,138,0.14)' : '#FAF8F3',
+        border: `1.5px solid ${swapSelected ? '#1B3828' : me ? GOLD_EDGE : '#DDD4C0'}`,
         opacity: dimmed ? 0.55 : swapMode && !swapSelectable ? 0.45 : 1,
         cursor: swapMode && swapSelectable ? 'pointer' : 'default',
       }}
@@ -107,24 +165,22 @@ function MemberRow({ member, swapMode, swapSelectable, swapSelected, onToggleSwa
         />
       )}
       <div className="relative flex-shrink-0">
-        <MemberAvatar name={name} url={member.profiles?.avatar_url ?? null} size={28} />
+        <MemberAvatar name={member.name} url={member.avatar_url} size={32} />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          {/* `nested` — the row itself is a div with an onClick (swap select),
-              so an anchor inside it is legal; stopping propagation keeps a
-              click on the name from also toggling the swap selection. The
-              <p> stays the flex item so truncation is unchanged. */}
-          <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-            <ProfileLink userId={member.user_id} name={member.profiles?.display_name} nested>{name}</ProfileLink>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Never cut a name off (CLAUDE.md §8): it wraps. `nested`, because
+              the row is a clickable div while swapping. */}
+          <p className="text-sm font-semibold [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
+            {pool?.user_id
+              ? <ProfileLink userId={pool.user_id} name={member.name} nested>{member.name}</ProfileLink>
+              : member.name}
           </p>
-          {member.is_head_delegate && member.role === 'delegate' && (
-            <span
-              className="flex-shrink-0 px-1.5 py-0.5 rounded-full"
-              style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', backgroundColor: 'rgba(27,56,40,0.1)', color: '#1B3828', fontFamily: OUTFIT }}
-            >
-              HD
-            </span>
+          {me && (
+            <span style={{ fontSize: 10.5, fontWeight: 800, color: GOLD_EDGE, fontFamily: OUTFIT, letterSpacing: '0.04em' }}>You</span>
+          )}
+          {!member.claimed && (
+            <span style={{ fontSize: 10.5, fontWeight: 600, color: '#9A8A78', fontFamily: OUTFIT }}>Invited</span>
           )}
           {dimmed && (
             <span style={{ fontSize: 9, fontWeight: 700, color: '#9A8A78', fontFamily: OUTFIT, letterSpacing: '0.05em' }}>
@@ -132,14 +188,16 @@ function MemberRow({ member, swapMode, swapSelectable, swapSelected, onToggleSwa
             </span>
           )}
         </div>
-        {alloc && (
+        {alloc ? (
           <div className="flex items-center gap-1.5 mt-0.5">
-            {member.assigned_country_code && <FlagImg code={member.assigned_country_code} size={13} logoUrl={seatLogo} label={member.assigned_country_name ?? undefined} />}
-            <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{alloc}</p>
+            {member.allocation?.country_code && <FlagImg code={member.allocation.country_code} size={13} logoUrl={seatLogo} label={member.allocation.country_name ?? undefined} />}
+            <p className="text-xs [overflow-wrap:anywhere]" style={{ color: '#6B5F52', fontFamily: OUTFIT, margin: 0 }}>{alloc}</p>
           </div>
+        ) : (
+          <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: 0 }}>{ROLE_WORD[member.role]}</p>
         )}
       </div>
-      {!dimmed && (
+      {chip && !dimmed && (
         <span
           className="px-2.5 py-0.5 rounded-full flex-shrink-0"
           style={{ ...CHIP_STYLES[chip], fontSize: '9px', fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.08em' }}
@@ -157,6 +215,63 @@ function MemberRow({ member, swapMode, swapSelectable, swapSelected, onToggleSwa
           }}
         >
           {swapSelected && <span style={{ width: 7, height: 7, borderRadius: '9999px', backgroundColor: '#EED98A' }} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** One role group, paged so the card never overfills. The roster arrives
+ *  with the viewer first, so their row is always on page 1. */
+function RosterGroup({ title, members, pageSize, page, onPage, empty, renderRow }: {
+  title: string;
+  members: RosterMember[];
+  pageSize: number;
+  page: number;
+  onPage: (p: number) => void;
+  empty?: string;
+  renderRow: (m: RosterMember) => React.ReactNode;
+}) {
+  if (members.length === 0 && !empty) return null;
+  const pages = Math.max(1, Math.ceil(members.length / pageSize));
+  const p = Math.min(page, pages - 1);
+  const from = p * pageSize;
+  const shown = members.slice(from, from + pageSize);
+  const navBtn = (dir: -1 | 1) => {
+    const off = dir < 0 ? p === 0 : p >= pages - 1;
+    const Icon = dir < 0 ? ChevronLeft : ChevronRight;
+    return (
+      <button
+        type="button"
+        onClick={() => onPage(p + dir)}
+        disabled={off}
+        aria-label={`${dir < 0 ? 'Previous' : 'Next'} ${title.toLowerCase()}`}
+        className="inline-flex items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
+        style={{ width: 28, height: 28, border: '1px solid #DDD4C0', background: 'transparent', color: '#1B3828', opacity: off ? 0.35 : 1, cursor: off ? 'default' : 'pointer' }}
+      >
+        <Icon size={14} aria-hidden />
+      </button>
+    );
+  };
+  return (
+    <div className="mb-5">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <p style={{ fontSize: 9, fontWeight: 700, color: '#B6871F', fontFamily: OUTFIT, letterSpacing: '0.12em', margin: 0 }}>{title}</p>
+        {pages > 1 && (
+          <div className="flex items-center gap-1">
+            <span style={{ fontSize: 11.5, color: '#6B5F52', fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums', marginRight: 4 }}>
+              {from + 1} to {Math.min(from + pageSize, members.length)} of {members.length}
+            </span>
+            {navBtn(-1)}
+            {navBtn(1)}
+          </div>
+        )}
+      </div>
+      {members.length === 0 ? (
+        <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: 0 }}>{empty}</p>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {shown.map(m => <div key={m.application_id}>{renderRow(m)}</div>)}
         </div>
       )}
     </div>
@@ -205,13 +320,62 @@ function SwapResultModal({ info, onClose }: { info: SwapResultInfo; onClose: () 
 
 export interface DelegationPanelProps {
   conferenceId: string;
+  conferenceSlug: string;
   societyId: string;
   allocationSwapMode: string;
 }
 
-export default function DelegationPanel({ conferenceId, societyId, allocationSwapMode }: DelegationPanelProps) {
+export default function DelegationPanel({ conferenceId, conferenceSlug, societyId, allocationSwapMode }: DelegationPanelProps) {
   const { user, session } = useAuth();
+  const router = useRouter();
   const { confirm, modal: confirmModal } = useConfirmModal();
+
+  // ── The roster, for every member (my_delegation_roster) ──────────────────
+  // Every hook in this component sits ABOVE the early returns further down.
+  const [roster, setRoster] = useState<Roster | null>(null);
+  const [rosterError, setRosterError] = useState<string | null>(null);
+  const [pages, setPages] = useState<Record<string, number>>({});
+  const [importOpen, setImportOpen] = useState(false);
+  const [conferenceAcronym, setConferenceAcronym] = useState('');
+
+  const loadRoster = useCallback(async () => {
+    if (!societyId) return;
+    try {
+      const client = await getFreshAuthedClient();
+      if (!client) return;
+      const { data, error } = await client.rpc('my_delegation_roster', { p_society: societyId });
+      if (error) throw error;
+      const a = (data ?? {}) as { ok?: boolean; message?: string; society_name?: string; is_leader?: boolean; members?: RosterMember[] };
+      if (a.ok !== true) {
+        setRosterError(plainOrFallback(a.message, 'Your delegation could not be read. Refresh the page to try again.'));
+        return;
+      }
+      setRoster({ society_name: a.society_name ?? null, is_leader: a.is_leader === true, members: Array.isArray(a.members) ? a.members : [] });
+      setRosterError(null);
+    } catch (e) {
+      setRosterError(friendlyError(e, 'Your delegation could not be read. Refresh the page to try again.'));
+    }
+  }, [societyId]);
+
+  useEffect(() => { void loadRoster(); }, [loadRoster]);
+
+  const isLeader = !!roster?.is_leader;
+  // Leader imports (DelegationImportCard's read), only for a leader.
+  const delegationImport = useDelegationImport(isLeader ? societyId : null);
+  const importAvailable = isLeader && !!delegationImport.leader?.enabled;
+
+  useEffect(() => {
+    if (!importAvailable || conferenceAcronym || !session) return;
+    let cancelled = false;
+    void getAuthedClient(session.access_token)
+      .from('conferences').select('acronym, full_name').eq('id', conferenceId).maybeSingle()
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        const c = data as { acronym?: string | null; full_name?: string | null };
+        setConferenceAcronym((c.acronym ?? '').trim() || (c.full_name ?? '').trim());
+      });
+    return () => { cancelled = true; };
+  }, [importAvailable, conferenceAcronym, session, conferenceId]);
 
   const [society, setSociety] = useState<Society | null>(null);
   const [members, setMembers] = useState<PoolMember[]>([]);
@@ -235,6 +399,9 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
 
   const load = useCallback(async () => {
     if (!societyId || !session) return;
+    // A plain delegate reads only the roster; the leader extras below need
+    // the leaders' RLS and are skipped for everyone else.
+    if (!isLeader) { setLoading(false); return; }
     setLoading(true);
     const supabase = getAuthedClient(session.access_token);
     const [{ data: societyRow }, { data: memberRows }, { data: coveredRows }] = await Promise.all([
@@ -249,7 +416,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
     setLoading(false);
     const ccIds = memberList.map(m => m.assigned_committee_id).filter((id): id is string => !!id);
     void loadSlotArtIndex(supabase, ccIds).then(setSeatArt).catch(() => {});
-  }, [societyId, session]);
+  }, [societyId, session, isLeader]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -259,7 +426,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
   // 'swap_notice' whose metadata->>'society_id' matches their society, so
   // every leader sees the same state, not just whoever sent it.
   const loadSwapActivity = useCallback(async () => {
-    if (!societyId || !session) return;
+    if (!societyId || !session || !isLeader) return;
     const supabase = getAuthedClient(session.access_token);
     const [{ data: reqData }, { data: noticeData }] = await Promise.all([
       supabase
@@ -287,13 +454,16 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
     setRecentSwapNotice(
       notice && Date.now() - new Date(notice.created_at).getTime() < RECENT_SWAP_NOTICE_MS ? notice : null
     );
-  }, [societyId, conferenceId, session]);
+  }, [societyId, conferenceId, session, isLeader]);
 
   useEffect(() => { loadSwapActivity(); }, [loadSwapActivity]);
 
-  const advisors = useMemo(() => members.filter(m => m.role === 'faculty-advisor'), [members]);
-  const headDelegates = useMemo(() => members.filter(m => m.role === 'head-delegate'), [members]);
-  const delegates = useMemo(() => members.filter(m => m.role === 'delegate'), [members]);
+  // The roster, grouped; the server already puts the viewer first.
+  const rosterMembers = useMemo(() => roster?.members ?? [], [roster]);
+  const advisors = useMemo(() => rosterMembers.filter(m => m.role === 'faculty-advisor'), [rosterMembers]);
+  const headDelegates = useMemo(() => rosterMembers.filter(m => m.role === 'head-delegate'), [rosterMembers]);
+  const delegates = useMemo(() => rosterMembers.filter(m => m.role === 'delegate'), [rosterMembers]);
+  const poolById = useMemo(() => new Map(members.map(m => [m.id, m] as const)), [members]);
   const delegatePool = useMemo(() => members.filter(m => m.role === 'delegate' || m.role === 'head-delegate'), [members]);
   const paidCount = delegatePool.filter(m => m.payment_status === 'paid').length;
   const pledgingMembers = useMemo(() => members.filter(m => !!m.pledge_type), [members]);
@@ -399,7 +569,15 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
     ? members.find(m => m.user_id === pendingSwapRequest.user_id)?.profiles?.display_name ?? 'A delegation leader'
     : null;
 
-  if (loading) {
+  if (!roster && rosterError) {
+    return (
+      <SectionCard>
+        <p className="text-sm" role="alert" style={{ color: '#8B2020', fontFamily: OUTFIT, margin: 0 }}>{rosterError}</p>
+      </SectionCard>
+    );
+  }
+
+  if (!roster || (isLeader && loading)) {
     return (
       <SectionCard>
         <div className="flex justify-center py-6">
@@ -409,18 +587,51 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
     );
   }
 
+  const rowFor = (m: RosterMember, swappable: boolean) => {
+    const pool = poolById.get(m.application_id);
+    return (
+      <RosterRow
+        member={m}
+        pool={pool}
+        swapMode={swappable && swapMode}
+        swapSelectable={!!pool?.assigned_committee_id}
+        swapSelected={swapSelection.includes(m.application_id)}
+        onToggleSwap={() => toggleSwapSelect(m.application_id)}
+        covered={coveredIds.has(m.application_id)}
+        seatLogo={pool ? seatLogoFor(pool) : null}
+      />
+    );
+  };
+  const pageOf = (k: string) => pages[k] ?? 0;
+  const setPageOf = (k: string) => (n: number) => setPages(prev => ({ ...prev, [k]: n }));
+
   return (
     <SectionCard>
-      <div className="flex items-center justify-between gap-3 mb-1">
+      <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
         <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: 0 }}>
           DELEGATION
         </p>
-        <p className="text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-          Paid spots: <span style={{ fontWeight: 700, color: '#1C1410' }}>{paidCount}/{society?.spots_purchased ?? 0}</span>
-        </p>
+        {isLeader && (
+          <div className="flex items-center gap-3">
+            {importAvailable && (
+              <button
+                type="button"
+                onClick={() => setImportOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
+                style={{ minHeight: 34, padding: '0 12px', border: 'none', background: 'linear-gradient(90deg, #1B3828 0%, #2A5A3C 100%)', color: '#FFFFFF', fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}
+              >
+                <UserPlus size={14} strokeWidth={2.4} aria-hidden />
+                Import delegates
+              </button>
+            )}
+            <p className="text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: 0 }}>
+              Paid spots: <span style={{ fontWeight: 700, color: '#1C1410' }}>{paidCount}/{society?.spots_purchased ?? 0}</span>
+            </p>
+          </div>
+        )}
       </div>
-      <p className="font-bold text-[17px] mb-5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-        {society?.name ?? 'Delegation'}
+      <p className="font-bold text-[17px] mb-5 [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+        {roster.society_name ?? society?.name ?? 'Delegation'}
       </p>
 
       {pendingSwapRequest && (
@@ -447,56 +658,13 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
         </p>
       )}
 
-      {advisors.length > 0 && (
-        <div className="mb-5">
-          <p className="mb-2" style={{ fontSize: 9, fontWeight: 700, color: '#B6871F', fontFamily: OUTFIT, letterSpacing: '0.12em' }}>ADVISORS</p>
-          <div className="flex flex-col gap-1.5">
-            {advisors.map(m => (
-              <MemberRow key={m.id} member={m} swapMode={false} swapSelectable={false} swapSelected={false} onToggleSwap={() => {}} seatLogo={seatLogoFor(m)} />
-            ))}
-          </div>
-        </div>
-      )}
+      <RosterGroup title="ADVISORS" members={advisors} pageSize={3} page={pageOf('adv')} onPage={setPageOf('adv')} renderRow={m => rowFor(m, false)} />
 
-      {headDelegates.length > 0 && (
-        <div className="mb-5">
-          <p className="mb-2" style={{ fontSize: 9, fontWeight: 700, color: '#B6871F', fontFamily: OUTFIT, letterSpacing: '0.12em' }}>HEAD DELEGATES</p>
-          <div className="flex flex-col gap-1.5">
-            {headDelegates.map(m => (
-              <MemberRow
-                key={m.id} member={m} swapMode={swapMode}
-                swapSelectable={!!m.assigned_committee_id}
-                swapSelected={swapSelection.includes(m.id)}
-                onToggleSwap={() => toggleSwapSelect(m.id)}
-                covered={coveredIds.has(m.id)}
-                seatLogo={seatLogoFor(m)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+      <RosterGroup title="HEAD DELEGATES" members={headDelegates} pageSize={3} page={pageOf('hd')} onPage={setPageOf('hd')} renderRow={m => rowFor(m, true)} />
 
-      <div className="mb-5">
-        <p className="mb-2" style={{ fontSize: 9, fontWeight: 700, color: '#B6871F', fontFamily: OUTFIT, letterSpacing: '0.12em' }}>DELEGATES</p>
-        {delegates.length === 0 ? (
-          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>No delegates yet.</p>
-        ) : (
-          <div className="flex flex-col gap-1.5">
-            {delegates.map(m => (
-              <MemberRow
-                key={m.id} member={m} swapMode={swapMode}
-                swapSelectable={!!m.assigned_committee_id}
-                swapSelected={swapSelection.includes(m.id)}
-                onToggleSwap={() => toggleSwapSelect(m.id)}
-                covered={coveredIds.has(m.id)}
-                seatLogo={seatLogoFor(m)}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      <RosterGroup title="DELEGATES" members={delegates} pageSize={5} page={pageOf('del')} onPage={setPageOf('del')} empty="No delegates yet." renderRow={m => rowFor(m, true)} />
 
-      {pledgingMembers.length > 0 && (
+      {isLeader && pledgingMembers.length > 0 && (
         <div className="mb-5 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
           <p className="mb-2" style={{ fontSize: 9, fontWeight: 700, color: '#B6871F', fontFamily: OUTFIT, letterSpacing: '0.12em' }}>PLEDGES</p>
           <div className="flex flex-col gap-1">
@@ -530,7 +698,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
         </div>
       )}
 
-      {allocationSwapMode !== 'off' && (
+      {isLeader && allocationSwapMode !== 'off' && (
         <div className="pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
           {!swapMode ? (
             <button
@@ -584,6 +752,18 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
 
       {confirmModal}
       {swapResult && <SwapResultModal info={swapResult} onClose={() => setSwapResult(null)} />}
+      {importOpen && importAvailable && delegationImport.leader && (
+        <DelegationImportPopup
+          societyId={societyId}
+          data={delegationImport.leader}
+          reload={delegationImport.reload}
+          conferenceAcronym={conferenceAcronym || 'this conference'}
+          userEmail={user?.email ?? null}
+          onPledgeMore={() => { setImportOpen(false); router.push(`/conferences/${conferenceSlug}/pay?open=spots`); }}
+          onImported={() => { void loadRoster(); void load(); }}
+          onClose={() => setImportOpen(false)}
+        />
+      )}
     </SectionCard>
   );
 }

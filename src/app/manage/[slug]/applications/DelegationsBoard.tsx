@@ -452,7 +452,7 @@ function DelegationRowCard<M extends DelegationMemberLite>({
   const head = row.heads[0]
     ?? row.members.find(m => m.role === 'faculty-advisor' && m.status !== 'rejected' && m.status !== 'withdrawn')
     ?? null;
-  const headRole = head ? (head.is_head_delegate || head.role === 'head-delegate' ? 'Head delegate' : 'Faculty advisor') : null;
+  const headRole = head ? (head.is_head_delegate || head.role === 'head-delegate' ? 'Head Delegate' : 'Faculty Advisor') : null;
   const panelId = `dlg-panel-${row.id}`;
   const messageable = row.members.filter(m => m.status !== 'rejected' && m.status !== 'withdrawn');
   const owing = row.members.filter(m => row.owingMemberIds.includes(m.id));

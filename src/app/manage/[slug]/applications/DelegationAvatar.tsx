@@ -163,7 +163,7 @@ export function DelegationIdentity({
         {lead !== undefined && (
           <span className="flex items-start gap-1.5 min-w-0" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: soft, marginTop: 2 }}>
             <Crown size={12} strokeWidth={2.4} style={{ color: lead ? GOLD_DEEP : soft, flexShrink: 0 }} aria-hidden />
-            <span className="[overflow-wrap:anywhere]">{lead ? `${leadRole ?? 'Head delegate'}: ${lead}` : 'No head delegate yet'}</span>
+            <span className="[overflow-wrap:anywhere]">{lead ? `${leadRole ?? 'Head Delegate'}: ${lead}` : 'No head delegate yet'}</span>
           </span>
         )}
       </span>
@@ -234,7 +234,7 @@ export function useDelegationSummaries(apps: SummaryApp[]): Map<string, Delegati
         members: g.length,
         country,
         lead: first ? `${nameOf(first)}${leaders.length > 1 ? ` and ${leaders.length - 1} more` : ''}` : null,
-        leadRole: first ? (heads.length ? 'Head delegate' : 'Faculty advisor') : null,
+        leadRole: first ? (heads.length ? 'Head Delegate' : 'Faculty Advisor') : null,
         leadAppIds: leaders.map(a => a.id),
       });
     }

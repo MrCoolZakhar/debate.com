@@ -187,8 +187,13 @@ function statusOf(d: ImportedDelegate): { Icon: typeof Mail; label: string; colo
 // ── Card ───────────────────────────────────────────────────────────────────
 
 export default function DelegationImportCard({
-  societyId, data, reload, conferenceAcronym, userEmail, onPledgeMore, onImported,
+  societyId, data, reload, conferenceAcronym, userEmail, onPledgeMore, onImported, tab = 'both', bare = false,
 }: {
+  /** Which part to draw. The delegation card's pop-up keeps ONE instance
+   *  mounted and switches this, so typed rows survive a tab switch. */
+  tab?: 'import' | 'imported' | 'both';
+  /** Inside the pop-up: no card, no title of its own. */
+  bare?: boolean;
   societyId: string;
   data: LeaderImport;
   reload: () => Promise<void>;
@@ -196,7 +201,7 @@ export default function DelegationImportCard({
   conferenceAcronym: string;
   /** The leader's own address, refused as a row before the server does. */
   userEmail: string | null;
-  /** Opens the pay page's own "Add spots" row and scrolls to it. */
+  /** Where to add delegation spots (the pay page's Add Delegation Spots). */
   onPledgeMore: () => void;
   /** Whatever the pay page refreshes after a delegation change. */
   onImported?: () => void;
@@ -423,16 +428,18 @@ export default function DelegationImportCard({
     </div>
   );
 
-  return (
-    <SectionCard>
-      <h3 style={{ fontFamily: OUTFIT, fontSize: 24, fontWeight: 800, color: INK, margin: 0, lineHeight: 1.15 }}>
-        Import Your <GoldWord tone="light">Delegates</GoldWord>
-      </h3>
-      <p style={{ fontFamily: OUTFIT, fontSize: 13, color: INK_SOFT, margin: '6px 0 0 0', lineHeight: 1.55 }}>
-        Add a name and an email for each delegate and we&rsquo;ll invite them to join your delegation
-      </p>
+  // One message at a time, the most important first (owner, 25 Sep 2026):
+  // short of pledged spots beats short of credits, and while the spots
+  // message shows no credit warning does.
+  const spotsShort = needSpots || count > data.free_spots;
+  const creditsShort = !spotsShort && count > data.balance;
 
-      <div className="flex flex-wrap gap-x-7 gap-y-3 mt-5">
+  const showImport = tab !== 'imported';
+  const showList = tab !== 'import';
+
+  const importPart = (
+    <>
+      <div className="flex flex-wrap gap-x-7 gap-y-3">
         <Stat n={data.free_spots} label={data.free_spots === 1 ? 'pledged spot free' : 'pledged spots free'} />
         <Stat n={data.pledged} label={data.pledged === 1 ? 'spot pledged' : 'spots pledged'} />
         <Stat n={data.balance} label={data.balance === 1 ? 'credit of yours' : 'credits of yours'} />
@@ -486,7 +493,10 @@ export default function DelegationImportCard({
           return (
             <li key={r.key}>
               <div className="flex items-start gap-2">
-                <div className="flex-1 min-w-0 grid gap-2 sm:grid-cols-2">
+                {/* Name over email until the row is wide enough for a whole
+                    address (firstname.lastname@university.edu.tr) beside a
+                    name; the email column is the wider one. */}
+                <div className="gv-imp-row flex-1 min-w-0 grid gap-2">
                   <input
                     type="text"
                     value={r.name}
@@ -559,8 +569,8 @@ export default function DelegationImportCard({
           className={`flex items-center justify-center rounded-xl px-5 font-bold text-sm transition-colors ${FOCUS}`}
           style={{
             minWidth: 220, height: 48,
-            backgroundColor: busy ? '#2A5A3C' : FOREST,
-            color: '#EED98A',
+            background: busy ? '#2A5A3C' : 'linear-gradient(90deg, #1B3828 0%, #2A5A3C 100%)',
+            color: '#FFFFFF',
             fontFamily: OUTFIT, letterSpacing: '0.01em', border: 'none',
             cursor: busy ? 'wait' : count === 0 ? 'not-allowed' : 'pointer',
             opacity: count === 0 ? 0.5 : busy ? 0.85 : 1,
@@ -568,10 +578,14 @@ export default function DelegationImportCard({
         >
           {busy ? 'Importing' : count === 1 ? 'Import 1 delegate' : `Import ${count} delegates`}
         </button>
-        {count > 0 && (
-          <p style={{ fontFamily: OUTFIT, fontSize: 13, color: INK_SOFT, margin: 0 }}>
-            Uses {count} of your {data.balance} {data.balance === 1 ? 'credit' : 'credits'}
-          </p>
+        {count > 0 && !spotsShort && (
+          creditsShort ? (
+            <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: DANGER, margin: 0 }}>Not enough credits</p>
+          ) : (
+            <p style={{ fontFamily: OUTFIT, fontSize: 13, color: INK_SOFT, margin: 0 }}>
+              Uses {count} of your {data.balance} {data.balance === 1 ? 'credit' : 'credits'}
+            </p>
+          )
         )}
       </div>
 
@@ -585,7 +599,7 @@ export default function DelegationImportCard({
               className={`mt-3 rounded-xl px-4 font-bold text-sm ${FOCUS}`}
               style={{ height: 44, backgroundColor: '#FFFFFF', border: `1.5px solid ${INK}`, color: INK, fontFamily: OUTFIT, letterSpacing: '0.01em', cursor: 'pointer' }}
             >
-              Pledge more spots
+              Add delegation spots
             </button>
           )}
         </div>
@@ -593,47 +607,80 @@ export default function DelegationImportCard({
       {okLine && (
         <p role="status" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: '#2A5A3C', margin: '12px 0 0 0' }}>{okLine}</p>
       )}
+    </>
+  );
 
-      {/* Everyone imported so far */}
-      {data.imports.length > 0 && (
+  const listPart = data.imports.length === 0 ? (
+    <p style={{ fontFamily: OUTFIT, fontSize: 13.5, color: INK_SOFT, margin: 0 }}>Nobody imported yet. The delegates you import show here</p>
+  ) : (
+    <ul className="flex flex-col gap-2" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+      {data.imports.map(d => {
+        const s = statusOf(d);
+        return (
+          <li
+            key={d.application_id}
+            className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1.5 rounded-xl"
+            style={{ padding: '12px 14px', backgroundColor: '#FFFFFF', boxShadow: '0 1px 3px rgba(27,56,40,0.06)' }}
+          >
+            <div className="min-w-0 flex-1" style={{ minWidth: 180 }}>
+              <p style={{ fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 700, color: INK, margin: 0, overflowWrap: 'anywhere', lineHeight: 1.3 }}>
+                {d.name?.trim() || d.email || 'Imported delegate'}
+              </p>
+              {d.email && (
+                <p style={{ fontFamily: OUTFIT, fontSize: 12, color: INK_SOFT, margin: '2px 0 0 0', overflowWrap: 'anywhere' }}>{d.email}</p>
+              )}
+            </div>
+            <div className="flex flex-col items-start sm:items-end">
+              <span className="inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: s.color }}>
+                <s.Icon size={16} strokeWidth={2.2} aria-hidden />
+                {s.label}
+              </span>
+              {d.imported_at && (
+                <span style={{ fontFamily: OUTFIT, fontSize: 12, color: INK_SOFT, marginTop: 2 }}>
+                  Invited {new Date(d.imported_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                </span>
+              )}
+              {d.credit === 'refunded' && (
+                <span className="inline-flex items-center gap-1 mt-1" style={{ fontFamily: OUTFIT, fontSize: 12, color: INK_SOFT }}>
+                  <RotateCcw size={12} aria-hidden />
+                  Credit returned to you
+                </span>
+              )}
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+
+  const rowCss = <style>{`.gv-imp-row{grid-template-columns:1fr}@media (min-width:640px){.gv-imp-row{grid-template-columns:minmax(0,1fr) minmax(0,1.6fr)}}`}</style>;
+
+  if (bare) {
+    return (
+      <>
+        {rowCss}
+        {showImport && importPart}
+        {showList && listPart}
+      </>
+    );
+  }
+
+  return (
+    <SectionCard>
+      {rowCss}
+      <h3 style={{ fontFamily: OUTFIT, fontSize: 24, fontWeight: 800, color: INK, margin: 0, lineHeight: 1.15 }}>
+        Import Your <GoldWord tone="light">Delegates</GoldWord>
+      </h3>
+      <p style={{ fontFamily: OUTFIT, fontSize: 13, color: INK_SOFT, margin: '6px 0 20px 0', lineHeight: 1.55 }}>
+        Add a name and an email for each delegate and we&rsquo;ll invite them to join your delegation
+      </p>
+      {showImport && importPart}
+      {showList && (
         <div className="mt-6 pt-5" style={{ borderTop: `1px solid ${LINE}` }}>
-          <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: INK, margin: 0 }}>Your imported delegates</p>
-          <ul className="mt-3 flex flex-col gap-2" style={{ listStyle: 'none', padding: 0, margin: '12px 0 0 0' }}>
-            {data.imports.map(d => {
-              const s = statusOf(d);
-              return (
-                <li
-                  key={d.application_id}
-                  className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1.5 rounded-xl"
-                  style={{ padding: '12px 14px', backgroundColor: '#FFFFFF', boxShadow: '0 1px 3px rgba(27,56,40,0.06)' }}
-                >
-                  <div className="min-w-0 flex-1" style={{ minWidth: 180 }}>
-                    <p style={{ fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 700, color: INK, margin: 0, overflowWrap: 'anywhere', lineHeight: 1.3 }}>
-                      {d.name?.trim() || d.email || 'Imported delegate'}
-                    </p>
-                    {d.email && (
-                      <p style={{ fontFamily: OUTFIT, fontSize: 12, color: INK_SOFT, margin: '2px 0 0 0', overflowWrap: 'anywhere' }}>{d.email}</p>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-start sm:items-end">
-                    <span className="inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: s.color }}>
-                      <s.Icon size={16} strokeWidth={2.2} aria-hidden />
-                      {s.label}
-                    </span>
-                    {d.credit === 'refunded' && (
-                      <span className="inline-flex items-center gap-1 mt-1" style={{ fontFamily: OUTFIT, fontSize: 12, color: INK_SOFT }}>
-                        <RotateCcw size={12} aria-hidden />
-                        Credit returned to you
-                      </span>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+          <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: INK, margin: '0 0 12px 0' }}>Your imported delegates</p>
+          {listPart}
         </div>
       )}
     </SectionCard>
   );
 }
-

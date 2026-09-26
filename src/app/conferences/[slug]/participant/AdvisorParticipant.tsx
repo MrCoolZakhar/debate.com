@@ -11,8 +11,9 @@ import CommitteesSessionsCard from './CommitteesSessionsCard';
 import { SectionCard, OUTFIT } from './shared';
 import type { ParticipantApplication } from './types';
 
-export default function AdvisorParticipant({ conferenceId, conferenceStartDate, application, allocationSwapMode }: {
+export default function AdvisorParticipant({ conferenceId, conferenceSlug, conferenceStartDate, application, allocationSwapMode }: {
   conferenceId: string;
+  conferenceSlug: string;
   conferenceStartDate: string | null;
   application: ParticipantApplication;
   allocationSwapMode: string;
@@ -34,6 +35,7 @@ export default function AdvisorParticipant({ conferenceId, conferenceStartDate, 
     <div className="flex flex-col gap-6">
       <DelegationPanel
         conferenceId={conferenceId}
+        conferenceSlug={conferenceSlug}
         societyId={application.society_id}
         allocationSwapMode={allocationSwapMode}
       />
