@@ -66,18 +66,18 @@ export default function CreditsPricingClient() {
           /* The title keeps its own column (never under the film); the film
              takes everything to its right and runs to the shell's edge. */
           .gv-cr-hero{grid-template-columns:minmax(0,480px) minmax(0,1fr);gap:24px}
-          /* The gavel film (26 Sep 2026): bigger, hugging the right edge of
-             the content, centred on the hero, and melted into the page on
-             EVERY side. The mask is radial to the box's closest side, so all
-             four edges reach fully transparent, and the film is multiplied
-             onto the ivory, so its light grey ground takes the page's colour
-             and no rectangle edge can show. Mask and blend sit on the video
-             itself (a masked wrapper would isolate the blend). The extra
-             width reaches left into the column gap only, where the film is
-             already transparent; the title and buttons keep their column. */
-          .gv-cr-filmwrap{display:block;position:relative;align-self:center;justify-self:stretch;width:calc(100% + 32px + 56px);margin-left:-56px;margin-right:-32px;aspect-ratio:16/10}
-          .gv-cr-film{display:block;width:100%;height:100%;object-fit:cover;object-position:60% 50%;filter:saturate(0.9);mix-blend-mode:multiply;
-            -webkit-mask-image:radial-gradient(closest-side,#000 58%,transparent 100%);mask-image:radial-gradient(closest-side,#000 58%,transparent 100%)}
+          /* The gavel film, faded into the page like the gavel behind the
+             /sessions hero (26 Sep 2026): the same blur(2px) saturate(.75)
+             and a soft mask, at opacity .5, a step stronger than /sessions
+             (.42 under an ivory wash, about .27 on its right side), so it
+             reads as the gavel but sits behind the page. The mask is radial
+             to the box's closest side, so no edge is ever hard. It is drawn
+             18% larger by a transform anchored at its right edge and middle,
+             so it grows left and out from the centre without moving the
+             layout; the text column (z-index 2) stays on top of it. */
+          .gv-cr-filmwrap{display:block;position:relative;align-self:center;justify-self:stretch;width:calc(100% + 32px + 56px);margin-left:-56px;margin-right:-32px;aspect-ratio:16/10;pointer-events:none}
+          .gv-cr-film{display:block;width:100%;height:100%;object-fit:cover;object-position:60% 50%;opacity:.5;filter:blur(2px) saturate(.75);transform:scale(1.18);transform-origin:100% 50%;
+            -webkit-mask-image:radial-gradient(closest-side,#000 52%,transparent 100%);mask-image:radial-gradient(closest-side,#000 52%,transparent 100%)}
         }
         @media (prefers-reduced-motion:reduce){.gv-cr-filmwrap{display:none}}
       `}</style>

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   Search, SlidersHorizontal, LayoutGrid, Rows3, Users, Check,
   CalendarDays, Ticket, Globe, CalendarArrowUp, CalendarArrowDown,
-  MapPin, Monitor, School, GraduationCap, Plus, Heart, X,
+  MapPin, Monitor, School, GraduationCap, Plus, Heart, X, Play,
 } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import SiteFooter from '@/components/SiteFooter';
@@ -1474,10 +1474,12 @@ export default function ConferencesExploreClient() {
         <header className="px-6 md:px-10" style={{ paddingTop: 'clamp(24px, 3vw, 40px)', paddingBottom: '28px' }}>
           <Link
             href="/"
-            className="inline-block text-[13px] mb-4 font-bold focus:outline-none"
-            style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif", textDecoration: 'underline', textUnderlineOffset: '3px' }}
+            className="inline-flex items-center gap-1.5 text-[13px] mb-4 font-bold focus:outline-none"
+            style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}
           >
-            Back to conferences
+            {/* A small filled triangle pointing back, sized to the text. */}
+            <Play size={10} strokeWidth={0} fill="currentColor" aria-hidden style={{ transform: 'rotate(180deg)', flexShrink: 0 }} />
+            <span style={{ textDecoration: 'underline', textUnderlineOffset: '3px' }}>Back to home</span>
           </Link>
 
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5">
