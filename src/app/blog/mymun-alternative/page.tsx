@@ -296,7 +296,7 @@ export default function MymunAlternative() {
           </table>
         </TableWrap>
         <p className="gv-note">
-          mymun and MUN Command details from mymun.com and its MUN Command product and pricing pages, reviewed August 2026, alongside a walkthrough of a live organiser dashboard. &ldquo;Not observed&rdquo; means we did not find it, not that it does not exist. Gavelling rows were checked against our own source code rather than our own marketing. If anything here is wrong or has changed, <Link href="/contact">tell us</Link> and we will correct it.
+          mymun and MUN Command details from mymun.com and its MUN Command product and pricing pages, reviewed August 2026, alongside a walkthrough of a live organiser dashboard. &ldquo;Not observed&rdquo; means we did not find it, not that it does not exist. Gavelling rows were checked against our own source code rather than our own marketing. If anything here is wrong or has changed, <Link href="/about">tell us</Link> and we will correct it.
         </p>
 
         <H2>A note on the feature-count race</H2>

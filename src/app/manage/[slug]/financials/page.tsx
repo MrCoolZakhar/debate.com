@@ -11,7 +11,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import {
-  BadgePercent, CircleCheck, ClipboardCheck, Clock, HandCoins, Hourglass,
+  BadgePercent, CheckCircle2, ClipboardCheck, Clock, HandCoins, Hourglass, MinusCircle,
   PiggyBank, Users,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
@@ -23,7 +23,7 @@ import {
 import {
   useFinancialsData, useFinancialsCurrency, useInvoiceTotals,
   rowAmount, roleLabel, RoleIcon, roleTone, committeeAbbr, CountryFlag,
-  cumulativeSpark, chipStyle, formatRowDate, paymentMethod,
+  cumulativeSpark, chipStyle, formatRowDate, paymentMethod, methodIcon, sentenceCase,
   PIPELINE_FILTERS, type PipelineFilter, mutedCaption,
 } from './shared';
 
@@ -240,15 +240,10 @@ export default function FinancialsOverviewPage() {
                   {/* Role chip */}
                   <span
                     className="inline-flex items-center gap-1"
-                    style={{
-                      ...chipStyle,
-                      backgroundColor: roleTone(r.role).bg,
-                      color: roleTone(r.role).color,
-                      border: `1px solid ${roleTone(r.role).border}`,
-                    }}
+                    style={{ ...chipStyle, color: roleTone(r.role).color }}
                   >
-                    <RoleIcon role={r.role} />
-                    {roleLabel(r.role).toUpperCase()}
+                    <RoleIcon role={r.role} size={14} />
+                    {roleLabel(r.role)}
                   </span>
 
                   {/* Committee + flag */}
@@ -297,42 +292,43 @@ export default function FinancialsOverviewPage() {
                   {waived ? (
                     <span
                       className="inline-flex items-center gap-1"
-                      style={{ ...chipStyle, backgroundColor: 'rgba(184,132,74,0.16)', color: '#9A6B2F', border: '1px solid rgba(184,132,74,0.42)' }}
+                      style={{ ...chipStyle, color: '#9A6B2F' }}
                     >
-                      <HandCoins size={10} strokeWidth={2.5} />
-                      WAIVED
+                      <MinusCircle size={14} strokeWidth={2.4} aria-hidden="true" />
+                      Waived
                     </span>
                   ) : paid ? (
                     <span
                       className="inline-flex items-center gap-1"
-                      style={{ ...chipStyle, backgroundColor: 'rgba(61,122,82,0.17)', color: '#2A5A3C', border: '1px solid rgba(61,122,82,0.45)' }}
+                      style={{ ...chipStyle, color: '#2A5A3C' }}
                     >
-                      <CircleCheck size={10} strokeWidth={2.5} />
-                      PAID
+                      <CheckCircle2 size={14} strokeWidth={2.4} aria-hidden="true" />
+                      Paid
                     </span>
                   ) : (
                     <span
                       className="inline-flex items-center gap-1"
-                      style={{ ...chipStyle, backgroundColor: 'rgba(184,132,74,0.12)', color: '#9A6B2F', border: '1px solid rgba(184,132,74,0.3)' }}
+                      style={{ ...chipStyle, color: '#9A6B2F' }}
                     >
-                      <Clock size={10} strokeWidth={2.5} />
-                      UNPAID
+                      <Clock size={14} strokeWidth={2.4} aria-hidden="true" />
+                      Unpaid
                     </span>
                   )}
 
-                  {/* Method chip, HOW the payment happened (see paymentMethod) */}
-                  {method && (
-                    <span
-                      title={method.title}
-                      style={{
-                        ...chipStyle, fontSize: 8.5,
-                        backgroundColor: 'rgba(154,138,120,0.13)', color: '#6B5E4E',
-                        border: '1px solid rgba(154,138,120,0.35)',
-                      }}
-                    >
-                      {method.label}
-                    </span>
-                  )}
+                  {/* Method, HOW the payment happened (see paymentMethod) */}
+                  {method && (() => {
+                    const MethodIcon = methodIcon(method.label);
+                    return (
+                      <span
+                        className="inline-flex items-center gap-1"
+                        title={method.title}
+                        style={{ ...chipStyle, color: NEU.inkSoft }}
+                      >
+                        <MethodIcon size={14} strokeWidth={2.4} aria-hidden="true" />
+                        {sentenceCase(method.label)}
+                      </span>
+                    );
+                  })()}
                 </div>
               );
             })}

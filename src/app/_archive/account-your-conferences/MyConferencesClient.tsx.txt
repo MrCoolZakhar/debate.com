@@ -1,3 +1,18 @@
+// ARCHIVED 26 Sep 2026 (owner: "Remove the 'Your conferences' page completely,
+// archive it. Keep what the calendar page has and rename it to My conferences.").
+// This was src/app/account/conferences/MyConferencesClient.tsx, the role-tab
+// page (All / Delegate / Chair / Advisor / Organizer, upcoming / past, continent)
+// served at /account/conferences. It is a .txt so it is not compiled.
+//
+// The actions only this page had (chair and organiser invitations, imported
+// invitations, drafts to complete, the accepted-invite notice) were carried over
+// to src/app/account/conferences/conferenceActions.tsx and sit at the top of
+// My conferences (src/app/account/conferences/page.tsx, the former calendar).
+//
+// To restore: rename this file to .tsx under src/app/account/conferences/, and
+// point src/app/account/conferences/page.tsx back at it
+// (`return <MyConferencesClient embedded />;` inside the account layout).
+
 'use client';
 
 import { Suspense, useState, useEffect, useMemo, useCallback, useRef } from 'react';

@@ -8,13 +8,13 @@
  */
 
 import { useEffect, useState } from 'react';
-import { CreditCard, Receipt } from 'lucide-react';
+import { CreditCard, MinusCircle, PenLine, Receipt, Undo2, type LucideIcon } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { invoiceLabel, centsToFee } from '@/lib/invoices';
 import { NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuInset, NeuIconDisc } from '@/components/neu';
-import { inputStyle, mutedCaption, chipStyle, formatRowDate, roleLabel } from '../shared';
+import { inputStyle, mutedCaption, chipStyle, formatRowDate, roleLabel, methodIcon, sentenceCase } from '../shared';
 
 interface PaymentInvoice {
   id: string;
@@ -47,6 +47,13 @@ const TYPE_LABEL: Record<string, string> = {
 function typeLabel(type: string): string {
   return TYPE_LABEL[type] ?? type.replace(/_/g, ' ').toUpperCase();
 }
+
+const TYPE_ICON: Record<string, LucideIcon> = {
+  payment: CreditCard,
+  manual_paid: PenLine,
+  waiver: MinusCircle,
+  refund: Undo2,
+};
 
 const TYPE_STYLE: Record<string, { bg: string; color: string }> = {
   payment: { bg: 'rgba(61,122,82,0.13)', color: '#2A5A3C' },
@@ -192,24 +199,22 @@ export default function FinancialsHistoryPage() {
                 {/* Type chip */}
                 <span
                   className="inline-flex items-center gap-1"
-                  style={{ ...chipStyle, backgroundColor: typeStyle.bg, color: typeStyle.color, border: `1px solid ${typeStyle.color}55` }}
+                  style={{ ...chipStyle, color: typeStyle.color }}
                 >
-                  <CreditCard size={10} strokeWidth={2.5} />
-                  {typeLabel(p.type)}
+                  {(() => { const TypeIcon = TYPE_ICON[p.type] ?? CreditCard; return <TypeIcon size={14} strokeWidth={2.4} aria-hidden="true" />; })()}
+                  {sentenceCase(typeLabel(p.type))}
                 </span>
 
                 {/* Method chip */}
-                {p.method && (
-                  <span
-                    style={{
-                      ...chipStyle, fontSize: 8.5,
-                      backgroundColor: 'rgba(154,138,120,0.13)', color: '#6B5E4E',
-                      border: '1px solid rgba(154,138,120,0.35)',
-                    }}
-                  >
-                    {p.method.toUpperCase()}
-                  </span>
-                )}
+                {p.method && (() => {
+                  const MethodIcon = methodIcon(p.method);
+                  return (
+                    <span className="inline-flex items-center gap-1" style={{ ...chipStyle, color: NEU.inkSoft }}>
+                      <MethodIcon size={14} strokeWidth={2.4} aria-hidden="true" />
+                      {sentenceCase(p.method)}
+                    </span>
+                  );
+                })()}
               </div>
             );
           })}

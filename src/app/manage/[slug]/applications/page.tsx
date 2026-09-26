@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
-  ArrowRight, BadgeCheck, Ban, Briefcase, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
+  ArrowRight, BadgeCheck, Ban, CheckCircle2, MinusCircle, XCircle, Briefcase, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
   Download, Eye, Filter, Gavel, GraduationCap, HandCoins, Inbox, Info, Landmark, LogOut,
   Loader2, Mail, MoreHorizontal, PencilLine, Plus, RotateCcw, Search, Send, SlidersHorizontal, Trash2, Undo2, User, UserRoundCheck,
   UserX, Users, Wallet, X, UsersRound } from 'lucide-react';
@@ -227,117 +227,82 @@ function RoleIcon({ role, size = 10 }: { role: string; size?: number }) {
   return <Icon size={size} strokeWidth={2.5} />;
 }
 
-/** Small muted chip for applications with no linked profile (user_id null), imported, unclaimed. */
-function NotRegisteredChip() {
+/** A state shown as an icon plus a plain word: no pill, no capitals. The
+ *  colour carries the meaning through the icon and the word. `onDark` swaps to
+ *  the light tints used on the forest hero of the applicant pop-up. */
+const MARK_LIGHT = { done: '#2A5A3C', pending: '#8A6614', danger: '#8B2020', neutral: NEU.inkSoft };
+const MARK_DARK = { done: '#A8D8B5', pending: '#EED98A', danger: '#F2A7A7', neutral: '#E4DCCA' };
+type MarkTone = keyof typeof MARK_LIGHT;
+
+function StateMark({ icon: Icon, label, tone, onDark = false, size = 'md' }: {
+  icon: LucideGlyph;
+  label: string; tone: MarkTone; onDark?: boolean; size?: 'sm' | 'md';
+}) {
   return (
     <span
-      className="inline-flex items-center px-2 py-0.5 rounded-full font-bold flex-shrink-0"
-      style={{ fontSize: 9, fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', backgroundColor: 'rgba(154,138,120,0.12)', color: '#9A8A78', border: '1px solid rgba(154,138,120,0.3)' }}
+      className="inline-flex items-center gap-1 flex-shrink-0"
+      style={{
+        fontFamily: OUTFIT, fontSize: size === 'sm' ? 12 : 13, fontWeight: 700,
+        color: (onDark ? MARK_DARK : MARK_LIGHT)[tone], whiteSpace: 'nowrap',
+      }}
     >
-      NOT REGISTERED
+      <span aria-hidden="true" className="inline-flex"><Icon size={size === 'sm' ? 14 : 15} strokeWidth={2.4} /></span>
+      {label}
     </span>
   );
 }
 
-/** A chair brought in by the organizing team rather than applying — shown
- *  next to the role chip regardless of whether this conference charges a
+/** Applications with no linked profile (user_id null), imported, unclaimed. */
+function NotRegisteredChip({ onDark = false }: { onDark?: boolean }) {
+  return <StateMark icon={UserX} label="Not registered" tone="neutral" onDark={onDark} size="sm" />;
+}
+
+/** A chair brought in by the organizing team rather than applying, shown
+ *  next to the role regardless of whether this conference charges a
  *  chair fee. */
-function InvitedChip() {
-  return (
-    <span
-      className="inline-flex items-center px-2 py-0.5 rounded-full font-bold flex-shrink-0"
-      style={{ fontSize: 9, fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', backgroundColor: 'rgba(182,135,31,0.14)', color: '#8A6614', border: '1px solid rgba(182,135,31,0.35)' }}
-    >
-      INVITED
-    </span>
-  );
+function InvitedChip({ onDark = false }: { onDark?: boolean }) {
+  return <StateMark icon={Mail} label="Invited" tone="pending" onDark={onDark} size="sm" />;
 }
 
 /** Static stand-in for the payment menu, an invited chair whose role has no
  *  configured fee at all gets no PaymentMenu (there's nothing to mark paid),
  *  so this is the only visible confirmation they owe nothing. Once a
  *  conference configures a chair fee, the real PaymentMenu takes over and
- *  already renders its own "WAIVED" label for a waived chair, same as any
- *  other role — this chip only appears where that menu doesn't. */
+ *  already renders its own "Waived" label for a waived chair, same as any
+ *  other role; this mark only appears where that menu doesn't. */
 function WaivedChip() {
-  return (
-    <span
-      className="inline-flex items-center px-2.5 py-1 rounded-full font-bold flex-shrink-0"
-      style={{ fontSize: 10, fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.06em', backgroundColor: 'rgba(61,122,82,0.14)', color: '#2A5A3C', border: '1px solid rgba(61,122,82,0.35)' }}
-    >
-      WAIVED
-    </span>
-  );
+  return <StateMark icon={MinusCircle} label="Waived" tone="done" />;
 }
 
 type LucideGlyph = React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
 
-/** Large, solid-fill status pill, forest/ivory palette. White glyph + label on
- *  a saturated two-stop gradient with a soft neumorphic seat. The four
- *  checkmark-family states get deliberately distinct glyphs so they read apart
- *  at this larger size (accept = plain tick, assigned = badge tick, checked-in =
- *  person tick). */
-const STATUS_PILL: Record<string, { grad: [string, string]; label: string; icon: LucideGlyph }> = {
-  submitted:    { grad: ['#C79A52', '#B8844A'], label: 'Submitted',  icon: Inbox },
-  accepted:     { grad: ['#3D7A52', '#2A5A3C'], label: 'Accepted',   icon: Check },
-  assigned:     { grad: ['#C79A2E', '#9A7418'], label: 'Assigned',   icon: BadgeCheck },
-  'checked-in': { grad: ['#2F7A5C', '#1F6E52'], label: 'Checked In', icon: UserRoundCheck },
-  rejected:     { grad: ['#9A3030', '#7A1F1F'], label: 'Rejected',   icon: Ban },
-  withdrawn:    { grad: ['#8A7E6E', '#6B5F52'], label: 'Withdrawn',  icon: LogOut },
+/** Application status as an icon plus a plain word. The four
+ *  checkmark-family states keep distinct glyphs so they read apart
+ *  (accept = plain tick, assigned = badge tick, checked-in = person tick). */
+const STATUS_PILL: Record<string, { tone: MarkTone; label: string; icon: LucideGlyph }> = {
+  submitted:    { tone: 'pending', label: 'Submitted',  icon: Clock },
+  accepted:     { tone: 'done',    label: 'Accepted',   icon: CheckCircle2 },
+  assigned:     { tone: 'done',    label: 'Assigned',   icon: BadgeCheck },
+  'checked-in': { tone: 'done',    label: 'Checked in', icon: UserRoundCheck },
+  rejected:     { tone: 'danger',  label: 'Rejected',   icon: XCircle },
+  withdrawn:    { tone: 'neutral', label: 'Withdrawn',  icon: LogOut },
 };
 
-function StatusPill({ status, size = 'md', awaitingResubmission = false }: { status: string; size?: 'sm' | 'md'; awaitingResubmission?: boolean }) {
+function StatusPill({ status, size = 'md', awaitingResubmission = false, onDark = false }: { status: string; size?: 'sm' | 'md'; awaitingResubmission?: boolean; onDark?: boolean }) {
   // A rejected application whose role allows resubmission reads as "Awaiting
-  // Resubmission" (amber/pending) instead of the final-sounding "Rejected" —
+  // resubmission" (amber/pending) instead of the final-sounding "Rejected",
   // same underlying status, display only.
   const t = (status === 'rejected' && awaitingResubmission)
-    ? { grad: ['#C79A52', '#B8844A'] as [string, string], label: 'Awaiting Resubmission', icon: RotateCcw }
-    : STATUS_PILL[status] ?? { grad: ['#9A8A78', '#6B5F52'] as [string, string], label: status.replace('-', ' '), icon: Clock };
-  const Icon = t.icon;
-  const iconSize = size === 'sm' ? 12 : 14;
-  return (
-    <span
-      className="inline-flex items-center gap-1.5"
-      style={{
-        padding: size === 'sm' ? '4px 10px' : '5px 12px',
-        borderRadius: 999,
-        background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[1]})`,
-        color: '#FFFFFF',
-        fontFamily: OUTFIT, fontSize: size === 'sm' ? 11 : 11.5, fontWeight: 800, letterSpacing: '0.03em',
-        boxShadow: `0 3px 8px ${t.grad[0]}55, inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -1px 0 rgba(0,0,0,0.08)`,
-        whiteSpace: 'nowrap',
-      }}
-    >
-      <Icon size={iconSize} strokeWidth={2.7} style={{ color: '#FFFFFF' }} />
-      {t.label.toUpperCase()}
-    </span>
-  );
+    ? { tone: 'pending' as MarkTone, label: 'Awaiting resubmission', icon: RotateCcw }
+    : STATUS_PILL[status] ?? { tone: 'neutral' as MarkTone, label: status.replace('-', ' '), icon: Clock };
+  return <StateMark icon={t.icon} label={t.label} tone={t.tone} onDark={onDark} size={size} />;
 }
 
-/** Danger-muted pill for `attending === false`, layered independently of
- *  status (an accepted/assigned/checked-in applicant can still be marked not
- *  attending). Reuses the Withdrawn treatment's gradient for the same visual
- *  family, distinct icon so the two states never look identical. */
-function NotAttendingBadge({ size = 'md' }: { size?: 'sm' | 'md' }) {
-  const grad = STATUS_PILL.withdrawn.grad;
-  const iconSize = size === 'sm' ? 12 : 14;
-  return (
-    <span
-      className="inline-flex items-center gap-1.5"
-      style={{
-        padding: size === 'sm' ? '4px 10px' : '5px 12px',
-        borderRadius: 999,
-        background: `linear-gradient(135deg, ${grad[0]}, ${grad[1]})`,
-        color: '#FFFFFF',
-        fontFamily: OUTFIT, fontSize: size === 'sm' ? 11 : 11.5, fontWeight: 800, letterSpacing: '0.03em',
-        boxShadow: `0 3px 8px ${grad[0]}55, inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -1px 0 rgba(0,0,0,0.08)`,
-        whiteSpace: 'nowrap',
-      }}
-    >
-      <UserX size={iconSize} strokeWidth={2.7} style={{ color: '#FFFFFF' }} />
-      NOT ATTENDING
-    </span>
-  );
+/** `attending === false`, layered independently of status (an
+ *  accepted/assigned/checked-in applicant can still be marked not
+ *  attending). Distinct icon so it never looks like Withdrawn. */
+function NotAttendingBadge({ size = 'md', onDark = false }: { size?: 'sm' | 'md'; onDark?: boolean }) {
+  return <StateMark icon={UserX} label="Not attending" tone="neutral" onDark={onDark} size={size} />;
 }
 
 /** Reserved width of the row's role/level slot (#4). Wide enough for the
@@ -380,30 +345,19 @@ const ALLOCATE_RAIL_W = 152;
  *  + 20px bar padding + its 20px offset from the bottom). */
 const BULK_BAR_CLEARANCE = 140;
 
-/** Role pill, same upgraded fill treatment. Chairs get the gold accent (forest
- *  glyph on a gold gradient for contrast); delegates read forest, staff slate. */
-function RolePill({ role, size = 'md' }: { role: string; size?: 'sm' | 'md' }) {
-  const spec = role === 'chair'
-    ? { grad: ['#EED98A', '#C79A2E'] as [string, string], ink: '#3A2A08' }
-    : role === 'delegate' || role === 'head-delegate'
-    ? { grad: ['#3D7A52', '#2A5A3C'] as [string, string], ink: '#FFFFFF' }
-    : { grad: ['#5A6E9E', '#45568A'] as [string, string], ink: '#FFFFFF' };
-  const iconSize = size === 'sm' ? 12 : 13;
+/** Role as its icon plus the plain word. Chairs read gold, delegates forest,
+ *  staff slate. */
+function RolePill({ role, size = 'md', onDark = false }: { role: string; size?: 'sm' | 'md'; onDark?: boolean }) {
+  const color = onDark
+    ? (role === 'chair' ? '#EED98A' : role === 'delegate' || role === 'head-delegate' ? '#A8D8B5' : '#C9D3EE')
+    : (role === 'chair' ? '#8A6614' : role === 'delegate' || role === 'head-delegate' ? '#2A5A3C' : '#45568A');
   return (
     <span
-      className="inline-flex items-center gap-1.5"
-      style={{
-        padding: size === 'sm' ? '4px 10px' : '5px 12px',
-        borderRadius: 999,
-        background: `linear-gradient(135deg, ${spec.grad[0]}, ${spec.grad[1]})`,
-        color: spec.ink,
-        fontFamily: OUTFIT, fontSize: size === 'sm' ? 11 : 11.5, fontWeight: 800, letterSpacing: '0.03em',
-        boxShadow: `0 3px 8px ${spec.grad[0]}55, inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -1px 0 rgba(0,0,0,0.08)`,
-        whiteSpace: 'nowrap',
-      }}
+      className="inline-flex items-center gap-1 flex-shrink-0"
+      style={{ fontFamily: OUTFIT, fontSize: size === 'sm' ? 12 : 13, fontWeight: 700, color, whiteSpace: 'nowrap' }}
     >
-      <RoleIcon role={role} size={iconSize} />
-      {roleLabel(role).toUpperCase()}
+      <RoleIcon role={role} size={size === 'sm' ? 14 : 15} />
+      {roleLabel(role)}
     </span>
   );
 }
@@ -427,7 +381,7 @@ function LevelBadge({ level, count }: { level: string; count?: number }) {
       >
         <LevelInsignia level={key} size={30} />
       </span>
-      <span className="text-center leading-tight" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 11, letterSpacing: '0.05em', textTransform: 'uppercase', color: NEU.ink }}>
+      <span className="text-center leading-tight" style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: NEU.ink }}>
         {label}
       </span>
       {count !== undefined && (
@@ -4271,10 +4225,9 @@ export default function ApplicationsPage() {
               fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.inkSoft,
               fontVariantNumeric: 'tabular-nums',
             };
-            const chip = (bg: string, color: string, border: string): React.CSSProperties => ({
-              fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.08em',
-              padding: '3px 9px', borderRadius: 999, backgroundColor: bg, color, border: `1px solid ${border}`,
-              whiteSpace: 'nowrap',
+            // A state line: icon plus a plain word, no pill (CLAUDE.md §8).
+            const chip = (color: string): React.CSSProperties => ({
+              fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color, whiteSpace: 'nowrap',
             });
 
             // Anything that is itself interactive keeps its own behaviour and
@@ -4399,8 +4352,8 @@ export default function ApplicationsPage() {
 
                       {pledgeLine && (
                         <div className="flex flex-wrap gap-2 mt-2.5 items-center">
-                          <span className="inline-flex items-center gap-1.5" style={{ ...chip('rgba(27,56,40,0.06)', NEU.forest, 'rgba(27,56,40,0.14)'), fontSize: 10.5, fontVariantNumeric: 'tabular-nums' }}>
-                            <HandCoins size={11} strokeWidth={2.5} />
+                          <span className="inline-flex items-center gap-1.5" style={{ ...chip(NEU.forest), fontVariantNumeric: 'tabular-nums' }}>
+                            <HandCoins size={14} strokeWidth={2.4} aria-hidden="true" />
                             {pledgeLine}{app.pledge_confirmed_at ? ' · received' : ''}
                           </span>
                         </div>
@@ -4575,19 +4528,19 @@ export default function ApplicationsPage() {
                           for. It sits OUTSIDE notAttendingFade's dimming on
                           purpose, next to the status it is about to change. */}
                       {rowBusy && (
-                        <span className="inline-flex items-center gap-1" style={chip('rgba(27,56,40,0.10)', NEU.forest, 'rgba(27,56,40,0.22)')}>
-                          <Loader2 size={10} strokeWidth={3} style={{ animation: 'gvSpin 900ms linear infinite' }} />
-                          SAVING
+                        <span className="inline-flex items-center gap-1" style={chip(NEU.forest)}>
+                          <Loader2 size={14} strokeWidth={2.6} style={{ animation: 'gvSpin 900ms linear infinite' }} />
+                          Saving
                         </span>
                       )}
                       {app.resubmitted_at && (
                         <span
                           className="inline-flex items-center gap-1"
                           title="The applicant edited and resubmitted this application"
-                          style={chip('rgba(182,135,31,0.18)', '#8A6614', 'rgba(182,135,31,0.4)')}
+                          style={chip('#8A6614')}
                         >
-                          <RotateCcw size={10} strokeWidth={2.5} />
-                          RESUBMITTED {formatDate(app.resubmitted_at)}
+                          <RotateCcw size={14} strokeWidth={2.4} aria-hidden="true" />
+                          Resubmitted {formatDate(app.resubmitted_at)}
                         </span>
                       )}
                     </div>
@@ -5432,22 +5385,23 @@ export default function ApplicationsPage() {
             accessToken={accessToken ?? null}
             chips={(
               <>
-                {!app.user_id && <NotRegisteredChip />}
-                <RolePill role={app.role} size="sm" />
-                {app.role === 'chair' && app.fee_waiver_source === 'chair_invite' && <InvitedChip />}
+                {!app.user_id && <NotRegisteredChip onDark />}
+                <RolePill role={app.role} size="sm" onDark />
+                {app.role === 'chair' && app.fee_waiver_source === 'chair_invite' && <InvitedChip onDark />}
                 <StatusPill
                   status={app.status}
                   size="sm"
+                  onDark
                   awaitingResubmission={app.status === 'rejected' && (roleConfig?.allow_resubmission ?? false)}
                 />
-                {!app.attending && <NotAttendingBadge size="sm" />}
+                {!app.attending && <NotAttendingBadge size="sm" onDark />}
                 {app.resubmitted_at && (
                   <span
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold"
+                    className="inline-flex items-center gap-1 font-bold"
                     title="The applicant edited and resubmitted this application"
-                    style={{ fontSize: 11, fontFamily: OUTFIT, letterSpacing: '0.04em', backgroundColor: 'rgba(238,217,138,0.18)', color: '#EED98A', border: '1px solid rgba(238,217,138,0.45)' }}
+                    style={{ fontSize: 12, fontFamily: OUTFIT, color: '#EED98A' }}
                   >
-                    <RotateCcw size={11} strokeWidth={2.5} />
+                    <RotateCcw size={14} strokeWidth={2.4} aria-hidden="true" />
                     Resubmitted {formatDate(app.resubmitted_at)}
                   </span>
                 )}

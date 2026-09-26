@@ -8,7 +8,7 @@
 // gate once the committee's live session has opened.
 
 import { useEffect, useState } from 'react';
-import { Compass, ArrowRight, Copy, Check } from 'lucide-react';
+import { Compass, ArrowRight, Copy, Check, Signal } from 'lucide-react';
 import Link from 'next/link';
 import { FlagImg } from '@/components/FlagImg';
 import { supabase } from '@/lib/supabase';
@@ -19,11 +19,11 @@ import { NEU } from '@/components/neu';
 import { SectionCard, OUTFIT, capitalize, useAllocationPartner, effectiveReleaseTime, formatReleaseDate } from './shared';
 import type { ParticipantCommittee, ParticipantAllocation } from './types';
 
-const DIFFICULTY_STYLES: Record<string, { bg: string; color: string }> = {
-  beginner: { bg: 'rgba(61,122,82,0.13)', color: '#2A5A3C' },
-  intermediate: { bg: 'rgba(238,217,138,0.35)', color: '#8A6614' },
-  advanced: { bg: 'rgba(184,132,74,0.16)', color: '#B8844A' },
-  expert: { bg: 'rgba(139,32,32,0.1)', color: '#8B2020' },
+const DIFFICULTY_STYLES: Record<string, { color: string }> = {
+  beginner: { color: '#2A5A3C' },
+  intermediate: { color: '#8A6614' },
+  advanced: { color: '#B8844A' },
+  expert: { color: '#8B2020' },
 };
 
 const ROMAN = ['I', 'II', 'III'];
@@ -107,10 +107,8 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
 
         <div className="flex items-center gap-2 mt-1.5">
           {committee.difficulty && (
-            <span
-              className="px-2.5 py-0.5 rounded-full"
-              style={{ backgroundColor: diffStyle.bg, color: diffStyle.color, fontSize: '10px', fontFamily: OUTFIT, letterSpacing: '0.06em', fontWeight: 700 }}
-            >
+            <span className="inline-flex items-center gap-1" style={{ color: diffStyle.color, fontSize: '12px', fontFamily: OUTFIT, fontWeight: 700 }}>
+              <Signal size={14} strokeWidth={2.2} aria-hidden />
               {capitalize(diff)}
             </span>
           )}

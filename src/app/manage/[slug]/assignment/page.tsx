@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   X, Check, Sparkles, ChevronDown, ChevronUp, Award, Globe2, ArrowRight, GripVertical,
   MousePointerClick, Plus, Info, Layers, Gavel, UserRound, Users, Trash2, Repeat, MoreVertical,
+  CheckCircle2, Clock, Star,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useManage } from '@/app/manage/[slug]/layout';
@@ -850,7 +851,7 @@ function CommitteeDifficultyBadge({ level, disc = 34, glyph = 22, showWord = tru
         <LevelInsignia level={level} size={glyph} />
       </span>
       {showWord && (
-        <span style={{ fontSize: 9.5, fontWeight: 800, color: accent, fontFamily: MONO, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: accent, fontFamily: OUTFIT, textTransform: 'capitalize' }}>
           {key || 'beginner'}
         </span>
       )}
@@ -1405,18 +1406,16 @@ function LevelTag({ level }: { level: string | null | undefined }) {
   const lvl = level && level.trim() ? level : 'beginner';
   const accent = LEVEL_ACCENT[lvl.toLowerCase()] ?? '#9A8A78';
   return (
-    <span
-      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full flex-shrink-0"
-      style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
-    >
+    <span className="inline-flex items-center gap-1 flex-shrink-0">
       <span
         className="inline-flex items-center justify-center flex-shrink-0"
         style={{ width: 16, height: 16, borderRadius: 9999, background: `linear-gradient(150deg, ${accent}22, ${accent}12)`, border: `1px solid ${accent}55` }}
+        aria-hidden="true"
       >
         <LevelInsignia level={lvl} size={11} />
       </span>
-      <span style={{ fontSize: 10, fontWeight: 800, color: accent, fontFamily: MONO, letterSpacing: '0.04em' }}>
-        {lvl.toUpperCase()}
+      <span style={{ fontSize: 12, fontWeight: 700, color: accent, fontFamily: OUTFIT, textTransform: 'capitalize' }}>
+        {lvl.toLowerCase()}
       </span>
     </span>
   );
@@ -2029,7 +2028,10 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       {idx === 0 && score >= 20 && (
-                        <span style={{ fontSize: 10, fontWeight: 800, color: NEU.deepGold, fontFamily: MONO, letterSpacing: '0.04em' }}>BEST</span>
+                        <span className="inline-flex items-center gap-1" style={{ fontSize: 12, fontWeight: 700, color: '#8A6614', fontFamily: OUTFIT }}>
+                          <Star size={14} strokeWidth={2.4} aria-hidden="true" />
+                          Best
+                        </span>
                       )}
                       <span style={{ fontSize: 12, fontWeight: 800, color: fitColor(score), fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>{score}</span>
                     </div>
@@ -2868,8 +2870,8 @@ function CommitteeOverviewModal({
         {/* Open-seat importance summary: dash indicator + count, no words. */}
         <div className="flex flex-wrap items-center gap-1.5 mb-4">
           {openSlots.length === 0 ? (
-            <span className="inline-flex items-center gap-1.5" style={{ fontSize: 10, fontWeight: 800, color: NEU.green, fontFamily: MONO, letterSpacing: '0.06em' }}>
-              <Check size={12} strokeWidth={3} /> FULLY ALLOCATED
+            <span className="inline-flex items-center gap-1" style={{ fontSize: 12, fontWeight: 700, color: NEU.forest, fontFamily: OUTFIT }}>
+              <CheckCircle2 size={14} strokeWidth={2.4} aria-hidden="true" /> Fully allocated
             </span>
           ) : (
             (['high', 'medium', 'low', 'standard'] as ImportanceTier[]).map(t =>
@@ -2886,7 +2888,7 @@ function CommitteeOverviewModal({
           {slots.flatMap(slot => {
             const rows = byCountry.get(slot.country_code) ?? [];
             const bySeat = new Map(rows.map(r => [r.seat, r]));
-            const seatLabel = (seatNum: number) => (slot.delegation_size >= 2 ? `, SEAT ${seatNum}` : '');
+            const seatLabel = (seatNum: number) => (slot.delegation_size >= 2 ? `, seat ${seatNum}` : '');
 
             return Array.from({ length: slot.delegation_size }, (_, i) => i + 1).map(seatNum => {
               const alloc = bySeat.get(seatNum) ?? null;
@@ -2904,7 +2906,7 @@ function CommitteeOverviewModal({
                     <CountryFlag code={slot.country_code} w={30} h={30} radius={9999} shadow={FLAG_SHADOW} dim={0.5} alt={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
                     <div className="flex-1 min-w-0">
                       <p style={{ fontSize: 13.5, fontWeight: 700, color: NEU.ink, fontFamily: OUTFIT }}><CountryName name={slot.country_name} code={slot.country_code} /></p>
-                      <p style={{ fontSize: 10.5, color: NEU.muted, fontFamily: MONO, letterSpacing: '0.06em', marginTop: 1 }}>OPEN SEAT{seatLabel(seatNum)}</p>
+                      <p style={{ fontSize: 11.5, color: NEU.inkSoft, fontFamily: OUTFIT, marginTop: 1 }}>Open seat{seatLabel(seatNum)}</p>
                     </div>
                     <TierBadge tier={slot.importance} />
                     <span className="inline-flex items-center gap-1 flex-shrink-0" style={{ fontSize: 10.5, fontWeight: 800, color: NEU.forest, fontFamily: MONO, letterSpacing: 0 }}>
@@ -2936,9 +2938,9 @@ function CommitteeOverviewModal({
                     </div>
                     <span
                       className="inline-flex items-center gap-1 flex-shrink-0"
-                      style={{ padding: '3px 9px', borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm, fontSize: 9.5, fontWeight: 800, color: NEU.deepGold, fontFamily: MONO, letterSpacing: '0.08em' }}
+                      style={{ fontSize: 12, fontWeight: 700, color: '#8A6614', fontFamily: OUTFIT, whiteSpace: 'nowrap' }}
                     >
-                      <Users size={11} strokeWidth={2.4} /> DELEGATION
+                      <Users size={14} strokeWidth={2.4} aria-hidden="true" /> Delegation
                     </span>
                     {removableSoc && (
                       <RowMenu
@@ -3305,10 +3307,11 @@ function ChairBoardPanel({
             {invites.map(inv => (
               <NeuInset key={inv.id} small className="flex items-center gap-2 px-2.5 py-1.5" style={{ opacity: 0.72 }}>
                 <span
-                  className="px-2 py-0.5 rounded-full flex-shrink-0"
-                  style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.06em', fontFamily: MONO, backgroundColor: 'rgba(238,217,138,0.4)', color: '#8A6614' }}
+                  className="inline-flex items-center gap-1 flex-shrink-0"
+                  style={{ fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, color: '#8A6614' }}
                 >
-                  PENDING
+                  <Clock size={14} strokeWidth={2.4} aria-hidden="true" />
+                  Pending
                 </span>
                 <span className="flex-1 min-w-0" style={{ fontFamily: OUTFIT }}>
                   <StackedName name={inv.profiles?.display_name ?? inv.invited_name ?? inv.email} size={12} weight={700} color="#7A5A10" />

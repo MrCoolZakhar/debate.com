@@ -72,7 +72,7 @@ export function OrganizerPencil({ variant, onClick, label, ariaLabel, style }: {
         <Pencil size={15} strokeWidth={1.9} />
       </span>
       {label && (
-        <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.16em', color: '#FFFFFF' }}>
+        <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: 0, color: '#FFFFFF' }}>
           {label}
         </span>
       )}

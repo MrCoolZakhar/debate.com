@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   Download, Upload as UploadIcon, ArrowLeft, Check,
-  AlertTriangle, Mail, Loader2, CircleCheck, CircleX,
+  AlertTriangle, Mail, Loader2, CircleCheck, CircleX, CheckCircle2, XCircle,
   FileSpreadsheet, Users, Link2, UserCheck, ArrowRight, Pencil, X,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
@@ -161,18 +161,20 @@ async function loadContext(supabase: ReturnType<typeof getAuthedClient>, confere
 // ── Row classification pill ──────────────────────────────────────────────────
 
 const CLASS_STYLES: Record<string, { bg: string; color: string; border: string; label: string }> = {
-  valid:   { bg: 'rgba(61,122,82,0.14)',  color: '#2A5A3C', border: 'rgba(61,122,82,0.4)',  label: 'VALID' },
-  warning: { bg: 'rgba(184,132,74,0.16)', color: '#9A6B2F', border: 'rgba(184,132,74,0.42)', label: 'WARNING' },
-  error:   { bg: 'rgba(139,32,32,0.1)',   color: '#8B2020', border: 'rgba(139,32,32,0.3)',   label: 'ERROR' },
+  valid:   { bg: 'rgba(61,122,82,0.14)',  color: '#2A5A3C', border: 'rgba(61,122,82,0.4)',  label: 'Valid' },
+  warning: { bg: 'rgba(184,132,74,0.16)', color: '#9A6B2F', border: 'rgba(184,132,74,0.42)', label: 'Warning' },
+  error:   { bg: 'rgba(139,32,32,0.1)',   color: '#8B2020', border: 'rgba(139,32,32,0.3)',   label: 'Error' },
 };
 
 function ClassPill({ cls }: { cls: string }) {
   const s = CLASS_STYLES[cls] ?? CLASS_STYLES.warning;
+  const Icon = cls === 'valid' ? CheckCircle2 : cls === 'error' ? XCircle : AlertTriangle;
   return (
     <span
-      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full flex-shrink-0"
-      style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.08em', backgroundColor: s.bg, color: s.color, border: `1px solid ${s.border}`, fontFamily: OUTFIT }}
+      className="inline-flex items-center gap-1 flex-shrink-0"
+      style={{ fontSize: 12, fontWeight: 700, color: s.color, fontFamily: OUTFIT, whiteSpace: 'nowrap' }}
     >
+      <Icon size={14} strokeWidth={2.4} aria-hidden="true" />
       {s.label}
     </span>
   );
@@ -1600,12 +1602,10 @@ function ImportedDelegatesTab({ conference, session, confirm, fixApplicationId }
                     <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{STATUS_LABEL[r.status] ?? r.status}</td>
                     <td className="px-3 py-2.5">
                       <span
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold"
-                        style={claimed
-                          ? { backgroundColor: 'rgba(61,122,82,0.14)', color: '#2A5A3C' }
-                          : { backgroundColor: 'rgba(184,132,74,0.16)', color: '#9A6B2F' }}
+                        className="inline-flex items-center gap-1 text-xs font-bold"
+                        style={{ color: claimed ? '#2A5A3C' : '#9A6B2F', whiteSpace: 'nowrap' }}
                       >
-                        {claimed ? <Check size={11} /> : <Mail size={11} />}
+                        {claimed ? <CheckCircle2 size={14} aria-hidden="true" /> : <Mail size={14} aria-hidden="true" />}
                         {claimed ? 'Claimed' : 'Unclaimed'}
                       </span>
                     </td>

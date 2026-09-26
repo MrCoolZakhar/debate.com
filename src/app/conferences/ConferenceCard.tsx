@@ -19,6 +19,15 @@
 //
 // `compact` (default false) is the same listing, a little denser.
 //
+// `variant="listing"` (Explore only; redesign 26 Sep 2026, owner: "use a
+// similar thing with the cards"): a soft 3D white card on the ivory ground.
+// The cover photo runs flush across the top of the card (4:3, the card's own
+// rounded corners, the photo scales 1.03 on hover) and is the hero of the
+// card; the logo disc overlaps its lower edge; the text sits below. The card
+// lifts 3px on hover. A conference without a banner gets a pale fill with its
+// logo centred large. Spotlight is the gold edge and glow plus the tag;
+// credit sponsored keeps the heart. Every other caller keeps the inset card.
+//
 // `heroCompact` is the PHOTO-FORWARD hero tier, used ONLY by the Stagefront
 // hero "up next" rail: the banner photo fills the entire 188px card (cover)
 // under a forest-tinted scrim that darkens toward the bottom; the logo floats
@@ -57,10 +66,15 @@ import { CreditSponsoredMark, SpotlightTag, SPOTLIGHT_GLOW, SPOTLIGHT_GLOW_HOVER
 // Photo-forward hero cards: kill the Ken Burns zoom + hover lift for users who
 // asked the OS for less motion. Scoped to the hero tier's own class names.
 // The listing card: no photo zoom for people who asked for less motion.
+// Explore's listing card: a soft 3D white card on ivory (a light top edge,
+// a hairline and a forest-tinted drop), lifted on hover.
+const LISTING_SHADOW = 'inset 0 1px 0 rgba(255,255,255,0.9), 0 0 0 1px rgba(27,56,40,0.06), 5px 7px 20px rgba(27,56,40,0.11), 0 1px 2px rgba(27,56,40,0.06)';
+const LISTING_SHADOW_HOVER = 'inset 0 1px 0 rgba(255,255,255,0.9), 0 0 0 1px rgba(27,56,40,0.07), 9px 14px 32px rgba(27,56,40,0.17), 0 2px 4px rgba(27,56,40,0.07)';
+
 const LISTING_CSS = `
 @media (prefers-reduced-motion: reduce) {
   .gv-listing-card, .gv-listing-photo { transition: none !important; }
-  .gv-listing-photo { transform: none !important; }
+  .gv-listing-photo, .gv-listing-card { transform: none !important; }
 }`;
 
 // Pale covers for a conference without a banner photo: ivory, pale green and
@@ -126,8 +140,11 @@ function formatDateRange(start: string | null, end: string | null): string {
 
 export function ConferenceCard({
   conf, hovered, onHover, onLeave, onClick, compact = false, heroCompact = false, goldGlow = false, applied = false, member = false,
-  showFlag = true, spotlight = false, creditSponsored = false, href,
+  showFlag = true, spotlight = false, creditSponsored = false, href, variant = 'card',
 }: {
+  /** 'listing' = Explore's photo-forward soft 3D card: the photo flush across
+   *  the top. Default 'card' (the inset white card) everywhere else. */
+  variant?: 'card' | 'listing';
   conf: CardConference;
   /** Listing tier: the conference page. When set the card is a real link and
    *  `onClick` runs as a side effect only (e.g. record a spotlight click); it
@@ -190,6 +207,13 @@ export function ConferenceCard({
       : '0 0 0 1px rgba(238,217,138,0.40), 0 4px 16px rgba(182,135,31,0.22), 0 12px 34px rgba(238,217,138,0.18)';
   // A spotlight card is always glowing, whatever the caller passes.
   const glowing = goldGlow || spotlight;
+  // Explore's photo-forward listing: the photo flush across the top of a
+  // soft 3D white card.
+  const bare = variant === 'listing' && !heroCompact;
+  const hasBanner = !!conf.banner_url;
+  // A bare card with no banner shows its logo large in the middle of the
+  // pale fill, so the small disc over the edge would only repeat it.
+  const edgeLogo = !bare || hasBanner;
 
   // ── Photo-forward hero tier ───────────────────────────────────────────────
   // The banner photo IS the card: full-bleed cover, forest-tinted scrim heavier
@@ -393,14 +417,17 @@ export function ConferenceCard({
         display: 'flex',
         flexDirection: 'column',
         backgroundColor: '#FFFFFF',
-        borderRadius: '22px',
-        padding: dense ? '7px' : '8px',
+        borderRadius: bare ? '20px' : '22px',
+        padding: bare ? 0 : dense ? '7px' : '8px',
         boxShadow: glowing
           ? glowShadow
-          : hovered
-            ? '0 1px 2px rgba(27,56,40,0.06), 0 18px 40px rgba(27,56,40,0.15)'
-            : '0 1px 2px rgba(27,56,40,0.05), 0 8px 24px rgba(27,56,40,0.08)',
-        transition: 'box-shadow 240ms ease',
+          : bare
+            ? (hovered ? LISTING_SHADOW_HOVER : LISTING_SHADOW)
+            : hovered
+              ? '0 1px 2px rgba(27,56,40,0.06), 0 18px 40px rgba(27,56,40,0.15)'
+              : '0 1px 2px rgba(27,56,40,0.05), 0 8px 24px rgba(27,56,40,0.08)',
+        transform: bare && hovered ? 'translateY(-3px)' : undefined,
+        transition: 'box-shadow 240ms ease, transform 260ms cubic-bezier(0.22,1,0.36,1)',
       }}
     >
       <style>{LISTING_CSS}</style>
@@ -409,8 +436,11 @@ export function ConferenceCard({
       <div style={{ position: 'relative' }}>
         <div
           style={{
-            position: 'relative', aspectRatio: '3 / 2', borderRadius: '16px', overflow: 'hidden',
-            background: conf.banner_url ? '#E4DCCB' : `linear-gradient(135deg, ${p0} 0%, ${p1} 100%)`,
+            position: 'relative', aspectRatio: bare ? '4 / 3' : '3 / 2',
+            borderRadius: bare ? '20px 20px 0 0' : '16px', overflow: 'hidden',
+            background: bare
+              ? (hasBanner ? '#EFEBE3' : `linear-gradient(135deg, ${p0} 0%, ${p1} 100%)`)
+              : conf.banner_url ? '#E4DCCB' : `linear-gradient(135deg, ${p0} 0%, ${p1} 100%)`,
           }}
         >
           {conf.banner_url ? (
@@ -422,10 +452,28 @@ export function ConferenceCard({
               className="gv-listing-photo"
               style={{
                 position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
-                transform: hovered ? 'scale(1.04)' : 'scale(1)',
+                transform: hovered ? (bare ? 'scale(1.03)' : 'scale(1.04)') : 'scale(1)',
                 transition: 'transform 600ms cubic-bezier(0.22,1,0.36,1)',
               }}
             />
+          ) : bare ? (
+            // No banner on Explore: the logo, large, centred on a pale fill.
+            <div
+              className="gv-listing-photo"
+              style={{
+                position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transform: hovered ? 'scale(1.03)' : 'scale(1)',
+                transition: 'transform 600ms cubic-bezier(0.22,1,0.36,1)',
+              }}
+            >
+              <LogoDisc
+                src={conf.logo_url}
+                alt={conf.acronym}
+                size={dense ? 96 : 112}
+                fallbackText={initials}
+                style={{ border: '4px solid #FFFFFF', boxShadow: '0 8px 22px rgba(16,28,21,0.14)' }}
+              />
+            </div>
           ) : (
             <span
               aria-hidden
@@ -446,21 +494,25 @@ export function ConferenceCard({
           )}
         </div>
         {/* The conference's own logo, over the photo's lower edge */}
-        <div style={{ position: 'absolute', left: '12px', bottom: dense ? '-22px' : '-26px', zIndex: 2 }}>
-          <LogoDisc
-            src={conf.logo_url}
-            alt={conf.acronym}
-            size={dense ? 48 : 56}
-            fallbackText={initials}
-            style={{ border: '3px solid #FFFFFF', boxShadow: '0 6px 14px rgba(16,28,21,0.20)' }}
-          />
-        </div>
+        {edgeLogo && (
+          <div style={{ position: 'absolute', left: bare ? '16px' : '12px', bottom: dense ? '-22px' : '-26px', zIndex: 2 }}>
+            <LogoDisc
+              src={conf.logo_url}
+              alt={conf.acronym}
+              size={dense ? 48 : 56}
+              fallbackText={initials}
+              style={{ border: '3px solid #FFFFFF', boxShadow: '0 6px 14px rgba(16,28,21,0.20)' }}
+            />
+          </div>
+        )}
       </div>
 
       <div
         style={{
           display: 'flex', flexDirection: 'column', flex: '1 1 auto',
-          padding: dense ? '30px 7px 7px' : '34px 8px 8px',
+          padding: bare
+            ? (edgeLogo ? (dense ? '30px 14px 14px' : '36px 16px 16px') : (dense ? '14px 14px 14px' : '16px 16px 16px'))
+            : dense ? '30px 7px 7px' : '34px 8px 8px',
           fontFamily: "var(--font-brand), sans-serif",
         }}
       >
@@ -550,14 +602,16 @@ export function ConferenceCard({
       onClick={onClick}
       onMouseEnter={onHover}
       onMouseLeave={onLeave}
-      className="block h-full rounded-[22px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2"
+      className={`block h-full ${bare ? 'rounded-[20px]' : 'rounded-[22px]'} focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2`}
       style={{ textDecoration: 'none', color: 'inherit' }}
     >
       {card}
     </Link>
   ) : card;
 
-  if (!glowing) return listing;
+  // The Explore listing carries its spotlight as the gold edge and glow on
+  // the card itself; no gavel disc on the corner.
+  if (!glowing || bare) return listing;
 
   // goldGlow: positioned wrapper carries the hover lift and hosts the gavel
   // disc as a SIBLING of the article, above it in z-order, the article keeps
@@ -688,7 +742,8 @@ function ApplyButton({ applied = false, member = false }: { applied?: boolean; m
 
 /** The listing card's grey skeleton: the same shape (inset 3:2 cover, logo
  *  disc over its edge, the text rows), for loading grids. */
-export function ConferenceCardSkeleton() {
+export function ConferenceCardSkeleton({ variant = 'card' }: { variant?: 'card' | 'listing' } = {}) {
+  const bare = variant === 'listing';
   const bar = (w: string, h: number, mt: number) => (
     <div className="animate-pulse" style={{ width: w, height: `${h}px`, marginTop: `${mt}px`, borderRadius: '8px', backgroundColor: '#ECE6D9' }} />
   );
@@ -696,15 +751,15 @@ export function ConferenceCardSkeleton() {
     <div
       aria-hidden
       style={{
-        backgroundColor: '#FFFFFF', borderRadius: '22px', padding: '8px',
-        boxShadow: '0 1px 2px rgba(27,56,40,0.05), 0 8px 24px rgba(27,56,40,0.08)',
+        backgroundColor: '#FFFFFF', borderRadius: bare ? '20px' : '22px', padding: bare ? 0 : '8px',
+        boxShadow: bare ? LISTING_SHADOW : '0 1px 2px rgba(27,56,40,0.05), 0 8px 24px rgba(27,56,40,0.08)',
       }}
     >
       <div style={{ position: 'relative' }}>
-        <div className="animate-pulse" style={{ aspectRatio: '3 / 2', borderRadius: '16px', backgroundColor: '#E4DCCB' }} />
-        <div style={{ position: 'absolute', left: '12px', bottom: '-26px', width: '56px', height: '56px', borderRadius: '9999px', backgroundColor: '#DDD4C0', border: '3px solid #FFFFFF' }} />
+        <div className="animate-pulse" style={{ aspectRatio: bare ? '4 / 3' : '3 / 2', borderRadius: bare ? '20px 20px 0 0' : '16px', backgroundColor: bare ? '#EFEBE3' : '#E4DCCB' }} />
+        <div style={{ position: 'absolute', left: bare ? '16px' : '12px', bottom: '-26px', width: '56px', height: '56px', borderRadius: '9999px', backgroundColor: '#DDD4C0', border: '3px solid #FFFFFF' }} />
       </div>
-      <div style={{ padding: '34px 8px 10px' }}>
+      <div style={{ padding: bare ? '36px 16px 16px' : '34px 8px 10px' }}>
         {bar('55%', 18, 0)}
         {bar('80%', 12, 8)}
         {bar('65%', 12, 12)}

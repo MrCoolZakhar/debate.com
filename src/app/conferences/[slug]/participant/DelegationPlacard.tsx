@@ -16,7 +16,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Users2 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { SectionCard, OUTFIT, CHIP_STYLES, derivePaymentChip } from './shared';
+import { SectionCard, OUTFIT, PaymentChipMark, derivePaymentChip } from './shared';
 
 export interface DelegationPlacardProps {
   societyId: string | null;
@@ -83,12 +83,7 @@ export default function DelegationPlacard({ societyId, paymentStatus, selfPaid, 
         <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: 0 }}>
           DELEGATION
         </p>
-        <span
-          className="px-2.5 py-0.5 rounded-full"
-          style={{ ...CHIP_STYLES[chip], fontSize: '10px', fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.08em' }}
-        >
-          {chip}
-        </span>
+        <PaymentChipMark chip={chip} />
       </div>
       <p className="font-bold text-[15px]" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
         {societyName ?? 'Delegation'}

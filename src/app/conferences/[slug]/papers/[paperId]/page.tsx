@@ -10,7 +10,8 @@
 import AuthLink from '@/components/auth/AuthLink';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Check, Download, ExternalLink, FileText, Send, X } from 'lucide-react';
+import { ArrowLeft, Check, CheckCircle2, Clock, Download, Eye, ExternalLink, FileText, Hourglass, Send, X, XCircle } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
@@ -75,20 +76,23 @@ interface ChatMessage {
   profiles: { display_name: string; avatar_url: string | null } | null;
 }
 
-const STATUS_STYLES: Record<string, { bg: string; color: string }> = {
-  submitted: { bg: 'rgba(238,217,138,0.2)', color: '#B8844A' },
-  reviewed: { bg: 'rgba(154,138,120,0.15)', color: '#6E5F4E' },
-  approved: { bg: 'rgba(61,122,82,0.12)', color: '#3D7A52' },
-  rejected: { bg: 'rgba(139,32,32,0.1)', color: '#8B2020' },
+// State marks are an icon plus a plain word (CLAUDE.md §8), no pill.
+const STATUS_STYLES: Record<string, { color: string; icon: LucideIcon }> = {
+  submitted: { color: '#8A6614', icon: Clock },
+  reviewed: { color: '#6E5F4E', icon: Eye },
+  approved: { color: '#2A5A3C', icon: CheckCircle2 },
+  rejected: { color: '#8B2020', icon: XCircle },
 };
 
 function StatusBadge({ status }: { status: string }) {
   const s = STATUS_STYLES[status.toLowerCase()] ?? STATUS_STYLES.submitted;
+  const Icon = s.icon;
   return (
     <span
-      className="px-3 py-1 rounded-full flex-shrink-0"
-      style={{ backgroundColor: s.bg, color: s.color, fontSize: 11, fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.06em' }}
+      className="inline-flex items-center gap-1 flex-shrink-0"
+      style={{ color: s.color, fontSize: 12.5, fontFamily: OUTFIT, fontWeight: 700 }}
     >
+      <Icon size={15} strokeWidth={2.2} aria-hidden />
       {status.charAt(0).toUpperCase() + status.slice(1)}
     </span>
   );
@@ -518,9 +522,10 @@ export default function PositionPaperPage() {
               <div className="flex items-center gap-2 flex-wrap">
                 {late && (
                   <span
-                    className="px-3 py-1 rounded-full"
-                    style={{ backgroundColor: 'rgba(184,132,74,0.16)', color: '#8A5A2E', fontSize: 11, fontFamily: OUTFIT, fontWeight: 700 }}
+                    className="inline-flex items-center gap-1"
+                    style={{ color: '#8A5A2E', fontSize: 12.5, fontFamily: OUTFIT, fontWeight: 700 }}
                   >
+                    <Hourglass size={15} strokeWidth={2.2} aria-hidden />
                     Late
                   </span>
                 )}

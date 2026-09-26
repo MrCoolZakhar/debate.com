@@ -2,8 +2,8 @@
 
 // Shared "a conference I'm personally connected to" card: acronym-forward name,
 // floating logo, countdown chip, date + location, role badge(s). Used by
-// /account/calendar (which merges every role a user holds into one card),
-// /account/conferences and /account/conferences (one card per tab, one role each).
+// /account/conferences, My conferences (which merges every role a user holds into one card),
+// (The archived role-tab page drew one card per tab, one role each.)
 //
 // Redesigned to match the organiser-side neumorphism (see components/neu.tsx):
 // a soft extruded ivory NeuCard surface, denser padding so more cards fit per

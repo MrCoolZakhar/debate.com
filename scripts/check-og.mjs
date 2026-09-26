@@ -43,7 +43,6 @@ const ROUTES = [
   { path: '/' },
   { path: '/sessions' },
   { path: '/about' },
-  { path: '/contact' },
   { path: '/blog' },
   { path: '/blog/mun-motions-explained' },
   { path: '/blog/how-to-run-mun-committee' },

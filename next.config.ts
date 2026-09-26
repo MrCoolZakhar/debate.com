@@ -40,11 +40,19 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       { source: '/account', destination: '/account/profile', permanent: true },
-      { source: '/account/points', destination: '/account/manage/credits', permanent: true },
-      { source: '/account/manage', destination: '/account/manage/credits', permanent: true },
+      { source: '/account/points', destination: '/account/manage#credits', permanent: true },
+      // Manage account is ONE page since 26 Sep 2026 (/account/manage). The
+      // old /account/manage/credits, /subscription and /promo are NOT
+      // redirected: they render the same page scrolled to their section,
+      // because browsers cached the old 308 /account/manage ->
+      // /account/manage/credits, and a redirect back would loop for them.
+      // The conference calendar became My conferences (26 Sep 2026).
+      { source: '/account/calendar', destination: '/account/conferences', permanent: false },
       { source: '/account/unlimited', destination: '/pricing/subscription', permanent: true },
       { source: '/my-conferences', destination: '/account/conferences', permanent: true },
       { source: '/pricing', destination: '/pricing/credits', permanent: true },
+      // Contact lives at the top of /about since 26 Sep 2026.
+      { source: '/contact', destination: '/about', permanent: true },
       // The conference map is archived (src/app/_archive/conferences-map, 25 Sep 2026).
       { source: '/conferences/map', destination: '/conferences/explore', permanent: false },
     ];

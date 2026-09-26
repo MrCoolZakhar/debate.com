@@ -14,7 +14,7 @@
 
 import { notifyErr, clearErr } from '@/lib/appNotify';
 import { useState, useEffect, useCallback } from 'react';
-import { Dices, Plus, Ticket, Trash2 } from 'lucide-react';
+import { Ban, Dices, Plus, Ticket, Trash2 } from 'lucide-react';
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -483,8 +483,9 @@ export default function VouchersSection({
                         />
                       )}
                       {exhausted && (
-                        <span style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', color: NEU.amber }}>
-                          FULL
+                        <span className="inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#9A6B2F' }}>
+                          <Ban size={14} strokeWidth={2.4} aria-hidden="true" />
+                          Full
                         </span>
                       )}
                     </span>

@@ -1,6 +1,5 @@
-// Instant route-level loading UI for the conferences explore page. Replaces the
-// previously frozen prior page during navigation with an immediate ivory shell,
-// matching the client's own loading background.
+// Instant route-level loading UI for the conferences explore page: the brand
+// ivory ground the page itself draws, so navigation never flashes another colour.
 import Loader from '@/components/Loader';
 
 export default function Loading() {

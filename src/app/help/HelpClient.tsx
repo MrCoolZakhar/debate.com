@@ -168,7 +168,7 @@ export default function HelpClient() {
           <div className="gv-help-wrap">
             <h1 className="gv-help-h1">How can we <GoldWord tone="light">help</GoldWord></h1>
             <p className="gv-help-lead">
-              Search or browse by section, or <Link href="/contact" className={FOCUS_ON_IVORY}>contact us</Link>
+              Search or browse by section, or <Link href="/about" className={FOCUS_ON_IVORY}>contact us</Link>
             </p>
             <div className="gv-help-row">
               <div className="gv-help-search">
@@ -193,7 +193,7 @@ export default function HelpClient() {
                   </button>
                 )}
               </div>
-              <Link href="/contact" className={`gv-help-contact ${FOCUS_ON_IVORY}`}>Contact us</Link>
+              <Link href="/about" className={`gv-help-contact ${FOCUS_ON_IVORY}`}>Contact us</Link>
             </div>
           </div>
         </header>
@@ -231,7 +231,7 @@ export default function HelpClient() {
                 <section className="gv-help-results" aria-label="Search results">
                   {hits.length === 0 ? (
                     <p className="gv-help-empty" aria-live="polite">
-                      No matches. <Link href="/contact" className={FOCUS}>Contact us</Link> and a person answers
+                      No matches. <Link href="/about" className={FOCUS}>Contact us</Link> and a person answers
                     </p>
                   ) : (
                     <>

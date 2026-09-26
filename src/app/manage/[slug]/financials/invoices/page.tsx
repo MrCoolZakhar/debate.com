@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { notifyErr, clearErr } from '@/lib/appNotify';
-import { Check, Clock, CreditCard, Eye, Receipt, RotateCcw, User, X } from 'lucide-react';
+import { Ban, Check, CheckCircle2, CircleDashed, Clock, CreditCard, Eye, MinusCircle, PenLine, Receipt, RotateCcw, User, X, XCircle, type LucideIcon } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -27,7 +27,7 @@ import {
 import {
   NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuCard, NeuInset, NeuIconDisc,
 } from '@/components/neu';
-import { inputStyle, mutedCaption, formatRowDate, roleLabel } from '../shared';
+import { inputStyle, mutedCaption, formatRowDate, roleLabel, sentenceCase } from '../shared';
 import { friendlyError } from '@/lib/friendlyError';
 
 const first = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null));
@@ -60,14 +60,21 @@ const INDEPENDENT_DELEGATION = '__independent__';
 
 const STATUS_OPTIONS: InvoiceStatus[] = ['open', 'partial', 'settled', 'waived', 'void'];
 
+const INVOICE_STATUS_ICON: Record<InvoiceStatus, LucideIcon> = {
+  open: Clock, partial: CircleDashed, settled: CheckCircle2, waived: MinusCircle, void: Ban,
+};
+
+/** Invoice status as an icon plus a plain word (no pill, no capitals). */
 function StatusPill({ status }: { status: InvoiceStatus }) {
   const s = INVOICE_STATUS_STYLE[status];
+  const Icon = INVOICE_STATUS_ICON[status] ?? Clock;
   return (
     <span
-      className="px-2.5 py-1 rounded-full flex-shrink-0"
-      style={{ backgroundColor: s.bg, color: s.color, fontSize: 10, fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.06em' }}
+      className="inline-flex items-center gap-1 flex-shrink-0"
+      style={{ color: s.color, fontSize: 12, fontFamily: OUTFIT, fontWeight: 700, whiteSpace: 'nowrap' }}
     >
-      {INVOICE_STATUS_LABEL[status]}
+      <Icon size={14} strokeWidth={2.4} aria-hidden="true" />
+      {sentenceCase(INVOICE_STATUS_LABEL[status])}
     </span>
   );
 }
@@ -111,20 +118,21 @@ const BATCH_METHOD_LABEL: Record<string, string> = {
   stripe: 'STRIPE', manual: 'MANUAL', organizer: 'ORGANIZER',
 };
 
-const BATCH_STATUS_STYLES: Record<string, { bg: string; color: string; label: string }> = {
-  pending: { bg: 'rgba(184,132,74,0.18)', color: '#8A6614', label: 'AWAITING REVIEW' },
-  paid: { bg: 'rgba(61,122,82,0.13)', color: '#2A5A3C', label: 'PAID' },
-  rejected: { bg: 'rgba(139,32,32,0.1)', color: '#8B2020', label: 'REJECTED' },
+const BATCH_STATUS_STYLES: Record<string, { color: string; label: string; icon: LucideIcon }> = {
+  pending: { color: '#8A6614', label: 'Awaiting review', icon: Clock },
+  paid: { color: '#2A5A3C', label: 'Paid', icon: CheckCircle2 },
+  rejected: { color: '#8B2020', label: 'Rejected', icon: XCircle },
 };
 
 function TxStatusPill({ status }: { status: string }) {
   const s = BATCH_STATUS_STYLES[status] ?? BATCH_STATUS_STYLES.pending;
+  const Icon = s.icon;
   return (
     <span
-      className="px-2.5 py-1 rounded-full flex-shrink-0 inline-flex items-center gap-1"
-      style={{ backgroundColor: s.bg, color: s.color, fontSize: 10, fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.06em' }}
+      className="flex-shrink-0 inline-flex items-center gap-1"
+      style={{ color: s.color, fontSize: 12, fontFamily: OUTFIT, fontWeight: 700, whiteSpace: 'nowrap' }}
     >
-      {status === 'pending' && <Clock size={10} strokeWidth={2.8} />}
+      <Icon size={14} strokeWidth={2.4} aria-hidden="true" />
       {s.label}
     </span>
   );
@@ -680,11 +688,13 @@ export default function FinancialsInvoicesPage() {
                       </div>
 
                       <span
-                        className="px-2.5 py-1 rounded-full flex-shrink-0 inline-flex items-center gap-1"
-                        style={{ backgroundColor: 'rgba(154,138,120,0.13)', color: '#6B5E4E', fontSize: 9, fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.06em' }}
+                        className="flex-shrink-0 inline-flex items-center gap-1"
+                        style={{ color: NEU.inkSoft, fontSize: 12, fontFamily: OUTFIT, fontWeight: 700, whiteSpace: 'nowrap' }}
                       >
-                        {batch.method === 'stripe' && <CreditCard size={10} strokeWidth={2.5} />}
-                        {BATCH_METHOD_LABEL[batch.method] ?? batch.method.toUpperCase()}
+                        {batch.method === 'stripe'
+                          ? <CreditCard size={14} strokeWidth={2.4} aria-hidden="true" />
+                          : <PenLine size={14} strokeWidth={2.4} aria-hidden="true" />}
+                        {sentenceCase(BATCH_METHOD_LABEL[batch.method] ?? batch.method)}
                       </span>
 
                       <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, color: NEU.ink, fontVariantNumeric: 'tabular-nums', minWidth: 70, textAlign: 'right' }}>

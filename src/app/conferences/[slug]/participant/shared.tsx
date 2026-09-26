@@ -6,6 +6,8 @@
 // ParticipantView and an import back the other way would cycle.
 
 import { useEffect, useState } from 'react';
+import { CheckCircle2, CircleDashed, MinusCircle, XCircle } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 
@@ -101,14 +103,29 @@ export function statusPriority(status: string): number {
 
 export type PaymentChip = 'PAID' | 'COVERED' | 'WAIVED' | 'PARTIAL' | 'UNPAID' | 'REFUNDED';
 
-export const CHIP_STYLES: Record<PaymentChip, { bg: string; color: string }> = {
-  PAID: { bg: 'rgba(61,122,82,0.13)', color: '#2A5A3C' },
-  COVERED: { bg: 'rgba(61,122,82,0.13)', color: '#2A6858' },
-  WAIVED: { bg: 'rgba(154,138,120,0.16)', color: '#6B5F52' },
-  PARTIAL: { bg: 'rgba(238,217,138,0.35)', color: '#8A6614' },
-  UNPAID: { bg: 'rgba(139,32,32,0.1)', color: '#8B2020' },
-  REFUNDED: { bg: 'rgba(154,138,120,0.16)', color: '#6B5F52' },
+// Drawn as an icon plus a plain word (CLAUDE.md §8), never a capitals pill.
+export const CHIP_STYLES: Record<PaymentChip, { color: string; icon: LucideIcon; word: string }> = {
+  PAID: { color: '#2A5A3C', icon: CheckCircle2, word: 'Paid' },
+  COVERED: { color: '#2A6858', icon: CheckCircle2, word: 'Covered' },
+  WAIVED: { color: '#6B5F52', icon: MinusCircle, word: 'Waived' },
+  PARTIAL: { color: '#8A6614', icon: CircleDashed, word: 'Partial' },
+  UNPAID: { color: '#8B2020', icon: XCircle, word: 'Unpaid' },
+  REFUNDED: { color: '#6B5F52', icon: MinusCircle, word: 'Refunded' },
 };
+
+export function PaymentChipMark({ chip, size = 'md' }: { chip: PaymentChip; size?: 'sm' | 'md' }) {
+  const c = CHIP_STYLES[chip];
+  const Icon = c.icon;
+  return (
+    <span
+      className="inline-flex items-center gap-1 flex-shrink-0"
+      style={{ color: c.color, fontSize: size === 'sm' ? 11.5 : 12.5, fontFamily: OUTFIT, fontWeight: 700 }}
+    >
+      <Icon size={size === 'sm' ? 14 : 15} strokeWidth={2.2} aria-hidden />
+      {c.word}
+    </span>
+  );
+}
 
 export function derivePaymentChip(paymentStatus: string, selfPaid: boolean, amountPaid: number): PaymentChip {
   if (paymentStatus === 'paid') return selfPaid ? 'PAID' : 'COVERED';

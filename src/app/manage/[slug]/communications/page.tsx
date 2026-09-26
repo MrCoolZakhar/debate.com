@@ -7,7 +7,7 @@ import {
   Mail, AlertTriangle, Send, Bell, Copy, X, ChevronDown, ChevronLeft, ChevronRight, Trash2,
   BadgeCheck, MessageSquare, CalendarDays, ArrowRight, Compass, Wrench,
   Zap, Clock, BookOpen, KeyRound, PenLine, Plus, Inbox, Users, CheckCircle2,
-  CreditCard, Globe, FileText, Mic, HelpCircle, Info,
+  CreditCard, Globe, FileText, Mic, HelpCircle, Info, Repeat, CircleDot, CheckCheck, XCircle, CircleDashed,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
@@ -263,10 +263,10 @@ interface InboxProfile {
   avatar_url: string | null;
 }
 
-const KIND_CHIP: Record<string, { label: string; bg: string; color: string }> = {
-  question: { label: 'QUESTION', bg: 'rgba(27,56,40,0.08)', color: '#1B3828' },
-  swap_request: { label: 'SWAP REQUEST', bg: 'rgba(182,135,31,0.16)', color: GOLD_INK },
-  swap_notice: { label: 'SWAP', bg: 'rgba(154,138,120,0.16)', color: '#6B5F52' },
+const KIND_CHIP: Record<string, { label: string; color: string; Icon: typeof HelpCircle }> = {
+  question: { label: 'Question', color: '#1B3828', Icon: HelpCircle },
+  swap_request: { label: 'Swap request', color: GOLD_INK, Icon: Repeat },
+  swap_notice: { label: 'Swap', color: '#6B5F52', Icon: Repeat },
 };
 
 const INBOX_STATE_OPTIONS = [
@@ -791,16 +791,16 @@ function toggleInSet<T>(set: Set<T>, value: T): Set<T> {
 // Dots keep their status hues; TEXT uses the inks that actually pass on the
 // tinted chip surfaces (see ../live/tokens for the measurements — #3D7A52 is
 // 4.30:1 and #B6871F 2.72:1, both fail as text).
-const STATUS_COLORS: Record<string, { dot: string; text: string; bg: string }> = {
-  sent:      { dot: '#3D7A52', text: GREEN_INK, bg: 'rgba(61,122,82,0.1)' },
-  scheduled: { dot: '#B6871F', text: GOLD_INK, bg: 'rgba(182,135,31,0.1)' },
-  draft:     { dot: '#DDD4C0', text: SOFT, bg: 'rgba(154,138,120,0.1)' },
-  failed:    { dot: '#8B2020', text: RED, bg: 'rgba(139,32,32,0.1)' },
-  pending:   { dot: '#B6871F', text: GOLD_INK, bg: 'rgba(182,135,31,0.1)' },
+const STATUS_COLORS: Record<string, { text: string; Icon: typeof Clock }> = {
+  sent:      { text: GREEN_INK, Icon: CheckCircle2 },
+  scheduled: { text: GOLD_INK, Icon: Clock },
+  draft:     { text: SOFT, Icon: PenLine },
+  failed:    { text: RED, Icon: XCircle },
+  pending:   { text: GOLD_INK, Icon: Clock },
 };
 
 function outboxStatusColor(status: string) {
-  return STATUS_COLORS[status] ?? STATUS_COLORS.draft;
+  return STATUS_COLORS[status] ?? { text: SOFT, Icon: CircleDashed };
 }
 
 // ── Small shared bits ─────────────────────────────────────────────────────────
@@ -3560,10 +3560,11 @@ function CommunicationsPageInner() {
             </span>
           )}
           <span
-            className="rounded-md px-2 py-0.5 flex-shrink-0"
-            style={{ fontSize: 10, fontWeight: 700, fontFamily: OUTFIT, backgroundColor: rc.bg, color: rc.text, border: `1px solid ${rc.dot}55` }}
+            className="inline-flex items-center gap-1 flex-shrink-0"
+            style={{ fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, color: rc.text }}
           >
-            {r.status}
+            <rc.Icon size={14} strokeWidth={2.2} aria-hidden />
+            {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
           </span>
         </div>
       </div>
@@ -3712,9 +3713,10 @@ function CommunicationsPageInner() {
           </span>
           <span className="flex items-center flex-wrap gap-x-1.5 gap-y-0.5" style={{ marginBlockStart: 3 }}>
             <span
-              className="rounded-full px-2 py-0.5 flex-shrink-0"
-              style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.05em', fontFamily: OUTFIT, backgroundColor: kindChip.bg, color: kindChip.color }}
+              className="inline-flex items-center gap-1 flex-shrink-0"
+              style={{ fontSize: 11.5, fontWeight: 700, fontFamily: OUTFIT, color: kindChip.color }}
             >
+              <kindChip.Icon size={14} strokeWidth={2.2} aria-hidden />
               {kindChip.label}
             </span>
             <span className="min-w-0 [overflow-wrap:anywhere]" style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700 }}>
@@ -4124,10 +4126,11 @@ function CommunicationsPageInner() {
                                 </span>
                                 {ev.recurring && (
                                   <span
-                                    className="rounded-full px-2 py-0.5 flex-shrink-0"
-                                    style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.05em', fontFamily: OUTFIT, backgroundColor: 'rgba(182,135,31,0.16)', color: GOLD_INK }}
+                                    className="inline-flex items-center gap-1 flex-shrink-0"
+                                    style={{ fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, color: GOLD_INK }}
                                   >
-                                    REMINDER
+                                    <Bell size={14} strokeWidth={2.2} aria-hidden />
+                                    Reminder
                                   </span>
                                 )}
                               </span>
@@ -4365,17 +4368,23 @@ function CommunicationsPageInner() {
                   <div className="flex items-start justify-between gap-3 mb-1">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 mb-1">
+                        {(() => { const KindIcon = selectedKindChip!.Icon; return (
                         <span
-                          className="rounded-full px-2 py-0.5 flex-shrink-0"
-                          style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', fontFamily: OUTFIT, backgroundColor: selectedKindChip!.bg, color: selectedKindChip!.color }}
+                          className="inline-flex items-center gap-1 flex-shrink-0"
+                          style={{ fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, color: selectedKindChip!.color }}
                         >
+                          <KindIcon size={14} strokeWidth={2.2} aria-hidden />
                           {selectedKindChip!.label}
                         </span>
+                        ); })()}
                         <span
-                          className="rounded-full px-2 py-0.5 flex-shrink-0"
-                          style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', fontFamily: OUTFIT, backgroundColor: selectedRequest.status === 'open' ? 'rgba(61,122,82,0.13)' : 'rgba(154,138,120,0.16)', color: selectedRequest.status === 'open' ? GREEN_INK : '#6B5F52' }}
+                          className="inline-flex items-center gap-1 flex-shrink-0"
+                          style={{ fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, color: selectedRequest.status === 'open' ? GREEN_INK : '#6B5F52' }}
                         >
-                          {selectedRequest.status.toUpperCase()}
+                          {selectedRequest.status === 'open'
+                            ? <CircleDot size={14} strokeWidth={2.2} aria-hidden />
+                            : <CheckCheck size={14} strokeWidth={2.2} aria-hidden />}
+                          {selectedRequest.status.charAt(0).toUpperCase() + selectedRequest.status.slice(1)}
                         </span>
                       </div>
                       <p className="font-black text-base" style={{ color: '#1C1410', fontFamily: OUTFIT, textWrap: 'balance' }}>{selectedRequest.subject}</p>
@@ -4999,10 +5008,11 @@ function CommunicationsPageInner() {
                             {g.label}
                           </p>
                           <span
-                            className="flex-shrink-0 rounded-md px-2 py-0.5"
-                            style={{ fontSize: 10, fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.06em', backgroundColor: 'rgba(182,135,31,0.12)', color: GOLD_INK, border: '1px solid rgba(182,135,31,0.3)' }}
+                            className="flex-shrink-0 inline-flex items-center gap-1"
+                            style={{ fontSize: 12, fontFamily: OUTFIT, fontWeight: 700, color: GOLD_INK }}
                           >
-                            AUTOMATIC
+                            <Zap size={14} strokeWidth={2.2} aria-hidden />
+                            Automatic
                           </span>
                         </div>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5" style={{ fontSize: 12, color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
@@ -5047,9 +5057,10 @@ function CommunicationsPageInner() {
                           {email.subject || '(No subject)'}
                         </p>
                         <span
-                          className="flex-shrink-0 rounded-md px-2.5 py-0.5"
-                          style={{ fontSize: 11, fontFamily: OUTFIT, fontWeight: 700, backgroundColor: sc.bg, color: sc.text, border: `1px solid ${sc.dot}55` }}
+                          className="flex-shrink-0 inline-flex items-center gap-1"
+                          style={{ fontSize: 12, fontFamily: OUTFIT, fontWeight: 700, color: sc.text }}
                         >
+                          <sc.Icon size={14} strokeWidth={2.2} aria-hidden />
                           {email.status.charAt(0).toUpperCase() + email.status.slice(1)}
                         </span>
                       </div>

@@ -6,7 +6,7 @@
 // except for the one explicit side effect: a full grant also waives payment.
 
 import { useCallback, useEffect, useState } from 'react';
-import { Check, HeartHandshake, TriangleAlert, X } from 'lucide-react';
+import { Archive, Check, CheckCircle2, Clock, HeartHandshake, TriangleAlert, Users, X, XCircle } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
@@ -66,19 +66,21 @@ function roleLabel(role: string) {
   return map[role] ?? role;
 }
 
-const STATUS_STYLES: Record<AidRequestRow['status'], { bg: string; color: string; border: string; label: string }> = {
-  pending: { bg: 'rgba(184,132,74,0.16)', color: '#9A6B2F', border: 'rgba(184,132,74,0.42)', label: 'PENDING' },
-  approved: { bg: 'rgba(61,122,82,0.17)', color: '#2A5A3C', border: 'rgba(61,122,82,0.45)', label: 'APPROVED' },
-  denied: { bg: 'rgba(154,138,120,0.16)', color: '#6B5F52', border: 'rgba(154,138,120,0.35)', label: 'DENIED' },
+const STATUS_STYLES: Record<AidRequestRow['status'], { color: string; label: string; Icon: typeof Clock }> = {
+  pending: { color: '#9A6B2F', label: 'Pending', Icon: Clock },
+  approved: { color: '#2A5A3C', label: 'Approved', Icon: CheckCircle2 },
+  denied: { color: '#8B2020', label: 'Denied', Icon: XCircle },
 };
 
 function StatusChip({ status }: { status: AidRequestRow['status'] }) {
   const s = STATUS_STYLES[status];
+  const Icon = s.Icon;
   return (
     <span
-      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold flex-shrink-0"
-      style={{ fontSize: 9, fontFamily: OUTFIT, letterSpacing: '0.08em', backgroundColor: s.bg, color: s.color, border: `1px solid ${s.border}` }}
+      className="inline-flex items-center gap-1 font-semibold flex-shrink-0"
+      style={{ fontSize: 12, fontFamily: OUTFIT, color: s.color }}
     >
+      <Icon size={14} strokeWidth={2.2} aria-hidden="true" />
       {s.label}
     </span>
   );
@@ -89,10 +91,11 @@ function StatusChip({ status }: { status: AidRequestRow['status'] }) {
 function DelegationChip() {
   return (
     <span
-      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold"
-      style={{ fontSize: 9, fontFamily: OUTFIT, letterSpacing: '0.08em', backgroundColor: '#1B3828', color: '#EED98A', border: '1px solid #1B3828' }}
+      className="inline-flex items-center gap-1 font-semibold"
+      style={{ fontSize: 12, fontFamily: OUTFIT, color: NEU.forest }}
     >
-      DELEGATION
+      <Users size={14} strokeWidth={2.2} aria-hidden="true" />
+      Delegation
     </span>
   );
 }
@@ -463,10 +466,11 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
                         {q.label}
                         {q.archived && (
                           <span
-                            className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-                            style={{ color: '#9A8A78', backgroundColor: 'rgba(154,138,120,0.14)', letterSpacing: '0.04em' }}
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold"
+                            style={{ color: NEU.inkSoft }}
                           >
-                            ARCHIVED
+                            <Archive size={13} strokeWidth={2.2} aria-hidden="true" />
+                            Archived
                           </span>
                         )}
                       </p>

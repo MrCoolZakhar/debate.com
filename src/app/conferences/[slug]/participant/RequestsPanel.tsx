@@ -8,7 +8,8 @@
 // are read-only here, no attachments).
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { MessageSquare, ChevronLeft, ChevronRight, Plus, Send, ArrowLeftRight, BadgeCheck, CalendarDays, ArrowRight } from 'lucide-react';
+import { MessageSquare, ChevronLeft, ChevronRight, Plus, Send, ArrowLeftRight, BadgeCheck, CalendarDays, ArrowRight, HelpCircle, Repeat, CircleDot, CheckCircle2 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { notifyOrganizersOfRequest } from '@/lib/emailEvents';
@@ -74,15 +75,16 @@ function fmtTime(iso: string): string {
 }
 
 // Same kind/status colour language as the organizer inbox (communications/page.tsx).
-const KIND_CHIP: Record<string, { label: string; bg: string; color: string }> = {
-  question: { label: 'Question', bg: 'rgba(27,56,40,0.08)', color: '#1B3828' },
-  swap_request: { label: 'Swap request', bg: 'rgba(182,135,31,0.16)', color: '#8A6614' },
-  swap_notice: { label: 'Swap', bg: 'rgba(154,138,120,0.16)', color: '#6B5F52' },
+// Drawn as an icon plus a plain word (CLAUDE.md §8), never a pill.
+const KIND_CHIP: Record<string, { label: string; color: string; icon: LucideIcon }> = {
+  question: { label: 'Question', color: '#1B3828', icon: HelpCircle },
+  swap_request: { label: 'Swap request', color: '#8A6614', icon: Repeat },
+  swap_notice: { label: 'Swap', color: '#6B5F52', icon: Repeat },
 };
 
-const STATUS_CHIP: Record<string, { label: string; bg: string; color: string }> = {
-  open: { label: 'Open', bg: 'rgba(61,122,82,0.13)', color: '#2A5A3C' },
-  closed: { label: 'Closed', bg: 'rgba(154,138,120,0.16)', color: '#6B5F52' },
+const STATUS_CHIP: Record<string, { label: string; color: string; icon: LucideIcon }> = {
+  open: { label: 'Open', color: '#2A5A3C', icon: CircleDot },
+  closed: { label: 'Closed', color: '#6B5F52', icon: CheckCircle2 },
 };
 
 const STATE_OPTIONS = [
@@ -438,14 +440,18 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
 
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <span
+              className="inline-flex items-center gap-1"
               style={{ fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, color: selectedKindChip!.color }}
             >
+              {(() => { const I = selectedKindChip!.icon; return <I size={14} strokeWidth={2.2} aria-hidden />; })()}
               {selectedKindChip!.label}
             </span>
             <span aria-hidden style={{ color: NEU.muted, fontSize: 12 }}>·</span>
             <span
+              className="inline-flex items-center gap-1"
               style={{ fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, color: selectedStatusChip!.color }}
             >
+              {(() => { const I = selectedStatusChip!.icon; return <I size={14} strokeWidth={2.2} aria-hidden />; })()}
               {selectedStatusChip!.label}
             </span>
           </div>
@@ -690,14 +696,18 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
                     <div className="flex items-center gap-1">
                       <span
+                        className="inline-flex items-center gap-1"
                         style={{ fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, color: kindChip.color }}
                       >
+                        <kindChip.icon size={14} strokeWidth={2.2} aria-hidden />
                         {kindChip.label}
                       </span>
                       <span aria-hidden style={{ color: NEU.muted, fontSize: 12 }}>·</span>
                       <span
+                        className="inline-flex items-center gap-1"
                         style={{ fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, color: statusChip.color }}
                       >
+                        <statusChip.icon size={14} strokeWidth={2.2} aria-hidden />
                         {statusChip.label}
                       </span>
                     </div>

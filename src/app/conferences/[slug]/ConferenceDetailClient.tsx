@@ -4,7 +4,8 @@ import { openAuth } from '@/lib/authModal';
 import { Fragment, useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, Circle, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound, Gavel, Eye, ScrollText, CreditCard, Languages } from 'lucide-react';
+import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, Circle, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound, Gavel, Eye, ScrollText, CreditCard, Languages, Cake, Clock, CheckCircle2, Hourglass, XCircle, MinusCircle } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { committeeLanguageCode, committeeLanguageFlag } from '@/lib/committeeLanguage';
 import { CircleFlag } from '@/components/CircleFlag';
 import SiteNav from '@/components/SiteNav';
@@ -297,7 +298,7 @@ function MinAgeChip({ minAge, maxAge }: { minAge: number | null; maxAge: number 
   const label =
     minAge != null && maxAge != null ? `${minAge}–${maxAge}`
       : minAge != null ? `${minAge}+`
-        : `UP TO ${maxAge}`;
+        : `Up to ${maxAge}`;
   const requirement =
     minAge != null && maxAge != null ? `between ${minAge} and ${maxAge} years old`
       : minAge != null ? `at least ${minAge} years old`
@@ -305,21 +306,33 @@ function MinAgeChip({ minAge, maxAge }: { minAge: number | null; maxAge: number 
   return (
     <span
       title={`This conference requires delegates to be ${requirement} at its start date`}
-      className="flex-shrink-0 inline-flex items-center rounded-full"
+      className="flex-shrink-0 inline-flex items-center gap-1"
       style={{
-        padding: '3px 9px',
-        backgroundColor: 'rgba(238,217,138,0.14)',
-        border: '1px solid rgba(238,217,138,0.4)',
         color: 'var(--gv-on-main)',
         fontFamily: "var(--font-brand), sans-serif",
-        fontSize: '11px',
-        fontWeight: 800,
-        letterSpacing: '0.06em',
+        fontSize: '12.5px',
+        fontWeight: 700,
       }}
     >
+      <Cake size={14} strokeWidth={2.2} aria-hidden />
       {label}
     </span>
   );
+}
+
+/** An application status as an icon plus a plain word (CLAUDE.md §8), never a
+ *  capitals chip. Presentation only: the stored status value is untouched. */
+const APP_STATUS_MARK: Record<string, { word: string; icon: LucideIcon }> = {
+  submitted: { word: 'Submitted', icon: Clock },
+  accepted: { word: 'Accepted', icon: CheckCircle2 },
+  assigned: { word: 'Assigned', icon: CheckCircle2 },
+  'checked-in': { word: 'Checked in', icon: CheckCircle2 },
+  waitlisted: { word: 'Waitlisted', icon: Hourglass },
+  rejected: { word: 'Not accepted', icon: XCircle },
+  withdrawn: { word: 'Withdrawn', icon: MinusCircle },
+};
+function appStatusMark(status: string): { word: string; icon: LucideIcon } {
+  return APP_STATUS_MARK[status] ?? { word: status.charAt(0).toUpperCase() + status.slice(1).replace(/-/g, ' '), icon: Clock };
 }
 
 /** Big gold role glyph shown beside each role in the APPLY NOW picker.
@@ -2372,9 +2385,16 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                             <span className="text-[12px] font-semibold" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 90%, transparent)', fontFamily: "var(--font-brand), sans-serif" }}>
                               Also applied as {roleLabel(myApp.role)}
                             </span>
-                            <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.1em', color: 'var(--gv-on-main)' }}>
-                              {myApp.status.toUpperCase()}
-                            </span>
+                            {(() => {
+                              const m = appStatusMark(myApp.status);
+                              const Icon = m.icon;
+                              return (
+                                <span className="inline-flex items-center gap-1" style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '12px', color: 'var(--gv-on-main)' }}>
+                                  <Icon size={14} strokeWidth={2.2} aria-hidden />
+                                  {m.word}
+                                </span>
+                              );
+                            })()}
                           </div>
                         )}
                         <Link
@@ -2391,16 +2411,18 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     ) : myApp ? (
                       /* 2, Existing applicant/participant: status card, no apply buttons */
                       (() => {
-                        const STATUS_META: Record<string, { label: string; bg: string; color: string; hint: string }> = {
-                          submitted:    { label: 'SUBMITTED',    bg: 'rgba(238,217,138,0.15)', color: 'var(--gv-on-main)',              hint: 'Your application is under review.' },
-                          accepted:     { label: 'ACCEPTED',     bg: 'color-mix(in srgb, var(--gv-main-light) 35%, transparent)',   color: '#A8D5B8',              hint: 'You are in. Your allocation will follow.' },
-                          assigned:     { label: 'ASSIGNED',     bg: 'color-mix(in srgb, var(--gv-main-light) 35%, transparent)',   color: '#A8D5B8',              hint: '' },
-                          'checked-in': { label: 'CHECKED IN',   bg: 'color-mix(in srgb, var(--gv-main-light) 35%, transparent)',   color: '#A8D5B8',              hint: '' },
-                          waitlisted:   { label: 'WAITLISTED',   bg: 'rgba(237,231,216,0.12)', color: 'color-mix(in srgb, var(--gv-on-main) 80%, transparent)', hint: 'You are on the waitlist. We will notify you if a spot opens.' },
-                          rejected:     { label: 'NOT ACCEPTED', bg: 'rgba(139,32,32,0.35)',   color: '#E8A9A9',              hint: 'Your application was not accepted this time.' },
-                          withdrawn:    { label: 'WITHDRAWN',    bg: 'rgba(237,231,216,0.12)', color: 'color-mix(in srgb, var(--gv-on-main) 80%, transparent)', hint: 'You withdrew this application. Contact the organizing team if you want to take part after all.' },
+                        const STATUS_META: Record<string, { color: string; hint: string }> = {
+                          submitted:    { color: 'var(--gv-on-main)',              hint: 'Your application is under review.' },
+                          accepted:     { color: '#A8D5B8',              hint: 'You are in. Your allocation will follow.' },
+                          assigned:     { color: '#A8D5B8',              hint: '' },
+                          'checked-in': { color: '#A8D5B8',              hint: '' },
+                          waitlisted:   { color: 'color-mix(in srgb, var(--gv-on-main) 80%, transparent)', hint: 'You are on the waitlist. We will notify you if a spot opens.' },
+                          rejected:     { color: '#E8A9A9',              hint: 'Your application was not accepted this time.' },
+                          withdrawn:    { color: 'color-mix(in srgb, var(--gv-on-main) 80%, transparent)', hint: 'You withdrew this application. Contact the organizing team if you want to take part after all.' },
                         };
-                        const meta = STATUS_META[myApp.status] ?? { label: myApp.status.toUpperCase(), bg: 'rgba(237,231,216,0.12)', color: 'color-mix(in srgb, var(--gv-on-main) 80%, transparent)', hint: '' };
+                        const meta = STATUS_META[myApp.status] ?? { color: 'color-mix(in srgb, var(--gv-on-main) 80%, transparent)', hint: '' };
+                        const statusMark = appStatusMark(myApp.status);
+                        const StatusIcon = statusMark.icon;
                         const allocCountry = myAllocation ? getCountryByName(myAllocation.country_name) : null;
                         const allocFlag = allocCountry ? getFlagUrl(allocCountry.code) : null;
                         // The conference application fee (if any) is always
@@ -2435,10 +2457,11 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                 {roleLabel(myApp.role)}
                               </p>
                               <span
-                                className="flex-shrink-0"
-                                style={{ color: meta.color, fontFamily: "var(--font-brand), sans-serif", fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em' }}
+                                className="flex-shrink-0 inline-flex items-center gap-1"
+                                style={{ color: meta.color, fontFamily: "var(--font-brand), sans-serif", fontSize: '12.5px', fontWeight: 700 }}
                               >
-                                {meta.label}
+                                <StatusIcon size={15} strokeWidth={2.2} aria-hidden />
+                                {statusMark.word}
                               </span>
                             </div>
                             {meta.hint && (

@@ -41,7 +41,7 @@ export function ActionButton({
     border: border ?? 'none',
     background: disabled ? 'rgba(27,56,40,0.12)' : (hovered && hoverBackground) ? hoverBackground : background,
     color: disabled ? NEU.muted : (hovered && hoverColor) ? hoverColor : color,
-    fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.05em',
+    fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: 0,
     textDecoration: 'none',
     cursor: disabled ? 'default' : 'pointer',
     boxShadow: disabled ? 'none' : hovered ? `0 6px 14px ${shadowTint}, ${NEU.outSmHover}` : `0 3px 8px ${shadowTint}, ${NEU.outSm}`,

@@ -36,8 +36,7 @@ const STATIC_PAGES: { path: string; lastModified: string; changeFrequency: 'dail
   { path: '/pricing/credits',   lastModified: '2026-09-24', changeFrequency: 'monthly', priority: 0.7 },
   { path: '/pricing/subscription', lastModified: '2026-09-24', changeFrequency: 'monthly', priority: 0.7 },
   { path: '/help',              lastModified: '2026-09-24', changeFrequency: 'weekly',  priority: 0.6 },
-  { path: '/about',             lastModified: '2026-09-15', changeFrequency: 'monthly', priority: 0.6 },
-  { path: '/contact',           lastModified: '2026-08-13', changeFrequency: 'yearly',  priority: 0.5 },
+  { path: '/about',             lastModified: '2026-09-26', changeFrequency: 'monthly', priority: 0.6 },
   { path: '/privacy',           lastModified: '2026-08-28', changeFrequency: 'yearly',  priority: 0.3 },
   { path: '/terms',             lastModified: '2026-08-28', changeFrequency: 'yearly',  priority: 0.3 },
 ];

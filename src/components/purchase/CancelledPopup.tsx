@@ -22,7 +22,7 @@ export default function CancelledPopup({ untilDate, gavinSrc, busy, err, onResum
         <h2 className="gv-bye-title">We hate to see you go...</h2>
         <p className="gv-bye-line">
           Unlimited stays on until {untilDate ?? 'the end of the period you paid for'}. You can resume any time before then and nothing
-          changes. If something did not work for you, tell us on our <Link href="/contact" className="gv-bye-link">contact page</Link>.
+          changes. If something did not work for you, tell us on our <Link href="/about" className="gv-bye-link">contact page</Link>.
         </p>
         {err ? <ErrorLine>{err}</ErrorLine> : null}
         <button type="button" className="gv-bye-btn" onClick={onResume} disabled={busy} aria-busy={busy || undefined}>

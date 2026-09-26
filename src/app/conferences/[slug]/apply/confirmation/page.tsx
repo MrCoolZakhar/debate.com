@@ -364,7 +364,7 @@ export default function ConfirmationPage() {
                 padding: '12px 24px', borderRadius: 12, textDecoration: 'none',
               }}
             >
-              Your conferences
+              My conferences
             </Link>
           </div>
         </div>

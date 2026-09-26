@@ -6,7 +6,7 @@
 // render identical swap/not-attending/waived affordances.
 
 import { useState } from 'react';
-import { GripVertical, Lock, Check } from 'lucide-react';
+import { GripVertical, Lock, Check, CircleDashed, Crown, UserX } from 'lucide-react';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { queueEventEmail, type QueueEventEmailResult } from '@/lib/emailEvents';
 import { ConfirmModal } from '@/components/ConfirmModal';
@@ -470,10 +470,11 @@ export function memberDisplayName(m: { profiles?: { display_name: string } | nul
 export function NotRegisteredChip() {
   return (
     <span
-      className="inline-flex items-center px-2 py-0.5 rounded-full font-bold flex-shrink-0"
-      style={{ fontSize: 10, fontFamily: OUTFIT, letterSpacing: '0.06em', backgroundColor: 'rgba(154,138,120,0.12)', color: '#9A8A78', border: '1px solid rgba(154,138,120,0.3)' }}
+      className="inline-flex items-center gap-1 font-bold flex-shrink-0"
+      style={{ fontSize: 12, fontFamily: OUTFIT, color: '#5A4E42', whiteSpace: 'nowrap' }}
     >
-      NOT REGISTERED
+      <UserX size={14} strokeWidth={2.4} aria-hidden="true" />
+      Not registered
     </span>
   );
 }
@@ -638,7 +639,7 @@ export function WaivedChip({ member, onRemove }: { member: PoolMember; onRemove?
       <MemberAvatar name={name} url={member.profiles?.avatar_url ?? null} userId={member.user_id} />
       <span className="flex-1 min-w-0 text-sm font-semibold [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{name}</span>
       {!member.user_id && <NotRegisteredChip />}
-      <span style={{ fontSize: 10, fontWeight: 700, color: '#9A6B2F', fontFamily: MONO, letterSpacing: '0.06em', flexShrink: 0 }}>WAIVED</span>
+      <span style={{ fontSize: 12, fontWeight: 700, color: '#9A6B2F', fontFamily: OUTFIT, flexShrink: 0 }}>Waived</span>
       {onRemove && <RemoveButton onRemove={onRemove} />}
     </div>
   );
@@ -703,10 +704,11 @@ export function PaidSlotChip({
           {!member.user_id && <NotRegisteredChip />}
           {hdTag && (
             <span
-              className="flex-shrink-0 px-1.5 py-0.5 rounded-full"
-              style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', backgroundColor: 'rgba(27,56,40,0.1)', color: '#1B3828', fontFamily: MONO }}
+              className="flex-shrink-0 inline-flex items-center gap-1"
+              style={{ fontSize: 12, fontWeight: 700, color: '#1B3828', fontFamily: OUTFIT, whiteSpace: 'nowrap' }}
             >
-              HD
+              <Crown size={14} strokeWidth={2.4} aria-hidden="true" />
+              Head delegate
             </span>
           )}
         </div>
@@ -751,7 +753,10 @@ export function OpenSlot({
         cursor: clickable ? 'pointer' : 'default',
       }}
     >
-      <span style={{ fontSize: 11, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.08em' }}>OPEN SPOT</span>
+      <span className="inline-flex items-center gap-1" style={{ fontSize: 12, fontWeight: 700, color: '#5A4E42', fontFamily: OUTFIT }}>
+        <CircleDashed size={14} strokeWidth={2.4} aria-hidden="true" />
+        Open spot
+      </span>
     </div>
   );
 }

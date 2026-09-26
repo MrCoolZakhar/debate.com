@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { Building2, CreditCard, Clock, Users, X, ChevronDown, ChevronUp, Briefcase } from 'lucide-react';
+import { Building2, CreditCard, Clock, Users, X, ChevronDown, ChevronUp, Briefcase, CheckCircle2, XCircle, MinusCircle } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { Emoji3D } from '@/components/neu';
 import { GoldWord } from '@/components/BrandHeading';
@@ -201,9 +201,10 @@ function ApplicationsPanel({
           const profile = app.profiles;
           const isLast = i === apps.length - 1;
           const statusStyle =
-            app.status === 'accepted' ? { backgroundColor: 'rgba(27,56,40,0.12)', color: FOREST } :
-            app.status === 'rejected' ? { backgroundColor: 'rgba(220,53,69,0.1)', color: '#DC3545' } :
-                                        { backgroundColor: 'rgba(238,217,138,0.15)', color: AMBER_TEXT };
+            app.status === 'accepted' ? { color: FOREST } :
+            app.status === 'rejected' ? { color: '#8B2020' } :
+                                        { color: AMBER_TEXT };
+          const StatusIcon = app.status === 'accepted' ? CheckCircle2 : app.status === 'rejected' ? XCircle : Clock;
 
           return (
             <div
@@ -250,9 +251,10 @@ function ApplicationsPanel({
 
               {/* Status badge */}
               <span
-                className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+                className="inline-flex items-center gap-1 text-[12px] font-bold flex-shrink-0"
                 style={{ ...statusStyle, fontFamily: "var(--font-brand), sans-serif" }}
               >
+                <StatusIcon size={14} strokeWidth={2.2} aria-hidden />
                 {sentenceLabel(app.status)}
               </span>
 
@@ -311,8 +313,8 @@ function PostingCard({
 
   const catStyle = categoryBadgeStyle(posting.category);
   const openStyle = posting.is_open
-    ? { backgroundColor: 'rgba(61,122,82,0.12)', color: FOREST }
-    : { backgroundColor: 'rgba(154,138,120,0.1)', color: MUTED };
+    ? { color: FOREST }
+    : { color: '#6B5F52' };
 
   return (
     <div
@@ -337,9 +339,12 @@ function PostingCard({
           {posting.role_name}
         </p>
         <span
-          className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+          className="inline-flex items-center gap-1 text-[12px] font-bold flex-shrink-0"
           style={{ ...openStyle, fontFamily: "var(--font-brand), sans-serif" }}
         >
+          {posting.is_open
+            ? <CheckCircle2 size={14} strokeWidth={2.2} aria-hidden />
+            : <MinusCircle size={14} strokeWidth={2.2} aria-hidden />}
           {posting.is_open ? 'Open' : 'Closed'}
         </span>
       </div>

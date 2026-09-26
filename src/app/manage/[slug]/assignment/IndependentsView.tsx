@@ -11,7 +11,7 @@
 // shared markNotAttending handler's existing behavior, not duplicated here.
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Lock } from 'lucide-react';
+import { CheckCircle2, CircleDashed, Clock, Lock, UserX } from 'lucide-react';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import type { Conference } from '@/app/manage/[slug]/layout';
@@ -143,15 +143,22 @@ function IndependentCard({
         <div className="min-w-0 flex-1">
           <div style={{ fontFamily: OUTFIT }}><StackedName name={name} size={15} weight={900} color={NEU.ink} restColor={NEU.inkSoft} /></div>
           {notAttending && (
-            <span style={{ fontSize: 10, fontWeight: 800, color: NEU.muted, fontFamily: MONO, letterSpacing: '0.06em' }}>NOT ATTENDING</span>
+            <span className="inline-flex items-center gap-1" style={{ fontSize: 12, fontWeight: 700, color: NEU.inkSoft, fontFamily: OUTFIT }}>
+              <UserX size={14} strokeWidth={2.4} aria-hidden="true" />
+              Not attending
+            </span>
           )}
         </div>
-        {waived && <Lock size={14} style={{ color: '#9A6B2F', flexShrink: 0 }} />}
         <span
-          className="flex-shrink-0 px-2.5 py-0.5 rounded-full"
-          style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', fontFamily: OUTFIT, boxShadow: NEU.outSm, backgroundColor: NEU.surface, color: waived ? '#9A6B2F' : paid ? NEU.green : '#8A6614' }}
+          className="flex-shrink-0 inline-flex items-center gap-1"
+          style={{ fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, whiteSpace: 'nowrap', color: waived ? '#9A6B2F' : paid ? NEU.forest : '#8A6614' }}
         >
-          {waived ? 'WAIVED' : paid ? 'PAID' : 'UNPAID'}
+          {waived
+            ? <Lock size={14} strokeWidth={2.4} aria-hidden="true" />
+            : paid
+              ? <CheckCircle2 size={14} strokeWidth={2.4} aria-hidden="true" />
+              : <Clock size={14} strokeWidth={2.4} aria-hidden="true" />}
+          {waived ? 'Waived' : paid ? 'Paid' : 'Unpaid'}
         </span>
       </div>
 
@@ -161,8 +168,9 @@ function IndependentCard({
 
       {openSpot && (
         <NeuInset small className="mt-3 px-3 py-2">
-          <p style={{ fontSize: 10, fontWeight: 800, color: NEU.muted, fontFamily: MONO, letterSpacing: '0.06em' }}>
-            OPEN SPOT (held by {name})
+          <p className="inline-flex items-center gap-1" style={{ fontSize: 12, fontWeight: 700, color: NEU.inkSoft, fontFamily: OUTFIT }}>
+            <CircleDashed size={14} strokeWidth={2.4} aria-hidden="true" />
+            Open spot (held by {name})
           </p>
         </NeuInset>
       )}

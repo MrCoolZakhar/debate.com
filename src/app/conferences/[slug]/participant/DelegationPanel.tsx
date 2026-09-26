@@ -23,7 +23,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeftRight, ChevronLeft, ChevronRight, UserPlus, X } from 'lucide-react';
+import { ArrowLeftRight, ChevronLeft, ChevronRight, Mail, UserPlus, UserX, X } from 'lucide-react';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useDelegationImport } from './DelegationImportCard';
 import DelegationImportPopup from './DelegationImportPopup';
@@ -42,7 +42,7 @@ import {
   POOL_MEMBER_SELECT, pledgeSatisfied, pledgeText, MemberAvatar,
   type PoolMember,
 } from '@/app/manage/[slug]/assignment/delegationShared';
-import { SectionCard, OUTFIT, CHIP_STYLES, derivePaymentChip, formatReleaseDate } from './shared';
+import { SectionCard, OUTFIT, PaymentChipMark, derivePaymentChip, formatReleaseDate } from './shared';
 
 interface Society {
   id: string;
@@ -180,11 +180,15 @@ function RosterRow({ member, pool, swapMode, swapSelectable, swapSelected, onTog
             <span style={{ fontSize: 10.5, fontWeight: 800, color: GOLD_EDGE, fontFamily: OUTFIT, letterSpacing: '0.04em' }}>You</span>
           )}
           {!member.claimed && (
-            <span style={{ fontSize: 10.5, fontWeight: 600, color: '#9A8A78', fontFamily: OUTFIT }}>Invited</span>
+            <span className="inline-flex items-center gap-1" style={{ fontSize: 10.5, fontWeight: 600, color: '#6B5F52', fontFamily: OUTFIT }}>
+              <Mail size={14} strokeWidth={2.2} aria-hidden />
+              Invited
+            </span>
           )}
           {dimmed && (
-            <span style={{ fontSize: 9, fontWeight: 700, color: '#9A8A78', fontFamily: OUTFIT, letterSpacing: '0.05em' }}>
-              NOT ATTENDING
+            <span className="inline-flex items-center gap-1" style={{ fontSize: 10.5, fontWeight: 600, color: '#6B5F52', fontFamily: OUTFIT }}>
+              <UserX size={14} strokeWidth={2.2} aria-hidden />
+              Not attending
             </span>
           )}
         </div>
@@ -198,12 +202,7 @@ function RosterRow({ member, pool, swapMode, swapSelectable, swapSelected, onTog
         )}
       </div>
       {chip && !dimmed && (
-        <span
-          className="px-2.5 py-0.5 rounded-full flex-shrink-0"
-          style={{ ...CHIP_STYLES[chip], fontSize: '9px', fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.08em' }}
-        >
-          {chip}
-        </span>
+        <PaymentChipMark chip={chip} size="sm" />
       )}
       {swapMode && (
         <div

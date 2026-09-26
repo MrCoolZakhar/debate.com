@@ -47,7 +47,7 @@ export default function SubscriptionPricingClient() {
   const faq = faqForPage('subscription');
 
   const unlimitedCta = (big: boolean, onForest: boolean) => onUnlimited
-    ? <ActionLink href="/account/manage/subscription" skin="gold" big={big} onForest={onForest}>You&apos;re on Unlimited</ActionLink>
+    ? <ActionLink href="/account/manage#subscription" skin="gold" big={big} onForest={onForest}>You&apos;re on Unlimited</ActionLink>
     : <ActionButton skin="gold" big={big} onForest={onForest} onClick={() => openUnlimitedPopup({ plan: period })}>Go Unlimited</ActionButton>;
 
   return (
@@ -231,7 +231,7 @@ export default function SubscriptionPricingClient() {
       </div>
 
       <p className="gv-su-promo gv-p-open">
-        Have a promo code? Redeem it in <Link href="/account/manage/promo" className={`gv-p-link ${FOCUS_RING}`}>Manage account</Link>
+        Have a promo code? Redeem it in <Link href="/account/manage#promo" className={`gv-p-link ${FOCUS_RING}`}>Manage account</Link>
       </p>
 
       {/* QUESTIONS: white */}

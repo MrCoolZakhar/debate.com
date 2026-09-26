@@ -7,7 +7,7 @@ import {
   SlidersHorizontal, Building2, Users2, ShieldCheck, X, Lock, Copy, AlertTriangle, Check,
   Plus, Crown, Mail as MailIcon, ChevronDown, Info, ArrowLeft,
   Settings2, Globe, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, Briefcase, Trophy,
-  ClipboardList, CreditCard, Megaphone, Star, UsersRound, type LucideIcon,
+  ClipboardList, CreditCard, Megaphone, Star, UsersRound, CheckCircle2, Clock, XCircle, MinusCircle, type LucideIcon,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 
@@ -38,7 +38,7 @@ import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { acronymProblem, conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import {
   ROLE_ORDER, ROLE_EMOJI, ROLE_BLURB, RoleBookmarks, StepDisc, InfoHint,
-  CopyToRolesModal, SetupIntro, Segmented, STATUS_STYLE,
+  CopyToRolesModal, SetupIntro, Segmented,
   type RoleStatus as RoleStatusKind,
 } from './applicationsUi';
 // Awards are behind a holding screen for now. `./awardsUi` (AwardsSettings) is
@@ -226,6 +226,15 @@ type RoleStatus = RoleStatusKind;
 
 /** Four states, not two. A role can be switched on while its window has
  *  already closed, and "enabled" alone would report that as live. */
+/** The role's application state as an icon + a plain word (CLAUDE.md §8:
+ *  no uppercase status pills). Presentation only; `RoleStatus` is unchanged. */
+const ROLE_STATUS_MARK: Record<RoleStatus, { label: string; color: string; Icon: LucideIcon }> = {
+  OPEN:      { label: 'Open',      color: '#1B3828', Icon: CheckCircle2 },
+  SCHEDULED: { label: 'Scheduled', color: '#6B4F12', Icon: Clock },
+  CLOSED:    { label: 'Closed',    color: '#8B2020', Icon: XCircle },
+  OFF:       { label: 'Off',       color: '#6B5F52', Icon: MinusCircle },
+};
+
 function roleStatus(config: RoleConfig | undefined, now: number): RoleStatus {
   if (!config?.is_enabled) return 'OFF';
   const opensAt = config.applications_open_at ? new Date(config.applications_open_at).getTime() : null;
@@ -3188,7 +3197,7 @@ export default function SettingsPage() {
         const config = roleConfigs.find(rc => rc.role === role);
         const enabled = config?.is_enabled ?? false;
         const status = roleStatus(config, Date.now());
-        const chip = STATUS_STYLE[status];
+        const chip = ROLE_STATUS_MARK[status];
         // Nobody charges their own volunteers or their own secretariat: the
         // Fees step doesn't apply to either, so it isn't shown at all.
         const showFeesStep = role !== 'secretariat' && role !== 'staff';
@@ -3234,14 +3243,14 @@ export default function SettingsPage() {
                   </span>
                   <span
                     suppressHydrationWarning
-                    className="font-bold"
+                    className="inline-flex items-center gap-1 font-bold"
                     style={{
-                      fontFamily: "var(--font-brand), sans-serif", fontSize: '10px', fontWeight: 800,
-                      letterSpacing: '0.1em', padding: '3px 9px', borderRadius: '999px',
-                      backgroundColor: chip.bg, color: chip.fg,
+                      fontFamily: "var(--font-brand), sans-serif", fontSize: '12px', fontWeight: 700,
+                      color: chip.color,
                     }}
                   >
-                    {status}
+                    <chip.Icon size={14} strokeWidth={2.2} aria-hidden />
+                    {chip.label}
                   </span>
 
                   <div className="flex items-center gap-3 flex-wrap w-full sm:w-auto sm:ml-auto">
@@ -3708,10 +3717,11 @@ export default function SettingsPage() {
                                           />
                                           {isActive && (
                                             <span
-                                              className="flex-shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                                              style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.1em' }}
+                                              className="flex-shrink-0 inline-flex items-center gap-1 text-[12px] font-bold"
+                                              style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}
                                             >
-                                              CURRENT
+                                              <Star size={14} strokeWidth={2.2} aria-hidden />
+                                              Current
                                             </span>
                                           )}
                                         </div>
@@ -4843,18 +4853,19 @@ export default function SettingsPage() {
                   {/* A company has no counterparty team, so "pending approval"
                       would be a lie — it is live the moment it is added. */}
                   <span
-                    className="flex-shrink-0 rounded-full px-2.5 py-1 font-bold"
+                    className="flex-shrink-0 inline-flex items-center gap-1 font-bold"
                     style={{
-                      fontSize: '10px',
-                      letterSpacing: '0.08em',
+                      fontSize: '12px',
                       fontFamily: "var(--font-brand), sans-serif",
-                      backgroundColor: isCompany
-                        ? 'rgba(182,135,31,0.14)'
-                        : link.approved ? 'rgba(61,122,82,0.13)' : 'rgba(238,217,138,0.35)',
                       color: isCompany ? '#8A6614' : link.approved ? '#2A5A3C' : '#8A6614',
                     }}
                   >
-                    {isCompany ? 'COMPANY' : link.approved ? 'APPROVED' : 'PENDING APPROVAL'}
+                    {isCompany
+                      ? <Building2 size={14} strokeWidth={2.2} aria-hidden />
+                      : link.approved
+                        ? <CheckCircle2 size={14} strokeWidth={2.2} aria-hidden />
+                        : <Clock size={14} strokeWidth={2.2} aria-hidden />}
+                    {isCompany ? 'Company' : link.approved ? 'Approved' : 'Pending approval'}
                   </span>
 
                   <div className="flex items-center flex-shrink-0">
@@ -5606,14 +5617,13 @@ export default function SettingsPage() {
                       </p>
 
                       <span
-                        className="mt-2.5"
+                        className="mt-2.5 inline-flex items-center gap-1"
                         style={{
-                          padding: '4px 10px', borderRadius: 999, fontSize: 9.5, fontWeight: 800,
-                          letterSpacing: '0.07em', fontFamily: OUTFIT,
-                          backgroundColor: 'rgba(182,135,31,0.18)', color: '#7A5A10',
+                          fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, color: '#7A5A10',
                         }}
                       >
-                        AWAITING REPLY
+                        <Clock size={14} strokeWidth={2.2} aria-hidden />
+                        Awaiting reply
                       </span>
                       <p
                         className="mt-1.5"

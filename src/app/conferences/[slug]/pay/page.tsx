@@ -28,9 +28,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  ArrowLeft, ChevronDown, ChevronUp, Clock, Coins, CreditCard, GraduationCap, HandCoins, ImageUp,
-  Lock, Mail, Minus, Plus, Receipt, ShoppingBag, Users2, Wallet, X,
+  ArrowLeft, CheckCircle2, ChevronDown, ChevronUp, CircleDashed, Clock, Coins, CreditCard, GraduationCap, HandCoins, ImageUp,
+  Lock, Mail, Minus, MinusCircle, Plus, Receipt, ShoppingBag, Users2, Wallet, X, XCircle,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import Portal from '@/components/Portal';
@@ -136,12 +137,13 @@ interface PaymentBatchRow {
 
 type Badge = 'PAID' | 'WAIVED' | 'PARTIAL' | 'UNPAID' | 'REFUNDED';
 
-const BADGE_STYLES: Record<Badge, { bg: string; color: string }> = {
-  PAID: { bg: 'rgba(61,122,82,0.13)', color: '#2A5A3C' },
-  WAIVED: { bg: 'rgba(154,138,120,0.16)', color: '#6B5E4E' },
-  PARTIAL: { bg: 'rgba(238,217,138,0.35)', color: '#8A6614' },
-  UNPAID: { bg: 'rgba(139,32,32,0.1)', color: '#8B2020' },
-  REFUNDED: { bg: 'rgba(154,138,120,0.16)', color: '#6B5E4E' },
+// State marks are an icon plus a plain word (CLAUDE.md §8): no pill, no capitals.
+const BADGE_STYLES: Record<Badge, { color: string; icon: LucideIcon; word: string }> = {
+  PAID: { color: '#2A5A3C', icon: CheckCircle2, word: 'Paid' },
+  WAIVED: { color: '#6B5E4E', icon: MinusCircle, word: 'Waived' },
+  PARTIAL: { color: '#8A6614', icon: CircleDashed, word: 'Partial' },
+  UNPAID: { color: '#8B2020', icon: XCircle, word: 'Unpaid' },
+  REFUNDED: { color: '#6B5E4E', icon: MinusCircle, word: 'Refunded' },
 };
 
 function deriveBadge(paymentStatus: string, amountPaid: number): Badge {
@@ -161,12 +163,15 @@ function invoiceBadge(inv: InvoiceRow): Badge {
 // ── Small shared pieces ──────────────────────────────────────────────────────
 
 function BadgePill({ badge }: { badge: Badge }) {
+  const b = BADGE_STYLES[badge];
+  const Icon = b.icon;
   return (
     <span
-      className="px-2.5 py-1 rounded-full flex-shrink-0"
-      style={{ ...BADGE_STYLES[badge], fontSize: 10, fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.08em' }}
+      className="inline-flex items-center gap-1 flex-shrink-0"
+      style={{ color: b.color, fontSize: 12.5, fontFamily: OUTFIT, fontWeight: 700 }}
     >
-      {badge}
+      <Icon size={15} strokeWidth={2.2} aria-hidden />
+      {b.word}
     </span>
   );
 }
@@ -842,10 +847,11 @@ function GenericInvoiceCard({
                 </p>
                 {inv.kind === 'addon' && (
                   <span
-                    className="px-2 py-0.5 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: 'rgba(154,138,120,0.14)', color: '#6B5E4E', fontSize: 9, fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.06em' }}
+                    className="inline-flex items-center gap-1 flex-shrink-0"
+                    style={{ color: '#6B5E4E', fontSize: 12, fontFamily: OUTFIT, fontWeight: 600 }}
                   >
-                    OPTIONAL
+                    <Plus size={14} strokeWidth={2.2} aria-hidden />
+                    Optional
                   </span>
                 )}
               </div>
@@ -1584,19 +1590,21 @@ const BATCH_METHOD_LABEL: Record<string, string> = {
   organizer: 'Recorded by organizers',
 };
 
-const BATCH_STATUS_STYLES: Record<string, { bg: string; color: string; label: string }> = {
-  pending: { bg: 'rgba(184,132,74,0.16)', color: '#8A6614', label: 'AWAITING REVIEW' },
-  paid: { bg: 'rgba(61,122,82,0.13)', color: '#2A5A3C', label: 'PAID' },
-  rejected: { bg: 'rgba(139,32,32,0.1)', color: '#8B2020', label: 'REJECTED' },
+const BATCH_STATUS_STYLES: Record<string, { color: string; label: string; icon: LucideIcon }> = {
+  pending: { color: '#8A6614', label: 'Awaiting review', icon: Clock },
+  paid: { color: '#2A5A3C', label: 'Paid', icon: CheckCircle2 },
+  rejected: { color: '#8B2020', label: 'Rejected', icon: XCircle },
 };
 
 function BatchStatusPill({ status }: { status: string }) {
   const s = BATCH_STATUS_STYLES[status] ?? BATCH_STATUS_STYLES.pending;
+  const Icon = s.icon;
   return (
     <span
-      className="px-2.5 py-1 rounded-full flex-shrink-0"
-      style={{ backgroundColor: s.bg, color: s.color, fontSize: 10, fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.06em' }}
+      className="inline-flex items-center gap-1 flex-shrink-0"
+      style={{ color: s.color, fontSize: 12.5, fontFamily: OUTFIT, fontWeight: 700 }}
     >
+      <Icon size={15} strokeWidth={2.2} aria-hidden />
       {s.label}
     </span>
   );

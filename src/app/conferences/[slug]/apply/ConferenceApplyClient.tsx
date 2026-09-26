@@ -69,7 +69,7 @@ import {
   GraduationCap, Trophy, Crown, Sparkles,
   MapPin, Landmark, Check, X, Plus, ArrowRight, CalendarClock,
   Ticket, Infinity as InfinityIcon, Globe, Lock, ChevronUp, ChevronDown,
-  Info, Coins, Pencil, Ban,
+  Info, Coins, Pencil, Ban, Cake,
 } from 'lucide-react';
 
 /** Destructive-action red, matching /drafts/[token] exactly. */
@@ -542,18 +542,13 @@ function DifficultyBadge({ difficulty }: { difficulty: string }) {
     <span
       className="inline-flex items-center gap-1"
       style={{
-        padding: '3px 9px 3px 6px',
-        borderRadius: 999,
-        background: `${accent}14`,
-        border: `1px solid ${accent}44`,
         fontFamily: OUTFIT,
-        fontWeight: 800,
-        fontSize: 10,
-        letterSpacing: '0.05em',
+        fontWeight: 700,
+        fontSize: 12,
         color: accent,
       }}
     >
-      <LevelInsignia level={key} size={13} />
+      <LevelInsignia level={key} size={14} />
       {meta.label}
     </span>
   );
@@ -1174,7 +1169,7 @@ function ConferenceApplyInner() {
       ? `${minAgeLimit}–${maxAgeLimit}`
       : minAgeLimit != null
         ? `${minAgeLimit}+`
-        : `UP TO ${maxAgeLimit}`;
+        : `Up to ${maxAgeLimit}`;
 
   // Not hardcoded to delegate/head-delegate any more: a role expresses
   // preferences exactly when its own role config says so.
@@ -5585,10 +5580,11 @@ function ConferenceApplyInner() {
         <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
           <div className="rounded-2xl p-10 text-center max-w-md w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
             <span
-              className="inline-flex items-center rounded-full px-3 py-1 mb-4 text-[11px] font-bold"
-              style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.25)', color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}
+              className="inline-flex items-center gap-1 mb-4 text-[12.5px] font-bold"
+              style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}
             >
-              AGE REQUIREMENT
+              <Cake size={15} strokeWidth={2.2} aria-hidden />
+              Age requirement
             </span>
             <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
               This conference requires delegates to be {ageRequirementText}
@@ -5635,10 +5631,11 @@ function ConferenceApplyInner() {
           <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
             <div className="rounded-2xl p-10 text-center max-w-md w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
               <span
-                className="inline-flex items-center rounded-full px-3 py-1 mb-4 text-[11px] font-bold"
-                style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.25)', color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}
+                className="inline-flex items-center gap-1 mb-4 text-[12.5px] font-bold"
+                style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}
               >
-                AGE REQUIREMENT
+                <Cake size={15} strokeWidth={2.2} aria-hidden />
+                Age requirement
               </span>
               <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
                 This conference requires delegates to be {ageRequirementText}
@@ -5675,10 +5672,11 @@ function ConferenceApplyInner() {
         <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
           <div className="rounded-2xl p-10 max-w-md w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
             <span
-              className="inline-flex items-center rounded-full px-3 py-1 mb-4 text-[11px] font-bold"
-              style={{ backgroundColor: 'color-mix(in srgb, var(--gv-accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-accent) 35%, transparent)', color: 'var(--gv-accent)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}
+              className="inline-flex items-center gap-1 mb-4 text-[12.5px] font-bold"
+              style={{ color: 'var(--gv-accent)', fontFamily: "var(--font-brand), sans-serif" }}
             >
-              BEFORE YOU START
+              <Cake size={15} strokeWidth={2.2} aria-hidden />
+              Before you start
             </span>
             <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
               What Is Your Date of Birth?
@@ -5741,10 +5739,11 @@ function ConferenceApplyInner() {
         <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
           <div className="rounded-2xl p-10 max-w-md w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
             <span
-              className="inline-flex items-center rounded-full px-3 py-1 mb-4 text-[11px] font-bold"
-              style={{ backgroundColor: 'color-mix(in srgb, var(--gv-accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-accent) 35%, transparent)', color: 'var(--gv-accent)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}
+              className="inline-flex items-center gap-1 mb-4 text-[12.5px] font-bold"
+              style={{ color: 'var(--gv-accent)', fontFamily: "var(--font-brand), sans-serif" }}
             >
-              {hasAgeGate ? `${ageChipText} CONFERENCE` : 'BEFORE YOU APPLY'}
+              {hasAgeGate ? <Cake size={15} strokeWidth={2.2} aria-hidden /> : <Info size={15} strokeWidth={2.2} aria-hidden />}
+              {hasAgeGate ? `${ageChipText} conference` : 'Before you apply'}
             </span>
             <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
               Two Things Before You Apply

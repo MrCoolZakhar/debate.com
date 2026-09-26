@@ -1,14 +1,15 @@
 'use client';
 
-// ── Explore chrome: the search pill, the category rail, the sort menu and the
-// phone filter sheet (CLAUDE.md §8, "The Explore page", items 2 to 5).
+// ── Explore chrome: the search pill, the date tabs, the filter chips (a
+// popover on desktop, a bottom sheet on phones), the place rail, the sort menu
+// and the list / grid toggle (CLAUDE.md §8, "The Explore page").
 // Presentation only: every control here drives a filter the page already has
 // (and so the URL query the page already writes); nothing new is filtered.
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   Search, ChevronLeft, ChevronRight, ChevronDown, Check, X, Globe, MapPin,
-  LayoutGrid, Rows3, SlidersHorizontal,
+  LayoutGrid, Rows3,
 } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { CircleFlag } from '@/components/CircleFlag';
@@ -109,10 +110,12 @@ export function SearchPill({
   continent, continentLabels, onContinent,
   nearCountry, nearCode, nearActive, onToggleNear,
   chosenCountryNames,
-  dateFilter, dateFrom, dateTo, onDate,
+  dateFilter, dateFrom, dateTo, onDate, whenLabel,
   roles, onToggleRole, onClearRoles,
   onSubmit,
 }: {
+  /** A name for the chosen dates when the page knows one ("This week"). */
+  whenLabel?: string | null;
   search: string; onSearch: (v: string) => void;
   continent: string | null; continentLabels: Record<string, string>; onContinent: (k: string | null) => void;
   nearCountry: string | null; nearCode?: string; nearActive: boolean; onToggleNear: () => void;
@@ -152,7 +155,9 @@ export function SearchPill({
     : chosenCountryNames.length > 0
       ? chosenCountryNames.join(', ')
       : 'Search conferences or places';
-  const whenSummary = dateFrom || dateTo
+  const whenSummary = whenLabel
+    ? whenLabel
+    : dateFrom || dateTo
     ? [dateFrom ? formatShort(dateFrom) : 'Any', dateTo ? formatShort(dateTo) : 'Any'].join(' to ')
     : DATE_OPTIONS.find(d => d.key === dateFilter && d.key !== '')?.label ?? 'Any time';
   const roleSummary = roles.size === 0
@@ -296,7 +301,7 @@ export function SearchPill({
               <>
                 <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 800, color: INK }}>When</p>
                 {(dateFrom || dateTo) && (
-                  <p style={{ margin: '0 0 8px', fontSize: 13, color: INK_SOFT }}>Dates chosen in Filters: {whenSummary}</p>
+                  <p style={{ margin: '0 0 8px', fontSize: 13, color: INK_SOFT }}>Chosen: {whenSummary}</p>
                 )}
                 <div role="radiogroup" aria-label="When">
                   {DATE_OPTIONS.map(d => {
@@ -374,85 +379,6 @@ export function CheckBox({ on }: { on: boolean }) {
   );
 }
 
-// ── The category rail ────────────────────────────────────────────────────────
-
-export interface RailCategory {
-  key: string;
-  label: string;
-  icon: IconType;
-  tone: 'gold' | 'green';
-  active: boolean;
-  onClick: () => void;
-}
-
-export function CategoryRail({ items }: { items: RailCategory[] }) {
-  const scroller = useRef<HTMLDivElement>(null);
-  const [edges, setEdges] = useState({ left: false, right: false });
-  const measure = useCallback(() => {
-    const el = scroller.current;
-    if (!el) return;
-    const left = el.scrollLeft > 4;
-    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
-    setEdges(prev => (prev.left === left && prev.right === right ? prev : { left, right }));
-  }, []);
-  useEffect(() => {
-    const el = scroller.current;
-    if (!el) return;
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    el.addEventListener('scroll', measure, { passive: true });
-    return () => { ro.disconnect(); el.removeEventListener('scroll', measure); };
-  }, [measure]);
-  const nudge = (dir: 1 | -1) => {
-    const el = scroller.current;
-    if (el) el.scrollBy({ left: dir * Math.max(200, el.clientWidth * 0.6), behavior: 'smooth' });
-  };
-  const mask = `linear-gradient(90deg, ${edges.left ? 'transparent 0, #000 56px' : '#000 0'}, ${edges.right ? '#000 calc(100% - 56px), transparent 100%' : '#000 100%'})`;
-
-  return (
-    <div className="relative flex items-center" style={{ gap: 10 }}>
-      {edges.left && (
-        <span className="hidden sm:inline-flex">
-          <button type="button" onClick={() => nudge(-1)} aria-label="Scroll categories back" className="focus:outline-none" style={RIM_DISC}>
-            <ChevronLeft size={17} strokeWidth={2.4} aria-hidden />
-          </button>
-        </span>
-      )}
-      <div
-        ref={scroller}
-        role="toolbar"
-        aria-label="Categories"
-        className="gv-explore-cats flex-1 flex items-stretch"
-        style={{ overflowX: 'auto', scrollbarWidth: 'none', gap: 'clamp(18px, 2.6vw, 36px)', WebkitMaskImage: mask, maskImage: mask, padding: '2px 4px' }}
-      >
-        <style>{'.gv-explore-cats::-webkit-scrollbar{display:none}'}</style>
-        {items.map(it => (
-          <button
-            key={it.key}
-            type="button"
-            aria-pressed={it.active}
-            onClick={it.onClick}
-            className="gv-cat flex flex-col items-center flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded-lg"
-            style={{ gap: 6, padding: '6px 2px 0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: FONT, opacity: it.active ? 1 : 0.86 }}
-          >
-            <DuoIcon icon={it.icon} size={26} tone={it.tone} />
-            <span style={{ fontSize: 12.5, fontWeight: it.active ? 800 : 600, color: it.active ? INK : INK_SOFT, whiteSpace: 'nowrap' }}>{it.label}</span>
-            <span aria-hidden style={{ width: 24, height: 2, borderRadius: 2, marginTop: 4, backgroundColor: it.active ? FOREST : 'transparent' }} />
-          </button>
-        ))}
-      </div>
-      {edges.right && (
-        <span className="hidden sm:inline-flex">
-          <button type="button" onClick={() => nudge(1)} aria-label="Scroll categories forward" className="focus:outline-none" style={RIM_DISC}>
-            <ChevronRight size={17} strokeWidth={2.4} aria-hidden />
-          </button>
-        </span>
-      )}
-    </div>
-  );
-}
-
 // ── Sort: a plain text menu ─────────────────────────────────────────────────
 
 export function SortMenu({ sort, onChange }: { sort: 'asc' | 'desc'; onChange: (v: 'asc' | 'desc') => void }) {
@@ -521,8 +447,8 @@ export type ExploreView = 'grid' | 'list';
 
 export function ViewToggle({ view, onChange }: { view: ExploreView; onChange: (v: ExploreView) => void }) {
   const options: { key: ExploreView; icon: typeof LayoutGrid; label: string }[] = [
-    { key: 'grid', icon: LayoutGrid, label: 'Grid view' },
     { key: 'list', icon: Rows3, label: 'List view' },
+    { key: 'grid', icon: LayoutGrid, label: 'Grid view' },
   ];
   return (
     <div
@@ -556,99 +482,384 @@ export function ViewToggle({ view, onChange }: { view: ExploreView; onChange: (v
   );
 }
 
-// ── The Filters button and the phone bottom sheet ───────────────────────────
 
-export function FiltersButton({ count, onClick }: { count: number; onClick: () => void }) {
+// ── Narrow screens: popovers become bottom sheets ──────────────────────────
+
+export function useIsNarrow(maxWidth = 639): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${maxWidth}px)`);
+    const on = () => setNarrow(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, [maxWidth]);
+  return narrow;
+}
+
+// ── Date tabs (Eventbrite / Luma): each tab is one existing date filter ────
+
+export interface DateTab { key: string; label: string; active: boolean; onClick: () => void }
+
+export function DateTabs({ tabs }: { tabs: DateTab[] }) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="When"
+      className="gv-explore-scroll flex items-end"
+      style={{ gap: 'clamp(18px, 2.4vw, 30px)', overflowX: 'auto', scrollbarWidth: 'none', padding: '2px 2px 0' }}
+    >
+      {tabs.map(t => (
+        <button
+          key={t.key}
+          type="button"
+          role="radio"
+          aria-checked={t.active}
+          onClick={t.onClick}
+          className="flex flex-col items-center flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded-md"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px 2px 0', fontFamily: FONT }}
+        >
+          <span style={{ fontSize: 15, fontWeight: t.active ? 800 : 600, color: t.active ? INK : INK_SOFT, whiteSpace: 'nowrap' }}>{t.label}</span>
+          <span aria-hidden style={{ width: '100%', minWidth: 24, height: 2.5, borderRadius: 2, marginTop: 8, backgroundColor: t.active ? FOREST : 'transparent' }} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Filter chips: a slim bar, each chip opens a small popover ──────────────
+
+const CHIP: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 7, flexShrink: 0,
+  height: 40, padding: '0 15px', borderRadius: 9999, cursor: 'pointer',
+  fontFamily: FONT, fontSize: 14, color: INK, whiteSpace: 'nowrap',
+  transition: 'background-color 140ms ease, box-shadow 140ms ease',
+};
+
+function chipLook(active: boolean): React.CSSProperties {
+  return active
+    ? { ...CHIP, fontWeight: 800, backgroundColor: '#EEF3EC', border: `1.5px solid ${FOREST}`, boxShadow: '0 1px 2px rgba(27,56,40,0.08)' }
+    : { ...CHIP, fontWeight: 600, backgroundColor: '#FFFFFF', border: '1px solid rgba(28,20,16,0.14)', boxShadow: '0 1px 2px rgba(27,56,40,0.06), 0 3px 8px rgba(27,56,40,0.05)' };
+}
+
+/** A chip that opens a popover (a bottom sheet on phones). `summary` names
+ *  what is chosen; nothing chosen shows the plain label. */
+export function FilterChip({
+  label, summary, active, icon, title, children, onClear,
+}: {
+  label: string;
+  summary?: string | null;
+  active: boolean;
+  icon?: IconType;
+  /** The popover's own heading. */
+  title: string;
+  children: React.ReactNode;
+  /** Clears this one filter; shown in the popover when it is on. */
+  onClear?: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const btn = useRef<HTMLButtonElement>(null);
+  const close = useCallback(() => { setOpen(false); btn.current?.focus(); }, []);
+  return (
+    <>
+      <button
+        ref={btn}
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen(o => !o)}
+        className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2"
+        style={chipLook(active)}
+      >
+        {icon && <DuoIcon icon={icon} size={17} tone={active ? 'green' : 'gold'} />}
+        {active && summary ? summary : label}
+        <ChevronDown size={15} strokeWidth={2.4} aria-hidden style={{ transform: open ? 'rotate(180deg)' : undefined, transition: 'transform 160ms ease' }} />
+      </button>
+      <ChipLayer open={open} anchor={btn} onClose={close} title={title} onClear={active ? onClear : undefined}>
+        {children}
+      </ChipLayer>
+    </>
+  );
+}
+
+/** A chip that is simply on or off (Credit sponsored). */
+export function ToggleChip({ label, active, icon, onClick }: { label: string; active: boolean; icon?: IconType; onClick: () => void }) {
   return (
     <button
       type="button"
+      aria-pressed={active}
       onClick={onClick}
-      aria-haspopup="dialog"
-      aria-label={count > 0 ? `Filters, ${count} on` : 'Filters'}
-      className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-      style={{ ...SECONDARY_BUTTON, gap: 7, padding: '8px 14px', fontSize: 14, border: '1px solid rgba(28,20,16,0.35)' }}
+      className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2"
+      style={chipLook(active)}
     >
-      <SlidersHorizontal size={15} strokeWidth={2.3} aria-hidden />
-      Filters
-      {count > 0 && <span style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: FOREST }}>{count}</span>}
+      {icon && <DuoIcon icon={icon} size={17} tone={active ? 'green' : 'gold'} />}
+      {label}
+      {active && <Check size={15} strokeWidth={2.6} aria-hidden style={{ color: FOREST }} />}
     </button>
   );
 }
 
-export function FiltersSheet({
-  open, onClose, onClear, canClear, resultCount, children,
+/** The layer behind a chip: anchored under it on desktop, a bottom sheet on
+ *  phones. A backdrop takes the outside click, so a DatePicker calendar
+ *  (its own Portal, above this layer) can be used inside it. */
+export function ChipLayer({
+  open, anchor, onClose, title, onClear, children, width = 340,
 }: {
   open: boolean;
+  anchor: React.RefObject<HTMLElement | null>;
   onClose: () => void;
-  onClear: () => void;
-  canClear: boolean;
-  resultCount: number;
+  title: string;
+  onClear?: () => void;
   children: React.ReactNode;
+  width?: number;
 }) {
+  const narrow = useIsNarrow();
+  const pos = useAnchoredLayer(open && !narrow, anchor, width, 'start');
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const focusTimer = window.setTimeout(() => panel.current?.focus(), 0);
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
     document.addEventListener('keydown', onKey);
+    const t = window.setTimeout(() => panel.current?.focus(), 0);
+    let prev = '';
+    if (narrow) { prev = document.body.style.overflow; document.body.style.overflow = 'hidden'; }
     return () => {
-      document.body.style.overflow = prev;
-      window.clearTimeout(focusTimer);
       document.removeEventListener('keydown', onKey);
+      window.clearTimeout(t);
+      if (narrow) document.body.style.overflow = prev;
     };
-  }, [open, onClose]);
+  }, [open, narrow, onClose]);
   if (!open) return null;
-  return (
-    <Portal>
-      <div style={{ position: 'fixed', inset: 0, zIndex: 1000, fontFamily: FONT }}>
-        <div aria-hidden onClick={onClose} style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(20,16,12,0.42)' }} />
-        <div
-          ref={panel}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Filters"
-          tabIndex={-1}
+
+  const head = (
+    <div className="flex items-center justify-between" style={{ gap: 12, marginBottom: 10 }}>
+      <span style={{ fontSize: 16, fontWeight: 800, color: INK }}>{title}</span>
+      {narrow ? (
+        <button type="button" onClick={onClose} aria-label="Close" className="focus:outline-none" style={{ ...RIM_DISC, width: 38, height: 38 }}>
+          <X size={16} strokeWidth={2.4} aria-hidden />
+        </button>
+      ) : onClear ? (
+        <button
+          type="button"
+          onClick={onClear}
           className="focus:outline-none"
-          style={{
-            position: 'absolute', left: 0, right: 0, bottom: 0, maxHeight: '88dvh',
-            display: 'flex', flexDirection: 'column',
-            backgroundColor: '#FFFFFF', borderRadius: '24px 24px 0 0',
-            boxShadow: '0 -12px 40px rgba(27,56,40,0.22)',
-          }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: FOREST, textDecoration: 'underline', textUnderlineOffset: 3 }}
         >
-          <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 8 }}>
-            <span aria-hidden style={{ width: 40, height: 4, borderRadius: 4, backgroundColor: 'rgba(28,20,16,0.18)' }} />
-          </div>
-          <div className="flex items-center justify-between" style={{ padding: '8px 16px 10px', borderBottom: '1px solid rgba(28,20,16,0.08)' }}>
-            <span style={{ fontSize: 17, fontWeight: 800, color: INK }}>Filters</span>
-            <button type="button" onClick={onClose} aria-label="Close filters" className="focus:outline-none" style={{ ...RIM_DISC, width: 40, height: 40 }}>
-              <X size={17} strokeWidth={2.4} aria-hidden />
-            </button>
-          </div>
-          <div style={{ flex: '1 1 auto', overflowY: 'auto', overscrollBehavior: 'contain', padding: '14px 16px' }}>
-            {children}
-          </div>
+          Clear
+        </button>
+      ) : null}
+    </div>
+  );
+
+  if (narrow) {
+    return (
+      <Portal>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1200, fontFamily: FONT }}>
+          <div aria-hidden onClick={onClose} style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(20,16,12,0.42)' }} />
           <div
-            className="flex items-center justify-between"
-            style={{ gap: 12, padding: '12px 16px', paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))', borderTop: '1px solid rgba(28,20,16,0.08)' }}
+            ref={panel}
+            role="dialog"
+            aria-modal="true"
+            aria-label={title}
+            tabIndex={-1}
+            className="focus:outline-none"
+            style={{
+              position: 'absolute', left: 0, right: 0, bottom: 0, maxHeight: '82dvh', display: 'flex', flexDirection: 'column',
+              backgroundColor: '#FFFFFF', borderRadius: '24px 24px 0 0', boxShadow: '0 -12px 40px rgba(27,56,40,0.22)',
+            }}
           >
-            <button
-              type="button"
-              onClick={onClear}
-              disabled={!canClear}
-              className="focus:outline-none"
-              style={{ background: 'none', border: 'none', cursor: canClear ? 'pointer' : 'default', fontFamily: FONT, fontSize: 15, fontWeight: 700, color: canClear ? INK : '#A89C8C', textDecoration: 'underline', textUnderlineOffset: 3 }}
+            <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 8 }}>
+              <span aria-hidden style={{ width: 40, height: 4, borderRadius: 4, backgroundColor: 'rgba(28,20,16,0.18)' }} />
+            </div>
+            <div style={{ padding: '8px 18px 0' }}>{head}</div>
+            <div style={{ flex: '1 1 auto', overflowY: 'auto', overscrollBehavior: 'contain', padding: '0 18px 12px' }}>{children}</div>
+            <div
+              className="flex items-center justify-between"
+              style={{ gap: 12, padding: '12px 18px', paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))', borderTop: '1px solid rgba(28,20,16,0.08)' }}
             >
-              Clear all
-            </button>
-            <button type="button" onClick={onClose} className="focus:outline-none" style={{ ...PRIMARY_BUTTON, padding: '13px 20px', fontSize: 15 }}>
-              Show {resultCount.toLocaleString()} {resultCount === 1 ? 'conference' : 'conferences'}
-            </button>
+              <button
+                type="button"
+                onClick={onClear}
+                disabled={!onClear}
+                className="focus:outline-none"
+                style={{ background: 'none', border: 'none', cursor: onClear ? 'pointer' : 'default', fontFamily: FONT, fontSize: 15, fontWeight: 700, color: onClear ? INK : '#A89C8C', textDecoration: 'underline', textUnderlineOffset: 3 }}
+              >
+                Clear
+              </button>
+              <button type="button" onClick={onClose} className="focus:outline-none" style={{ ...PRIMARY_BUTTON, padding: '12px 26px', fontSize: 15 }}>
+                Done
+              </button>
+            </div>
           </div>
         </div>
+      </Portal>
+    );
+  }
+
+  if (!pos) return null;
+  return (
+    <Portal>
+      <div aria-hidden onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1199 }} />
+      <div
+        ref={panel}
+        role="dialog"
+        aria-label={title}
+        tabIndex={-1}
+        className="focus:outline-none"
+        style={{ ...LAYER, top: pos.top, left: pos.left, width: pos.width, padding: 18, maxHeight: `calc(100dvh - ${pos.top + 16}px)`, overflowY: 'auto' }}
+      >
+        {head}
+        {children}
       </div>
     </Portal>
   );
 }
+
+/** One option row inside a chip's popover: a radio or a checkbox look. */
+export function ChoiceRow({
+  label, active, onClick, kind = 'radio', icon, note,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  kind?: 'radio' | 'check';
+  icon?: IconType;
+  note?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role={kind === 'radio' ? 'radio' : 'checkbox'}
+      aria-checked={active}
+      onClick={onClick}
+      className="w-full flex items-center text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+      style={{
+        gap: 10, padding: '11px 10px', borderRadius: 12, border: 'none', cursor: 'pointer',
+        backgroundColor: active ? '#EEF3EC' : 'transparent', fontFamily: FONT, fontSize: 15, fontWeight: active ? 800 : 500, color: INK,
+      }}
+    >
+      {kind === 'check' ? <CheckBox on={active} /> : <RadioDot on={active} />}
+      {icon && <DuoIcon icon={icon} size={18} tone="green" />}
+      <span className="flex-1 min-w-0" style={{ overflowWrap: 'anywhere' }}>{label}</span>
+      {note && <span style={{ fontSize: 12.5, fontWeight: 600, color: INK_SOFT }}>{note}</span>}
+    </button>
+  );
+}
+
+function RadioDot({ on }: { on: boolean }) {
+  return (
+    <span
+      aria-hidden
+      style={{
+        width: 18, height: 18, borderRadius: 9999, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        border: on ? `1.5px solid ${FOREST}` : '1.5px solid rgba(28,20,16,0.35)', backgroundColor: '#FFFFFF',
+      }}
+    >
+      {on && <span style={{ width: 9, height: 9, borderRadius: 9999, backgroundColor: FOREST }} />}
+    </span>
+  );
+}
+
+// ── Place rail: Near you, the six regions and the countries, as round discs ─
+
+export interface PlaceItem {
+  key: string;
+  label: string;
+  /** How many conferences sit behind it under the other filters. */
+  count?: number;
+  /** ISO code: a round flag. Without one, `icon` in a rimmed disc. */
+  code?: string;
+  icon?: IconType;
+  /** A small word above the label ("Near you"). */
+  kicker?: string;
+  active: boolean;
+  onClick: () => void;
+}
+
+export function PlaceRail({ items, trailing }: { items: PlaceItem[]; trailing?: React.ReactNode }) {
+  const scroller = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+  const measure = useCallback(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const left = el.scrollLeft > 4;
+    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+    setEdges(prev => (prev.left === left && prev.right === right ? prev : { left, right }));
+  }, []);
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    el.addEventListener('scroll', measure, { passive: true });
+    return () => { ro.disconnect(); el.removeEventListener('scroll', measure); };
+  }, [measure, items.length]);
+  const nudge = (dir: 1 | -1) => {
+    const el = scroller.current;
+    if (el) el.scrollBy({ left: dir * Math.max(240, el.clientWidth * 0.7), behavior: 'smooth' });
+  };
+  const mask = `linear-gradient(90deg, ${edges.left ? 'transparent 0, #000 48px' : '#000 0'}, ${edges.right ? '#000 calc(100% - 48px), transparent 100%' : '#000 100%'})`;
+
+  return (
+    <div className="relative flex items-center" style={{ gap: 10 }}>
+      {edges.left && (
+        <span className="hidden sm:inline-flex">
+          <button type="button" onClick={() => nudge(-1)} aria-label="Scroll places back" className="focus:outline-none" style={RIM_DISC}>
+            <ChevronLeft size={17} strokeWidth={2.4} aria-hidden />
+          </button>
+        </span>
+      )}
+      <div
+        ref={scroller}
+        role="group"
+        aria-label="Browse by place"
+        className="gv-explore-scroll flex-1 flex items-start"
+        style={{ overflowX: 'auto', scrollbarWidth: 'none', gap: 'clamp(10px, 1.4vw, 18px)', WebkitMaskImage: mask, maskImage: mask, padding: '6px 4px 4px' }}
+      >
+        {items.map(it => (
+          <button
+            key={it.key}
+            type="button"
+            aria-pressed={it.active}
+            onClick={it.onClick}
+            className="flex flex-col items-center flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded-xl"
+            style={{ width: 84, gap: 6, padding: '2px 0 4px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: FONT }}
+          >
+            <span
+              style={{
+                width: 64, height: 64, borderRadius: 9999, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                padding: 3, background: 'linear-gradient(180deg, #FFFFFF 0%, #F2EDE2 100%)',
+                boxShadow: it.active
+                  ? `0 0 0 2.5px ${FOREST}, 0 6px 14px rgba(27,56,40,0.20)`
+                  : 'inset 0 1px 0 #FFFFFF, 0 0 0 1px rgba(27,56,40,0.14), 0 3px 8px rgba(27,56,40,0.12)',
+                transition: 'box-shadow 160ms ease',
+              }}
+            >
+              {it.code ? (
+                <CircleFlag code={it.code} size={58} decorative />
+              ) : it.icon ? (
+                <DuoIcon icon={it.icon} size={28} tone={it.active ? 'green' : 'gold'} />
+              ) : null}
+            </span>
+            {it.kicker && <span style={{ fontSize: 10.5, fontWeight: 800, color: '#8A6414', lineHeight: 1 }}>{it.kicker}</span>}
+            <span style={{ fontSize: 13, fontWeight: it.active ? 800 : 600, color: INK, lineHeight: 1.2, textAlign: 'center', overflowWrap: 'anywhere' }}>{it.label}</span>
+            {typeof it.count === 'number' && (
+              <span style={{ fontSize: 12, fontWeight: 600, color: INK_SOFT, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{it.count.toLocaleString()}</span>
+            )}
+          </button>
+        ))}
+        {trailing}
+      </div>
+      {edges.right && (
+        <span className="hidden sm:inline-flex">
+          <button type="button" onClick={() => nudge(1)} aria-label="Scroll places forward" className="focus:outline-none" style={RIM_DISC}>
+            <ChevronRight size={17} strokeWidth={2.4} aria-hidden />
+          </button>
+        </span>
+      )}
+    </div>
+  );
+}
+
+export const SCROLL_CSS = '.gv-explore-scroll::-webkit-scrollbar{display:none}';

@@ -6,7 +6,8 @@
 // reads the /account type scale from accountUi so the three pages and the rest
 // of the account area move together.
 //
-// House rules these pieces carry: every button label uppercase, every inline
+// House rules these pieces carry: every button label in sentence case (owner,
+// 26 Sep 2026; it was uppercase until then), every inline
 // link bold and underlined, no full stop on a title, a button or a one-line
 // caption, palette forest / gold / cream / ivory / white / ink only.
 
@@ -15,6 +16,7 @@ import Link from 'next/link';
 import { Info } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { OUTFIT, T, W } from '../accountUi';
+import { RAISED } from '../accountShell';
 
 export const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2';
 
@@ -221,7 +223,7 @@ type ButtonProps = {
   type?: 'button' | 'submit';
   style?: React.CSSProperties;
   className?: string;
-  /** 48 by default; the promo CLAIM is 52. */
+  /** 48 by default; the promo Claim is 52. */
   height?: number;
 };
 
@@ -229,26 +231,29 @@ const BUTTON_TYPE: React.CSSProperties = {
   fontFamily: OUTFIT,
   fontSize: T.body,
   fontWeight: W.title,
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
+  letterSpacing: '0.01em',
 };
 
-/** Forest fill, gold text. The green button. */
+/** The forest gradient button (white text). The main action. */
 export function PrimaryButton({ children, onClick, disabled, type = 'button', style, className = '', height = 48 }: ButtonProps) {
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`gv-btn-primary inline-flex items-center justify-center gap-2 rounded-xl px-6 ${FOCUS} ${className}`}
+      className={`gv-btn-primary inline-flex items-center justify-center gap-2 rounded-[10px] px-6 ${FOCUS} ${className}`}
       style={{
         minHeight: height,
         minWidth: 44,
-        backgroundColor: disabled ? 'rgba(27,56,40,0.45)' : FOREST,
-        color: GOLD,
+        // The Airbnb button in forest (taste board two): a left-to-right
+        // gradient, white text, sentence case, radius 10.
+        background: 'linear-gradient(90deg, #1B3828 0%, #2A5A3C 55%, #1E4A31 100%)',
+        opacity: disabled ? 0.5 : 1,
+        color: WHITE,
         border: 'none',
+        boxShadow: '0 8px 18px -8px rgba(27,56,40,0.55), inset 0 1px 0 rgba(255,255,255,0.14)',
         cursor: disabled ? 'not-allowed' : 'pointer',
-        transition: 'background-color 150ms ease-out',
+        transition: 'filter 150ms ease-out, transform 150ms ease-out',
         ...BUTTON_TYPE,
         ...style,
       }}
@@ -258,20 +263,20 @@ export function PrimaryButton({ children, onClick, disabled, type = 'button', st
   );
 }
 
-/** Outlined on white, for a second action beside the green one. */
+/** Ink outline on white, for a second action beside the main one. */
 export function SecondaryButton({ children, onClick, disabled, type = 'button', style, className = '', height = 48 }: ButtonProps) {
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`gv-btn-secondary inline-flex items-center justify-center gap-2 rounded-xl px-6 ${FOCUS} ${className}`}
+      className={`gv-btn-secondary inline-flex items-center justify-center gap-2 rounded-[10px] px-6 ${FOCUS} ${className}`}
       style={{
         minHeight: height,
         minWidth: 44,
         backgroundColor: WHITE,
-        color: disabled ? INK_SOFT : FOREST,
-        border: `1.5px solid ${disabled ? RULE : FOREST}`,
+        color: disabled ? INK_SOFT : INK,
+        border: `1.5px solid ${disabled ? RULE : INK}`,
         cursor: disabled ? 'not-allowed' : 'pointer',
         transition: 'background-color 150ms ease-out',
         ...BUTTON_TYPE,
@@ -287,7 +292,8 @@ export function SecondaryButton({ children, onClick, disabled, type = 'button', 
 export function ButtonStyles() {
   return (
     <style>{`
-      .gv-btn-primary:not(:disabled):hover{background-color:${FOREST_MID} !important}
+      .gv-btn-primary:not(:disabled):hover{filter:brightness(1.08)}
+      .gv-btn-primary:not(:disabled):active,.gv-btn-secondary:not(:disabled):active{transform:scale(0.98)}
       .gv-btn-secondary:not(:disabled):hover{background-color:${IVORY} !important}
     `}</style>
   );
@@ -297,12 +303,12 @@ export function ButtonStyles() {
 
 type CardProps = { children: React.ReactNode; className?: string; style?: React.CSSProperties } & React.HTMLAttributes<HTMLElement>;
 
-/** A white block with a parchment rule. */
+/** The raised white card of the account area (the soft 3D card). */
 export function WhiteCard({ children, className = '', style, ...rest }: CardProps) {
   return (
     <section
       className={`rounded-[20px] p-6 md:p-8 ${className}`}
-      style={{ backgroundColor: WHITE, border: `1px solid ${RULE}`, boxShadow: '0 1px 3px rgba(27,56,40,0.06), 0 10px 28px rgba(27,56,40,0.07)', ...style }}
+      style={{ background: 'linear-gradient(180deg, #FFFFFF 0%, #FDFBF7 100%)', boxShadow: RAISED, ...style }}
       {...rest}
     >
       {children}

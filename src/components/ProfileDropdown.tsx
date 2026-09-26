@@ -607,7 +607,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
             <>
               <div className="pt-2.5 pb-1.5">
                 <p className="px-4 pb-1 font-semibold" style={{ color: INK_SOFT, fontSize: 12, fontFamily: FONT }}>
-                  Your conferences
+                  My conferences
                 </p>
 
                 {confsLoading ? (
@@ -708,7 +708,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
           <div className="py-1.5">
             {/* Manage account, with the credit balance as a plain number. */}
             <Link
-              href="/account/manage/credits"
+              href="/account/manage"
               onClick={close}
               className="flex items-center gap-3 px-4 py-2 font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-inset"
               style={{ ...ROW_TEXT, textDecoration: 'none', minHeight: ROW_H }}

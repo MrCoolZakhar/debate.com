@@ -37,7 +37,7 @@ import { BenefitList, BrandTitle, ErrorLine, Eyebrow, GOLD, GoldButton, Purchase
 
 // Only what is real, as titles (owner, 25 Sep 2026): no caption under any
 // of them, so the pop-up fits a 1280x800 screen. Kept in step with INCLUDED
-// on /pricing/subscription and BENEFITS on /account/manage/subscription.
+// on /pricing/subscription and BENEFITS on /account/manage (the plan card).
 const BENEFITS: Benefit[] = [
   { emoji: 'Infinity', fallback: InfinityIcon, title: 'Apply to as many conferences as you like', live: true },
   { emoji: 'Books', fallback: BookOpen, title: 'Premium MUN guides', live: true },
@@ -199,7 +199,7 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
             <h3 className="gv-buy-rtitle">You&apos;re already on Unlimited</h3>
             <p className="gv-buy-note">
               Every application is covered. Your plan and its renewal date are in{' '}
-              <Link href="/account/manage/subscription" onClick={closePurchasePopup}>Manage subscription</Link>.
+              <Link href="/account/manage#subscription" onClick={closePurchasePopup}>Manage subscription</Link>.
             </p>
             <SwapLine lead="Looking for credits?" action="Top up here" onClick={() => swapToCredits('header')} />
           </>

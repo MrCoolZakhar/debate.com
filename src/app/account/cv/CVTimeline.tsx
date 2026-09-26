@@ -292,25 +292,19 @@ export function TimelineEntry({
             </button>
           )}
 
-          {/* Role chip */}
+          {/* Role: an icon plus a plain word (CLAUDE.md §8), no chip */}
           <div className="flex items-center gap-3 mb-2 pr-9">
             <span
-              className="inline-flex items-center gap-1.5 flex-shrink-0"
+              className="inline-flex items-center gap-1 flex-shrink-0"
               style={{
-                padding: '4px 11px 4px 7px',
-                borderRadius: '999px',
-                background: `linear-gradient(150deg, ${type.accent}1C, ${type.accent}0C), ${NEU.surface}`,
-                border: `1px solid ${type.accent}33`,
-                boxShadow: NEU.outSm,
                 color: type.chipInk,
                 fontFamily: OUTFIT,
-                fontSize: '10.5px',
-                fontWeight: 800,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
+                fontSize: '12.5px',
+                fontWeight: 700,
               }}
             >
-              {type.label}
+              <type.Icon size={15} strokeWidth={2.2} aria-hidden />
+              {type.label.charAt(0) + type.label.slice(1).toLowerCase()}
             </span>
           </div>
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ChevronLeft, Check, Trash2 } from 'lucide-react';
+import { ChevronLeft, Check, CheckCircle2, CircleDashed, Clock, Trash2 } from 'lucide-react';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { isPaymentsLive } from '@/lib/payments';
@@ -71,18 +71,20 @@ function DelegationCard({ society, members, hasUnseenSwap, isEmpty, onClick, onD
         </div>
         {pledgePending && (
           <span
-            className="flex-shrink-0 px-2.5 py-0.5 rounded-full"
-            style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.05em', backgroundColor: NEU.surface, boxShadow: NEU.outSm, color: '#9A6B2F', fontFamily: OUTFIT }}
+            className="flex-shrink-0 inline-flex items-center gap-1"
+            style={{ fontSize: 12, fontWeight: 700, color: '#9A6B2F', fontFamily: OUTFIT, whiteSpace: 'nowrap' }}
           >
-            PLEDGE PENDING
+            <Clock size={14} strokeWidth={2.4} aria-hidden="true" />
+            Pledge pending
           </span>
         )}
         {isEmpty && !pledgePending && (
           <span
-            className="flex-shrink-0 px-2.5 py-0.5 rounded-full"
-            style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.05em', backgroundColor: NEU.surface, boxShadow: NEU.outSm, color: NEU.muted, fontFamily: OUTFIT, marginRight: isEmpty ? 30 : undefined }}
+            className="flex-shrink-0 inline-flex items-center gap-1"
+            style={{ fontSize: 12, fontWeight: 700, color: NEU.inkSoft, fontFamily: OUTFIT, whiteSpace: 'nowrap', marginRight: isEmpty ? 30 : undefined }}
           >
-            EMPTY
+            <CircleDashed size={14} strokeWidth={2.4} aria-hidden="true" />
+            Empty
           </span>
         )}
       </div>
@@ -905,8 +907,9 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
                   <span className="flex-1 min-w-0" style={{ fontFamily: OUTFIT }}>
                     <StackedName name={name} size={14} weight={700} color={paid ? '#EED98A' : '#1C1410'} restColor={paid ? 'rgba(238,217,138,0.78)' : '#5A4E42'} />
                   </span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: paid ? '#EED98A' : '#9A6B2F', fontFamily: MONO, letterSpacing: '0.06em', flexShrink: 0, opacity: paid ? 0.9 : 1 }}>
-                    {paid ? 'PAID' : 'UNPAID'}
+                  <span className="inline-flex items-center gap-1" style={{ fontSize: 12, fontWeight: 700, color: paid ? '#EED98A' : '#9A6B2F', fontFamily: OUTFIT, flexShrink: 0 }}>
+                    {paid ? <CheckCircle2 size={14} strokeWidth={2.4} aria-hidden="true" /> : <Clock size={14} strokeWidth={2.4} aria-hidden="true" />}
+                    {paid ? 'Paid' : 'Unpaid'}
                   </span>
                   <div className="flex items-center gap-2.5 flex-shrink-0">
                     {paid && (
@@ -995,7 +998,10 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
                       </p>
                     )}
                   </div>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: '#EED98A', fontFamily: MONO, letterSpacing: '0.06em', flexShrink: 0, opacity: 0.9 }}>PAID</span>
+                  <span className="inline-flex items-center gap-1" style={{ fontSize: 12, fontWeight: 700, color: '#EED98A', fontFamily: OUTFIT, flexShrink: 0 }}>
+                    <CheckCircle2 size={14} strokeWidth={2.4} aria-hidden="true" />
+                    Paid
+                  </span>
                   <div className="flex items-center gap-2.5 flex-shrink-0">
                     <button
                       onClick={() => handleNotAttending(m)}

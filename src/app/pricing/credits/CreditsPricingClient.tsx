@@ -99,7 +99,7 @@ export default function CreditsPricingClient() {
           {user && balance !== null && (
             <p className="gv-cr-balance">
               You have {balance} {balance === 1 ? 'credit' : 'credits'}.{' '}
-              <Link href="/account/manage/credits" className={`gv-p-link ${FOCUS_RING}`}>See your history</Link>
+              <Link href="/account/manage#credits" className={`gv-p-link ${FOCUS_RING}`}>See your history</Link>
             </p>
           )}
         </div>

@@ -28,9 +28,9 @@ export interface FaqEntry {
   keywords?: string[];
 }
 
-const MANAGE_SUBSCRIPTION = { kind: 'link', label: 'Manage account: Subscription', href: '/account/manage/subscription' } as const;
-const MANAGE_PROMO = { kind: 'link', label: 'Manage account: Promo code', href: '/account/manage/promo' } as const;
-const MANAGE_CREDITS = { kind: 'link', label: 'Manage account: Credits and usage', href: '/account/manage/credits' } as const;
+const MANAGE_SUBSCRIPTION = { kind: 'link', label: 'Manage account: Subscription', href: '/account/manage#subscription' } as const;
+const MANAGE_PROMO = { kind: 'link', label: 'Manage account: Promo code', href: '/account/manage#promo' } as const;
+const MANAGE_CREDITS = { kind: 'link', label: 'Manage account: Credits and usage', href: '/account/manage#credits' } as const;
 const PRICING_CREDITS = { kind: 'link', label: 'Credits pricing', href: '/pricing/credits' } as const;
 const PRICING_SUB = { kind: 'link', label: 'Unlimited pricing', href: '/pricing/subscription' } as const;
 

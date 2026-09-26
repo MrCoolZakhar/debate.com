@@ -6,7 +6,7 @@ import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
 import {
   LayoutDashboard, Building2, Users, MapPin, FileText,
-  Mail, CreditCard, Settings, Briefcase, Menu, X, Radio, Upload, HeartHandshake, Store,
+  Mail, CreditCard, Settings, Briefcase, Menu, X, Radio, Upload, HeartHandshake, Store, Clock,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -262,7 +262,7 @@ const NAV_SECTIONS = (slug: string, badges: NavBadges = NO_BADGES): NavSection[]
       { icon: Settings,  label: 'Settings',  href: `/manage/${slug}/settings`, external: false, badge: 0 },
       // The public job board is not open yet, so a posting would reach nobody.
       // The entry stays a link (the page shows a coming-soon panel) with a tag.
-      { icon: Briefcase, label: 'Job Board', href: `/manage/${slug}/jobs`,     external: false, badge: 0, tag: 'COMING SOON' },
+      { icon: Briefcase, label: 'Job Board', href: `/manage/${slug}/jobs`,     external: false, badge: 0, tag: 'Coming soon' },
       { icon: Upload,    label: 'Import',    href: `/manage/${slug}/import`,   external: false, badge: 0 },
     ],
   },
@@ -476,14 +476,15 @@ function SideRail({
                   )}
                   {expanded && item.tag && (
                     <span
-                      className="flex-shrink-0 rounded-full"
+                      className="flex-shrink-0 inline-flex items-center gap-1"
                       style={{
-                        marginLeft: 'auto', padding: '2px 6px', fontSize: 9.5, fontWeight: 800,
-                        letterSpacing: '0.08em', textTransform: 'uppercase', lineHeight: 1.2, whiteSpace: 'nowrap',
+                        marginLeft: 'auto', fontSize: 11, fontWeight: 700,
+                        lineHeight: 1.2, whiteSpace: 'nowrap',
                         fontFamily: "var(--font-brand), sans-serif",
-                        backgroundColor: '#EED98A', color: '#1C1410',
+                        color: active ? '#EED98A' : '#8A6614',
                       }}
                     >
+                      <Clock size={13} strokeWidth={2.2} aria-hidden />
                       {item.tag}
                     </span>
                   )}
@@ -656,14 +657,15 @@ function SidebarContent({
                   )}
                   {item.tag && (
                     <span
-                      className="flex-shrink-0 rounded-full"
+                      className="flex-shrink-0 inline-flex items-center gap-1"
                       style={{
-                        padding: '2px 6px', fontSize: 9.5, fontWeight: 800,
-                        letterSpacing: '0.08em', textTransform: 'uppercase', lineHeight: 1.2, whiteSpace: 'nowrap',
+                        fontSize: 11, fontWeight: 700,
+                        lineHeight: 1.2, whiteSpace: 'nowrap',
                         fontFamily: "var(--font-brand), sans-serif",
-                        backgroundColor: '#EED98A', color: '#1C1410',
+                        color: '#8A6614',
                       }}
                     >
+                      <Clock size={13} strokeWidth={2.2} aria-hidden />
                       {item.tag}
                     </span>
                   )}

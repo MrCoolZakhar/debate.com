@@ -24,7 +24,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Megaphone, Info, Zap, PauseCircle, Flag, ImagePlus, X, Trash2,
-  Check, Clock, AlertTriangle, Loader2, Radio,
+  Check, Clock, AlertTriangle, Loader2, Radio, CheckCircle2, Hourglass,
 } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { LogoDisc } from '@/components/LogoDisc';
@@ -1027,10 +1027,13 @@ export function RecentBroadcasts({
                 </button>
               ) : (
                 <span
-                  className="text-[10px] font-bold uppercase flex-shrink-0"
-                  style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.06em' }}
+                  className="inline-flex items-center gap-1 text-[12px] font-bold flex-shrink-0"
+                  style={{ color: '#6B5F52', fontFamily: OUTFIT }}
                   title={g.kind === 'actionable' ? 'Already delivered to the dais. Deleting the row would not undo it' : 'Expired'}
                 >
+                  {g.kind === 'actionable'
+                    ? <CheckCircle2 size={14} strokeWidth={2.2} aria-hidden />
+                    : <Hourglass size={14} strokeWidth={2.2} aria-hidden />}
                   {g.kind === 'actionable' ? 'Delivered' : 'Expired'}
                 </span>
               )}

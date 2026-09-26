@@ -3,9 +3,9 @@ import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import AboutClient from './AboutClient';
 
 export const metadata: Metadata = pageMetadata({
-  title: 'About Us: Built for the MUN Community',
+  title: 'About and Contact: Built for the MUN Community',
   description:
-    'Meet the team behind Gavelling: MUN practitioners building the modern infrastructure for Model UN sessions and conferences worldwide.',
+    'Contact the Gavelling team as an organiser, a delegate or chair, or press, and meet the founders and ambassadors building Model UN software worldwide.',
   path: '/about',
   ogTitle: 'About Gavelling: Built for the MUN Community',
 });
@@ -14,9 +14,20 @@ const aboutSchema = {
   '@context': 'https://schema.org',
   '@type': 'AboutPage',
   name: 'About Gavelling',
-  description: 'Meet the team behind Gavelling: MUN practitioners building the modern infrastructure for Model UN sessions and conferences worldwide.',
+  description: 'Contact the Gavelling team as an organiser, a delegate or chair, or press, and meet the founders and ambassadors building Model UN software worldwide.',
   url: 'https://gavelling.com/about',
   publisher: JSONLD_PUBLISHER,
+  mainEntity: {
+    '@type': 'Organization',
+    name: 'Gavelling',
+    url: 'https://gavelling.com',
+    contactPoint: {
+      '@type': 'ContactPoint',
+      contactType: 'customer support',
+      email: 'wearegavelling@gmail.com',
+      availableLanguage: ['English'],
+    },
+  },
 };
 
 const breadcrumbSchema = {
@@ -24,7 +35,7 @@ const breadcrumbSchema = {
   '@type': 'BreadcrumbList',
   itemListElement: [
     { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://gavelling.com' },
-    { '@type': 'ListItem', position: 2, name: 'About', item: 'https://gavelling.com/about' },
+    { '@type': 'ListItem', position: 2, name: 'About and contact', item: 'https://gavelling.com/about' },
   ],
 };
 

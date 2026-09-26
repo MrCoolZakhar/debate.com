@@ -36,14 +36,14 @@ import { useAuthModalOpen } from '@/lib/authModal';
 // 'checking' or 'needed', so no modal ever opens on top of this one.
 //
 // Never shown on EXCLUDED routes: the auth flow (onboarding asks the same
-// thing itself), legal pages, contact and unsubscribe (must stay reachable),
+// thing itself), legal pages, /about (contact lives there) and unsubscribe (must stay reachable),
 // every anonymous live-session surface (a chair must never get a modal over a
 // live committee), the profile page (it has both fields AND account deletion,
 // which must not require handing over a birth date first), and any /apply
 // path (the apply flow has its own basics wall, so the gate would ask twice).
 
 const EXCLUDED_PREFIXES = [
-  '/auth', '/privacy', '/terms', '/contact', '/unsubscribe', '/api',
+  '/auth', '/privacy', '/terms', '/about', '/contact', '/unsubscribe', '/api',
   '/chair', '/delegate', '/advisor', '/voting', '/join', '/create/sessions',
   '/account/profile',
 ];

@@ -1,44 +1,63 @@
 'use client';
 
+// ── Explore conferences (/conferences/explore), redesigned 26 Sep 2026 ──────
+// Owner: "revert the background ... do a complete redesign of the page. Find
+// best event platforms and do it that way. I like the top bar for searching."
+// Built after Luma discover, Eventbrite, Meetup and Resident Advisor, in
+// Gavelling's ivory, white, forest and gold (CLAUDE.md §8, "The Explore page"):
+//   1. a compact hero: the title, the count line and the search pill
+//   2. date tabs (All dates, This week, This month, Next 3 months, Later)
+//   3. a slim bar of filter chips, each a small popover (a sheet on phones)
+//   4. browse by place: Near you, the six regions and the countries, round
+//   5. the Spotlight row: booked spotlights as large featured cards
+//   6. the feed, grouped by month under sticky month headers, as a list
+//      (default) or the photo-card grid
+// Every control drives a filter the page already had, and so its existing
+// URL parameter. Nothing new is read or invented.
+
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  Search, Users, Check,
-  CalendarDays, Ticket, Globe,
-  MapPin, Monitor, School, GraduationCap, Heart, X, DoorOpen, LayoutGrid,
+  Search, CalendarDays, Ticket, Globe, MapPin, Monitor, School, GraduationCap, Heart, DoorOpen, Navigation, Plus,
 } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import SiteFooter from '@/components/SiteFooter';
-import { Emoji3D } from '@/components/neu';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase } from '@/lib/supabase';
 import { getCountryByName, getCountryByCode, UN_COUNTRIES, fold, countryIdentity, countryMatchRank } from '@/lib/countries';
 import { CircleFlag } from '@/components/CircleFlag';
-import { currencySymbol, formatFeeAmountCompact } from '@/lib/utils';
-import { fetchDelegatePrices, withDelegatePrice, TBD_PRICE, type DelegatePrice } from '@/lib/publicFees';
-import { compareStartDate, hasConcluded, splitConferenceDates } from '@/lib/conferenceDates';
-import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
+import { fetchDelegatePrices, withDelegatePrice } from '@/lib/publicFees';
+import { compareStartDate, hasConcluded } from '@/lib/conferenceDates';
 import { ConferenceCard, ConferenceCardSkeleton } from '../ConferenceCard';
 import { GoldWord } from '@/components/BrandHeading';
 import {
-  CategoryRail, CheckBox, FiltersButton, FiltersSheet, PRIMARY_BUTTON, SECONDARY_BUTTON, SearchPill, SortMenu, ViewToggle,
-  type ExploreView, type RailCategory,
+  ChipLayer, ChoiceRow, DateTabs, FilterChip, PlaceRail, PRIMARY_BUTTON, RIM_DISC, SCROLL_CSS, SearchPill, SortMenu, ToggleChip, ViewToggle,
+  type DateTab, type ExploreView, type PlaceItem,
 } from './ExploreChrome';
-import VerifiedCheck from '@/components/VerifiedCheck';
-import { LogoDisc } from '@/components/LogoDisc';
+import {
+  FEED_CSS, FeedRows, FeedSkeleton, MonthHeader, SpotlightRow, groupByMonth,
+  type ExploreConference, type SpotlightItem,
+} from './ExploreFeed';
 import { isListedConference } from '@/lib/publicConferences';
 import { fetchFeatured, recordSpotlightClick, recordSpotlightView, type FeaturedRow } from '@/lib/spotlight';
 import { fetchCreditSponsoredIds } from '@/lib/creditSponsored';
-import { CreditSponsoredMark, SpotlightTag, SPOTLIGHT_GLOW, SPOTLIGHT_GLOW_HOVER } from '@/components/conferences/SpotlightTag';
 import ConferenceSpotlightDialog, { claimSpotlightDialog } from './ConferenceSpotlightDialog';
 import { DatePicker } from '@/components/DatePicker';
 import {
-  DATE_OPTIONS, PRICE_OPTIONS, ROLE_OPTIONS, matchesDateBucket, matchesDateRange, matchesPrice, matchesRoles,
-  parseFacets, readExploreQuery, writeExploreQuery, toDateOnly,
+  PRICE_OPTIONS, ROLE_OPTIONS, matchesDateBucket, matchesDateRange, matchesPrice, matchesRoles,
+  parseDateOnly, parseFacets, readExploreQuery, writeExploreQuery, toDateOnly,
   type DateFilter, type FacetMap, type PriceFilter, type RoleKey,
 } from './exploreFilters';
+
+const FONT = "var(--font-brand), sans-serif";
+const INK = '#1C1410';
+const INK_SOFT = '#5C5140';
+const FOREST = '#1B3828';
+const IVORY = '#EDE7D8';
+// The paper grain every public page lays over the ivory (pricing, legal).
+const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
 // ── Continent maps ─────────────────────────────────────────────────────────────
 
@@ -62,19 +81,6 @@ const CONTINENT_LABELS: Record<string, string> = {
 
 // The rail's Region group, in this order (25 Sep 2026). ?continent=<key>.
 const REGION_ORDER = ['africa', 'asia', 'europe', 'north-america', 'south-america', 'oceania'] as const;
-
-// User-facing labels for student_level DB values ('school' stays 'school' in the DB).
-const LEVEL_LABELS: Record<string, string> = {
-  school: 'High School',
-  university: 'University',
-  both: 'HS & Uni',
-};
-
-const FORMAT_LABELS: Record<string, string> = {
-  'in-person': 'In person',
-  'online': 'Online',
-  'hybrid': 'Hybrid',
-};
 
 // The rail offers two formats and two levels, because that is how people
 // actually choose: can I get there in person, or do I attend from my room?
@@ -115,48 +121,10 @@ const BIG_CONFERENCE_DELEGATES = 500;
 const BIG_CONFERENCE_LIMIT = 4;
 
 
-// Small lucide icons that showcase HOW a conference happens, so a row reads at
-// a glance: format (where it meets) and student level (who it is for).
-type RowIcon = React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
-
-const FORMAT_ICONS: Record<string, RowIcon> = {
-  'in-person': MapPin,   // meets in a physical place
-  'online': Monitor,     // meets on screen
-  'hybrid': Globe,       // both worlds
-};
-
-const LEVEL_ICONS: Record<string, RowIcon> = {
-  school: School,             // high school
-  university: GraduationCap,  // university
-  both: GraduationCap,        // HS & Uni
-};
-
-const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-interface Conference {
-  id: string;
-  slug: string;
-  full_name: string;
-  acronym: string;
-  country: string;
-  city: string;
-  start_date: string;
-  end_date: string;
-  expected_delegates: number;
-  fee_amount: number;
-  fee_currency: string;
-  /** Public delegate price (publicFees.displayDelegatePrice); absent = TBD. */
-  delegate_price?: DelegatePrice;
-  format: string;
-  student_level: string;
-  logo_url: string | null;
-  banner_url: string | null;
-  is_public: boolean;
-  is_verified?: boolean;
-  organizer_id: string | null;
-}
+type Conference = ExploreConference;
 
 // Resolve a Vercel ISO-3166 alpha-2 code (e.g. "GB") to a full country name
 // so it can be matched against conference.country ("United Kingdom").
@@ -170,316 +138,6 @@ function countryNameFromCode(code: string | null | undefined): string | null {
 
 const VIEW_STORAGE_KEY = 'gavelling-explore-view';
 type DateSort = 'asc' | 'desc';
-
-// ── List row (myMUN-style directory row) ──────────────────────────────────
-
-// Two-line date range: "Jul 13 – Jul 17" over "2026". A one-day conference
-// collapses to just "Aug 30".
-function splitDateRange(start: string | null, end: string | null): { range: string; year: string } {
-  return splitConferenceDates(start, end);
-}
-
-/** Format and level on a list row: an icon and a plain word, never a chip. */
-function RowChip({ label, icon: Icon }: { label: string; icon?: RowIcon }) {
-  return (
-    <span
-      className="inline-flex items-center flex-shrink-0"
-      style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, fontSize: '13px', color: '#5C5140', gap: '5px', whiteSpace: 'nowrap' }}
-    >
-      {Icon && <Icon size={14} strokeWidth={2} style={{ color: '#2A5A3C', flexShrink: 0 }} />}
-      {label}
-    </span>
-  );
-}
-
-function ConferenceListRow({
-  conf, applied, member, hovered, onHover, onLeave, creditSponsored = false, spotlight = false, onSpotlightClick,
-}: {
-  conf: Conference;
-  creditSponsored?: boolean;
-  /** A booked Gavelling Spotlight: the small tag and the gold edge and glow the grid card wears. */
-  spotlight?: boolean;
-  onSpotlightClick?: () => void;
-  applied: boolean;
-  /** Viewer is already part of this conference (organizer / chair / delegate), takes precedence over `applied`. */
-  member: boolean;
-  hovered: boolean;
-  onHover: () => void;
-  onLeave: () => void;
-}) {
-  const router = useRouter();
-  const href = `/conferences/${conf.slug}`;
-  const countryObj = getCountryByName(conf.country);
-  const initials = conf.acronym.slice(0, 3).toUpperCase();
-  const { range, year } = splitDateRange(conf.start_date, conf.end_date);
-  const formatLabel = FORMAT_LABELS[conf.format] ?? conf.format;
-  const levelLabel = LEVEL_LABELS[conf.student_level];
-  const price = conf.delegate_price ?? TBD_PRICE;
-
-  // CTA navigates itself and stops the click reaching the row link.
-  function onCta(e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    router.push(href);
-  }
-
-  const ctaBase: React.CSSProperties = {
-    fontSize: '13px', padding: '9px 16px',
-  };
-
-  return (
-    <Link
-      href={href}
-      onMouseEnter={onHover}
-      onMouseLeave={onLeave}
-      onClick={spotlight ? onSpotlightClick : undefined}
-      className="flex items-center gap-4 md:gap-6 px-2 md:px-4"
-      style={spotlight ? {
-        // The grid card's spotlight treatment: a gold edge and a soft gold glow.
-        paddingTop: '20px',
-        paddingBottom: '20px',
-        margin: '10px 0',
-        borderRadius: '18px',
-        backgroundColor: hovered ? '#FFFDF6' : '#FFFFFF',
-        boxShadow: hovered ? SPOTLIGHT_GLOW_HOVER : SPOTLIGHT_GLOW,
-        textDecoration: 'none',
-        transition: 'background-color 160ms ease, box-shadow 200ms ease',
-      } : {
-        paddingTop: '22px',
-        paddingBottom: '22px',
-        backgroundColor: hovered ? 'rgba(27,56,40,0.035)' : 'transparent',
-        borderBottom: '2px solid rgba(27,56,40,0.16)',
-        textDecoration: 'none',
-        transition: 'background-color 160ms ease',
-      }}
-    >
-      {/* Round logo: the shared LogoDisc (near-white disc, forest fallback
-          with acronym initials), so a circle-cropped logo fills it edge to edge. */}
-      <LogoDisc
-        src={conf.logo_url}
-        alt={conf.acronym}
-        size={64}
-        fallbackText={initials}
-        style={{
-          border: '0.5px solid rgba(221,212,192,0.8)',
-          boxShadow: hovered ? '0 6px 16px rgba(27,56,40,0.16)' : '0 3px 8px rgba(27,56,40,0.10)',
-          transition: 'box-shadow 160ms ease',
-        }}
-      />
-
-      {/* Name · city/country with flag · badge chips.
-          Grows to absorb ALL slack so the metadata columns to its right land in
-          the same position on every row (tidy, scannable columns). */}
-      <div className="min-w-0" style={{ flex: '1 1 0' }}>
-        <div
-          className="flex items-center gap-1.5 min-w-0 flex-wrap"
-          style={{
-            fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '18px',
-            letterSpacing: '0.003em', color: hovered ? '#1B3828' : '#1C1410',
-            transition: 'color 160ms ease', lineHeight: 1.2,
-          }}
-        >
-          <span style={{ overflowWrap: 'anywhere' }}>{conferenceAcronymLabel(conf) || conf.full_name}</span>
-          <VerifiedCheck verified={!!conf.is_verified} size={18} title="Verified conference" />
-          {spotlight && <SpotlightTag size="sm" style={{ marginInlineStart: 4 }} />}
-        </div>
-        {conferenceAcronymLabel(conf) && conf.full_name && conf.full_name !== conferenceAcronymLabel(conf) && (
-          <div style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, fontSize: '13px', color: '#6B5F52', marginTop: '2px', lineHeight: 1.3, overflowWrap: 'anywhere' }}>
-            {conf.full_name}
-          </div>
-        )}
-        <div
-          className="flex items-center gap-2 min-w-0"
-          style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, fontSize: '14px', color: '#6B5F52', marginTop: '5px' }}
-        >
-          {countryObj && <CircleFlag code={countryObj.code} size={18} decorative className="flex-shrink-0" />}
-          <span style={{ overflowWrap: 'anywhere' }}>{conf.city}, {conf.country}</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 mt-2.5">
-          {conf.format && <RowChip label={formatLabel} icon={FORMAT_ICONS[conf.format]} />}
-          {levelLabel && <RowChip label={levelLabel} icon={LEVEL_ICONS[conf.student_level]} />}
-          {/* The fee column is hidden below md, so the mark rides here there */}
-          {creditSponsored && <span className="md:hidden inline-flex"><CreditSponsoredMark size="xs" /></span>}
-          {/* Mobile-only inline date (right columns hidden below sm) */}
-          <span
-            className="sm:hidden inline-flex items-center gap-1.5 flex-shrink-0"
-            style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '12px', color: '#8A7D6C', whiteSpace: 'nowrap' }}
-          >
-            <CalendarDays size={13} style={{ color: '#9A8A78' }} />
-            {range} {year}
-          </span>
-        </div>
-      </div>
-
-      {/* Right rail — fixed-width metadata columns, right-aligned. Because the
-          name block absorbs all slack, date / delegates / fee sit at identical
-          horizontal positions on every row so they read as tidy columns. */}
-      <div
-        className="hidden sm:flex items-center flex-shrink-0"
-        style={{ justifyContent: 'flex-end', gap: '24px' }}
-      >
-      {/* Date (two-line) */}
-      <div className="flex items-start gap-2 flex-shrink-0" style={{ width: '152px' }}>
-        <CalendarDays size={18} strokeWidth={2} style={{ color: '#2A5A3C', marginTop: '2px', flexShrink: 0 }} />
-        <div style={{ fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums' }}>
-          <div style={{ fontWeight: 700, fontSize: '14.5px', color: '#1C1410', whiteSpace: 'nowrap' }}>{range}</div>
-          <div style={{ fontWeight: 500, fontSize: '13px', color: '#9A8A78', marginTop: '2px' }}>{year}</div>
-        </div>
-      </div>
-
-      {/* Delegates */}
-      <div className="hidden lg:flex items-center gap-2 flex-shrink-0" style={{ width: '96px' }}>
-        {conf.expected_delegates > 0 && (
-          <>
-            <Users size={18} strokeWidth={2} style={{ color: '#9A8A78', flexShrink: 0 }} />
-            <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: '15px', color: '#1C1410' }}>
-              {conf.expected_delegates.toLocaleString()}
-            </span>
-          </>
-        )}
-      </div>
-
-      {/* Fee, a gold 3D ticket for paid conferences, forest FREE pill for
-          free ones, a quiet TBD pill until delegate applications launch */}
-      <div className="hidden md:flex flex-col items-start justify-center gap-1 flex-shrink-0" style={{ width: '118px' }}>
-        <div className="flex items-center gap-2">
-        {price.kind === 'tbd' ? (
-          <span
-            title="Price to be announced"
-            style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '15px', color: '#6B5F52' }}
-          >
-            TBD
-          </span>
-        ) : price.kind === 'free' ? (
-          <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '15px', color: '#2A5A3C' }}>
-            Free
-          </span>
-        ) : (
-          <>
-            <Emoji3D name="Ticket" size={20} fallback={Ticket} fallbackColor="#B6871F" />
-            <span className="inline-flex items-baseline gap-0.5">
-              <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '13px', color: '#B6871F' }}>
-                {currencySymbol(price.currency)}
-              </span>
-              <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: '15px', color: '#1C1410' }}>
-                {formatFeeAmountCompact(price.amount)}
-              </span>
-            </span>
-          </>
-        )}
-        </div>
-        {/* Credit sponsored on its own line under the fee */}
-        {creditSponsored && <CreditSponsoredMark size="xs" />}
-      </div>
-      </div>
-
-      {/* CTA, member (part of the conference) > applied > apply */}
-      <div className="hidden sm:flex justify-end flex-shrink-0" style={{ width: '124px' }}>
-        {member ? (
-          <button type="button" onClick={onCta} className="inline-flex items-center gap-1.5 focus:outline-none"
-            style={{ ...SECONDARY_BUTTON, ...ctaBase }}
-          >
-            View
-          </button>
-        ) : applied ? (
-          <button type="button" onClick={onCta} className="inline-flex items-center gap-1.5 focus:outline-none"
-            style={{ ...SECONDARY_BUTTON, ...ctaBase }}
-          >
-            <Check size={14} strokeWidth={3} style={{ color: '#2A5A3C' }} />
-            Applied
-          </button>
-        ) : (
-          <button type="button" onClick={onCta} className="inline-flex items-center gap-1.5 focus:outline-none"
-            style={{
-              ...PRIMARY_BUTTON, ...ctaBase,
-              boxShadow: hovered ? '0 6px 16px rgba(27,56,40,0.26)' : '0 3px 8px rgba(27,56,40,0.18)',
-              transition: 'box-shadow 180ms ease',
-            }}
-          >
-            Apply
-          </button>
-        )}
-      </div>
-    </Link>
-  );
-}
-
-
-// ── Filter rail (mymun-style: filters live in a column beside the grid) ────
-// One vertical stack of grouped controls, sticky on desktop so filtering never
-// means scrolling back to the top. On narrow screens the whole rail collapses
-// behind a FILTERS button and expands in flow above the results.
-
-function RailHeading({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      style={{
-        fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '15px',
-        color: '#1C1410', margin: '0 10px 6px',
-      }}
-    >
-      {children}
-    </p>
-  );
-}
-
-/** One filter row. Reads as a list item, not a pill: full width, a check
- *  gutter on the left so the ticked and unticked rows stay optically aligned. */
-function RailOption({
-  label, active, onClick, icon: Icon, flagCode, note, count,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  icon?: RowIcon;
-  flagCode?: string;
-  note?: string;
-  /** How many conferences sit behind this option. */
-  count?: number;
-}) {
-  return (
-    <button
-      type="button"
-      role="option"
-      aria-selected={active}
-      onClick={onClick}
-      className="w-full flex items-center text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-      style={{
-        gap: '10px',
-        padding: '8px 10px',
-        borderRadius: '11px',
-        backgroundColor: active ? '#EEF3EC' : 'transparent',
-        color: '#1C1410',
-        border: 'none',
-        cursor: 'pointer',
-        fontFamily: "var(--font-brand), sans-serif",
-        fontWeight: active ? 700 : 500,
-        fontSize: '14px',
-        transition: 'background-color 140ms ease',
-      }}
-      onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
-      onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-    >
-      <CheckBox on={active} />
-      {flagCode ? (
-        <CircleFlag code={flagCode} size={18} decorative />
-      ) : Icon ? (
-        <Icon size={15} strokeWidth={2} style={{ flexShrink: 0, color: '#2A5A3C' }} />
-      ) : null}
-      <span className="flex-1 min-w-0" style={{ overflowWrap: 'anywhere' }}>{label}</span>
-      {note && (
-        <span style={{ fontSize: '12px', fontWeight: 700, color: '#8A6414', flexShrink: 0 }}>
-          {note}
-        </span>
-      )}
-      {typeof count === 'number' && (
-        <span style={{ fontSize: '12.5px', fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: '#6B5F52', flexShrink: 0 }}>
-          {count}
-        </span>
-      )}
-    </button>
-  );
-}
 
 /** Shown under Open Applications and Price when the facets read failed. */
 function FacetsNote() {
@@ -593,211 +251,6 @@ function CountrySearch({ options, chosen, onAdd, idPrefix = 'gv-explore' }: {
   );
 }
 
-function FilterRail({
-  bare = false, idPrefix = 'gv-explore',
-  continent, onContinent,
-  userCountry, userCountryCount, nearActive, onToggleNear,
-  chosenCountries, countryOptions, onAddCountry, onRemoveCountry,
-  formatFilter, onFormat,
-  levelFilter, onLevel,
-  roleFilter, onToggleRole,
-  facetsUnavailable,
-  priceFilter, onPrice,
-  sponsoredFilter, onSponsored,
-  dateFilter, onDate,
-  dateFrom, dateTo, onDateFrom, onDateTo,
-  hasActiveFilters, onClear,
-}: {
-  /** Inside the phone sheet: no card of its own. */
-  bare?: boolean;
-  idPrefix?: string;
-  /** A continent key from REGION_ORDER, or null. */
-  continent: string | null;
-  onContinent: (k: string | null) => void;
-  /** Near you: the profile nationality, else the browser locale's region. */
-  userCountry: string | null;
-  /** How many conferences currently sit in that country. */
-  userCountryCount: number;
-  nearActive: boolean;
-  onToggleNear: () => void;
-  /** Countries picked through the search, shown as removable chips. */
-  chosenCountries: CountryFacet[];
-  /** Countries present in the results, for the search's suggestions. */
-  countryOptions: CountryFacet[];
-  onAddCountry: (id: string) => void;
-  onRemoveCountry: (id: string) => void;
-  formatFilter: FormatFilter; onFormat: (v: FormatFilter) => void;
-  levelFilter: LevelFilter; onLevel: (v: LevelFilter) => void;
-  /** Open applications: any selected role open right now. */
-  roleFilter: ReadonlySet<RoleKey>; onToggleRole: (r: RoleKey) => void;
-  /** The facets read failed: say so under Open Applications and Price. */
-  facetsUnavailable: boolean;
-  priceFilter: PriceFilter; onPrice: (v: PriceFilter) => void;
-  sponsoredFilter: boolean; onSponsored: (v: boolean) => void;
-  dateFilter: DateFilter; onDate: (v: DateFilter) => void;
-  dateFrom: string; dateTo: string; onDateFrom: (v: string) => void; onDateTo: (v: string) => void;
-  hasActiveFilters: boolean; onClear: () => void;
-}) {
-  const userCode = userCountry ? getCountryByName(userCountry)?.code : undefined;
-  const todayIso = toDateOnly(new Date());
-  const chosenIds = useMemo(() => new Set(chosenCountries.map(c => c.id)), [chosenCountries]);
-
-  const group: React.CSSProperties = {
-    paddingBottom: '16px',
-    marginBottom: '16px',
-    borderBottom: '1px solid rgba(28,20,16,0.08)',
-  };
-
-  return (
-    <div
-      style={bare ? undefined : {
-        // A white floating panel beside the grid (owner's taste board three;
-        // CLAUDE.md §8, "The Explore page", item 4): sticky, soft shadow,
-        // labels above their controls, section titles as plain bold words.
-        backgroundColor: '#FFFFFF',
-        borderRadius: '22px',
-        padding: '20px 16px',
-        boxShadow: '0 1px 2px rgba(27,56,40,0.06), 0 12px 32px rgba(27,56,40,0.10)',
-      }}
-    >
-      {!bare && (
-        <p style={{ margin: '0 10px 14px', fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '17px', color: '#1C1410' }}>
-          Filters
-        </p>
-      )}
-      {/* Open applications: which roles a person could apply for today. A
-          conference matches when ANY ticked role is open. */}
-      <div style={group} role="listbox" aria-label="Open applications" aria-multiselectable="true">
-        <RailHeading>Open applications</RailHeading>
-        {ROLE_OPTIONS.map(r => (
-          <RailOption key={r.key} label={r.label} active={roleFilter.has(r.key)} onClick={() => onToggleRole(r.key)} />
-        ))}
-        {facetsUnavailable && <FacetsNote />}
-      </div>
-
-      {/* Price: bucketed on an approximate USD figure; the cards keep printing
-          the real fee in the conference's own currency. */}
-      <div style={group} role="listbox" aria-label="Price">
-        <RailHeading>Price</RailHeading>
-        {PRICE_OPTIONS.map(p => (
-          <RailOption key={p.key || 'any'} label={p.label} active={priceFilter === p.key} onClick={() => onPrice(p.key)} icon={p.key === '' ? undefined : Ticket} />
-        ))}
-        <p style={{ margin: '6px 10px 0', fontSize: '11px', lineHeight: 1.4, color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif" }}>
-          Approximate, converted to USD
-        </p>
-        {facetsUnavailable && <FacetsNote />}
-      </div>
-
-      {/* Credit sponsored: the conference pays applicants' Gavelling credit
-          (credit_sponsored_conference_ids), ?sponsored=1 */}
-      <div style={group} role="listbox" aria-label="Credit sponsored">
-        <RailHeading>Credits</RailHeading>
-        <RailOption label="Credit sponsored" active={sponsoredFilter} onClick={() => onSponsored(!sponsoredFilter)} icon={Heart} />
-      </div>
-
-      {/* Dates: quick buckets on the start day, or a custom range through the
-          shared DatePicker (date-only values, never a bare new Date()). */}
-      <div style={group} role="listbox" aria-label="Dates">
-        <RailHeading>Dates</RailHeading>
-        {DATE_OPTIONS.map(d => (
-          <RailOption key={d.key || 'any'} label={d.label} active={dateFilter === d.key && !dateFrom && !dateTo} onClick={() => { onDate(d.key); onDateFrom(''); onDateTo(''); }} icon={d.key === '' ? undefined : CalendarDays} />
-        ))}
-        <div className="gv-explore-range" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '8px' }}>
-          <div>
-            <p style={{ margin: '0 0 4px 2px', fontSize: '12px', fontWeight: 700, color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif" }}>From</p>
-            <DatePicker value={dateFrom} onChange={(iso) => { onDateFrom(iso); onDate(''); }} min={todayIso} max={dateTo || undefined} placeholder="Any" />
-          </div>
-          <div>
-            <p style={{ margin: '0 0 4px 2px', fontSize: '12px', fontWeight: 700, color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif" }}>To</p>
-            <DatePicker value={dateTo} onChange={(iso) => { onDateTo(iso); onDate(''); }} min={dateFrom || todayIso} placeholder="Any" />
-          </div>
-        </div>
-      </div>
-
-      {/* Region: the six continents, one at a time (?continent=). Picking one
-          puts that continent's Region Spotlight first. */}
-      <div style={group} role="listbox" aria-label="Region">
-        <RailHeading>Region</RailHeading>
-        {REGION_ORDER.map(k => (
-          <RailOption key={k} label={CONTINENT_LABELS[k]} active={continent === k} onClick={() => onContinent(continent === k ? null : k)} icon={Globe} />
-        ))}
-      </div>
-
-      {/* Country: Near you, then any countries typed in (?country=, several).
-          The first chosen country's Country Spotlight goes first. */}
-      <div style={group}>
-        <RailHeading>Country</RailHeading>
-        {userCountry && (
-          <div role="listbox" aria-label="Near you">
-            <RailOption
-              label={userCountry}
-              active={nearActive}
-              onClick={onToggleNear}
-              flagCode={userCode}
-              note="Near you"
-              count={userCountryCount}
-            />
-          </div>
-        )}
-        {chosenCountries.length > 0 && (
-          <ul className="flex flex-wrap" style={{ listStyle: 'none', margin: '6px 0 8px', padding: 0, gap: 6 }} aria-label="Chosen countries">
-            {chosenCountries.map(c => (
-              <li key={c.id}>
-                <span
-                  className="inline-flex items-center"
-                  style={{
-                    gap: 6, padding: '4px 4px 4px 6px', borderRadius: 10, backgroundColor: '#1B3828', color: '#FFFFFF',
-                    fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '12px',
-                  }}
-                >
-                  {c.code ? <CircleFlag code={c.code} size={16} decorative /> : <Globe size={13} style={{ color: '#EED98A' }} />}
-                  <span style={{ overflowWrap: 'anywhere' }}>{c.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => onRemoveCountry(c.id)}
-                    aria-label={`Remove ${c.name}`}
-                    title={`Remove ${c.name}`}
-                    className="inline-flex items-center justify-center focus:outline-none"
-                    style={{ width: 22, height: 22, borderRadius: 7, border: 'none', cursor: 'pointer', background: 'rgba(255,255,255,0.12)', color: '#FFFFFF' }}
-                  >
-                    <X size={12} strokeWidth={2.6} aria-hidden />
-                  </button>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        <div style={{ marginTop: userCountry || chosenCountries.length > 0 ? 6 : 0 }}>
-          <CountrySearch options={countryOptions} chosen={chosenIds} onAdd={onAddCountry} idPrefix={idPrefix} />
-        </div>
-      </div>
-
-      {/* Format. Hybrid is not a third choice, it answers to both. */}
-      <div style={group} role="listbox" aria-label="Format">
-        <RailHeading>Format</RailHeading>
-        <RailOption label="In person" active={formatFilter === 'in-person'} onClick={() => onFormat(formatFilter === 'in-person' ? '' : 'in-person')} icon={MapPin} />
-        <RailOption label="Online"    active={formatFilter === 'online'}    onClick={() => onFormat(formatFilter === 'online' ? '' : 'online')}    icon={Monitor} />
-      </div>
-
-      {/* Level. A conference open to both answers to either. */}
-      <div style={{ ...group, borderBottom: hasActiveFilters && !bare ? group.borderBottom : 'none', marginBottom: hasActiveFilters && !bare ? 16 : 0, paddingBottom: hasActiveFilters && !bare ? 16 : 0 }} role="listbox" aria-label="Student level">
-        <RailHeading>Level</RailHeading>
-        <RailOption label="High school" active={levelFilter === 'school'}     onClick={() => onLevel(levelFilter === 'school' ? '' : 'school')}         icon={School} />
-        <RailOption label="University"  active={levelFilter === 'university'} onClick={() => onLevel(levelFilter === 'university' ? '' : 'university')} icon={GraduationCap} />
-      </div>
-
-      {hasActiveFilters && !bare && (
-        <button
-          onClick={onClear}
-          className="w-full focus:outline-none"
-          style={{ ...SECONDARY_BUTTON, fontSize: '13px', padding: '9px' }}
-        >
-          Clear all filters
-        </button>
-      )}
-    </div>
-  );
-}
 
 // ── Main page ──────────────────────────────────────────────────────────────
 
@@ -814,8 +267,6 @@ export default function ConferencesExploreClient() {
   // filtered view can be shared (src/app/conferences/explore/exploreFilters.ts).
   const initialQuery = useMemo(() => readExploreQuery(searchParams), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [searchQuery, setSearchQuery] = useState(initialQuery.search);
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const closeFilters = useCallback(() => setFiltersOpen(false), []);
   const [formatFilter, setFormatFilter] = useState<FormatFilter>(
     initialQuery.format === 'in-person' || initialQuery.format === 'online' ? initialQuery.format : '',
   );
@@ -893,8 +344,9 @@ export default function ConferencesExploreClient() {
   // Date sort, soonest-first by default, one click flips to latest-first.
   const [dateSort, setDateSort] = useState<DateSort>(initialQuery.sort);
 
-  // Grid / list view, restored from localStorage after mount (SSR-safe).
-  const [view, setView] = useState<ExploreView>('grid');
+  // List (the month feed, default) or grid, restored from localStorage after
+  // mount (SSR-safe).
+  const [view, setView] = useState<ExploreView>('list');
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
@@ -1050,8 +502,10 @@ export default function ConferencesExploreClient() {
   }, [authLoading, user, session]);
 
   // Owner check rides on the conference rows themselves (organizer_id).
-  const isMember = (c: Conference) =>
-    memberIds.has(c.id) || (!!user && c.organizer_id === user.id);
+  const isMember = useCallback(
+    (c: Conference) => memberIds.has(c.id) || (!!user && c.organizer_id === user.id),
+    [memberIds, user],
+  );
 
   const continentKey = continent;
   const continentLabel = continentKey ? (CONTINENT_LABELS[continentKey] ?? null) : null;
@@ -1233,8 +687,24 @@ export default function ConferencesExploreClient() {
     for (const r of spotlightRows) if (shown.has(r.conference_id)) recordSpotlightView(r.booking_id);
   }, [sorted, spotlightRows]);
 
+  // The Spotlight row: the booked spotlights that passed every filter, in the
+  // row's order. They lead the page in their own row, so the feed below
+  // carries the rest in date order.
+  const spotItems = useMemo<SpotlightItem[]>(() => {
+    const byId = new Map(filtered.map(c => [c.id, c]));
+    return spotlightRows
+      .map(r => { const conf = byId.get(r.conference_id); return conf ? { conf, spot: r } : null; })
+      .filter((x): x is SpotlightItem => !!x);
+  }, [filtered, spotlightRows]);
+  const feed = useMemo(() => {
+    if (spotItems.length === 0) return sorted;
+    const ids = new Set(spotItems.map(s => s.conf.id));
+    return sorted.filter(c => !ids.has(c.id));
+  }, [sorted, spotItems]);
+
   // Country tab shows up to 4 local conferences prominently.
-  const displayed = countryMode ? sorted.slice(0, 4) : sorted;
+  const displayed = countryMode ? feed.slice(0, 4) : feed;
+  const months = useMemo(() => groupByMonth(displayed), [displayed]);
 
   // When a country filter has narrowed the page down, the end of the list is
   // the honest moment to say: there are much bigger rooms elsewhere. Upcoming
@@ -1275,12 +745,6 @@ export default function ConferencesExploreClient() {
 
   const userCode = userCountry ? getCountryByName(userCountry)?.code : undefined;
 
-  // The Filters button's number: one per chosen value (the search lives in
-  // the pill, so it is not counted here).
-  const activeFilterCount =
-    roleFilter.size + (priceFilter ? 1 : 0) + (dateFilter || dateFrom || dateTo ? 1 : 0) + (sponsoredFilter ? 1 : 0)
-    + (formatFilter ? 1 : 0) + (levelFilter ? 1 : 0) + (continentKey ? 1 : 0) + (countryMode ? 0 : countryIds.length);
-
   // How many continents the listed conferences span, for the header line.
   const continentCount = useMemo(() => {
     const hit = new Set<string>();
@@ -1292,34 +756,6 @@ export default function ConferencesExploreClient() {
     return hit.size;
   }, [conferences, continentIdentities]);
 
-  // The category rail: each tab is one EXISTING filter (and so its existing
-  // URL parameter). "All" clears exactly the filters the rail itself sets.
-  const allRoles = ROLE_OPTIONS.map(r => r.key);
-  const openNow = roleFilter.size === allRoles.length;
-  const thisMonth = dateFilter === 'month' && !dateFrom && !dateTo;
-  const railAll =
-    roleFilter.size === 0 && !dateFilter && !dateFrom && !dateTo && !priceFilter && !sponsoredFilter && !formatFilter && !levelFilter;
-  const categories: RailCategory[] = [
-    {
-      key: 'all', label: 'All', icon: LayoutGrid, tone: 'gold', active: railAll,
-      onClick: () => {
-        setRoleFilter(new Set()); setDateFilter(''); setDateFrom(''); setDateTo('');
-        setPriceFilter(''); setSponsoredFilter(false); setFormatFilter(''); setLevelFilter('');
-      },
-    },
-    { key: 'open', label: 'Open now', icon: DoorOpen, tone: 'green', active: openNow, onClick: () => setRoleFilter(openNow ? new Set() : new Set(allRoles)) },
-    {
-      key: 'month', label: 'This month', icon: CalendarDays, tone: 'gold', active: thisMonth,
-      onClick: () => { setDateFilter(thisMonth ? '' : 'month'); setDateFrom(''); setDateTo(''); },
-    },
-    { key: 'free', label: 'Free', icon: Ticket, tone: 'green', active: priceFilter === 'free', onClick: () => setPriceFilter(priceFilter === 'free' ? '' : 'free') },
-    { key: 'sponsored', label: 'Credit sponsored', icon: Heart, tone: 'gold', active: sponsoredFilter, onClick: () => setSponsoredFilter(!sponsoredFilter) },
-    { key: 'in-person', label: 'In person', icon: MapPin, tone: 'green', active: formatFilter === 'in-person', onClick: () => setFormatFilter(formatFilter === 'in-person' ? '' : 'in-person') },
-    { key: 'online', label: 'Online', icon: Monitor, tone: 'gold', active: formatFilter === 'online', onClick: () => setFormatFilter(formatFilter === 'online' ? '' : 'online') },
-    { key: 'university', label: 'University', icon: GraduationCap, tone: 'green', active: levelFilter === 'university', onClick: () => setLevelFilter(levelFilter === 'university' ? '' : 'university') },
-    { key: 'school', label: 'High school', icon: School, tone: 'gold', active: levelFilter === 'school', onClick: () => setLevelFilter(levelFilter === 'school' ? '' : 'school') },
-  ];
-
   const resultsRef = useRef<HTMLElement>(null);
   function scrollToResults() {
     const el = resultsRef.current;
@@ -1330,32 +766,16 @@ export default function ConferencesExploreClient() {
 
   const toggleNear = () => { if (nearId) { if (nearActive) removeCountry(nearId); else addCountry(nearId); } };
 
-  const railProps = {
-    continent: continentKey, onContinent: changeContinent,
-    userCountry, userCountryCount, nearActive, onToggleNear: toggleNear,
-    chosenCountries: chipCountries, countryOptions: searchCountries,
-    onAddCountry: addCountry, onRemoveCountry: removeCountry,
-    formatFilter, onFormat: setFormatFilter,
-    levelFilter, onLevel: setLevelFilter,
-    roleFilter, onToggleRole: toggleRole,
-    facetsUnavailable: facetsFailed,
-    priceFilter, onPrice: setPriceFilter,
-    sponsoredFilter, onSponsored: setSponsoredFilter,
-    dateFilter, onDate: setDateFilter,
-    dateFrom, dateTo, onDateFrom: setDateFrom, onDateTo: setDateTo,
-    hasActiveFilters, onClear: clearFilters,
-  };
-
-  // Grid: one column on a phone, two on a tablet (and beside the panel at
-  // 1024), three at 1280, four at 1440 (CLAUDE.md §8, "The Explore page", 7).
-  // Written as plain CSS (below) so the 1400px step always wins over 1280.
+  // Grid: one column on a phone, two on a tablet, three at 1024, four at 1280
+  // (CLAUDE.md §8, "The Explore page"). Plain CSS (below).
   const GRID = 'gv-explore-grid';
-  const GRID_GAP: React.CSSProperties = { columnGap: 'clamp(18px, 1.8vw, 28px)', rowGap: 'clamp(24px, 2.4vw, 36px)' };
+  const GRID_GAP: React.CSSProperties = { columnGap: 'clamp(18px, 1.8vw, 28px)', rowGap: 'clamp(32px, 3vw, 40px)' };
 
   const cardFor = (conf: Conference, spot?: FeaturedRow) => (
     <ConferenceCard
       key={conf.id}
       conf={conf}
+      variant="listing"
       href={`/conferences/${conf.slug}`}
       spotlight={!!spot}
       creditSponsored={sponsoredIds.has(conf.id)}
@@ -1369,227 +789,377 @@ export default function ConferencesExploreClient() {
     />
   );
 
+
+  // ── Derived for the new chrome ────────────────────────────────────────────
+  const todayIso = toDateOnly(new Date());
+  const weekEndIso = (() => { const d = new Date(); d.setDate(d.getDate() + 6); return toDateOnly(d); })();
+  const thisWeek = !dateFilter && dateFrom === todayIso && dateTo === weekEndIso;
+  const customRange = (!!dateFrom || !!dateTo) && !thisWeek;
+  const pickBucket = (v: DateFilter) => { setDateFilter(v); setDateFrom(''); setDateTo(''); };
+  const dateTabs: DateTab[] = [
+    { key: 'any', label: 'All dates', active: !dateFilter && !dateFrom && !dateTo, onClick: () => pickBucket('') },
+    { key: 'week', label: 'This week', active: thisWeek, onClick: () => { if (thisWeek) pickBucket(''); else { setDateFilter(''); setDateFrom(todayIso); setDateTo(weekEndIso); } } },
+    { key: 'month', label: 'This month', active: dateFilter === 'month' && !dateFrom && !dateTo, onClick: () => pickBucket(dateFilter === 'month' ? '' : 'month') },
+    { key: 'quarter', label: 'Next 3 months', active: dateFilter === 'quarter' && !dateFrom && !dateTo, onClick: () => pickBucket(dateFilter === 'quarter' ? '' : 'quarter') },
+    { key: 'later', label: 'Later', active: dateFilter === 'later' && !dateFrom && !dateTo, onClick: () => pickBucket(dateFilter === 'later' ? '' : 'later') },
+  ];
+  const shortDate = (iso: string) => parseDateOnly(iso)?.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) ?? '';
+  const rangeSummary = customRange ? `${dateFrom ? shortDate(dateFrom) : 'Any'} to ${dateTo ? shortDate(dateTo) : 'Any'}` : null;
+
+  const roleSummary = roleFilter.size === 0 ? null
+    : roleFilter.size === ROLE_OPTIONS.length ? 'Open for every role'
+      : `Open for ${ROLE_OPTIONS.filter(r => roleFilter.has(r.key)).map(r => r.label.toLowerCase()).join(', ')}`;
+  const priceSummary = PRICE_OPTIONS.find(p => p.key === priceFilter && p.key !== '')?.label ?? null;
+  const formatSummary = formatFilter === 'in-person' ? 'In person' : formatFilter === 'online' ? 'Online' : null;
+  const levelSummary = levelFilter === 'school' ? 'High school' : levelFilter === 'university' ? 'University' : null;
+
+  // Place rail counts come from everything but the place filter itself.
+  const continentCounts = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const c of preRegion) {
+      const id = countryIdentity(c.country);
+      for (const [key, ids] of Object.entries(continentIdentities)) if (ids.has(id)) { out[key] = (out[key] ?? 0) + 1; break; }
+    }
+    return out;
+  }, [preRegion, continentIdentities]);
+
+  const placeItems: PlaceItem[] = useMemo(() => {
+    const items: PlaceItem[] = [];
+    items.push({
+      key: 'everywhere', label: 'Everywhere', icon: Globe, count: preRegion.length,
+      active: !continentKey && countryIds.length === 0, onClick: clearRegion,
+    });
+    if (userCountry && nearId) {
+      items.push({
+        key: 'near', label: userCountry, kicker: 'Near you', code: userCode, icon: Navigation, count: userCountryCount,
+        active: nearActive, onClick: toggleNear,
+      });
+    }
+    for (const k of REGION_ORDER) {
+      items.push({
+        key: `region-${k}`, label: CONTINENT_LABELS[k], icon: Globe, count: continentCounts[k] ?? 0,
+        active: continentKey === k, onClick: () => changeContinent(continentKey === k ? null : k),
+      });
+    }
+    // Chosen countries first, then the countries with the most conferences.
+    const seen = new Set<string>(nearId ? [nearId] : []);
+    const countries = [...chipCountries, ...countryFacets.slice(0, 12)];
+    for (const c of countries) {
+      if (seen.has(c.id)) continue;
+      seen.add(c.id);
+      const active = countryIdSet.has(c.id);
+      items.push({
+        key: `country-${c.id}`, label: c.name, code: c.code, icon: MapPin, count: c.count,
+        active, onClick: () => (active ? removeCountry(c.id) : addCountry(c.id)),
+      });
+    }
+    return items;
+    // The handlers are plain closures over state already listed here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preRegion.length, continentKey, countryIds, userCountry, nearId, userCode, userCountryCount, nearActive, continentCounts, chipCountries, countryFacets, countryIdSet]);
+
+  // The results heading: the count as a big number with the words beside it.
+  const resultNoun = (n: number) => (n === 1 ? 'conference' : 'conferences');
+  const resultsHeading = (() => {
+    if (loading) return null;
+    if (aroundYouMode) return { flag: undefined as string | undefined, n: sorted.length, words: `${resultNoun(sorted.length)} around the world` };
+    if (countryMode) return { flag: userCode, n: sorted.length, words: `${resultNoun(sorted.length)} in ${userCountry}` };
+    if (selectedCountry) return { flag: selectedCountry.code, n: sorted.length, words: `${resultNoun(sorted.length)} in ${selectedCountry.name}` };
+    return { flag: undefined, n: sorted.length, words: `${resultNoun(sorted.length)}${continentLabel && countryIds.length === 0 ? ` in ${continentLabel}` : ''}` };
+  })();
+
+  const facetsLoaded = facets.size > 0;
+  const onSpotOpen = useCallback((spot: FeaturedRow) => recordSpotlightClick(spot.booking_id), []);
+
+  const sectionGap = 'clamp(26px, 3vw, 40px)';
+
   return (
-    <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: '#EDE7D8', overflowX: 'clip' }}>
-      {/* Paper grain on the ivory page */}
+    // Explore is back on the brand ground (owner, 26 Sep 2026: the white page
+    // "doesn't fit the brand"): ivory with the site's paper grain. White is
+    // for the cards and panels on top of it.
+    <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: IVORY, overflowX: 'clip', fontFamily: FONT }}>
       <div
         className="pointer-events-none fixed inset-0 z-0"
-        style={{
-          backgroundImage: GRAIN,
-          backgroundRepeat: 'repeat',
-          backgroundSize: '300px 300px',
-          mixBlendMode: 'multiply',
-          opacity: 0.18,
-        }}
+        aria-hidden
+        style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }}
       />
+      <style>{`
+        ${SCROLL_CSS}
+        ${FEED_CSS}
+        .gv-explore-wrap { width: 100%; max-width: 1280px; margin: 0 auto; padding-left: 16px; padding-right: 16px; }
+        @media (min-width: 640px) { .gv-explore-wrap { padding-left: 24px; padding-right: 24px; } }
+        @media (min-width: 1024px) { .gv-explore-wrap { padding-left: 40px; padding-right: 40px; } }
+        .gv-explore-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
+        @media (min-width: 640px) { .gv-explore-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (min-width: 1024px) { .gv-explore-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        @media (min-width: 1280px) { .gv-explore-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+      `}</style>
 
       <div className="relative z-10 flex flex-col min-h-screen">
         <SiteNav hideLanguage />
 
-        {/* ── Header, small: the title, the count line, List your conference ── */}
-        <header className="px-4 sm:px-6 md:px-10" style={{ paddingTop: 'clamp(20px, 2.4vw, 32px)', paddingBottom: '8px' }}>
-          <div className="flex flex-wrap items-end justify-between" style={{ gap: '12px 20px' }}>
-            <div className="min-w-0">
-              <h1
-                style={{
-                  fontFamily: "var(--font-brand), sans-serif", fontWeight: 800,
-                  fontSize: 'clamp(28px, 3vw, 40px)', lineHeight: 1.08, letterSpacing: '-0.015em', color: '#1C1410', margin: 0,
-                }}
-              >
-                Explore <GoldWord>Conferences</GoldWord>
-              </h1>
-              <p style={{ margin: '6px 0 0', fontFamily: "var(--font-brand), sans-serif", fontSize: '15px', color: '#5C5140', fontVariantNumeric: 'tabular-nums' }}>
-                {headlineCount === null ? (
-                  'Loading the directory'
-                ) : (
+        {/* ── 1. Hero: title, count line, the search pill ───────────────── */}
+        <header className="gv-explore-wrap" style={{ paddingTop: 'clamp(20px, 3vw, 44px)', textAlign: 'center' }}>
+          <h1
+            style={{
+              fontWeight: 800, fontSize: 'clamp(30px, 3.6vw, 48px)', lineHeight: 1.06, letterSpacing: '-0.018em', color: INK, margin: 0,
+            }}
+          >
+            Explore Model UN <GoldWord>Conferences</GoldWord>
+          </h1>
+          <p style={{ margin: '10px 0 0', fontSize: 15.5, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>
+            {headlineCount === null ? (
+              'Loading the directory'
+            ) : (
+              <>
+                <span style={{ fontWeight: 800, color: INK }}>{headlineCount.toLocaleString()}</span>
+                {` ${headlineCount === 1 ? 'conference' : 'conferences'}`}
+                {continentCount > 0 && (
                   <>
-                    <span style={{ fontWeight: 800, color: '#1C1410' }}>{headlineCount.toLocaleString()}</span>
-                    {` ${headlineCount === 1 ? 'conference' : 'conferences'}`}
-                    {continentCount > 0 && (
-                      <>
-                        {' across '}
-                        <span style={{ fontWeight: 800, color: '#1C1410' }}>{continentCount}</span>
-                        {` ${continentCount === 1 ? 'continent' : 'continents'}`}
-                      </>
-                    )}
+                    {' across '}
+                    <span style={{ fontWeight: 800, color: INK }}>{continentCount}</span>
+                    {` ${continentCount === 1 ? 'continent' : 'continents'}`}
                   </>
                 )}
-              </p>
-            </div>
-            <Link
-              href="/conferences/new"
-              className="inline-flex items-center flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2"
-              style={{ ...SECONDARY_BUTTON, padding: '10px 16px', fontSize: '14.5px', textDecoration: 'none' }}
-            >
-              List your conference
-            </Link>
-          </div>
-
-          {/* The search pill: Where, When, Role and the round search disc */}
-          <div style={{ marginTop: 'clamp(16px, 2vw, 24px)' }}>
+                {'. Running one? '}
+                <Link href="/conferences/new" className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded" style={{ fontWeight: 700, color: FOREST, textDecoration: 'underline', textUnderlineOffset: 3 }}>
+                  List your conference
+                </Link>
+              </>
+            )}
+          </p>
+          <div style={{ marginTop: 'clamp(18px, 2.2vw, 28px)' }}>
             <SearchPill
               search={searchQuery} onSearch={setSearchQuery}
               continent={continentKey} continentLabels={CONTINENT_LABELS} onContinent={changeContinent}
               nearCountry={userCountry} nearCode={userCode} nearActive={nearActive} onToggleNear={toggleNear}
               chosenCountryNames={chosenFacets.map(c => c.name)}
               dateFilter={dateFilter} dateFrom={dateFrom} dateTo={dateTo}
-              onDate={(v) => { setDateFilter(v); setDateFrom(''); setDateTo(''); }}
+              onDate={pickBucket}
+              whenLabel={thisWeek ? 'This week' : null}
               roles={roleFilter} onToggleRole={toggleRole} onClearRoles={() => setRoleFilter(new Set())}
               onSubmit={scrollToResults}
             />
           </div>
-
-          {/* The category rail under it */}
-          <div style={{ marginTop: 'clamp(14px, 1.6vw, 20px)' }}>
-            <CategoryRail items={categories} />
-          </div>
         </header>
 
-        {/* ── The floating panel beside the grid ───────────────────── */}
-        <style>{`
-          .gv-explore-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
-          @media (min-width: 640px) { .gv-explore-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-          @media (min-width: 1280px) { .gv-explore-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-          @media (min-width: 1400px) { .gv-explore-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-          @media (min-width: 1024px) {
-            .gv-explore-rail { max-height: calc(100dvh - 100px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
-            .gv-explore-rail::-webkit-scrollbar { display: none; }
-          }
-        `}</style>
-        <main
-          className="flex-1 px-4 sm:px-6 md:px-10 flex flex-col lg:flex-row"
-          style={{ gap: 'clamp(20px, 2.2vw, 32px)', alignItems: 'flex-start', paddingTop: '18px', paddingBottom: 'clamp(40px, 4vw, 64px)' }}
-        >
-          <aside
-            aria-label="Filters"
-            // Desktop only: the panel is PINNED and fits the viewport, scrolling
-            // on its own. On phones and tablets it is the bottom sheet below.
-            className="gv-explore-rail hidden lg:block lg:sticky lg:top-[84px] flex-shrink-0"
-            style={{ width: '272px', padding: '2px 4px 16px' }}
-          >
-            <FilterRail {...railProps} />
-          </aside>
-
-          <section ref={resultsRef} className="flex-1 min-w-0 w-full" aria-label="Conferences">
-            {/* The results bar: the count as a big number with the word
-                beside it, Sort as a text menu, grid / list. No count pills. */}
-            <div className="flex items-center flex-wrap" style={{ gap: '10px 14px', marginBottom: '20px' }}>
-              {!loading && displayed.length > 0 ? (
-                <span className="inline-flex items-baseline flex-wrap" style={{ gap: '8px', fontFamily: "var(--font-brand), sans-serif", color: '#1C1410', fontVariantNumeric: 'tabular-nums' }}>
-                  {aroundYouMode ? (
-                    <span style={{ fontWeight: 800, fontSize: '20px' }}>Conferences around you</span>
-                  ) : countryMode ? (
-                    <>
-                      {userCode && <CircleFlag code={userCode} size={20} decorative style={{ alignSelf: 'center' }} />}
-                      <span style={{ fontWeight: 800, fontSize: '26px' }}>{displayed.length}</span>
-                      <span style={{ fontWeight: 600, fontSize: '15px', color: '#4A4238', overflowWrap: 'anywhere' }}>
-                        {displayed.length === 1 ? 'conference' : 'conferences'} in {userCountry}
-                        {displayed.length < sorted.length ? ` of ${sorted.length}` : ''}
-                      </span>
-                    </>
-                  ) : selectedCountry ? (
-                    <>
-                      {selectedCountry.code && <CircleFlag code={selectedCountry.code} size={20} decorative style={{ alignSelf: 'center' }} />}
-                      <span style={{ fontWeight: 800, fontSize: '26px' }}>{sorted.length}</span>
-                      <span style={{ fontWeight: 600, fontSize: '15px', color: '#4A4238', overflowWrap: 'anywhere' }}>
-                        {sorted.length === 1 ? 'conference' : 'conferences'} in {selectedCountry.name}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span style={{ fontWeight: 800, fontSize: '26px' }}>{sorted.length}</span>
-                      <span style={{ fontWeight: 600, fontSize: '15px', color: '#4A4238', overflowWrap: 'anywhere' }}>
-                        {sorted.length === 1 ? 'conference' : 'conferences'}
-                        {continentLabel && countryIds.length === 0 ? ` in ${continentLabel}` : ''}
-                      </span>
-                    </>
-                  )}
-                </span>
-              ) : (
-                <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '15px', color: '#6B5F52', whiteSpace: 'nowrap' }}>
-                  {loading ? 'Loading conferences' : 'No matches'}
-                </span>
+        <main className="flex-1" style={{ paddingBottom: 'clamp(40px, 4vw, 64px)' }}>
+          {/* ── 2 and 3. Date tabs, then the filter chips ─────────────────── */}
+          <div className="gv-explore-wrap" style={{ marginTop: 'clamp(22px, 2.6vw, 34px)' }}>
+            <div style={{ borderBottom: '1px solid rgba(28,20,16,0.12)' }}>
+              <DateTabs tabs={dateTabs} />
+            </div>
+            <div
+              role="toolbar"
+              aria-label="Filters"
+              className="gv-explore-scroll flex items-center"
+              style={{ gap: 10, overflowX: 'auto', scrollbarWidth: 'none', padding: '14px 2px 6px', margin: '0 -2px' }}
+            >
+              <FilterChip
+                label="Open applications" title="Applications open for" icon={DoorOpen}
+                active={roleFilter.size > 0} summary={roleSummary} onClear={() => setRoleFilter(new Set())}
+              >
+                <div role="group" aria-label="Applications open for">
+                  {ROLE_OPTIONS.map(r => (
+                    <ChoiceRow key={r.key} kind="check" label={r.label} active={roleFilter.has(r.key)} onClick={() => toggleRole(r.key)} />
+                  ))}
+                </div>
+                {facetsFailed && <FacetsNote />}
+              </FilterChip>
+              <FilterChip
+                label="Price" title="Price" icon={Ticket}
+                active={!!priceFilter} summary={priceSummary} onClear={() => setPriceFilter('')}
+              >
+                <div role="radiogroup" aria-label="Price">
+                  {PRICE_OPTIONS.map(p => (
+                    <ChoiceRow key={p.key || 'any'} label={p.label} active={priceFilter === p.key} onClick={() => setPriceFilter(p.key)} />
+                  ))}
+                </div>
+                <p style={{ margin: '8px 10px 0', fontSize: 12, color: '#6E5F4E' }}>Approximate, converted to USD</p>
+                {facetsFailed && <FacetsNote />}
+              </FilterChip>
+              <FilterChip
+                label="Dates" title="Dates" icon={CalendarDays}
+                active={customRange} summary={rangeSummary} onClear={() => { setDateFrom(''); setDateTo(''); }}
+              >
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <p style={{ margin: '0 0 5px 2px', fontSize: 12.5, fontWeight: 700, color: '#6E5F4E' }}>From</p>
+                    <DatePicker value={thisWeek ? '' : dateFrom} onChange={(iso) => { setDateFrom(iso); setDateFilter(''); if (thisWeek) setDateTo(''); }} min={todayIso} max={dateTo && !thisWeek ? dateTo : undefined} placeholder="Any" />
+                  </div>
+                  <div>
+                    <p style={{ margin: '0 0 5px 2px', fontSize: 12.5, fontWeight: 700, color: '#6E5F4E' }}>To</p>
+                    <DatePicker value={thisWeek ? '' : dateTo} onChange={(iso) => { setDateTo(iso); setDateFilter(''); if (thisWeek) setDateFrom(''); }} min={(!thisWeek && dateFrom) || todayIso} placeholder="Any" />
+                  </div>
+                </div>
+                <p style={{ margin: '10px 2px 0', fontSize: 12, color: '#6E5F4E' }}>By the day a conference starts</p>
+              </FilterChip>
+              <FilterChip
+                label="Format" title="Format" icon={formatFilter === 'online' ? Monitor : MapPin}
+                active={!!formatFilter} summary={formatSummary} onClear={() => setFormatFilter('')}
+              >
+                <div role="radiogroup" aria-label="Format">
+                  <ChoiceRow label="Any format" active={!formatFilter} onClick={() => setFormatFilter('')} />
+                  <ChoiceRow label="In person" icon={MapPin} active={formatFilter === 'in-person'} onClick={() => setFormatFilter('in-person')} />
+                  <ChoiceRow label="Online" icon={Monitor} active={formatFilter === 'online'} onClick={() => setFormatFilter('online')} />
+                </div>
+                <p style={{ margin: '8px 10px 0', fontSize: 12, color: '#6E5F4E' }}>Hybrid conferences answer to both</p>
+              </FilterChip>
+              <FilterChip
+                label="Level" title="Level" icon={levelFilter === 'school' ? School : GraduationCap}
+                active={!!levelFilter} summary={levelSummary} onClear={() => setLevelFilter('')}
+              >
+                <div role="radiogroup" aria-label="Level">
+                  <ChoiceRow label="Any level" active={!levelFilter} onClick={() => setLevelFilter('')} />
+                  <ChoiceRow label="High school" icon={School} active={levelFilter === 'school'} onClick={() => setLevelFilter('school')} />
+                  <ChoiceRow label="University" icon={GraduationCap} active={levelFilter === 'university'} onClick={() => setLevelFilter('university')} />
+                </div>
+              </FilterChip>
+              <ToggleChip label="Credit sponsored" icon={Heart} active={sponsoredFilter} onClick={() => setSponsoredFilter(!sponsoredFilter)} />
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 6px', fontFamily: FONT, fontSize: 14, fontWeight: 700, color: INK, textDecoration: 'underline', textUnderlineOffset: 3, whiteSpace: 'nowrap' }}
+                >
+                  Clear all
+                </button>
               )}
-              <div className="flex items-center flex-wrap" style={{ gap: '10px 14px', marginLeft: 'auto' }}>
-                <span className="lg:hidden"><FiltersButton count={activeFilterCount} onClick={() => setFiltersOpen(true)} /></span>
+            </div>
+          </div>
+
+          {/* ── 4. Browse by place ────────────────────────────────────────── */}
+          <section className="gv-explore-wrap" aria-labelledby="gv-explore-place" style={{ marginTop: 'clamp(18px, 2vw, 26px)' }}>
+            <h2 id="gv-explore-place" style={{ margin: '0 0 10px', fontSize: 'clamp(19px, 1.8vw, 23px)', fontWeight: 800, color: INK }}>
+              Browse by Place
+            </h2>
+            <PlaceRail
+              items={placeItems}
+              trailing={<AddCountryDisc options={searchCountries} chosen={countryIdSet} onAdd={addCountry} />}
+            />
+          </section>
+
+          {/* ── 5. The Spotlight row ──────────────────────────────────────── */}
+          {!loading && spotItems.length > 0 && (
+            <section className="gv-explore-wrap" aria-labelledby="gv-explore-spot" style={{ marginTop: sectionGap }}>
+              <h2 id="gv-explore-spot" style={{ margin: '0 0 16px', fontSize: 'clamp(22px, 2.2vw, 30px)', fontWeight: 800, color: INK, letterSpacing: '-0.012em' }}>
+                In the <GoldWord>Spotlight</GoldWord>
+              </h2>
+              <SpotlightRow
+                items={spotItems}
+                sponsoredIds={sponsoredIds}
+                appliedIds={appliedIds}
+                isMember={isMember}
+                hoveredId={hoveredId}
+                onHover={setHoveredId}
+                onLeave={() => setHoveredId(null)}
+                onOpen={onSpotOpen}
+              />
+            </section>
+          )}
+
+          {/* ── 6. The feed ───────────────────────────────────────────────── */}
+          <section ref={resultsRef} className="gv-explore-wrap" aria-label="Conferences" style={{ marginTop: sectionGap }}>
+            <div className="flex items-center flex-wrap" style={{ gap: '10px 16px', marginBottom: 6 }}>
+              {resultsHeading ? (
+                <p className="inline-flex items-baseline flex-wrap" style={{ margin: 0, gap: 8, color: INK, fontVariantNumeric: 'tabular-nums' }}>
+                  {resultsHeading.flag && <CircleFlag code={resultsHeading.flag} size={22} decorative style={{ alignSelf: 'center' }} />}
+                  <span style={{ fontWeight: 800, fontSize: 'clamp(26px, 2.4vw, 32px)', lineHeight: 1 }}>{resultsHeading.n.toLocaleString()}</span>
+                  <span style={{ fontWeight: 600, fontSize: 16, color: '#4A4238', overflowWrap: 'anywhere' }}>
+                    {resultsHeading.words}
+                    {countryMode && displayed.length < feed.length ? `, the first ${displayed.length} below` : ''}
+                  </span>
+                </p>
+              ) : (
+                <span style={{ fontWeight: 700, fontSize: 15, color: '#6B5F52' }}>Loading conferences</span>
+              )}
+              <div className="flex items-center" style={{ gap: 14, marginLeft: 'auto' }}>
                 <SortMenu sort={dateSort} onChange={setDateSort} />
                 <ViewToggle view={view} onChange={changeView} />
               </div>
             </div>
 
-          {loading ? (
-            <div className={GRID} style={GRID_GAP} aria-busy="true" aria-label="Loading conferences">
-              {Array.from({ length: 8 }).map((_, i) => <ConferenceCardSkeleton key={i} />)}
-            </div>
-          ) : displayed.length === 0 ? (
-            // Empty: one line and one button.
-            <div className="flex flex-col items-center justify-center text-center" style={{ padding: 'clamp(48px, 8vw, 96px) 0', gap: '16px' }}>
-              {countryMode && !searchQuery && !formatFilter && !levelFilter ? (
-                <>
-                  <p style={{ margin: 0, fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '17px', color: '#1C1410' }}>
-                    No conferences in {userCountry} yet
-                  </p>
-                  <button onClick={clearRegion} className="py-3 px-6 text-[15px] focus:outline-none" style={PRIMARY_BUTTON}>
-                    Explore all conferences
-                  </button>
-                </>
+            {loading ? (
+              view === 'list' ? (
+                <div aria-busy="true" aria-label="Loading conferences"><FeedSkeleton /></div>
               ) : (
-                <>
-                  <p style={{ margin: 0, fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '17px', color: '#1C1410' }}>
-                    {hasActiveFilters ? 'No conferences match these filters' : 'No conferences listed yet'}
-                  </p>
-                  <button
-                    onClick={() => (hasActiveFilters ? clearFilters() : router.push('/conferences/new'))}
-                    className="py-3 px-6 text-[15px] focus:outline-none"
-                    style={PRIMARY_BUTTON}
-                  >
-                    {hasActiveFilters ? 'Clear filters' : 'List your conference'}
-                  </button>
-                </>
-              )}
-            </div>
-          ) : view === 'list' ? (
-            <div style={{ borderTop: '2px solid rgba(27,56,40,0.16)' }}>
-              {displayed.map(conf => (
-                <ConferenceListRow
-                  key={conf.id}
-                  conf={conf}
-                  spotlight={spotlightById.has(conf.id)}
-                  onSpotlightClick={() => { const spot = spotlightById.get(conf.id); if (spot) recordSpotlightClick(spot.booking_id); }}
-                  creditSponsored={sponsoredIds.has(conf.id)}
-                  applied={appliedIds.has(conf.id)}
-                  member={isMember(conf)}
-                  hovered={hoveredId === conf.id}
-                  onHover={() => setHoveredId(conf.id)}
-                  onLeave={() => setHoveredId(null)}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className={GRID} style={GRID_GAP}>
-              {displayed.map(conf => cardFor(conf, spotlightById.get(conf.id)))}
-            </div>
-          )}
+                <div className={GRID} style={{ ...GRID_GAP, marginTop: 16 }} aria-busy="true" aria-label="Loading conferences">
+                  {Array.from({ length: 8 }).map((_, i) => <ConferenceCardSkeleton key={i} variant="listing" />)}
+                </div>
+              )
+            ) : displayed.length === 0 && spotItems.length === 0 ? (
+              // Empty: one line and one button.
+              <div className="flex flex-col items-center justify-center text-center" style={{ padding: 'clamp(40px, 7vw, 88px) 0', gap: 16 }}>
+                {countryMode && !searchQuery && !formatFilter && !levelFilter ? (
+                  <>
+                    <p style={{ margin: 0, fontWeight: 700, fontSize: 17, color: INK }}>No conferences in {userCountry} yet</p>
+                    <button onClick={clearRegion} className="py-3 px-6 text-[15px] focus:outline-none" style={PRIMARY_BUTTON}>
+                      Explore all conferences
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ margin: 0, fontWeight: 700, fontSize: 17, color: INK }}>
+                      {hasActiveFilters ? 'No conferences match these filters' : 'No conferences listed yet'}
+                    </p>
+                    <button
+                      onClick={() => (hasActiveFilters ? clearFilters() : router.push('/conferences/new'))}
+                      className="py-3 px-6 text-[15px] focus:outline-none"
+                      style={PRIMARY_BUTTON}
+                    >
+                      {hasActiveFilters ? 'Clear filters' : 'List your conference'}
+                    </button>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col" style={{ gap: 'clamp(14px, 1.6vw, 22px)' }}>
+                {months.map(g => (
+                  <section key={g.key} aria-label={g.label}>
+                    <MonthHeader label={g.label} count={g.items.length} />
+                    {view === 'list' ? (
+                      <FeedRows
+                        items={g.items}
+                        facets={facets}
+                        facetsLoaded={facetsLoaded}
+                        sponsoredIds={sponsoredIds}
+                        appliedIds={appliedIds}
+                        isMember={isMember}
+                      />
+                    ) : (
+                      <div className={GRID} style={{ ...GRID_GAP, paddingTop: 6 }}>
+                        {g.items.map(conf => cardFor(conf))}
+                      </div>
+                    )}
+                  </section>
+                ))}
+              </div>
+            )}
 
-          {/* The list has ended and a country filter is what ended it. Rather
-              than stopping at a short list, name the handful of big rooms
-              elsewhere and say plainly what they are: far away, and large. */}
-          {showBigElsewhere && (
-            <section
-              aria-label="Bigger conferences elsewhere"
-              className="mt-12"
-              style={{ borderTop: '1px solid rgba(28,20,16,0.10)', paddingTop: '26px' }}
-            >
-              <div className="flex items-baseline flex-wrap gap-x-3 gap-y-1 mb-5">
-                <h2
-                  style={{
-                    fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: 'clamp(20px, 2vw, 26px)',
-                    color: '#1C1410', margin: 0,
-                  }}
+            {/* Country tab: a quiet way back to the whole directory */}
+            {!loading && countryMode && displayed.length > 0 && (
+              <div className="flex justify-center" style={{ marginTop: 28 }}>
+                <button
+                  onClick={clearRegion}
+                  className="inline-flex items-center gap-1.5 focus:outline-none"
+                  style={{ fontWeight: 700, fontSize: 14.5, color: FOREST, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}
                 >
+                  <Globe size={15} strokeWidth={2.25} aria-hidden />
+                  Explore all conferences
+                </button>
+              </div>
+            )}
+          </section>
+
+          {/* A country filter ended the list: name the big rooms elsewhere. */}
+          {showBigElsewhere && (
+            <section className="gv-explore-wrap" aria-labelledby="gv-explore-big" style={{ marginTop: sectionGap }}>
+              <div className="flex items-baseline flex-wrap" style={{ columnGap: 12, rowGap: 4, marginBottom: 16 }}>
+                <h2 id="gv-explore-big" style={{ fontWeight: 800, fontSize: 'clamp(22px, 2.2vw, 30px)', color: INK, margin: 0, letterSpacing: '-0.012em' }}>
                   Bigger Conferences Worth <GoldWord>Travelling</GoldWord>
                 </h2>
-                <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, fontSize: '13.5px', color: '#6B5F52', margin: 0 }}>
+                <p style={{ fontWeight: 500, fontSize: 14, color: '#6B5F52', margin: 0 }}>
                   Outside your filter, {BIG_CONFERENCE_DELEGATES}+ delegates expected
                 </p>
               </div>
@@ -1598,42 +1168,44 @@ export default function ConferencesExploreClient() {
               </div>
             </section>
           )}
-
-          {/* Country tab, subtle reset to the worldwide directory */}
-          {!loading && countryMode && displayed.length > 0 && (
-            <div className="flex justify-center mt-10">
-              <button
-                onClick={clearRegion}
-                className="inline-flex items-center gap-1.5 focus:outline-none"
-                style={{
-                  fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '14px',
-                  color: '#1B3828', background: 'transparent', border: 'none', cursor: 'pointer',
-                  textDecoration: 'underline', textUnderlineOffset: '3px',
-                }}
-              >
-                <Globe size={14} strokeWidth={2.25} />
-                Explore all conferences
-              </button>
-            </div>
-          )}
-          </section>
         </main>
 
         <SiteFooter />
       </div>
 
-      {/* Phones and tablets: the panel as a bottom sheet */}
-      <FiltersSheet
-        open={filtersOpen}
-        onClose={closeFilters}
-        onClear={clearFilters}
-        canClear={hasActiveFilters}
-        resultCount={sorted.length}
-      >
-        <FilterRail {...railProps} bare idPrefix="gv-explore-sheet" />
-      </FiltersSheet>
-
       {spotlightDialog && <ConferenceSpotlightDialog rows={spotlightDialog} onClose={() => setSpotlightDialog(null)} />}
     </div>
+  );
+}
+
+/** The last disc of the place rail: type to add any country with conferences. */
+function AddCountryDisc({ options, chosen, onAdd }: {
+  options: CountryFacet[];
+  chosen: ReadonlySet<string>;
+  onAdd: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const btn = useRef<HTMLButtonElement>(null);
+  const close = useCallback(() => { setOpen(false); btn.current?.focus(); }, []);
+  return (
+    <>
+      <button
+        ref={btn}
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen(o => !o)}
+        className="flex flex-col items-center flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded-xl"
+        style={{ width: 84, gap: 6, padding: '2px 0 4px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: FONT }}
+      >
+        <span style={{ ...RIM_DISC, width: 64, height: 64 }}>
+          <Plus size={24} strokeWidth={2.2} aria-hidden />
+        </span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: INK, lineHeight: 1.2, textAlign: 'center' }}>Another country</span>
+      </button>
+      <ChipLayer open={open} anchor={btn} onClose={close} title="Add a country">
+        <CountrySearch options={options} chosen={chosen} onAdd={(id) => { onAdd(id); close(); }} idPrefix="gv-explore-add" />
+      </ChipLayer>
+    </>
   );
 }

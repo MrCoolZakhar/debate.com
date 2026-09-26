@@ -113,12 +113,9 @@ export default function FooterLegal({
           Help
         </Link>
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
-        <Link href="/contact" className={hubLink}>
-          Contact
-        </Link>
-        <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
+        {/* One link: /about carries contact at the top (/contact 308s there). */}
         <Link href="/about" className={hubLink}>
-          About Gavelling
+          About and contact
         </Link>
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
         {/* The session tools, a plain server-rendered way in to both from

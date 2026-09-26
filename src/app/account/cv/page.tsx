@@ -2,7 +2,7 @@
 
 import { sortCvEntries } from '@/lib/cvOrder';
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Share2, Check } from 'lucide-react';
+import { Plus, Share2, Check, ScrollText, EyeOff } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { syncExperienceLevel } from '@/lib/munExperience';
@@ -10,8 +10,14 @@ import { cvHref } from '@/lib/cvLink';
 import { CVEntryModal, type CVEntry } from '@/components/CVEntryModal';
 import { ShareAchievementModal } from '@/components/ShareAchievementModal';
 import Loader from '@/components/Loader';
-import { Eyebrow, GlassCard, OUTFIT, MONO, T } from '../accountUi';
-import { TimelineEntry, CVStatsRow } from './CVTimeline';
+import { LevelBadge, OUTFIT, T } from '../accountUi';
+import { TimelineEntry } from './CVTimeline';
+import { AccountHero, HeroOverlap, RaisedCard, EmojiDisc, FOREST, INK, INK_SOFT, DEEP_GOLD } from '../accountShell';
+import { GoldWord } from '@/components/BrandHeading';
+import { CircleFlag } from '@/components/CircleFlag';
+import VerifiedCheck from '@/components/VerifiedCheck';
+import { getCountryByName } from '@/lib/countries';
+import { experienceProgress } from '@/lib/munExperience';
 import CVPrivacyPanel, { type CvPrivacy } from './CVPrivacyPanel';
 import { friendlyError } from '@/lib/friendlyError';
 
@@ -31,6 +37,8 @@ export default function CVPage() {
   const [privacy, setPrivacy] = useState<CvPrivacy>({ cvPrivate: false, hideNationality: false });
   const [privSaving, setPrivSaving] = useState(false);
   const [privError, setPrivError] = useState<string | null>(null);
+  // Shown on the person card only (the owner's own view).
+  const [nationality, setNationality] = useState<string | null>(null);
 
   const fetchEntries = useCallback(async () => {
     if (!user || !session) return;
@@ -64,12 +72,13 @@ export default function CVPage() {
     let cancelled = false;
     getAuthedClient(session.access_token)
       .from('profiles')
-      .select('cv_private, cv_hide_nationality')
+      .select('cv_private, cv_hide_nationality, nationality')
       .eq('id', user.id)
       .maybeSingle()
       .then(({ data }) => {
         if (cancelled || !data) return;
         setPrivacy({ cvPrivate: !!data.cv_private, hideNationality: !!data.cv_hide_nationality });
+        setNationality(data.nationality ?? null);
       });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -171,145 +180,170 @@ export default function CVPage() {
     );
   }
 
+  // The three figures of the person card (Strava-like): conferences, awards
+  // (the awards list, else the single legacy award), and distinct committees.
+  const totalAwards = entries.reduce((sum, e) => sum + (e.awards.length > 0 ? e.awards.length : (e.award && e.award !== 'None' ? 1 : 0)), 0);
+  const totalCommittees = new Set(entries.map((e) => (e.committee ?? '').trim().toLowerCase()).filter(Boolean)).size;
+  const totalVerified = entries.filter((e) => e.source === 'gavelling_verified').length;
+  const exp = experienceProgress(entries.length);
+  const natCountry = nationality ? getCountryByName(nationality) : undefined;
+  const name = profile?.display_name ?? user?.email?.split('@')[0] ?? '';
+  const openAdd = () => { setModalEntry(null); setModalOpen(true); };
+
   return (
     <div>
-      {/* Two columns is a desktop shape. On a 375px phone the text column was
-          squeezed to 150px (about twenty characters a line) for its whole
-          356px height while 161px of the row sat empty beside it, and the
-          Share pill and + disc floated in the middle of the paragraph.
-          `flex-wrap` + `w-full` under 640px stacks them: the text gets the
-          page, the two buttons sit on their own row under it. Desktop is the
-          same row it always was. (18 Sep 2026 phone audit.) */}
-      <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
-        <div className="min-w-0 flex-1 basis-full sm:basis-auto">
-          <Eyebrow className="mb-2">Delegate Record</Eyebrow>
-          <h1
-            className="font-black text-[26px] mb-1"
-            style={{ color: '#1C1410', fontFamily: OUTFIT, letterSpacing: '-0.01em' }}
-          >
-            MUN CV
-          </h1>
-          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: 0 }}>
-            Every Model UN conference you have taken part in, in one record
-          </p>
-        </div>
+      <AccountHero
+        label="Delegate record"
+        title={<>Your MUN <GoldWord>CV</GoldWord></>}
+        line="Every Model UN conference you have taken part in, in one record"
+        emoji="Scroll"
+        fallback={ScrollText}
+        aside={
+          <>
+            {/* Share: copies a public read-only link to this CV */}
+            <button
+              type="button"
+              onClick={handleShare}
+              disabled={privacy.cvPrivate}
+              aria-label={privacy.cvPrivate ? 'Your CV is private, so there is no public link to share' : 'Copy a public link to your CV'}
+              title={privacy.cvPrivate ? 'Your CV is private. Make it public to share it.' : copied ? 'Link copied' : 'Share your CV'}
+              className="gv-acct-btn2"
+            >
+              {copied ? <Check size={16} strokeWidth={2.6} style={{ color: '#2A5A3C' }} aria-hidden /> : <Share2 size={16} strokeWidth={2.2} aria-hidden />}
+              {copied ? 'Copied' : 'Share'}
+            </button>
+            <button type="button" onClick={openAdd} className="gv-acct-btn" aria-label="Add a conference to your CV">
+              <Plus size={18} strokeWidth={2.6} aria-hidden />
+              Add conference
+            </button>
+          </>
+        }
+      >
+        {/* Who can see the CV: one small toggle, the rest behind its gear */}
+        <CVPrivacyPanel
+          value={privacy}
+          onChange={changePrivacy}
+          saving={privSaving}
+          error={privError}
+          publicHref={publicHref}
+          hiddenCount={entries.filter((e) => e.is_private).length}
+        />
+      </AccountHero>
 
-        <div className="flex items-center gap-2.5 flex-shrink-0 w-full sm:w-auto">
-          {/* Share — copies a public read-only link to this CV */}
-          <button
-            onClick={handleShare}
-            disabled={privacy.cvPrivate}
-            aria-label={privacy.cvPrivate ? 'Your CV is private, so there is no public link to share' : 'Copy a public link to your CV'}
-            title={privacy.cvPrivate ? 'Your CV is private. Make it public to share it.' : copied ? 'Link copied' : 'Share your CV'}
-            className="inline-flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-full focus:outline-none"
-            style={{
-              height: '48px',
-              padding: '0 16px',
-              backgroundColor: NEU_SURFACE,
-              color: '#1B3828',
-              border: '1px solid rgba(221,212,192,0.95)',
-              boxShadow: '0 4px 14px rgba(27,56,40,0.10)',
-              fontFamily: OUTFIT,
-              fontWeight: 800,
-              fontSize: T.body,
-              cursor: privacy.cvPrivate ? 'not-allowed' : 'pointer',
-              opacity: privacy.cvPrivate ? 0.5 : 1,
-              transition: 'transform 160ms cubic-bezier(0.22,1,0.36,1)',
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
-            onPointerDown={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(0.96)'; }}
-            onPointerUp={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
-          >
-            {copied ? <Check size={16} strokeWidth={2.6} style={{ color: '#2A5A3C' }} /> : <Share2 size={15} strokeWidth={2.4} />}
-            {copied ? 'Copied' : 'Share'}
-          </button>
+      <HeroOverlap>
+        {/* ── The person, with three big numbers ── */}
+        <RaisedCard className="flex flex-col gap-6 md:flex-row md:items-center">
+          <div className="flex items-center gap-4 min-w-0 md:flex-1">
+            <span className="relative flex-shrink-0">
+              {profile?.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={profile.avatar_url}
+                  alt=""
+                  className="rounded-full object-cover"
+                  style={{ width: 84, height: 84, boxShadow: '0 0 0 4px #FFFFFF, 0 0 0 5px rgba(27,56,40,0.10), 0 10px 22px -8px rgba(27,56,40,0.35)' }}
+                />
+              ) : (
+                <span
+                  aria-hidden
+                  className="rounded-full flex items-center justify-center"
+                  style={{
+                    width: 84, height: 84, fontFamily: OUTFIT, fontWeight: 800, fontSize: 34, color: FOREST,
+                    background: 'linear-gradient(150deg, rgba(238,217,138,0.55), rgba(238,217,138,0.22))',
+                    boxShadow: '0 0 0 4px #FFFFFF, 0 0 0 5px rgba(27,56,40,0.10), 0 10px 22px -8px rgba(27,56,40,0.35)',
+                  }}
+                >
+                  {(name[0] ?? '?').toUpperCase()}
+                </span>
+              )}
+              {natCountry && (
+                <span className="absolute" style={{ right: -4, bottom: -2 }} title={privacy.hideNationality ? `${natCountry.name}, hidden on your public CV` : natCountry.name}>
+                  <CircleFlag code={natCountry.code} size={30} label={natCountry.name} style={{ boxShadow: '0 0 0 3px #FFFFFF, 0 3px 8px rgba(27,56,40,0.25)', opacity: privacy.hideNationality ? 0.55 : 1 }} />
+                </span>
+              )}
+            </span>
+            <div className="min-w-0">
+              <p className="[overflow-wrap:anywhere]" style={{ margin: 0, fontFamily: OUTFIT, fontWeight: 800, fontSize: 'clamp(22px, 4.5vw, 28px)', lineHeight: 1.15, letterSpacing: '-0.02em', color: INK }}>
+                {name}
+              </p>
+              {natCountry && (
+                <p className="inline-flex items-center gap-1.5 [overflow-wrap:anywhere]" style={{ margin: '3px 0 0', fontFamily: OUTFIT, fontSize: T.body, color: INK_SOFT }}>
+                  {natCountry.name}
+                  {privacy.hideNationality && <EyeOff size={13} strokeWidth={2.3} aria-label="Hidden on your public CV" />}
+                </p>
+              )}
+              <div className="mt-2.5">
+                <LevelBadge level={exp.level} size="sm" />
+              </div>
+            </div>
+          </div>
 
-          <button
-            onClick={() => { setModalEntry(null); setModalOpen(true); }}
-            aria-label="Add a conference to your CV"
-            title="Add conference"
-            className="flex items-center justify-center flex-shrink-0 rounded-full focus:outline-none"
-            style={{
-              width: '58px',
-              height: '58px',
-              background: 'radial-gradient(120% 120% at 30% 25%, #2A5A3C 0%, #1B3828 70%)',
-              color: '#EED98A',
-              border: '1px solid rgba(238,217,138,0.4)',
-              boxShadow: '0 8px 22px rgba(27,56,40,0.28), inset 0 1px 0 rgba(238,217,138,0.25)',
-              cursor: 'pointer',
-              transition: 'transform 160ms cubic-bezier(0.22,1,0.36,1), box-shadow 220ms cubic-bezier(0.22,1,0.36,1)',
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1.07)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 12px 30px rgba(27,56,40,0.34), inset 0 1px 0 rgba(238,217,138,0.3)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 22px rgba(27,56,40,0.28), inset 0 1px 0 rgba(238,217,138,0.25)'; }}
-            onPointerDown={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(0.96)'; }}
-            onPointerUp={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1.07)'; }}
-          >
-            <Plus size={26} strokeWidth={2.6} />
-          </button>
-        </div>
-      </div>
+          <div className="grid grid-cols-3 gap-2 md:gap-3 md:flex-shrink-0" style={{ minWidth: 0 }}>
+            {[
+              { value: entries.length, word: entries.length === 1 ? 'Conference' : 'Conferences' },
+              { value: totalAwards, word: totalAwards === 1 ? 'Award' : 'Awards' },
+              { value: totalCommittees, word: totalCommittees === 1 ? 'Committee' : 'Committees' },
+            ].map((s) => (
+              <div
+                key={s.word}
+                className="rounded-[18px] px-3 py-3 md:px-5 md:py-4 text-center"
+                style={{ backgroundColor: 'rgba(27,56,40,0.035)', minWidth: 0 }}
+              >
+                <p style={{ margin: 0, fontFamily: OUTFIT, fontWeight: 800, fontSize: 'clamp(30px, 6vw, 44px)', lineHeight: 1, letterSpacing: '-0.03em', color: FOREST, fontVariantNumeric: 'tabular-nums' }}>
+                  {s.value}
+                </p>
+                <p className="[overflow-wrap:anywhere]" style={{ margin: '6px 0 0', fontFamily: OUTFIT, fontWeight: 600, fontSize: T.caption + 1, color: INK_SOFT }}>
+                  {s.word}
+                </p>
+              </div>
+            ))}
+          </div>
+        </RaisedCard>
+      </HeroOverlap>
 
-      <CVPrivacyPanel
-        value={privacy}
-        onChange={changePrivacy}
-        saving={privSaving}
-        error={privError}
-        publicHref={publicHref}
-        hiddenCount={entries.filter((e) => e.is_private).length}
-      />
-
-      {/* Stats row — three showcase counts + the rank insignia. */}
-      <CVStatsRow entries={entries} />
-      <div className="mb-8" />
-
-      {/* Entries — vertical timeline */}
-      {entries.length === 0 ? (
-        <GlassCard className="text-center !py-14">
-          <p className="text-lg font-bold mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-            No entries yet
-          </p>
-          <p className="text-sm mb-6 max-w-sm mx-auto" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.7 }}>
-            Add your past conferences manually, or they&apos;ll appear automatically when you attend Gavelling-verified conferences.
-          </p>
-          <button
-            onClick={() => { setModalEntry(null); setModalOpen(true); }}
-            aria-label="Add your first conference"
-            className="flex items-center justify-center rounded-full focus:outline-none mx-auto"
-            style={{
-              width: '58px',
-              height: '58px',
-              background: 'radial-gradient(120% 120% at 30% 25%, #2A5A3C 0%, #1B3828 70%)',
-              color: '#EED98A',
-              border: '1px solid rgba(238,217,138,0.4)',
-              boxShadow: '0 8px 22px rgba(27,56,40,0.28), inset 0 1px 0 rgba(238,217,138,0.25)',
-              cursor: 'pointer',
-              transition: 'transform 160ms cubic-bezier(0.22,1,0.36,1)',
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1.07)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
-            onPointerDown={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(0.96)'; }}
-            onPointerUp={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1.07)'; }}
-          >
-            <Plus size={26} strokeWidth={2.6} />
-          </button>
-          <p className="mt-3" style={{ fontSize: T.caption, color: '#B6871F', fontFamily: MONO, fontWeight: 700, margin: '12px 0 0 0' }}>
-            Add your first entry
-          </p>
-        </GlassCard>
-      ) : (
-        <div className="flex flex-col">
-          {entries.map((entry, i) => (
-            <TimelineEntry
-              key={entry.id}
-              entry={entry}
-              isLast={i === entries.length - 1}
-              onEdit={() => { setModalEntry(entry); setModalOpen(true); }}
-              onTogglePrivate={() => toggleEntryPrivate(entry)}
-            />
-          ))}
-        </div>
+      {totalVerified > 0 && (
+        <p className="inline-flex items-center gap-1.5 mt-4 px-2 sm:px-4 md:px-6" style={{ fontFamily: OUTFIT, fontSize: T.body, color: INK_SOFT }}>
+          <VerifiedCheck verified size={16} />
+          <span><strong style={{ color: INK, fontVariantNumeric: 'tabular-nums' }}>{totalVerified}</strong> verified by Gavelling</span>
+        </p>
       )}
+
+      <div className="mt-6 px-2 sm:px-4 md:px-6">
+        {/* Entries: vertical timeline */}
+        <div className="flex items-baseline gap-2.5 mb-5">
+          <h2 style={{ margin: 0, fontFamily: OUTFIT, fontWeight: 800, fontSize: T.section, letterSpacing: '-0.01em', color: INK }}>
+            Timeline
+          </h2>
+          {entries.length > 0 && (
+            <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: T.section, color: DEEP_GOLD, fontVariantNumeric: 'tabular-nums' }}>{entries.length}</span>
+          )}
+        </div>
+
+        {entries.length === 0 ? (
+          <RaisedCard className="text-center !py-12">
+            <div className="flex justify-center mb-4"><EmojiDisc emoji="Scroll" fallback={ScrollText} size={56} /></div>
+            <p style={{ margin: '0 0 18px', fontFamily: OUTFIT, fontSize: T.body + 2, fontWeight: 700, color: INK }}>
+              Add the conferences you have taken part in
+            </p>
+            <button type="button" onClick={openAdd} className="gv-acct-btn" aria-label="Add your first conference">
+              <Plus size={18} strokeWidth={2.6} aria-hidden />
+              Add your first conference
+            </button>
+          </RaisedCard>
+        ) : (
+          <div className="flex flex-col">
+            {entries.map((entry, i) => (
+              <TimelineEntry
+                key={entry.id}
+                entry={entry}
+                isLast={i === entries.length - 1}
+                onEdit={() => { setModalEntry(entry); setModalOpen(true); }}
+                onTogglePrivate={() => toggleEntryPrivate(entry)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
 
       {modalOpen && user && (
         <CVEntryModal
@@ -333,4 +367,3 @@ export default function CVPage() {
   );
 }
 
-const NEU_SURFACE = '#FAF8F3';

@@ -16,7 +16,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Mail, Info, Send, Repeat, ListChecks, Check, Search, X, ChevronDown, CircleSlash,
+  Mail, Info, Send, Repeat, ListChecks, Check, Search, X, ChevronDown, CircleSlash, CheckCircle2,
 } from 'lucide-react';
 import { type QueueEventEmailResult } from '@/lib/emailEvents';
 import { CircleFlag } from '@/components/CircleFlag';
@@ -645,16 +645,13 @@ function SentPill({ sent, sentAt }: { sent: boolean; sentAt: string | null }) {
     <span
       className="inline-flex items-center gap-1 flex-shrink-0"
       style={{
-        padding: '3px 8px', borderRadius: 999,
-        backgroundColor: sent ? 'rgba(61,122,82,0.12)' : 'transparent',
-        boxShadow: sent ? 'none' : NEU.inSm,
-        fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.05em',
-        color: sent ? NEU.green : NEU.muted, whiteSpace: 'nowrap',
+        fontFamily: OUTFIT, fontSize: 12, fontWeight: 700,
+        color: sent ? NEU.forest : NEU.inkSoft, whiteSpace: 'nowrap',
       }}
     >
       {sent
-        ? <><Check size={10} strokeWidth={3} />{formatSentAt(sentAt).toUpperCase()}</>
-        : <><CircleSlash size={10} strokeWidth={2.6} />NOT SENT</>}
+        ? <><CheckCircle2 size={14} strokeWidth={2.4} aria-hidden="true" />{formatSentAt(sentAt)}</>
+        : <><CircleSlash size={14} strokeWidth={2.4} aria-hidden="true" />Not sent</>}
     </span>
   );
 }

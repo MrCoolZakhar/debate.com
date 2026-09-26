@@ -13,7 +13,8 @@ import {
   createContext, useContext, useState, useEffect, useMemo, type ReactNode,
 } from 'react';
 import {
-  Eye, Gavel, GraduationCap, User, Users,
+  Banknote, CreditCard, Eye, Gavel, GraduationCap, HandCoins, MinusCircle, PenLine, User, Users,
+  type LucideIcon,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
@@ -135,10 +136,29 @@ export function cumulativeSpark(rows: FinRow[], pick: (r: FinRow) => boolean, n 
   return buckets.map(v => (acc += v));
 }
 
+/** A state shown as an icon plus a plain word: no pill, no capitals. Callers
+ *  set `color`; the icon (14px) and the word share it. */
 export const chipStyle: React.CSSProperties = {
-  fontSize: 9, fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.08em',
-  padding: '3px 9px', borderRadius: 999, whiteSpace: 'nowrap',
+  fontSize: 12, fontFamily: OUTFIT, fontWeight: 700, whiteSpace: 'nowrap',
 };
+
+/** "NO PAYMENT" → "No payment". Display only; stored labels are unchanged. */
+export function sentenceCase(label: string): string {
+  const lower = label.replace(/_/g, ' ').toLowerCase();
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
+}
+
+/** The icon that goes with a payment method label from paymentMethod(). */
+export function methodIcon(label: string): LucideIcon {
+  switch (label.toUpperCase()) {
+    case 'STRIPE': return CreditCard;
+    case 'OFFLINE': return Banknote;
+    case 'MANUAL': return PenLine;
+    case 'DELEGATION': return Users;
+    case 'NO PAYMENT': return MinusCircle;
+    default: return HandCoins;
+  }
+}
 
 export function formatRowDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });

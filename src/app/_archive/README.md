@@ -14,3 +14,10 @@ here when the owner takes a feature off the site but wants the code kept.
   owner's request. The session creator now opens straight on building the committee, and its
   Back button goes back (or to `/sessions`). The file is `.txt` so it is not compiled; the
   restore steps are at its top. The card videos (`/card_*.mp4`) are still in `public/`.
+- `account-your-conferences/`: the role-tab "Your conferences" page (All, Delegate, Chair,
+  Advisor, Organizer; upcoming or past; continent) that was `/account/conferences`, archived on
+  26 Sep 2026 at the owner's request. The former Conference calendar is now **My conferences** at
+  `/account/conferences`, and `/account/calendar` redirects there (next.config.ts). The actions
+  only the old page had (chair and organiser invitations, imported invitations, drafts to
+  complete, the accepted-invite notice) moved to `src/app/account/conferences/conferenceActions.tsx`
+  and sit at the top of My conferences. The file is `.txt`; the restore steps are at its top.

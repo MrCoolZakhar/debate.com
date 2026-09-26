@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { Star, X, Check, Megaphone, MessageSquare, ClipboardCheck, FileText, CreditCard, TrendingUp, ArrowRight, Camera, Globe2, Sparkles, Cake, Mail, User, Bell, ShieldAlert, MapPin, GraduationCap, School, Layers } from 'lucide-react';
+import { Star, X, Check, Megaphone, MessageSquare, ClipboardCheck, FileText, CreditCard, Camera, Globe2, Sparkles, Cake, Mail, User, Bell, ShieldAlert, MapPin, GraduationCap, School, Layers, Landmark, Trophy, Coins, Infinity as InfinityIcon } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { UN_COUNTRIES, getCountryByName, countryMatchRank } from '@/lib/countries';
@@ -10,8 +10,11 @@ import { CircleFlag } from '@/components/CircleFlag';
 import { deriveExperienceLevel, experienceProgress } from '@/lib/munExperience';
 import { ageAt } from '@/lib/age';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
-import { CardTitle, Eyebrow, GlassCard, PillToggle, ExperienceInfo, LevelInsignia, OUTFIT, T } from '../accountUi';
-import { NEU, NeuIconDisc, NEU_GRADIENTS } from '@/components/neu';
+import { useCredits } from '@/hooks/useCredits';
+import { useUnlimitedStatus, isUnlimited } from '@/lib/unlimitedStatus';
+import { GoldWord } from '@/components/BrandHeading';
+import { PillToggle, ExperienceInfo, LevelInsignia, OUTFIT, T } from '../accountUi';
+import { AccountHero, HeroOverlap, RaisedCard, CardHead, StatBlock, EmojiDisc, RAISED, INSET } from '../accountShell';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { DatePicker } from '@/components/DatePicker';
 import Portal from '@/components/Portal';
@@ -56,22 +59,13 @@ const HINT = '#6E5F4E';
 
 const inputStyle: React.CSSProperties = {
   border: '1px solid #DDD4C0',
-  backgroundColor: 'rgba(250,248,243,0.9)',
+  backgroundColor: '#FFFFFF',
   color: '#1C1410',
   // 14px is the floor for anything typed into (T.body) and also the point
   // below which iOS zooms the page on focus; the inputs were `text-sm`, i.e.
   // exactly 14, so this only states it rather than changing it.
   fontSize: T.body,
   fontFamily: OUTFIT,
-};
-
-// Folds the forest/ivory neumorphic surface into the existing GlassCard usages:
-// opaque parchment surface + soft extruded dual-shadow (no hard border), so the
-// profile reads like the rest of the neu dashboard.
-const NEU_CARD_STYLE: React.CSSProperties = {
-  backgroundColor: NEU.surface,
-  border: 'none',
-  boxShadow: NEU.out,
 };
 
 export default function ProfilePage() {
@@ -90,6 +84,11 @@ export default function ProfilePage() {
   });
   const [educationLevel, setEducationLevel] = useState<string | null>(null);
   const [cvCount, setCvCount]         = useState<number | null>(null);
+  // Awards on the MUN CV, for the stat card (read only, counted the way the
+  // CV page counts them: the awards list, else the single legacy award).
+  const [awardCount, setAwardCount]   = useState<number | null>(null);
+  const { balance: creditBalance }    = useCredits();
+  const unlimitedStatus               = useUnlimitedStatus();
   const [dataLoading, setDataLoading] = useState(true);
   const [saving, setSaving]           = useState(false);
   const [saved, setSaved]             = useState(false);
@@ -184,6 +183,15 @@ export default function ProfilePage() {
       });
 
     loadReviewable(supabase);
+
+    supabase
+      .from('mun_cv_entries')
+      .select('award, awards')
+      .eq('user_id', user.id)
+      .then(({ data: cvRows }) => {
+        const rows = (cvRows ?? []) as { award: string | null; awards: string[] | null }[];
+        setAwardCount(rows.reduce((n, r) => n + ((r.awards?.length ?? 0) > 0 ? r.awards!.length : (r.award && r.award !== 'None' ? 1 : 0)), 0));
+      });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id, session?.access_token]);
 
@@ -484,6 +492,7 @@ export default function ProfilePage() {
       .map((x) => x.c);
   }, [nationality]);
 
+
   const exp = experienceProgress(cvCount ?? 0);
 
   if (dataLoading) {
@@ -499,230 +508,260 @@ export default function ProfilePage() {
     const a = ageAt(dateOfBirth);
     return a !== null && a >= 0 && a <= 120 ? a : null;
   })();
+  const educationWord = EDUCATION_WORD[educationLevel ?? ''] ?? null;
+  const unlimited = isUnlimited(unlimitedStatus);
+
+  const label = (Icon: typeof User, text: string) => (
+    <span className="flex items-center gap-1.5 font-semibold" style={{ fontSize: T.body, color: '#1C1410', fontFamily: OUTFIT }}>
+      <Icon size={14} strokeWidth={2.2} style={{ color: '#B6871F' }} aria-hidden />
+      {text}
+    </span>
+  );
 
   return (
-    <div
-      className="relative rounded-[24px] p-5 md:p-7"
-      style={{
-        backgroundColor: NEU.surface,
-        borderRadius: 24,
-        boxShadow: NEU.out,
-      }}
-    >
+    <div>
       {/* iOS Safari zooms the whole page when a focused field is under 16px,
-          and every field on this screen was 14px, so tapping Display Name
-          jerked the layout sideways and left it zoomed. 16px on a phone only;
-          the 14px desktop field is unchanged. `!important` because the size
-          comes from a utility class and, on the nationality field, an inline
-          style. (18 Sep 2026 phone audit.) */}
+          so every field is 16px on a phone only; the 14px desktop field is
+          unchanged. `!important` because the size comes from a utility class
+          and, on the nationality field, an inline style. (18 Sep 2026 phone
+          audit.) The two tap growers enlarge small hit areas on a phone. */}
       <style>{`
 @media (max-width:743px){
   .gv-acct-input{font-size:16px!important}
   .gv-tap44>button::after{content:'';position:absolute;top:-11px;bottom:-11px;left:-8px;right:-8px}
   .gv-tap20::after{content:'';position:absolute;top:-12px;bottom:-12px;left:-12px;right:-12px}
 }
-@media (max-width:430px){
-  .gv-rank-row{flex-direction:column;align-items:flex-start;gap:12px}
-}`}</style>
+.gv-acct-input:focus{border-color:#1B3828!important;box-shadow:0 0 0 3px rgba(27,56,40,0.10)}`}</style>
 
-      {/* Decorative bleed — a low-opacity globe drifting off the top-right of the
-          page panel for depth. Negative z keeps it under the opaque cards; the
-          small offset keeps it from ever forcing a horizontal scrollbar. */}
-      <Globe2
-        aria-hidden
-        size={150}
-        strokeWidth={1}
-        className="pointer-events-none absolute"
-        style={{ top: '-38px', right: '-16px', color: 'rgba(27,56,40,0.055)', zIndex: -1 }}
+      <AccountHero
+        label="Your profile"
+        title={<>Your <GoldWord>Profile</GoldWord></>}
+        line="The details every conference reads when you apply"
+        emoji="Bust in silhouette"
+        fallback={User}
       />
 
-      <div className="relative pb-5 mb-7" style={{ borderBottom: '2px solid rgba(182,135,31,0.35)', zIndex: 1 }}>
-        <Eyebrow className="mb-2" size="lg">My Profile</Eyebrow>
-        <h1
-          className="font-black mb-1 flex items-baseline gap-2 flex-wrap"
-          style={{ fontSize: `clamp(28px, 8vw, ${T.title}px)`, lineHeight: 1.1, color: '#1C1410', fontFamily: OUTFIT, letterSpacing: '-0.01em' }}
-        >
-          <span className="min-w-0 [overflow-wrap:anywhere]">{displayName || 'Your Profile'}</span>
-          {headerAge !== null && (
-            <span
-              className="inline-flex items-center gap-1"
-              style={{ fontFamily: OUTFIT, fontSize: T.section, fontWeight: 700, color: '#B6871F', letterSpacing: '0', fontVariantNumeric: 'tabular-nums' }}
-            >
-              <Cake size={17} strokeWidth={2.2} style={{ color: '#B6871F', transform: 'translateY(1px)' }} />
-              ({headerAge})
-            </span>
-          )}
-        </h1>
-        <p style={{ fontSize: T.body, color: HINT, fontFamily: OUTFIT, margin: 0 }}>
-          Manage your Gavelling account details
-        </p>
-      </div>
-
-      {/* Big level banner — the visual centrepiece */}
-      <Link
-        href="/account/cv"
-        className="relative block mb-7 rounded-[20px] focus:outline-none"
-        style={{ textDecoration: 'none', zIndex: 1 }}
-      >
-        <div
-          className="relative overflow-hidden rounded-[20px] px-6 py-6 md:px-8 md:py-7 transition-transform"
-          style={{
-            background: 'linear-gradient(135deg, #1B3828 0%, #24492F 55%, #2A5A3C 100%)',
-            border: '1.5px solid rgba(238,217,138,0.45)',
-            boxShadow: '0 14px 40px rgba(27,56,40,0.3)',
-          }}
-        >
-          {/* soft gold glow */}
-          <div
-            className="pointer-events-none absolute"
-            style={{ top: '-60px', right: '-40px', width: '220px', height: '220px', borderRadius: '9999px', background: 'radial-gradient(circle, rgba(238,217,138,0.30), transparent 70%)' }}
-          />
-          {/* decorative insignia ghost bleeding off the bottom-right, low opacity */}
-          <Sparkles
-            aria-hidden
-            size={130}
-            strokeWidth={1}
-            className="pointer-events-none absolute"
-            style={{ bottom: '-34px', right: '-18px', color: 'rgba(238,217,138,0.10)' }}
-          />
-          <div className="relative flex items-center justify-between gap-4 flex-wrap">
-            {/* The rank word ran 41px past the banner at 375px and 56px at
-                360px, and `overflow-hidden` cut it in half ("Beginne"). Two
-                things were wrong: nothing could shrink (`min-w-0` is missing
-                by default on a flex child), and a 78px insignia plus a fixed
-                50px word simply does not fit 279px of banner. On a phone the
-                insignia now sits ABOVE the word, which gives the word the full
-                width, so even "Intermediate" fits at a size still worth
-                reading. The desktop row is unchanged. */}
-            <div className="gv-rank-row flex items-center gap-4 min-w-0">
-              {/* MUN rank insignia — the same tiered glyph used across the app */}
-              <span
-                className="inline-flex items-center justify-center flex-shrink-0"
-                style={{
-                  width: '78px', height: '78px', borderRadius: '9999px',
-                  background: 'radial-gradient(circle at 34% 30%, rgba(250,248,243,0.20), rgba(238,217,138,0.12) 55%, rgba(27,56,40,0.25))',
-                  border: '1.5px solid rgba(238,217,138,0.55)',
-                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35), 0 6px 16px rgba(27,56,40,0.35)',
-                }}
-              >
-                <LevelInsignia level={exp.level} size={48} />
-              </span>
-              <div className="min-w-0">
-                <span
-                  className="inline-flex items-center gap-2 max-w-full"
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+      <HeroOverlap>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-5">
+          {/* ── Identity card ── */}
+          <RaisedCard className="lg:col-span-5 flex flex-col">
+            <div className="flex flex-col items-center text-center">
+              <div className="relative flex-shrink-0">
+                {displayAvatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={displayAvatar}
+                    alt="Profile"
+                    className="rounded-full object-cover"
+                    style={{ width: 128, height: 128, boxShadow: '0 0 0 4px #FFFFFF, 0 0 0 5px rgba(27,56,40,0.10), 0 12px 26px -8px rgba(27,56,40,0.35)' }}
+                  />
+                ) : (
+                  <div
+                    className="rounded-full flex items-center justify-center font-black"
+                    style={{
+                      width: 128, height: 128, fontSize: 50, color: '#1B3828', fontFamily: OUTFIT,
+                      background: 'linear-gradient(150deg, rgba(238,217,138,0.55), rgba(238,217,138,0.22))',
+                      boxShadow: '0 0 0 4px #FFFFFF, 0 0 0 5px rgba(27,56,40,0.10), 0 12px 26px -8px rgba(27,56,40,0.35)',
+                    }}
+                  >
+                    {(displayName?.[0] ?? user?.email?.[0] ?? '?').toUpperCase()}
+                  </div>
+                )}
+                {/* Camera: the soft round rimmed disc */}
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={avatarUploading}
+                  aria-label={displayAvatar ? 'Change photo' : 'Upload photo'}
+                  className="gv-acct-rim absolute"
+                  style={{ right: -2, bottom: 2, width: 42, height: 42 }}
                 >
-                  <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: T.caption, letterSpacing: '0.18em', color: '#EED98A', margin: 0, textTransform: 'uppercase' }}>
-                    Your MUN Rank
-                  </p>
-                  <ExperienceInfo tone="gold" align="left" currentLevel={exp.level} />
-                </span>
-                {/* Fluid, so "Intermediate" fits the same box "Beginner" does.
-                    50px is still the desktop size (a 1000px page clears the
-                    10vw ceiling long before it). `break-words` is the belt to
-                    the clamp's braces. */}
-                <p
-                  className="font-black break-words"
-                  style={{ fontFamily: OUTFIT, fontSize: 'clamp(28px, 10vw, 50px)', lineHeight: 1.02, color: '#FAF8F3', letterSpacing: '-0.02em', margin: '4px 0 0 0' }}
-                >
-                  {exp.label}
-                </p>
+                  <Camera size={18} strokeWidth={2.2} aria-hidden />
+                </button>
+                {avatarUploading && (
+                  <div className="absolute inset-0 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(27,56,40,0.45)' }}>
+                    <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor: '#EED98A', borderTopColor: 'transparent' }} />
+                  </div>
+                )}
               </div>
-            </div>
-            <div className="inline-flex items-center gap-2">
-              <TrendingUp size={18} strokeWidth={2.4} style={{ color: '#EED98A' }} aria-hidden />
-              <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: T.section, color: '#FAF8F3', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                {cvCount ?? 0}
-              </span>
-              <span style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: T.caption, color: 'rgba(250,248,243,0.92)' }}>
-                conference{(cvCount ?? 0) === 1 ? '' : 's'}
-              </span>
-            </div>
-          </div>
 
-          {/* Progress bar */}
-          <div className="relative mt-5">
-            <div className="w-full rounded-full overflow-hidden" style={{ height: '9px', backgroundColor: 'rgba(250,248,243,0.16)' }}>
-              <div
-                className="h-full rounded-full"
-                style={{ width: `${Math.round(exp.progress * 100)}%`, background: 'linear-gradient(90deg, #EED98A, #B6871F)', transition: 'width 500ms ease' }}
+              <h2
+                className="[overflow-wrap:anywhere]"
+                style={{ margin: '18px 0 0', fontFamily: OUTFIT, fontWeight: 800, fontSize: 'clamp(24px, 5vw, 30px)', lineHeight: 1.15, letterSpacing: '-0.02em', color: '#1C1410' }}
+              >
+                {displayName || 'Your name'}
+              </h2>
+              <p className="[overflow-wrap:anywhere]" style={{ margin: '4px 0 0', fontFamily: OUTFIT, fontSize: T.body, color: HINT }}>
+                {profile?.email ?? user?.email ?? ''}
+              </p>
+              <p className="inline-flex items-center gap-1.5" style={{ margin: '10px 0 0', fontFamily: OUTFIT, fontSize: T.body, fontWeight: 700, color: unlimited ? '#1B3828' : HINT }}>
+                {unlimited
+                  ? <InfinityIcon size={16} strokeWidth={2.4} style={{ color: '#B6871F' }} aria-hidden />
+                  : <Sparkles size={15} strokeWidth={2.2} style={{ color: '#B6871F' }} aria-hidden />}
+                {unlimited ? 'Unlimited' : 'Free plan'}
+              </p>
+            </div>
+
+            {/* Facts: icon + plain words, one per row */}
+            <ul className="mt-5 flex flex-col gap-2" style={{ listStyle: 'none', padding: 0, margin: '20px 0 0' }}>
+              <FactRow
+                icon={natCountry ? <CircleFlag code={natCountry.code} size={26} decorative /> : <Globe2 size={18} strokeWidth={2} style={{ color: '#9A8A78' }} aria-hidden />}
+                label="Nationality"
+                value={natCountry?.name ?? 'Not set'}
+              />
+              <FactRow
+                icon={<Cake size={18} strokeWidth={2} style={{ color: '#B6871F' }} aria-hidden />}
+                label="Age"
+                value={headerAge !== null ? String(headerAge) : 'Not set'}
+              />
+              <FactRow
+                icon={<GraduationCap size={18} strokeWidth={2} style={{ color: '#B6871F' }} aria-hidden />}
+                label="Education"
+                value={educationWord ?? 'Not set'}
+              />
+            </ul>
+
+            <div className="mt-5 flex flex-col items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={avatarUploading}
+                className="gv-acct-btn2 w-full"
+              >
+                <Camera size={16} strokeWidth={2.2} aria-hidden />
+                {displayAvatar ? 'Change photo' : 'Upload photo'}
+              </button>
+              <p style={{ margin: 0, fontSize: T.caption, color: avatarError ? '#8B2020' : HINT, fontFamily: OUTFIT }}>
+                {avatarError || 'JPG or PNG, up to 5MB'}
+              </p>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAvatarUpload(f); e.currentTarget.value = ''; }}
               />
             </div>
-            <div className="flex items-center justify-between mt-3 gap-3 flex-wrap">
-              <span style={{ fontFamily: OUTFIT, fontSize: T.body, fontWeight: 600, color: 'rgba(250,248,243,0.92)' }}>
-                {exp.nextLabel
-                  ? `Attend more conferences to increase your rank`
-                  : `Top tier reached. You're an Expert delegate`}
-              </span>
-              <span
-                className="inline-flex items-center gap-1.5"
-                style={{ fontFamily: OUTFIT, fontSize: T.body, fontWeight: 700, color: '#EED98A' }}
-              >
-                {exp.nextLabel
-                  ? `Add conferences to your MUN CV to rank up`
-                  : `View your MUN CV`}
-                <ArrowRight size={14} strokeWidth={2.4} />
-              </span>
+          </RaisedCard>
+
+          {/* ── Stats + rank ── */}
+          <div className="lg:col-span-7 flex flex-col gap-4 md:gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <StatBlock
+                emoji="Classical building"
+                fallback={Landmark}
+                value={cvCount ?? 0}
+                word={(cvCount ?? 0) === 1 ? 'conference' : 'conferences'}
+                note="On your MUN CV"
+                href="/account/cv"
+              />
+              <StatBlock
+                emoji="Trophy"
+                fallback={Trophy}
+                value={awardCount ?? 0}
+                word={(awardCount ?? 0) === 1 ? 'award' : 'awards'}
+                note="Across your conferences"
+                href="/account/cv"
+              />
+              <StatBlock
+                emoji="Coin"
+                fallback={Coins}
+                value={unlimited ? '∞' : (creditBalance ?? '…')}
+                word={unlimited ? 'Unlimited' : creditBalance === 1 ? 'credit' : 'credits'}
+                note={unlimited ? 'Apply as often as you like' : 'One credit, one application'}
+                href="/account/manage/credits"
+              />
             </div>
+
+            {/* Rank: a white card, the insignia large, a gold progress line */}
+            <Link
+              href="/account/cv"
+              className="gv-acct-card-link block rounded-[22px] p-5 md:p-7 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2"
+              style={{ textDecoration: 'none', background: 'linear-gradient(180deg, #FFFFFF 0%, #FDFBF7 100%)', boxShadow: RAISED }}
+            >
+              <div className="flex items-center gap-4 min-w-0">
+                <span
+                  className="inline-flex items-center justify-center flex-shrink-0"
+                  style={{
+                    width: 76, height: 76, borderRadius: 9999,
+                    background: 'radial-gradient(circle at 34% 30%, #FFFFFF, rgba(238,217,138,0.42) 70%)',
+                    boxShadow: 'inset 0 1px 0 #FFFFFF, 0 0 0 1px rgba(182,135,31,0.30), 0 0 0 5px rgba(238,217,138,0.25), 0 8px 18px -6px rgba(27,56,40,0.30)',
+                  }}
+                >
+                  <LevelInsignia level={exp.level} size={46} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <span
+                    className="inline-flex items-center gap-2"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  >
+                    <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: T.caption, letterSpacing: '0.14em', color: '#B6871F', textTransform: 'uppercase' }}>
+                      Your MUN rank
+                    </span>
+                    <ExperienceInfo tone="light" align="left" currentLevel={exp.level} />
+                  </span>
+                  <p className="break-words" style={{ margin: '4px 0 0', fontFamily: OUTFIT, fontWeight: 800, fontSize: 'clamp(28px, 6vw, 40px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#1C1410' }}>
+                    {exp.label}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-5 w-full rounded-full overflow-hidden" style={{ height: 10, backgroundColor: 'rgba(27,56,40,0.06)', boxShadow: 'inset 1px 1px 3px rgba(27,56,40,0.12)' }}>
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${Math.max(4, Math.round(exp.progress * 100))}%`, background: 'linear-gradient(90deg, #EED98A, #B6871F)', transition: 'width 500ms ease' }}
+                />
+              </div>
+              <p className="flex flex-wrap items-center justify-between gap-2" style={{ margin: '12px 0 0', fontFamily: OUTFIT, fontSize: T.body }}>
+                <span style={{ color: HINT }}>
+                  {exp.nextLabel
+                    ? `${exp.remaining} more ${exp.remaining === 1 ? 'conference' : 'conferences'} to ${exp.nextLabel}`
+                    : 'Top tier reached'}
+                </span>
+                <span className="gv-acct-link">
+                  {exp.nextLabel ? 'Add to your MUN CV' : 'View your MUN CV'}
+                </span>
+              </p>
+            </Link>
           </div>
         </div>
-      </Link>
+      </HeroOverlap>
 
-      {/* Review prompts — conferences attended but not yet reviewed */}
+      {/* Review prompts: conferences attended but not yet reviewed */}
       {reviewable.length > 0 && (
-        <div className="flex flex-col gap-3 mb-6">
+        <div className="flex flex-col gap-3 mt-6 px-2 sm:px-4 md:px-6">
           {reviewable.map((conf) => {
             const formOpen = reviewFormFor === conf.id;
             return (
-              <div
-                key={conf.id}
-                className="rounded-2xl px-5 py-4"
-                style={{
-                  backgroundColor: 'rgba(250,248,243,0.86)',
-                  backdropFilter: 'blur(12px)',
-                  WebkitBackdropFilter: 'blur(12px)',
-                  border: '1.5px solid rgba(182,135,31,0.4)',
-                  boxShadow: '0 8px 24px rgba(27,56,40,0.07)',
-                }}
-              >
+              <RaisedCard key={conf.id} className="!p-4 md:!p-5">
                 <div className="flex items-center gap-4">
-                  <span
-                    className="flex items-center justify-center flex-shrink-0"
-                    style={{ width: '36px', height: '36px', borderRadius: '11px', backgroundColor: 'rgba(182,135,31,0.12)' }}
-                  >
-                    <Star size={16} strokeWidth={2} style={{ color: '#B6871F', fill: '#B6871F' }} />
-                  </span>
+                  <EmojiDisc emoji="Glowing star" fallback={Star} size={42} />
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold" style={{ fontSize: T.body, color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
+                    <p className="font-bold" style={{ fontSize: T.body + 1, color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
                       How was {conferenceAcronymLabel(conf)}?
                     </p>
-                    <p className="[overflow-wrap:anywhere]" style={{ fontSize: T.caption, color: HINT, fontFamily: OUTFIT, margin: '1px 0 0 0' }}>
+                    <p className="[overflow-wrap:anywhere]" style={{ fontSize: T.caption + 1, color: HINT, fontFamily: OUTFIT, margin: '2px 0 0 0' }}>
                       Leave a review of{' '}
-                      <Link
-                        href={`/conferences/${conf.slug}`}
-                        className="hover:text-[#1B3828]"
-                        style={{ color: '#B6871F', textDecoration: 'underline', textUnderlineOffset: 3, fontWeight: 700 }}
-                      >
+                      <Link href={`/conferences/${conf.slug}`} className="gv-acct-link">
                         {conf.full_name}
                       </Link>
                     </p>
                   </div>
                   <button
+                    type="button"
                     onClick={() => openReviewForm(conf.id)}
-                    className="flex-shrink-0 rounded-xl py-2 px-4 font-bold focus:outline-none transition-colors"
-                    style={{ fontSize: T.caption, backgroundColor: formOpen ? 'transparent' : '#1B3828', color: formOpen ? '#1B3828' : '#EED98A', border: formOpen ? '1px solid #DDD4C0' : '1px solid #1B3828', fontFamily: OUTFIT, cursor: 'pointer' }}
+                    className={`${formOpen ? 'gv-acct-btn2' : 'gv-acct-btn'} flex-shrink-0`}
+                    style={{ minHeight: 40, padding: '0 16px', fontSize: T.body }}
                   >
                     {formOpen ? 'Close' : 'Leave a review'}
                   </button>
                   <button
+                    type="button"
                     onClick={() => dismissReviewPrompt(conf.id)}
                     aria-label={`Dismiss review prompt for ${conferenceAcronymLabel(conf)}`}
-                    className="flex items-center justify-center flex-shrink-0 rounded-full focus:outline-none transition-colors"
-                    style={{ width: '26px', height: '26px', border: 'none', backgroundColor: 'transparent', color: '#9A8A78', cursor: 'pointer' }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                    className="gv-acct-rim flex-shrink-0"
+                    style={{ width: 32, height: 32, color: '#5A5046' }}
                   >
-                    <X size={14} />
+                    <X size={14} aria-hidden />
                   </button>
                 </div>
 
@@ -732,6 +771,7 @@ export default function ProfilePage() {
                       {[1, 2, 3, 4, 5].map((i) => (
                         <button
                           key={i}
+                          type="button"
                           onClick={() => setReviewRating(i)}
                           onMouseEnter={() => setReviewHover(i)}
                           aria-label={`Rate ${i} out of 5`}
@@ -739,7 +779,7 @@ export default function ProfilePage() {
                           style={{ background: 'none', border: 'none', padding: '2px', cursor: 'pointer' }}
                         >
                           <Star
-                            size={24}
+                            size={26}
                             strokeWidth={1.6}
                             style={{
                               color: i <= (reviewHover || reviewRating) ? '#B6871F' : 'rgba(154,138,120,0.45)',
@@ -757,320 +797,194 @@ export default function ProfilePage() {
                       placeholder="What should future delegates know about this conference?"
                       className="gv-acct-input w-full rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"
                       style={{ ...inputStyle, lineHeight: 1.7 }}
-                      onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                      onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
                     />
                     {reviewError && (
-                      <p className="mt-2" style={{ fontSize: T.caption, color: '#8B2020', fontFamily: OUTFIT, margin: '8px 0 0 0' }}>
+                      <p style={{ fontSize: T.caption, color: '#8B2020', fontFamily: OUTFIT, margin: '8px 0 0 0' }}>
                         {reviewError}
                       </p>
                     )}
                     <button
+                      type="button"
                       onClick={() => handleSubmitReview(conf)}
                       disabled={reviewRating < 1 || reviewSubmitting}
-                      className="mt-3 rounded-xl py-2.5 px-6 font-bold focus:outline-none transition-colors"
-                      style={{
-                        backgroundColor: reviewRating < 1 || reviewSubmitting ? '#DDD4C0' : '#1B3828',
-                        color: reviewRating < 1 || reviewSubmitting ? '#9A8A78' : '#EED98A',
-                        fontFamily: OUTFIT,
-                        border: 'none',
-                        cursor: reviewRating < 1 || reviewSubmitting ? 'default' : 'pointer',
-                      }}
+                      className="gv-acct-btn mt-3"
                     >
-                      {reviewSubmitting ? 'Saving...' : 'Submit review'}
+                      {reviewSubmitting ? 'Saving…' : 'Submit review'}
                     </button>
                   </div>
                 )}
-              </div>
+              </RaisedCard>
             );
           })}
         </div>
       )}
 
-      {/* Card 1 — Basic Info */}
-      <GlassCard className="relative mb-6" style={NEU_CARD_STYLE}>
-        {/* decorative bleed off the left edge */}
-        <User
-          aria-hidden
-          size={118}
-          strokeWidth={1}
-          className="pointer-events-none absolute"
-          style={{ bottom: '-26px', left: '-30px', color: 'rgba(27,56,40,0.045)', zIndex: 0 }}
-        />
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-5 mt-6 px-2 sm:px-4 md:px-6">
+        {/* ── Your details (editable) ── */}
+        <RaisedCard className="lg:col-span-7">
+          <CardHead emoji="Pencil" fallback={User} title="Your details" sub="Nationality and date of birth are required to apply" />
 
-        <div className="relative flex items-center gap-2.5 mb-6" style={{ zIndex: 1 }}>
-          <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={User} size={38} />
-          <CardTitle>Basic Information</CardTitle>
-        </div>
-
-        {/* Avatar — roughly double the previous size, upload affordance intact.
-            `flex-wrap`: at 375px the 144px avatar plus the 20px gap left 123px
-            for a button that needs about 150, so "Upload photo" broke over two
-            lines inside a pill sized for one. Wrapping puts the button and its
-            hint on their own full-width row instead, and changes nothing on a
-            desktop where both fit side by side. */}
-        <div className="relative flex flex-wrap items-center gap-5 mb-7" style={{ zIndex: 1 }}>
-          <div className="relative flex-shrink-0">
-            {displayAvatar ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={displayAvatar}
-                alt="Profile"
-                className="rounded-full object-cover"
-                style={{ width: '144px', height: '144px', border: '3px solid #FAF8F3', boxShadow: NEU.out }}
+          <div className="space-y-5">
+            {/* Display name */}
+            <label className="block">
+              <span className="block mb-1.5">{label(User, 'Display name')}</span>
+              <input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                className="gv-acct-input w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+                style={inputStyle}
               />
-            ) : (
-              <div
-                className="rounded-full flex items-center justify-center font-black"
-                style={{ width: '144px', height: '144px', fontSize: '52px', background: 'linear-gradient(150deg, rgba(27,56,40,0.14), rgba(27,56,40,0.08))', border: '3px solid #FAF8F3', color: '#1B3828', fontFamily: OUTFIT, boxShadow: NEU.out }}
-              >
-                {(displayName?.[0] ?? user?.email?.[0] ?? '?').toUpperCase()}
-              </div>
-            )}
-            {/* Camera affordance — click anywhere on the avatar to change it */}
-            <button
-              onClick={() => avatarInputRef.current?.click()}
-              disabled={avatarUploading}
-              aria-label={displayAvatar ? 'Change photo' : 'Upload photo'}
-              className="absolute flex items-center justify-center focus:outline-none"
-              style={{
-                right: '4px', bottom: '4px', width: '40px', height: '40px', borderRadius: '9999px',
-                background: 'linear-gradient(150deg, #24492F, #1B3828)', border: '3px solid #F0EBDD',
-                color: '#EED98A', cursor: avatarUploading ? 'default' : 'pointer',
-                boxShadow: '0 4px 10px rgba(27,56,40,0.35)',
-              }}
-            >
-              <Camera size={17} strokeWidth={2.3} />
-            </button>
-            {avatarUploading && (
-              <div className="absolute inset-0 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(27,56,40,0.45)' }}>
-                <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor: '#EED98A', borderTopColor: 'transparent' }} />
-              </div>
-            )}
-          </div>
-          <div className="min-w-0">
-            <button
-              onClick={() => avatarInputRef.current?.click()}
-              disabled={avatarUploading}
-              className="inline-flex items-center gap-2 rounded-full px-4 font-bold focus:outline-none"
-              style={{ fontSize: T.body, minHeight: 44, whiteSpace: 'nowrap', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, border: 'none', cursor: avatarUploading ? 'default' : 'pointer', boxShadow: NEU.outSm }}
-            >
-              <Camera size={14} strokeWidth={2.2} />
-              {displayAvatar ? 'Change photo' : 'Upload photo'}
-            </button>
-            <p className="mt-2" style={{ fontSize: T.caption, color: avatarError ? '#8B2020' : HINT, fontFamily: OUTFIT }}>
-              {avatarError || 'JPG or PNG, up to 5MB.'}
-            </p>
-            <input
-              ref={avatarInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAvatarUpload(f); e.currentTarget.value = ''; }}
-            />
-          </div>
-        </div>
-
-        <div className="relative space-y-5" style={{ zIndex: 1 }}>
-          {/* Display Name */}
-          <div>
-            <label
-              className="flex items-center gap-1.5 font-semibold mb-1.5"
-              style={{ fontSize: T.body, color: '#1C1410', fontFamily: OUTFIT }}
-            >
-              <User size={13} strokeWidth={2.3} style={{ color: '#B6871F' }} />
-              Display Name
             </label>
-            <input
-              type="text"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              className="gv-acct-input w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
-              style={inputStyle}
-              onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-            />
-          </div>
 
-          {/* Email (read-only) */}
-          <div>
-            <label
-              className="flex items-center gap-1.5 font-semibold mb-1.5"
-              style={{ fontSize: T.body, color: '#1C1410', fontFamily: OUTFIT }}
-            >
-              <Mail size={13} strokeWidth={2.3} style={{ color: '#B6871F' }} />
-              Email
-            </label>
-            <input
-              type="email"
-              value={profile?.email ?? user?.email ?? ''}
-              readOnly
-              className="gv-acct-input w-full rounded-xl px-4 py-3 text-sm"
-              style={{
-                border: '1px solid #DDD4C0',
-                backgroundColor: 'rgba(0,0,0,0.03)',
-                color: 'rgba(28,20,16,0.4)',
-                fontFamily: OUTFIT,
-                cursor: 'not-allowed',
-              }}
-            />
-            <p className="mt-1" style={{ fontSize: T.caption, color: HINT, fontFamily: OUTFIT }}>
-              Email cannot be changed here.
-            </p>
-          </div>
-
-          {/* Nationality + Date of Birth — one row, two columns */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            {/* Nationality — autocomplete with flag. The menu is portalled so no
-                card boundary can clip it, and it flips above near the bottom edge. */}
-            <div ref={natWrapRef} className="relative">
-              <label
-                className="flex items-center gap-1.5 font-semibold mb-1.5"
-                style={{ fontSize: T.body, color: '#1C1410', fontFamily: OUTFIT }}
-              >
-                <MapPin size={13} strokeWidth={2.3} style={{ color: '#B6871F' }} />
-                Nationality
-              </label>
-              <div className="relative">
-                {natCountry ? (
-                  <span
-                    className="absolute pointer-events-none inline-flex"
-                    style={{ left: '14px', top: '50%', transform: 'translateY(-50%)' }}
-                  >
-                    <CircleFlag code={natCountry.code} size={20} label={nationality} />
-                  </span>
-                ) : (
-                  <Globe2
-                    size={17}
-                    strokeWidth={2}
-                    className="absolute pointer-events-none"
-                    style={{ left: '15px', top: '50%', transform: 'translateY(-50%)', color: '#9A8A78' }}
-                  />
-                )}
-                <input
-                  ref={natInputRef}
-                  type="text"
-                  value={nationality}
-                  placeholder="Start typing a country..."
-                  onChange={(e) => { setNationality(e.target.value); setNatOpen(true); }}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; setNatOpen(true); }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-                  className="gv-acct-input w-full rounded-xl py-3 text-sm focus:outline-none"
-                  style={{ ...inputStyle, paddingLeft: '44px', paddingRight: '16px' }}
-                />
-              </div>
-              {natOpen && natMatches.length > 0 && natPos && (
-                <Portal>
-                  <div
-                    ref={natMenuRef}
-                    className="rounded-xl overflow-y-auto"
-                    style={{
-                      position: 'fixed',
-                      top: natPos.top,
-                      left: natPos.left,
-                      width: natPos.width,
-                      transform: natPos.up ? 'translateY(-100%)' : 'none',
-                      zIndex: 9999,
-                      maxHeight: '224px',
-                      backgroundColor: 'rgba(250,248,243,0.98)',
-                      backdropFilter: 'blur(16px)',
-                      WebkitBackdropFilter: 'blur(16px)',
-                      border: '1px solid #DDD4C0',
-                      boxShadow: '0 16px 40px rgba(27,56,40,0.16)',
-                    }}
-                  >
-                    {natMatches.slice(0, 40).map((c) => (
-                      <button
-                        key={c.code}
-                        type="button"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => { setNationality(c.name); setNatOpen(false); }}
-                        className="w-full flex items-center gap-2.5 px-4 py-2 text-left text-sm focus:outline-none"
-                        style={{ background: 'none', border: 'none', color: '#1C1410', fontFamily: OUTFIT, cursor: 'pointer' }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                      >
-                        <CircleFlag code={c.code} size={20} decorative style={{ flexShrink: 0 }} />
-                        {c.name}
-                      </button>
-                    ))}
-                  </div>
-                </Portal>
-              )}
-            </div>
-
-            {/* Date of birth + derived age */}
+            {/* Email (read-only) */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label
-                  className="flex items-center gap-1.5 font-semibold"
-                  style={{ fontSize: T.body, color: '#1C1410', fontFamily: OUTFIT }}
-                >
-                  <Cake size={13} strokeWidth={2.3} style={{ color: '#B6871F' }} />
-                  Date of Birth
-                </label>
-                {headerAge !== null && (
-                  <span style={{ fontFamily: OUTFIT, fontSize: T.body, fontWeight: 700, color: '#B6871F', fontVariantNumeric: 'tabular-nums' }}>
-                    Age {headerAge}
-                  </span>
+              <span className="block mb-1.5">{label(Mail, 'Email')}</span>
+              <input
+                type="email"
+                value={profile?.email ?? user?.email ?? ''}
+                readOnly
+                aria-label="Email"
+                className="gv-acct-input w-full rounded-xl px-4 py-3 text-sm"
+                style={{
+                  border: '1px solid #DDD4C0',
+                  backgroundColor: 'rgba(27,56,40,0.03)',
+                  color: '#6E5F4E',
+                  fontFamily: OUTFIT,
+                  cursor: 'not-allowed',
+                }}
+              />
+              <p className="mt-1" style={{ fontSize: T.caption, color: HINT, fontFamily: OUTFIT }}>
+                Email cannot be changed here
+              </p>
+            </div>
+
+            {/* Nationality + Date of Birth: one row, two columns */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {/* Nationality: autocomplete with flag. The menu is portalled so no
+                  card boundary can clip it, and it flips above near the bottom edge. */}
+              <div ref={natWrapRef} className="relative">
+                <span className="block mb-1.5">{label(MapPin, 'Nationality')}</span>
+                <div className="relative">
+                  {natCountry ? (
+                    <span
+                      className="absolute pointer-events-none inline-flex"
+                      style={{ left: '14px', top: '50%', transform: 'translateY(-50%)' }}
+                    >
+                      <CircleFlag code={natCountry.code} size={20} label={nationality} />
+                    </span>
+                  ) : (
+                    <Globe2
+                      size={17}
+                      strokeWidth={2}
+                      className="absolute pointer-events-none"
+                      style={{ left: '15px', top: '50%', transform: 'translateY(-50%)', color: '#9A8A78' }}
+                    />
+                  )}
+                  <input
+                    ref={natInputRef}
+                    type="text"
+                    value={nationality}
+                    aria-label="Nationality"
+                    placeholder="Start typing a country..."
+                    onChange={(e) => { setNationality(e.target.value); setNatOpen(true); }}
+                    onFocus={() => setNatOpen(true)}
+                    className="gv-acct-input w-full rounded-xl py-3 text-sm focus:outline-none"
+                    style={{ ...inputStyle, paddingLeft: '44px', paddingRight: '16px' }}
+                  />
+                </div>
+                {natOpen && natMatches.length > 0 && natPos && (
+                  <Portal>
+                    <div
+                      ref={natMenuRef}
+                      className="rounded-xl overflow-y-auto"
+                      style={{
+                        position: 'fixed',
+                        top: natPos.top,
+                        left: natPos.left,
+                        width: natPos.width,
+                        transform: natPos.up ? 'translateY(-100%)' : 'none',
+                        zIndex: 9999,
+                        maxHeight: '224px',
+                        backgroundColor: 'rgba(255,255,255,0.98)',
+                        backdropFilter: 'blur(16px)',
+                        WebkitBackdropFilter: 'blur(16px)',
+                        border: '1px solid #DDD4C0',
+                        boxShadow: '0 16px 40px rgba(27,56,40,0.16)',
+                      }}
+                    >
+                      {natMatches.slice(0, 40).map((c) => (
+                        <button
+                          key={c.code}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => { setNationality(c.name); setNatOpen(false); }}
+                          className="w-full flex items-center gap-2.5 px-4 py-2 text-left text-sm focus:outline-none"
+                          style={{ background: 'none', border: 'none', color: '#1C1410', fontFamily: OUTFIT, cursor: 'pointer' }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                        >
+                          <CircleFlag code={c.code} size={20} decorative style={{ flexShrink: 0 }} />
+                          {c.name}
+                        </button>
+                      ))}
+                    </div>
+                  </Portal>
                 )}
               </div>
-              <DatePicker
-                value={dateOfBirth}
-                onChange={(iso) => { setDateOfBirth(iso); setDobError(''); }}
-                max={new Date().toISOString().slice(0, 10)}
-                initialView="2005-06-15"
-                placeholder="Select your date of birth"
-              />
-              {dobError ? (
-                <p className="mt-1" style={{ fontSize: T.caption, color: '#8B2020', fontFamily: OUTFIT }}>
-                  {dobError}
-                </p>
-              ) : (
-                <p className="mt-1" style={{ fontSize: T.caption, color: HINT, fontFamily: OUTFIT }}>
-                  Your age is calculated automatically.
-                </p>
-              )}
-            </div>
-          </div>
 
-          {/* Education — where they do MUN. Editable two-state switch; the value
-              is shown as the delegate's level when they apply to conferences, so
-              it saves immediately (optimistic) on toggle. */}
-          <div>
-            <label
-              className="flex items-center gap-1.5 font-semibold mb-1.5"
-              style={{ fontSize: T.body, color: '#1C1410', fontFamily: OUTFIT }}
-            >
-              <GraduationCap size={13} strokeWidth={2.3} style={{ color: '#B6871F' }} />
-              Education
-            </label>
-            {(() => {
-              const OPTIONS = [
-                { key: 'high_school' as const, label: 'High School', Icon: School },
-                { key: 'university'  as const, label: 'University',  Icon: GraduationCap },
-                { key: 'both'        as const, label: 'Both',        Icon: Layers },
-              ];
-              const selectedIdx = OPTIONS.findIndex((o) => o.key === educationLevel);
-              return (
-                <div
-                  role="radiogroup"
-                  aria-label="Education level"
-                  className="gv-edu-seg relative grid gap-1 rounded-full p-1 select-none"
-                  style={{
-                    maxWidth: '460px',
-                    backgroundColor: 'rgba(27,56,40,0.06)',
-                    boxShadow: NEU.inSm,
-                  }}
-                >
-                  {/* Two blocks side by side is a desktop shape. On a phone the
-                      pair squeezed to about 150px each and "High School" broke
-                      over two lines inside a pill sized for one (owner, 18 Sep
-                      2026). Three options since 23 Sep 2026 (Both); under 520px they stack, and the thumb slides down
-                      instead of across. Position lives in CSS so one media
-                      query moves both the buttons and the thumb; the paint
-                      (gradient, ring, shadow) stays inline. */}
-                  <style>{`
+              {/* Date of birth + derived age */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  {label(Cake, 'Date of birth')}
+                  {headerAge !== null && (
+                    <span style={{ fontFamily: OUTFIT, fontSize: T.body, fontWeight: 700, color: '#B6871F', fontVariantNumeric: 'tabular-nums' }}>
+                      Age {headerAge}
+                    </span>
+                  )}
+                </div>
+                <DatePicker
+                  value={dateOfBirth}
+                  onChange={(iso) => { setDateOfBirth(iso); setDobError(''); }}
+                  max={new Date().toISOString().slice(0, 10)}
+                  initialView="2005-06-15"
+                  placeholder="Select your date of birth"
+                />
+                {dobError ? (
+                  <p className="mt-1" style={{ fontSize: T.caption, color: '#8B2020', fontFamily: OUTFIT }}>
+                    {dobError}
+                  </p>
+                ) : (
+                  <p className="mt-1" style={{ fontSize: T.caption, color: HINT, fontFamily: OUTFIT }}>
+                    Your age is calculated automatically
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Education: where they do MUN. Saves on its own when picked
+                (optimistic), because it is shown as the delegate's level when
+                they apply to conferences. */}
+            <div>
+              <span className="block mb-1.5">{label(GraduationCap, 'Education')}</span>
+              {(() => {
+                const OPTIONS = [
+                  { key: 'high_school' as const, label: 'High school', Icon: School },
+                  { key: 'university'  as const, label: 'University',  Icon: GraduationCap },
+                  { key: 'both'        as const, label: 'Both',        Icon: Layers },
+                ];
+                const selectedIdx = OPTIONS.findIndex((o) => o.key === educationLevel);
+                return (
+                  <div
+                    role="radiogroup"
+                    aria-label="Education level"
+                    className="gv-edu-seg relative grid gap-1 rounded-[14px] p-1 select-none"
+                    style={{ maxWidth: '480px', backgroundColor: 'rgba(27,56,40,0.05)', boxShadow: INSET }}
+                  >
+                    {/* Under 520px the three options stack and the thumb
+                        slides down instead of across. Position lives in CSS so
+                        one media query moves both the buttons and the thumb. */}
+                    <style>{`
 .gv-edu-seg{grid-template-columns:repeat(3,minmax(0,1fr))}
 .gv-edu-thumb{top:4px;bottom:4px;left:4px;width:calc((100% - 16px) / 3)}
 .gv-edu-thumb[data-idx="1"]{left:calc((100% - 16px) / 3 + 8px)}
@@ -1083,214 +997,144 @@ export default function ProfilePage() {
   .gv-edu-thumb[data-idx="2"]{left:4px;top:calc((100% - 16px) * 2 / 3 + 12px)}
 }
 @media (prefers-reduced-motion:reduce){.gv-edu-thumb{transition:none}}
-                  `}</style>
-                  {/* Sliding forest thumb — only rendered once a side is chosen. */}
-                  {selectedIdx >= 0 && (
-                    <span
-                      aria-hidden
-                      data-idx={selectedIdx}
-                      className="gv-edu-thumb absolute rounded-full"
-                      style={{
-                        background: 'linear-gradient(150deg, #24492F, #1B3828)',
-                        boxShadow: '0 4px 12px rgba(27,56,40,0.3), inset 0 1px 0 rgba(238,217,138,0.25)',
-                        border: '1px solid rgba(238,217,138,0.35)',
-                        transition: 'left 260ms cubic-bezier(0.4,0,0.2,1), top 260ms cubic-bezier(0.4,0,0.2,1)',
-                      }}
-                    />
-                  )}
-                  {OPTIONS.map((o) => {
-                    const active = educationLevel === o.key;
-                    return (
-                      <button
-                        key={o.key}
-                        type="button"
-                        role="radio"
-                        aria-checked={active}
-                        onClick={() => handleEducationChange(o.key)}
-                        className="relative z-[1] inline-flex items-center justify-center gap-2 rounded-full py-2.5 px-3 font-bold focus:outline-none"
+                    `}</style>
+                    {/* A raised white thumb, only once a side is chosen. */}
+                    {selectedIdx >= 0 && (
+                      <span
+                        aria-hidden
+                        data-idx={selectedIdx}
+                        className="gv-edu-thumb absolute rounded-[11px]"
                         style={{
-                          fontSize: T.body,
-                          background: 'transparent',
-                          border: 'none',
-                          cursor: 'pointer',
-                          color: active ? '#EED98A' : '#6B5D4A',
-                          fontFamily: OUTFIT,
-                          letterSpacing: '0.01em',
-                          transition: 'color 200ms ease',
+                          background: 'linear-gradient(180deg, #FFFFFF, #F8F4EB)',
+                          boxShadow: 'inset 0 1px 0 #FFFFFF, 0 0 0 1.5px rgba(27,56,40,0.55), 0 4px 10px -4px rgba(27,56,40,0.3)',
+                          transition: 'left 260ms cubic-bezier(0.4,0,0.2,1), top 260ms cubic-bezier(0.4,0,0.2,1)',
                         }}
-                      >
-                        <o.Icon size={16} strokeWidth={2.2} style={{ color: active ? '#EED98A' : '#9A8A78', transition: 'color 200ms ease' }} />
-                        {o.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              );
-            })()}
-            <p className="mt-1.5" style={{ fontSize: T.caption, color: HINT, fontFamily: OUTFIT }}>
-              Shown as your level when you apply to conferences.
-            </p>
-          </div>
-        </div>
-
-        <div className="relative mt-7 flex items-center gap-4" style={{ zIndex: 1 }}>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="rounded-full px-6 font-bold focus:outline-none transition-colors"
-            style={{
-              fontSize: T.body,
-              minHeight: 44,
-              backgroundColor: saving ? '#DDD4C0' : '#1B3828',
-              color: saving ? '#9A8A78' : '#EED98A',
-              fontFamily: OUTFIT,
-              border: 'none',
-              cursor: saving ? 'default' : 'pointer',
-              boxShadow: saving ? 'none' : NEU.outSm,
-            }}
-            onMouseEnter={(e) => { if (!saving) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-            onMouseLeave={(e) => { if (!saving) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-          >
-            {saving ? 'Saving...' : 'Save changes'}
-          </button>
-          {saved && !saveError && (
-            <span className="inline-flex items-center gap-1 text-sm font-semibold" style={{ color: '#3D7A52', fontFamily: OUTFIT }}>
-              <Check size={15} strokeWidth={2.6} aria-hidden />
-              Saved
-            </span>
-          )}
-          {saveError && (
-            <span className="text-sm font-semibold" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
-              {saveError}
-            </span>
-          )}
-        </div>
-      </GlassCard>
-
-      {/* Card 2 — Notification Preferences */}
-      <GlassCard className="relative mb-6" style={NEU_CARD_STYLE}>
-        {/* decorative bleed off the right edge */}
-        <Bell
-          aria-hidden
-          size={112}
-          strokeWidth={1}
-          className="pointer-events-none absolute"
-          style={{ top: '-24px', right: '-14px', color: 'rgba(27,56,40,0.045)', zIndex: 0 }}
-        />
-        <div className="relative flex items-center gap-2.5 mb-1.5" style={{ zIndex: 1 }}>
-          <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={Bell} size={38} />
-          <CardTitle>Notification Preferences</CardTitle>
-        </div>
-        <p className="relative mb-4" style={{ fontSize: T.body, color: HINT, fontFamily: OUTFIT, zIndex: 1 }}>
-          Control which emails Gavelling sends you
-        </p>
-
-        <div className="relative" style={{ zIndex: 1 }}>
-          {NOTIFICATION_ROWS.map((row, i) => (
-            <div
-              key={row.field}
-              className="flex items-center gap-4 py-3.5"
-              style={{ borderBottom: i < NOTIFICATION_ROWS.length - 1 ? '1px solid rgba(221,212,192,0.55)' : 'none' }}
-            >
-              <span
-                className="flex items-center justify-center flex-shrink-0"
-                style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '11px',
-                  backgroundColor: notifications[row.field] ? 'rgba(27,56,40,0.09)' : 'rgba(154,138,120,0.1)',
-                  border: `1px solid ${notifications[row.field] ? 'rgba(27,56,40,0.22)' : 'rgba(154,138,120,0.2)'}`,
-                  transition: 'background-color 200ms ease, border-color 200ms ease',
-                }}
-              >
-                <row.Icon
-                  size={16}
-                  strokeWidth={1.9}
-                  style={{ color: notifications[row.field] ? '#1B3828' : '#9A8A78', transition: 'color 200ms ease' }}
-                />
-              </span>
-              <div className="flex-1 min-w-0 pr-2">
-                <p className="font-semibold" style={{ fontSize: T.body, color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
-                  {row.label}
-                </p>
-                <p className="mt-0.5" style={{ fontSize: T.caption, lineHeight: 1.5, color: HINT, fontFamily: OUTFIT, margin: '2px 0 0 0' }}>
-                  {row.desc}
-                </p>
-              </div>
-              {/* The switch itself is 40x22, which is the right SIZE and the
-                  wrong TARGET on a phone. The wrapper grows the hit area to
-                  44px tall with a pseudo-element on the button (which is
-                  already `position: relative`), so nothing about the switch's
-                  look or any other screen that uses it changes. */}
-              <span className="gv-tap44 flex-shrink-0 inline-flex">
-                <PillToggle
-                  value={notifications[row.field]}
-                  onChange={(v) => handleToggle(row.field, v)}
-                />
-              </span>
+                      />
+                    )}
+                    {OPTIONS.map((o) => {
+                      const active = educationLevel === o.key;
+                      return (
+                        <button
+                          key={o.key}
+                          type="button"
+                          role="radio"
+                          aria-checked={active}
+                          onClick={() => handleEducationChange(o.key)}
+                          className="relative z-[1] inline-flex items-center justify-center gap-2 rounded-[11px] py-2.5 px-3 font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                          style={{
+                            fontSize: T.body,
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: active ? '#1B3828' : '#5A5046',
+                            fontFamily: OUTFIT,
+                            transition: 'color 200ms ease',
+                          }}
+                        >
+                          <o.Icon size={16} strokeWidth={2} fill={active ? 'rgba(238,217,138,0.7)' : 'none'} style={{ color: active ? '#1B3828' : '#9A8A78', transition: 'color 200ms ease' }} />
+                          {o.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+              <p className="mt-1.5" style={{ fontSize: T.caption, color: HINT, fontFamily: OUTFIT }}>
+                Shown as your level when you apply to conferences
+              </p>
             </div>
-          ))}
-        </div>
-        {/* Functional emails (chair/import invites, replies to your own
-           requests) aren't gated by these toggles, see ALWAYS_SEND_EVENTS
-           in src/lib/emailEvents.ts, opting out would break the product. */}
-        <p className="mt-4" style={{ fontSize: T.caption, lineHeight: 1.5, color: HINT, fontFamily: OUTFIT }}>
-          Invitations and direct replies to your messages are always sent, regardless of these settings.
-        </p>
-      </GlassCard>
+          </div>
 
-      {/* Card 3 — Account */}
-      <GlassCard style={{ ...NEU_CARD_STYLE, boxShadow: `${NEU.out}, inset 0 0 0 1.5px rgba(139,32,32,0.22)` }}>
-        <div className="flex items-center gap-2.5 mb-4">
-          <span
-            className="inline-flex items-center justify-center flex-shrink-0"
-            style={{ width: 30, height: 30, borderRadius: 10, background: 'linear-gradient(135deg, rgba(139,32,32,0.16), rgba(139,32,32,0.08))', border: '1px solid rgba(139,32,32,0.3)' }}
-          >
-            <ShieldAlert size={16} strokeWidth={2.2} style={{ color: '#8B2020' }} />
-          </span>
-          <CardTitle color="#8B2020">Account</CardTitle>
+          <div className="mt-7 flex flex-wrap items-center gap-4">
+            <button type="button" onClick={handleSave} disabled={saving} className="gv-acct-btn">
+              {saving ? 'Saving…' : 'Save changes'}
+            </button>
+            {saved && !saveError && (
+              <span className="inline-flex items-center gap-1 text-sm font-semibold" style={{ color: '#2A5A3C', fontFamily: OUTFIT }}>
+                <Check size={15} strokeWidth={2.6} aria-hidden />
+                Saved
+              </span>
+            )}
+            {saveError && (
+              <span role="alert" className="text-sm font-semibold" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+                {saveError}
+              </span>
+            )}
+          </div>
+        </RaisedCard>
+
+        <div className="lg:col-span-5 flex flex-col gap-4 md:gap-5">
+          {/* ── Emails ── */}
+          <RaisedCard>
+            <CardHead emoji="Bell" fallback={Bell} title="Emails" sub="Choose what Gavelling sends you" />
+            <div>
+              {NOTIFICATION_ROWS.map((row, i) => {
+                const on = notifications[row.field];
+                return (
+                  <div
+                    key={row.field}
+                    className="flex items-center gap-3.5 py-3"
+                    style={{ borderTop: i > 0 ? '1px solid rgba(221,212,192,0.55)' : 'none' }}
+                  >
+                    <span
+                      className="flex items-center justify-center flex-shrink-0"
+                      style={{
+                        width: 36, height: 36, borderRadius: 12,
+                        background: on ? 'linear-gradient(135deg, rgba(238,217,138,0.45), rgba(238,217,138,0.2))' : 'rgba(154,138,120,0.10)',
+                        transition: 'background-color 200ms ease',
+                      }}
+                    >
+                      <row.Icon
+                        size={17}
+                        strokeWidth={2}
+                        fill={on ? 'rgba(255,255,255,0.7)' : 'none'}
+                        style={{ color: on ? '#1B3828' : '#9A8A78', transition: 'color 200ms ease' }}
+                      />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold" style={{ fontSize: T.body, color: '#1C1410', fontFamily: OUTFIT, margin: 0 }} title={row.desc}>
+                        {row.label}
+                      </p>
+                      <p style={{ fontSize: T.caption, lineHeight: 1.45, color: HINT, fontFamily: OUTFIT, margin: '2px 0 0 0' }}>
+                        {row.desc}
+                      </p>
+                    </div>
+                    {/* The switch is 40x22; the wrapper grows its phone hit
+                        area to 44px tall with a pseudo-element. */}
+                    <span className="gv-tap44 flex-shrink-0 inline-flex">
+                      <PillToggle value={on} onChange={(v) => handleToggle(row.field, v)} />
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            {/* Functional emails (chair/import invites, replies to your own
+               requests) aren't gated by these toggles, see ALWAYS_SEND_EVENTS
+               in src/lib/emailEvents.ts, opting out would break the product. */}
+            <p className="mt-3" style={{ fontSize: T.caption, lineHeight: 1.5, color: HINT, fontFamily: OUTFIT, margin: '12px 0 0' }}>
+              Invitations and direct replies to your messages are always sent
+            </p>
+          </RaisedCard>
+
+          {/* ── Account ── */}
+          <RaisedCard>
+            <CardHead emoji="Key" fallback={ShieldAlert} title="Account" />
+            <div className="flex flex-wrap gap-3">
+              <button type="button" onClick={handleSignOut} className="gv-acct-btn2 flex-1" style={{ minWidth: 150 }}>
+                Sign out
+              </button>
+              <button
+                type="button"
+                onClick={openDeleteAccount}
+                className="gv-acct-btn2 flex-1"
+                style={{ minWidth: 150, color: '#8B2020', borderColor: '#8B2020' }}
+              >
+                Delete account
+              </button>
+            </div>
+          </RaisedCard>
         </div>
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="flex-1 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8B2020] focus-visible:ring-offset-2 transition-colors"
-            style={{
-              minHeight: 48,
-              minWidth: 160,
-              fontSize: T.body,
-              fontWeight: 800,
-              border: '1px solid #8B2020',
-              color: '#FFFFFF',
-              backgroundColor: '#8B2020',
-              fontFamily: OUTFIT,
-              cursor: 'pointer',
-              boxShadow: NEU.outSm,
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#A32A2A'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
-          >
-            Sign out
-          </button>
-          <button
-            onClick={openDeleteAccount}
-            className="flex-1 rounded-full py-2.5 font-semibold focus:outline-none transition-colors"
-            style={{
-              fontSize: T.body,
-              border: '1px solid #8B2020',
-              color: '#FFFFFF',
-              backgroundColor: '#8B2020',
-              fontFamily: OUTFIT,
-              cursor: 'pointer',
-              boxShadow: NEU.outSm,
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#701919'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
-          >
-            Delete account
-          </button>
-        </div>
-      </GlassCard>
+      </div>
 
       {deleteOpen && (
         <ConfirmModal
@@ -1345,5 +1189,27 @@ export default function ProfilePage() {
         />
       )}
     </div>
+  );
+}
+
+const EDUCATION_WORD: Record<string, string> = {
+  high_school: 'High school',
+  university: 'University',
+  both: 'High school and university',
+};
+
+/** One fact on the identity card: icon, the label small, the value in ink. */
+function FactRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <li
+      className="flex items-center gap-3 rounded-[14px] px-3 py-2.5"
+      style={{ backgroundColor: 'rgba(27,56,40,0.035)' }}
+    >
+      <span className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 28, height: 28 }}>{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block" style={{ fontFamily: OUTFIT, fontSize: T.caption, color: HINT }}>{label}</span>
+        <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: T.body + 1, fontWeight: 700, color: '#1C1410', lineHeight: 1.3 }}>{value}</span>
+      </span>
+    </li>
   );
 }

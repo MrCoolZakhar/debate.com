@@ -8,7 +8,7 @@
 // delegates: the RLS on conference_awards only exposes published rows.
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { ChevronDown, ChevronUp, Sparkles, Send, Undo2, Lock, Megaphone, ExternalLink, Check } from 'lucide-react';
+import { ChevronDown, ChevronUp, Clock, Sparkles, Send, Undo2, Lock, Megaphone, ExternalLink, Check } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { FlagImg } from '@/components/FlagImg';
@@ -817,7 +817,7 @@ function TierDot({ tier }: { tier: AwardTier }) {
 function StatePill({ state }: { state: SlateState }) {
   const style: Record<SlateState, { bg: string; color: string; Icon: typeof Lock | null }> = {
     off: { bg: 'transparent', color: '#9A8A78', Icon: null },
-    open: { bg: 'rgba(238,217,138,0.35)', color: '#8A6614', Icon: null },
+    open: { bg: 'rgba(238,217,138,0.35)', color: '#8A6614', Icon: Clock },
     returned: { bg: 'rgba(139,32,32,0.1)', color: '#8B2020', Icon: Undo2 },
     submitted: { bg: 'rgba(61,122,82,0.13)', color: '#2A5A3C', Icon: Send },
     approved: { bg: 'rgba(27,56,40,0.12)', color: '#1B3828', Icon: Lock },
