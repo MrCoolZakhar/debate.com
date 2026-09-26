@@ -222,7 +222,6 @@ function ReleaseTimePicker({ value, onSave, placeholder, disabled }: {
   const [datePart, setDatePart] = useState(isoToDatePart(value));
   const [timePart, setTimePart] = useState(isoToTimePart(value));
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
 
   useEffect(() => {
     setDatePart(isoToDatePart(value));
@@ -240,13 +239,13 @@ function ReleaseTimePicker({ value, onSave, placeholder, disabled }: {
       iso = new Date(y, mo - 1, da, h, m).toISOString();
     }
     setSaving(true);
-    setError('');
+    clearErr('committees');
     const ok = await onSave(iso);
     setSaving(false);
     if (!ok) {
       setDatePart(prevDate);
       setTimePart(prevTime);
-      setError("Couldn't save, please try again.");
+      notifyErr("Couldn't save, please try again.", 'committees');
     }
   }
 
@@ -286,7 +285,6 @@ function ReleaseTimePicker({ value, onSave, placeholder, disabled }: {
           </button>
         )}
       </div>
-      {error && <p style={{ fontSize: 11, color: '#8B2020', fontFamily: OUTFIT, marginTop: 4 }}>{error}</p>}
     </div>
   );
 }

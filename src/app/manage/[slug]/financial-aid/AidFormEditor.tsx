@@ -16,6 +16,7 @@ import QuestionBuilder from '@/components/QuestionBuilder';
 import { type FormBlock, normalizeBlocks, unpublishableQuestions } from '@/lib/customQuestions';
 import { NEU, OUTFIT, NeuCard } from '@/components/neu';
 import { friendlyError } from '@/lib/friendlyError';
+import { notifyErr, clearErr } from '@/lib/appNotify';
 
 const inputStyle: React.CSSProperties = {
   backgroundColor: '#FAF8F3',
@@ -53,7 +54,6 @@ export default function AidFormEditor({ conferenceId, initialEnabled, initialInt
   const [toggleSaving, setToggleSaving] = useState(false);
   const [introSaving, setIntroSaving] = useState(false);
   const [introSaved, setIntroSaved] = useState(false);
-  const [error, setError] = useState('');
   // Decoupled from `enabled` — organizers can open the form to edit it
   // whether or not aid is currently switched on.
   const [expanded, setExpanded] = useState(false);
@@ -69,7 +69,7 @@ export default function AidFormEditor({ conferenceId, initialEnabled, initialInt
 
   async function saveAidConfig(updates: Partial<{ financial_aid_enabled: boolean; aid_intro: string | null; aid_questions: FormBlock[] }>): Promise<boolean> {
     if (!session) {
-      setError('Your session has expired, please refresh and sign in again.');
+      notifyErr('Your session has expired, please refresh and sign in again.', 'aid-form');
       return false;
     }
     const supabase = getAuthedClient(session.access_token);
@@ -79,10 +79,10 @@ export default function AidFormEditor({ conferenceId, initialEnabled, initialInt
       .eq('id', conferenceId)
       .select('id');
     if (writeError || !data || data.length !== 1) {
-      setError(saveFailMessage(writeError));
+      notifyErr(saveFailMessage(writeError), 'aid-form');
       return false;
     }
-    setError('');
+    clearErr('aid-form');
     await refreshConferenceQuiet();
     return true;
   }
@@ -147,12 +147,12 @@ export default function AidFormEditor({ conferenceId, initialEnabled, initialInt
     blocksPendingRef.current = null;
     blocksChainRef.current = blocksChainRef.current.then(async () => {
       if (!session) {
-        setError('Your session has expired, please refresh and sign in again.');
+        notifyErr('Your session has expired, please refresh and sign in again.', 'aid-form');
         return;
       }
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
-        setError('Your session has expired, please refresh and sign in again.');
+        notifyErr('Your session has expired, please refresh and sign in again.', 'aid-form');
         return;
       }
       const { data, error: writeError } = await supabase
@@ -161,7 +161,7 @@ export default function AidFormEditor({ conferenceId, initialEnabled, initialInt
         .eq('id', conferenceId)
         .select('id');
       if (writeError || !data || data.length !== 1) {
-        setError(saveFailMessage(writeError));
+        notifyErr(saveFailMessage(writeError), 'aid-form');
         void (async () => {
           const fresh = await getFreshAuthedClient();
           if (!fresh) return;
@@ -174,7 +174,7 @@ export default function AidFormEditor({ conferenceId, initialEnabled, initialInt
         })();
         return;
       }
-      setError('');
+      clearErr('aid-form');
       await refreshConferenceQuiet();
     });
   }
@@ -211,10 +211,6 @@ export default function AidFormEditor({ conferenceId, initialEnabled, initialInt
       <p className="text-sm mb-4" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
         Delegates can request financial aid from the payment panel once accepted. Review each request below and grant a discount, applied automatically at checkout.
       </p>
-
-      {error && (
-        <p className="text-xs mb-3" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{error}</p>
-      )}
 
       {!expanded && (
         <div className="flex justify-center pt-1">

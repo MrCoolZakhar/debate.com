@@ -1901,7 +1901,6 @@ export default function ApplicationsPage() {
   // has the in-flight lock and no server-side guard at all; that pattern is
   // deliberately not repeated here.)
   const [remindingId, setRemindingId] = useState<string | null>(null);
-  const [remindErr, setRemindErr] = useState<Record<string, string>>({});
   // ── Bulk email (remind-to-pay + custom one-off). One in-flight lock covers
   // both, because both end in an email_outbox insert and neither should ever
   // be re-entered while the other is mid-queue.
@@ -2191,11 +2190,11 @@ export default function ApplicationsPage() {
   async function handleSendDraftReminder(d: DraftRow) {
     if (remindingId) return;
     setRemindingId(d.id);
-    setRemindErr(p => ({ ...p, [d.id]: '' }));
+    clearErr('drafts');
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setRemindingId(null);
-      setRemindErr(p => ({ ...p, [d.id]: 'Your session has expired. Please reload the page.' }));
+      notifyErr('Your session has expired. Please reload the page.', 'drafts');
       return;
     }
     const { data, error } = await supabase.rpc('send_draft_reminder', { p_draft_id: d.id });
@@ -2203,7 +2202,7 @@ export default function ApplicationsPage() {
     setRemindingId(null);
 
     if (error || !res) {
-      setRemindErr(p => ({ ...p, [d.id]: 'Could not send that reminder. Please try again.' }));
+      notifyErr('Could not send that reminder. Please try again.', 'drafts');
       return;
     }
     if (res.ok) {
@@ -2221,7 +2220,7 @@ export default function ApplicationsPage() {
       : res.reason === 'no_recipient'  ? 'There is no email address on their account.'
       : res.reason === 'forbidden'     ? 'You do not have permission to send this.'
       : 'Could not send that reminder.';
-    setRemindErr(p => ({ ...p, [d.id]: why }));
+    notifyErr(why, 'drafts');
     // A cooldown answer is fresher than what this page is holding, so re-read.
     if (res.reason === 'cooldown' || res.reason === 'opted_out') loadDrafts();
   }
@@ -4967,11 +4966,6 @@ export default function ApplicationsPage() {
                         )}
                       </div>
 
-                      {remindErr[d.id] && (
-                        <p className="w-full" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: NEU.inkSoft, lineHeight: 1.45 }}>
-                          {remindErr[d.id]}
-                        </p>
-                      )}
                     </div>
                   );
                 })}

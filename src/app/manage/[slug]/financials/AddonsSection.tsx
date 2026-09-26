@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { notifyErr, clearErr } from '@/lib/appNotify';
 import { Package, Plus, Trash2 } from 'lucide-react';
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
@@ -91,6 +92,7 @@ export default function AddonsSection({ conference }: { conference: Conference }
     if (!label.trim()) { setError('Give the add-on a label.'); return; }
     if (!Number.isFinite(amt) || amt <= 0) { setError('Enter an amount greater than zero.'); return; }
     setError('');
+    clearErr('financials-addons');
     setCreating(true);
 
     const tempId = `temp-${Date.now()}`;
@@ -122,7 +124,7 @@ export default function AddonsSection({ conference }: { conference: Conference }
     })()
       .catch(() => {
         setAddons(cur => cur.filter(a => a.id !== tempId));
-        setError('Could not create the add-on, it was removed from the list. Please try again.');
+        notifyErr('Could not create the add-on, it was removed from the list. Please try again.', 'financials-addons');
       })
       .finally(() => setCreating(false));
   }
@@ -131,6 +133,7 @@ export default function AddonsSection({ conference }: { conference: Conference }
     if (!session || busyIds.has(a.id) || a.id.startsWith('temp-')) return;
     const prev = a.active;
     setError('');
+    clearErr('financials-addons');
     markBusy(a.id, true);
     setAddons(cur => cur.map(x => (x.id === a.id ? { ...x, active: !prev } : x)));
 
@@ -145,7 +148,7 @@ export default function AddonsSection({ conference }: { conference: Conference }
     })()
       .catch(() => {
         setAddons(cur => cur.map(x => (x.id === a.id ? { ...x, active: prev } : x)));
-        setError(`Could not update ${a.label}, the change was reverted.`);
+        notifyErr(`Could not update ${a.label}, the change was reverted.`, 'financials-addons');
       })
       .finally(() => markBusy(a.id, false));
   }
@@ -161,6 +164,7 @@ export default function AddonsSection({ conference }: { conference: Conference }
     if (!confirmed) return;
 
     setError('');
+    clearErr('financials-addons');
     markBusy(a.id, true);
     setAddons(cur => cur.filter(x => x.id !== a.id));
 
@@ -175,7 +179,7 @@ export default function AddonsSection({ conference }: { conference: Conference }
     })()
       .catch(() => {
         setAddons(cur => [a, ...cur.filter(x => x.id !== a.id)]);
-        setError(`Could not delete ${a.label}, it was restored. Please try again.`);
+        notifyErr(`Could not delete ${a.label}, it was restored. Please try again.`, 'financials-addons');
       })
       .finally(() => markBusy(a.id, false));
   }

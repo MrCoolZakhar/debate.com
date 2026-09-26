@@ -8,7 +8,9 @@
  * marking paid stays on the Applications page.
  */
 
+import { plainOrFallback } from '@/lib/friendlyError';
 import { useState, useEffect, useMemo } from 'react';
+import { notifyErr, clearErr } from '@/lib/appNotify';
 import { useRouter } from 'next/navigation';
 import {
   CircleCheck, CreditCard, Receipt, TriangleAlert, Wallet,
@@ -84,11 +86,10 @@ export default function FinancialsSettingsPage() {
   // ── Stripe Connect payouts card ──────────────────────────────────────────
   const [connectStatus, setConnectStatus] = useState<ConnectStatus>('none');
   const [connectBusy, setConnectBusy] = useState<'start' | 'status' | null>(null);
-  const [connectError, setConnectError] = useState('');
   // Stripe Connect set-up is limited to organisers who can edit financials
   // (connect-onboard v8 checks can_write_financials server-side); a read-only
   // organiser sees why the button is off instead of a refusal after a click.
-  const connectNotice = financialsReadOnly ? CONNECT_READONLY_MESSAGE : connectError;
+  const connectNotice = financialsReadOnly ? CONNECT_READONLY_MESSAGE : '';
 
   useEffect(() => {
     if (!conference) return;
@@ -123,11 +124,11 @@ export default function FinancialsSettingsPage() {
   async function startConnectOnboarding(overrideCountryCode?: string) {
     if (!conference || connectBusy || financialsReadOnly) return;
     setConnectBusy('start');
-    setConnectError('');
+    clearErr('financials-settings');
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setConnectBusy(null);
-      setConnectError('Your session has expired, please refresh and sign in again.');
+      notifyErr('Your session has expired, please refresh and sign in again.', 'financials-settings');
       return;
     }
     const countryCode = overrideCountryCode || getCountryByName(conference.country)?.code;
@@ -140,13 +141,13 @@ export default function FinancialsSettingsPage() {
     });
     if (error) {
       setConnectBusy(null);
-      setConnectError(await extractFunctionErrorMessage(error));
+      notifyErr(plainOrFallback(await extractFunctionErrorMessage(error), 'Stripe did not answer. Please try again.'), 'financials-settings');
       return;
     }
     const result = data as { ok?: boolean; url?: string; error?: string } | null;
     if (!result?.ok || !result.url) {
       setConnectBusy(null);
-      setConnectError(result?.error || 'Could not start onboarding. Please try again.');
+      notifyErr(plainOrFallback(result?.error, 'Could not start onboarding. Please try again.'), 'financials-settings');
       return;
     }
     window.location.assign(result.url);
@@ -155,11 +156,11 @@ export default function FinancialsSettingsPage() {
   async function checkConnectStatus() {
     if (!conference || connectBusy) return;
     setConnectBusy('status');
-    setConnectError('');
+    clearErr('financials-settings');
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setConnectBusy(null);
-      setConnectError('Your session has expired, please refresh and sign in again.');
+      notifyErr('Your session has expired, please refresh and sign in again.', 'financials-settings');
       return;
     }
     const { data, error } = await supabase.functions.invoke('connect-onboard', {
@@ -167,12 +168,12 @@ export default function FinancialsSettingsPage() {
     });
     setConnectBusy(null);
     if (error) {
-      setConnectError(await extractFunctionErrorMessage(error));
+      notifyErr(plainOrFallback(await extractFunctionErrorMessage(error), 'Stripe did not answer. Please try again.'), 'financials-settings');
       return;
     }
     const result = data as { ok?: boolean; status?: ConnectStatus; error?: string } | null;
     if (!result?.ok || !result.status) {
-      setConnectError(result?.error || 'Could not check status. Please try again.');
+      notifyErr(plainOrFallback(result?.error, 'Could not check status. Please try again.'), 'financials-settings');
       return;
     }
     setConnectStatus(result.status);
@@ -271,11 +272,12 @@ export default function FinancialsSettingsPage() {
     }
     setPaymentUrlError('');
     setPaymentSaveError('');
+    clearErr('financials-settings');
     setPaymentSaving(true);
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setPaymentSaving(false);
-      setPaymentSaveError('Your session has expired, please refresh and sign in again.');
+      notifyErr('Your session has expired, please refresh and sign in again.', 'financials-settings');
       return false;
     }
     const { data, error } = await supabase
@@ -291,7 +293,7 @@ export default function FinancialsSettingsPage() {
       .select('id');
     setPaymentSaving(false);
     if (error || !data || data.length === 0) {
-      setPaymentSaveError('Could not save your payment page. Please try again.');
+      notifyErr('Could not save your payment page. Please try again.', 'financials-settings');
       return false;
     }
     setActiveMethodState('manual');

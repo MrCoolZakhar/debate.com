@@ -20,6 +20,7 @@ import Avatar from '@/components/Avatar';
 import ProfileLink from '@/components/ProfileLink';
 import { type CustomAnswers, normalizeBlocks, questionsOf, displayAnswer } from '@/lib/customQuestions';
 import { friendlyError } from '@/lib/friendlyError';
+import { notifyErr, clearErr } from '@/lib/appNotify';
 
 interface AidRequestRow {
   id: string;
@@ -152,6 +153,7 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
 
   function openReview(r: AidRequestRow) {
     setActionError('');
+    clearErr('aid');
     setGrantAmount(r.requested_amount != null ? String(r.requested_amount) : '');
     setReviewId(r.id);
   }
@@ -203,7 +205,7 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
         const waiveResult = await queueEventEmail(supabase, conferenceId, 'fee_waived', [r.application_id]);
         notifyIfNeeded(waiveResult, pushDraftNotice);
       } catch {
-        setActionError('Aid approved, but the fee-waived notification email could not be queued.');
+        notifyErr('Aid approved, but the fee-waived notification email could not be queued.', 'aid');
       }
     }
 
@@ -211,7 +213,7 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
       const result = await queueEventEmail(supabase, conferenceId, 'aid_approved', [r.application_id]);
       notifyIfNeeded(result, pushDraftNotice);
     } catch {
-      setActionError('Aid approved, but the notification email could not be queued.');
+      notifyErr('Aid approved, but the notification email could not be queued.', 'aid');
     }
 
     setBusyId(null);
@@ -255,7 +257,7 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
       const result = await queueEventEmail(supabase, conferenceId, 'aid_denied', [r.application_id]);
       notifyIfNeeded(result, pushDraftNotice);
     } catch {
-      setActionError('Aid denied, but the notification email could not be queued.');
+      notifyErr('Aid denied, but the notification email could not be queued.', 'aid');
     }
     setBusyId(null);
     setReviewId(null);
@@ -305,13 +307,6 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
           );
         })}
       </div>
-
-      {actionError && !reviewId && (
-        <div className="flex items-start gap-2 rounded-xl px-3.5 py-2.5 mb-4" style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.22)' }}>
-          <TriangleAlert size={14} style={{ color: '#8B2020', marginTop: 1, flexShrink: 0 }} />
-          <p className="text-[12.5px]" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.5 }}>{actionError}</p>
-        </div>
-      )}
 
       {loading ? (
         <p className="text-sm" style={{ color: NEU.muted, fontFamily: OUTFIT }}>Loading…</p>

@@ -29,6 +29,7 @@ import { useManage } from '@/app/manage/[slug]/layout';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { friendlyError } from '@/lib/friendlyError';
+import { notifyErr, clearErr } from '@/lib/appNotify';
 import { InfoHint } from './applicationsUi';
 import {
   type ConferenceTheme, GAVELLING_THEME, themeCssVars, themeWarnings,
@@ -146,10 +147,8 @@ export default function CustomizationCard({
   const [hexInputs, setHexInputs] = useState<Record<ThemeKey, string>>(() => buildHexInputs(initialDraft));
 
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
-  const [draftError, setDraftError] = useState('');
   const [publishing, setPublishing] = useState(false);
   const [justPublished, setJustPublished] = useState(false);
-  const [publishError, setPublishError] = useState('');
 
   const isPublished = themesEqual(draft, published);
 
@@ -173,13 +172,13 @@ export default function CustomizationCard({
     draftChainRef.current = draftChainRef.current.then(async () => {
       if (!session) {
         setSaveState('idle');
-        setDraftError('Your session has expired, please refresh and sign in again.');
+        notifyErr('Your session has expired, please refresh and sign in again.', 'settings-theme');
         return;
       }
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
         setSaveState('idle');
-        setDraftError('Your session has expired, please refresh and sign in again.');
+        notifyErr('Your session has expired, please refresh and sign in again.', 'settings-theme');
         return;
       }
       const { data, error } = await supabase
@@ -189,10 +188,10 @@ export default function CustomizationCard({
         .select('id');
       if (error || !data || data.length !== 1) {
         setSaveState('idle');
-        setDraftError(saveFailMessage(error));
+        notifyErr(saveFailMessage(error), 'settings-theme');
         return;
       }
-      setDraftError('');
+      clearErr('settings-theme');
       setSaveState('saved');
       setTimeout(() => setSaveState((s) => (s === 'saved' ? 'idle' : s)), 2000);
       await refreshConferenceQuiet();
@@ -278,17 +277,17 @@ export default function CustomizationCard({
       if (!confirmed) return;
     }
     setPublishing(true);
-    setPublishError('');
+    clearErr('settings-theme-publish');
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setPublishing(false);
-      setPublishError('Your session has expired, please refresh and sign in again.');
+      notifyErr('Your session has expired, please refresh and sign in again.', 'settings-theme-publish');
       return;
     }
     const { data, error } = await supabase.rpc('publish_conference_theme', { p_conference_id: conferenceId });
     setPublishing(false);
     if (error) {
-      setPublishError(friendlyError(error, "Couldn't publish your changes. Please try again."));
+      notifyErr(friendlyError(error, "Couldn't publish your changes. Please try again."), 'settings-theme-publish');
       return;
     }
     setPublished((data as ConferenceTheme) ?? {});
@@ -317,9 +316,6 @@ export default function CustomizationCard({
         Pick your main colour and an accent. Gavelling handles the rest, including text contrast.
       </p>
 
-      {draftError && (
-        <p className="text-xs mb-4" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{draftError}</p>
-      )}
 
       {ROWS.map((row) => {
         const value = fieldValue(draft, row.key);
@@ -436,9 +432,6 @@ export default function CustomizationCard({
         </div>
       )}
 
-      {publishError && (
-        <p className="text-xs mb-3" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{publishError}</p>
-      )}
 
       <div className="flex items-center gap-3 flex-wrap">
         <a

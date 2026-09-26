@@ -12,6 +12,7 @@
  * so every read/write here pins both.
  */
 
+import { notifyErr, clearErr } from '@/lib/appNotify';
 import { useState, useEffect, useCallback } from 'react';
 import { Dices, Plus, Ticket, Trash2 } from 'lucide-react';
 import type { Conference } from '@/app/manage/[slug]/layout';
@@ -171,6 +172,7 @@ export default function VouchersSection({
     const expiresAt = expiry ? new Date(`${expiry}T23:59:59`).toISOString() : null;
 
     setError('');
+    clearErr('financials-vouchers');
     setCreating(true);
 
     const tempId = `temp-${Date.now()}`;
@@ -210,9 +212,9 @@ export default function VouchersSection({
       .catch((e: unknown) => {
         setVouchers(cur => cur.filter(v => v.id !== tempId));
         const isDuplicate = typeof e === 'object' && e !== null && (e as { code?: string }).code === '23505';
-        setError(isDuplicate
+        notifyErr(isDuplicate
           ? `Code ${trimmed} is already taken, try another.`
-          : 'Could not create the voucher, it was removed from the list. Please try again.');
+          : 'Could not create the voucher, it was removed from the list. Please try again.', 'financials-vouchers');
       })
       .finally(() => setCreating(false));
   }
@@ -222,6 +224,7 @@ export default function VouchersSection({
     if (!session || busyIds.has(v.id) || v.id.startsWith('temp-')) return;
     const prev = v.active;
     setError('');
+    clearErr('financials-vouchers');
     markBusy(v.id, true);
     setVouchers(cur => cur.map(x => (x.id === v.id ? { ...x, active: !prev } : x)));
 
@@ -237,7 +240,7 @@ export default function VouchersSection({
     })()
       .catch(() => {
         setVouchers(cur => cur.map(x => (x.id === v.id ? { ...x, active: prev } : x)));
-        setError(`Could not ${prev ? 'deactivate' : 'activate'} ${v.code}, the change was reverted.`);
+        notifyErr(`Could not ${prev ? 'deactivate' : 'activate'} ${v.code}, the change was reverted.`, 'financials-vouchers');
       })
       .finally(() => markBusy(v.id, false));
   }
@@ -256,6 +259,7 @@ export default function VouchersSection({
     if (!confirmed) return;
 
     setError('');
+    clearErr('financials-vouchers');
     markBusy(v.id, true);
     setVouchers(cur => cur.filter(x => x.id !== v.id));
 
@@ -272,7 +276,7 @@ export default function VouchersSection({
     })()
       .catch(() => {
         setVouchers(cur => [v, ...cur.filter(x => x.id !== v.id)]);
-        setError(`Could not delete ${v.code}, it was restored. Please try again.`);
+        notifyErr(`Could not delete ${v.code}, it was restored. Please try again.`, 'financials-vouchers');
       })
       .finally(() => markBusy(v.id, false));
   }

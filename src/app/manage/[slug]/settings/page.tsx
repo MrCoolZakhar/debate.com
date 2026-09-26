@@ -24,6 +24,7 @@ import { LogoDisc } from '@/components/LogoDisc';
 import { LogoCropModal } from '@/components/LogoCropModal';
 import { safeStorageKey } from '@/lib/storageKey';
 import { notify } from '@/lib/sessionNotifications';
+import { notifyErr, notifyOk, clearErr, clearOk } from '@/lib/appNotify';
 import { DatePicker } from '@/components/DatePicker';
 import { sendOrganizerInvite, listPendingOrganizerInvites, revokeOrganizerInvite, type OrganizerInviteRow } from '@/lib/organizerInvites';
 import {
@@ -600,11 +601,9 @@ export default function SettingsPage() {
   const [confLinkCopied, setConfLinkCopied] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState('');
 
   // Visual tab state
   const [bannerUploading, setBannerUploading] = useState(false);
-  const [bannerError, setBannerError] = useState('');
   const [description, setDescription] = useState('');
   const [instagramUrl, setInstagramUrl] = useState('');
   const [facebookUrl, setFacebookUrl] = useState('');
@@ -612,9 +611,7 @@ export default function SettingsPage() {
   const [whatsappUrl, setWhatsappUrl] = useState('');
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [visualSaved, setVisualSaved] = useState(false);
-  const [visualError, setVisualError] = useState('');
   const [logoUploading, setLogoUploading] = useState(false);
-  const [logoError, setLogoError] = useState('');
   // Logo picked but not yet uploaded, the drag-to-fit crop modal is open.
   const [logoCropFile, setLogoCropFile] = useState<File | null>(null);
 
@@ -627,7 +624,6 @@ export default function SettingsPage() {
   const [showCommittees, setShowCommittees] = useState(true);
   const [visibilityStatus, setVisibilityStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [visibilitySavingKey, setVisibilitySavingKey] = useState<string | null>(null);
-  const [visibilityError, setVisibilityError] = useState('');
   const visibilitySavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Conference details (identity + logistics, mirrors the creation form)
@@ -645,7 +641,6 @@ export default function SettingsPage() {
   const [format, setFormat] = useState<'in-person' | 'online' | 'hybrid' | ''>('');
   const [expectedDelegates, setExpectedDelegates] = useState('');
   const [detailsSaved, setDetailsSaved] = useState(false);
-  const [detailsError, setDetailsError] = useState('');
 
   // What the organiser said they use Gavelling for (`conferences.intent`),
   // asked once at the end of the creation wizard and editable here. It sorts
@@ -654,7 +649,6 @@ export default function SettingsPage() {
   // payload shape is intentPayload's business.
   const [intentKeys, setIntentKeys] = useState<string[]>([]);
   const [intentSaved, setIntentSaved] = useState(false);
-  const [intentError, setIntentError] = useState('');
 
   // Age range (Applications → General). min_age has existed since launch;
   // max_age is its other half, and both are measured on the start date.
@@ -669,7 +663,6 @@ export default function SettingsPage() {
   // the single most tedious part of setting a conference up.
   const [copyPhasesOpen, setCopyPhasesOpen] = useState(false);
   const [copyPhasesBusy, setCopyPhasesBusy] = useState(false);
-  const [copyPhasesNotice, setCopyPhasesNotice] = useState('');
   const phaseOfferedFor = useRef<Set<string>>(new Set());
   // Roles whose first-run walkthrough has been dismissed, kept in localStorage
   // per conference. Hydrated after mount so the server render and the first
@@ -679,16 +672,14 @@ export default function SettingsPage() {
 
   // Delegation allocation swaps (Applications tab)
   const [swapMode, setSwapMode] = useState('request');
-  const [swapModeError, setSwapModeError] = useState('');
 
   const [roleConfigs, setRoleConfigs] = useState<RoleConfig[]>([]);
   const [configVersion, setConfigVersion] = useState(0);
-  const [roleConfigError, setRoleConfigError] = useState('');
   // The one line under the window or the fee phases saying what the timeline
   // rule moved, or why an edit was not saved (src/lib/roleTimeline.ts).
   const [timelineMsg, setTimelineMsg] = useState<{ role: string; where: 'window' | 'phases'; kind: 'info' | 'error'; text: string } | null>(null);
   /** Why the form builder is refusing to save. Sits beside the builder, not up
-   *  with roleConfigError, because the question that caused it is down here. */
+   *  in the corner card, because the question that caused it is down here. */
   const [blocksBlocked, setBlocksBlocked] = useState('');
   type SaveState = 'idle' | 'saving' | 'saved';
   const [stepSaveState, setStepSaveState] = useState<Record<number, SaveState>>({ 1: 'idle', 2: 'idle', 3: 'idle' });
@@ -760,7 +751,6 @@ export default function SettingsPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteError, setInviteError] = useState('');
   const [inviting, setInviting] = useState(false);
-  const [inviteNotice, setInviteNotice] = useState('');
   // Consent-based invite flow, mirrors chair invites: a pending row + email,
   // accepted/declined by the invitee via /invites/organizer/[token].
   const [pendingInvites, setPendingInvites] = useState<OrganizerInviteRow[]>([]);
@@ -866,7 +856,6 @@ export default function SettingsPage() {
   const [incomingClaims, setIncomingClaims] = useState<IncomingClaim[]>([]);
   const [predecessorInfo, setPredecessorInfo] = useState<PredecessorSummary | null>(null);
   const [lineageBusy, setLineageBusy] = useState<string | null>(null);
-  const [lineageError, setLineageError] = useState('');
 
   // Partners: linked Gavelling conferences and free-form companies
   const [partners, setPartners] = useState<PartnerLink[]>([]);
@@ -874,7 +863,6 @@ export default function SettingsPage() {
   const [partnerQuery, setPartnerQuery] = useState('');
   const [partnerResults, setPartnerResults] = useState<PartnerConf[]>([]);
   const [partnerBusy, setPartnerBusy] = useState<string | null>(null);
-  const [partnerError, setPartnerError] = useState('');
   // Keyed by partner link id: true while that row's website field shows the
   // "must start with https://" note, cleared the moment they edit it again.
   const [partnerUrlWarnings, setPartnerUrlWarnings] = useState<Record<string, boolean>>({});
@@ -891,8 +879,6 @@ export default function SettingsPage() {
   const [companySaving, setCompanySaving] = useState(false);
 
   // Organizers + privacy inline error surfaces
-  const [organizersError, setOrganizersError] = useState('');
-  const [privacyError, setPrivacyError] = useState('');
 
   // Per-save "saving" flags, every conference-row save below is: click →
   // disabled/spinner → awaited + verified write → refreshConferenceQuiet()
@@ -924,7 +910,7 @@ export default function SettingsPage() {
   async function setSoloSecretariat(on: boolean) {
     if (!conference || !accessToken || soloSaving) return;
     setSoloSaving(true);
-    setOrganizersError('');
+    clearErr('settings-team');
     const supabase = getAuthedClient(accessToken);
     // .select() so a zero-row write is caught: supabase-js resolves with a null
     // error when an update matches nothing.
@@ -935,7 +921,7 @@ export default function SettingsPage() {
       .select('id');
     if (error || !data || data.length === 0) {
       setSoloSaving(false);
-      setOrganizersError('Could not save that. Try again in a moment.');
+      notifyErr('Could not save that. Try again in a moment.', 'settings-team');
       return;
     }
     await refreshConferenceQuiet();
@@ -1191,7 +1177,6 @@ export default function SettingsPage() {
     setMinAge(conference.min_age != null ? String(conference.min_age) : '');
     setMaxAge(conference.max_age != null ? String(conference.max_age) : '');
     setSwapMode(conference.allocation_swap_mode ?? 'request');
-    setSwapModeError('');
     setFullName(conference.full_name ?? '');
     setAcronym(conference.acronym ?? '');
     setAcronymError('');
@@ -1331,13 +1316,13 @@ export default function SettingsPage() {
     // click at once, independent of any other save's in-flight DB round trip.
     const previous = roleConfigs;
     setRoleConfigs(prev => prev.map(rc => (rc.role === role ? { ...rc, ...updates, ...localOnly } : rc)));
-    setRoleConfigError('');
+    clearErr('settings-applications');
     markStep(step, 'saving');
 
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setRoleConfigs(previous);
-      setRoleConfigError('Your session has expired, please refresh and sign in again.');
+      notifyErr('Your session has expired, please refresh and sign in again.', 'settings-applications');
       markStep(step, 'idle');
       return;
     }
@@ -1353,7 +1338,7 @@ export default function SettingsPage() {
       // Revert the optimistic patch and surface the failure, a silent
       // no-op update (0 rows matched, no error) is treated as a failure too.
       setRoleConfigs(previous);
-      setRoleConfigError(error ? friendlyError(error, "Couldn't save this role. Please try again.") : "Couldn't save, that role config wasn't found.");
+      notifyErr(error ? friendlyError(error, "Couldn't save this role. Please try again.") : "Couldn't save, that role config wasn't found.", 'settings-applications');
       markStep(step, 'idle');
     } else {
       // The timeline trigger may have moved a date (enforce_role_config_timeline):
@@ -1489,7 +1474,7 @@ export default function SettingsPage() {
     const source = roleConfigs.find(rc => rc.role === activeRole);
     if (!conference || !source || copyPhasesBusy) return;
     setCopyPhasesBusy(true);
-    setRoleConfigError('');
+    clearErr('settings-applications');
     const patch = {
       fee_phases: source.fee_phases ?? [],
       fee_amount: source.fee_amount,
@@ -1501,7 +1486,7 @@ export default function SettingsPage() {
     if (!supabase) {
       setRoleConfigs(previous);
       setCopyPhasesBusy(false);
-      setRoleConfigError('Your session has expired, please refresh and sign in again.');
+      notifyErr('Your session has expired, please refresh and sign in again.', 'settings-applications');
       return;
     }
     const { data, error } = await supabase
@@ -1513,7 +1498,7 @@ export default function SettingsPage() {
     setCopyPhasesBusy(false);
     if (error || !data || data.length === 0) {
       setRoleConfigs(previous);
-      setRoleConfigError(error ? friendlyError(error, "Couldn't copy those phases across.") : "Couldn't copy those phases across.");
+      notifyErr(error ? friendlyError(error, "Couldn't copy those phases across.") : "Couldn't copy those phases across.", 'settings-applications');
       return;
     }
     // Each target's window now follows the copied prices (the timeline
@@ -1525,8 +1510,7 @@ export default function SettingsPage() {
     }));
     setCopyPhasesOpen(false);
     setConfigVersion(v => v + 1);
-    setCopyPhasesNotice(`Copied to ${targets.length} ${targets.length === 1 ? 'role' : 'roles'}`);
-    setTimeout(() => setCopyPhasesNotice(''), 3000);
+    notifyOk(`Copied to ${targets.length} ${targets.length === 1 ? 'role' : 'roles'}`, 'settings-copy');
   }
 
   // Toggle that writes immediately (no dedicated save button): shows an
@@ -1535,12 +1519,12 @@ export default function SettingsPage() {
   async function saveSwapMode(mode: string) {
     if (!conference || swapModeSaving) return;
     setSwapModeSaving(true);
-    setSwapModeError('');
+    clearErr('settings-delegations');
 
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setSwapModeSaving(false);
-      setSwapModeError('Your session has expired, please refresh and sign in again.');
+      notifyErr('Your session has expired, please refresh and sign in again.', 'settings-delegations');
       return;
     }
 
@@ -1552,7 +1536,7 @@ export default function SettingsPage() {
 
     if (error || !data || data.length !== 1) {
       setSwapModeSaving(false);
-      setSwapModeError(saveFailMessage(error));
+      notifyErr(saveFailMessage(error), 'settings-delegations');
       return;
     }
     await refreshConferenceQuiet();
@@ -1569,7 +1553,7 @@ export default function SettingsPage() {
   function openInviteFlow() {
     setInviteEmail('');
     setInviteError('');
-    setInviteNotice('');
+    clearOk('settings-team-invite');
     setInviteBundle('admin');
     setInviteCustomPerms({});
     setInvitePublicTitle('');
@@ -1584,7 +1568,7 @@ export default function SettingsPage() {
     if (!conference || !session || !inviteEmail.trim()) return;
     setInviting(true);
     setInviteError('');
-    setInviteNotice('');
+    clearOk('settings-team-invite');
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setInviting(false);
@@ -1608,9 +1592,9 @@ export default function SettingsPage() {
     setInviteOpen(false);
     setInviteEmail('');
     setInvitePublicTitle('');
-    setInviteNotice(res.existing
+    notifyOk(res.existing
       ? `An invite for ${sentTo} was already pending, the original link still works. Its privileges now match what you just picked.`
-      : `Invite sent to ${sentTo} as ${bundleLabel(inviteBundle).toLowerCase()}. They'll appear on the team once they accept.`);
+      : `Invite sent to ${sentTo} as ${bundleLabel(inviteBundle).toLowerCase()}. They'll appear on the team once they accept.`, 'settings-team-invite');
     void loadPendingInvites();
   }
 
@@ -1628,18 +1612,18 @@ export default function SettingsPage() {
     // Optimistic remove with rollback, matches the organizer row pattern.
     const previous = pendingInvites;
     setPendingInvites(prev => prev.filter(i => i.id !== invite.id));
-    setInviteError('');
+    clearErr('settings-team');
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setPendingInvites(previous);
-      setInviteError('Your session has expired, please refresh and sign in again.');
+      notifyErr('Your session has expired, please refresh and sign in again.', 'settings-team');
       setRevokingInviteId(null);
       return;
     }
     const res = await revokeOrganizerInvite(supabase, invite.id);
     if (!res.ok) {
       setPendingInvites(previous);
-      setInviteError(res.error ?? "Couldn't revoke that invite. Please try again.");
+      notifyErr(res.error ?? "Couldn't revoke that invite. Please try again.", 'settings-team');
     }
     setRevokingInviteId(null);
   }
@@ -1648,7 +1632,7 @@ export default function SettingsPage() {
   // fails the member may have been toggled again. Re-read the row instead, so
   // the screen ends up showing what the database actually holds.
   const resyncOrganizerPermissions = useCallback(async (orgId: string, message: string) => {
-    setOrganizersError(message);
+    notifyErr(message, 'settings-team');
     const supabase = await getFreshAuthedClient();
     if (!supabase) return;
     const { data } = await supabase
@@ -1696,7 +1680,7 @@ export default function SettingsPage() {
     // Turning the financials section off makes a read-only marker meaningless.
     if (key === 'financials' && !next.financials) delete next[FINANCIALS_READONLY_KEY];
     applyOrganizers(prev => prev.map(o => o.id === orgId ? { ...o, permissions: next } : o));
-    setOrganizersError('');
+    clearErr('settings-team');
     queuePermissionWrite(orgId, next);
   }
 
@@ -1710,7 +1694,7 @@ export default function SettingsPage() {
     const wanted = bundlePermissions(bundle, target.permissions ?? {});
     if (wanted[TEAM_KEY] && !canGrantSuperAdmin) delete wanted[TEAM_KEY];
     applyOrganizers(prev => prev.map(o => o.id === orgId ? { ...o, permissions: wanted } : o));
-    setOrganizersError('');
+    clearErr('settings-team');
     setBundleMenuFor(null);
     queuePermissionWrite(orgId, wanted);
   }
@@ -1724,7 +1708,7 @@ export default function SettingsPage() {
     const next: PermissionMap = { ...current, [FINANCIALS_READONLY_KEY]: !current[FINANCIALS_READONLY_KEY] };
     if (next[FINANCIALS_READONLY_KEY]) next.financials = true;
     applyOrganizers(prev => prev.map(o => o.id === orgId ? { ...o, permissions: next } : o));
-    setOrganizersError('');
+    clearErr('settings-team');
     queuePermissionWrite(orgId, next);
   }
 
@@ -1740,7 +1724,7 @@ export default function SettingsPage() {
     // (with an inline error) if the delete fails, including a silent
     // zero-row delete, which is treated as a failure too.
     applyOrganizers(prev => prev.filter(o => o.id !== organizerId));
-    setOrganizersError('');
+    clearErr('settings-team');
     void (async () => {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
@@ -1749,7 +1733,7 @@ export default function SettingsPage() {
           arr.splice(Math.min(idx, arr.length), 0, removed);
           return arr;
         });
-        setOrganizersError('Your session has expired, please refresh and sign in again.');
+        notifyErr('Your session has expired, please refresh and sign in again.', 'settings-team');
         return;
       }
       const { data, error } = await supabase.from('conference_organizers').delete().eq('id', organizerId).select('id');
@@ -1759,7 +1743,7 @@ export default function SettingsPage() {
           arr.splice(Math.min(idx, arr.length), 0, removed);
           return arr;
         });
-        setOrganizersError(saveFailMessage(error));
+        notifyErr(saveFailMessage(error), 'settings-team');
       }
     })();
   }
@@ -1774,7 +1758,7 @@ export default function SettingsPage() {
   // the time it fails the row may have been toggled again. Re-read it instead,
   // exactly like resyncOrganizerPermissions.
   const resyncOrganizerPublic = useCallback(async (orgId: string, message: string) => {
-    setOrganizersError(message);
+    notifyErr(message, 'settings-team');
     const supabase = await getFreshAuthedClient();
     if (!supabase) return;
     const { data } = await supabase
@@ -1832,7 +1816,7 @@ export default function SettingsPage() {
     if (!target) return;
     const next = !target.show_on_public;
     applyOrganizers(prev => prev.map(o => o.id === orgId ? { ...o, show_on_public: next } : o));
-    setOrganizersError('');
+    clearErr('settings-team');
     queuePublicWrite(orgId, { show_on_public: next });
   }
 
@@ -1844,7 +1828,7 @@ export default function SettingsPage() {
     const next = raw.trim() || null;
     if (next === (target.public_title ?? null)) return;
     applyOrganizers(prev => prev.map(o => o.id === orgId ? { ...o, public_title: next } : o));
-    setOrganizersError('');
+    clearErr('settings-team');
     queuePublicWrite(orgId, { public_title: next });
   }
 
@@ -1858,12 +1842,12 @@ export default function SettingsPage() {
     // Optimistic: render the new order (with normalized sort_order values so
     // consecutive moves diff correctly) and persist in the background.
     applyOrganizers(() => order.map((o, i) => ({ ...o, sort_order: i })));
-    setOrganizersError('');
+    clearErr('settings-team');
     void (async () => {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
         applyOrganizers(() => previous);
-        setOrganizersError('Your session has expired, please refresh and sign in again.');
+        notifyErr('Your session has expired, please refresh and sign in again.', 'settings-team');
         return;
       }
       // Persist the displayed index as sort_order for every row that drifted —
@@ -1877,7 +1861,7 @@ export default function SettingsPage() {
       const failed = results.find(r => r.error || !r.data || r.data.length !== 1);
       if (failed) {
         applyOrganizers(() => previous);
-        setOrganizersError(saveFailMessage(failed.error));
+        notifyErr(saveFailMessage(failed.error), 'settings-team');
         return;
       }
       if (toWrite.length > 0) void refreshConferenceQuiet();
@@ -1891,16 +1875,16 @@ export default function SettingsPage() {
     // A conference with dates set to TBD (or no start date yet) can never be
     // public — mirrors the DB CHECK `conferences_tbd_not_public`.
     if (next && (conference.dates_tbd || !conference.start_date)) {
-      setPrivacyError('Add conference dates before publishing. A conference with dates set to TBD stays private.');
+      notifyErr('Add conference dates before publishing. A conference with dates set to TBD stays private.', 'settings-privacy');
       return;
     }
     setPublicToggleSaving(true);
-    setPrivacyError('');
+    clearErr('settings-privacy');
     void (async () => {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
         setPublicToggleSaving(false);
-        setPrivacyError('Your session has expired, please refresh and sign in again.');
+        notifyErr('Your session has expired, please refresh and sign in again.', 'settings-privacy');
         return;
       }
       const { data, error } = await supabase.from('conferences').update({
@@ -1909,7 +1893,7 @@ export default function SettingsPage() {
       }).eq('id', conference.id).select('id');
       if (error || !data || data.length !== 1) {
         setPublicToggleSaving(false);
-        setPrivacyError(saveFailMessage(error));
+        notifyErr(saveFailMessage(error), 'settings-privacy');
         return;
       }
       if (next) {
@@ -1944,7 +1928,7 @@ export default function SettingsPage() {
     if (lineageBusy === successorId) return;
     const previousClaims = incomingClaims;
     setLineageBusy(successorId);
-    setLineageError('');
+    clearErr('settings-lineage');
     // Optimistic: approvals flip the badge instantly, rejections drop the
     // row instantly. A silent (stale-guarded) loadLineage afterwards picks
     // up whatever canonical shape the RPC left behind.
@@ -1955,7 +1939,7 @@ export default function SettingsPage() {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
         setIncomingClaims(previousClaims);
-        setLineageError('Your session has expired, please refresh and sign in again.');
+        notifyErr('Your session has expired, please refresh and sign in again.', 'settings-lineage');
         setLineageBusy(null);
         return;
       }
@@ -1965,7 +1949,7 @@ export default function SettingsPage() {
       });
       if (error) {
         setIncomingClaims(previousClaims);
-        setLineageError(friendlyError(error, "Couldn't save the previous edition. Please try again."));
+        notifyErr(friendlyError(error, "Couldn't save the previous edition. Please try again."), 'settings-lineage');
         setLineageBusy(null);
         return;
       }
@@ -1983,12 +1967,12 @@ export default function SettingsPage() {
       danger: true,
     });
     if (!confirmed) return;
-    setLineageError('');
+    clearErr('settings-lineage');
     setWithdrawingClaim(true);
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setWithdrawingClaim(false);
-      setLineageError('Your session has expired, please refresh and sign in again.');
+      notifyErr('Your session has expired, please refresh and sign in again.', 'settings-lineage');
       return;
     }
     // Only clear the id, predecessor_approved is reset by the DB trigger.
@@ -1999,7 +1983,7 @@ export default function SettingsPage() {
       .select('id');
     if (error || !data || data.length !== 1) {
       setWithdrawingClaim(false);
-      setLineageError(saveFailMessage(error));
+      notifyErr(saveFailMessage(error), 'settings-lineage');
       return;
     }
     await refreshConferenceQuiet();
@@ -2030,12 +2014,12 @@ export default function SettingsPage() {
     }]);
     setPartnerQuery('');
     setPartnerResults([]);
-    setPartnerError('');
+    clearErr('settings-partners');
     void (async () => {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
         setPartners(prev => prev.filter(p => p.id !== tempId));
-        setPartnerError('Your session has expired, please refresh and sign in again.');
+        notifyErr('Your session has expired, please refresh and sign in again.', 'settings-partners');
         return;
       }
       const { data, error } = await supabase.from('conference_partners').insert({
@@ -2045,7 +2029,7 @@ export default function SettingsPage() {
       }).select('id').single();
       if (error || !data) {
         setPartners(prev => prev.filter(p => p.id !== tempId));
-        setPartnerError(friendlyError(error, "Couldn't add this partner. Please try again."));
+        notifyErr(friendlyError(error, "Couldn't add this partner. Please try again."), 'settings-partners');
       } else {
         setPartners(prev => prev.map(p => p.id === tempId ? { ...p, id: (data as { id: string }).id } : p));
       }
@@ -2059,13 +2043,13 @@ export default function SettingsPage() {
    *  refused outright — see src/lib/storageKey.ts. */
   async function handleCompanyLogoUpload(file: File) {
     if (!session || !conference || companyLogoUploading) return;
-    if (file.size > 5 * 1024 * 1024) { setPartnerError('Logo must be under 5MB.'); return; }
+    if (file.size > 5 * 1024 * 1024) { notifyErr('Logo must be under 5MB.', 'settings-partners'); return; }
     setCompanyLogoUploading(true);
-    setPartnerError('');
+    clearErr('settings-partners');
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setCompanyLogoUploading(false);
-      setPartnerError('Your session has expired, please refresh and sign in again.');
+      notifyErr('Your session has expired, please refresh and sign in again.', 'settings-partners');
       return;
     }
     const path = safeStorageKey(`partner-logos/${conference.id}`, crypto.randomUUID(), file.name);
@@ -2074,7 +2058,7 @@ export default function SettingsPage() {
       .upload(path, file, { contentType: file.type, upsert: true });
     if (error) {
       setCompanyLogoUploading(false);
-      setPartnerError(friendlyError(error, "Couldn't upload the logo. Please try a different image."));
+      notifyErr(friendlyError(error, "Couldn't upload the logo. Please try a different image."), 'settings-partners');
       return;
     }
     const { data: urlData } = supabase.storage.from('conference-assets').getPublicUrl(path);
@@ -2095,13 +2079,13 @@ export default function SettingsPage() {
   async function handleAddCompanyPartner() {
     if (!conference || !session || companySaving) return;
     const name = companyName.trim();
-    if (!name) { setPartnerError('Give the company a name.'); return; }
+    if (!name) { notifyErr('Give the company a name.', 'settings-partners'); return; }
     setCompanySaving(true);
-    setPartnerError('');
+    clearErr('settings-partners');
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setCompanySaving(false);
-      setPartnerError('Your session has expired, please refresh and sign in again.');
+      notifyErr('Your session has expired, please refresh and sign in again.', 'settings-partners');
       return;
     }
     const sortOrder = partners.length;
@@ -2117,7 +2101,7 @@ export default function SettingsPage() {
     }).select('id, approved').single();
     if (error || !data) {
       setCompanySaving(false);
-      setPartnerError(friendlyError(error, "Couldn't add this partner. Please try again."));
+      notifyErr(friendlyError(error, "Couldn't add this partner. Please try again."), 'settings-partners');
       return;
     }
     const row = data as { id: string; approved: boolean };
@@ -2151,12 +2135,12 @@ export default function SettingsPage() {
     const order = [...partners];
     [order[idx], order[j]] = [order[j], order[idx]];
     setPartners(order.map((p, i) => ({ ...p, sort_order: i })));
-    setPartnerError('');
+    clearErr('settings-partners');
     void (async () => {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
         setPartners(previous);
-        setPartnerError('Your session has expired, please refresh and sign in again.');
+        notifyErr('Your session has expired, please refresh and sign in again.', 'settings-partners');
         return;
       }
       const results = await Promise.all(
@@ -2167,7 +2151,7 @@ export default function SettingsPage() {
       const failed = results.find(r => r.error || !r.data || r.data.length !== 1);
       if (failed) {
         setPartners(previous);
-        setPartnerError(saveFailMessage(failed.error));
+        notifyErr(saveFailMessage(failed.error), 'settings-partners');
       }
     })();
   }
@@ -2189,7 +2173,7 @@ export default function SettingsPage() {
     // Optimistic: drop the row instantly; re-insert at its old position if
     // the delete fails, including a silent zero-row delete.
     setPartners(prev => prev.filter(p => p.id !== link.id));
-    setPartnerError('');
+    clearErr('settings-partners');
     void (async () => {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
@@ -2198,7 +2182,7 @@ export default function SettingsPage() {
           arr.splice(Math.min(idx, arr.length), 0, link);
           return arr;
         });
-        setPartnerError('Your session has expired, please refresh and sign in again.');
+        notifyErr('Your session has expired, please refresh and sign in again.', 'settings-partners');
         return;
       }
       const { data, error } = await supabase.from('conference_partners').delete().eq('id', link.id).select('id');
@@ -2208,7 +2192,7 @@ export default function SettingsPage() {
           arr.splice(Math.min(idx, arr.length), 0, link);
           return arr;
         });
-        setPartnerError(saveFailMessage(error));
+        notifyErr(saveFailMessage(error), 'settings-partners');
       }
     })();
   }
@@ -2221,13 +2205,13 @@ export default function SettingsPage() {
     const previous = partners;
     setPartners(prev => prev.map(p => (p.id === link.id ? { ...p, featured: next } : p)));
     setPartnerBusy(link.id);
-    setPartnerError('');
+    clearErr('settings-partners');
     void (async () => {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
         setPartners(previous);
         setPartnerBusy(null);
-        setPartnerError('Your session has expired, please refresh and sign in again.');
+        notifyErr('Your session has expired, please refresh and sign in again.', 'settings-partners');
         return;
       }
       const { data, error } = await supabase
@@ -2237,7 +2221,7 @@ export default function SettingsPage() {
         .select('id');
       if (error || !data || data.length !== 1) {
         setPartners(previous);
-        setPartnerError(saveFailMessage(error));
+        notifyErr(saveFailMessage(error), 'settings-partners');
       }
       setPartnerBusy(null);
     })();
@@ -2257,7 +2241,7 @@ export default function SettingsPage() {
     void (async () => {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
-        setPartnerError('Your session has expired, please refresh and sign in again.');
+        notifyErr('Your session has expired, please refresh and sign in again.', 'settings-partners');
         return;
       }
       const { data, error } = await supabase
@@ -2266,7 +2250,7 @@ export default function SettingsPage() {
         .eq('id', link.id)
         .select('id');
       if (error || !data || data.length !== 1) {
-        setPartnerError(saveFailMessage(error));
+        notifyErr(saveFailMessage(error), 'settings-partners');
       }
     })();
   }
@@ -2275,7 +2259,7 @@ export default function SettingsPage() {
     if (partnerBusy === linkId) return;
     const previousIncoming = incomingPartnerClaims;
     setPartnerBusy(linkId);
-    setPartnerError('');
+    clearErr('settings-partners');
     // Optimistic: the request row disappears instantly; silent (stale-guarded)
     // refetches afterwards pick up any server-side effects of the RPC.
     setIncomingPartnerClaims(prev => prev.filter(c => c.link_id !== linkId));
@@ -2283,7 +2267,7 @@ export default function SettingsPage() {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
         setIncomingPartnerClaims(previousIncoming);
-        setPartnerError('Your session has expired, please refresh and sign in again.');
+        notifyErr('Your session has expired, please refresh and sign in again.', 'settings-partners');
         setPartnerBusy(null);
         return;
       }
@@ -2293,7 +2277,7 @@ export default function SettingsPage() {
       });
       if (error) {
         setIncomingPartnerClaims(previousIncoming);
-        setPartnerError(friendlyError(error, "Couldn't save this partner. Please try again."));
+        notifyErr(friendlyError(error, "Couldn't save this partner. Please try again."), 'settings-partners');
         setPartnerBusy(null);
         return;
       }
@@ -2308,7 +2292,6 @@ export default function SettingsPage() {
   const currentBlocks: FormBlock[] = normalizeBlocks(selectedConfig?.custom_questions ?? []);
   const selectedRoleHasApplications = rolesWithApplications.has(selectedRole);
   const otherRoles = ROLES.filter(r => r !== selectedRole);
-  const [copyNotice, setCopyNotice] = useState('');
 
   // ── Step completion ──────────────────────────────────────────────────────
   // "Nothing unresolved", not "every field filled". Max accepted, the phase
@@ -2444,7 +2427,7 @@ export default function SettingsPage() {
         setLinkCopied(true);
         window.setTimeout(() => setLinkCopied(false), 2000);
       },
-      () => setRoleConfigError('Could not copy the link. Your browser blocked clipboard access.'),
+      () => notifyErr('Could not copy the link. Your browser blocked clipboard access.', 'settings-applications'),
     );
   }
 
@@ -2475,13 +2458,13 @@ export default function SettingsPage() {
     }
     setVisibilitySavingKey(column);
     setVisibilityStatus('saving');
-    setVisibilityError('');
+    clearErr('settings-visibility');
 
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setVisibilitySavingKey(null);
       setVisibilityStatus('idle');
-      setVisibilityError('Your session has expired, please refresh and sign in again.');
+      notifyErr('Your session has expired, please refresh and sign in again.', 'settings-visibility');
       return;
     }
 
@@ -2494,7 +2477,7 @@ export default function SettingsPage() {
     if (error || !data || data.length !== 1) {
       setVisibilitySavingKey(null);
       setVisibilityStatus('idle');
-      setVisibilityError(saveFailMessage(error));
+      notifyErr(saveFailMessage(error), 'settings-visibility');
       return;
     }
 
@@ -2513,7 +2496,7 @@ export default function SettingsPage() {
   function handleBlocksChange(next: FormBlock[]) {
     const role = selectedRole;
     setRoleConfigs(prev => prev.map(rc => (rc.role === role ? { ...rc, custom_questions: next } : rc)));
-    setRoleConfigError('');
+    clearErr('settings-applications');
 
     // A required choice question whose options are blank can never be
     // answered, so it makes the whole application unsubmittable. Refuse to
@@ -2555,7 +2538,7 @@ export default function SettingsPage() {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
         markStep(3, 'idle');
-        setRoleConfigError('Your session has expired, please refresh and sign in again.');
+        notifyErr('Your session has expired, please refresh and sign in again.', 'settings-applications');
         return;
       }
       const { data, error } = await supabase
@@ -2566,7 +2549,7 @@ export default function SettingsPage() {
         .select('id');
       if (error || !data || data.length === 0) {
         markStep(3, 'idle');
-        setRoleConfigError('Could not save your questions. Reloading the latest saved version.');
+        notifyErr('Could not save your questions. Reloading the latest saved version.', 'settings-applications');
         void loadRoleConfigs();
         return;
       }
@@ -2632,19 +2615,18 @@ export default function SettingsPage() {
     }
     const copiedBlocks = currentBlocks.map(cloneBlockWithNewId);
     await saveRoleConfig(targetRole, { custom_questions: copiedBlocks });
-    setCopyNotice(`Copied to ${roleLabel(targetRole)}`);
-    setTimeout(() => setCopyNotice(''), 2500);
+    notifyOk(`Copied to ${roleLabel(targetRole)}`, 'settings-copy');
   }
 
   async function handleBannerUpload(file: File) {
     if (!session || !conference || bannerUploading) return;
     if (file.size > 5 * 1024 * 1024) { alert('Banner must be under 5MB.'); return; }
     setBannerUploading(true);
-    setBannerError('');
+    clearErr('settings-banner');
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setBannerUploading(false);
-      setBannerError('Your session has expired, please refresh and sign in again.');
+      notifyErr('Your session has expired, please refresh and sign in again.', 'settings-banner');
       return;
     }
     const ext = file.name.split('.').pop();
@@ -2652,7 +2634,7 @@ export default function SettingsPage() {
     const { error } = await supabase.storage.from('conference-assets').upload(path, file, { contentType: file.type, upsert: true });
     if (error) {
       setBannerUploading(false);
-      setBannerError(friendlyError(error, "Couldn't upload the banner. Please try a different image."));
+      notifyErr(friendlyError(error, "Couldn't upload the banner. Please try a different image."), 'settings-banner');
       return;
     }
     const { data: urlData } = supabase.storage.from('conference-assets').getPublicUrl(path);
@@ -2665,7 +2647,7 @@ export default function SettingsPage() {
       .select('id');
     if (writeError || !data || data.length !== 1) {
       setBannerUploading(false);
-      setBannerError(saveFailMessage(writeError));
+      notifyErr(saveFailMessage(writeError), 'settings-banner');
       return;
     }
     await refreshConferenceQuiet();
@@ -2677,19 +2659,19 @@ export default function SettingsPage() {
   function handleBannerPreset(path: string) {
     if (!session || !conference || bannerUploading) return;
     if (conference.banner_url === path) return;
-    setBannerError('');
+    clearErr('settings-banner');
     setBannerUploading(true);
     void (async () => {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
         setBannerUploading(false);
-        setBannerError('Your session has expired, please refresh and sign in again.');
+        notifyErr('Your session has expired, please refresh and sign in again.', 'settings-banner');
         return;
       }
       const { data, error } = await supabase.from('conferences').update({ banner_url: path }).eq('id', conference.id).select('id');
       if (error || !data || data.length !== 1) {
         setBannerUploading(false);
-        setBannerError(saveFailMessage(error));
+        notifyErr(saveFailMessage(error), 'settings-banner');
         return;
       }
       await refreshConferenceQuiet();
@@ -2701,11 +2683,11 @@ export default function SettingsPage() {
     if (!session || !conference || logoUploading) return;
     if (file.size > 5 * 1024 * 1024) { alert('Logo must be under 5MB.'); return; }
     setLogoUploading(true);
-    setLogoError('');
+    clearErr('settings-logo');
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setLogoUploading(false);
-      setLogoError('Your session has expired, please refresh and sign in again.');
+      notifyErr('Your session has expired, please refresh and sign in again.', 'settings-logo');
       return;
     }
     const ext = file.name.split('.').pop();
@@ -2713,7 +2695,7 @@ export default function SettingsPage() {
     const { error } = await supabase.storage.from('conference-assets').upload(path, file, { contentType: file.type, upsert: true });
     if (error) {
       setLogoUploading(false);
-      setLogoError(friendlyError(error, "Couldn't upload the logo. Please try a different image."));
+      notifyErr(friendlyError(error, "Couldn't upload the logo. Please try a different image."), 'settings-logo');
       return;
     }
     const { data: urlData } = supabase.storage.from('conference-assets').getPublicUrl(path);
@@ -2725,7 +2707,7 @@ export default function SettingsPage() {
       .select('id');
     if (writeError || !data || data.length !== 1) {
       setLogoUploading(false);
-      setLogoError(saveFailMessage(writeError));
+      notifyErr(saveFailMessage(writeError), 'settings-logo');
       return;
     }
     await refreshConferenceQuiet();
@@ -2760,7 +2742,7 @@ export default function SettingsPage() {
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setMinAgeSaving(false);
-      setMinAgeError('Your session has expired, please refresh and sign in again.');
+      notifyErr('Your session has expired, please refresh and sign in again.', 'settings-age');
       return;
     }
     const { data, error } = await supabase.from('conferences').update({ min_age: value, max_age: maxValue }).eq('id', conference.id).select('id');
@@ -2768,7 +2750,7 @@ export default function SettingsPage() {
       // Failure: the input keeps the user's typed value untouched, the
       // button returns to its normal label, and an inline error explains it.
       setMinAgeSaving(false);
-      setMinAgeError(saveFailMessage(error));
+      notifyErr(saveFailMessage(error), 'settings-age');
       return;
     }
     // Success is only declared once the DB write is verified AND the UI has
@@ -2788,7 +2770,6 @@ export default function SettingsPage() {
       return;
     }
     setContactEmailError('');
-    setVisualError('');
     setVisualSaving(true);
     // Normalize bare handles/domains ("@mymun", "instagram.com/mymun", "mymun")
     // into valid absolute URLs so the public page's links always work.
@@ -2803,14 +2784,14 @@ export default function SettingsPage() {
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setVisualSaving(false);
-      setVisualError('Your session has expired, please refresh and sign in again.');
+      notifyErr('Your session has expired, please refresh and sign in again.', 'settings-contact');
       return;
     }
     const { data, error } = await supabase.from('conferences').update(updates).eq('id', conference.id).select('id');
     if (error || !data || data.length !== 1) {
       // Failure: inputs keep the user's edits untouched for a retry.
       setVisualSaving(false);
-      setVisualError(saveFailMessage(error));
+      notifyErr(saveFailMessage(error), 'settings-contact');
       return;
     }
     await refreshConferenceQuiet();
@@ -2829,14 +2810,13 @@ export default function SettingsPage() {
       return;
     }
     setAcronymError('');
-    setDetailsError('');
     setDetailsSaving(true);
     const parsedDelegates = parseInt(expectedDelegates, 10);
     const expected = Number.isFinite(parsedDelegates) ? parsedDelegates : conference.expected_delegates;
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setDetailsSaving(false);
-      setDetailsError('Your session has expired, please refresh and sign in again.');
+      notifyErr('Your session has expired, please refresh and sign in again.', 'settings-details');
       return;
     }
     const { data, error } = await supabase.from('conferences').update({
@@ -2855,7 +2835,7 @@ export default function SettingsPage() {
     if (error || !data || data.length !== 1) {
       // Failure: inputs keep the user's edits untouched for a retry.
       setDetailsSaving(false);
-      setDetailsError(saveFailMessage(error));
+      notifyErr(saveFailMessage(error), 'settings-details');
       return;
     }
 
@@ -2911,12 +2891,11 @@ export default function SettingsPage() {
    */
   async function handleSaveIntent() {
     if (!conference || intentSaving) return;
-    setIntentError('');
     setIntentSaving(true);
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setIntentSaving(false);
-      setIntentError('Your session has expired, please refresh and sign in again.');
+      notifyErr('Your session has expired, please refresh and sign in again.', 'settings-intent');
       return;
     }
     const { data, error } = await supabase.from('conferences')
@@ -2924,7 +2903,7 @@ export default function SettingsPage() {
       .eq('id', conference.id).select('id');
     if (error || !data || data.length !== 1) {
       setIntentSaving(false);
-      setIntentError(saveFailMessage(error));
+      notifyErr(saveFailMessage(error), 'settings-intent');
       return;
     }
     await refreshConferenceQuiet();
@@ -2944,7 +2923,7 @@ export default function SettingsPage() {
       if (next.has(key)) next.delete(key); else next.add(key);
       return INTENT_OPTIONS.filter(o => next.has(o.key)).map(o => o.key);
     });
-    setIntentError('');
+    clearErr('settings-intent');
   }
 
   // Debounced autosave for the three manual-input sections above: bail while
@@ -3310,13 +3289,6 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                {/* enforce_role_config_payment_gate raises for real, so a refused
-                    toggle has to explain itself where the toggle is. */}
-                {roleConfigError && (
-                  <p className="text-xs mt-3 rounded-lg px-3 py-2" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif" }}>
-                    {roleConfigError}
-                  </p>
-                )}
               </div>
 
               {/* ── First-run walkthrough. Only for a role nothing has been
@@ -3677,11 +3649,6 @@ export default function SettingsPage() {
                                   />
                                 </label>
                                 <div className="flex items-center" style={{ gap: 12 }}>
-                                  {copyPhasesNotice && (
-                                    <span className="text-[11px] font-bold" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>
-                                      {copyPhasesNotice} ✓
-                                    </span>
-                                  )}
                                   {phases.length > 0 && (
                                     <button
                                       type="button"
@@ -3832,11 +3799,6 @@ export default function SettingsPage() {
                       <div className="mt-5">
                         <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
                           <CopyFormMenu roles={otherRoles} onPick={handleCopyFormTo} />
-                          {copyNotice && (
-                            <p className="text-xs font-semibold" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>
-                              {copyNotice} ✓
-                            </p>
-                          )}
                         </div>
                         {blocksBlocked && (
                           <p
@@ -4013,7 +3975,6 @@ export default function SettingsPage() {
           onConferenceSaved={refreshConferenceQuiet}
           swapMode={swapMode}
           swapModeSaving={swapModeSaving}
-          swapModeError={swapModeError}
           onSwapModeChange={(v) => { void saveSwapMode(v); }}
         />
       )}
@@ -4144,9 +4105,6 @@ export default function SettingsPage() {
                     />
                   </span>
                 </div>
-                {visibilityError && (
-                  <p className="text-xs" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{visibilityError}</p>
-                )}
                 </div>
               </div>
             )}
@@ -4246,9 +4204,6 @@ export default function SettingsPage() {
                 })}
               </div>
             </div>
-            {bannerError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{bannerError}</p>
-            )}
 
             <div className="my-5" style={{ borderTop: '1px solid #F0EDE6' }} />
 
@@ -4299,9 +4254,6 @@ export default function SettingsPage() {
                 }}
               />
             </div>
-            {logoError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{logoError}</p>
-            )}
             </div>
             )}
           </div>
@@ -4614,9 +4566,6 @@ export default function SettingsPage() {
             </div>
 
             <AutoSaveStatus saving={detailsSaving} saved={detailsSaved} />
-            {detailsError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{detailsError}</p>
-            )}
             </div>
             )}
           </div>
@@ -4657,7 +4606,7 @@ export default function SettingsPage() {
                   // Re-clicking the open kind closes it, so the card can go
                   // back to being just the list of partners.
                   setPartnerKind(active ? null : key);
-                  setPartnerError('');
+                  clearErr('settings-partners');
                   setPartnerQuery('');
                   setPartnerResults([]);
                 }}
@@ -4759,7 +4708,7 @@ export default function SettingsPage() {
               </button>
               <button
                 type="button"
-                onClick={() => { resetCompanyDraft(); setPartnerKind(null); setPartnerError(''); }}
+                onClick={() => { resetCompanyDraft(); setPartnerKind(null); clearErr('settings-partners'); }}
                 disabled={companySaving}
                 className="rounded-lg py-2 px-3 font-bold text-[11px] focus:outline-none transition-colors"
                 style={{
@@ -5048,11 +4997,6 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {partnerError && (
-          <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>
-            {partnerError}
-          </p>
-        )}
             </div>
             )}
           </div>
@@ -5111,9 +5055,6 @@ export default function SettingsPage() {
                 </div>
               ))}
             </div>
-            {visualError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{visualError}</p>
-            )}
             </div>
             )}
           </div>
@@ -5205,9 +5146,6 @@ export default function SettingsPage() {
               </p>
             )}
             <AutoSaveStatus saving={intentSaving} saved={intentSaved} />
-            {intentError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{intentError}</p>
-            )}
           </div>
         </div>
       )}
@@ -5690,25 +5628,6 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* A refused write must never be silent — this is the surface that
-              told the owner nothing when the platform-admin UPDATE matched
-              zero rows. The resync helpers fill it and re-read the row so the
-              cards end up showing database truth. */}
-          {organizersError && (
-            <p
-              role="alert"
-              className="text-xs mt-4 rounded-lg px-3 py-2"
-              style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.22)', fontFamily: OUTFIT }}
-            >
-              {organizersError}
-            </p>
-          )}
-          {inviteNotice && (
-            <p className="text-xs mt-4 rounded-lg px-3 py-2" style={{ color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.07)', fontFamily: OUTFIT }}>
-              {inviteNotice}
-            </p>
-          )}
-
           {/* Running it alone. Offered only to a team that IS one person, and
               only to someone who could invite if they wanted to: it is the
               alternative to the invite button above, never a shortcut past it.
@@ -5798,9 +5717,6 @@ export default function SettingsPage() {
         {!view.is_public && paymentGateBlocks(view) && (
           <p className="text-xs mt-2" style={{ color: '#B8844A', fontFamily: "var(--font-brand), sans-serif" }}>{paymentGateMessage(view)}</p>
         )}
-        {privacyError && (
-          <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{privacyError}</p>
-        )}
 
         {/* Danger zone */}
         <div className="mt-6 pt-6" style={{ borderTop: '1px solid #F0EDE6' }}>
@@ -5808,7 +5724,7 @@ export default function SettingsPage() {
             Danger Zone
           </p>
           <button
-            onClick={() => { if (!isOwner) { setDeleteError('Only the conference owner can delete this view.'); return; } setDeleteError(''); setConfirmingDelete(true); }}
+            onClick={() => { if (!isOwner) { notifyErr('Only the conference owner can delete this view.', 'settings-delete'); return; } clearErr('settings-delete'); setConfirmingDelete(true); }}
             className="w-full rounded-xl py-2.5 font-semibold text-sm focus:outline-none transition-colors gv-lift"
             style={{ border: '1px solid rgba(139,32,32,0.3)', color: '#8B2020', backgroundColor: 'transparent', fontFamily: "var(--font-brand), sans-serif" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
@@ -5816,9 +5732,6 @@ export default function SettingsPage() {
           >
             Delete conference
           </button>
-          {deleteError && (
-            <p className="text-sm mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{deleteError}</p>
-          )}
 
           {confirmingDelete && (
             <ConfirmModal
@@ -5832,7 +5745,7 @@ export default function SettingsPage() {
                 setDeleting(true);
                 const supabase = getAuthedClient(session.access_token);
                 const { error } = await supabase.rpc('delete_conference', { p_conference_id: view.id });
-                if (error) { setDeleteError(friendlyError(error, 'Could not delete view.')); setConfirmingDelete(false); setDeleting(false); return; }
+                if (error) { notifyErr(friendlyError(error, 'Could not delete view.'), 'settings-delete'); setConfirmingDelete(false); setDeleting(false); return; }
                 window.location.href = '/';
               }}
               onCancel={() => { if (!deleting) setConfirmingDelete(false); }}
@@ -5975,11 +5888,6 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {lineageError && (
-          <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>
-            {lineageError}
-          </p>
-        )}
       </div>
 
       {/* Partners moved to the Conference tab (Section 9): partners are
@@ -6709,15 +6617,6 @@ export default function SettingsPage() {
                   </div>
                 )}
 
-                {organizersError && (
-                  <p
-                    role="alert"
-                    className="text-xs mt-4 rounded-lg px-3 py-2"
-                    style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.22)', fontFamily: OUTFIT }}
-                  >
-                    {organizersError}
-                  </p>
-                )}
               </div>
             </div>
           </Portal>

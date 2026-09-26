@@ -10,6 +10,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { notifyErr, clearErr } from '@/lib/appNotify';
 import { ShieldAlert } from 'lucide-react';
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
@@ -88,6 +89,7 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
       return;
     }
     setError('');
+    clearErr('financials-fee');
     setSaving(true);
     const supabase = getAuthedClient(session.access_token);
     const payload = {
@@ -108,7 +110,7 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
       : await supabase.from('application_surcharges').insert(payload).select('id').single();
     setSaving(false);
     if (writeError || !data) {
-      setError('Could not save the application fee. Please try again.');
+      notifyErr('Could not save the application fee. Please try again.', 'financials-fee');
       return;
     }
     if (!existing) setExisting({ id: (data as { id: string }).id, ...payload } as SurchargeRow);

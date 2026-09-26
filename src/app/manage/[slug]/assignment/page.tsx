@@ -36,7 +36,7 @@ import {
 } from '@/components/neu';
 import Portal from '@/components/Portal';
 import { ModalOverlay as SharedModalOverlay } from '@/components/ModalOverlay';
-import { useToast, ToastHost } from '@/components/Toast';
+import { notifyOk, notifyErr } from '@/lib/appNotify';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -3587,14 +3587,14 @@ export default function AssignmentPage() {
   const [expandedSuggestionKey, setExpandedSuggestionKey] = useState<string | null>(null);
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
   const { confirm, modal: confirmModal } = useConfirmModal();
-  const toast = useToast();
 
-  // Organizer action feedback now lands as a floating toast (does not shift
-  // page layout). Same (kind, msg) signature the whole page — and the
-  // Delegations/Independents views — already call.
+  // Organizer action feedback lands as the glass card top right (the manage
+  // layout's NotificationStack). Same (kind, msg) signature the whole page —
+  // and the Delegations/Independents views — already call.
   const showFlash = useCallback((kind: 'ok' | 'err', msg: string) => {
-    toast(kind, msg);
-  }, [toast]);
+    if (kind === 'ok') notifyOk(msg, 'assignment');
+    else notifyErr(msg, 'assignment');
+  }, []);
 
   // Monotonic sequence for loads, a slow older response never overwrites a
   // newer one (silent background refetches can race with each other and with
@@ -5431,8 +5431,6 @@ export default function AssignmentPage() {
 
       {confirmModal}
 
-      {/* Floating action-feedback toasts (fixed overlay, never shifts layout) */}
-      <ToastHost />
     </div>
   );
 }

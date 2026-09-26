@@ -980,7 +980,6 @@ export default function DashboardPage() {
   const [soloSaving, setSoloSaving] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
-  const [publishBlockMsg, setPublishBlockMsg] = useState('');
   const [dash, setDash] = useState<DashData | null>(null);
   // The applicants card's width decides the dial's diameter (one-screen grid).
   const [dialCardRef, dialSize] = useDialSize();
@@ -1639,15 +1638,11 @@ export default function DashboardPage() {
 
   function handlePublishClick() {
     if (committeeCount === 0) {
-      setPublishBlockMsg('Add at least one committee before publishing.');
-      setTimeout(() => setPublishBlockMsg(''), 3000);
+      notifyErr('Add at least one committee before publishing.', 'publish');
       return;
     }
     if (conference && paymentGateBlocks(conference)) {
-      setPublishBlockMsg(paymentGateMessage(conference));
-      // Longer timeout than the committee check above: this is a longer
-      // sentence and needs more time to actually be read.
-      setTimeout(() => setPublishBlockMsg(''), 6000);
+      notifyErr(paymentGateMessage(conference), 'publish');
       return;
     }
     setShowPublishModal(true);
@@ -1826,9 +1821,6 @@ export default function DashboardPage() {
             )}
             <ShareLinkRow conference={conference} />
           </div>
-          {publishBlockMsg && (
-            <p className="flex-shrink-0" style={{ fontSize: 11, marginTop: 7, color: NEU.amber, fontFamily: OUTFIT, fontWeight: 700 }}>{publishBlockMsg}</p>
-          )}
         </NeuCard>
         )}
 

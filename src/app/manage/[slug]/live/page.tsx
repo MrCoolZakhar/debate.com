@@ -39,6 +39,7 @@ import {
 } from './cardModel';
 import { SOFT, AMBER_INK, RED } from './tokens';
 import { friendlyError } from '@/lib/friendlyError';
+import { notifyErr, clearErr } from '@/lib/appNotify';
 
 /** Deadline on the in-flight load guard. Longer than any healthy load (the
  *  batch is eight indexed `in` queries) but short enough that a hung request
@@ -96,7 +97,6 @@ export default function LiveStatusPage() {
   const [composerOpen, setComposerOpen] = useState(false);
   const [broadcasts, setBroadcasts] = useState<BroadcastRow[]>([]);
   const [broadcastBusyKey, setBroadcastBusyKey] = useState<string | null>(null);
-  const [broadcastError, setBroadcastError] = useState('');
   const [loadError, setLoadError] = useState<string | null>(null);
   // Custom seat / group crests for every committee, keyed by committee + seat
   // (`src/lib/slotGroups.ts`). Loaded beside the committee list on each pass
@@ -688,10 +688,10 @@ export default function LiveStatusPage() {
 
   async function handleWithdraw(g: BroadcastGroup) {
     setBroadcastBusyKey(g.key);
-    setBroadcastError('');
+    clearErr('live');
     const err = await deleteBroadcastGroup(g.ids);
     setBroadcastBusyKey(null);
-    if (err) { setBroadcastError(err); return; }
+    if (err) { notifyErr(err, 'live'); return; }
     await loadBroadcasts();
   }
 
@@ -840,7 +840,6 @@ export default function LiveStatusPage() {
         groups={broadcastGroups}
         onDelete={(g) => { void handleWithdraw(g); }}
         busyKey={broadcastBusyKey}
-        error={broadcastError}
       />
 
       {/* Grid */}

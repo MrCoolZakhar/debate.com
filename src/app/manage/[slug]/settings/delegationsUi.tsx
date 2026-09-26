@@ -23,6 +23,7 @@ import Portal from '@/components/Portal';
 import { Emoji3D, NEU } from '@/components/neu';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError } from '@/lib/friendlyError';
+import { notifyErr, clearErr } from '@/lib/appNotify';
 
 const FONT = 'var(--font-brand), sans-serif';
 
@@ -159,7 +160,7 @@ function Switch({ on, onChange, disabled, label }: {
 
 export function DelegationsSettings({
   conferenceId, allowImport, onConferenceSaved,
-  swapMode, swapModeSaving, swapModeError, onSwapModeChange,
+  swapMode, swapModeSaving, onSwapModeChange,
 }: {
   conferenceId: string;
   /** conferences.allow_delegation_import as the page last read it. */
@@ -168,7 +169,6 @@ export function DelegationsSettings({
   onConferenceSaved: () => Promise<void> | void;
   swapMode: string;
   swapModeSaving: boolean;
-  swapModeError: string;
   onSwapModeChange: (mode: string) => void;
 }) {
   // What the database last confirmed. Moves only after a verified write.
@@ -179,17 +179,16 @@ export function DelegationsSettings({
     setImportOn(allowImport);
   }
   const [importSaving, setImportSaving] = useState(false);
-  const [importError, setImportError] = useState('');
 
   async function saveImport(next: boolean) {
     if (importSaving) return;
     setImportSaving(true);
-    setImportError('');
+    clearErr('settings-delegations');
     const fail = "Couldn't save, please refresh and try again.";
     try {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
-        setImportError('Your session has expired, please refresh and sign in again.');
+        notifyErr('Your session has expired, please refresh and sign in again.', 'settings-delegations');
         return;
       }
       const { data, error } = await supabase
@@ -198,13 +197,13 @@ export function DelegationsSettings({
         .eq('id', conferenceId)
         .select('id');
       if (error || !data || data.length !== 1) {
-        setImportError(error ? friendlyError(error, fail) : fail);
+        notifyErr(error ? friendlyError(error, fail) : fail, 'settings-delegations');
         return;
       }
       setImportOn(next);
       await onConferenceSaved();
     } catch (e) {
-      setImportError(friendlyError(e, fail));
+      notifyErr(friendlyError(e, fail), 'settings-delegations');
     } finally {
       setImportSaving(false);
     }
@@ -258,9 +257,6 @@ export function DelegationsSettings({
           </div>
           {swapModeSaving && <div className="pt-3"><Spinner /></div>}
         </div>
-        {swapModeError && (
-          <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: FONT }}>{swapModeError}</p>
-        )}
       </div>
 
       {/* ── Leader imports ── */}
@@ -289,9 +285,6 @@ export function DelegationsSettings({
             />
           </div>
         </div>
-        {importError && (
-          <p role="alert" className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: FONT }}>{importError}</p>
-        )}
       </div>
     </>
   );

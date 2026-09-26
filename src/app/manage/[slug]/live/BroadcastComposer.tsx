@@ -947,12 +947,10 @@ export function RecentBroadcasts({
   groups,
   onDelete,
   busyKey,
-  error,
 }: {
   groups: BroadcastGroup[];
   onDelete: (g: BroadcastGroup) => void;
   busyKey: string | null;
-  error: string;
 }) {
   const now = useNow(groups.length > 0);
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
@@ -1040,9 +1038,6 @@ export function RecentBroadcasts({
           );
         })}
       </div>
-      {error && (
-        <p className="text-xs font-bold mt-2" style={{ color: '#9A3030', fontFamily: OUTFIT }}>{error}</p>
-      )}
     </div>
   );
 }

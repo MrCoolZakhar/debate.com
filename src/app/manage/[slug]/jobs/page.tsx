@@ -139,7 +139,6 @@ function ApplicationsPanel({
   const accessToken = session?.access_token;
   const [apps, setApps] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
-  const [panelError, setPanelError] = useState('');
   // App ids with a write in flight, hides that row's Accept/Reject (double-click guard).
   const [busyAppIds, setBusyAppIds] = useState<Set<string>>(new Set());
 
@@ -163,14 +162,14 @@ function ApplicationsPanel({
     // roll back only this row + show an inline error if the write fails.
     const prevStatus = apps.find(a => a.id === appId)?.status ?? 'submitted';
     setApps(prev => prev.map(a => a.id === appId ? { ...a, status: newStatus } : a));
-    setPanelError('');
+    clearErr('jobs-applications');
     setBusyAppIds(prev => new Set(prev).add(appId));
     const supabase = getAuthedClient(session.access_token);
     supabase.from('job_applications').update({ status: newStatus }).eq('id', appId).then(({ error }) => {
       setBusyAppIds(prev => { const next = new Set(prev); next.delete(appId); return next; });
       if (error) {
         setApps(prev => prev.map(a => a.id === appId ? { ...a, status: prevStatus } : a));
-        setPanelError("Couldn't update that application. The change was reverted.");
+        notifyErr("Couldn't update that application. The change was reverted.", 'jobs-applications');
         return;
       }
       onStatusChange();
@@ -193,11 +192,6 @@ function ApplicationsPanel({
       className="rounded-xl p-4 mt-3"
       style={{ background: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
     >
-      {panelError && (
-        <p className="text-xs mb-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", fontWeight: 600 }}>
-          {panelError}
-        </p>
-      )}
       {apps.length === 0 ? (
         <p className="text-xs text-center py-2" style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif" }}>
           No applications yet

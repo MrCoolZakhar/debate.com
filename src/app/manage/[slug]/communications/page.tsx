@@ -27,7 +27,7 @@ import {
   CARD_BORDER, CARD_SHADOW as LIFTED_SHADOW, CARD_SHADOW_HOVER as HOVER_SHADOW,
 } from '../live/tokens';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
-import { notifyErr, notifyOk } from '@/lib/appNotify';
+import { notifyErr, notifyOk, clearErr } from '@/lib/appNotify';
 import { type EmailBlock, normalizeBlocks, flattenBlocksToPlainText, blocksHaveContent } from '@/lib/emailBlocks';
 import { renderEmailHtml, resolveEmailTheme, type EmailTheme } from '@/lib/emailHtml';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
@@ -49,7 +49,7 @@ import GuidedWalkthrough, {
 } from '@/components/GuidedWalkthrough';
 import ProfileLink from '@/components/ProfileLink';
 import Portal from '@/components/Portal';
-import { friendlyError, UserFacingError } from '@/lib/friendlyError';
+import { friendlyError, plainOrFallback, UserFacingError } from '@/lib/friendlyError';
 import { formatConferenceDates } from '@/lib/conferenceDates';
 import { waitingSince, waitAgeLabel } from './waitingOnReply';
 
@@ -1687,10 +1687,8 @@ function CommunicationsPageInner() {
   const [inboxExpanded, setInboxExpanded] = useState(false);
   const [markingAllRead, setMarkingAllRead] = useState(false);
   const [replyText, setReplyText] = useState('');
-  const [replyError, setReplyError] = useState('');
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const [swapActing, setSwapActing] = useState(false);
-  const [swapError, setSwapError] = useState('');
   const [deletingThread, setDeletingThread] = useState(false);
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
 
@@ -2652,6 +2650,7 @@ function CommunicationsPageInner() {
     setBuilderDelivery(existing?.delivery ?? ev.defaultDelivery);
     resetAudience();
     setBuilderError('');
+    clearErr('communications-builder');
     builderJustOpenedRef.current = true;
     builderInitialRef.current = JSON.stringify({ subject: initialSubject, blocks: initialBlocks });
     setPickerOpen(false);
@@ -2670,6 +2669,7 @@ function CommunicationsPageInner() {
     resetAudience();
     if (template?.audience) restoreAudience(template.audience);
     setBuilderError('');
+    clearErr('communications-builder');
     builderJustOpenedRef.current = true;
     builderInitialRef.current = JSON.stringify({ subject: initialSubject, blocks: initialBlocks });
     setPickerOpen(false);
@@ -2694,6 +2694,7 @@ function CommunicationsPageInner() {
     // show what is selected, so the "Saved audience loaded" affordance stays off.
     setAudienceRestored(false);
     setBuilderError('');
+    clearErr('communications-builder');
     builderJustOpenedRef.current = true;
     setPickerOpen(false);
     setBuilderOpen(true);
@@ -2743,13 +2744,13 @@ function CommunicationsPageInner() {
     const isAdHoc = builderEventKey === null;
     const eventDef = builderEventKey ? EVENT_REGISTRY.find(e => e.key === builderEventKey) : null;
     const name = isAdHoc ? builderName.trim() : (eventDef?.label ?? builderEventKey ?? '');
-    if (isAdHoc && !name) { if (!opts.silent) setBuilderError('Name is required.'); return null; }
+    if (isAdHoc && !name) { if (!opts.silent) notifyErr('Name is required.', 'communications-builder'); return null; }
     // `blocks.length === 0` was the old test, and an editor opened and left
     // alone holds ONE empty paragraph, so a blank email saved cleanly and then
     // sent as the organiser's own copy. The test is now whether there are
     // words in it.
     if (!subject.trim() || !blocksHaveContent(blocks)) {
-      if (!opts.silent) setBuilderError('Add a subject and a message. An email with nothing in it is never sent.');
+      if (!opts.silent) notifyErr('Add a subject and a message. An email with nothing in it is never sent.', 'communications-builder');
       return null;
     }
 
@@ -2766,7 +2767,7 @@ function CommunicationsPageInner() {
 
     if (builderTemplateId) {
       const { error } = await supabase.from('email_templates').update(payload).eq('id', builderTemplateId);
-      if (error) { if (!opts.silent) setBuilderError(friendlyError(error, "Couldn't save this email. Please try again.")); return null; }
+      if (error) { if (!opts.silent) notifyErr(friendlyError(error, "Couldn't save this email. Please try again."), 'communications-builder'); return null; }
       void loadTemplates(); // silent background refresh, never blocks the builder
       return builderTemplateId;
     }
@@ -2785,7 +2786,7 @@ function CommunicationsPageInner() {
       enabled: newTemplateStartsEnabled(builderEventKey),
       ...payload,
     }).select('id').single();
-    if (error) { if (!opts.silent) setBuilderError(friendlyError(error, "Couldn't save this email. Please try again.")); return null; }
+    if (error) { if (!opts.silent) notifyErr(friendlyError(error, "Couldn't save this email. Please try again."), 'communications-builder'); return null; }
     const newId = (data as { id: string }).id;
     setBuilderTemplateId(newId);
     void loadTemplates(); // silent background refresh, never blocks the builder
@@ -2808,6 +2809,7 @@ function CommunicationsPageInner() {
   async function handleSaveAndClose() {
     setSavingTemplate(true);
     setBuilderError('');
+    clearErr('communications-builder');
     const id = await persistTemplate(builderSubject, builderBlocks, { silent: false });
     setSavingTemplate(false);
     if (id) {
@@ -2989,7 +2991,8 @@ function CommunicationsPageInner() {
   async function handleOpenSendConfirm() {
     if (!conference || !session || openingSend) return;
     setBuilderError('');
-    if (finalRecipients.length === 0) { setBuilderError('No recipients selected.'); return; }
+    clearErr('communications-builder');
+    if (finalRecipients.length === 0) { notifyErr('No recipients selected.', 'communications-builder'); return; }
     // Awaited on purpose: we must have the real template id + a validated save
     // before offering to send. Busy-state is scoped to the SEND button only.
     setOpeningSend(true);
@@ -3040,20 +3043,23 @@ function CommunicationsPageInner() {
     });
 
     if (result.error) {
-      setBuilderError(result.error);
-      // The database's own cap ("This conference has used its N emails…").
-      setEmailsBlocked(isEmailAllowanceMessage(result.error));
+      // The database's own cap ("This conference has used its N emails…")
+      // stays in the page: it carries the Get more emails button.
+      const capped = isEmailAllowanceMessage(result.error);
+      if (capped) setBuilderError(result.error);
+      else notifyErr(result.error, 'communications-builder');
+      setEmailsBlocked(capped);
       setSending(false);
       setSendConfirmOpen(false);
       return;
     }
     void readEmailAllowance(supabase, conference.id).then(a => { if (a) setAllowance(a); });
     if (result.queued === 0) {
-      setBuilderError(result.skippedUnresolved > 0
+      notifyErr(result.skippedUnresolved > 0
         ? `Nothing was sent. ${result.skippedUnresolved} recipient${result.skippedUnresolved === 1 ? ' is' : 's are'} missing ${result.unresolvedFields.map(unresolvedFieldLabel).join(', ')}, which this email uses.`
         : result.optedOut > 0
         ? `Nothing was sent. Every matched recipient (${result.optedOut}) has opted out of marketing emails.`
-        : 'Nothing was sent. No eligible recipients.');
+        : 'Nothing was sent. No eligible recipients.', 'communications-builder');
       setSending(false);
       setSendConfirmOpen(false);
       return;
@@ -3569,8 +3575,8 @@ function CommunicationsPageInner() {
   function handleOpenThread(id: string) {
     setSelectedRequestId(id);
     setReplyText('');
-    setReplyError('');
-    setSwapError('');
+    clearErr('communications-reply');
+    clearErr('communications-swap');
     const req = inboxRequests.find(r => r.id === id);
     // Optimistic mark-read: the unread badge clears instantly. mark_request_seen
     // (SECURITY DEFINER) stamps organizer_seen_at, fire-and-forget on a FRESH
@@ -3764,7 +3770,7 @@ function CommunicationsPageInner() {
     }]);
     setInboxRequests(prev => prev.map(r => (r.id === req.id ? { ...r, last_message_at: nowIso, seen_by_organizer: true } : r)));
     setReplyText('');
-    setReplyError('');
+    clearErr('communications-reply');
 
     const supabase = getAuthedClient(session.access_token);
     (async () => {
@@ -3790,7 +3796,7 @@ function CommunicationsPageInner() {
           });
           notifyIfNeeded(result, pushDraftNotice);
         } catch {
-          setReplyError('Reply posted, but the notification email could not be queued.');
+          notifyErr('Reply posted, but the notification email could not be queued.', 'communications-reply');
         }
       }
 
@@ -3804,7 +3810,7 @@ function CommunicationsPageInner() {
       setInboxMessages(prev => prev.filter(m => m.id !== tempId));
       setInboxRequests(prev => prev.map(r => (r.id === req.id ? { ...r, ...prevReq } : r)));
       setReplyText(cur => (cur ? cur : body));
-      setReplyError(friendlyError(e, 'Could not send the reply.'));
+      notifyErr(friendlyError(e, 'Could not send the reply.'), 'communications-reply');
     });
   }
 
@@ -3862,19 +3868,19 @@ function CommunicationsPageInner() {
     if (!session || !conference || !selectedRequest || swapActing) return;
     const req = selectedRequest;
     const { app_a, app_b } = req.metadata;
-    setSwapError('');
+    clearErr('communications-swap');
     const supabase = getAuthedClient(session.access_token);
 
     if (approve) {
       // The swap itself is a server-computed RPC whose ok/error result gates
       // everything else, so it stays awaited, busy-state on the Approve/
       // Decline buttons only (swapActing).
-      if (!app_a || !app_b) { setSwapError('This request is missing the application ids to swap.'); return; }
+      if (!app_a || !app_b) { notifyErr('This request is missing the application ids to swap.', 'communications-swap'); return; }
       setSwapActing(true);
       const { data, error } = await supabase.rpc('perform_delegation_swap', { p_app_a: app_a, p_app_b: app_b });
-      if (error) { setSwapError(friendlyError(error, 'Could not perform the swap.')); setSwapActing(false); return; }
+      if (error) { notifyErr(friendlyError(error, 'Could not perform the swap.'), 'communications-swap'); setSwapActing(false); return; }
       const result = data as { ok: boolean; error?: string };
-      if (!result.ok) { setSwapError(result.error ?? 'Could not perform the swap.'); setSwapActing(false); return; }
+      if (!result.ok) { notifyErr(plainOrFallback(result.error, 'Could not perform the swap.'), 'communications-swap'); setSwapActing(false); return; }
       setSwapActing(false);
     }
 
@@ -3915,7 +3921,7 @@ function CommunicationsPageInner() {
           const result = await queueEventEmail(supabase, conference.id, 'delegation_swap', [app_a, app_b]);
           notifyIfNeeded(result, pushDraftNotice);
         } catch {
-          setSwapError('Decision recorded, but the notification email could not be queued.');
+          notifyErr('Decision recorded, but the notification email could not be queued.', 'communications-swap');
         }
       }
 
@@ -3926,7 +3932,7 @@ function CommunicationsPageInner() {
       // has already been applied and is not undone here.
       setInboxMessages(prev => prev.filter(m => m.id !== tempId));
       setInboxRequests(prev => prev.map(r => (r.id === req.id ? { ...r, ...prevReq } : r)));
-      setSwapError(friendlyError(e, 'Could not record the decision.'));
+      notifyErr(friendlyError(e, 'Could not record the decision.'), 'communications-swap');
     });
   }
 
@@ -4409,9 +4415,6 @@ function CommunicationsPageInner() {
                       <p className="text-sm mt-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                         {selectedRequest.metadata.member_b ?? 'Member B'}: {selectedRequest.metadata.before?.b ?? '–'} → {selectedRequest.metadata.after?.b ?? '–'}
                       </p>
-                      {swapError && (
-                        <p className="text-xs mt-3" style={{ color: RED, fontFamily: OUTFIT }}>{swapError}</p>
-                      )}
                       {selectedRequest.kind === 'swap_request' && selectedRequest.status === 'open' && (
                         <div className="flex gap-2 mt-3">
                           <GhostBtn onClick={() => handleSwapDecision(false)} danger disabled={swapActing}>
@@ -4497,9 +4500,6 @@ function CommunicationsPageInner() {
                         Send
                       </button>
                     </div>
-                  )}
-                  {replyError && (
-                    <p className="text-xs mt-2" style={{ color: RED, fontFamily: OUTFIT }}>{replyError}</p>
                   )}
 
                   {closeConfirmOpen && (
