@@ -27,12 +27,13 @@ import BrandLogo from '@/components/BrandLogo';
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { openAuth } from '@/lib/authModal';
+import MobileTabBar from '@/components/MobileTabBar';
 import { useState, useEffect, useRef, Suspense, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   AlertCircle, ArrowRight, BadgeCheck, CheckCircle2, Eye, Gavel, Globe2, KeyRound,
-  Loader2, Lock, LogIn, Mail, MessageSquareText, Plus, RotateCw, UserRound, Users,
+  Loader2, Lock, LogIn, Mail, Plus, RotateCw, UserRound, Users,
 } from 'lucide-react';
 import { getCommitteeRosterByCode, addChairName, updateCommitteeHeadChairInDB } from '@/lib/committeeService';
 import { getGavelDeviceId } from '@/lib/gavelDevice';
@@ -56,6 +57,9 @@ import {
   PageBackdrop, PrimaryAction, RoleTile,
 } from './joinUi';
 import JoinSeatPicker, { type JoinSeatRow } from './JoinSeatPicker';
+import {
+  ChairRoleCards, ChairRoleSummary, ModeratorTakeoverDialog, liveModeratorName, type ChairRoleKey,
+} from '@/components/chairRole/ChairRoleChoice';
 import { getReservedSeatHint, setClaimMarker, takeClaimMarker, type ReservedSeatHint } from './reservedSeatHint';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useMyAdvisorDelegation } from '@/lib/advisorDelegation';
@@ -117,11 +121,17 @@ function JoinPageInner() {
   // Chair name selection — after committee found in chair mode
   const [chairName, setChairName] = useState('');
   const [chairNameMode, setChairNameMode] = useState<'select' | 'new'>('select');
-  // Moderator (holds the gavel) vs Commenter (view-only, writes feedback). Defaults to
-  // Commenter so joining never steals the gavel by accident; unset head falls back to the
-  // creator (chairNames[0]). The stored values stay 'head' | 'co' — settings.headChair is
-  // a persisted key and must not be renamed.
-  const [chairRole, setChairRole] = useState<'head' | 'co'>('co');
+  // Moderator (holds the gavel) vs Commenter (view-only, writes feedback). Asked FIRST in
+  // the chair tab, as two big cards (26 Sep 2026, owner), so it starts unanswered (null):
+  // nothing below it (name, chair code) shows and Join stays off until it is answered.
+  // The stored values stay 'head' | 'co': settings.headChair is a persisted key and must
+  // not be renamed.
+  const [chairRole, setChairRole] = useState<ChairRoleKey | null>(null);
+  // Moderator picked while another chair holds the gavel and has the chair page open:
+  // "{name} is moderating now" asks first. `takeoverOk` remembers who was confirmed, so
+  // Join asks again only if the live Moderator changed meanwhile.
+  const [takeover, setTakeover] = useState<{ name: string; thenJoin: boolean } | null>(null);
+  const takeoverOkRef = useRef<string | null>(null);
   const [newChairName, setNewChairName] = useState('');
   const [chairPassword, setChairPassword] = useState('');
   const [chairCodePrefilled, setChairCodePrefilled] = useState(false);
@@ -299,6 +309,8 @@ function JoinPageInner() {
     setChairCodePrefilled(!!suffix);
     setPasswordError('');
     setActiveChairNames(new Set());
+    setChairRole(null);
+    takeoverOkRef.current = null;
     if (suffix && currentMode !== 'chair') setMode('chair');
 
     async function checkConferenceSession(found: Committee) {
@@ -484,6 +496,12 @@ function JoinPageInner() {
   }, []);
 
   const handleJoin = async () => {
+    // Moderator chosen, and a different chair is moderating live right now: ask first
+    // (again, if the live Moderator changed since the card was confirmed).
+    if (mode === 'chair' && chairRole === 'head' && !foundCommittee?.endedAt) {
+      const live = liveModeratorName(foundCommittee?.dbHeadChair, activeChairNames, myChairIdentity);
+      if (live && takeoverOkRef.current !== live) { setTakeover({ name: live, thenJoin: true }); return; }
+    }
     // ── Conference-linked session fork ──
     // Only for people the conference records know, or when nothing here is open to them.
     // Everyone else on a conference code takes the open path: the anonymous flow below.
@@ -584,20 +602,40 @@ function JoinPageInner() {
     if (!chairCodePrefilled) setChairPassword('');
     setPasswordError('');
     setActiveChairNames(new Set());
+    setChairRole(null);
+    takeoverOkRef.current = null;
   }
 
   const selectedChairName = chairNameMode === 'new' ? newChairName.trim() : chairName;
+  // The chair's name as the chair page will know it: the profile name on the verified
+  // conference path, else the name picked or typed below.
+  const myChairIdentity = isConferenceSession && !openPath
+    ? (profile?.display_name ?? user?.email ?? 'Chair').trim()
+    : selectedChairName;
+  // An ended room is read only, so nobody takes the gavel there: no question, Commenter.
+  const chairRoleNeeded = !!foundCommittee && !foundCommittee.endedAt;
+  const chairRoleMissing = mode === 'chair' && chairRoleNeeded && chairRole === null;
+  // Nobody holds the gavel and nobody has chaired yet: whoever arrives starts with it.
+  const gavelFree = !!foundCommittee && !(foundCommittee.dbHeadChair ?? '').trim() && foundCommittee.chairNames.length === 0;
+  const pickChairRole = (r: ChairRoleKey) => {
+    setError('');
+    if (r === 'head') {
+      const live = liveModeratorName(foundCommittee?.dbHeadChair, activeChairNames, myChairIdentity);
+      if (live && takeoverOkRef.current !== live) { setTakeover({ name: live, thenJoin: false }); return; }
+    }
+    setChairRole(r);
+  };
   const chairAlreadyActive = !!selectedChairName && activeChairNames.has(selectedChairName);
   const requiresChairCode = !!foundCommittee && !!(foundCommittee.dbChairJoinSuffix ?? getSettings(foundCommittee.code).chairJoinSuffix);
 
   const joinDisabled = isConferenceSession && !openPath
     ? (!foundCommittee || !user || allocationLoading || allocationError !== '' ||
-       (mode === 'delegate' && !allocatedCountry))
+       (mode === 'delegate' && !allocatedCountry) || chairRoleMissing)
     : (
       mode === 'delegate'
         ? (!foundCommittee || !country || seatBlocked(country))
         : mode === 'chair'
-        ? (!foundCommittee ||
+        ? (!foundCommittee || chairRoleMissing ||
             (chairNameMode === 'select' ? !chairName : !newChairName.trim()) ||
             (requiresChairCode && !chairPassword) ||
             chairAlreadyActive)
@@ -673,26 +711,26 @@ function JoinPageInner() {
     lookingUp ? 'busy' : error && !foundCommittee ? 'error' : foundCommittee ? 'found' : 'idle';
 
   const signInFooter = user ? (
-    <div className="flex items-center gap-2.5" style={{ opacity: 0.82 }}>
+    <div className="flex items-center gap-2.5">
       {profile?.avatar_url ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={profile.avatar_url} alt="" className="h-6 w-6 flex-shrink-0 rounded-full object-cover" />
       ) : (
-        <span aria-hidden className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: C.forestLift, color: C.gold, fontFamily: OUTFIT, fontSize: 10, fontWeight: 800 }}>
+        <span aria-hidden className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: 'rgba(27,56,40,0.10)', color: C.forest, fontFamily: OUTFIT, fontSize: 10, fontWeight: 800 }}>
           {(signedInName[0] ?? '?').toUpperCase()}
         </span>
       )}
-      <span className="min-w-0 truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: 'rgba(237,231,216,0.86)' }}>
+      <span className="min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13, color: C.inkSoft }}>
         {t('join_signed_in_as', { name: signedInName })}
       </span>
     </div>
   ) : (
-    <div className="pt-5" style={{ borderTop: '1px solid rgba(238,217,138,0.16)' }}>
-      <p style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: C.page }}>{t('join_signin_prompt')}</p>
+    <div className="pt-5" style={{ borderTop: '1px solid rgba(27,56,40,0.10)' }}>
+      <p style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: C.ink }}>{t('join_signin_prompt')}</p>
       {/* Narrow on purpose: the phone mockup takes the panel's bottom inline-end corner. */}
-      <p className="mt-1 max-w-[230px]" style={{ fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.5, color: 'rgba(237,231,216,0.74)', textWrap: 'pretty' }}>{t('join_signin_why')}</p>
+      <p className="mt-1 max-w-[230px]" style={{ fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.5, color: C.inkSoft, textWrap: 'pretty' }}>{t('join_signin_why')}</p>
       <div className="mt-3">
-        <GhostAction tone="gold" onClick={goSignIn} icon={<LogIn size={15} strokeWidth={2.4} />}>{t('join_signin_cta')}</GhostAction>
+        <GhostAction onClick={goSignIn} icon={<LogIn size={15} strokeWidth={2.4} />}>{t('join_signin_cta')}</GhostAction>
       </div>
     </div>
   );
@@ -1019,6 +1057,8 @@ function JoinPageInner() {
                             clear: t('join_seat_clear'),
                             rosterEmpty: t('join_roster_empty'),
                             counter: t('join_seats_open', { open: String(openCount), total: String(seats.length) }),
+                            groupOpen: t('join_seat_group_open'),
+                            groupClosed: t('join_seat_group_closed'),
                           }}
                           blockedNote={note}
                         />
@@ -1034,7 +1074,15 @@ function JoinPageInner() {
                     </div>
                   )}
 
-                  {showRoleFlow && mode === 'chair' && (
+                  {/* Chair: the role comes FIRST (26 Sep 2026, owner). Two big cards, then
+                      the name and the chair code once it is answered. */}
+                  {foundCommittee && mode === 'chair' && chairRoleNeeded && (!isConferenceSession || openPath || hasVerifiedRole) && (
+                    chairRole === null
+                      ? <ChairRoleCards value={null} onPick={pickChairRole} gavelFree={gavelFree} />
+                      : <ChairRoleSummary value={chairRole} onChange={() => setChairRole(null)} />
+                  )}
+
+                  {showRoleFlow && mode === 'chair' && !chairRoleMissing && (
                     <div>
                       <FieldLabel>{t('join_chair_label')}</FieldLabel>
                       {foundCommittee.chairNames.length > 0 && (
@@ -1093,40 +1141,6 @@ function JoinPageInner() {
                     </div>
                   )}
 
-                  {foundCommittee && mode === 'chair' && (!isConferenceSession || openPath || hasVerifiedRole) && (
-                    <div>
-                      <FieldLabel>{t('join_chair_role_head')} / {t('join_chair_role_co')}</FieldLabel>
-                      <div className="grid grid-cols-2 gap-2 rounded-2xl p-1" style={{ backgroundColor: 'rgba(27,56,40,0.06)' }}>
-                        {(['head', 'co'] as const).map((r) => {
-                          const on = chairRole === r;
-                          return (
-                            <button
-                              key={r}
-                              type="button"
-                              aria-pressed={on}
-                              onClick={() => setChairRole(r)}
-                              className="inline-flex items-center justify-center gap-2 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 active:scale-[0.96]"
-                              style={{
-                                height: 44, cursor: 'pointer',
-                                backgroundColor: on ? C.forest : 'transparent',
-                                color: on ? C.gold : C.inkSoft,
-                                boxShadow: on ? '0 2px 8px rgba(27,56,40,0.22)' : 'none',
-                                fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase',
-                                transitionProperty: 'background-color, color, box-shadow, transform', transitionDuration: '160ms',
-                              }}
-                            >
-                              {r === 'head' ? <Gavel size={16} strokeWidth={2.4} /> : <MessageSquareText size={16} strokeWidth={2.4} />}
-                              {r === 'head' ? t('join_chair_role_head') : t('join_chair_role_co')}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <p className="mt-2" style={{ fontFamily: OUTFIT, fontSize: 12, lineHeight: 1.5, color: C.inkSoft, textWrap: 'pretty', minHeight: 36 }}>
-                        {chairRole === 'head' ? t('join_chair_role_head_note') : t('join_chair_role_co_note')}
-                      </p>
-                    </div>
-                  )}
-
                   {foundCommittee && mode === 'chair' && chairAlreadyActive && (
                     <div className="flex items-start gap-2.5 rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(139,32,32,0.07)', boxShadow: 'inset 0 0 0 1px rgba(139,32,32,0.2)' }}>
                       <Lock size={15} strokeWidth={2.4} color={C.danger} className="mt-0.5 flex-shrink-0" />
@@ -1134,7 +1148,7 @@ function JoinPageInner() {
                     </div>
                   )}
 
-                  {showRoleFlow && mode === 'chair' && requiresChairCode && (
+                  {showRoleFlow && mode === 'chair' && requiresChairCode && !chairRoleMissing && (
                     <div>
                       <FieldLabel htmlFor="join-chair-code">{t('join_chair_code_label')}</FieldLabel>
                       <TextInput
@@ -1226,6 +1240,21 @@ function JoinPageInner() {
           </JoinCard>
         </div>
       </main>
+      {/* The phone tab bar (hidden from lg): /join has no SiteNav, which mounts it elsewhere. */}
+      <MobileTabBar />
+      {takeover && (
+        <ModeratorTakeoverDialog
+          name={takeover.name}
+          onCancel={() => setTakeover(null)}
+          onConfirm={() => {
+            const then = takeover.thenJoin;
+            takeoverOkRef.current = takeover.name;
+            setTakeover(null);
+            setChairRole('head');
+            if (then) void handleJoin();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1249,6 +1278,16 @@ const JOIN_BAR_CSS = `
 }
 @media (min-width: 640px) {
   .join-action-bar { margin-inline: -28px; padding-inline: 28px; }
+}
+/* Below lg the phone tab bar (MobileTabBar, 62px + the safe area, z 40) is fixed at
+   the bottom, so the Join bar rests ON it. With the keyboard up the tab bar is behind
+   the keyboard, so the larger of the two wins. The tab bar already clears the home
+   indicator, so no safe-area padding here. */
+@media (max-width: 1023px) {
+  .join-action-bar {
+    bottom: max(var(--join-kb, 0px), calc(62px + env(safe-area-inset-bottom, 0px)));
+    padding-bottom: 12px;
+  }
 }
 `;
 

@@ -27,6 +27,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase } from '@/lib/supabase';
 import { getGavelDeviceId } from '@/lib/gavelDevice';
+import { updateCommitteeHeadChairInDB } from '@/lib/committeeService';
 
 export type LiveRole = 'organiser' | 'chair' | 'delegate' | 'advisor';
 
@@ -289,16 +290,38 @@ export function chairIdentity(displayName: string | null | undefined, email: str
   return (displayName ?? '').trim() || (email ?? '').trim().split('@')[0] || 'Chair';
 }
 
+/**
+ * A chair now answers "Moderator or Commenter?" first (ChairRoleChoice, 26 Sep 2026).
+ * Both call `enter_live_chair_room` (unchanged): it records the name and gives the
+ * gavel to this chair ONLY when nobody holds it, which is right for a Commenter too
+ * (a room always has one Moderator; the Commenter card says so). A MODERATOR whom
+ * the RPC did not make Moderator then takes the gavel for this device, exactly as
+ * the join page's 'head' role and the GavelChip do: `updateCommitteeHeadChairInDB`
+ * with this device's id, authorised by the chair suffix read from the (anon-readable)
+ * committee row. A failed take still enters the room; the chair page's GavelChip is
+ * one tap away.
+ */
 export async function resolveEntryHref(
   e: LiveEntry,
-  ctx: { accessToken: string | null; chairName: string },
+  ctx: { accessToken: string | null; chairName: string; chairRole?: 'head' | 'co' },
 ): Promise<string> {
   if (e.role !== 'chair') return liveEntryHref(e);
   const name = ctx.chairName.trim();
   if (!ctx.accessToken || !name) return liveEntryHref(e);
   const res = await enterLiveChairRoom(ctx.accessToken, e.room.sessionCode, name);
   if (!res) return liveEntryHref(e);
+  if (ctx.chairRole === 'head' && !res.moderator) await takeGavelForThisDevice(e.room.sessionId, e.room.sessionCode, name);
   return `/chair/${e.room.sessionCode}?chairName=${encodeURIComponent(name)}`;
+}
+
+async function takeGavelForThisDevice(committeeId: string, code: string, name: string): Promise<boolean> {
+  try {
+    const { data } = await supabase.from('committees').select('settings').eq('id', committeeId).maybeSingle();
+    const suffix = ((data as { settings?: Record<string, unknown> } | null)?.settings?.chairJoinSuffix as string | undefined) || undefined;
+    return await updateCommitteeHeadChairInDB(committeeId, name, code, suffix, getGavelDeviceId(code));
+  } catch {
+    return false;
+  }
 }
 
 /**

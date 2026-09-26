@@ -22,6 +22,9 @@ import { useScrollLock } from '@/hooks/useScrollLock';
 import { useT } from '@/contexts/LanguageContext';
 import { committeeDisplayName, deriveCommitteeAcronym, matchPresetEmblem } from '@/lib/presetNames';
 import { liveEntryHref, useChairPresence, type LiveEntry, type LiveRoomInfo } from '@/lib/liveRooms';
+import {
+  ChairRoleCards, ModeratorTakeoverDialog, liveModeratorName, type ChairRoleKey,
+} from '@/components/chairRole/ChairRoleChoice';
 
 // ── Palette (CLAUDE.md §8) ────────────────────────────────────────────────────
 export const LR = {
@@ -261,14 +264,24 @@ export interface LiveRoomsDialogProps {
   displayName: string;
   avatarUrl: string | null;
   showAvatar: boolean;
-  onGo: (item: PromptItem) => void | Promise<void>;
+  /** A conference chair's press carries the role they chose (ChairRoleStep). */
+  onGo: (item: PromptItem, chairRole?: ChairRoleKey) => void | Promise<void>;
   onClose: () => void;
   /** Standalone only: forget this room for good (the old Dismiss). */
   onForget: (item: PromptItem) => void;
+  /** The chair identity the chair page will use (profile name), to recognise oneself. */
+  chairName?: string;
 }
 
-export default function LiveRoomsDialog({ items, displayName, avatarUrl, showAvatar, onGo, onClose, onForget }: LiveRoomsDialogProps) {
+export default function LiveRoomsDialog({ items, displayName, avatarUrl, showAvatar, onGo, onClose, onForget, chairName = '' }: LiveRoomsDialogProps) {
   const t = useT();
+  // A conference chair is asked "Moderator or Commenter?" before walking in
+  // (26 Sep 2026, owner): pressing their entry opens this step in the same pop-up.
+  const [roleFor, setRoleFor] = useState<Extract<LiveEntry, { role: 'chair' }> | null>(null);
+  const goOrAsk = (item: PromptItem) => {
+    if (item.role === 'chair') { setRoleFor(item); return; }
+    return onGo(item);
+  };
   useScrollLock(true);
   const closeRef = useRef(onClose);
   useEffect(() => { closeRef.current = onClose; }, [onClose]);
@@ -344,10 +357,12 @@ export default function LiveRoomsDialog({ items, displayName, avatarUrl, showAva
             </div>
           </div>
 
-          {single ? (
-            <SingleCard item={single} t={t} primaryRef={primaryRef} onGo={onGo} onClose={onClose} onForget={onForget} />
+          {roleFor ? (
+            <ChairRoleStep item={roleFor} chairName={chairName} t={t} onBack={() => setRoleFor(null)} onGo={onGo} />
+          ) : single ? (
+            <SingleCard item={single} t={t} primaryRef={primaryRef} onGo={goOrAsk} onClose={onClose} onForget={onForget} />
           ) : (
-            <Chooser items={items} t={t} primaryRef={primaryRef} onGo={onGo} onClose={onClose} onForget={onForget} />
+            <Chooser items={items} t={t} primaryRef={primaryRef} onGo={goOrAsk} onClose={onClose} onForget={onForget} />
           )}
         </div>
       </div>
@@ -606,6 +621,79 @@ function SingleCard({ item, t, primaryRef, onGo, onClose, onForget }: ViewProps 
         </button>
       </div>
       {note && <p style={{ fontSize: 12, color: LR.inkSoft, textAlign: 'center', marginTop: -4 }}>{note}</p>}
+    </>
+  );
+}
+
+// ── The chair's role, before entering ─────────────────────────────────────────
+
+/** Moderator or Commenter, then Enter the room. Moderator while another chair
+ *  holds the gavel AND has the chair page open asks first (ModeratorTakeoverDialog). */
+function ChairRoleStep({ item, chairName, t, onBack, onGo }: {
+  item: Extract<LiveEntry, { role: 'chair' }>;
+  chairName: string;
+  t: T;
+  onBack: () => void;
+  onGo: (item: PromptItem, chairRole?: ChairRoleKey) => void | Promise<void>;
+}) {
+  const presence = useChairPresence(item.room.sessionId);
+  const [role, setRole] = useState<ChairRoleKey | null>(null);
+  const [confirmFor, setConfirmFor] = useState<{ name: string; thenEnter: boolean } | null>(null);
+  const okFor = useRef<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const { primary } = committeeNames(item.room.committeeName, item.room.committeeAbbreviation);
+  const live = liveModeratorName(item.room.headChair, presence, chairName);
+
+  const enter = async (r: ChairRoleKey) => {
+    setPending(true);
+    try { await onGo(item, r); } finally { setPending(false); }
+  };
+  const pick = (r: ChairRoleKey) => {
+    if (r === 'head' && live && okFor.current !== live) { setConfirmFor({ name: live, thenEnter: false }); return; }
+    setRole(r);
+  };
+  const press = () => {
+    if (!role) return;
+    if (role === 'head' && live && okFor.current !== live) { setConfirmFor({ name: live, thenEnter: true }); return; }
+    void enter(role);
+  };
+
+  return (
+    <>
+      <div className="flex items-center gap-3">
+        <Emblem src={emblemFor(item)} label={primary} size={44} />
+        <p className="min-w-0 [overflow-wrap:anywhere]" style={{ fontSize: 18, fontWeight: 800, color: LR.forest, lineHeight: 1.15 }}>{primary}</p>
+      </div>
+      <ChairRoleCards value={role} onPick={pick} gavelFree={!item.room.headChair} />
+      <div className="srp-actions">
+        <button
+          type="button"
+          disabled={!role || pending}
+          onClick={press}
+          className="srp-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A] focus-visible:ring-offset-2"
+          style={!role ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+        >
+          <LogIn size={20} strokeWidth={2.4} aria-hidden />
+          <span>{pending ? t('srp_entering') : t('chair_role_enter')}</span>
+        </button>
+        <button type="button" onClick={onBack} className="srp-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]/40">
+          {t('chair_role_back')}
+        </button>
+      </div>
+      {confirmFor && (
+        <ModeratorTakeoverDialog
+          name={confirmFor.name}
+          rootAttrs={{ [PROMPT_ATTR]: '' }}
+          onCancel={() => setConfirmFor(null)}
+          onConfirm={() => {
+            const then = confirmFor.thenEnter;
+            okFor.current = confirmFor.name;
+            setConfirmFor(null);
+            setRole('head');
+            if (then) void enter('head');
+          }}
+        />
+      )}
     </>
   );
 }

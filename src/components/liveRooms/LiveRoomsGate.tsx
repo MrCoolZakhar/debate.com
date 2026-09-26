@@ -6,7 +6,9 @@
  * it recommends going straight in (`my_live_rooms()`, src/lib/liveRooms.ts):
  *
  *   organiser -> "Open live status"  (/manage/[slug]/live), with live / in-session counts
- *   chair     -> "Join as chair"     (/join?code=CODE&mode=chair, the verified chair path)
+ *   chair     -> first "Moderator or Commenter?" (two cards, ChairRoleChoice), then
+ *                enter_live_chair_room and the chair page; a Moderator who did not
+ *                get the gavel from the RPC takes it for this device
  *   delegate  -> "Join now"          (/delegate/CODE?country=NAME&locked=1, what /join builds
  *                                     for a verified allocated delegate: no picker, no typing)
  *   advisor   -> "Follow your delegation" (/advisor, the Faculty Advisor board): ONE
@@ -201,12 +203,14 @@ export default function LiveRoomsGate() {
   // which decides at PRESS TIME whether this press starts the session or joins an
   // open dais, and lands on the chair page with the profile name as the chair
   // identity. Every other role is the plain href.
-  const go = useCallback(async (item: PromptItem) => {
+  // A chair has already answered "Moderator or Commenter?" in the pop-up (chairRole).
+  const go = useCallback(async (item: PromptItem, chairRole?: 'head' | 'co') => {
     const href = item.role === 'standalone'
       ? itemHref(item)
       : await resolveEntryHref(item, {
           accessToken: session?.access_token ?? null,
           chairName: chairIdentity(profile?.display_name, user?.email),
+          chairRole,
         });
     window.location.href = href;
   }, [session?.access_token, profile?.display_name, user?.email]);
@@ -231,6 +235,7 @@ export default function LiveRoomsGate() {
       onGo={go}
       onClose={close}
       onForget={forget}
+      chairName={chairIdentity(profile?.display_name, user?.email)}
     />
   );
 }

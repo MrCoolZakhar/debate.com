@@ -42,7 +42,9 @@ export default function LiveNowMenuSection({ onNavigate }: { onNavigate: () => v
                 href={liveEntryHref(e)}
                 onClick={async (ev) => {
                   // Same walk-in as the pop-up. A modified click (new tab) keeps the plain href.
-                  if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button !== 0) { onNavigate(); return; }
+                  // A chair keeps the plain href too: /join?mode=chair asks "Moderator or
+                  // Commenter?" first (the menu has no room for the two cards).
+                  if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button !== 0 || e.role === 'chair') { onNavigate(); return; }
                   ev.preventDefault();
                   setBusy(e.key);
                   const href = await resolveEntryHref(e, {

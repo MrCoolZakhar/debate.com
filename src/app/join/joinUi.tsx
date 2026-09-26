@@ -27,7 +27,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, type CSSProperties, type ReactNode } from 'react';
-import { Gavel } from 'lucide-react';
+import { Clock3, Flag, Gavel, Pause, Radio } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 
 export const OUTFIT = "var(--font-brand), sans-serif";
@@ -256,8 +256,12 @@ export function RoleTile({ icon, label, desc, active, onClick }: {
 }
 
 // ── Brand panel ──────────────────────────────────────────────────────────────
-// The colour on the page. On a phone it is a short band above the card; from
-// `lg` it is a tall sticky panel beside it.
+// On a phone it is a short card above the join card; from `lg` a sticky card
+// beside it. Since 26 Sep 2026 it is WHITE on the ivory page (it was a forest
+// block, which the taste board rules out): ink and forest text, sentence case,
+// no tracked capitals, state as an icon in a tinted disc, the count as a big
+// number with the words beside it, round flags, the dais after a gavel. The phone
+// mockup still hangs over its corner (overlapping devices, no fade).
 //
 // Redesigned 24 Sep 2026 (owner: "looks way too AI generated"). No eyebrow, no
 // icon-tile bullets, no sticker art. Before a code resolves it is one big line
@@ -325,11 +329,12 @@ function PhoneMockup() {
   );
 }
 
-const STATE_DOT: Record<BrandRoom['state']['tone'], string> = {
-  live: '#7FD39A',
-  waiting: C.gold,
-  paused: '#E8B27A',
-  ended: 'rgba(237,231,216,0.45)',
+// State as a small icon in a soft tinted disc and a plain word (never a dot + word).
+const STATE_ICON: Record<BrandRoom['state']['tone'], { icon: ReactNode; bg: string; fg: string }> = {
+  live: { icon: <Radio size={13} strokeWidth={2.6} />, bg: 'rgba(61,122,82,0.14)', fg: '#1F5333' },
+  waiting: { icon: <Clock3 size={13} strokeWidth={2.6} />, bg: 'rgba(238,217,138,0.45)', fg: '#6B4E08' },
+  paused: { icon: <Pause size={13} strokeWidth={2.6} fill="currentColor" />, bg: 'rgba(232,178,122,0.30)', fg: '#7A3A0C' },
+  ended: { icon: <Flag size={13} strokeWidth={2.6} />, bg: 'rgba(27,56,40,0.08)', fg: C.inkSoft },
 };
 
 function RoomEmblem({ url, acronym, size }: { url: string | null; acronym: string; size: number }) {
@@ -340,16 +345,15 @@ function RoomEmblem({ url, acronym, size }: { url: string | null; acronym: strin
       className="flex flex-shrink-0 items-center justify-center overflow-hidden rounded-full"
       style={{
         width: size, height: size,
-        backgroundColor: src ? '#FFFDF8' : C.forestLift,
-        // Neumorphic lift on forest, with a solid gold edge rather than a glow.
-        boxShadow: `inset 0 0 0 2px ${C.gold}, inset 0 -3px 6px rgba(27,56,40,0.18), 0 10px 22px rgba(0,0,0,0.30)`,
+        backgroundColor: src ? '#FFFFFF' : C.forest,
+        boxShadow: '0 0 0 1px rgba(27,56,40,0.10), 0 6px 16px rgba(27,56,40,0.12)',
       }}
     >
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={src} alt="" onError={() => setFailed(src)} style={{ width: '68%', height: '68%', objectFit: 'contain' }} />
       ) : (
-        <span style={{ fontFamily: OUTFIT, fontSize: size * (acronym.length > 4 ? 0.2 : 0.26), fontWeight: 900, color: C.gold, letterSpacing: '0.02em' }}>
+        <span style={{ fontFamily: OUTFIT, fontSize: size * (acronym.length > 4 ? 0.2 : 0.26), fontWeight: 900, color: '#FFFFFF', letterSpacing: '0.02em' }}>
           {acronym.slice(0, 6).toUpperCase()}
         </span>
       )}
@@ -357,7 +361,6 @@ function RoomEmblem({ url, acronym, size }: { url: string | null; acronym: strin
   );
 }
 
-const SOFT = 'rgba(237,231,216,0.74)';
 const FLAGS_SHOWN = 7;
 
 export function BrandPanel({ title, accent, sub, room, footer }: {
@@ -371,40 +374,38 @@ export function BrandPanel({ title, accent, sub, room, footer }: {
     <div className="relative">
     <style>{PHONE_CSS}</style>
     <section
+      // A white card on the ivory page (26 Sep 2026, owner: "apply the new design
+      // principles"). Forest is text and small marks only, never the ground.
       className="gv-join-panel relative overflow-hidden"
       style={{
         borderRadius: 28,
-        backgroundColor: C.forest,
-        backgroundImage: 'radial-gradient(420px 320px at 0% 100%, rgba(61,122,82,0.40) 0%, rgba(61,122,82,0) 65%)',
-        boxShadow: `${SHADOW.panel}, inset 0 0 0 1px rgba(238,217,138,0.16)`,
-        color: C.page,
+        backgroundColor: '#FFFFFF',
+        boxShadow: `${SHADOW.card}, inset 0 0 0 1px rgba(27,56,40,0.07)`,
+        color: C.ink,
       }}
     >
       {/* lg:pb keeps the bottom inline-end corner free for the phone. */}
-      <div className="gv-join-panel-inner relative px-6 py-7 sm:px-8 sm:py-9 gv-phone-room">
+      <div className="gv-join-panel-inner relative px-6 py-6 sm:px-8 sm:py-8 gv-phone-room">
         {room ? <RoomBrand room={room} /> : (
-          <h1
-            style={{
-              fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1,
-              fontSize: 'clamp(34px, 7vw, 52px)', margin: 0, textWrap: 'balance',
-            }}
-          >
-            {title}
-            <span
-              className="block"
-              style={{ fontFamily: PLAYFAIR, fontStyle: 'italic', fontWeight: 400, color: C.gold, letterSpacing: '0', marginTop: 4 }}
+          <>
+            <h1
+              style={{
+                fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1.05,
+                fontSize: 'clamp(28px, 6vw, 40px)', margin: 0, textWrap: 'balance', color: C.ink,
+              }}
             >
-              {accent}
-            </span>
-          </h1>
-        )}
-        {!room && (
-          <p className="mt-4 max-w-[300px]" style={{ fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.55, color: SOFT, textWrap: 'pretty' }}>
-            {sub}
-          </p>
+              {title}{' '}
+              <span style={{ fontFamily: PLAYFAIR, fontStyle: 'italic', fontWeight: 400, color: C.goldDeep, letterSpacing: '-0.01em' }}>
+                {accent}
+              </span>
+            </h1>
+            <p className="mt-3 max-w-[300px]" style={{ fontFamily: OUTFIT, fontSize: 14.5, lineHeight: 1.55, color: C.inkSoft, textWrap: 'pretty' }}>
+              {sub}
+            </p>
+          </>
         )}
 
-        {footer && <div className="mt-7 hidden lg:block">{footer}</div>}
+        {footer && <div className="mt-6 hidden lg:block">{footer}</div>}
       </div>
     </section>
     <PhoneMockup />
@@ -414,6 +415,7 @@ export function BrandPanel({ title, accent, sub, room, footer }: {
 
 function RoomBrand({ room }: { room: BrandRoom }) {
   const extra = room.present.seats.length - FLAGS_SHOWN;
+  const st = STATE_ICON[room.state.tone];
   return (
     <div>
       {room.conference && (
@@ -424,31 +426,31 @@ function RoomBrand({ room }: { room: BrandRoom }) {
               src={room.conference.logoUrl}
               alt=""
               className="flex-shrink-0 rounded-full object-contain"
-              style={{ width: 26, height: 26, backgroundColor: '#FFFDF8', padding: 2, boxShadow: `inset 0 0 0 1px rgba(0,0,0,0.08)` }}
+              style={{ width: 26, height: 26, backgroundColor: '#FFFFFF', padding: 2, boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.12)' }}
             />
           )}
-          <p className="min-w-0 line-clamp-2" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, lineHeight: 1.35, color: SOFT, textWrap: 'balance' }} title={room.conference.label}>
+          <p className="min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, lineHeight: 1.35, color: C.inkSoft, textWrap: 'balance' }}>
             {room.conference.label}
           </p>
         </div>
       )}
 
-      {/* Phone: emblem beside the name. lg: emblem above, the acronym at full size. */}
-      <div className="flex items-center gap-4 lg:gap-5">
-        <span className="lg:hidden"><RoomEmblem url={room.emblemUrl} acronym={room.acronym} size={56} /></span>
-        <span className="hidden lg:block"><RoomEmblem url={room.emblemUrl} acronym={room.acronym} size={76} /></span>
+      {/* The emblem beside the name: the acronym large, the full name small beneath. */}
+      <div className="flex items-center gap-4">
+        <span className="lg:hidden"><RoomEmblem url={room.emblemUrl} acronym={room.acronym} size={52} /></span>
+        <span className="hidden lg:block"><RoomEmblem url={room.emblemUrl} acronym={room.acronym} size={68} /></span>
         <div className="min-w-0">
           <h1
-            className="truncate"
+            className="[overflow-wrap:anywhere]"
             style={{
-              fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '-0.035em', lineHeight: 0.98, margin: 0,
-              fontSize: room.acronym.length > 8 ? 'clamp(28px, 7vw, 40px)' : 'clamp(38px, 10vw, 64px)',
+              fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1, margin: 0, color: C.forest,
+              fontSize: room.acronym.length > 8 ? 'clamp(24px, 6vw, 32px)' : 'clamp(32px, 8vw, 48px)',
             }}
           >
             {room.acronym}
           </h1>
           {room.spelled && (
-            <p className="mt-1.5" style={{ fontFamily: OUTFIT, fontSize: 13.5, lineHeight: 1.35, color: SOFT, textWrap: 'balance' }}>
+            <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 13.5, lineHeight: 1.35, color: C.inkSoft, textWrap: 'balance' }}>
               {room.spelled}
             </p>
           )}
@@ -457,59 +459,58 @@ function RoomBrand({ room }: { room: BrandRoom }) {
 
       {room.topic && (
         <p
-          className="mt-4 truncate"
+          className="mt-4 line-clamp-2"
           title={room.topic}
-          style={{ fontFamily: PLAYFAIR, fontStyle: 'italic', fontSize: 16, lineHeight: 1.35, color: C.gold }}
+          style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 600, lineHeight: 1.4, color: C.ink, textWrap: 'pretty' }}
         >
           {room.topic}
         </p>
       )}
 
-      {/* The facts. Plain type, no pills, no tiles. */}
-      <div className="mt-5 flex items-center gap-2 lg:mt-6" style={{ fontFamily: OUTFIT }}>
-        <span aria-hidden className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: STATE_DOT[room.state.tone] }} />
-        <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.01em', color: C.page }}>{room.state.label}</span>
-        {/* Phone: the count shares the state's line. */}
-        <span className="lg:hidden" style={{ fontSize: 13, color: SOFT }}>
-          <span aria-hidden> · </span>
-          <span style={{ fontWeight: 700, color: C.page, fontVariantNumeric: 'tabular-nums' }}>{room.present.count}</span> {room.present.ofLabel}
+      <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-3 lg:mt-6" style={{ fontFamily: OUTFIT }}>
+        <span className="inline-flex items-center gap-2">
+          <span aria-hidden className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: st.bg, color: st.fg }}>
+            {st.icon}
+          </span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>{room.state.label}</span>
+        </span>
+        {/* The count: a big number with the words beside it. */}
+        <span className="inline-flex items-baseline gap-1.5" style={{ color: C.inkSoft, fontSize: 14 }}>
+          <span className="lg:text-[36px] text-[26px]" style={{ fontWeight: 800, color: C.ink, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+            {room.present.count}
+          </span>
+          <span>{room.present.ofLabel}</span>
         </span>
       </div>
 
-      <div className="mt-4 hidden lg:block">
-        <p style={{ fontFamily: OUTFIT, color: SOFT, fontSize: 14 }}>
-          <span style={{ fontSize: 44, fontWeight: 800, color: C.page, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-            {room.present.count}
-          </span>
-          <span className="ms-2">{room.present.ofLabel}</span>
-        </p>
-        {room.present.seats.length > 0 && (
-          <div className="mt-3 flex items-center">
-            {room.present.seats.slice(0, FLAGS_SHOWN).map((s, i) => (
-              <CircleFlag
-                key={s.country}
-                country={s.country}
-                logoUrl={s.logoUrl}
-                size={30}
-                title={s.country}
-                decorative
-                style={{ marginInlineStart: i === 0 ? 0 : -8, boxShadow: `0 0 0 2px ${C.forest}` }}
-              />
-            ))}
-            {extra > 0 && (
-              <span className="ms-2" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: SOFT, fontVariantNumeric: 'tabular-nums' }}>
-                +{extra}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
+      {room.present.seats.length > 0 && (
+        <div className="mt-3 hidden items-center lg:flex">
+          {room.present.seats.slice(0, FLAGS_SHOWN).map((s, i) => (
+            <CircleFlag
+              key={s.country}
+              country={s.country}
+              logoUrl={s.logoUrl}
+              size={30}
+              title={s.country}
+              decorative
+              style={{ marginInlineStart: i === 0 ? 0 : -8, boxShadow: '0 0 0 2px #FFFFFF' }}
+            />
+          ))}
+          {extra > 0 && (
+            <span className="ms-2" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: C.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
+              +{extra}
+            </span>
+          )}
+        </div>
+      )}
 
       {room.dais && (
-        <p className="mt-5 hidden items-center gap-2 lg:flex" style={{ fontFamily: OUTFIT, fontSize: 13.5, color: SOFT }}>
-          <Gavel aria-hidden size={15} strokeWidth={2.2} style={{ color: C.gold, flexShrink: 0 }} />
+        <p className="mt-5 hidden items-start gap-2 lg:flex" style={{ fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.4, color: C.inkSoft }}>
+          <span aria-hidden className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: 'rgba(27,56,40,0.08)', color: C.forest }}>
+            <Gavel size={14} strokeWidth={2.4} fill="rgba(238,217,138,0.9)" />
+          </span>
           <span className="sr-only">{room.dais.label}: </span>
-          <span className="min-w-0 truncate" title={room.dais.names} style={{ color: C.page, fontWeight: 600 }}>{room.dais.names}</span>
+          <span className="min-w-0 pt-1 [overflow-wrap:anywhere]" style={{ color: C.ink, fontWeight: 600 }}>{room.dais.names}</span>
         </p>
       )}
     </div>

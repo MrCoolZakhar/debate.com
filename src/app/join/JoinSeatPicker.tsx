@@ -7,7 +7,13 @@
 // for "Türkiye" in a General Assembly roster had to scroll a system dropdown
 // with no flags and a " · Taken" suffix glued onto the label; now the seat is a
 // row with its round flag (or its crest), its name in the reader's language,
-// and its state as a chip.
+// and its state as an icon and plain words.
+//
+// 26 Sep 2026 (owner: "choosing the country is also a pain"): a big round search
+// that filters as you type, roomy 56px rows with 36px flags and names that wrap
+// (never cut), a taller list, and OPEN SEATS FIRST: everything that cannot be taken
+// sits below under "Not available", still marked Taken / Reserved / Removed. One
+// tap picks. The keyboard and the seat logic are unchanged.
 //
 // CONTRACT. This component decides NOTHING about who may sit where. The caller
 // passes each seat's `state` ('open' | 'taken' | 'reserved' | 'removed' | 'mine')
@@ -55,9 +61,16 @@ export interface SeatPickerLabels {
   rosterEmpty: string;
   /** "12 of 189 seats open" — already interpolated by the caller. */
   counter: string;
+  /** Group headings: seats that can be taken, then the rest. */
+  groupOpen: string;
+  groupClosed: string;
 }
 
-const ROW_H = 46;
+// Roomy rows (26 Sep 2026, owner: "choosing the country is also a pain"): a 56px row,
+// a 36px round flag, the name never cut (it wraps), open seats first.
+const ROW_H = 56;
+
+const isSelectable = (s: JoinSeatRow) => s.state === 'open' || s.state === 'mine';
 
 /** Diacritic- and case-insensitive, like `countries.ts` does internally. */
 function fold(s: string): string {
@@ -97,7 +110,7 @@ export default function JoinSeatPicker({
     [seats, language],
   );
 
-  const rows = useMemo(() => {
+  const ranked = useMemo(() => {
     const q = query.trim();
     if (!q) return index;
     const folded = fold(q);
@@ -115,7 +128,15 @@ export default function JoinSeatPicker({
       .map((r) => r.row);
   }, [index, query, language]);
 
-  const selectable = (s: JoinSeatRow) => s.state === 'open' || s.state === 'mine';
+  const selectable = isSelectable;
+  // Open seats first, everything that cannot be taken below them, each group keeping
+  // its order (roster order, or the search ranking). Presentation only: which seat is
+  // open is still the caller's `state`.
+  const rows = useMemo(
+    () => [...ranked.filter((r) => isSelectable(r.seat)), ...ranked.filter((r) => !isSelectable(r.seat))],
+    [ranked],
+  );
+  const firstClosed = rows.findIndex((r) => !selectable(r.seat));
   const pointable = (s: JoinSeatRow) => selectable(s) || (!!onReservedPick && s.state === 'reserved');
   const pick = (s: JoinSeatRow) => {
     if (selectable(s)) onChange(s.country);
@@ -174,7 +195,7 @@ export default function JoinSeatPicker({
 
   // Seat state as an icon and plain words, never a pill (CLAUDE.md §8).
   const stateText = (icon: ReactNode, text: string, color: string) => (
-    <span className="inline-flex flex-shrink-0 items-center gap-1 whitespace-nowrap" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color }}>
+    <span className="inline-flex flex-shrink-0 items-center gap-1 whitespace-nowrap" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color }}>
       {icon}{text}
     </span>
   );
@@ -191,15 +212,16 @@ export default function JoinSeatPicker({
     // fit in page.tsx (JOIN_FIT_CSS): there the list takes the flexible space of the
     // stage instead of its fixed height. Presentation only.
     <div className="gv-join-picker">
+      <style>{PICKER_CSS}</style>
       {/* Search + counter */}
-      <div className="mb-2.5 flex items-center gap-2">
+      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <div className="relative min-w-0 flex-1">
           <span
             aria-hidden
             className="pointer-events-none absolute inset-y-0 flex items-center"
-            style={{ insetInlineStart: 12, color: C.muted }}
+            style={{ insetInlineStart: 16, color: C.forest }}
           >
-            <Search size={16} strokeWidth={2.4} />
+            <Search size={19} strokeWidth={2.5} />
           </span>
           <input
             type="text"
@@ -215,44 +237,45 @@ export default function JoinSeatPicker({
             placeholder={labels.search}
             className="w-full focus:outline-none"
             style={{
-              height: 44, borderRadius: 14, paddingInlineStart: 36, paddingInlineEnd: query ? 36 : 12,
-              backgroundColor: C.surfaceAlt, boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.12)',
-              fontFamily: OUTFIT, fontSize: 14.5, color: C.ink,
+              height: 54, borderRadius: 999, paddingInlineStart: 46, paddingInlineEnd: query ? 48 : 18,
+              backgroundColor: '#FFFFFF', boxShadow: SEARCH_REST,
+              fontFamily: OUTFIT, fontSize: 16, fontWeight: 500, color: C.ink,
             }}
-            onFocus={(e) => { setFocused(true); e.currentTarget.style.boxShadow = `inset 0 0 0 2px ${C.forest}`; }}
-            onBlur={(e) => { setFocused(false); e.currentTarget.style.boxShadow = 'inset 0 0 0 1px rgba(27,56,40,0.12)'; }}
+            onFocus={(e) => { setFocused(true); e.currentTarget.style.boxShadow = `inset 0 0 0 2px ${C.forest}, 0 6px 18px rgba(27,56,40,0.10)`; }}
+            onBlur={(e) => { setFocused(false); e.currentTarget.style.boxShadow = SEARCH_REST; }}
           />
           {query && (
             <button
               type="button"
               onClick={() => setQuery('')}
               aria-label={labels.clear}
-              className="absolute inset-y-0 flex items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
-              style={{ insetInlineEnd: 4, width: 36, color: C.inkSoft, cursor: 'pointer' }}
+              className="absolute inset-y-0 my-auto flex items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
+              style={{ insetInlineEnd: 5, width: 44, height: 44, color: C.inkSoft, cursor: 'pointer' }}
             >
               <X size={15} strokeWidth={2.6} />
             </button>
           )}
         </div>
         <span
-          className="hidden flex-shrink-0 sm:block"
-          style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 600, color: C.muted, fontVariantNumeric: 'tabular-nums' }}
+          className="flex-shrink-0 basis-full sm:basis-auto"
+          style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: C.inkSoft, fontVariantNumeric: 'tabular-nums' }}
         >
           {labels.counter}
         </span>
       </div>
 
-      {/* The list. Fixed height in every state, so the card never resizes. */}
+      {/* The list. Fixed height in every state, so the card never resizes; roomier than
+          the old 272px box (on a desktop of 700px+ it takes the stage's flexible space). */}
       <div
         id={listId}
         ref={listRef}
         role="listbox"
         aria-label={labels.search}
-        className="gv-join-picker-list relative h-[272px] overflow-y-auto overscroll-contain sm:h-[300px]"
+        className="gv-join-picker-list relative h-[380px] overflow-y-auto overscroll-contain sm:h-[420px]"
         style={{
-          borderRadius: 18,
-          backgroundColor: C.surfaceAlt,
-          boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.10)',
+          borderRadius: 20,
+          backgroundColor: '#FFFFFF',
+          boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.09)',
           padding: 6,
         }}
       >
@@ -261,15 +284,27 @@ export default function JoinSeatPicker({
         ) : rows.length === 0 ? (
           <EmptyState text={labels.empty} action={{ label: labels.clear, onClick: () => setQuery('') }} />
         ) : (
-          rows.map(({ seat, label, at }) => {
+          rows.map(({ seat, label, at }, i) => {
             const picked = value === seat.country;
             const isActive = focused && current === seat.country;
             const can = selectable(seat);
             const point = pointable(seat);
             const pointed = !can && point && reservedPicked === seat.country;
+            const heading = i === 0 && firstClosed !== 0
+              ? labels.groupOpen
+              : i === firstClosed ? labels.groupClosed : null;
             return (
+              <div key={seat.country} role="presentation">
+              {heading && (
+                <p
+                  role="presentation"
+                  aria-hidden
+                  style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: C.inkSoft, padding: i === 0 ? '6px 12px 4px' : '14px 12px 4px' }}
+                >
+                  {heading}
+                </p>
+              )}
               <div
-                key={seat.country}
                 id={`${listId}-o${at}`}
                 data-seat={seat.country}
                 role="option"
@@ -277,16 +312,18 @@ export default function JoinSeatPicker({
                 aria-disabled={!point}
                 tabIndex={-1}
                 onClick={() => { if (point) { setActive(seat.country); pick(seat); } }}
-                className="flex items-center gap-2.5"
+                className="gv-seat-row flex items-center gap-3"
+                data-point={point ? '' : undefined}
                 style={{
-                  height: ROW_H,
+                  minHeight: ROW_H,
                   contentVisibility: 'auto',
                   containIntrinsicSize: `0 ${ROW_H}px`,
                   paddingInline: 10,
-                  borderRadius: 12,
+                  paddingBlock: 6,
+                  borderRadius: 14,
                   cursor: point ? 'pointer' : 'default',
-                  opacity: point ? 1 : 0.55,
-                  backgroundColor: picked ? C.forest : pointed ? 'rgba(238,217,138,0.40)' : isActive && point ? 'rgba(27,56,40,0.07)' : 'transparent',
+                  opacity: point ? 1 : 0.62,
+                  backgroundColor: picked ? C.forest : pointed ? 'rgba(238,217,138,0.40)' : isActive && point ? 'rgba(27,56,40,0.07)' : undefined,
                   boxShadow: picked
                     ? `inset 0 0 0 1.5px ${C.gold}, 0 4px 12px rgba(27,56,40,0.22)`
                     : pointed ? 'inset 0 0 0 1.5px rgba(182,135,31,0.7)'
@@ -298,11 +335,11 @@ export default function JoinSeatPicker({
                 <CircleFlag
                   country={seat.country}
                   logoUrl={seat.logoUrl ?? null}
-                  size={30}
+                  size={36}
                   decorative
                   ring={picked ? 'rgba(238,217,138,0.5)' : true}
                 />
-                <span className="min-w-0 flex-1 truncate" style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: picked ? 700 : 600, color: picked ? C.page : C.ink }}>
+                <span className="min-w-0 flex-1 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 16, lineHeight: 1.25, fontWeight: picked ? 700 : 600, color: picked ? '#FFFFFF' : C.ink }}>
                   {label}
                 </span>
                 {seat.isObserver && (
@@ -310,7 +347,8 @@ export default function JoinSeatPicker({
                     <Megaphone size={15} strokeWidth={2.2} />
                   </span>
                 )}
-                {picked ? <Check size={17} strokeWidth={3} color={C.gold} /> : chipFor(seat)}
+                {picked ? <Check size={19} strokeWidth={3} color={C.gold} /> : chipFor(seat)}
+              </div>
               </div>
             );
           })
@@ -325,6 +363,10 @@ export default function JoinSeatPicker({
     </div>
   );
 }
+
+const SEARCH_REST = 'inset 0 0 0 1.5px rgba(27,56,40,0.16), 0 1px 2px rgba(27,56,40,0.05)';
+// Hover tint for rows that can be pointed at (the picked row keeps its forest).
+const PICKER_CSS = '@media (hover:hover){.gv-seat-row[data-point]:not([aria-selected="true"]):hover{background-color:rgba(27,56,40,0.05)}}';
 
 function EmptyState({ text, action }: { text: string; action?: { label: string; onClick: () => void } }) {
   return (
@@ -342,7 +384,7 @@ function EmptyState({ text, action }: { text: string; action?: { label: string; 
           onClick={action.onClick}
           className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 active:scale-[0.96]"
           style={{
-            fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.forest,
+            fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: C.forest,
             minHeight: 44, cursor: 'pointer',
             padding: '8px 14px', borderRadius: 12, backgroundColor: 'rgba(27,56,40,0.06)',
             boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.12)',
