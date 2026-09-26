@@ -4,18 +4,20 @@
 // Shared conference card, ONE definition used by both the explore directory
 // (/conferences/explore) and the Stagefront landing (/conferences).
 //
-// Anatomy: banner band (104px, banner_url + top-dark gradient, or gradient +
-// monogram fallback) with a glass date chip top-left · free-floating logo
-// overlapping the band (marginTop -36px, 72px contain + drop-shadow) · fee
-// bubble (currency symbol + amount) straddling the banner/body seam on the
-// right · BIG "ACRONYM YYYY" heading · "City, CC" location line · foot row
-// (delegates chip · APPLY pill, or APPLIED state when the viewer already has
-// an application).
-// Hover lifts the card and deepens the shadow so it reads as a floating object.
+// The default tier is the LISTING card (CLAUDE.md §8, "The Explore page",
+// item 6; 26 Sep 2026): Airbnb's search-result card in ivory, white, forest
+// and gold. A white card with a soft shadow, a landscape 3:2 cover inset on
+// top (the banner photo, or a pale wash with the acronym watermark), the
+// conference's logo as a round disc over the photo's lower edge, then the
+// text below: acronym large with the full name smaller beneath (two rows,
+// never "…"), the verified check, round flag + city and country, the dates,
+// format and delegates as an icon and a plain word, and the price in bold with
+// the role in grey. The whole card is the link (pass `href` for a real <a>);
+// there is no APPLY pill: the viewer's own state is a quiet check + word.
+// A booked Spotlight keeps its gold edge, glow and tag; credit sponsored keeps
+// the heart.
 //
-// `compact` (default false, the explore directory is untouched) shrinks the
-// same anatomy for narrow rails (~340–380px): 72px banner band, smaller logo
-// overlap and tighter padding. One definition, two densities, never fork it.
+// `compact` (default false) is the same listing, a little denser.
 //
 // `heroCompact` is the PHOTO-FORWARD hero tier, used ONLY by the Stagefront
 // hero "up next" rail: the banner photo fills the entire 188px card (cover)
@@ -34,12 +36,14 @@
 // rounded corners, can never clip it. The hover lift moves to the wrapper in
 // this branch so disc and card travel together.
 // `applied` marks conferences the signed-in viewer already has an application
-// for: the APPLY pill becomes a solid forest APPLIED ✓ badge. Consumers own
+// for: the hero tier's APPLY pill becomes a solid forest APPLIED ✓ badge, the
+// listing card says "Applied" with a check. Consumers own
 // the lookup (one applications query per page) and pass the boolean down.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState } from 'react';
-import { ArrowRight, Check, Users, CalendarDays, Gavel, MapPin } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, Check, Users, CalendarDays, Gavel, MapPin, Monitor, Globe } from 'lucide-react';
 import { getCountryByName } from '@/lib/countries';
 import { currencySymbol, formatFeeAmountCompact } from '@/lib/utils';
 import { TBD_PRICE, type DelegatePrice } from '@/lib/publicFees';
@@ -52,6 +56,25 @@ import { CreditSponsoredMark, SpotlightTag, SPOTLIGHT_GLOW, SPOTLIGHT_GLOW_HOVER
 
 // Photo-forward hero cards: kill the Ken Burns zoom + hover lift for users who
 // asked the OS for less motion. Scoped to the hero tier's own class names.
+// The listing card: no photo zoom for people who asked for less motion.
+const LISTING_CSS = `
+@media (prefers-reduced-motion: reduce) {
+  .gv-listing-card, .gv-listing-photo { transition: none !important; }
+  .gv-listing-photo { transform: none !important; }
+}`;
+
+// Pale covers for a conference without a banner photo: ivory, pale green and
+// pale gold washes (never a forest block, CLAUDE.md §8).
+const PALE_COVERS: [string, string][] = [
+  ['#E6EEE3', '#F4EFE2'],
+  ['#EFE7D2', '#E3ECDF'],
+  ['#F3EBD3', '#EAF0E6'],
+  ['#E0EADC', '#F1EAD8'],
+];
+
+const FORMAT_WORDS: Record<string, string> = { 'in-person': 'In person', online: 'Online', hybrid: 'Hybrid' };
+const FORMAT_GLYPHS: Record<string, typeof MapPin> = { 'in-person': MapPin, online: Monitor, hybrid: Globe };
+
 const PHOTO_REDUCED_MOTION_CSS = `
 @media (prefers-reduced-motion: reduce) {
   .gv-photo-card, .gv-photo-card img, .gv-photo-lift { transition: none !important; }
@@ -101,18 +124,16 @@ function formatDateRange(start: string | null, end: string | null): string {
   return formatConferenceDates(start, end, { style: 'dmy-end-year' });
 }
 
-/** Dense cards drop the year from the date chip: the heading right below it
- *  already ends in the edition year, and at four columns the full form was
- *  colliding with the format chip on the opposite corner. */
-function formatDateRangeDense(start: string | null, end: string | null): string {
-  return formatConferenceDates(start, end, { style: 'dm-upper' });
-}
-
 export function ConferenceCard({
   conf, hovered, onHover, onLeave, onClick, compact = false, heroCompact = false, goldGlow = false, applied = false, member = false,
-  showFlag = true, wrapTitle = true, spotlight = false, creditSponsored = false,
+  showFlag = true, spotlight = false, creditSponsored = false, href,
 }: {
   conf: CardConference;
+  /** Listing tier: the conference page. When set the card is a real link and
+   *  `onClick` runs as a side effect only (e.g. record a spotlight click); it
+   *  must not navigate itself. Without it the card navigates through
+   *  `onClick` (role="link", Enter / Space). */
+  href?: string;
   /** A booked Gavelling Spotlight: the small tag top right and the bright gold
    *  edge and glow (25 Sep 2026). */
   spotlight?: boolean;
@@ -137,8 +158,8 @@ export function ConferenceCard({
   /** Classic tier only: a round country flag before the location line (on by
    *  default; the owner wants a flag on every conference card, 25 Sep 2026). */
   showFlag?: boolean;
-  /** Classic tier only: the heading wraps to a second line instead of an
-   *  ellipsis (CLAUDE.md §8, never cut a name). On by default. */
+  /** Kept for callers; the listing card's name ALWAYS wraps (CLAUDE.md §8,
+   *  never cut a name), so this no longer changes anything. */
   wrapTitle?: boolean;
 }) {
   const countryObj = getCountryByName(conf.country);
@@ -154,7 +175,12 @@ export function ConferenceCard({
   const [g0, g1] = gradientFor(conf.acronym);
   // heroCompact reuses compact's tighter horizontal padding.
   const dense = compact || heroCompact;
-  const padX = dense ? 'px-4' : 'px-5';
+  // Listing tier facts.
+  const [p0, p1] = PALE_COVERS[(() => { let h = 0; for (let i = 0; i < conf.acronym.length; i++) h = (h * 31 + conf.acronym.charCodeAt(i)) >>> 0; return h % PALE_COVERS.length; })()];
+  const countryName = countryObj?.name ?? conf.country;
+  const showFullName = !!conf.full_name && conf.full_name.trim() !== headingLabel.trim() && conf.full_name.trim() !== conf.acronym.trim();
+  const formatLabel = conf.format ? (FORMAT_WORDS[conf.format] ?? null) : null;
+  const FormatIcon = conf.format ? FORMAT_GLYPHS[conf.format] : undefined;
 
   // Layered golden glow, soft, static, tasteful (deepens slightly on hover).
   const glowShadow = spotlight
@@ -345,195 +371,193 @@ export function ConferenceCard({
       </div>
     </article>
   ) : (
+    // ── The listing card (Airbnb's, in ivory, white, forest and gold) ───────
+    // CLAUDE.md §8, "The Explore page", item 6. A white card with a soft
+    // shadow; a landscape cover (3:2, radius 16) inset on top; the logo as a
+    // round disc over the photo's lower edge; then the text below: acronym
+    // large with the full name beneath (two rows, never cut), the verified
+    // check, round flag + city and country, the dates, format and delegates
+    // as icon + plain word, and the price in bold with the role in grey. The
+    // whole card is the link; there is no APPLY pill.
     <article
-      onClick={onClick}
-      onMouseEnter={onHover}
-      onMouseLeave={onLeave}
-      className="cursor-pointer overflow-hidden"
+      onClick={href ? undefined : onClick}
+      onKeyDown={href ? undefined : (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
+      role={href ? undefined : 'link'}
+      tabIndex={href ? undefined : 0}
+      onMouseEnter={href ? undefined : onHover}
+      onMouseLeave={href ? undefined : onLeave}
+      className="gv-listing-card cursor-pointer focus:outline-none"
       style={{
         position: 'relative',
-        backgroundColor: '#FAF8F3',
-        border: glowing
-          ? '1px solid rgba(238,217,138,0.7)'
-          : hovered ? '1px solid rgba(27,56,40,0.55)' : '1px solid #DDD4C0',
-        borderRadius: '20px',
-        // When glowing, the hover lift lives on the outer wrapper so the
-        // overlapping gavel disc travels with the card.
-        transform: glowing ? undefined : hovered ? 'translateY(-4px)' : 'translateY(0)',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: '#FFFFFF',
+        borderRadius: '22px',
+        padding: dense ? '7px' : '8px',
         boxShadow: glowing
           ? glowShadow
           : hovered
-            ? '0 20px 48px rgba(27,56,40,0.16), 0 2px 8px rgba(27,56,40,0.08)'
-            : '0 1px 3px rgba(27,56,40,0.05)',
-        transition: 'transform 260ms cubic-bezier(0.22,1,0.36,1), box-shadow 260ms ease, border-color 260ms ease',
+            ? '0 1px 2px rgba(27,56,40,0.06), 0 18px 40px rgba(27,56,40,0.15)'
+            : '0 1px 2px rgba(27,56,40,0.05), 0 8px 24px rgba(27,56,40,0.08)',
+        transition: 'box-shadow 240ms ease',
       }}
     >
-      {/* Banner band */}
-      <div className="relative" style={{ height: heroCompact ? '42px' : compact ? '72px' : '104px', overflow: 'hidden' }}>
-        {conf.banner_url ? (
-          <>
+      <style>{LISTING_CSS}</style>
+
+      {/* Cover: the banner photo, or a pale wash with the acronym watermark */}
+      <div style={{ position: 'relative' }}>
+        <div
+          style={{
+            position: 'relative', aspectRatio: '3 / 2', borderRadius: '16px', overflow: 'hidden',
+            background: conf.banner_url ? '#E4DCCB' : `linear-gradient(135deg, ${p0} 0%, ${p1} 100%)`,
+          }}
+        >
+          {conf.banner_url ? (
             <img
               src={conf.banner_url}
               alt=""
               loading="lazy"
               decoding="async"
+              className="gv-listing-photo"
               style={{
                 position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
-                transform: hovered ? 'scale(1.05)' : 'scale(1)',
-                transition: 'transform 700ms cubic-bezier(0.22,1,0.36,1)',
+                transform: hovered ? 'scale(1.04)' : 'scale(1)',
+                transition: 'transform 600ms cubic-bezier(0.22,1,0.36,1)',
               }}
             />
-            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(20,36,27,0.55) 0%, rgba(20,36,27,0.08) 55%)' }} />
-          </>
-        ) : (
-          <>
-            <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(120deg, ${g0} 0%, ${g1} 100%)` }} />
+          ) : (
             <span
               aria-hidden
               style={{
-                position: 'absolute', right: '14px', bottom: '-6px',
-                fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: heroCompact ? '30px' : compact ? '38px' : '52px', lineHeight: 1,
-                color: 'rgba(238,217,138,0.13)', letterSpacing: '0.02em', userSelect: 'none',
+                position: 'absolute', right: '12px', bottom: '-4px',
+                fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: dense ? '40px' : '48px', lineHeight: 1,
+                color: 'rgba(27,56,40,0.10)', letterSpacing: '0.02em', userSelect: 'none', whiteSpace: 'nowrap',
               }}
             >
               {conf.acronym.slice(0, 6)}
             </span>
-          </>
-        )}
-        {/* Date chip, glass pill, top-left, so the dates read first (omitted when TBD/missing) */}
-        {showDates && (
-          <span
-            className="absolute top-3 left-3 flex items-center gap-1"
-            style={{
-              backgroundColor: 'rgba(20,36,27,0.5)',
-              backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
-              border: '1px solid rgba(250,248,243,0.2)',
-              padding: dense ? '2.5px 8px' : '3px 10px', borderRadius: '9999px',
-            }}
-          >
-            <CalendarDays size={dense ? 11 : 12} style={{ color: '#EED98A', flexShrink: 0 }} />
-            <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em', fontSize: dense ? '10px' : '11.5px', color: '#FAF8F3', whiteSpace: 'nowrap' }}>
-              {dense ? formatDateRangeDense(conf.start_date, conf.end_date) : formatDateRange(conf.start_date, conf.end_date)}
+          )}
+          {/* Spotlight tag, top right on the photo */}
+          {spotlight && (
+            <span style={{ position: 'absolute', top: '10px', right: '10px', zIndex: 2 }}>
+              <SpotlightTag size="sm" />
             </span>
-          </span>
-        )}
-        {/* Spotlight tag, top right, over the format chip's spot */}
-        {spotlight && (
-          <span className="absolute top-3 right-3" style={{ zIndex: 3 }}>
-            <SpotlightTag size="sm" />
-          </span>
-        )}
-        {/* Format chip; a spotlight card drops it and the Spotlight tag
-            takes the corner (the format stays in the filters) */}
-        {conf.format && !spotlight && (
-          <span
-            className="absolute top-3 right-3"
-            style={{
-              fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: dense ? '8.5px' : '9px', letterSpacing: dense ? '0.09em' : '0.12em',
-              color: '#FAF8F3', backgroundColor: 'rgba(20,36,27,0.45)',
-              backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
-              border: '1px solid rgba(250,248,243,0.18)',
-              padding: dense ? '2.5px 8px' : '3px 10px', borderRadius: '9999px',
-            }}
-          >
-            {conf.format.toUpperCase().replace('-', ' ')}
-          </span>
-        )}
+          )}
+        </div>
+        {/* The conference's own logo, over the photo's lower edge */}
+        <div style={{ position: 'absolute', left: '12px', bottom: dense ? '-22px' : '-26px', zIndex: 2 }}>
+          <LogoDisc
+            src={conf.logo_url}
+            alt={conf.acronym}
+            size={dense ? 48 : 56}
+            fallbackText={initials}
+            style={{ border: '3px solid #FFFFFF', boxShadow: '0 6px 14px rgba(16,28,21,0.20)' }}
+          />
+        </div>
       </div>
 
-      {/* Fee bubble, straddles the seam between the banner photo and the
-          card body, right-hand side, with the real currency symbol */}
       <div
         style={{
-          position: 'absolute', zIndex: 2,
-          right: dense ? '14px' : '18px',
-          top: `${(compact ? 72 : 104) - 17}px`,
-          display: 'inline-flex', alignItems: 'baseline', gap: '2px',
-          backgroundColor: '#FAF8F3',
-          border: price.kind === 'tbd'
-            ? '2px solid rgba(28,20,16,0.18)'
-            : price.kind === 'free' ? '2px solid rgba(61,122,82,0.5)' : '2px solid rgba(182,135,31,0.45)',
-          borderRadius: '9999px', padding: '5px 13px',
-          boxShadow: '0 6px 16px rgba(27,56,40,0.18)',
+          display: 'flex', flexDirection: 'column', flex: '1 1 auto',
+          padding: dense ? '30px 7px 7px' : '34px 8px 8px',
+          fontFamily: "var(--font-brand), sans-serif",
         }}
       >
-        {price.kind === 'tbd' ? (
-          <span title="Price to be announced" style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '14px', letterSpacing: '0.08em', color: '#5C4F44' }}>
-            TBD
-          </span>
-        ) : price.kind === 'free' ? (
-          <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '14px', letterSpacing: '0.08em', color: '#2A5A3C' }}>
-            FREE
-          </span>
-        ) : (
-          <>
-            <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '14.5px', color: '#B6871F' }}>
-              {currencySymbol(price.currency)}
-            </span>
-            <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: '16.5px', color: '#1C1410' }}>
-              {formatFeeAmountCompact(price.amount)}
-            </span>
-          </>
-        )}
-      </div>
-
-      {/* Logo disc overlapping the band */}
-      <div className={padX} style={{ marginTop: heroCompact ? '-22px' : compact ? '-24px' : '-36px', position: 'relative' }}>
-        <LogoDisc
-          src={conf.logo_url}
-          alt={conf.acronym}
-          size={heroCompact ? 44 : compact ? 52 : 72}
-          fallbackText={initials}
-          style={{ boxShadow: '0 8px 16px rgba(16,28,21,0.28)' }}
-        />
-      </div>
-
-      <div className={`${padX} ${heroCompact ? 'pt-1 pb-2.5' : compact ? 'pt-2 pb-4' : 'pt-3 pb-5'}`} style={{ containerType: 'inline-size' }}>
-        {/* Acronym + edition year, the card's main heading */}
+        {/* Acronym large, the full name smaller beneath: two rows, never "…" */}
         <h3
-          className={heroCompact ? 'mb-1.5' : compact ? 'mb-2' : 'mb-2.5'}
           style={{
-            color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums',
-            fontSize: dense ? 'clamp(18px, 7.6cqw, 23px)' : 'clamp(21px, 9.2cqw, 29px)', lineHeight: 1.05, letterSpacing: '-0.012em',
-            marginTop: dense ? '2px' : '4px',
-            display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0,
+            margin: 0, display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0,
+            color: '#1C1410', fontWeight: 800, fontSize: dense ? '18px' : '20px', lineHeight: 1.15, letterSpacing: '-0.01em',
           }}
         >
-          <span style={wrapTitle ? { minWidth: 0, overflowWrap: 'anywhere' } : { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{headingLabel}</span>
-          <VerifiedCheck verified={!!conf.is_verified} size={dense ? 17 : 21} title="Verified conference" />
+          <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{headingLabel}</span>
+          <VerifiedCheck verified={!!conf.is_verified} size={dense ? 16 : 18} title="Verified conference" />
         </h3>
+        {showFullName && (
+          <p style={{ margin: '2px 0 0', fontSize: '13px', fontWeight: 500, lineHeight: 1.35, color: '#5C5140', overflowWrap: 'anywhere' }}>
+            {conf.full_name}
+          </p>
+        )}
 
-        {/* Location */}
-        <div className={`flex items-center flex-wrap gap-x-1.5 gap-y-1 ${heroCompact ? 'mb-1.5' : compact ? 'mb-3' : 'mb-4'}`}>
-          {showFlag && <CircleFlag country={conf.country} size={18} decorative />}
-          <span className="text-[13px]" style={{ color: '#6B5F52', fontFamily: "var(--font-brand), sans-serif", fontWeight: 500 }}>
-            {conf.city}, {countryCode}
+        {/* Round flag, city and country */}
+        <p className="flex items-center" style={{ margin: '9px 0 0', gap: '7px', fontSize: '13.5px', fontWeight: 500, color: '#4A4238', lineHeight: 1.35 }}>
+          {showFlag && <CircleFlag country={conf.country} size={17} decorative />}
+          <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+            {[conf.city?.trim(), countryName?.trim()].filter(Boolean).join(', ')}
           </span>
-          {/* Credit sponsored, in the meta row: never over the name, logo or fee */}
-          {creditSponsored && <CreditSponsoredMark size="xs" style={{ marginLeft: 'auto' }} />}
-        </div>
+        </p>
 
-        {/* Foot row */}
-        <div
-          className={`flex items-center justify-between ${heroCompact ? 'pt-1.5' : compact ? 'pt-2.5' : 'pt-3.5'}`}
-          style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}
-        >
-          {conf.expected_delegates > 0 ? (
-            <span
-              className="flex items-center gap-1.5 text-[13px] px-2.5 py-1 rounded-full"
-              style={{ backgroundColor: 'rgba(27,56,40,0.06)', color: '#4A4238', fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
-            >
-              <Users size={13} style={{ color: '#9A8A78' }} />
-              {conf.expected_delegates.toLocaleString()}
+        {/* Dates */}
+        <p style={{ margin: '3px 0 0', fontSize: '13.5px', fontWeight: 500, color: '#5C5140', fontVariantNumeric: 'tabular-nums', lineHeight: 1.35 }}>
+          {showDates ? formatDateRange(conf.start_date, conf.end_date) : 'Dates to be announced'}
+        </p>
+
+        {/* Format and delegates: an icon and a plain word, never a chip */}
+        {(formatLabel || conf.expected_delegates > 0) && (
+          <p className="flex items-center flex-wrap" style={{ margin: '6px 0 0', columnGap: '14px', rowGap: '4px', fontSize: '13px', fontWeight: 500, color: '#5C5140' }}>
+            {formatLabel && (
+              <span className="inline-flex items-center" style={{ gap: '5px' }}>
+                {FormatIcon && <FormatIcon size={14} strokeWidth={2} fill="rgba(207,227,211,0.9)" style={{ color: '#2A5A3C', flexShrink: 0 }} aria-hidden />}
+                {formatLabel}
+              </span>
+            )}
+            {conf.expected_delegates > 0 && (
+              <span className="inline-flex items-center" style={{ gap: '5px', fontVariantNumeric: 'tabular-nums' }} title="Expected delegates">
+                <Users size={14} strokeWidth={2} fill="rgba(238,217,138,0.55)" style={{ color: '#2A5A3C', flexShrink: 0 }} aria-hidden />
+                {conf.expected_delegates.toLocaleString()}
+                <span className="sr-only"> delegates</span>
+              </span>
+            )}
+          </p>
+        )}
+
+        {/* Price in bold with the role in grey; the viewer's own state beside it */}
+        <div className="flex items-end justify-between flex-wrap" style={{ marginTop: 'auto', paddingTop: '10px', columnGap: '10px', rowGap: '4px' }}>
+          <p style={{ margin: 0, fontSize: '15px', lineHeight: 1.3, color: '#1C1410', fontVariantNumeric: 'tabular-nums' }}>
+            {price.kind === 'tbd' ? (
+              <span title="Price to be announced" style={{ fontWeight: 600, color: '#6B5F52' }}>Price to be announced</span>
+            ) : price.kind === 'free' ? (
+              <span style={{ fontWeight: 800 }}>Free</span>
+            ) : (
+              <>
+                <span style={{ fontWeight: 800 }}>{currencySymbol(price.currency)}{formatFeeAmountCompact(price.amount)}</span>
+                <span style={{ fontWeight: 500, color: '#6B5F52' }}> delegate</span>
+              </>
+            )}
+          </p>
+          {member ? (
+            <span className="inline-flex items-center" style={{ gap: '4px', fontSize: '12.5px', fontWeight: 700, color: '#1B3828' }}>
+              <Check size={14} strokeWidth={2.75} aria-hidden /> You&apos;re in
             </span>
-          ) : <span />}
-          <ApplyButton applied={applied} member={member} />
+          ) : applied ? (
+            <span className="inline-flex items-center" style={{ gap: '4px', fontSize: '12.5px', fontWeight: 700, color: '#1B3828' }}>
+              <Check size={14} strokeWidth={2.75} aria-hidden /> Applied
+            </span>
+          ) : null}
         </div>
+        {creditSponsored && <CreditSponsoredMark size="xs" style={{ marginTop: '5px' }} />}
       </div>
     </article>
   );
 
-  if (!glowing) return card;
+  // The whole card is the link. With `href` it is a real <a> (crawlable,
+  // middle-click, open in new tab); `onClick` then runs as a side effect
+  // only (record a spotlight click) and must not navigate itself.
+  const listing = !heroCompact && href ? (
+    <Link
+      href={href}
+      onClick={onClick}
+      onMouseEnter={onHover}
+      onMouseLeave={onLeave}
+      className="block h-full rounded-[22px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2"
+      style={{ textDecoration: 'none', color: 'inherit' }}
+    >
+      {card}
+    </Link>
+  ) : card;
+
+  if (!glowing) return listing;
 
   // goldGlow: positioned wrapper carries the hover lift and hosts the gavel
   // disc as a SIBLING of the article, above it in z-order, the article keeps
@@ -548,7 +572,7 @@ export function ConferenceCard({
         transition: 'transform 260ms cubic-bezier(0.22,1,0.36,1)',
       }}
     >
-      {card}
+      {listing}
       {/* Gold gavel disc, straddles the top-right corner, fully visible. */}
       <span
         aria-hidden="true"
@@ -659,5 +683,34 @@ function ApplyButton({ applied = false, member = false }: { applied?: boolean; m
       APPLY
       <ArrowRight size={12} strokeWidth={2.75} />
     </button>
+  );
+}
+
+/** The listing card's grey skeleton: the same shape (inset 3:2 cover, logo
+ *  disc over its edge, the text rows), for loading grids. */
+export function ConferenceCardSkeleton() {
+  const bar = (w: string, h: number, mt: number) => (
+    <div className="animate-pulse" style={{ width: w, height: `${h}px`, marginTop: `${mt}px`, borderRadius: '8px', backgroundColor: '#ECE6D9' }} />
+  );
+  return (
+    <div
+      aria-hidden
+      style={{
+        backgroundColor: '#FFFFFF', borderRadius: '22px', padding: '8px',
+        boxShadow: '0 1px 2px rgba(27,56,40,0.05), 0 8px 24px rgba(27,56,40,0.08)',
+      }}
+    >
+      <div style={{ position: 'relative' }}>
+        <div className="animate-pulse" style={{ aspectRatio: '3 / 2', borderRadius: '16px', backgroundColor: '#E4DCCB' }} />
+        <div style={{ position: 'absolute', left: '12px', bottom: '-26px', width: '56px', height: '56px', borderRadius: '9999px', backgroundColor: '#DDD4C0', border: '3px solid #FFFFFF' }} />
+      </div>
+      <div style={{ padding: '34px 8px 10px' }}>
+        {bar('55%', 18, 0)}
+        {bar('80%', 12, 8)}
+        {bar('65%', 12, 12)}
+        {bar('45%', 12, 7)}
+        {bar('35%', 14, 16)}
+      </div>
+    </div>
   );
 }

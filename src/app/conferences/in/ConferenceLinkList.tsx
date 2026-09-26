@@ -51,11 +51,11 @@ export default function ConferenceLinkList({ conferences }: { conferences: Liste
                 )}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate" style={{ fontFamily: SANS, fontWeight: 800, fontSize: 16, color: INK }}>
+                <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: SANS, fontWeight: 800, fontSize: 16, color: INK, lineHeight: 1.25 }}>
                   {conferenceTitle(c)}
                 </span>
                 {c.acronym && c.full_name && c.full_name !== c.acronym && (
-                  <span className="block truncate" style={{ fontFamily: SANS, fontSize: 12.5, color: INK_SOFT }}>
+                  <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: SANS, fontSize: 12.5, color: INK_SOFT, lineHeight: 1.35 }}>
                     {c.full_name}
                   </span>
                 )}

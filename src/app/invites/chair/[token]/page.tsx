@@ -14,7 +14,7 @@ import { Check, X, Gavel } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { reportBlocked } from '@/lib/reportCrash';
-import { friendlyError } from '@/lib/friendlyError';
+import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import { Eyebrow, OUTFIT } from '@/app/account/accountUi';
@@ -37,16 +37,16 @@ interface InviteData {
 }
 
 const STATUS_COPY: Record<string, { title: string; body: string }> = {
-  accepted: { title: "You're already chairing this committee", body: 'This invitation was accepted earlier, no further action needed.' },
-  declined: { title: 'Invitation declined', body: "You've declined this invitation. If that was a mistake, ask the organizer to send a new one." },
-  revoked: { title: 'This invitation was revoked', body: 'The organizer withdrew this invite before it was answered.' },
+  accepted: { title: "You're Already Chairing This Committee", body: 'You accepted this invitation earlier. Nothing else to do.' },
+  declined: { title: 'Invitation Declined', body: "You've declined this invitation. If that was a mistake, ask the organizer to send a new one." },
+  revoked: { title: 'This Invitation Was Revoked', body: 'The organizer withdrew this invite before it was answered.' },
 };
 
-// Uppercase forest-and-gold pill, the primary link CTA — same recipe as
+// Forest-and-gold pill, the primary link CTA — same recipe as
 // NeuButton's own (non-hover) rendered state, just usable as a <Link>.
 const primaryPillStyle: React.CSSProperties = {
   background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-  color: NEU.gold, textDecoration: 'none', fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.05em',
+  color: NEU.gold, textDecoration: 'none', fontFamily: OUTFIT, fontWeight: 800,
   boxShadow: `0 4px 10px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 30%, transparent), ${NEU.outSm}`,
 };
 
@@ -106,7 +106,7 @@ export default function ChairInvitePage() {
           inviteStatus: invite?.status ?? null,
         });
       }
-      setError((rpcErr ? friendlyError(rpcErr, 'Could not respond to this invite.') : result?.error) || 'Could not respond to this invite.');
+      setError(rpcErr ? friendlyError(rpcErr, 'Could not respond to this invite. Try again.') : plainOrFallback(result?.error, 'Could not respond to this invite. Try again.'));
       return;
     }
 
@@ -148,13 +148,15 @@ export default function ChairInvitePage() {
               <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Gavel} size={52} style={{ marginBottom: 20 }} />
               <Eyebrow>Chair Invite</Eyebrow>
               <h1 className="font-black text-xl mt-2 mb-2" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-                Invite not found
+                Invite Not Found
               </h1>
               <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.55 }}>
-                {invite?.error ?? error ?? "This invite link isn't valid. It may have been mistyped or already removed."}
+                {invite?.error
+                  ? plainOrFallback(invite.error, "This invite link isn't valid. It may have been mistyped or removed.")
+                  : error || "This invite link isn't valid. It may have been mistyped or removed."}
               </p>
               <Link href="/account/conferences" className="inline-flex items-center gap-2 rounded-full py-2.5 px-5 font-bold text-sm focus:outline-none" style={primaryPillStyle}>
-                GO TO MY CONFERENCES
+                Go to my conferences
               </Link>
             </>
           ) : resolvedCopy ? (
@@ -169,7 +171,7 @@ export default function ChairInvitePage() {
                   {resolvedCopy.body}
                 </p>
                 <Link href="/account/conferences?tab=chair" className="inline-flex items-center gap-2 rounded-full py-2.5 px-5 font-bold text-sm focus:outline-none" style={primaryPillStyle}>
-                  GO TO MY CONFERENCES
+                  Go to my conferences
                 </Link>
               </div>
             </>
@@ -200,13 +202,13 @@ export default function ChairInvitePage() {
                     style={{
                       border: 'none', color: NEU.ink, backgroundColor: NEU.surface,
                       boxShadow: responding !== null ? 'none' : NEU.outSm,
-                      fontFamily: OUTFIT, letterSpacing: '0.04em', cursor: responding !== null ? 'default' : 'pointer',
+                      fontFamily: OUTFIT, cursor: responding !== null ? 'default' : 'pointer',
                     }}
                   >
-                    <X size={14} /> {responding === 'decline' ? 'DECLINING…' : 'DECLINE'}
+                    <X size={14} /> {responding === 'decline' ? 'Declining…' : 'Decline'}
                   </button>
                   <NeuButton icon={Check} onClick={() => respond(true)} disabled={responding !== null} style={{ flex: 1 }}>
-                    {responding === 'accept' ? 'ACCEPTING…' : 'ACCEPT'}
+                    {responding === 'accept' ? 'Accepting…' : 'Accept'}
                   </NeuButton>
                 </div>
               </div>

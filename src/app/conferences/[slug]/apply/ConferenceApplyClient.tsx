@@ -17,7 +17,7 @@ import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { formatFee } from '@/lib/utils';
-import { Pill, LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
+import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { experienceProgress, EXPERIENCE_BANDS } from '@/lib/munExperience';
 import { openCreditsPopup, openUnlimitedPopup } from '@/lib/purchasePopup';
 import { computeCheckout, activePhaseFee, type VoucherInput, type FeePhase } from '@/lib/finance';
@@ -254,7 +254,6 @@ function WizardFooter({
           fontFamily: OUTFIT,
           fontWeight: 800,
           fontSize: 14,
-          letterSpacing: '0.06em',
           padding: '14px 34px',
           borderRadius: 999,
           border: 'none',
@@ -603,11 +602,11 @@ function CountryChip({
     >
       <FlagImg code={resolved} size={22} />
       <span className="min-w-0">
-        <span className="block truncate" style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5, color: selected ? NEU.gold : NEU.ink, maxWidth: 150 }}>
+        <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5, lineHeight: 1.25, color: selected ? NEU.gold : NEU.ink, maxWidth: 150 }}>
           {name}
         </span>
         {committeeLabel && (
-          <span className="block truncate" style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 9.5, color: selected ? 'color-mix(in srgb, var(--gv-accent) 70%, transparent)' : NEU.muted, maxWidth: 150 }}>
+          <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 9.5, lineHeight: 1.25, color: selected ? 'color-mix(in srgb, var(--gv-accent) 70%, transparent)' : NEU.muted, maxWidth: 150 }}>
             {committeeLabel}
           </span>
         )}
@@ -718,10 +717,10 @@ function RankedRow({
         {/* Wraps to a second line rather than truncating: the reorder buttons
             take real width on a phone, and a rank the delegate cannot read is
             worse than a rank that takes two lines. */}
-        <p className="line-clamp-2" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, lineHeight: 1.25, color: NEU.ink, overflowWrap: 'anywhere' }}>
+        <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, lineHeight: 1.25, color: NEU.ink, overflowWrap: 'anywhere' }}>
           {countryName || committee?.abbreviation || committee?.name || 'Preference'}
         </p>
-        <p className="truncate" style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 10.5, color: NEU.inkSoft }}>
+        <p style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 10.5, lineHeight: 1.3, color: NEU.inkSoft, overflowWrap: 'anywhere' }}>
           {countryName && committee ? (committee.abbreviation || committee.name) : committee ? committee.name : ''}
         </p>
       </div>
@@ -780,7 +779,7 @@ function isNetworkError(err: unknown): boolean {
 
 /** Inline text button inside the red out-of-credits strips. */
 const CREDIT_STRIP_LINK: React.CSSProperties = {
-  color: '#8B2020', textDecoration: 'underline', textUnderlineOffset: 3,
+  color: '#8B2020', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3,
   background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer',
 };
 
@@ -812,7 +811,6 @@ function CreditPillButton({
         fontFamily: OUTFIT,
         fontWeight: 800,
         fontSize: 13,
-        letterSpacing: '0.05em',
         padding: '10px 20px',
         borderRadius: 999,
         border: primary ? 'none' : `1.5px solid color-mix(in srgb, ${NEU.forest} 28%, transparent)`,
@@ -3499,14 +3497,14 @@ function ConferenceApplyInner() {
               disabled={voucherChecking || !voucherCode.trim()}
               className="rounded-full px-4 text-xs font-extrabold focus:outline-none"
               style={{
-                border: 'none', fontFamily: OUTFIT, letterSpacing: '0.1em',
+                border: 'none', fontFamily: OUTFIT,
                 background: voucherChecking || !voucherCode.trim() ? 'color-mix(in srgb, var(--gv-main) 14%, transparent)' : NEU.forest,
                 color: voucherChecking || !voucherCode.trim() ? NEU.muted : NEU.gold,
                 cursor: voucherChecking || !voucherCode.trim() ? 'default' : 'pointer',
                 boxShadow: NEU.outSm,
               }}
             >
-              {voucherChecking ? 'CHECKING…' : 'APPLY'}
+              {voucherChecking ? 'Checking…' : 'Apply'}
             </button>
           </div>
         ))}
@@ -3550,7 +3548,7 @@ function ConferenceApplyInner() {
           minBodyHeight={STEP_MIN_BODY}
           extraChrome={wizardExtraChrome}
           onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
-          title={withDelegation ? 'Your delegation' : 'How you are applying'}
+          title={withDelegation ? 'Your Delegation' : 'How You Are Applying'}
           sub="This is saved with your application."
         >
           {/* Read only, so not a button and no hover state: the lock and the
@@ -3622,7 +3620,7 @@ function ConferenceApplyInner() {
         minBodyHeight={STEP_MIN_BODY}
         extraChrome={wizardExtraChrome}
         onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
-        title={!showSociety ? 'A little background' : isInvoicingRole ? 'Your delegation' : 'How are you applying?'}
+        title={!showSociety ? 'A Little Background' : isInvoicingRole ? 'Your Delegation' : 'How Are You Applying?'}
         sub={
           !showSociety
             ? 'As an observer, no delegation information is required. Just continue.'
@@ -3779,10 +3777,10 @@ function ConferenceApplyInner() {
                             <span className="min-w-0" style={{ overflowWrap: 'anywhere' }}>{s.name}</span>
                             {taken && (
                               <span
-                                className="flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold"
-                                style={{ backgroundColor: 'rgba(139,32,32,0.1)', color: '#8B2020', letterSpacing: '0.04em' }}
+                                className="flex-shrink-0 text-[11px] font-bold"
+                                style={{ color: '#8B2020' }}
                               >
-                                ALREADY APPLIED
+                                Already applied
                               </span>
                             )}
                           </button>
@@ -3891,7 +3889,7 @@ function ConferenceApplyInner() {
         minBodyHeight={STEP_MIN_BODY}
         extraChrome={wizardExtraChrome}
         onBack={() => setStep(s => s - 1)}
-        title="Paying for delegation spots?"
+        title="Paying for Delegation Spots?"
         sub="Separate from your own registration fee. This only covers spots for your delegates."
       >
         <TwoTabPick
@@ -4012,7 +4010,7 @@ function ConferenceApplyInner() {
 
         <WizardFooter
           onNext={handleContinue}
-          nextLabel={step >= totalSteps ? (previewing ? 'Return to settings' : submitting ? 'Submitting…' : (isEditMode ? 'RESUBMIT APPLICATION' : 'SUBMIT APPLICATION')) : 'Continue'}
+          nextLabel={step >= totalSteps ? (previewing ? 'Return to settings' : submitting ? 'Submitting…' : (isEditMode ? 'Resubmit application' : 'Submit application')) : 'Continue'}
           primary
           disabled={submitting}
         />
@@ -4130,7 +4128,7 @@ function ConferenceApplyInner() {
           minBodyHeight={STEP_MIN_BODY}
           extraChrome={wizardExtraChrome}
           onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
-          title="Your preferences"
+          title="Your Preferences"
           sub={subtitle}
         >
           <div className="flex items-center justify-center py-16">
@@ -4148,7 +4146,7 @@ function ConferenceApplyInner() {
         minBodyHeight={STEP_MIN_BODY}
         extraChrome={wizardExtraChrome}
         onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
-        title="Your preferences"
+        title="Your Preferences"
         sub={subtitle}
       >
         {minPrefs > 0 && (
@@ -4218,14 +4216,21 @@ function ConferenceApplyInner() {
               const monogram = (c.abbreviation || c.name).slice(0, 3).toUpperCase();
               return (
                 <div key={c.id}>
-                  <div className="flex items-center gap-2.5 mb-2.5">
+                  <div className="flex flex-wrap items-center gap-2.5 mb-2.5">
                     <LogoDisc src={c.logo_url} alt={c.name} size={30} fallbackText={monogram} />
-                    <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, color: NEU.ink }}>
-                      {c.abbreviation || c.name}
+                    <span className="min-w-0">
+                      <span className="block" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, lineHeight: 1.2, color: NEU.ink, overflowWrap: 'anywhere' }}>
+                        {c.abbreviation || c.name}
+                      </span>
+                      {c.abbreviation && c.abbreviation !== c.name && (
+                        <span className="block" style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 10.5, lineHeight: 1.25, color: NEU.inkSoft, overflowWrap: 'anywhere' }}>
+                          {c.name}
+                        </span>
+                      )}
                     </span>
                     <DifficultyBadge difficulty={c.difficulty} />
                     {info.full && (
-                      <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, color: '#8B2020', letterSpacing: '0.06em' }}>FULL</span>
+                      <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, color: '#8B2020' }}>Full</span>
                     )}
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -4287,7 +4292,7 @@ function ConferenceApplyInner() {
                             className="inline-flex items-center gap-1"
                             style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10.5, letterSpacing: '0.02em', color: info.openCount <= 0 ? '#8B2020' : NEU.green, fontVariantNumeric: 'tabular-nums' }}
                           >
-                            {info.openCount <= 0 ? 'ALL TAKEN' : `${info.openCount} of ${info.total} free`}
+                            {info.openCount <= 0 ? 'All taken' : `${info.openCount} of ${info.total} free`}
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -4348,8 +4353,8 @@ function ConferenceApplyInner() {
         minBodyHeight={STEP_MIN_BODY}
         extraChrome={wizardExtraChrome}
         onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
-        title="About you"
-        sub="Set your MUN experience level, or import it from your MUN CV. The organiser sees it with your application and uses it for allocations."
+        title="About You"
+        sub="Set your MUN level, or import it from your MUN CV."
       >
         {(() => {
           // Choosable experience slider. The applicant DRAGS the thumb between
@@ -4720,8 +4725,8 @@ function ConferenceApplyInner() {
         minBodyHeight={STEP_MIN_BODY}
         extraChrome={wizardExtraChrome}
         onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
-        title="MUN experience"
-        sub="List the conferences you have chaired or staffed. Import them from your MUN CV, or add them one at a time."
+        title="MUN Experience"
+        sub="The conferences you have chaired or staffed. Import them from your MUN CV or add them one by one."
       >
         {sortedEntries.length > 0 && (
           <div className="flex flex-col gap-3 mb-4">
@@ -4783,7 +4788,7 @@ function ConferenceApplyInner() {
           {munCvRows !== null && munCvRows.length === 0 && (
             <p className="text-center text-xs mt-2" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
               Nothing on your MUN CV yet.{' '}
-              <Link href="/account/cv" className="font-semibold" style={{ color: NEU.forest }}>
+              <Link href="/account/cv" className="font-bold" style={{ color: NEU.forest, textDecoration: 'underline', textUnderlineOffset: 3 }}>
                 Add conferences there
               </Link>
               , then come back to import them.
@@ -5174,7 +5179,7 @@ function ConferenceApplyInner() {
               Create an account to submit
             </p>
             <p className="text-sm" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6 }}>
-              Your answers are saved on this device, so nothing is lost. Sign in or create an account and we will carry everything you have filled in straight through to your application.
+              Your answers are saved on this device. Sign in and they carry straight into your application.
             </p>
             {/* The one cost fact a signed-out visitor can actually know,
                 decided the same way costLabel above decides it — never a
@@ -5202,7 +5207,7 @@ function ConferenceApplyInner() {
               <Sparkles size={17} strokeWidth={2.2} style={{ color: 'var(--gv-on-main)' }} />
             </span>
             <p className="font-bold text-sm" style={{ color: 'var(--gv-on-surface)', fontFamily: OUTFIT }}>
-              Credits for this conference have been sponsored by Gavelling!
+              Credits for this conference have been sponsored by Gavelling, so applying is free.
             </p>
           </div>
         ) : (
@@ -5236,9 +5241,10 @@ function ConferenceApplyInner() {
               {/* Subscription placard */}
               <div className="flex items-center justify-between mt-4 pt-3" style={{ borderTop: '1px solid color-mix(in srgb, var(--gv-main) 10%, transparent)' }}>
                 <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 11.5, color: NEU.muted }}>Your plan</span>
-                <Pill tone={hasUnlimited ? 'gold' : 'neutral'} icon={hasUnlimited ? <InfinityIcon size={12} strokeWidth={2.4} /> : undefined}>
+                <span className="inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, color: hasUnlimited ? '#8A6614' : NEU.ink }}>
+                  {hasUnlimited && <InfinityIcon size={14} strokeWidth={2.4} aria-hidden />}
                   {tierLabel}
-                </Pill>
+                </span>
               </div>
               {trialEndingSoon && (
                 <p className="text-xs mt-2" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
@@ -5288,7 +5294,7 @@ function ConferenceApplyInner() {
 
         <WizardFooter
           onNext={guestGate ? goSignIn : handleSubmit}
-          nextLabel={guestGate ? 'Sign in and submit' : previewing ? 'Return to settings' : submitting ? 'Submitting…' : (isEditMode ? 'RESUBMIT APPLICATION' : 'SUBMIT APPLICATION')}
+          nextLabel={guestGate ? 'Sign in and submit' : previewing ? 'Return to settings' : submitting ? 'Submitting…' : (isEditMode ? 'Resubmit application' : 'Submit application')}
           primary
           disabled={guestGate ? false : submitting}
         />
@@ -5303,7 +5309,7 @@ function ConferenceApplyInner() {
                   type="button"
                   onClick={() => { setWithdrawConfirm(true); setWithdrawError(''); }}
                   className="text-xs font-semibold focus:outline-none"
-                  style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.04em', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}
+                  style={{ color: NEU.muted, fontFamily: OUTFIT, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.muted; }}
                 >
@@ -5329,9 +5335,9 @@ function ConferenceApplyInner() {
                     onClick={handleWithdraw}
                     disabled={withdrawing}
                     className="rounded-xl py-2 px-4 text-xs font-bold focus:outline-none"
-                    style={{ backgroundColor: withdrawing ? 'rgba(139,32,32,0.4)' : '#8B2020', color: '#FBEDED', fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none', cursor: withdrawing ? 'not-allowed' : 'pointer' }}
+                    style={{ backgroundColor: withdrawing ? 'rgba(139,32,32,0.4)' : '#8B2020', color: '#FBEDED', fontFamily: OUTFIT, border: 'none', cursor: withdrawing ? 'not-allowed' : 'pointer' }}
                   >
-                    {withdrawing ? 'WITHDRAWING…' : 'YES, WITHDRAW'}
+                    {withdrawing ? 'Withdrawing…' : 'Yes, withdraw'}
                   </button>
                   <button
                     type="button"
@@ -5340,7 +5346,7 @@ function ConferenceApplyInner() {
                     className="rounded-xl py-2 px-4 text-xs font-bold focus:outline-none"
                     style={{ border: '1.5px solid #C8BEA8', color: NEU.ink, fontFamily: OUTFIT, background: 'transparent', cursor: withdrawing ? 'not-allowed' : 'pointer' }}
                   >
-                    CANCEL
+                    Cancel
                   </button>
                 </div>
               </div>
@@ -5408,7 +5414,7 @@ function ConferenceApplyInner() {
         <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
           <div className="rounded-2xl p-10 text-center max-w-sm w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
             <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
-              You&apos;ve already applied
+              You&apos;ve Already Applied
             </h2>
             <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>
               You already have an active {otherRoleApp.role.replace(/-/g, ' ')} application to this conference. Withdraw it or contact the organizing team if you need to change roles.
@@ -5417,9 +5423,9 @@ function ConferenceApplyInner() {
             <Link
               href={`/conferences/${slug}`}
               className="inline-block rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
-              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}
+              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif" }}
             >
-              VIEW CONFERENCE →
+              View conference
             </Link>
           </div>
         </div>
@@ -5447,7 +5453,7 @@ function ConferenceApplyInner() {
         <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
           <div className="rounded-2xl p-10 text-center max-w-md w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
             <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
-              You already applied to this conference
+              You Already Applied to This Conference
             </h2>
             <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.7 }}>
               You applied as {role.replace(/-/g, ' ')} already. We saved the answers you just filled in on this device. You can use them to update your existing application, or keep the application you already have.
@@ -5455,7 +5461,7 @@ function ConferenceApplyInner() {
             <button
               onClick={() => router.push(updateHref)}
               className="w-full rounded-xl py-3 font-bold text-sm focus:outline-none transition-colors"
-              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', border: 'none', cursor: 'pointer' }}
+              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", border: 'none', cursor: 'pointer' }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
             >
@@ -5488,7 +5494,7 @@ function ConferenceApplyInner() {
         <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
           <div className="rounded-2xl p-10 text-center max-w-sm w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
             <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
-              You&apos;ve already applied
+              You&apos;ve Already Applied
             </h2>
             <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>
               Your application as {role.replace(/-/g, ' ')} is {existingApp.status}.
@@ -5499,19 +5505,19 @@ function ConferenceApplyInner() {
                 <Link
                   href={`/conferences/${slug}/pay`}
                   className="inline-block rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
-                  style={{ backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}
+                  style={{ backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif" }}
                 >
-                  GO TO PAYMENT
+                  Go to payment
                 </Link>
               )}
               <Link
                 href={`/conferences/${slug}`}
                 className="inline-block rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
                 style={showPayment
-                  ? { backgroundColor: 'transparent', color: 'var(--gv-on-surface)', border: '1.5px solid var(--gv-border)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }
-                  : { backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}
+                  ? { backgroundColor: 'transparent', color: 'var(--gv-on-surface)', border: '1.5px solid var(--gv-border)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif" }
+                  : { backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif" }}
               >
-                VIEW CONFERENCE
+                View conference
               </Link>
             </div>
           </div>
@@ -5559,9 +5565,9 @@ function ConferenceApplyInner() {
             <Link
               href={`/conferences/${slug}`}
               className="inline-block rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
-              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}
+              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif" }}
             >
-              VIEW CONFERENCE
+              View conference
             </Link>
           </div>
         </div>
@@ -5675,7 +5681,7 @@ function ConferenceApplyInner() {
               BEFORE YOU START
             </span>
             <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
-              What is your date of birth?
+              What Is Your Date of Birth?
             </h2>
             <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.7 }}>
               {conferenceAcronymLabel(conference)} sets an age requirement, so we ask before you fill anything in. We only use it to check you can apply.
@@ -5704,7 +5710,6 @@ function ConferenceApplyInner() {
                 backgroundColor: !guestDobInput ? 'var(--gv-border)' : 'var(--gv-main)',
                 color: !guestDobInput ? 'var(--gv-muted)' : 'var(--gv-on-main)',
                 fontFamily: "var(--font-brand), sans-serif",
-                letterSpacing: '0.08em',
                 cursor: !guestDobInput ? 'default' : 'pointer',
               }}
               onMouseEnter={(e) => { if (guestDobInput) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
@@ -5742,7 +5747,7 @@ function ConferenceApplyInner() {
               {hasAgeGate ? `${ageChipText} CONFERENCE` : 'BEFORE YOU APPLY'}
             </span>
             <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
-              Two things before you apply
+              Two Things Before You Apply
             </h2>
             <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.7 }}>
               Your profile is missing your nationality or your date of birth. Allocation places delegates by country, and conferences set age limits on who can apply.
@@ -5794,13 +5799,12 @@ function ConferenceApplyInner() {
                 backgroundColor: basicsIncomplete ? 'var(--gv-border)' : 'var(--gv-main)',
                 color: basicsIncomplete ? 'var(--gv-muted)' : 'var(--gv-on-main)',
                 fontFamily: "var(--font-brand), sans-serif",
-                letterSpacing: '0.08em',
                 cursor: basicsSaving ? 'wait' : basicsIncomplete ? 'default' : 'pointer',
               }}
               onMouseEnter={(e) => { if (!basicsIncomplete) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
               onMouseLeave={(e) => { if (!basicsIncomplete) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
             >
-              {basicsSaving ? 'SAVING...' : 'SAVE & CONTINUE'}
+              {basicsSaving ? 'Saving…' : 'Save and continue'}
             </button>
             <div className="text-center mt-4">
               <Link
@@ -5835,11 +5839,11 @@ function ConferenceApplyInner() {
           className="relative w-full text-center"
           style={{
             backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: OUTFIT,
-            fontSize: 12, fontWeight: 800, letterSpacing: '0.08em',
+            fontSize: 12, fontWeight: 800,
             padding: '9px 16px', zIndex: 20,
           }}
         >
-          PREVIEW MODE. Nothing you type here is saved and no application is created.
+          Preview mode. Nothing you type here is saved.
         </div>
       )}
 
@@ -5928,14 +5932,9 @@ function ConferenceApplyInner() {
 
         {isEditMode && (
           <div className="flex justify-center mb-2">
-            <div
-              className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5"
-              style={{ backgroundColor: 'color-mix(in srgb, var(--gv-accent) 14%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-accent) 35%, transparent)' }}
-            >
-              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: '#8A6614', fontFamily: "var(--font-brand), sans-serif" }}>
-                EDITING YOUR APPLICATION
-              </span>
-            </div>
+            <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.15em', color: '#8A6614', fontFamily: "var(--font-brand), sans-serif" }}>
+              EDITING YOUR APPLICATION
+            </p>
           </div>
         )}
 

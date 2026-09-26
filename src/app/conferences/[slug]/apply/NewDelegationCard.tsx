@@ -174,9 +174,9 @@ export function NewDelegationCard({
             {name.trim()}
           </p>
           {(details.city.trim() || country) && (
-            <p className="mt-1 flex items-center gap-1.5 min-w-0" style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 12.5, color: NEU.inkSoft }}>
+            <p className="mt-1 flex items-start gap-1.5 min-w-0" style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 12.5, lineHeight: 1.3, color: NEU.inkSoft }}>
               {country ? <CircleFlag code={country.code} size={16} decorative /> : <MapPin size={14} strokeWidth={2.4} style={{ flexShrink: 0 }} />}
-              <span className="truncate">
+              <span className="min-w-0 [overflow-wrap:anywhere]">
                 {[details.city.trim(), country?.name].filter(Boolean).join(', ')}
               </span>
             </p>

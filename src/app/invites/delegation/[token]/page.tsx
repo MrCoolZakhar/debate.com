@@ -28,7 +28,7 @@ import Link from 'next/link';
 import { ArrowRight, CircleCheck, TriangleAlert, Users2 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient, supabaseAuthClient } from '@/lib/supabase-auth';
-import { friendlyError } from '@/lib/friendlyError';
+import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import { openAuth } from '@/lib/authModal';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
@@ -88,7 +88,7 @@ export default function DelegationInvitePage() {
       const { data, error } = await supabaseAuthClient.rpc('resolve_delegation_invite', { p_token: token });
       const r = data as JoinResult | null;
       if (error) { setView({ kind: 'error', message: friendlyError(error, 'We could not open this invite. Try again.') }); return; }
-      if (!r?.ok) { setView({ kind: 'invalid', message: r?.error ?? 'This invite link is not valid.' }); return; }
+      if (!r?.ok) { setView({ kind: 'invalid', message: plainOrFallback(r?.error, 'This invite link is not valid.') }); return; }
       setView({ kind: 'signin', r: { ...r, conference_name: r.conference_name } });
       openAuth({ next: `/invites/delegation/${encodeURIComponent(token)}`, apply: true });
       return;
@@ -101,7 +101,7 @@ export default function DelegationInvitePage() {
     if (r.ok && r.action === 'apply') { router.replace(applyUrl(r, token)); return; }
     if (r.ok && r.action === 'joined') { setView({ kind: 'joined', r }); return; }
     if (r.ok && r.action === 'already') { setView({ kind: 'already', r }); return; }
-    if (r.reason === 'invalid') { setView({ kind: 'invalid', message: r.error ?? 'This invite link is not valid.' }); return; }
+    if (r.reason === 'invalid') { setView({ kind: 'invalid', message: plainOrFallback(r.error, 'This invite link is not valid.') }); return; }
     if (r.reason === 'confirm_move') { setView({ kind: 'confirm_move', r }); return; }
     if (r.reason === 'leader' || r.reason === 'role') { setView({ kind: 'blocked', r }); return; }
     setView({ kind: 'error', message: 'We could not open this invite. Try again.' });
@@ -129,26 +129,26 @@ export default function DelegationInvitePage() {
 
   const primary = (label: string, onClick: () => void, disabled = false) => (
     <button type="button" onClick={onClick} disabled={disabled} className="inline-flex items-center gap-2 focus:outline-none focus-visible:ring-2"
-      style={{ padding: '11px 18px', borderRadius: 12, border: 'none', backgroundColor: NEU.forest, color: NEU.gold, fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.55 : 1 }}>
+      style={{ padding: '11px 18px', borderRadius: 12, border: 'none', backgroundColor: NEU.forest, color: NEU.gold, fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.55 : 1 }}>
       {label} <ArrowRight size={16} strokeWidth={2.4} aria-hidden />
     </button>
   );
   const secondary = (label: string, href: string) => (
     <Link href={href} className="inline-flex items-center focus:outline-none focus-visible:ring-2"
-      style={{ padding: '11px 18px', borderRadius: 12, border: NEU.hairline, color: NEU.forest, fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', textDecoration: 'none' }}>
+      style={{ padding: '11px 18px', borderRadius: 12, border: NEU.hairline, color: NEU.forest, fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, textDecoration: 'none' }}>
       {label}
     </Link>
   );
 
   switch (view.kind) {
     case 'signin':
-      title = `Join ${view.r.society_name ?? 'this delegation'}`;
+      title = `Join ${view.r.society_name ?? 'This Delegation'}`;
       body = <>Sign in or create your account to apply to {conf(view.r)} as a delegate of {view.r.society_name}. If you already applied, you are added to the delegation.</>;
       actions = primary('Continue', () => openAuth({ next: `/invites/delegation/${encodeURIComponent(token)}`, apply: true }));
       break;
     case 'joined':
       icon = CircleCheck;
-      title = `You joined ${view.r.society_name}`;
+      title = `You Joined ${view.r.society_name}`;
       body = (
         <>
           Your application to {conf(view.r)} is now part of {view.r.society_name}.
@@ -160,7 +160,7 @@ export default function DelegationInvitePage() {
       break;
     case 'already':
       icon = CircleCheck;
-      title = `You are already in ${view.r.society_name}`;
+      title = `You Are Already in ${view.r.society_name}`;
       body = <>Nothing to do. Your application to {conf(view.r)} is already part of this delegation.</>;
       actions = secondary('Go to the conference', `/conferences/${view.r.slug}`);
       break;
@@ -185,7 +185,7 @@ export default function DelegationInvitePage() {
       icon = TriangleAlert;
       tone = '#8A5A1E';
       const role = ROLE_WORD[view.r.role ?? ''] ?? view.r.role ?? 'participant';
-      title = 'This link cannot move you';
+      title = 'This Link Cannot Move You';
       body = view.r.reason === 'leader'
         ? <>You applied to {conf(view.r)} as {role} of {view.r.other_name ?? 'another delegation'}. A delegation leader is never moved by a link. Ask the organiser if you need to change delegation.</>
         : <>You applied to {conf(view.r)} as a {role}, and delegations are for delegates. Ask the organiser if you need to change.</>;
@@ -195,14 +195,14 @@ export default function DelegationInvitePage() {
     case 'invalid':
       icon = TriangleAlert;
       tone = '#8B2020';
-      title = /expired/i.test(view.message) ? 'This invite has expired' : 'This invite is not valid';
+      title = /expired/i.test(view.message) ? 'This Invite Has Expired' : 'This Invite Is Not Valid';
       body = <>Ask your head delegate for a new link.</>;
       actions = secondary('Browse conferences', '/conferences/explore');
       break;
     case 'error':
       icon = TriangleAlert;
       tone = '#8B2020';
-      title = 'Something went wrong';
+      title = 'Something Went Wrong';
       body = view.message;
       actions = primary('Try again', () => { setView({ kind: 'loading' }); void run(false); });
       break;

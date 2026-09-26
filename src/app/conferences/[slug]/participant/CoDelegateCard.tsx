@@ -132,14 +132,14 @@ export default function CoDelegateCard({ conferenceId, myAllocation }: {
           </p>
           {hasPartner ? (
             <>
-              <p className="font-bold text-[17px] truncate" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: '2px 0 0' }}>
+              <p className="font-bold text-[17px] [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: '2px 0 0' }}>
                 {row.partner_name
                   ? <ProfileLink userId={row.partner_user_id} name={row.partner_name}>{row.partner_name}</ProfileLink>
                   : row.partner_email}
               </p>
               {row.partner_email && (
                 <div className="flex items-center gap-2 mt-1 min-w-0">
-                  <span className="text-[13px] truncate select-all" style={{ color: '#574B40', fontFamily: OUTFIT }}>
+                  <span className="text-[13px] min-w-0 [overflow-wrap:anywhere] select-all" style={{ color: '#574B40', fontFamily: OUTFIT }}>
                     {row.partner_email}
                   </span>
                   <button

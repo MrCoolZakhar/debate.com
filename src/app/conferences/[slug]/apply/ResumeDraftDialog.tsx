@@ -129,7 +129,7 @@ export default function ResumeDraftDialog({
           }}
         >
           <p id="resume-draft-title" style={{ margin: 0, fontSize: 18, fontWeight: 700, color: NEU.ink, lineHeight: 1.3, textWrap: 'balance' }}>
-            Application in progress
+            Application in Progress
           </p>
           <p id="resume-draft-line" style={{ margin: '6px 0 0', fontSize: 13.5, fontWeight: 500, color: NEU.inkSoft, lineHeight: 1.5 }}>
             {line} Would you like to continue or start again?

@@ -323,7 +323,7 @@ export function TimelineEntry({
                   className="font-black leading-tight flex items-center min-w-0"
                   style={{ color: '#1B3828', fontFamily: OUTFIT, fontSize: '18px', letterSpacing: '-0.01em', margin: 0, gap: 6 }}
                 >
-                  <span>{disp.primary}</span>
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{disp.primary}</span>
                   <VerifiedCheck
                     verified={verifiedEntry}
                     showUnverified

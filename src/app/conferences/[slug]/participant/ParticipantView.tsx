@@ -9,7 +9,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { LogOut, Pencil, X } from 'lucide-react';
+import { Gavel, LogOut, Pencil, X } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { roleFeeToday } from '@/lib/freeRegistration';
@@ -183,7 +183,7 @@ export default function ParticipantView({
             className="flex items-center justify-center mb-4"
             style={{ width: 56, height: 56, borderRadius: 9999, backgroundColor: 'rgba(42,90,60,0.12)', border: '1px solid rgba(42,90,60,0.28)' }}
           >
-            <span aria-hidden style={{ fontSize: 26 }}>🪑</span>
+            <Gavel size={24} strokeWidth={2} aria-hidden style={{ color: '#1B3828' }} />
           </div>
           <p className="text-[16px] font-extrabold mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
             You&apos;re the organizer
@@ -195,9 +195,9 @@ export default function ParticipantView({
           <Link
             href={`/manage/${conferenceSlug}`}
             className="inline-flex items-center gap-2 rounded-full"
-            style={{ padding: '11px 20px', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, letterSpacing: '0.03em', textDecoration: 'none' }}
+            style={{ padding: '11px 20px', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, textDecoration: 'none' }}
           >
-            MANAGE CONFERENCE →
+            Manage conference
           </Link>
         </div>
       </SectionCard>
@@ -288,24 +288,24 @@ export default function ParticipantView({
                   <Link
                     href={`/conferences/${conferenceSlug}/apply?role=${selected.role}&edit=1`}
                     className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-3.5 text-xs font-bold focus:outline-none transition-colors min-h-11 sm:min-h-0"
-                    style={{ border: '1px solid #DDD4C0', color: '#1C1410', textDecoration: 'none', fontFamily: OUTFIT, letterSpacing: '0.04em' }}
+                    style={{ border: '1px solid #DDD4C0', color: '#1C1410', textDecoration: 'none', fontFamily: OUTFIT }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                   >
                     <Pencil size={12} />
-                    EDIT APPLICATION
+                    Edit application
                   </Link>
                   {/* Quieter than Edit on purpose: withdrawing is the rarer
                       choice and cannot be undone from here. */}
                   <button
                     onClick={() => { setWithdrawConfirm(true); setWithdrawError(''); }}
                     className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none transition-colors min-h-11 sm:min-h-0"
-                    style={{ border: 'none', background: 'transparent', color: '#8B2020', fontFamily: OUTFIT, letterSpacing: '0.04em', cursor: 'pointer' }}
+                    style={{ border: 'none', background: 'transparent', color: '#8B2020', fontFamily: OUTFIT, cursor: 'pointer' }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.07)'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                   >
                     <LogOut size={12} />
-                    WITHDRAW
+                    Withdraw
                   </button>
                 </div>
               </div>
@@ -332,17 +332,17 @@ export default function ParticipantView({
                       onClick={() => handleWithdraw(selected.id)}
                       disabled={withdrawing}
                       className="rounded-lg py-2 px-4 text-xs font-bold focus:outline-none"
-                      style={{ backgroundColor: withdrawing ? 'rgba(139,32,32,0.4)' : '#8B2020', color: '#FBEDED', border: 'none', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: withdrawing ? 'not-allowed' : 'pointer' }}
+                      style={{ backgroundColor: withdrawing ? 'rgba(139,32,32,0.4)' : '#8B2020', color: '#FBEDED', border: 'none', fontFamily: OUTFIT, cursor: withdrawing ? 'not-allowed' : 'pointer' }}
                     >
-                      {withdrawing ? 'WITHDRAWING…' : 'YES, WITHDRAW'}
+                      {withdrawing ? 'Withdrawing…' : 'Yes, withdraw'}
                     </button>
                     <button
                       onClick={() => { setWithdrawConfirm(false); setWithdrawError(''); }}
                       disabled={withdrawing}
                       className="rounded-lg py-2 px-4 text-xs font-bold focus:outline-none"
-                      style={{ border: '1.5px solid #C8BEA8', color: '#1C1410', background: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: withdrawing ? 'not-allowed' : 'pointer' }}
+                      style={{ border: '1.5px solid #C8BEA8', color: '#1C1410', background: 'transparent', fontFamily: OUTFIT, cursor: withdrawing ? 'not-allowed' : 'pointer' }}
                     >
-                      KEEP IT
+                      Keep it
                     </button>
                   </div>
                 </div>

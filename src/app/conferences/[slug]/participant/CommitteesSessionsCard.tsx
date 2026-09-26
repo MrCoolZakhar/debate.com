@@ -98,11 +98,11 @@ export default function CommitteesSessionsCard({ conferenceId, conferenceStartDa
               <MonogramMedallion text={c.abbreviation || c.name} isCrisis={false} size={32} />
             )}
             <div className="flex-1 min-w-0">
-              <p className="truncate text-sm font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+              <p className="text-sm font-semibold [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                 {c.abbreviation || c.name}
               </p>
               {c.abbreviation && (
-                <p className="truncate text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{c.name}</p>
+                <p className="text-xs [overflow-wrap:anywhere]" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{c.name}</p>
               )}
             </div>
             {released && c.session_code && (
@@ -111,11 +111,11 @@ export default function CommitteesSessionsCard({ conferenceId, conferenceStartDa
                 className="flex-shrink-0 rounded-lg focus:outline-none"
                 style={{
                   padding: '7px 14px', backgroundColor: '#1B3828', color: '#EED98A',
-                  fontFamily: OUTFIT, fontWeight: 800, fontSize: 11, letterSpacing: '0.06em',
-                  textTransform: 'uppercase', textDecoration: 'none',
+                  fontFamily: OUTFIT, fontWeight: 800, fontSize: 12,
+                  textDecoration: 'none',
                 }}
               >
-                View Session
+                View session
               </Link>
             )}
           </div>

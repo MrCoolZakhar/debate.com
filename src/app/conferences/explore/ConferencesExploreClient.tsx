@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  Search, SlidersHorizontal, LayoutGrid, Rows3, Users, Check,
-  CalendarDays, Ticket, Globe, CalendarArrowUp, CalendarArrowDown,
-  MapPin, Monitor, School, GraduationCap, Plus, Heart, X, Play,
+  Search, Users, Check,
+  CalendarDays, Ticket, Globe,
+  MapPin, Monitor, School, GraduationCap, Heart, X, DoorOpen, LayoutGrid,
 } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import SiteFooter from '@/components/SiteFooter';
@@ -20,7 +20,12 @@ import { currencySymbol, formatFeeAmountCompact } from '@/lib/utils';
 import { fetchDelegatePrices, withDelegatePrice, TBD_PRICE, type DelegatePrice } from '@/lib/publicFees';
 import { compareStartDate, hasConcluded, splitConferenceDates } from '@/lib/conferenceDates';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
-import { ConferenceCard } from '../ConferenceCard';
+import { ConferenceCard, ConferenceCardSkeleton } from '../ConferenceCard';
+import { GoldWord } from '@/components/BrandHeading';
+import {
+  CategoryRail, CheckBox, FiltersButton, FiltersSheet, PRIMARY_BUTTON, SECONDARY_BUTTON, SearchPill, SortMenu, ViewToggle,
+  type ExploreView, type RailCategory,
+} from './ExploreChrome';
 import VerifiedCheck from '@/components/VerifiedCheck';
 import { LogoDisc } from '@/components/LogoDisc';
 import { isListedConference } from '@/lib/publicConferences';
@@ -57,18 +62,6 @@ const CONTINENT_LABELS: Record<string, string> = {
 
 // The rail's Region group, in this order (25 Sep 2026). ?continent=<key>.
 const REGION_ORDER = ['africa', 'asia', 'europe', 'north-america', 'south-america', 'oceania'] as const;
-
-// The one main button (owner's taste board two): a forest gradient rounded
-// rectangle, sentence case. Second actions use SECONDARY_BUTTON.
-const PRIMARY_BUTTON: React.CSSProperties = {
-  background: 'linear-gradient(90deg,#1B3828 0%,#2A5A3C 55%,#1E4A31 100%)',
-  color: '#FFFFFF', border: 'none', borderRadius: '11px', cursor: 'pointer',
-  fontFamily: "var(--font-brand), sans-serif", fontWeight: 700,
-};
-const SECONDARY_BUTTON: React.CSSProperties = {
-  background: '#FFFFFF', color: '#1C1410', border: '1.5px solid #1C1410', borderRadius: '11px', cursor: 'pointer',
-  fontFamily: "var(--font-brand), sans-serif", fontWeight: 700,
-};
 
 // User-facing labels for student_level DB values ('school' stays 'school' in the DB).
 const LEVEL_LABELS: Record<string, string> = {
@@ -175,106 +168,8 @@ function countryNameFromCode(code: string | null | undefined): string | null {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-// ── View toggle (grid / list) ─────────────────────────────────────────────
-
 const VIEW_STORAGE_KEY = 'gavelling-explore-view';
-type ExploreView = 'grid' | 'list';
-
-function ViewToggle({ view, onChange }: { view: ExploreView; onChange: (v: ExploreView) => void }) {
-  const options: { key: ExploreView; icon: typeof LayoutGrid; label: string }[] = [
-    { key: 'grid', icon: LayoutGrid, label: 'Grid view' },
-    { key: 'list', icon: Rows3, label: 'List view' },
-  ];
-  return (
-    <div
-      className="flex items-center flex-shrink-0"
-      role="group"
-      aria-label="View"
-      style={{
-        backgroundColor: 'rgba(237,231,216,0.5)',
-        border: '1px solid rgba(221,212,192,0.9)',
-        borderRadius: '12px',
-        padding: '4px',
-        gap: '3px',
-      }}
-    >
-      {options.map(({ key, icon: Icon, label }) => {
-        const active = view === key;
-        return (
-          <button
-            key={key}
-            type="button"
-            aria-label={label}
-            aria-pressed={active}
-            title={label}
-            onClick={() => onChange(key)}
-            className="flex items-center justify-center transition-colors focus:outline-none"
-            style={{
-              width: '38px', height: '32px', borderRadius: '8px',
-              backgroundColor: active ? '#1B3828' : 'transparent',
-              color: active ? '#FFFFFF' : '#4A4238',
-              boxShadow: active ? '0 2px 6px rgba(27,56,40,0.25)' : 'none',
-            }}
-            onMouseEnter={(e) => {
-              if (active) return;
-              (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.08)';
-              (e.currentTarget as HTMLElement).style.color = '#1B3828';
-            }}
-            onMouseLeave={(e) => {
-              if (active) return;
-              (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-              (e.currentTarget as HTMLElement).style.color = '#4A4238';
-            }}
-          >
-            <Icon size={17} strokeWidth={2.25} />
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Date sort toggle (soonest ↔ latest) ───────────────────────────────────
-// Sorting is a property of the RESULTS, not of the filters, so it sits at the
-// top of the results column beside the view toggle rather than at the bottom
-// of the rail where it used to be buried.
-
 type DateSort = 'asc' | 'desc';
-
-function DateSortToggle({ sort, onChange }: { sort: DateSort; onChange: (v: DateSort) => void }) {
-  const Icon = sort === 'asc' ? CalendarArrowUp : CalendarArrowDown;
-  const label = sort === 'asc' ? 'Soonest first' : 'Latest first';
-  const [hover, setHover] = useState(false);
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(sort === 'asc' ? 'desc' : 'asc')}
-      title="Sort by date"
-      aria-label={`Sorted by date, ${label}. Click to flip.`}
-      className="inline-flex items-center flex-shrink-0 focus:outline-none"
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        height: '42px',
-        padding: '0 15px',
-        gap: '7px',
-        borderRadius: '12px',
-        backgroundColor: hover ? 'rgba(27,56,40,0.08)' : 'rgba(237,231,216,0.5)',
-        border: '1px solid rgba(221,212,192,0.9)',
-        color: hover ? '#1B3828' : '#4A4238',
-        fontFamily: "var(--font-brand), sans-serif",
-        fontWeight: 700,
-        fontSize: '13px',
-        whiteSpace: 'nowrap',
-        cursor: 'pointer',
-        transition: 'background-color 140ms ease, color 140ms ease',
-      }}
-    >
-      <Icon size={15} strokeWidth={2.25} style={{ color: '#2A5A3C', flexShrink: 0 }} />
-      {label}
-    </button>
-  );
-}
 
 // ── List row (myMUN-style directory row) ──────────────────────────────────
 
@@ -284,19 +179,14 @@ function splitDateRange(start: string | null, end: string | null): { range: stri
   return splitConferenceDates(start, end);
 }
 
+/** Format and level on a list row: an icon and a plain word, never a chip. */
 function RowChip({ label, icon: Icon }: { label: string; icon?: RowIcon }) {
   return (
     <span
       className="inline-flex items-center flex-shrink-0"
-      style={{
-        fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontSize: '12px',
-        color: '#6B5F52', backgroundColor: 'transparent',
-        border: '1px solid rgba(154,138,120,0.45)',
-        gap: '5px',
-        padding: Icon ? '3px 9px 3px 7px' : '3px 9px', borderRadius: '8px', whiteSpace: 'nowrap',
-      }}
+      style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, fontSize: '13px', color: '#5C5140', gap: '5px', whiteSpace: 'nowrap' }}
     >
-      {Icon && <Icon size={12.5} strokeWidth={2.25} style={{ color: '#2A5A3C', flexShrink: 0 }} />}
+      {Icon && <Icon size={14} strokeWidth={2} style={{ color: '#2A5A3C', flexShrink: 0 }} />}
       {label}
     </span>
   );
@@ -523,10 +413,9 @@ function ConferenceListRow({
 function RailHeading({ children }: { children: React.ReactNode }) {
   return (
     <p
-      className="mb-2.5"
       style={{
-        fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '14px',
-        color: '#1C1410', margin: '0 0 8px',
+        fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '15px',
+        color: '#1C1410', margin: '0 10px 6px',
       }}
     >
       {children}
@@ -554,53 +443,37 @@ function RailOption({
       role="option"
       aria-selected={active}
       onClick={onClick}
-      className="w-full flex items-center text-left focus:outline-none"
+      className="w-full flex items-center text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
       style={{
-        gap: '9px',
-        padding: '7px 10px',
-        borderRadius: '10px',
-        backgroundColor: active ? '#1B3828' : 'transparent',
-        color: active ? '#FFFFFF' : '#4A4238',
+        gap: '10px',
+        padding: '8px 10px',
+        borderRadius: '11px',
+        backgroundColor: active ? '#EEF3EC' : 'transparent',
+        color: '#1C1410',
         border: 'none',
         cursor: 'pointer',
         fontFamily: "var(--font-brand), sans-serif",
-        fontWeight: active ? 700 : 600,
-        fontSize: '12.5px',
-        transition: 'background-color 140ms ease, color 140ms ease',
+        fontWeight: active ? 700 : 500,
+        fontSize: '14px',
+        transition: 'background-color 140ms ease',
       }}
-      onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+      onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
       onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
     >
+      <CheckBox on={active} />
       {flagCode ? (
-        <CircleFlag code={flagCode} size={16} decorative />
+        <CircleFlag code={flagCode} size={18} decorative />
       ) : Icon ? (
-        <Icon size={14} strokeWidth={2.2} style={{ flexShrink: 0, color: active ? '#EED98A' : '#2A5A3C' }} />
-      ) : (
-        <span
-          aria-hidden
-          style={{
-            width: '14px', height: '14px', borderRadius: '5px', flexShrink: 0,
-            border: active ? '1px solid rgba(238,217,138,0.6)' : '1px solid rgba(154,138,120,0.5)',
-            backgroundColor: active ? 'rgba(238,217,138,0.2)' : 'transparent',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          {active && <Check size={10} strokeWidth={3.5} style={{ color: '#EED98A' }} />}
-        </span>
-      )}
+        <Icon size={15} strokeWidth={2} style={{ flexShrink: 0, color: '#2A5A3C' }} />
+      ) : null}
       <span className="flex-1 min-w-0" style={{ overflowWrap: 'anywhere' }}>{label}</span>
       {note && (
-        <span style={{ fontSize: '11px', fontWeight: 700, color: active ? 'rgba(255,255,255,0.8)' : '#8A6414', flexShrink: 0 }}>
+        <span style={{ fontSize: '12px', fontWeight: 700, color: '#8A6414', flexShrink: 0 }}>
           {note}
         </span>
       )}
       {typeof count === 'number' && (
-        <span
-          style={{
-            fontSize: '11px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
-            color: active ? 'rgba(255,255,255,0.8)' : '#6B5F52', flexShrink: 0,
-          }}
-        >
+        <span style={{ fontSize: '12.5px', fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: '#6B5F52', flexShrink: 0 }}>
           {count}
         </span>
       )}
@@ -634,10 +507,12 @@ function localeCountry(): string | null {
 /** Type to find a country; each pick becomes a removable chip above it. The
  *  suggestions sit in the rail's own flow (never a floating layer that the
  *  scrolling rail could clip), from the countries that have conferences. */
-function CountrySearch({ options, chosen, onAdd }: {
+function CountrySearch({ options, chosen, onAdd, idPrefix = 'gv-explore' }: {
   options: CountryFacet[];
   chosen: ReadonlySet<string>;
   onAdd: (id: string) => void;
+  /** Unique per mounted panel (the desktop panel and the phone sheet). */
+  idPrefix?: string;
 }) {
   const [q, setQ] = useState('');
   const [cursor, setCursor] = useState(0);
@@ -673,19 +548,19 @@ function CountrySearch({ options, chosen, onAdd }: {
           aria-label="Add a country"
           role="combobox"
           aria-expanded={matches.length > 0}
-          aria-controls="gv-explore-country-list"
-          aria-activedescendant={matches[active] ? `gv-explore-country-${matches[active].id}` : undefined}
-          className="w-full py-2 pl-8 pr-3 text-[12.5px] focus:outline-none"
+          aria-controls={`${idPrefix}-country-list`}
+          aria-activedescendant={matches[active] ? `${idPrefix}-country-${matches[active].id}` : undefined}
+          className="w-full py-2.5 pl-8 pr-3 text-[16px] lg:text-[14px] focus:outline-none"
           style={{
-            border: '1px solid rgba(221,212,192,0.9)', borderRadius: '10px',
-            backgroundColor: '#FFFDF9', color: '#1C1410', fontFamily: "var(--font-brand), sans-serif",
+            border: '1px solid rgba(28,20,16,0.18)', borderRadius: '12px',
+            backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: "var(--font-brand), sans-serif",
           }}
           onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-          onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(221,212,192,0.9)'; }}
+          onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(28,20,16,0.18)'; }}
         />
       </div>
       {q.trim() && (
-        <div id="gv-explore-country-list" role="listbox" aria-label="Countries" style={{ marginTop: 4 }}>
+        <div id={`${idPrefix}-country-list`} role="listbox" aria-label="Countries" style={{ marginTop: 4 }}>
           {matches.length === 0 ? (
             <p style={{ margin: '4px 10px', fontSize: '11.5px', color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif" }}>
               No conferences in a country like that
@@ -693,7 +568,7 @@ function CountrySearch({ options, chosen, onAdd }: {
           ) : matches.map((c, i) => (
             <button
               key={c.id}
-              id={`gv-explore-country-${c.id}`}
+              id={`${idPrefix}-country-${c.id}`}
               type="button"
               role="option"
               aria-selected={i === active}
@@ -719,7 +594,7 @@ function CountrySearch({ options, chosen, onAdd }: {
 }
 
 function FilterRail({
-  searchQuery, onSearch,
+  bare = false, idPrefix = 'gv-explore',
   continent, onContinent,
   userCountry, userCountryCount, nearActive, onToggleNear,
   chosenCountries, countryOptions, onAddCountry, onRemoveCountry,
@@ -733,7 +608,9 @@ function FilterRail({
   dateFrom, dateTo, onDateFrom, onDateTo,
   hasActiveFilters, onClear,
 }: {
-  searchQuery: string; onSearch: (v: string) => void;
+  /** Inside the phone sheet: no card of its own. */
+  bare?: boolean;
+  idPrefix?: string;
   /** A continent key from REGION_ORDER, or null. */
   continent: string | null;
   onContinent: (k: string | null) => void;
@@ -768,44 +645,26 @@ function FilterRail({
   const group: React.CSSProperties = {
     paddingBottom: '16px',
     marginBottom: '16px',
-    borderBottom: '1px solid rgba(221,212,192,0.85)',
+    borderBottom: '1px solid rgba(28,20,16,0.08)',
   };
 
   return (
     <div
-      style={{
-        // A white floating panel beside the grid (owner's taste board three).
+      style={bare ? undefined : {
+        // A white floating panel beside the grid (owner's taste board three;
+        // CLAUDE.md §8, "The Explore page", item 4): sticky, soft shadow,
+        // labels above their controls, section titles as plain bold words.
         backgroundColor: '#FFFFFF',
-        border: '1px solid rgba(27,56,40,0.06)',
-        borderRadius: '20px',
-        padding: '18px 16px',
+        borderRadius: '22px',
+        padding: '20px 16px',
         boxShadow: '0 1px 2px rgba(27,56,40,0.06), 0 12px 32px rgba(27,56,40,0.10)',
       }}
     >
-      {/* Search */}
-      <div style={group}>
-        <div className="relative flex items-center">
-          <Search size={16} className="absolute left-3 pointer-events-none" style={{ color: '#9A8A78' }} />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => onSearch(e.target.value)}
-            placeholder="Search name or city…"
-            aria-label="Search conferences"
-            className="w-full py-2.5 pl-9 pr-3 text-[13px] focus:outline-none"
-            style={{
-              border: '1px solid rgba(221,212,192,0.9)',
-              borderRadius: '11px',
-              backgroundColor: '#FFFDF9',
-              color: '#1C1410',
-              fontFamily: "var(--font-brand), sans-serif",
-            }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(221,212,192,0.9)'; }}
-          />
-        </div>
-      </div>
-
+      {!bare && (
+        <p style={{ margin: '0 10px 14px', fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '17px', color: '#1C1410' }}>
+          Filters
+        </p>
+      )}
       {/* Open applications: which roles a person could apply for today. A
           conference matches when ANY ticked role is open. */}
       <div style={group} role="listbox" aria-label="Open applications" aria-multiselectable="true">
@@ -833,9 +692,6 @@ function FilterRail({
           (credit_sponsored_conference_ids), ?sponsored=1 */}
       <div style={group} role="listbox" aria-label="Credit sponsored">
         <RailHeading>Credits</RailHeading>
-        <p style={{ margin: '-4px 0 6px', fontSize: '10.5px', lineHeight: 1.3, letterSpacing: '-0.005em', color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif", whiteSpace: 'nowrap' }}>
-          The conference pays your Gavelling credit.
-        </p>
         <RailOption label="Credit sponsored" active={sponsoredFilter} onClick={() => onSponsored(!sponsoredFilter)} icon={Heart} />
       </div>
 
@@ -912,7 +768,7 @@ function FilterRail({
           </ul>
         )}
         <div style={{ marginTop: userCountry || chosenCountries.length > 0 ? 6 : 0 }}>
-          <CountrySearch options={countryOptions} chosen={chosenIds} onAdd={onAddCountry} />
+          <CountrySearch options={countryOptions} chosen={chosenIds} onAdd={onAddCountry} idPrefix={idPrefix} />
         </div>
       </div>
 
@@ -924,13 +780,13 @@ function FilterRail({
       </div>
 
       {/* Level. A conference open to both answers to either. */}
-      <div style={{ ...group, borderBottom: hasActiveFilters ? group.borderBottom : 'none', marginBottom: hasActiveFilters ? 16 : 0, paddingBottom: hasActiveFilters ? 16 : 0 }} role="listbox" aria-label="Student level">
+      <div style={{ ...group, borderBottom: hasActiveFilters && !bare ? group.borderBottom : 'none', marginBottom: hasActiveFilters && !bare ? 16 : 0, paddingBottom: hasActiveFilters && !bare ? 16 : 0 }} role="listbox" aria-label="Student level">
         <RailHeading>Level</RailHeading>
         <RailOption label="High school" active={levelFilter === 'school'}     onClick={() => onLevel(levelFilter === 'school' ? '' : 'school')}         icon={School} />
         <RailOption label="University"  active={levelFilter === 'university'} onClick={() => onLevel(levelFilter === 'university' ? '' : 'university')} icon={GraduationCap} />
       </div>
 
-      {hasActiveFilters && (
+      {hasActiveFilters && !bare && (
         <button
           onClick={onClear}
           className="w-full focus:outline-none"
@@ -940,21 +796,6 @@ function FilterRail({
         </button>
       )}
     </div>
-  );
-}
-
-// ── Empty state SVG ────────────────────────────────────────────────────────
-
-function EmptySVG() {
-  return (
-    <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="28" cy="30" r="21" stroke="#1B3828" strokeWidth="1.5" fill="rgba(237,231,216,0.6)" />
-      <line x1="7" y1="30" x2="49" y2="30" stroke="#1B3828" strokeWidth="1" strokeOpacity="0.4" />
-      <line x1="28" y1="9" x2="28" y2="51" stroke="#1B3828" strokeWidth="1" strokeOpacity="0.4" />
-      <ellipse cx="28" cy="30" rx="10" ry="21" stroke="#1B3828" strokeWidth="1" fill="none" strokeOpacity="0.4" />
-      <circle cx="55" cy="56" r="12" stroke="#1B3828" strokeWidth="2" fill="rgba(237,231,216,0.5)" />
-      <line x1="63" y1="64" x2="73" y2="74" stroke="#1B3828" strokeWidth="2.5" strokeLinecap="round" />
-    </svg>
   );
 }
 
@@ -974,6 +815,7 @@ export default function ConferencesExploreClient() {
   const initialQuery = useMemo(() => readExploreQuery(searchParams), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [searchQuery, setSearchQuery] = useState(initialQuery.search);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const closeFilters = useCallback(() => setFiltersOpen(false), []);
   const [formatFilter, setFormatFilter] = useState<FormatFilter>(
     initialQuery.format === 'in-person' || initialQuery.format === 'online' ? initialQuery.format : '',
   );
@@ -1433,9 +1275,103 @@ export default function ConferencesExploreClient() {
 
   const userCode = userCountry ? getCountryByName(userCountry)?.code : undefined;
 
+  // The Filters button's number: one per chosen value (the search lives in
+  // the pill, so it is not counted here).
+  const activeFilterCount =
+    roleFilter.size + (priceFilter ? 1 : 0) + (dateFilter || dateFrom || dateTo ? 1 : 0) + (sponsoredFilter ? 1 : 0)
+    + (formatFilter ? 1 : 0) + (levelFilter ? 1 : 0) + (continentKey ? 1 : 0) + (countryMode ? 0 : countryIds.length);
+
+  // How many continents the listed conferences span, for the header line.
+  const continentCount = useMemo(() => {
+    const hit = new Set<string>();
+    for (const c of conferences) {
+      if (hasConcluded(c)) continue;
+      const id = countryIdentity(c.country);
+      for (const [key, ids] of Object.entries(continentIdentities)) if (ids.has(id)) { hit.add(key); break; }
+    }
+    return hit.size;
+  }, [conferences, continentIdentities]);
+
+  // The category rail: each tab is one EXISTING filter (and so its existing
+  // URL parameter). "All" clears exactly the filters the rail itself sets.
+  const allRoles = ROLE_OPTIONS.map(r => r.key);
+  const openNow = roleFilter.size === allRoles.length;
+  const thisMonth = dateFilter === 'month' && !dateFrom && !dateTo;
+  const railAll =
+    roleFilter.size === 0 && !dateFilter && !dateFrom && !dateTo && !priceFilter && !sponsoredFilter && !formatFilter && !levelFilter;
+  const categories: RailCategory[] = [
+    {
+      key: 'all', label: 'All', icon: LayoutGrid, tone: 'gold', active: railAll,
+      onClick: () => {
+        setRoleFilter(new Set()); setDateFilter(''); setDateFrom(''); setDateTo('');
+        setPriceFilter(''); setSponsoredFilter(false); setFormatFilter(''); setLevelFilter('');
+      },
+    },
+    { key: 'open', label: 'Open now', icon: DoorOpen, tone: 'green', active: openNow, onClick: () => setRoleFilter(openNow ? new Set() : new Set(allRoles)) },
+    {
+      key: 'month', label: 'This month', icon: CalendarDays, tone: 'gold', active: thisMonth,
+      onClick: () => { setDateFilter(thisMonth ? '' : 'month'); setDateFrom(''); setDateTo(''); },
+    },
+    { key: 'free', label: 'Free', icon: Ticket, tone: 'green', active: priceFilter === 'free', onClick: () => setPriceFilter(priceFilter === 'free' ? '' : 'free') },
+    { key: 'sponsored', label: 'Credit sponsored', icon: Heart, tone: 'gold', active: sponsoredFilter, onClick: () => setSponsoredFilter(!sponsoredFilter) },
+    { key: 'in-person', label: 'In person', icon: MapPin, tone: 'green', active: formatFilter === 'in-person', onClick: () => setFormatFilter(formatFilter === 'in-person' ? '' : 'in-person') },
+    { key: 'online', label: 'Online', icon: Monitor, tone: 'gold', active: formatFilter === 'online', onClick: () => setFormatFilter(formatFilter === 'online' ? '' : 'online') },
+    { key: 'university', label: 'University', icon: GraduationCap, tone: 'green', active: levelFilter === 'university', onClick: () => setLevelFilter(levelFilter === 'university' ? '' : 'university') },
+    { key: 'school', label: 'High school', icon: School, tone: 'gold', active: levelFilter === 'school', onClick: () => setLevelFilter(levelFilter === 'school' ? '' : 'school') },
+  ];
+
+  const resultsRef = useRef<HTMLElement>(null);
+  function scrollToResults() {
+    const el = resultsRef.current;
+    if (!el) return;
+    const top = el.getBoundingClientRect().top + window.scrollY - 88;
+    if (Math.abs(window.scrollY - top) > 24) window.scrollTo({ top, behavior: 'smooth' });
+  }
+
+  const toggleNear = () => { if (nearId) { if (nearActive) removeCountry(nearId); else addCountry(nearId); } };
+
+  const railProps = {
+    continent: continentKey, onContinent: changeContinent,
+    userCountry, userCountryCount, nearActive, onToggleNear: toggleNear,
+    chosenCountries: chipCountries, countryOptions: searchCountries,
+    onAddCountry: addCountry, onRemoveCountry: removeCountry,
+    formatFilter, onFormat: setFormatFilter,
+    levelFilter, onLevel: setLevelFilter,
+    roleFilter, onToggleRole: toggleRole,
+    facetsUnavailable: facetsFailed,
+    priceFilter, onPrice: setPriceFilter,
+    sponsoredFilter, onSponsored: setSponsoredFilter,
+    dateFilter, onDate: setDateFilter,
+    dateFrom, dateTo, onDateFrom: setDateFrom, onDateTo: setDateTo,
+    hasActiveFilters, onClear: clearFilters,
+  };
+
+  // Grid: one column on a phone, two on a tablet (and beside the panel at
+  // 1024), three at 1280, four at 1440 (CLAUDE.md §8, "The Explore page", 7).
+  // Written as plain CSS (below) so the 1400px step always wins over 1280.
+  const GRID = 'gv-explore-grid';
+  const GRID_GAP: React.CSSProperties = { columnGap: 'clamp(18px, 1.8vw, 28px)', rowGap: 'clamp(24px, 2.4vw, 36px)' };
+
+  const cardFor = (conf: Conference, spot?: FeaturedRow) => (
+    <ConferenceCard
+      key={conf.id}
+      conf={conf}
+      href={`/conferences/${conf.slug}`}
+      spotlight={!!spot}
+      creditSponsored={sponsoredIds.has(conf.id)}
+      applied={appliedIds.has(conf.id)}
+      member={isMember(conf)}
+      hovered={hoveredId === conf.id}
+      onHover={() => setHoveredId(conf.id)}
+      onLeave={() => setHoveredId(null)}
+      // A real link navigates; this only records the spotlight click.
+      onClick={() => { if (spot) recordSpotlightClick(spot.booking_id); }}
+    />
+  );
+
   return (
     <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: '#EDE7D8', overflowX: 'clip' }}>
-      {/* Grain */}
+      {/* Paper grain on the ivory page */}
       <div
         className="pointer-events-none fixed inset-0 z-0"
         style={{
@@ -1447,154 +1383,105 @@ export default function ConferencesExploreClient() {
         }}
       />
 
-      {/* Soft ambient washes behind the header */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute z-0"
-        style={{
-          top: '-140px', left: '8%', width: '620px', height: '420px',
-          background: 'radial-gradient(ellipse at center, rgba(238,217,138,0.22) 0%, transparent 65%)',
-          filter: 'blur(48px)',
-        }}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute z-0"
-        style={{
-          top: '-80px', right: '4%', width: '520px', height: '380px',
-          background: 'radial-gradient(ellipse at center, rgba(42,90,60,0.13) 0%, transparent 65%)',
-          filter: 'blur(48px)',
-        }}
-      />
-
       <div className="relative z-10 flex flex-col min-h-screen">
         <SiteNav hideLanguage />
 
-        {/* ── Editorial header ─────────────────────────────────────── */}
-        <header className="px-6 md:px-10" style={{ paddingTop: 'clamp(24px, 3vw, 40px)', paddingBottom: '28px' }}>
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 text-[13px] mb-4 font-bold focus:outline-none"
-            style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}
-          >
-            {/* A small filled triangle pointing back, sized to the text. */}
-            <Play size={10} strokeWidth={0} fill="currentColor" aria-hidden style={{ transform: 'rotate(180deg)', flexShrink: 0 }} />
-            <span style={{ textDecoration: 'underline', textUnderlineOffset: '3px' }}>Back to home</span>
-          </Link>
-
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5">
-            <div>
-              <p
-                className="mb-2 font-bold"
-                style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: '14px', color: '#8A6414' }}
-              >
-                Conference directory
-              </p>
+        {/* ── Header, small: the title, the count line, List your conference ── */}
+        <header className="px-4 sm:px-6 md:px-10" style={{ paddingTop: 'clamp(20px, 2.4vw, 32px)', paddingBottom: '8px' }}>
+          <div className="flex flex-wrap items-end justify-between" style={{ gap: '12px 20px' }}>
+            <div className="min-w-0">
               <h1
                 style={{
-                  fontFamily: "var(--font-brand), sans-serif", fontWeight: 900,
-                  fontSize: 'clamp(32px, 4vw, 52px)', lineHeight: 1.02, color: '#1C1410', margin: 0,
+                  fontFamily: "var(--font-brand), sans-serif", fontWeight: 800,
+                  fontSize: 'clamp(28px, 3vw, 40px)', lineHeight: 1.08, letterSpacing: '-0.015em', color: '#1C1410', margin: 0,
                 }}
               >
-                Explore{' '}
-                <span style={{ color: '#1B3828' }}>Conferences</span>
+                Explore <GoldWord>Conferences</GoldWord>
               </h1>
-              <p
-                className="mt-2.5"
-                style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: '14px', color: '#6B5F52', maxWidth: '460px', lineHeight: 1.6 }}
-              >
-                {headlineCount === null
-                  ? 'Loading the directory…'
-                  : `${headlineCount} conference${headlineCount === 1 ? '' : 's'} across every continent, find where you debate next`}
+              <p style={{ margin: '6px 0 0', fontFamily: "var(--font-brand), sans-serif", fontSize: '15px', color: '#5C5140', fontVariantNumeric: 'tabular-nums' }}>
+                {headlineCount === null ? (
+                  'Loading the directory'
+                ) : (
+                  <>
+                    <span style={{ fontWeight: 800, color: '#1C1410' }}>{headlineCount.toLocaleString()}</span>
+                    {` ${headlineCount === 1 ? 'conference' : 'conferences'}`}
+                    {continentCount > 0 && (
+                      <>
+                        {' across '}
+                        <span style={{ fontWeight: 800, color: '#1C1410' }}>{continentCount}</span>
+                        {` ${continentCount === 1 ? 'continent' : 'continents'}`}
+                      </>
+                    )}
+                  </>
+                )}
               </p>
             </div>
-
-            {/* Organise: a plus and the verb. The old sentence-length label was
-                the loudest thing on a page about browsing, not creating. */}
-            <button
-              onClick={() => router.push('/conferences/new')}
-              className="self-start md:self-auto flex-shrink-0 inline-flex items-center gap-2 py-3 px-5 text-[14px] transition-shadow focus:outline-none"
-              style={{ ...PRIMARY_BUTTON, boxShadow: '0 6px 18px rgba(27,56,40,0.20)' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 10px 24px rgba(27,56,40,0.28)'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 18px rgba(27,56,40,0.20)'; }}
+            <Link
+              href="/conferences/new"
+              className="inline-flex items-center flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2"
+              style={{ ...SECONDARY_BUTTON, padding: '10px 16px', fontSize: '14.5px', textDecoration: 'none' }}
             >
-              <Plus size={17} strokeWidth={2.6} />
-              Organise a conference
-            </button>
+              List your conference
+            </Link>
+          </div>
+
+          {/* The search pill: Where, When, Role and the round search disc */}
+          <div style={{ marginTop: 'clamp(16px, 2vw, 24px)' }}>
+            <SearchPill
+              search={searchQuery} onSearch={setSearchQuery}
+              continent={continentKey} continentLabels={CONTINENT_LABELS} onContinent={changeContinent}
+              nearCountry={userCountry} nearCode={userCode} nearActive={nearActive} onToggleNear={toggleNear}
+              chosenCountryNames={chosenFacets.map(c => c.name)}
+              dateFilter={dateFilter} dateFrom={dateFrom} dateTo={dateTo}
+              onDate={(v) => { setDateFilter(v); setDateFrom(''); setDateTo(''); }}
+              roles={roleFilter} onToggleRole={toggleRole} onClearRoles={() => setRoleFilter(new Set())}
+              onSubmit={scrollToResults}
+            />
+          </div>
+
+          {/* The category rail under it */}
+          <div style={{ marginTop: 'clamp(14px, 1.6vw, 20px)' }}>
+            <CategoryRail items={categories} />
           </div>
         </header>
 
-        {/* ── Directory: filter rail beside the grid ───────────────── */}
+        {/* ── The floating panel beside the grid ───────────────────── */}
         <style>{`
+          .gv-explore-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
+          @media (min-width: 640px) { .gv-explore-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+          @media (min-width: 1280px) { .gv-explore-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+          @media (min-width: 1400px) { .gv-explore-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
           @media (min-width: 1024px) {
             .gv-explore-rail { max-height: calc(100dvh - 100px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
             .gv-explore-rail::-webkit-scrollbar { display: none; }
           }
         `}</style>
-        <main className="flex-1 px-6 md:px-10 flex flex-col lg:flex-row" style={{ gap: '28px', alignItems: 'flex-start', paddingBottom: 'clamp(40px, 4vw, 64px)' }}>
-
-          {/* Mobile: the rail folds behind one button rather than pushing the
-              results a screen and a half down. */}
-          <button
-            onClick={() => setFiltersOpen(v => !v)}
-            aria-expanded={filtersOpen}
-            className="lg:hidden w-full flex items-center justify-center gap-2 py-3 text-[14px] focus:outline-none"
-            style={filtersOpen ? PRIMARY_BUTTON : SECONDARY_BUTTON}
-          >
-            <SlidersHorizontal size={15} />
-            Filters
-            {hasActiveFilters && <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: filtersOpen ? '#EED98A' : '#B6871F' }} />}
-          </button>
-
+        <main
+          className="flex-1 px-4 sm:px-6 md:px-10 flex flex-col lg:flex-row"
+          style={{ gap: 'clamp(20px, 2.2vw, 32px)', alignItems: 'flex-start', paddingTop: '18px', paddingBottom: 'clamp(40px, 4vw, 64px)' }}
+        >
           <aside
             aria-label="Filters"
-            // Full width on a phone (where it is a disclosed panel), a fixed
-            // 250px rail from lg up (where it sits beside the grid). The rail
-            // is PINNED and fits the viewport: it scrolls on its own inside
-            // `calc(100dvh - 100px)`, so every group is reachable without
-            // scrolling the results (owner, 25 Sep 2026).
-            className={`gv-explore-rail ${filtersOpen ? 'block' : 'hidden'} lg:block lg:sticky lg:top-[84px] lg:max-w-[250px] flex-shrink-0`}
-            style={{ width: '100%' }}
+            // Desktop only: the panel is PINNED and fits the viewport, scrolling
+            // on its own. On phones and tablets it is the bottom sheet below.
+            className="gv-explore-rail hidden lg:block lg:sticky lg:top-[84px] flex-shrink-0"
+            style={{ width: '272px', padding: '2px 4px 16px' }}
           >
-            <FilterRail
-              searchQuery={searchQuery} onSearch={setSearchQuery}
-              continent={continentKey} onContinent={changeContinent}
-              userCountry={userCountry}
-              userCountryCount={userCountryCount}
-              nearActive={nearActive}
-              onToggleNear={() => { if (nearId) { if (nearActive) removeCountry(nearId); else addCountry(nearId); } }}
-              chosenCountries={chipCountries}
-              countryOptions={searchCountries}
-              onAddCountry={addCountry}
-              onRemoveCountry={removeCountry}
-              formatFilter={formatFilter} onFormat={setFormatFilter}
-              levelFilter={levelFilter} onLevel={setLevelFilter}
-              roleFilter={roleFilter} onToggleRole={toggleRole}
-              facetsUnavailable={facetsFailed}
-              priceFilter={priceFilter} onPrice={setPriceFilter}
-              sponsoredFilter={sponsoredFilter} onSponsored={setSponsoredFilter}
-              dateFilter={dateFilter} onDate={setDateFilter}
-              dateFrom={dateFrom} dateTo={dateTo} onDateFrom={setDateFrom} onDateTo={setDateTo}
-              hasActiveFilters={hasActiveFilters} onClear={clearFilters}
-            />
+            <FilterRail {...railProps} />
           </aside>
 
-          <section className="flex-1 min-w-0 w-full">
-            {/* Results rule — what this column is showing, plus the one control
-                that belongs to the results rather than the filters. The rule's
-                LABEL depends on there being results; the view toggle does not,
-                so it stays put while you filter down to nothing and back. */}
-            <div className="flex items-center gap-3 mb-6 flex-wrap">
-              {/* Counts as plain typography: a big number with the word beside
-                  it, never a pill or tracked capitals (owner's taste board). */}
+          <section ref={resultsRef} className="flex-1 min-w-0 w-full" aria-label="Conferences">
+            {/* The results bar: the count as a big number with the word
+                beside it, Sort as a text menu, grid / list. No count pills. */}
+            <div className="flex items-center flex-wrap" style={{ gap: '10px 14px', marginBottom: '20px' }}>
               {!loading && displayed.length > 0 ? (
                 <span className="inline-flex items-baseline flex-wrap" style={{ gap: '8px', fontFamily: "var(--font-brand), sans-serif", color: '#1C1410', fontVariantNumeric: 'tabular-nums' }}>
                   {aroundYouMode ? (
-                    <span style={{ fontWeight: 800, fontSize: '17px' }}>Conferences around you</span>
+                    <span style={{ fontWeight: 800, fontSize: '20px' }}>Conferences around you</span>
                   ) : countryMode ? (
                     <>
-                      {userCode && <CircleFlag code={userCode} size={18} decorative style={{ alignSelf: 'center' }} />}
-                      <span style={{ fontWeight: 800, fontSize: '22px' }}>{displayed.length}</span>
+                      {userCode && <CircleFlag code={userCode} size={20} decorative style={{ alignSelf: 'center' }} />}
+                      <span style={{ fontWeight: 800, fontSize: '26px' }}>{displayed.length}</span>
                       <span style={{ fontWeight: 600, fontSize: '15px', color: '#4A4238', overflowWrap: 'anywhere' }}>
                         {displayed.length === 1 ? 'conference' : 'conferences'} in {userCountry}
                         {displayed.length < sorted.length ? ` of ${sorted.length}` : ''}
@@ -1602,15 +1489,15 @@ export default function ConferencesExploreClient() {
                     </>
                   ) : selectedCountry ? (
                     <>
-                      {selectedCountry.code && <CircleFlag code={selectedCountry.code} size={18} decorative style={{ alignSelf: 'center' }} />}
-                      <span style={{ fontWeight: 800, fontSize: '22px' }}>{sorted.length}</span>
+                      {selectedCountry.code && <CircleFlag code={selectedCountry.code} size={20} decorative style={{ alignSelf: 'center' }} />}
+                      <span style={{ fontWeight: 800, fontSize: '26px' }}>{sorted.length}</span>
                       <span style={{ fontWeight: 600, fontSize: '15px', color: '#4A4238', overflowWrap: 'anywhere' }}>
                         {sorted.length === 1 ? 'conference' : 'conferences'} in {selectedCountry.name}
                       </span>
                     </>
                   ) : (
                     <>
-                      <span style={{ fontWeight: 800, fontSize: '22px' }}>{sorted.length}</span>
+                      <span style={{ fontWeight: 800, fontSize: '26px' }}>{sorted.length}</span>
                       <span style={{ fontWeight: 600, fontSize: '15px', color: '#4A4238', overflowWrap: 'anywhere' }}>
                         {sorted.length === 1 ? 'conference' : 'conferences'}
                         {continentLabel && countryIds.length === 0 ? ` in ${continentLabel}` : ''}
@@ -1623,77 +1510,44 @@ export default function ConferencesExploreClient() {
                   {loading ? 'Loading conferences' : 'No matches'}
                 </span>
               )}
-              <div className="flex-1 h-px" style={{ backgroundColor: 'rgba(221,212,192,0.8)', minWidth: '12px' }} />
-              {/* Sort and view: the two controls that belong to the results.
-                  Kept as one group so they wrap together on a phone rather
-                  than splitting across two lines. */}
-              <div className="flex items-center gap-2 flex-shrink-0" style={{ marginLeft: 'auto' }}>
-                <DateSortToggle sort={dateSort} onChange={setDateSort} />
+              <div className="flex items-center flex-wrap" style={{ gap: '10px 14px', marginLeft: 'auto' }}>
+                <span className="lg:hidden"><FiltersButton count={activeFilterCount} onClick={() => setFiltersOpen(true)} /></span>
+                <SortMenu sort={dateSort} onChange={setDateSort} />
                 <ViewToggle view={view} onChange={changeView} />
               </div>
             </div>
 
           {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" style={{ gap: '20px' }}>
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="rounded-[20px] overflow-hidden"
-                  style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
-                >
-                  <div className="animate-pulse" style={{ height: '72px', backgroundColor: '#DDD4C0' }} />
-                  <div className="p-4">
-                    <div className="animate-pulse rounded-full mb-3" style={{ width: '56px', height: '10px', backgroundColor: '#E4DCCB' }} />
-                    <div className="animate-pulse rounded-lg mb-2" style={{ width: '80%', height: '16px', backgroundColor: '#E4DCCB' }} />
-                    <div className="animate-pulse rounded-lg mb-4" style={{ width: '55%', height: '12px', backgroundColor: '#EDE7D8' }} />
-                    <div className="animate-pulse rounded-full" style={{ width: '40%', height: '12px', backgroundColor: '#EDE7D8' }} />
-                  </div>
-                </div>
-              ))}
+            <div className={GRID} style={GRID_GAP} aria-busy="true" aria-label="Loading conferences">
+              {Array.from({ length: 8 }).map((_, i) => <ConferenceCardSkeleton key={i} />)}
             </div>
           ) : displayed.length === 0 ? (
-            countryMode && !searchQuery && !formatFilter && !levelFilter ? (
-              /* Country tab is empty, soft local empty state with a reset. */
-              <div className="flex flex-col items-center justify-center py-24 text-center">
-                {userCode && <CircleFlag code={userCode} size={40} decorative />}
-                <h2 className="font-semibold text-lg mt-5 mb-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                  No conferences in {userCountry} yet
-                </h2>
-                <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-                  Be the first to bring one home, or browse the worldwide directory
-                </p>
-                <button
-                  onClick={clearRegion}
-                  className="py-3 px-6 text-sm focus:outline-none"
-                  style={PRIMARY_BUTTON}
-                >
-                  Explore all conferences
-                </button>
-              </div>
-            ) : (
-              /* Two different nothings. "Your filters matched nothing" wants a
-                 way back to the full list; "the directory is empty" wants an
-                 invitation to fill it. Telling a searcher the product is
-                 launching soon, next to 157 conferences, is neither. */
-              <div className="flex flex-col items-center justify-center py-24 text-center">
-                <EmptySVG />
-                <h2 className="font-semibold text-lg mt-6 mb-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                  {hasActiveFilters ? 'Nothing matches that' : 'No conferences listed yet'}
-                </h2>
-                <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", maxWidth: '360px' }}>
-                  {hasActiveFilters
-                    ? 'Try a different search, a wider region, or clear the filters to see the whole directory'
-                    : 'Gavelling Conferences is launching soon. Be the first to list your conference'}
-                </p>
-                <button
-                  onClick={() => (hasActiveFilters ? clearFilters() : router.push('/conferences/new'))}
-                  className="py-3 px-6 text-sm focus:outline-none"
-                  style={PRIMARY_BUTTON}
-                >
-                  {hasActiveFilters ? 'Clear filters' : 'Organise a conference'}
-                </button>
-              </div>
-            )
+            // Empty: one line and one button.
+            <div className="flex flex-col items-center justify-center text-center" style={{ padding: 'clamp(48px, 8vw, 96px) 0', gap: '16px' }}>
+              {countryMode && !searchQuery && !formatFilter && !levelFilter ? (
+                <>
+                  <p style={{ margin: 0, fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '17px', color: '#1C1410' }}>
+                    No conferences in {userCountry} yet
+                  </p>
+                  <button onClick={clearRegion} className="py-3 px-6 text-[15px] focus:outline-none" style={PRIMARY_BUTTON}>
+                    Explore all conferences
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p style={{ margin: 0, fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '17px', color: '#1C1410' }}>
+                    {hasActiveFilters ? 'No conferences match these filters' : 'No conferences listed yet'}
+                  </p>
+                  <button
+                    onClick={() => (hasActiveFilters ? clearFilters() : router.push('/conferences/new'))}
+                    className="py-3 px-6 text-[15px] focus:outline-none"
+                    style={PRIMARY_BUTTON}
+                  >
+                    {hasActiveFilters ? 'Clear filters' : 'List your conference'}
+                  </button>
+                </>
+              )}
+            </div>
           ) : view === 'list' ? (
             <div style={{ borderTop: '2px solid rgba(27,56,40,0.16)' }}>
               {displayed.map(conf => (
@@ -1712,25 +1566,8 @@ export default function ConferencesExploreClient() {
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" style={{ gap: '20px' }}>
-              {displayed.map(conf => {
-                const spot = spotlightById.get(conf.id);
-                return (
-                  <ConferenceCard
-                    key={conf.id}
-                    conf={conf}
-                    compact
-                    spotlight={!!spot}
-                    creditSponsored={sponsoredIds.has(conf.id)}
-                    applied={appliedIds.has(conf.id)}
-                    member={isMember(conf)}
-                    hovered={hoveredId === conf.id}
-                    onHover={() => setHoveredId(conf.id)}
-                    onLeave={() => setHoveredId(null)}
-                    onClick={() => { if (spot) recordSpotlightClick(spot.booking_id); router.push(`/conferences/${conf.slug}`); }}
-                  />
-                );
-              })}
+            <div className={GRID} style={GRID_GAP}>
+              {displayed.map(conf => cardFor(conf, spotlightById.get(conf.id)))}
             </div>
           )}
 
@@ -1741,10 +1578,7 @@ export default function ConferencesExploreClient() {
             <section
               aria-label="Bigger conferences elsewhere"
               className="mt-12"
-              style={{
-                borderTop: '1px solid rgba(221,212,192,0.9)',
-                paddingTop: '26px',
-              }}
+              style={{ borderTop: '1px solid rgba(28,20,16,0.10)', paddingTop: '26px' }}
             >
               <div className="flex items-baseline flex-wrap gap-x-3 gap-y-1 mb-5">
                 <h2
@@ -1753,31 +1587,14 @@ export default function ConferencesExploreClient() {
                     color: '#1C1410', margin: 0,
                   }}
                 >
-                  Bigger Conferences Worth Travelling For
+                  Bigger Conferences Worth <GoldWord>Travelling</GoldWord>
                 </h2>
-                <p
-                  style={{
-                    fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, fontSize: '13px',
-                    color: '#8A7D6C', margin: 0,
-                  }}
-                >
+                <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, fontSize: '13.5px', color: '#6B5F52', margin: 0 }}>
                   Outside your filter, {BIG_CONFERENCE_DELEGATES}+ delegates expected
                 </p>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" style={{ gap: '20px' }}>
-                {bigElsewhere.map(conf => (
-                  <ConferenceCard
-                    key={conf.id}
-                    conf={conf}
-                    compact
-                    applied={appliedIds.has(conf.id)}
-                    member={isMember(conf)}
-                    hovered={hoveredId === conf.id}
-                    onHover={() => setHoveredId(conf.id)}
-                    onLeave={() => setHoveredId(null)}
-                    onClick={() => router.push(`/conferences/${conf.slug}`)}
-                  />
-                ))}
+              <div className={GRID} style={GRID_GAP}>
+                {bigElsewhere.map(conf => cardFor(conf))}
               </div>
             </section>
           )}
@@ -1804,6 +1621,18 @@ export default function ConferencesExploreClient() {
 
         <SiteFooter />
       </div>
+
+      {/* Phones and tablets: the panel as a bottom sheet */}
+      <FiltersSheet
+        open={filtersOpen}
+        onClose={closeFilters}
+        onClear={clearFilters}
+        canClear={hasActiveFilters}
+        resultCount={sorted.length}
+      >
+        <FilterRail {...railProps} bare idPrefix="gv-explore-sheet" />
+      </FiltersSheet>
+
       {spotlightDialog && <ConferenceSpotlightDialog rows={spotlightDialog} onClose={() => setSpotlightDialog(null)} />}
     </div>
   );

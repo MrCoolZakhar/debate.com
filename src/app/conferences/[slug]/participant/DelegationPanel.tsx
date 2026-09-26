@@ -310,7 +310,7 @@ function SwapResultModal({ info, onClose }: { info: SwapResultInfo; onClose: () 
           <p className="text-sm">{info.body}</p>
           {info.detail && <p className="text-sm mt-1.5">{info.detail}</p>}
         </div>
-        <NeuButton onClick={onClose}>DONE</NeuButton>
+        <NeuButton onClick={onClose}>Done</NeuButton>
       </div>
     </ModalOverlay>
   );
@@ -510,7 +510,7 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
       const { data, error } = await supabase.rpc('perform_delegation_swap', { p_app_a: swapA.id, p_app_b: swapB.id });
       if (error) { setSwapError(friendlyError(error, 'Could not swap allocations.')); setSwapping(false); return; }
       const result = data as SwapRpcResult;
-      if (!result.ok) { setSwapError(result.error ?? 'Could not swap allocations.'); setSwapping(false); return; }
+      if (!result.ok) { setSwapError(plainOrFallback(result.error, 'Could not swap allocations.')); setSwapping(false); return; }
       // The RPC's own return is the authoritative post-swap state, the
       // panel's locally-fetched allocation labels (allocA/allocB above) can
       // be stale by the time this resolves.
@@ -678,7 +678,7 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
                       Left unlinked here, exactly as in MemberRow: the name is
                       the CV link, the picture is decoration. */}
                   <MemberAvatar name={m.profiles?.display_name ?? 'Unknown'} url={m.profiles?.avatar_url ?? null} size={22} />
-                  <span className="truncate">
+                  <span className="min-w-0 [overflow-wrap:anywhere]">
                     {/* Pledger's name links to their MUN CV — this row has no
                         clickable ancestor, so no `nested` here. */}
                     <ProfileLink userId={m.user_id} name={m.profiles?.display_name}>
@@ -704,11 +704,11 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
             <button
               onClick={() => { setSwapMode(true); setSwapSelection([]); setSwapError(''); }}
               className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none transition-colors"
-              style={{ border: '1.5px solid rgba(27,56,40,0.35)', color: '#1B3828', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: 'pointer' }}
+              style={{ border: '1.5px solid rgba(27,56,40,0.35)', color: '#1B3828', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: 'pointer' }}
               onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; }}
               onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.color = '#1B3828'; }}
             >
-              <ArrowLeftRight size={13} /> SWAP ALLOCATIONS
+              <ArrowLeftRight size={13} /> Swap allocations
             </button>
           ) : (
             <div>
@@ -738,9 +738,9 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
                     onClick={handleConfirmSwap}
                     disabled={swapping}
                     className="rounded-lg px-4 py-2 text-xs font-bold focus:outline-none"
-                    style={{ backgroundColor: swapping ? '#DDD4C0' : '#1B3828', color: swapping ? '#9A8A78' : '#EED98A', border: 'none', fontFamily: OUTFIT, letterSpacing: '0.05em', cursor: swapping ? 'default' : 'pointer' }}
+                    style={{ backgroundColor: swapping ? '#DDD4C0' : '#1B3828', color: swapping ? '#9A8A78' : '#EED98A', border: 'none', fontFamily: OUTFIT, cursor: swapping ? 'default' : 'pointer' }}
                   >
-                    {swapping ? 'PROCESSING...' : allocationSwapMode === 'self_serve' ? 'CONFIRM SWAP' : 'CONFIRM REQUEST'}
+                    {swapping ? 'Processing…' : allocationSwapMode === 'self_serve' ? 'Confirm swap' : 'Confirm request'}
                   </button>
                 </div>
               )}

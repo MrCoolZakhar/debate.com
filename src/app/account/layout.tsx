@@ -270,23 +270,22 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                 </div>
               )}
               <div className="min-w-0">
-                <p className="truncate" style={{ margin: 0, color: '#1C1410', fontFamily: FONT, fontWeight: 700, fontSize: 14, lineHeight: 1.3 }}>
+                <p className="[overflow-wrap:anywhere]" style={{ margin: 0, color: '#1C1410', fontFamily: FONT, fontWeight: 700, fontSize: 14, lineHeight: 1.3 }}>
                   {displayName}
                 </p>
-                <p className="truncate" style={{ margin: 0, color: '#5A5046', fontFamily: FONT, fontWeight: 500, fontSize: 12, lineHeight: 1.4 }}>
+                <p className="[overflow-wrap:anywhere]" style={{ margin: 0, color: '#5A5046', fontFamily: FONT, fontWeight: 500, fontSize: 12, lineHeight: 1.4 }}>
                   {email}
                 </p>
                 {isUnlimited(unlimitedStatus) && (
                   <span
-                    className="inline-flex items-center rounded-full mt-1"
+                    className="inline-flex items-center gap-1 mt-1"
                     style={{
-                      padding: '1px 8px',
-                      backgroundColor: '#1B3828',
-                      color: '#EED98A',
-                      fontFamily: FONT, fontWeight: 700, fontSize: 10.5, letterSpacing: '0.12em',
+                      color: '#1B3828',
+                      fontFamily: FONT, fontWeight: 700, fontSize: 12,
                     }}
                   >
-                    UNLIMITED
+                    <InfinityIcon size={14} strokeWidth={2.4} aria-hidden style={{ color: '#B6871F' }} />
+                    Unlimited
                   </span>
                 )}
               </div>
@@ -353,13 +352,11 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                 border: 'none',
                 cursor: 'pointer',
                 fontFamily: FONT,
-                fontSize: 12.5,
-                fontWeight: 800,
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
+                fontSize: 14,
+                fontWeight: 700,
               }}
             >
-              SIGN OUT
+              Sign out
             </button>
           </aside>
 

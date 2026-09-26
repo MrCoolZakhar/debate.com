@@ -280,7 +280,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
             <FileText size={16} style={{ color: '#1B3828' }} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="truncate" style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 13, color: '#1C1410', margin: 0 }}>{myPositionPaper.file_name}</p>
+            <p className="truncate" title={myPositionPaper.file_name} style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 13, color: '#1C1410', margin: 0 }}>{myPositionPaper.file_name}</p>
             <p style={{ fontFamily: OUTFIT, fontSize: 11, color: '#9A8A78', margin: '2px 0 0 0' }}>
               Submitted {fmtDate(myPositionPaper.submitted_at)}
               {myPositionPaper.user_id !== user?.id && (
@@ -308,17 +308,16 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
             )}
             {late && (
               <span
-                className="px-2 py-0.5 rounded-full"
-                style={{ backgroundColor: 'rgba(184,132,74,0.16)', color: '#8A5A2E', fontSize: 9, fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.06em' }}
+                style={{ color: '#8A5A2E', fontSize: 12, fontFamily: OUTFIT, fontWeight: 800 }}
               >
-                LATE
+                Late
               </span>
             )}
             <span
-              className="px-2.5 py-0.5 rounded-full"
-              style={{ backgroundColor: statusStyle.bg, color: statusStyle.color, fontSize: 9, fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.06em' }}
+              className="capitalize"
+              style={{ color: statusStyle.color, fontSize: 12, fontFamily: OUTFIT, fontWeight: 700 }}
             >
-              {myPositionPaper.status.toUpperCase()}
+              {myPositionPaper.status}
             </span>
             <ChevronRight size={16} strokeWidth={2.4} style={{ color: NEU.muted, flexShrink: 0 }} />
           </div>
@@ -353,7 +352,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
                   boxShadowColor="rgba(27,56,40,0.1)"
                   style={{ flex: 1, padding: '10px 0', fontSize: 13, borderRadius: 12 }}
                 >
-                  CANCEL
+                  Cancel
                 </ActionButton>
                 <ActionButton
                   onClick={() => { setShowPPWarning(false); setIsReplacing(true); setExpanded(true); setPPFile(null); setPPError(''); }}
@@ -362,7 +361,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
                   boxShadowColor="rgba(27,56,40,0.35)"
                   style={{ flex: 1, padding: '10px 0', fontSize: 13, borderRadius: 12 }}
                 >
-                  REPLACE
+                  Replace
                 </ActionButton>
               </div>
             </div>
@@ -392,7 +391,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
               className="focus:outline-none flex-shrink-0 rounded-full px-3.5 py-1.5"
               style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#EED98A', background: '#1B3828', border: 'none', cursor: 'pointer' }}
             >
-              RETRY
+              Try again
             </button>
           </div>
         )}
@@ -401,7 +400,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
   }
 
   const collapsedStyle = myPositionPaper ? (ppStatusMap[myPositionPaper.status] ?? ppStatusMap.submitted) : NOT_SUBMITTED_STYLE;
-  const collapsedLabel = myPositionPaper ? `REPLACING ${myPositionPaper.status.toUpperCase()}` : 'NOT SUBMITTED';
+  const collapsedLabel = myPositionPaper ? `Replacing ${myPositionPaper.status}` : 'Not submitted';
 
   return (
     <SectionCard>
@@ -412,13 +411,12 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
       >
-        <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: 0 }}>
+        <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', color: '#B6871F', margin: 0 }}>
           POSITION PAPER
         </p>
         <div className="flex items-center gap-2.5">
           <span
-            className="px-2.5 py-0.5 rounded-full"
-            style={{ backgroundColor: collapsedStyle.bg, color: collapsedStyle.color, fontSize: '9px', fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.08em' }}
+            style={{ color: collapsedStyle.color, fontSize: 12, fontFamily: OUTFIT, fontWeight: 700 }}
           >
             {collapsedLabel}
           </span>
@@ -454,7 +452,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
                 <div style={{ borderRadius: 12, padding: '10px 14px', backgroundColor: 'rgba(61,122,82,0.06)', boxShadow: NEU.inSm, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                   <FileText size={15} style={{ color: '#2A5A3C', flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 13, color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ppFile.name}</p>
+                    <p title={ppFile.name} style={{ fontSize: 13, color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ppFile.name}</p>
                   </div>
                   <button
                     onClick={() => ppFileInputRef.current?.click()}
@@ -463,7 +461,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
                     onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.color = NEU.forest; el.style.textDecoration = 'underline'; }}
                     onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.color = NEU.muted; el.style.textDecoration = 'none'; }}
                   >
-                    CHANGE
+                    Change
                   </button>
                 </div>
               )}
@@ -477,7 +475,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
                     boxShadowColor="rgba(27,56,40,0.1)"
                     style={{ padding: '10px 18px', fontSize: 13, borderRadius: 12 }}
                   >
-                    CANCEL
+                    Cancel
                   </ActionButton>
                 )}
                 <ActionButton
@@ -488,7 +486,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
                   boxShadowColor="rgba(27,56,40,0.35)"
                   style={{ flex: 1, padding: '10px 0', fontSize: 13, borderRadius: 12 }}
                 >
-                  {ppUploading ? 'UPLOADING...' : isReplacing ? 'SUBMIT NEW VERSION' : 'SUBMIT POSITION PAPER'}
+                  {ppUploading ? 'Uploading…' : isReplacing ? 'Submit new version' : 'Submit position paper'}
                 </ActionButton>
               </div>
             </>

@@ -357,9 +357,9 @@ export default function DelegationCreditsCard({ societyId }: { societyId: string
           type="button"
           onClick={() => { void readPool(); }}
           className="rounded-xl px-4 font-bold text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAF8F3]"
-          style={{ height: 44, backgroundColor: '#FFFFFF', border: '1.5px solid #1C1410', color: '#1C1410', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: 'pointer' }}
+          style={{ height: 44, backgroundColor: '#FFFFFF', border: '1.5px solid #1C1410', color: '#1C1410', fontFamily: OUTFIT, cursor: 'pointer' }}
         >
-          TRY AGAIN
+          Try again
         </button>
       </SectionCard>
     );
@@ -433,14 +433,14 @@ export default function DelegationCreditsCard({ societyId }: { societyId: string
             minWidth: 200, height: 44,
             backgroundColor: fundBusy ? '#2A5A3C' : '#1B3828',
             color: '#EED98A',
-            fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none',
+            fontFamily: OUTFIT, border: 'none',
             cursor: fundBusy ? 'wait' : 'pointer',
             opacity: fundBusy ? 0.85 : 1,
           }}
           onMouseEnter={e => { if (!fundBusy) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
           onMouseLeave={e => { if (!fundBusy) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
         >
-          {fundBusy ? 'ADDING' : 'ADD TO DELEGATION'}
+          {fundBusy ? 'Adding' : 'Add to delegation'}
         </button>
       </div>
       {fundOk && (
@@ -481,14 +481,14 @@ export default function DelegationCreditsCard({ societyId }: { societyId: string
                 backgroundColor: '#FFFFFF',
                 border: '1.5px solid #1C1410',
                 color: '#1C1410',
-                fontFamily: OUTFIT, letterSpacing: '0.06em',
+                fontFamily: OUTFIT,
                 cursor: backBusy ? 'wait' : 'pointer',
                 opacity: backBusy ? 0.7 : 1,
               }}
               onMouseEnter={e => { if (!backBusy) (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#FFFFFF'; }}
             >
-              {backBusy ? 'TAKING BACK' : 'TAKE BACK'}
+              {backBusy ? 'Taking back' : 'Take back'}
             </button>
           </div>
           {backOk && (

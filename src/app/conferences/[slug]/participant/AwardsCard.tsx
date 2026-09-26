@@ -516,7 +516,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 mt-2"
-                style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#2A5A3C', textDecoration: 'underline', textUnderlineOffset: 3, letterSpacing: '0.03em' }}
+                style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#2A5A3C', textDecoration: 'underline', textUnderlineOffset: 3 }}
               >
                 Full guide <ExternalLink size={11} />
               </a>
@@ -593,7 +593,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
                               <td style={num}>{r.workingPapers}/{r.draftResolutions}</td>
                               <td style={{ ...num }}>
                                 {ps && paper ? (
-                                  <span className="px-2 py-0.5 rounded-full" style={{ backgroundColor: ps.bg, color: ps.color, fontSize: 10, fontWeight: 700, letterSpacing: '0.04em' }}>
+                                  <span style={{ color: ps.color, fontSize: 12, fontWeight: 700 }}>
                                     {paper.charAt(0).toUpperCase() + paper.slice(1)}
                                   </span>
                                 ) : <span style={{ color: '#C9BFAE' }}>none</span>}
@@ -624,7 +624,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
               type="button"
               onClick={suggest}
               className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 focus:outline-none"
-              style={{ border: '1px solid rgba(182,135,31,0.45)', backgroundColor: 'rgba(238,217,138,0.18)', color: '#7A5A20', fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', cursor: 'pointer' }}
+              style={{ border: '1px solid rgba(182,135,31,0.45)', backgroundColor: 'rgba(238,217,138,0.18)', color: '#7A5A20', fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
             >
               <Sparkles size={12} /> Suggest from the record
             </button>
@@ -684,7 +684,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
                         </span>
                       )}
                       {!editable && existing && ranks.get(existing.country_name ?? '') && (
-                        <span className="rounded-full px-2 py-0.5" style={{ backgroundColor: 'rgba(27,56,40,0.08)', color: '#1B3828', fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums' }}>
+                        <span style={{ color: '#1B3828', fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
                           #{ranks.get(existing.country_name ?? '')} on record
                         </span>
                       )}
@@ -765,13 +765,13 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
               disabled={lifecycleBusy || rows.length === 0}
               className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 focus:outline-none transition-colors"
               style={{
-                backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 12, letterSpacing: '0.06em',
+                backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 12,
                 border: 'none', cursor: lifecycleBusy || rows.length === 0 ? 'not-allowed' : 'pointer', opacity: lifecycleBusy || rows.length === 0 ? 0.55 : 1,
               }}
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
             >
-              <Send size={13} /> {state === 'returned' ? 'RESUBMIT SLATE' : 'SUBMIT SLATE'}
+              <Send size={13} /> {state === 'returned' ? 'Resubmit slate' : 'Submit slate'}
             </button>
           ) : (
             <button
@@ -780,11 +780,11 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
               disabled={lifecycleBusy}
               className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 focus:outline-none"
               style={{
-                backgroundColor: 'transparent', color: '#1C1410', fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, letterSpacing: '0.06em',
+                backgroundColor: 'transparent', color: '#1C1410', fontFamily: OUTFIT, fontWeight: 700, fontSize: 12,
                 border: '1px solid #DDD4C0', cursor: lifecycleBusy ? 'not-allowed' : 'pointer', opacity: lifecycleBusy ? 0.55 : 1,
               }}
             >
-              {justSubmitted ? <Check size={13} style={{ color: '#3D7A52' }} /> : <Undo2 size={13} />} {justSubmitted ? 'SUBMITTED' : 'WITHDRAW'}
+              {justSubmitted ? <Check size={13} style={{ color: '#3D7A52' }} /> : <Undo2 size={13} />} {justSubmitted ? 'Submitted' : 'Withdraw'}
             </button>
           )}
         </div>
@@ -825,11 +825,11 @@ function StatePill({ state }: { state: SlateState }) {
   };
   const s = style[state];
   const label: Record<SlateState, string> = {
-    off: 'OFF', open: 'NOT SUBMITTED', returned: 'RETURNED', submitted: 'SUBMITTED', approved: 'APPROVED', published: 'ANNOUNCED',
+    off: 'Off', open: 'Not submitted', returned: 'Returned', submitted: 'Submitted', approved: 'Approved', published: 'Announced',
   };
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5" style={{ backgroundColor: s.bg, color: s.color, fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.1em' }}>
-      {s.Icon && <s.Icon size={10} />}
+    <span className="inline-flex items-center gap-1.5" style={{ color: s.color, fontFamily: OUTFIT, fontSize: 12, fontWeight: 700 }}>
+      {s.Icon && <s.Icon size={13} />}
       {label[state]}
     </span>
   );

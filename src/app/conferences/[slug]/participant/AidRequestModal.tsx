@@ -15,7 +15,7 @@ import { currencySymbol } from '@/lib/utils';
 import { type FormBlock, type CustomAnswers, questionsOf, splitIntoSections, validateAnswers, answerIsEmpty } from '@/lib/customQuestions';
 import CustomQuestionsField from '@/components/CustomQuestionsField';
 import { OUTFIT } from './shared';
-import { friendlyError } from '@/lib/friendlyError';
+import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 
 export interface AidRequestModalProps {
   applicationId: string;
@@ -98,7 +98,9 @@ export default function AidRequestModal({
     const result = data as { ok?: boolean; error?: string } | null;
     if (error || !result?.ok) {
       setSubmitting(false);
-      setSubmitError(result?.error || friendlyError(error, 'Could not submit your request. Please try again.'));
+      setSubmitError(error
+        ? friendlyError(error, 'Could not submit your request. Please try again.')
+        : plainOrFallback(result?.error, 'Could not submit your request. Please try again.'));
       return;
     }
     setSubmitting(false);
@@ -197,9 +199,9 @@ export default function AidRequestModal({
             onClick={isFirst ? onClose : () => { setSubmitError(''); setPage(p => p - 1); }}
             disabled={submitting}
             className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
-            style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: submitting ? 'default' : 'pointer' }}
+            style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: submitting ? 'default' : 'pointer' }}
           >
-            {isFirst ? 'CANCEL' : 'BACK'}
+            {isFirst ? 'Cancel' : 'Back'}
           </button>
           <button
             onClick={isLast ? handleSubmit : handleNext}
@@ -208,10 +210,10 @@ export default function AidRequestModal({
             style={{
               backgroundColor: submitting ? '#DDD4C0' : '#1B3828',
               color: submitting ? '#9A8A78' : '#EED98A',
-              fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: submitting ? 'default' : 'pointer',
+              fontFamily: OUTFIT, cursor: submitting ? 'default' : 'pointer',
             }}
           >
-            {isLast ? (submitting ? 'SUBMITTING…' : 'SUBMIT REQUEST') : 'NEXT'}
+            {isLast ? (submitting ? 'Submitting…' : 'Submit request') : 'Next'}
           </button>
         </div>
     </PayActionPopup>

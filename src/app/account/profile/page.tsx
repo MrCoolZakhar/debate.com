@@ -2,14 +2,15 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { Star, X, Megaphone, MessageSquare, ClipboardCheck, FileText, CreditCard, TrendingUp, ArrowRight, Camera, Globe2, Sparkles, Cake, Mail, User, Bell, ShieldAlert, MapPin, GraduationCap, School, Layers } from 'lucide-react';
+import { Star, X, Check, Megaphone, MessageSquare, ClipboardCheck, FileText, CreditCard, TrendingUp, ArrowRight, Camera, Globe2, Sparkles, Cake, Mail, User, Bell, ShieldAlert, MapPin, GraduationCap, School, Layers } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { UN_COUNTRIES, getCountryByName, getFlagUrl, countryMatchRank } from '@/lib/countries';
+import { UN_COUNTRIES, getCountryByName, countryMatchRank } from '@/lib/countries';
+import { CircleFlag } from '@/components/CircleFlag';
 import { deriveExperienceLevel, experienceProgress } from '@/lib/munExperience';
 import { ageAt } from '@/lib/age';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
-import { CardTitle, Eyebrow, GlassCard, PillToggle, Pill, ExperienceInfo, LevelInsignia, OUTFIT, T } from '../accountUi';
+import { CardTitle, Eyebrow, GlassCard, PillToggle, ExperienceInfo, LevelInsignia, OUTFIT, T } from '../accountUi';
 import { NEU, NeuIconDisc, NEU_GRADIENTS } from '@/components/neu';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { DatePicker } from '@/components/DatePicker';
@@ -278,7 +279,7 @@ export default function ProfilePage() {
     });
     setReviewSubmitting(false);
     if (error) {
-      setReviewError('Your review could not be saved.');
+      setReviewError('Your review could not be saved. Please try again.');
       return;
     }
     setReviewFormFor(null);
@@ -471,7 +472,6 @@ export default function ProfilePage() {
   }
 
   const natCountry = getCountryByName(nationality);
-  const natFlag = natCountry ? getFlagUrl(natCountry.code) : null;
   // Accent-folded + alias-aware ranking — see THE FOLDING RULE in countries.ts.
   // The old `.includes()` could not find "Türkiye" from "Tu".
   const natMatches = useMemo(() => {
@@ -542,7 +542,7 @@ export default function ProfilePage() {
           className="font-black mb-1 flex items-baseline gap-2 flex-wrap"
           style={{ fontSize: `clamp(28px, 8vw, ${T.title}px)`, lineHeight: 1.1, color: '#1C1410', fontFamily: OUTFIT, letterSpacing: '-0.01em' }}
         >
-          <span>{displayName || 'Your Profile'}</span>
+          <span className="min-w-0 [overflow-wrap:anywhere]">{displayName || 'Your Profile'}</span>
           {headerAge !== null && (
             <span
               className="inline-flex items-center gap-1"
@@ -629,13 +629,13 @@ export default function ProfilePage() {
                 </p>
               </div>
             </div>
-            <div
-              className="inline-flex items-center gap-2 rounded-full"
-              style={{ padding: '6px 12px', backgroundColor: 'rgba(250,248,243,0.10)', border: '1px solid rgba(238,217,138,0.28)' }}
-            >
-              <TrendingUp size={16} strokeWidth={2.4} style={{ color: '#EED98A' }} />
-              <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: T.caption, color: 'rgba(250,248,243,0.92)', fontVariantNumeric: 'tabular-nums' }}>
-                {cvCount ?? 0} conference{(cvCount ?? 0) === 1 ? '' : 's'}
+            <div className="inline-flex items-center gap-2">
+              <TrendingUp size={18} strokeWidth={2.4} style={{ color: '#EED98A' }} aria-hidden />
+              <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: T.section, color: '#FAF8F3', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                {cvCount ?? 0}
+              </span>
+              <span style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: T.caption, color: 'rgba(250,248,243,0.92)' }}>
+                conference{(cvCount ?? 0) === 1 ? '' : 's'}
               </span>
             </div>
           </div>
@@ -696,7 +696,7 @@ export default function ProfilePage() {
                     <p className="font-bold" style={{ fontSize: T.body, color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
                       How was {conferenceAcronymLabel(conf)}?
                     </p>
-                    <p className="truncate" style={{ fontSize: T.caption, color: HINT, fontFamily: OUTFIT, margin: '1px 0 0 0' }}>
+                    <p className="[overflow-wrap:anywhere]" style={{ fontSize: T.caption, color: HINT, fontFamily: OUTFIT, margin: '1px 0 0 0' }}>
                       Leave a review of{' '}
                       <Link
                         href={`/conferences/${conf.slug}`}
@@ -710,9 +710,9 @@ export default function ProfilePage() {
                   <button
                     onClick={() => openReviewForm(conf.id)}
                     className="flex-shrink-0 rounded-xl py-2 px-4 font-bold focus:outline-none transition-colors"
-                    style={{ fontSize: T.caption, backgroundColor: formOpen ? 'transparent' : '#1B3828', color: formOpen ? '#1B3828' : '#EED98A', border: formOpen ? '1px solid #DDD4C0' : '1px solid #1B3828', fontFamily: OUTFIT, letterSpacing: '0.08em', cursor: 'pointer' }}
+                    style={{ fontSize: T.caption, backgroundColor: formOpen ? 'transparent' : '#1B3828', color: formOpen ? '#1B3828' : '#EED98A', border: formOpen ? '1px solid #DDD4C0' : '1px solid #1B3828', fontFamily: OUTFIT, cursor: 'pointer' }}
                   >
-                    {formOpen ? 'CLOSE' : 'LEAVE A REVIEW'}
+                    {formOpen ? 'Close' : 'Leave a review'}
                   </button>
                   <button
                     onClick={() => dismissReviewPrompt(conf.id)}
@@ -773,12 +773,11 @@ export default function ProfilePage() {
                         backgroundColor: reviewRating < 1 || reviewSubmitting ? '#DDD4C0' : '#1B3828',
                         color: reviewRating < 1 || reviewSubmitting ? '#9A8A78' : '#EED98A',
                         fontFamily: OUTFIT,
-                        letterSpacing: '0.06em',
                         border: 'none',
                         cursor: reviewRating < 1 || reviewSubmitting ? 'default' : 'pointer',
                       }}
                     >
-                      {reviewSubmitting ? 'SAVING...' : 'SUBMIT REVIEW'}
+                      {reviewSubmitting ? 'Saving...' : 'Submit review'}
                     </button>
                   </div>
                 )}
@@ -853,11 +852,11 @@ export default function ProfilePage() {
             <button
               onClick={() => avatarInputRef.current?.click()}
               disabled={avatarUploading}
-              className="inline-flex items-center gap-2 rounded-full px-4 font-bold uppercase focus:outline-none"
+              className="inline-flex items-center gap-2 rounded-full px-4 font-bold focus:outline-none"
               style={{ fontSize: T.body, minHeight: 44, whiteSpace: 'nowrap', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, border: 'none', cursor: avatarUploading ? 'default' : 'pointer', boxShadow: NEU.outSm }}
             >
               <Camera size={14} strokeWidth={2.2} />
-              {displayAvatar ? 'CHANGE PHOTO' : 'UPLOAD PHOTO'}
+              {displayAvatar ? 'Change photo' : 'Upload photo'}
             </button>
             <p className="mt-2" style={{ fontSize: T.caption, color: avatarError ? '#8B2020' : HINT, fontFamily: OUTFIT }}>
               {avatarError || 'JPG or PNG, up to 5MB.'}
@@ -933,14 +932,13 @@ export default function ProfilePage() {
                 Nationality
               </label>
               <div className="relative">
-                {natFlag ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
-                    src={natFlag}
-                    alt={nationality}
-                    className="absolute pointer-events-none"
-                    style={{ left: '14px', top: '50%', transform: 'translateY(-50%)', width: '22px', height: '15px', objectFit: 'cover', borderRadius: '2.5px', boxShadow: '0 1px 3px rgba(27,56,40,0.25)' }}
-                  />
+                {natCountry ? (
+                  <span
+                    className="absolute pointer-events-none inline-flex"
+                    style={{ left: '14px', top: '50%', transform: 'translateY(-50%)' }}
+                  >
+                    <CircleFlag code={natCountry.code} size={20} label={nationality} />
+                  </span>
                 ) : (
                   <Globe2
                     size={17}
@@ -992,12 +990,7 @@ export default function ProfilePage() {
                         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                       >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={getFlagUrl(c.code)}
-                          alt=""
-                          style={{ width: '20px', height: '14px', objectFit: 'cover', borderRadius: '2px', flexShrink: 0 }}
-                        />
+                        <CircleFlag code={c.code} size={20} decorative style={{ flexShrink: 0 }} />
                         {c.name}
                       </button>
                     ))}
@@ -1017,9 +1010,9 @@ export default function ProfilePage() {
                   Date of Birth
                 </label>
                 {headerAge !== null && (
-                  <Pill tone="gold" size="sm" icon={<Cake size={11} strokeWidth={2.4} />}>
-                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>Age {headerAge}</span>
-                  </Pill>
+                  <span style={{ fontFamily: OUTFIT, fontSize: T.body, fontWeight: 700, color: '#B6871F', fontVariantNumeric: 'tabular-nums' }}>
+                    Age {headerAge}
+                  </span>
                 )}
               </div>
               <DatePicker
@@ -1151,7 +1144,6 @@ export default function ProfilePage() {
               backgroundColor: saving ? '#DDD4C0' : '#1B3828',
               color: saving ? '#9A8A78' : '#EED98A',
               fontFamily: OUTFIT,
-              letterSpacing: '0.08em',
               border: 'none',
               cursor: saving ? 'default' : 'pointer',
               boxShadow: saving ? 'none' : NEU.outSm,
@@ -1159,11 +1151,12 @@ export default function ProfilePage() {
             onMouseEnter={(e) => { if (!saving) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { if (!saving) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
           >
-            {saving ? 'SAVING...' : 'SAVE CHANGES'}
+            {saving ? 'Saving...' : 'Save changes'}
           </button>
           {saved && !saveError && (
-            <span className="text-sm font-semibold" style={{ color: '#3D7A52', fontFamily: OUTFIT }}>
-              Saved ✓
+            <span className="inline-flex items-center gap-1 text-sm font-semibold" style={{ color: '#3D7A52', fontFamily: OUTFIT }}>
+              <Check size={15} strokeWidth={2.6} aria-hidden />
+              Saved
             </span>
           )}
           {saveError && (
@@ -1267,19 +1260,17 @@ export default function ProfilePage() {
               minWidth: 160,
               fontSize: T.body,
               fontWeight: 800,
-              textTransform: 'uppercase',
               border: '1px solid #8B2020',
               color: '#FFFFFF',
               backgroundColor: '#8B2020',
               fontFamily: OUTFIT,
-              letterSpacing: '0.08em',
               cursor: 'pointer',
               boxShadow: NEU.outSm,
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#A32A2A'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
           >
-            SIGN OUT
+            Sign out
           </button>
           <button
             onClick={openDeleteAccount}
@@ -1290,14 +1281,13 @@ export default function ProfilePage() {
               color: '#FFFFFF',
               backgroundColor: '#8B2020',
               fontFamily: OUTFIT,
-              letterSpacing: '0.06em',
               cursor: 'pointer',
               boxShadow: NEU.outSm,
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#701919'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
           >
-            DELETE ACCOUNT
+            Delete account
           </button>
         </div>
       </GlassCard>
@@ -1325,7 +1315,7 @@ export default function ProfilePage() {
                         <li key={c.slug}>
                           <Link
                             href={`/manage/${c.slug}/settings`}
-                            className="underline"
+                            className="underline font-bold"
                             style={{ color: '#8B2020' }}
                           >
                             {c.full_name || c.slug}

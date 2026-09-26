@@ -190,7 +190,7 @@ export default function CVPage() {
             MUN CV
           </h1>
           <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: 0 }}>
-            Your Model UN conference history: typeset, verified, and yours
+            Every Model UN conference you have taken part in, in one record
           </p>
         </div>
 
@@ -212,7 +212,6 @@ export default function CVPage() {
               fontFamily: OUTFIT,
               fontWeight: 800,
               fontSize: T.body,
-              letterSpacing: '0.02em',
               cursor: privacy.cvPrivate ? 'not-allowed' : 'pointer',
               opacity: privacy.cvPrivate ? 0.5 : 1,
               transition: 'transform 160ms cubic-bezier(0.22,1,0.36,1)',
@@ -223,7 +222,7 @@ export default function CVPage() {
             onPointerUp={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
           >
             {copied ? <Check size={16} strokeWidth={2.6} style={{ color: '#2A5A3C' }} /> : <Share2 size={15} strokeWidth={2.4} />}
-            {copied ? 'COPIED' : 'SHARE'}
+            {copied ? 'Copied' : 'Share'}
           </button>
 
           <button
@@ -294,8 +293,8 @@ export default function CVPage() {
           >
             <Plus size={26} strokeWidth={2.6} />
           </button>
-          <p className="mt-3" style={{ fontSize: T.caption, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.1em', margin: '12px 0 0 0' }}>
-            ADD YOUR FIRST ENTRY
+          <p className="mt-3" style={{ fontSize: T.caption, color: '#B6871F', fontFamily: MONO, fontWeight: 700, margin: '12px 0 0 0' }}>
+            Add your first entry
           </p>
         </GlassCard>
       ) : (

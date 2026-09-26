@@ -222,9 +222,9 @@ export default function PledgeInvoicingCard({
                 onClick={() => setAidModalOpen(false)}
                 disabled={aidSubmitting}
                 className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
-                style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: aidSubmitting ? 'default' : 'pointer' }}
+                style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: aidSubmitting ? 'default' : 'pointer' }}
               >
-                CANCEL
+                Cancel
               </button>
               <button
                 onClick={handleSubmitDelegationAid}
@@ -233,10 +233,10 @@ export default function PledgeInvoicingCard({
                 style={{
                   backgroundColor: aidSubmitting ? '#DDD4C0' : '#1B3828',
                   color: aidSubmitting ? '#9A8A78' : '#EED98A',
-                  fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: aidSubmitting ? 'default' : 'pointer',
+                  fontFamily: OUTFIT, cursor: aidSubmitting ? 'default' : 'pointer',
                 }}
               >
-                {aidSubmitting ? 'SUBMITTING…' : 'SUBMIT REQUEST'}
+                {aidSubmitting ? 'Submitting…' : 'Submit request'}
               </button>
             </div>
           </div>

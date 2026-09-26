@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
-import { UserFacingError, friendlyError } from '@/lib/friendlyError';
+import { UserFacingError, friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import { refreshCreditsEverywhere } from '@/hooks/useCredits';
 import { notifyUnlimitedChanged } from '@/lib/unlimitedStatus';
 import { GoldWord } from '@/components/BrandHeading';
@@ -85,11 +85,11 @@ export default function PromoCodePage() {
       const result = data as ClaimResult | null;
       if (!result) throw new Error('empty result');
       if (!result.ok) {
-        setFailure(result.message || 'That code did not work. Check it and try again.');
+        setFailure(plainOrFallback(result.message, 'That code did not work. Check it and try again.'));
         return;
       }
       setCode('');
-      showSuccess(result.message || 'Done. Your account has been updated.');
+      showSuccess(plainOrFallback(result.message, 'Done. Your account has been updated.'));
       refreshCreditsEverywhere();
       if (result.grant_kind === 'unlimited_days') notifyUnlimitedChanged(user?.id);
     } catch (err) {

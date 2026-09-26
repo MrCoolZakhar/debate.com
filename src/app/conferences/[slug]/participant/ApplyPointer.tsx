@@ -38,11 +38,11 @@ export default function ApplyPointer({ conferenceSlug, signedOut, next }: {
         <button
           onClick={() => (signedOut ? openAuth({ next }) : router.push(`/conferences/${conferenceSlug}/apply`))}
           className="rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none transition-colors"
-          style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none', cursor: 'pointer' }}
+          style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, border: 'none', cursor: 'pointer' }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
         >
-          {signedOut ? 'SIGN IN →' : 'APPLY NOW →'}
+          {signedOut ? 'Sign in' : 'Apply now'}
         </button>
       </div>
     </SectionCard>

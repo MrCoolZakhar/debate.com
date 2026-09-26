@@ -85,7 +85,7 @@ export default function StudyGuideCard({ committeeId }: { committeeId: string | 
                 <FileText size={16} style={{ color: '#1B3828' }} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>{sg.title}</p>
+                <p className="text-sm font-semibold" title={sg.title} style={{ color: '#1C1410', fontFamily: OUTFIT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>{sg.title}</p>
                 <p className="text-[11px] mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, fontWeight: 500, margin: 0 }}>{sg.file_name}</p>
               </div>
               <Download size={15} style={{ color: '#9A8A78', flexShrink: 0 }} />

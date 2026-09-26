@@ -65,10 +65,11 @@ export default function ContactClient() {
   const t = useT();
 
   const SUBJECTS = [
-    { id: 'general',    label: t('contact_subject_general') },
-    { id: 'conference', label: t('contact_subject_conference') },
-    { id: 'press',      label: t('contact_subject_press') },
-    { id: 'feedback',   label: t('contact_subject_feedback') },
+    // Button labels are sentence case (CLAUDE.md §8); /contact is English-only.
+    { id: 'general',    label: 'General enquiry' },
+    { id: 'conference', label: 'Conference partnership' },
+    { id: 'press',      label: 'Press and media' },
+    { id: 'feedback',   label: 'Feedback' },
   ];
 
   const PLACEHOLDERS: Record<string, string> = {
@@ -171,7 +172,7 @@ export default function ContactClient() {
                     color: '#EED98A',
                   }}
                 >
-                  {t('contact_hero_line2_italic')}
+                  {noStop(t('contact_hero_line2_italic'))}
                 </span>
               </h1>
 
@@ -228,7 +229,7 @@ export default function ContactClient() {
 
                 <div>
                   <p className="text-xs font-mono tracking-[0.2em] text-[#5A5046] mb-2 uppercase">{noStop(t('contact_success_eyebrow'))}</p>
-                  <h2 className="text-3xl font-black text-[#1C1410] mb-3">{noStop(t('contact_success_title'))}</h2>
+                  <h2 className="text-3xl font-black text-[#1C1410] mb-3">The Chair Acknowledges</h2>
                   <p className="text-[#5A5046] leading-relaxed">
                     {t('contact_success_desc')}
                   </p>
@@ -246,8 +247,6 @@ export default function ContactClient() {
                     fontSize: 13,
                     fontWeight: 700,
                     color: '#1B3828',
-                    letterSpacing: '0.06em',
-                    textTransform: 'uppercase',
                     background: 'none',
                     border: 'none',
                     cursor: 'pointer',
@@ -267,7 +266,7 @@ export default function ContactClient() {
 
                 <div>
                   <p className="text-xs font-mono tracking-[0.2em] text-[#5A5046] mb-2 uppercase">{noStop(t('contact_heading_eyebrow'))}</p>
-                  <h2 className="text-3xl font-black text-[#1C1410]">{noStop(t('contact_heading'))}</h2>
+                  <h2 className="text-3xl font-black text-[#1C1410]">Get in Touch</h2>
                 </div>
 
                 {/* Subject pills */}
@@ -297,8 +296,6 @@ export default function ContactClient() {
                             borderRadius: 9999,
                             fontSize: 12.5,
                             fontWeight: active ? 800 : 700,
-                            letterSpacing: '0.05em',
-                            textTransform: 'uppercase',
                             backgroundColor: active ? '#1B3828' : 'rgba(28, 20, 16, 0.07)',
                             color: active ? '#EED98A' : '#5A5046',
                             border: `1.5px solid ${active ? '#1B3828' : 'rgba(28, 20, 16, 0.14)'}`,
@@ -388,8 +385,6 @@ export default function ContactClient() {
                       color: '#EED98A',
                       fontWeight: 800,
                       fontSize: 15,
-                      letterSpacing: '0.06em',
-                      textTransform: 'uppercase',
                       padding: '13px 32px',
                       minHeight: 48,
                       borderRadius: 14,
@@ -400,7 +395,7 @@ export default function ContactClient() {
                       boxShadow: '0 4px 14px rgba(27, 56, 40, 0.18)',
                     }}
                   >
-                    {sending ? t('contact_sending') : t('contact_submit_btn')}
+                    {sending ? t('contact_sending') : 'Yield to the chair'}
                   </button>
                   <p className="text-xs" style={{ color: '#5A5046' }}>{noStop(t('contact_reply_time'))}</p>
                 </div>

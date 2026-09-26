@@ -509,9 +509,9 @@ export default function PayPage() {
             <AuthLink
               next={`/conferences/${slug}/pay`}
               className="inline-flex items-center justify-center rounded-xl px-5 py-2.5 mt-4 font-bold text-sm focus:outline-none"
-              style={{ backgroundColor: NEU.forest, color: NEU.gold, fontFamily: OUTFIT, letterSpacing: '0.06em', textDecoration: 'none' }}
+              style={{ backgroundColor: NEU.forest, color: NEU.gold, fontFamily: OUTFIT, textDecoration: 'none' }}
             >
-              SIGN IN
+              Sign in
             </AuthLink>
           </NeuCard>
         ) : !conference ? (
@@ -601,9 +601,9 @@ function ManualPayAction({
             target="_blank"
             rel="noopener noreferrer"
             className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 mb-3 font-bold text-sm focus:outline-none"
-            style={{ border: '1.5px solid var(--gv-border)', color: NEU.ink, fontFamily: OUTFIT, letterSpacing: '0.06em', textDecoration: 'none' }}
+            style={{ border: '1.5px solid var(--gv-border)', color: NEU.ink, fontFamily: OUTFIT, textDecoration: 'none' }}
           >
-            GO TO PAYMENT PAGE
+            Go to payment page
           </a>
         </>
       )}
@@ -615,10 +615,10 @@ function ManualPayAction({
       <button
         onClick={onUploadProof}
         className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-sm focus:outline-none"
-        style={{ backgroundColor: NEU.forest, color: NEU.gold, fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none', cursor: 'pointer' }}
+        style={{ backgroundColor: NEU.forest, color: NEU.gold, fontFamily: OUTFIT, border: 'none', cursor: 'pointer' }}
       >
         <ImageUp size={15} />
-        I HAVE PAID, UPLOAD PROOF
+        I have paid, upload proof
       </button>
     </>
   );
@@ -691,7 +691,7 @@ function RemovePledgeAction({
     const result = await onConfirm();
     if (!result.ok) {
       setBusy(false);
-      setError(result.error || 'Could not remove this. Please try again.');
+      setError(plainOrFallback(result.error, 'Could not remove this. Please try again.'));
       return;
     }
     setBusy(false);
@@ -707,7 +707,7 @@ function RemovePledgeAction({
         className="text-xs font-semibold focus:outline-none hover:underline flex-shrink-0"
         style={{ color: 'var(--gv-muted)', fontFamily: OUTFIT, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
       >
-        REMOVE
+        Remove
       </button>
       {open && pos && (
         <Portal>
@@ -732,7 +732,7 @@ function RemovePledgeAction({
                 className="flex-1 rounded-lg py-1.5 text-xs font-bold focus:outline-none"
                 style={{ border: '1px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: busy ? 'default' : 'pointer' }}
               >
-                CANCEL
+                Cancel
               </button>
               <button
                 onClick={handleConfirm}
@@ -740,7 +740,7 @@ function RemovePledgeAction({
                 className="flex-1 rounded-lg py-1.5 text-xs font-bold focus:outline-none"
                 style={{ border: 'none', color: '#FFFFFF', backgroundColor: busy ? '#C89494' : '#8B2020', fontFamily: OUTFIT, cursor: busy ? 'default' : 'pointer' }}
               >
-                {busy ? '…' : 'REMOVE'}
+                {busy ? '…' : 'Remove'}
               </button>
             </div>
           </div>
@@ -900,11 +900,11 @@ function GenericInvoiceCard({
                   style={{
                     backgroundColor: paying ? 'var(--gv-border)' : NEU.forest,
                     color: paying ? 'var(--gv-muted)' : NEU.gold,
-                    fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none', cursor: paying ? 'default' : 'pointer',
+                    fontFamily: OUTFIT, border: 'none', cursor: paying ? 'default' : 'pointer',
                   }}
                 >
                   <CreditCard size={15} />
-                  {paying ? 'OPENING CHECKOUT...' : `PAY ${centsToFee(due, inv.currency)}`}
+                  {paying ? 'Opening checkout…' : `Pay ${centsToFee(due, inv.currency)}`}
                 </button>
               </>
             )}
@@ -995,7 +995,7 @@ function AddonsModal({
     const result = data as { ok?: boolean; error?: string } | null;
     setSaving(false);
     if (rpcError || !result?.ok) {
-      setError(result?.error || friendlyError(rpcError, 'Could not save your add-ons. Please try again.'));
+      setError((result?.error ? plainOrFallback(result.error, 'Could not save your add-ons. Please try again.') : friendlyError(rpcError, 'Could not save your add-ons. Please try again.')));
       return;
     }
     onSaved();
@@ -1119,9 +1119,9 @@ function AddonsModal({
             onClick={() => { if (!saving) onClose(); }}
             disabled={saving}
             className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
-            style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: saving ? 'default' : 'pointer' }}
+            style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: saving ? 'default' : 'pointer' }}
           >
-            CANCEL
+            Cancel
           </button>
           {addons.length > 0 && (
             <button
@@ -1131,10 +1131,10 @@ function AddonsModal({
               style={{
                 backgroundColor: saving ? 'var(--gv-border)' : 'var(--gv-main)',
                 color: saving ? 'var(--gv-muted)' : 'var(--gv-on-main)',
-                fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: saving ? 'default' : 'pointer',
+                fontFamily: OUTFIT, cursor: saving ? 'default' : 'pointer',
               }}
             >
-              {saving ? 'SAVING…' : 'SAVE'}
+              {saving ? 'Saving…' : 'Save'}
             </button>
           )}
         </div>
@@ -1178,7 +1178,7 @@ function AddSpotsPanel({
     const result = data as { ok?: boolean; spots_pledged?: number; error?: string } | null;
     setAdding(false);
     if (rpcError || !result?.ok) {
-      setError(result?.error || friendlyError(rpcError, 'Could not add spots. Please try again.'));
+      setError((result?.error ? plainOrFallback(result.error, 'Could not add spots. Please try again.') : friendlyError(rpcError, 'Could not add spots. Please try again.')));
       return;
     }
     setJustAdded(countNum);
@@ -1220,10 +1220,10 @@ function AddSpotsPanel({
             border: 'none', minHeight: 44,
             backgroundColor: adding || countNum < 1 ? 'var(--gv-border)' : NEU.forest,
             color: adding || countNum < 1 ? 'var(--gv-muted)' : NEU.gold,
-            fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: adding || countNum < 1 ? 'default' : 'pointer',
+            fontFamily: OUTFIT, cursor: adding || countNum < 1 ? 'default' : 'pointer',
           }}
         >
-          {adding ? 'ADDING…' : 'ADD'}
+          {adding ? 'Adding…' : 'Add'}
         </button>
       </div>
       {justAdded && !error && (
@@ -1286,7 +1286,7 @@ function AdvisorTicketsModal({
     const result = data as { ok?: boolean; error?: string } | null;
     setAdding(false);
     if (rpcError || !result?.ok) {
-      setError(result?.error || friendlyError(rpcError, 'Could not add advisor tickets. Please try again.'));
+      setError((result?.error ? plainOrFallback(result.error, 'Could not add advisor tickets. Please try again.') : friendlyError(rpcError, 'Could not add advisor tickets. Please try again.')));
       return;
     }
     onAdded();
@@ -1377,9 +1377,9 @@ function AdvisorTicketsModal({
             onClick={() => { if (!adding) onClose(); }}
             disabled={adding}
             className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
-            style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: adding ? 'default' : 'pointer' }}
+            style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: adding ? 'default' : 'pointer' }}
           >
-            CANCEL
+            Cancel
           </button>
           <button
             onClick={handleAdd}
@@ -1388,10 +1388,10 @@ function AdvisorTicketsModal({
             style={{
               backgroundColor: adding ? 'var(--gv-border)' : 'var(--gv-main)',
               color: adding ? 'var(--gv-muted)' : 'var(--gv-on-main)',
-              fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: adding ? 'default' : 'pointer',
+              fontFamily: OUTFIT, cursor: adding ? 'default' : 'pointer',
             }}
           >
-            {adding ? 'ADDING…' : 'ADD TICKETS'}
+            {adding ? 'Adding…' : 'Add tickets'}
           </button>
         </div>
     </PayActionPopup>
@@ -1477,7 +1477,7 @@ function ProofUploadModal({
         rpcError ?? new Error(result?.error ?? 'rpc returned ok:false'),
         { conferenceId, invoiceCount: invoiceIds.length },
       );
-      setError(result?.error || friendlyError(rpcError, 'Could not submit your payment. Please try again.'));
+      setError((result?.error ? plainOrFallback(result.error, 'Could not submit your payment. Please try again.') : friendlyError(rpcError, 'Could not submit your payment. Please try again.')));
       return;
     }
     onSubmitted();
@@ -1528,7 +1528,7 @@ function ProofUploadModal({
               className="absolute bottom-2 right-2 rounded-lg px-3 py-1.5 text-xs font-bold focus:outline-none"
               style={{ backgroundColor: 'color-mix(in srgb, var(--gv-on-bg) 72%, transparent)', color: 'var(--gv-surface)', fontFamily: OUTFIT, border: 'none', cursor: 'pointer' }}
             >
-              CHANGE
+              Change
             </button>
           </div>
         ) : (
@@ -1551,9 +1551,9 @@ function ProofUploadModal({
             onClick={() => { if (!submitting) onClose(); }}
             disabled={submitting}
             className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
-            style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: submitting ? 'default' : 'pointer' }}
+            style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: submitting ? 'default' : 'pointer' }}
           >
-            CANCEL
+            Cancel
           </button>
           <button
             onClick={handleSubmit}
@@ -1562,10 +1562,10 @@ function ProofUploadModal({
             style={{
               backgroundColor: submitting || !file ? 'var(--gv-border)' : 'var(--gv-main)',
               color: submitting || !file ? 'var(--gv-muted)' : 'var(--gv-on-main)',
-              fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: submitting || !file ? 'default' : 'pointer',
+              fontFamily: OUTFIT, cursor: submitting || !file ? 'default' : 'pointer',
             }}
           >
-            {submitting ? 'SUBMITTING…' : 'SUBMIT'}
+            {submitting ? 'Submitting…' : 'Submit'}
           </button>
         </div>
       </div>
@@ -1851,7 +1851,7 @@ function PayInvoiceAndActions({
     const { data, error } = await supabase.rpc('remove_pledged_spot_invoice', { p_invoice_id: invoiceId });
     const result = data as { ok?: boolean; error?: string } | null;
     if (error || !result?.ok) {
-      return { ok: false, error: result?.error || friendlyError(error, 'Could not remove this. Please try again.') };
+      return { ok: false, error: (result?.error ? plainOrFallback(result.error, 'Could not remove this. Please try again.') : friendlyError(error, 'Could not remove this. Please try again.')) };
     }
     onInvoiceRemoved(invoiceId);
     onInvoicesChanged();
@@ -1915,7 +1915,7 @@ function PayInvoiceAndActions({
     const result = data as { ok?: boolean; error?: string } | null;
     setVoucherApplying(false);
     if (error || !result?.ok) {
-      setVoucherError(result?.error || friendlyError(error, 'Could not apply that code. Please try again.'));
+      setVoucherError((result?.error ? plainOrFallback(result.error, 'Could not apply that code. Please try again.') : friendlyError(error, 'Could not apply that code. Please try again.')));
       return;
     }
     if (!code) setVoucherCode('');
@@ -1986,10 +1986,10 @@ function PayInvoiceAndActions({
               border: leftTab === 'invoices' ? `1.5px solid ${NEU.forest}` : '1.5px solid var(--gv-border)',
               backgroundColor: leftTab === 'invoices' ? 'color-mix(in srgb, var(--gv-main) 6%, transparent)' : 'transparent',
               color: leftTab === 'invoices' ? NEU.forest : NEU.muted,
-              fontFamily: OUTFIT, letterSpacing: '0.04em', cursor: 'pointer',
+              fontFamily: OUTFIT, cursor: 'pointer',
             }}
           >
-            CURRENT INVOICES
+            Current invoices
           </button>
           <button
             type="button"
@@ -1999,10 +1999,10 @@ function PayInvoiceAndActions({
               border: leftTab === 'payments' ? `1.5px solid ${NEU.forest}` : '1.5px solid var(--gv-border)',
               backgroundColor: leftTab === 'payments' ? 'color-mix(in srgb, var(--gv-main) 6%, transparent)' : 'transparent',
               color: leftTab === 'payments' ? NEU.forest : NEU.muted,
-              fontFamily: OUTFIT, letterSpacing: '0.04em', cursor: 'pointer',
+              fontFamily: OUTFIT, cursor: 'pointer',
             }}
           >
-            PAYMENTS{paymentBatches.length > 0 ? ` (${paymentBatches.length})` : ''}
+            Payments{paymentBatches.length > 0 ? ` (${paymentBatches.length})` : ''}
           </button>
         </div>
 
@@ -2152,7 +2152,7 @@ function PayInvoiceAndActions({
                             fontFamily: OUTFIT, whiteSpace: 'nowrap', cursor: voucherApplying || !voucherCode.trim() ? 'default' : 'pointer',
                           }}
                         >
-                          {voucherApplying ? '...' : 'APPLY'}
+                          {voucherApplying ? '…' : 'Apply'}
                         </button>
                       </div>
                       {voucherDiscountCents > 0 ? (
@@ -2210,11 +2210,11 @@ function PayInvoiceAndActions({
                       style={{
                         backgroundColor: paying ? 'var(--gv-border)' : NEU.forest,
                         color: paying ? 'var(--gv-muted)' : NEU.gold,
-                        fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none', cursor: paying ? 'default' : 'pointer',
+                        fontFamily: OUTFIT, border: 'none', cursor: paying ? 'default' : 'pointer',
                       }}
                     >
                       <CreditCard size={15} />
-                      {paying ? 'OPENING CHECKOUT...' : `PAY ${centsToFee(dueCents, currency)}`}
+                      {paying ? 'Opening checkout…' : `Pay ${centsToFee(dueCents, currency)}`}
                     </button>
                   </>
                 ) : (
@@ -2300,11 +2300,11 @@ function PayInvoiceAndActions({
                   style={{
                     backgroundColor: selectedPaying ? 'var(--gv-border)' : NEU.forest,
                     color: selectedPaying ? 'var(--gv-muted)' : NEU.gold,
-                    fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none', cursor: selectedPaying ? 'default' : 'pointer',
+                    fontFamily: OUTFIT, border: 'none', cursor: selectedPaying ? 'default' : 'pointer',
                   }}
                 >
                   <CreditCard size={15} />
-                  {selectedPaying ? 'OPENING CHECKOUT...' : `PAY SELECTED (${selectedInvoices.length})`}
+                  {selectedPaying ? 'Opening checkout…' : `Pay selected (${selectedInvoices.length})`}
                 </button>
               </>
             )}
@@ -2461,7 +2461,7 @@ function PayInvoiceAndActions({
               className="rounded-xl py-2.5 font-bold text-sm focus:outline-none"
               style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: OUTFIT }}
             >
-              GOT IT
+              Got it
             </button>
           </div>
         </ModalOverlay>

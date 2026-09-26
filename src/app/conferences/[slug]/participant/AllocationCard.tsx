@@ -109,7 +109,7 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
           {committee.difficulty && (
             <span
               className="px-2.5 py-0.5 rounded-full"
-              style={{ ...diffStyle, fontSize: '10px', fontFamily: OUTFIT, letterSpacing: '0.06em', fontWeight: 700 }}
+              style={{ backgroundColor: diffStyle.bg, color: diffStyle.color, fontSize: '10px', fontFamily: OUTFIT, letterSpacing: '0.06em', fontWeight: 700 }}
             >
               {capitalize(diff)}
             </span>
@@ -200,11 +200,11 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
                   className="inline-flex items-center justify-center gap-2 w-full rounded-xl focus:outline-none"
                   style={{
                     padding: '13px 18px', backgroundColor: '#1B3828', color: '#EED98A',
-                    fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, letterSpacing: '0.06em',
-                    textTransform: 'uppercase', textDecoration: 'none',
+                    fontFamily: OUTFIT, fontWeight: 800, fontSize: 14,
+                    textDecoration: 'none',
                   }}
                 >
-                  Join Session <ArrowRight size={15} strokeWidth={2.4} />
+                  Join session <ArrowRight size={15} strokeWidth={2.4} />
                 </Link>
               </>
             ) : releaseMs !== null ? (

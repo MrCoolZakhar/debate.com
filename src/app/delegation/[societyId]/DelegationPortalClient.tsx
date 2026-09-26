@@ -33,7 +33,7 @@ import { ArmchairIcon, ArrowLeft, LayoutDashboard, Receipt, Users } from 'lucide
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { queueLeaderAllocationEmail } from '@/lib/emailEvents';
-import { friendlyError } from '@/lib/friendlyError';
+import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import { openAuth } from '@/lib/authModal';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
@@ -144,7 +144,7 @@ export default function DelegationPortalClient() {
     if (error || !r?.ok) {
       setData(prev);
       setBusySeatId(null);
-      setNotice({ tone: 'error', text: r?.error ?? friendlyError(error, 'That seat was not saved. Try again.') });
+      setNotice({ tone: 'error', text: error ? friendlyError(error, 'That seat was not saved. Try again.') : plainOrFallback(r?.error, 'That seat was not saved. Try again.') });
       return;
     }
     // Tell the delegate where they sit: the same announcement the organiser's own
@@ -175,7 +175,7 @@ export default function DelegationPortalClient() {
     setBusyMemberId(null);
     const r = out as { ok: boolean; error?: string } | null;
     if (error || !r?.ok) {
-      setNotice({ tone: 'error', text: r?.error ?? friendlyError(error, 'The role was not handed over. Try again.') });
+      setNotice({ tone: 'error', text: error ? friendlyError(error, 'The role was not handed over. Try again.') : plainOrFallback(r?.error, 'The role was not handed over. Try again.') });
       return;
     }
     setNotice({ tone: 'ok', text: `${m.name} is now head delegate.` });
@@ -221,7 +221,7 @@ export default function DelegationPortalClient() {
     }
     setBusyMemberId(null);
     if (error || !r?.ok) {
-      setNotice({ tone: 'error', text: r?.error ?? friendlyError(error, 'That change was not saved. Try again.') });
+      setNotice({ tone: 'error', text: error ? friendlyError(error, 'That change was not saved. Try again.') : plainOrFallback(r?.error, 'That change was not saved. Try again.') });
       return;
     }
     setNotice({ tone: 'ok', text: self ? 'You are now the faculty advisor.' : `${m.name} is now the faculty advisor.` });
@@ -235,10 +235,10 @@ export default function DelegationPortalClient() {
 
   if (state !== 'ok' || !data) {
     const text = state === 'denied'
-      ? { title: 'You do not lead this delegation', body: 'Only its head delegate or faculty advisor can open this page. If you just handed over the role, the new head delegate has it now.' }
+      ? { title: 'You Do Not Lead This Delegation', body: 'Only its head delegate or faculty advisor can open this page. If you just handed over the role, the new head delegate has it now.' }
       : state === 'not_found'
-        ? { title: 'Delegation not found', body: 'This delegation no longer exists, or the link is wrong.' }
-        : { title: 'We could not load this delegation', body: 'Check your connection and try again.' };
+        ? { title: 'Delegation Not Found', body: 'This delegation no longer exists, or the link is wrong.' }
+        : { title: 'We Could Not Load This Delegation', body: 'Check your connection and try again.' };
     return (
       <Shell>
         <Panel style={{ padding: '32px 20px', textAlign: 'center' }}>
@@ -247,13 +247,13 @@ export default function DelegationPortalClient() {
           <div className="flex flex-wrap justify-center gap-2">
             {state === 'error' && (
               <button type="button" onClick={() => load()} className="focus:outline-none focus-visible:ring-2"
-                style={{ padding: '10px 16px', borderRadius: 12, border: 'none', backgroundColor: NEU.forest, color: NEU.gold, fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.04em', cursor: 'pointer' }}>
-                TRY AGAIN
+                style={{ padding: '10px 16px', borderRadius: 12, border: 'none', backgroundColor: NEU.forest, color: NEU.gold, fontFamily: OUTFIT, fontWeight: 700, cursor: 'pointer' }}>
+                Try again
               </button>
             )}
             <Link href="/account/conferences" className="focus:outline-none focus-visible:ring-2"
-              style={{ padding: '10px 16px', borderRadius: 12, border: NEU.hairline, color: NEU.forest, fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.04em', textDecoration: 'none' }}>
-              MY CONFERENCES
+              style={{ padding: '10px 16px', borderRadius: 12, border: NEU.hairline, color: NEU.forest, fontFamily: OUTFIT, fontWeight: 700, textDecoration: 'none' }}>
+              My conferences
             </Link>
           </div>
         </Panel>
@@ -275,7 +275,7 @@ export default function DelegationPortalClient() {
         <Link href={`/conferences/${conf.slug}`} className="inline-flex items-center gap-2 min-w-0 focus:outline-none focus-visible:ring-2"
           style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
           <LogoDisc src={conf.logo_url} size={24} fallbackText={confName.slice(0, 3)} alt="" style={{ boxShadow: 'none' }} />
-          <span className="truncate">{confName}</span>
+          <span className="[overflow-wrap:anywhere]" style={{ lineHeight: 1.25 }}>{confName}</span>
         </Link>
       </div>
 

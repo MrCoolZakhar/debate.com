@@ -68,18 +68,18 @@ interface ImportInvite {
   allocation?: InviteAllocation | null;
 }
 
-// Uppercase forest-and-gold pill, the primary link CTA — the same recipe as
+// Forest-and-gold pill, the primary link CTA — the same recipe as
 // NeuButton's rendered (non-hover) state, usable as a <Link>.
 const primaryPillStyle: React.CSSProperties = {
   background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-  color: NEU.gold, textDecoration: 'none', fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.05em',
+  color: NEU.gold, textDecoration: 'none', fontFamily: OUTFIT, fontWeight: 800,
   boxShadow: `0 4px 10px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 30%, transparent), ${NEU.outSm}`,
 };
 
 // Quieter secondary pill: surface fill, forest ink, soft extrusion.
 const secondaryPillStyle: React.CSSProperties = {
   backgroundColor: NEU.surface, color: NEU.forest, textDecoration: 'none',
-  fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.05em', boxShadow: NEU.outSm,
+  fontFamily: OUTFIT, fontWeight: 800, boxShadow: NEU.outSm,
 };
 
 function formatDateRange(start: string | null, end: string | null): string | null {
@@ -194,13 +194,13 @@ export default function ImportInvitePage() {
         <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Landmark} size={52} style={{ marginBottom: 20 }} />
         <Eyebrow>Imported delegate</Eyebrow>
         <h1 className="font-black text-xl mt-2 mb-2" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-          Invitation not found
+          Invitation Not Found
         </h1>
         <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.55 }}>
           This invitation link is not valid. It may have been claimed already or removed. Ask your conference organizer to send you a new one.
         </p>
         <Link href="/conferences/explore" className="inline-flex items-center gap-2 rounded-full py-2.5 px-5 font-bold text-sm focus:outline-none" style={primaryPillStyle}>
-          BROWSE CONFERENCES
+          Browse conferences
         </Link>
       </CardShell>
     );
@@ -212,13 +212,13 @@ export default function ImportInvitePage() {
         <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Landmark} size={52} style={{ marginBottom: 20 }} />
         <Eyebrow>Imported delegate</Eyebrow>
         <h1 className="font-black text-xl mt-2 mb-2" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-          Already claimed
+          Already Claimed
         </h1>
         <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.55 }}>
           This invitation has already been claimed. If that was you, your conference is waiting in My Conferences.
         </p>
         <Link href="/account/conferences" className="inline-flex items-center gap-2 rounded-full py-2.5 px-5 font-bold text-sm focus:outline-none" style={primaryPillStyle}>
-          GO TO MY CONFERENCES
+          Go to my conferences
         </Link>
       </CardShell>
     );
@@ -310,14 +310,14 @@ export default function ImportInvitePage() {
             className="inline-flex items-center justify-center rounded-full py-3 px-5 text-sm focus:outline-none"
             style={primaryPillStyle}
           >
-            CREATE MY ACCOUNT
+            Create my account
           </AuthLink>
           <AuthLink
             next={nextPath}
             className="inline-flex items-center justify-center rounded-full py-3 px-5 text-sm focus:outline-none"
             style={secondaryPillStyle}
           >
-            I ALREADY HAVE AN ACCOUNT
+            I already have an account
           </AuthLink>
         </div>
       )}

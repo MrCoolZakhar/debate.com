@@ -46,14 +46,12 @@ export default function GuidesIndexPage() {
           </nav>
           <h1 className="gvg-h1" style={{ marginTop: 20 }}>Premium MUN Guides</h1>
           <p className="gvg-lead">
-            The long versions. Each guide is a complete playbook for one job at a conference: winning the room as a
-            delegate, chairing a committee people remember, funding and growing a conference, and designing committees
-            that debate well. The opening sections of every guide are free to read. The rest is included with Gavelling
-            Unlimited.
+            Each guide is a complete playbook for one job at a conference. The opening sections are free to read. The
+            rest comes with Gavelling Unlimited.
           </p>
           <GuideCardGrid guides={guides} headingLevel={2} />
           <p className="gvg-lead" style={{ fontSize: 16 }}>
-            Looking for the free basics? The <Link href="/blog" style={{ color: '#1B3828', textDecoration: 'underline' }}>MUN guides on the blog</Link> cover
+            Looking for the free basics? The <Link href="/blog" style={{ color: '#1B3828', textDecoration: 'underline', fontWeight: 700 }}>MUN guides on the blog</Link> cover
             procedure, speeches, position papers and running a committee, and stay free.
           </p>
         </div>

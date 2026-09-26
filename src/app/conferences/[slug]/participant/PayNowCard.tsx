@@ -76,7 +76,7 @@ function BalanceRow({ b, showConference }: { b: OpenBalance; showConference: boo
       </div>
       <div className="flex-1 min-w-0">
         {showConference && (
-          <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: '#6B5F52', margin: 0 }}>{name}</p>
+          <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: '#6B5F52', margin: 0 }}>{name}</p>
         )}
         <p style={{ fontFamily: OUTFIT, fontSize: 20, fontWeight: 800, color: '#1C1410', margin: 0, fontVariantNumeric: 'tabular-nums' }}>
           {centsToFee(b.due_cents, b.currency)}
@@ -98,7 +98,7 @@ function BalanceRow({ b, showConference }: { b: OpenBalance; showConference: boo
           className="inline-flex items-center gap-1.5 rounded-full px-4 py-2.5 focus:outline-none flex-shrink-0"
           style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}
         >
-          PAY NOW <ArrowRight size={14} aria-hidden />
+          Pay now <ArrowRight size={14} aria-hidden />
         </Link>
       ) : (
         <p className="flex-shrink-0" style={{ fontFamily: OUTFIT, fontSize: 12, color: '#6B5F52', margin: 0, maxWidth: 220 }}>

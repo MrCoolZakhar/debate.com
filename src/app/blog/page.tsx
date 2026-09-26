@@ -86,14 +86,13 @@ export default function BlogIndexPage() {
                 letterSpacing: '-0.025em',
               }}
             >
-              MUN guides
+              MUN Guides
             </h1>
             <p
               className="m-0 mt-4 max-w-[52ch]"
               style={{ color: '#55483C', fontSize: 'clamp(16.5px, 2.4vw, 19px)', lineHeight: 1.6 }}
             >
-              {articles.length} guides to running a Model UN committee, written for the people in the room:
-              the chair at the dais, the delegate on the floor, and the secretariat keeping the day on time.
+              {articles.length} free guides to running a Model UN committee, for chairs, delegates and secretariats.
             </p>
           </header>
 
@@ -108,15 +107,14 @@ export default function BlogIndexPage() {
                 className="m-0 font-extrabold"
                 style={{ color: '#1B3828', fontSize: 'clamp(21px, 3vw, 26px)', letterSpacing: '-0.014em' }}
               >
-                Premium guides
+                Premium Guides
               </h2>
               <Link href="/guides" className="text-[15px] font-bold underline underline-offset-4" style={{ color: '#1B3828' }}>
                 All premium guides
               </Link>
             </div>
             <p className="m-0 mt-2 max-w-[62ch] text-[15px] leading-[1.55]" style={{ color: '#55483C' }}>
-              Complete playbooks for delegates, chairs and organisers. The opening sections are free to read; the rest
-              is included with Gavelling Unlimited.
+              The opening sections are free to read. The rest comes with Gavelling Unlimited.
             </p>
             {/* Three: one each for delegates, chairs and organisers. */}
             <GuideCardGrid guides={premiumGuides} picks />
@@ -190,12 +188,12 @@ export default function BlogIndexPage() {
           {photoIds.length > 0 ? (
             <section aria-labelledby="photo-credits" className="mt-16 border-t pt-8" style={{ borderColor: '#DDD4C0' }}>
               <h2 id="photo-credits" className="m-0 text-[17px] font-extrabold" style={{ color: '#1B3828' }}>
-                Photo credits
+                Photo Credits
               </h2>
               <p className="m-0 mt-2 max-w-[62ch] text-[13.5px] leading-[1.6]" style={{ color: '#55483C' }}>
                 Every photograph on these guides is used under an open licence or is in the public domain, and is
                 credited beside it. If a photo is yours and you would like it credited differently or removed, email{' '}
-                <a href="mailto:wearegavelling@gmail.com" className="underline" style={{ color: '#1B3828' }}>
+                <a href="mailto:wearegavelling@gmail.com" className="font-bold underline" style={{ color: '#1B3828' }}>
                   wearegavelling@gmail.com
                 </a>
                 .

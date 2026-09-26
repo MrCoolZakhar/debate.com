@@ -3,7 +3,9 @@
 import { sortCvEntries } from '@/lib/cvOrder';
 import Link from 'next/link';
 import { ArrowRight, ScrollText } from 'lucide-react';
-import { getCountryByName, getFlagUrl } from '@/lib/countries';
+import { getCountryByName } from '@/lib/countries';
+import { CircleFlag } from '@/components/CircleFlag';
+import { BrandLogo } from '@/components/BrandLogo';
 import type { CVEntry } from '@/components/CVEntryModal';
 import { CVStatsRow, TimelineEntry } from '../../account/cv/CVTimeline';
 import { Eyebrow, OUTFIT, MONO } from '../../account/accountUi';
@@ -38,7 +40,7 @@ export default function PublicCVClient({ profile, entries: rawEntries }: { profi
           className="mt-6 inline-flex items-center gap-2 rounded-full"
           style={{ padding: '12px 20px', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, textDecoration: 'none' }}
         >
-          GO TO GAVELLING <ArrowRight size={16} strokeWidth={2.4} />
+          Go to Gavelling <ArrowRight size={16} strokeWidth={2.4} />
         </Link>
       </div>
     );
@@ -56,16 +58,14 @@ export default function PublicCVClient({ profile, entries: rawEntries }: { profi
         className="sticky top-0 z-20 flex items-center justify-between px-4 md:px-6"
         style={{ height: 60, backgroundColor: 'rgba(237,231,216,0.85)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', borderBottom: '1px solid rgba(221,212,192,0.7)' }}
       >
-        <Link href="/" style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 17, letterSpacing: '-0.01em', color: '#1B3828', textDecoration: 'none' }}>
-          GAVELLING
-        </Link>
+        <BrandLogo height={22} />
         <div className="flex items-center gap-2.5">
           <Link
             href="/"
             className="inline-flex items-center gap-1.5 rounded-full"
             style={{ padding: '9px 15px', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 12.5, textDecoration: 'none' }}
           >
-            BUILD YOUR MUN CV <ArrowRight size={15} strokeWidth={2.5} />
+            Build your MUN CV <ArrowRight size={15} strokeWidth={2.5} />
           </Link>
           {/* Signed-in readers get their own avatar menu; nothing while signed out. */}
           <ProfileAvatarMenu size={48} />
@@ -98,13 +98,12 @@ export default function PublicCVClient({ profile, entries: rawEntries }: { profi
           )}
           <div className="min-w-0">
             <Eyebrow className="mb-1.5">Model UN CV</Eyebrow>
-            <h1 className="font-black leading-tight" style={{ color: '#1C1410', fontFamily: OUTFIT, fontSize: 28, letterSpacing: '-0.015em', margin: 0 }}>
+            <h1 className="font-black leading-tight [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT, fontSize: 28, letterSpacing: '-0.015em', margin: 0 }}>
               {name}
             </h1>
             {country && (
               <div className="flex items-center gap-2 mt-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={getFlagUrl(country.code)} alt="" style={{ width: 22, height: 15, borderRadius: 3, objectFit: 'cover', border: '1px solid rgba(0,0,0,0.1)' }} />
+                <CircleFlag code={country.code} size={20} decorative />
                 <span style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 14, color: '#5C5140' }}>{country.name}</span>
               </div>
             )}
@@ -155,14 +154,14 @@ export default function PublicCVClient({ profile, entries: rawEntries }: { profi
             POWERED BY GAVELLING
           </p>
           <p className="text-sm mb-4 max-w-md" style={{ color: '#5C5140', fontFamily: OUTFIT, lineHeight: 1.6, margin: '0 0 16px' }}>
-            Keep your own verified Model UN record. Conferences, committees, and awards, beautifully typeset.
+            Keep your own Model UN record and share it with one link.
           </p>
           <Link
             href="/"
             className="inline-flex items-center gap-2 rounded-full"
             style={{ padding: '12px 20px', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, textDecoration: 'none' }}
           >
-            BUILD YOUR MUN CV <ArrowRight size={16} strokeWidth={2.4} />
+            Build your MUN CV <ArrowRight size={16} strokeWidth={2.4} />
           </Link>
         </div>
       </main>

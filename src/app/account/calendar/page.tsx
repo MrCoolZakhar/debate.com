@@ -240,12 +240,12 @@ export default function CalendarPage() {
           <Link
             href="/conferences/explore"
             className="inline-flex items-center gap-2 rounded-xl px-6 font-bold focus:outline-none transition-colors"
-            style={{ fontSize: T.body, minHeight: 44, backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: OUTFIT, letterSpacing: '0.04em' }}
+            style={{ fontSize: T.body, minHeight: 44, backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: OUTFIT }}
             onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#1B3828'; }}
           >
             <Compass size={15} strokeWidth={2.2} />
-            EXPLORE THE DIRECTORY
+            Explore conferences
           </Link>
         </div>
       ) : (

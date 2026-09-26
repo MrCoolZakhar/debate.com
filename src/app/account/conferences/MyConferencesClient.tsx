@@ -110,19 +110,19 @@ const DRAFT_ROLE_LABEL: Record<string, string> = {
 };
 
 const TABS: { key: TabKey; label: string }[] = [
-  { key: 'all', label: 'ALL' },
-  { key: 'delegate', label: 'DELEGATE' },
-  { key: 'chair', label: 'CHAIR' },
-  { key: 'advisor', label: 'ADVISOR' },
-  { key: 'organizer', label: 'ORGANIZER' },
+  { key: 'all', label: 'All' },
+  { key: 'delegate', label: 'Delegate' },
+  { key: 'chair', label: 'Chair' },
+  { key: 'advisor', label: 'Advisor' },
+  { key: 'organizer', label: 'Organizer' },
 ];
 
 const EXPLORE_CONFIG: Record<TabKey, { label: string; href: string }> = {
-  all:       { label: 'EXPLORE CONFERENCES', href: '/conferences/explore' },
-  delegate:  { label: 'EXPLORE CONFERENCES', href: '/conferences/explore' },
-  advisor:   { label: 'EXPLORE CONFERENCES', href: '/conferences/explore' },
-  chair:     { label: 'EXPLORE CHAIRING OPPORTUNITIES', href: '/conferences/roles' },
-  organizer: { label: 'LIST YOUR CONFERENCE', href: '/conferences/new' },
+  all:       { label: 'Explore conferences', href: '/conferences/explore' },
+  delegate:  { label: 'Explore conferences', href: '/conferences/explore' },
+  advisor:   { label: 'Explore conferences', href: '/conferences/explore' },
+  chair:     { label: 'Explore chairing opportunities', href: '/conferences/roles' },
+  organizer: { label: 'List your conference', href: '/conferences/new' },
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -236,10 +236,9 @@ function NeuSegmented<T extends string>({ options, value, onChange, size = 'md' 
               zIndex: 1,
               padding: isSm ? '7px 15px' : '9px 18px',
               borderRadius: 999,
-              fontSize: isSm ? 10.5 : 11.5,
+              fontSize: isSm ? 12 : 13,
               fontFamily: MONO,
               fontWeight: 800,
-              letterSpacing: '0.08em',
               border: 'none',
               backgroundColor: 'transparent',
               color: active ? NEU.gold : NEU.muted,
@@ -281,9 +280,8 @@ function NeuAnchorCta({ href, icon: Icon, children, gradient = NEU_GRADIENTS.for
         background: `linear-gradient(135deg, ${gradient[0]}, ${gradient[1]})`,
         color: textColor,
         fontFamily: OUTFIT,
-        fontSize: 12.5,
+        fontSize: 13.5,
         fontWeight: 800,
-        letterSpacing: '0.05em',
         textDecoration: 'none',
         boxShadow: hovered ? `0 6px 16px color-mix(in srgb, ${gradient[0]} 40%, transparent), ${NEU.outSmHover}` : `0 4px 10px color-mix(in srgb, ${gradient[0]} 30%, transparent), ${NEU.outSm}`,
         transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
@@ -319,9 +317,8 @@ function NeuGhostButton({ onClick, children, disabled = false, style }: {
         backgroundColor: NEU.surface,
         color: disabled ? NEU.muted : NEU.ink,
         fontFamily: OUTFIT,
-        fontSize: 12.5,
+        fontSize: 13.5,
         fontWeight: 800,
-        letterSpacing: '0.05em',
         cursor: disabled ? 'default' : 'pointer',
         boxShadow: disabled ? NEU.inSm : hovered ? NEU.outSmHover : NEU.outSm,
         transform: hovered && !disabled ? 'translateY(-1px)' : 'translateY(0)',
@@ -375,21 +372,19 @@ function NoMatchesCard({ onClear }: { onClear: () => void }) {
       <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
         Try a different timeframe or continent.
       </p>
-      <NeuGhostButton onClick={onClear}>CLEAR FILTERS</NeuGhostButton>
+      <NeuGhostButton onClick={onClear}>Clear filters</NeuGhostButton>
     </EmptyWell>
   );
 }
 
-/** Small pressed-in count chip for section headers. */
+/** A section header's count: a plain number beside the label, no chip
+ *  (CLAUDE.md §8, no count pills). */
 function CountChip({ n, muted = false }: { n: number; muted?: boolean }) {
   return (
     <span
-      className="inline-flex items-center justify-center"
       style={{
-        minWidth: 20, height: 20, padding: '0 6px', borderRadius: 999,
-        backgroundColor: NEU.base, boxShadow: NEU.inSm,
-        fontFamily: MONO, fontSize: 10, fontWeight: 800, letterSpacing: '0.02em',
-        color: muted ? NEU.muted : NEU.deepGold, fontVariantNumeric: 'tabular-nums',
+        fontFamily: MONO, fontSize: 15, fontWeight: 800, lineHeight: 1,
+        color: muted ? NEU.inkSoft : NEU.deepGold, fontVariantNumeric: 'tabular-nums',
       }}
     >
       {n}
@@ -419,10 +414,10 @@ function InviteCardShell({ title, subtitle, responding, onDecline, onAccept }: {
       <div className="flex items-center gap-3.5 min-w-0 sm:flex-1">
         <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={Mail} iconColor={NEU.forest} size={40} />
         <div className="min-w-0 flex-1">
-          <p className="font-bold text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+          <p className="font-bold text-sm [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
             {title}
           </p>
-          <p className="text-xs truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+          <p className="text-xs [overflow-wrap:anywhere]" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
             {subtitle}
           </p>
         </div>
@@ -435,11 +430,11 @@ function InviteCardShell({ title, subtitle, responding, onDecline, onAccept }: {
           style={{
             padding: '7px 13px', borderRadius: 999, border: 'none',
             backgroundColor: NEU.surface, boxShadow: busy ? NEU.inSm : NEU.outSm,
-            color: busy ? NEU.muted : NEU.ink, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800,
-            letterSpacing: '0.04em', cursor: busy ? 'not-allowed' : 'pointer',
+            color: busy ? NEU.muted : NEU.ink, fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800,
+            cursor: busy ? 'not-allowed' : 'pointer',
           }}
         >
-          <X size={12} strokeWidth={2.6} /> {responding === 'decline' ? '...' : 'DECLINE'}
+          <X size={12} strokeWidth={2.6} /> {responding === 'decline' ? '...' : 'Decline'}
         </button>
         <button
           onClick={onAccept}
@@ -449,11 +444,11 @@ function InviteCardShell({ title, subtitle, responding, onDecline, onAccept }: {
             padding: '7px 14px', borderRadius: 999, border: 'none',
             background: busy ? NEU.base : `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
             boxShadow: busy ? NEU.inSm : `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}`,
-            color: busy ? NEU.muted : NEU.gold, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800,
-            letterSpacing: '0.04em', cursor: busy ? 'not-allowed' : 'pointer',
+            color: busy ? NEU.muted : NEU.gold, fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800,
+            cursor: busy ? 'not-allowed' : 'pointer',
           }}
         >
-          <Check size={12} strokeWidth={2.6} /> {responding === 'accept' ? '...' : 'ACCEPT'}
+          <Check size={12} strokeWidth={2.6} /> {responding === 'accept' ? '...' : 'Accept'}
         </button>
       </div>
     </div>
@@ -525,10 +520,10 @@ function PendingImportInvitesSection({ invites }: { invites: ImportInvite[] }) {
             >
               <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={Mail} size={40} />
               <div className="flex-1 min-w-0">
-                <p className="font-black text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+                <p className="font-black text-sm [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
                   {conferenceAcronymLabel(inv.conference)} invited you as {inv.role.replace(/-/g, ' ')}
                 </p>
-                <p className="text-xs truncate mt-0.5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                <p className="text-xs [overflow-wrap:anywhere] mt-0.5" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
                   {subtitle}
                 </p>
               </div>
@@ -537,11 +532,11 @@ function PendingImportInvitesSection({ invites }: { invites: ImportInvite[] }) {
                 className="flex-shrink-0 inline-flex items-center gap-2 rounded-full py-2 px-4 font-bold text-xs focus:outline-none"
                 style={{
                   background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-                  color: NEU.gold, textDecoration: 'none', fontFamily: OUTFIT, letterSpacing: '0.05em',
+                  color: NEU.gold, textDecoration: 'none', fontFamily: OUTFIT,
                   boxShadow: `0 4px 10px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 30%, transparent), ${NEU.outSm}`,
                 }}
               >
-                OPEN INVITATION
+                Open invitation
               </Link>
             </div>
           );
@@ -639,15 +634,15 @@ function DraftRowCard({ draft, onDelete }: { draft: DraftRow; onDelete: (draft: 
         fallbackText={(draft.acronym || draft.fullName).slice(0, 3)}
       />
       <div className="min-w-0 flex-1">
-        <p className="font-black text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, letterSpacing: '-0.01em' }}>
+        <p className="font-black text-sm [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT, letterSpacing: '-0.01em' }}>
           {primary}
         </p>
         {secondary && (
-          <p className="text-[11px] truncate" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontWeight: 600 }}>
+          <p className="text-[11px] [overflow-wrap:anywhere]" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontWeight: 600 }}>
             {secondary}
           </p>
         )}
-        <p className="text-xs truncate mt-0.5" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
+        <p className="text-xs mt-0.5" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
           {roleLabel} · last edited {relativeTime(draft.updatedAt)}
         </p>
       </div>
@@ -660,11 +655,11 @@ function DraftRowCard({ draft, onDelete }: { draft: DraftRow; onDelete: (draft: 
             padding: '8px 14px', borderRadius: 999, border: 'none',
             background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
             boxShadow: `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}`,
-            color: NEU.gold, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800,
-            letterSpacing: '0.05em', textDecoration: 'none', whiteSpace: 'nowrap',
+            color: NEU.gold, fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800,
+            textDecoration: 'none', whiteSpace: 'nowrap',
           }}
         >
-          CONTINUE
+          Continue
         </Link>
         <button
           onClick={async () => { setBusy(true); try { await onDelete(draft); } finally { setBusy(false); } }}
@@ -1208,7 +1203,7 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
             </p>
           </div>
           <div className="flex-shrink-0 sm:mt-1">
-            <NeuAnchorCta href="/conferences/new" icon={Plus}>ORGANISE A CONFERENCE</NeuAnchorCta>
+            <NeuAnchorCta href="/conferences/new" icon={Plus}>Organise a conference</NeuAnchorCta>
           </div>
         </div>
 
@@ -1232,7 +1227,7 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
         {/* Secondary filters */}
         <div className="flex flex-wrap items-center gap-3 mb-8">
           <NeuSegmented
-            options={[{ key: 'upcoming' as const, label: 'UPCOMING' }, { key: 'past' as const, label: 'PAST' }]}
+            options={[{ key: 'upcoming' as const, label: 'Upcoming' }, { key: 'past' as const, label: 'Past' }]}
             value={timeframe}
             onChange={setTimeframe}
             size="sm"

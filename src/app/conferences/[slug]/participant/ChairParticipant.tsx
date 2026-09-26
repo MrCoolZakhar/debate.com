@@ -86,7 +86,7 @@ function CommitteeHeaderCard({ committee }: { committee: ChairCommittee }) {
         </h3>
         <div className="flex items-center gap-2 mt-1.5">
           {committee.difficulty && (
-            <span className="px-2.5 py-0.5 rounded-full" style={{ ...diffStyle, fontSize: '10px', fontFamily: OUTFIT, letterSpacing: '0.06em', fontWeight: 700 }}>
+            <span className="px-2.5 py-0.5 rounded-full" style={{ backgroundColor: diffStyle.bg, color: diffStyle.color, fontSize: '10px', fontFamily: OUTFIT, letterSpacing: '0.06em', fontWeight: 700 }}>
               {capitalize(diff)}
             </span>
           )}
@@ -170,7 +170,7 @@ function SessionCard({ committee, chairDisplayName, conferenceStartDate }: {
               {copied ? (
                 <>
                   <Check size={12} style={{ color: '#3D7A52' }} />
-                  <span style={{ fontFamily: OUTFIT, fontSize: '11px', fontWeight: 700, letterSpacing: '0.1em', color: '#3D7A52' }}>COPIED</span>
+                  <span style={{ fontFamily: OUTFIT, fontSize: '11px', fontWeight: 700, color: '#3D7A52' }}>Copied</span>
                 </>
               ) : (
                 <>
@@ -183,11 +183,11 @@ function SessionCard({ committee, chairDisplayName, conferenceStartDate }: {
           <a
             href={`${getSiteUrl()}/chair/${committee.session_code}?chairName=${encodeURIComponent(chairDisplayName)}`}
             className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-sm focus:outline-none transition-colors"
-            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, letterSpacing: '0.06em', textDecoration: 'none' }}
+            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, textDecoration: 'none' }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
           >
-            <Radio size={14} /> JOIN SESSION
+            <Radio size={14} /> Join session
           </a>
         </div>
       )}

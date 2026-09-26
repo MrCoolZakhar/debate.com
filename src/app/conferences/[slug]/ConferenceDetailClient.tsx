@@ -4,7 +4,7 @@ import { openAuth } from '@/lib/authModal';
 import { Fragment, useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound, Gavel, Eye, ScrollText, CreditCard, Languages } from 'lucide-react';
+import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, Circle, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound, Gavel, Eye, ScrollText, CreditCard, Languages } from 'lucide-react';
 import { committeeLanguageCode, committeeLanguageFlag } from '@/lib/committeeLanguage';
 import { CircleFlag } from '@/components/CircleFlag';
 import SiteNav from '@/components/SiteNav';
@@ -383,7 +383,7 @@ function ReviewCard({ review }: { review: ConferenceReview }) {
           >
             {(review.display_name ?? 'V').charAt(0).toUpperCase()}
           </span>
-          <span className="text-[13.5px] font-semibold truncate" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
+          <span className="text-[13.5px] font-semibold min-w-0 [overflow-wrap:anywhere]" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
             {review.display_name ?? 'Verified delegate'}
           </span>
         </div>
@@ -414,7 +414,6 @@ function SortButton({ label, dir, onClick }: { label: string; dir: 'asc' | 'desc
         color: active ? 'var(--gv-on-main)' : '#6B5F52',
         border: active ? '1px solid var(--gv-main)' : '1px solid color-mix(in srgb, var(--gv-border) 90%, transparent)',
         fontFamily: "var(--font-brand), sans-serif",
-        letterSpacing: '0.09em',
         whiteSpace: 'nowrap',
         cursor: 'pointer',
       }}
@@ -443,12 +442,11 @@ function TypeFilterButton({ mode, onClick }: { mode: 'ga' | 'crisis' | null; onC
         color: active ? 'var(--gv-on-main)' : '#6B5F52',
         border: active ? '1px solid var(--gv-main)' : '1px solid color-mix(in srgb, var(--gv-border) 90%, transparent)',
         fontFamily: "var(--font-brand), sans-serif",
-        letterSpacing: '0.09em',
         whiteSpace: 'nowrap',
         cursor: 'pointer',
       }}
     >
-      {mode === 'ga' ? 'GA ONLY' : mode === 'crisis' ? 'CRISIS ONLY' : 'GA / CRISIS'}
+      {mode === 'ga' ? 'GA only' : mode === 'crisis' ? 'Crisis only' : 'GA / Crisis'}
       {active ? (
         <Check size={12} strokeWidth={2.4} />
       ) : (
@@ -1658,8 +1656,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(16,28,21,0.28)'; el.style.borderColor = 'rgba(255,255,255,0.55)'; }}
                 >
                   <Plus size={20} strokeWidth={2.2} />
-                  <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.16em' }}>
-                    ADD LOGO
+                  <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '11px' }}>
+                    Add logo
                   </span>
                 </button>
               ) : null}
@@ -1699,7 +1697,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   ) : isOrganizerViewer ? (
                     <>
                       <span aria-hidden style={{ color: 'rgba(238,217,138,0.5)', fontSize: '10px' }}>◆</span>
-                      <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontSize: '11px', letterSpacing: '0.06em', color: 'var(--gv-on-main)', backgroundColor: 'rgba(238,217,138,0.14)', border: '1px solid rgba(238,217,138,0.32)', padding: '2px 9px', borderRadius: '9999px' }}>
+                      <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontSize: '13px', color: 'var(--gv-on-main)' }}>
                         Dates: TBD
                       </span>
                     </>
@@ -1728,7 +1726,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
           {isOrganizerViewer && (
             <OrganizerPencil
               variant="cover"
-              label="EDIT BANNER"
+              label="Edit banner"
               ariaLabel="Edit banner"
               onClick={() => openEdit('banner')}
               style={{ zIndex: 5 }}
@@ -1837,11 +1835,11 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   <button
                     onClick={() => showTab('reviews')}
                     className="flex-shrink-0 rounded-xl py-2 px-4 text-[11px] font-bold focus:outline-none transition-colors gv-lift"
-                    style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', border: 'none', cursor: 'pointer' }}
+                    style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", border: 'none', cursor: 'pointer' }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
                   >
-                    LEAVE A REVIEW
+                    Leave a review
                   </button>
                   <button
                     onClick={dismissReviewPrompt}
@@ -2289,12 +2287,11 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           backgroundColor: reviewRating < 1 || reviewSubmitting ? 'var(--gv-border)' : 'var(--gv-main)',
                           color: reviewRating < 1 || reviewSubmitting ? 'var(--gv-muted)' : 'var(--gv-on-main)',
                           fontFamily: "var(--font-brand), sans-serif",
-                          letterSpacing: '0.06em',
                           border: 'none',
                           cursor: reviewRating < 1 || reviewSubmitting ? 'default' : 'pointer',
                         }}
                       >
-                        {reviewSubmitting ? 'SAVING...' : 'SUBMIT REVIEW'}
+                        {reviewSubmitting ? 'Saving…' : 'Submit review'}
                       </button>
                     </SectionCard>
                   )}
@@ -2383,12 +2380,12 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         <Link
                           href={`/manage/${slug}`}
                           className="flex items-center justify-center gap-2 w-full rounded-xl py-3 font-bold text-sm transition-colors focus:outline-none"
-                          style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none' }}
+                          style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "var(--font-brand), sans-serif", boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none' }}
                           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-accent)'; }}
                         >
                           <LayoutDashboard size={15} strokeWidth={2.2} />
-                          MANAGE CONFERENCE
+                          Manage conference
                         </Link>
                       </>
                     ) : myApp ? (
@@ -2427,7 +2424,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         // Financial aid is a real second thing this button
                         // leads to, so it only earns a place in the label when
                         // the conference actually runs an aid programme.
-                        const payLabel = conference.financial_aid_enabled ? 'PAY AND REQUEST AID' : 'PAY';
+                        const payLabel = conference.financial_aid_enabled ? 'Pay and request aid' : 'Pay';
                         return (
                           <>
                             <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-on-main)', margin: '0 0 8px 0' }}>
@@ -2439,7 +2436,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                               </p>
                               <span
                                 className="flex-shrink-0"
-                                style={{ backgroundColor: meta.bg, color: meta.color, fontFamily: "var(--font-brand), sans-serif", fontSize: '9px', fontWeight: 700, padding: '4px 10px', borderRadius: '9999px', letterSpacing: '0.1em' }}
+                                style={{ color: meta.color, fontFamily: "var(--font-brand), sans-serif", fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em' }}
                               >
                                 {meta.label}
                               </span>
@@ -2453,7 +2450,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                               <Link
                                 href={`/conferences/${slug}/pay`}
                                 className="w-full flex items-center justify-center gap-2 rounded-xl py-3 mt-4 font-bold text-sm transition-colors focus:outline-none"
-                                style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.06em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none' }}
+                                style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "var(--font-brand), sans-serif", boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none' }}
                                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
                                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-accent)'; }}
                               >
@@ -2497,11 +2494,11 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                 showTab('participant', myApp.role);
                               }}
                               className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 mt-3 font-bold text-xs transition-colors focus:outline-none"
-                              style={{ backgroundColor: 'rgba(238,217,138,0.08)', color: 'var(--gv-on-main)', border: '1px solid rgba(238,217,138,0.22)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.06em', textDecoration: 'none' }}
+                              style={{ backgroundColor: 'rgba(238,217,138,0.08)', color: 'var(--gv-on-main)', border: '1px solid rgba(238,217,138,0.22)', fontFamily: "var(--font-brand), sans-serif", textDecoration: 'none' }}
                               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.16)'; }}
                               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.08)'; }}
                             >
-                              VIEW YOUR DASHBOARD
+                              View your dashboard
                             </a>
                           </>
                         );
@@ -2521,14 +2518,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         <button
                           onClick={() => openAuth()}
                           className="w-full rounded-xl py-3 font-bold text-sm focus:outline-none"
-                          style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', transition: `background-color 200ms ${EASE}, transform 160ms ${EASE}` }}
+                          style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "var(--font-brand), sans-serif", boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', transition: `background-color 200ms ${EASE}, transform 160ms ${EASE}` }}
                           onMouseEnter={(e) => { const el = (e.currentTarget as HTMLElement); el.style.backgroundColor = 'white'; el.style.color = 'var(--gv-main)'; }}
                           onMouseLeave={(e) => { const el = (e.currentTarget as HTMLElement); el.style.backgroundColor = 'var(--gv-accent)'; el.style.color = 'var(--gv-on-accent)'; }}
                           onPointerDown={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(0.96)'; }}
                           onPointerUp={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
                           onPointerLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
                         >
-                          APPLY NOW →
+                          Apply now →
                         </button>
                       </>
                     ) : enabledRoles.length === 0 ? (
@@ -2552,14 +2549,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           onClick={() => setRolePickerOpen(v => !v)}
                           aria-expanded={rolePickerOpen}
                           className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-sm focus:outline-none"
-                          style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', transition: `background-color 200ms ${EASE}, transform 160ms ${EASE}` }}
+                          style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "var(--font-brand), sans-serif", boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', transition: `background-color 200ms ${EASE}, transform 160ms ${EASE}` }}
                           onMouseEnter={(e) => { const el = (e.currentTarget as HTMLElement); el.style.backgroundColor = 'white'; el.style.color = 'var(--gv-main)'; }}
                           onMouseLeave={(e) => { const el = (e.currentTarget as HTMLElement); el.style.backgroundColor = 'var(--gv-accent)'; el.style.color = 'var(--gv-on-accent)'; }}
                           onPointerDown={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(0.96)'; }}
                           onPointerUp={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
                           onPointerLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
                         >
-                          APPLY NOW
+                          Apply now
                           <ChevronDown
                             size={15}
                             strokeWidth={2.4}
@@ -2600,7 +2597,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                   <span className="flex items-center gap-3 min-w-0">
                                     <RoleApplyGlyph role={r.role} size={30} />
                                     <span className="min-w-0">
-                                      <span className="block text-[13px] font-bold truncate" style={{ color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif" }}>
+                                      <span className="block text-[13px] font-bold [overflow-wrap:anywhere]" style={{ color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif" }}>
                                         {roleLabel(r.role)}
                                       </span>
                                       <span
@@ -2726,17 +2723,17 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                       >
                                         <span className="flex items-center gap-1.5 min-w-0">
                                           <span
-                                            className="text-[11.5px] font-semibold truncate"
+                                            className="text-[11.5px] font-semibold min-w-0 [overflow-wrap:anywhere]"
                                             style={{ color: isCurrent ? 'var(--gv-main)' : '#4A4238', fontFamily: "var(--font-brand), sans-serif" }}
                                           >
                                             {p.label || 'Phase'}
                                           </span>
                                           {isCurrent && (
                                             <span
-                                              className="flex-shrink-0 text-[8.5px] font-bold px-1.5 py-0.5 rounded-full"
-                                              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.1em' }}
+                                              className="flex-shrink-0 text-[10.5px] font-bold"
+                                              style={{ color: 'var(--gv-main)', fontFamily: "var(--font-brand), sans-serif" }}
                                             >
-                                              CURRENT
+                                              Current
                                             </span>
                                           )}
                                         </span>
@@ -2874,13 +2871,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         }}
                       >
                         <SortButton
-                          label="DIFFICULTY"
+                          label="Difficulty"
                           dir={sortKey === 'difficulty' ? sortDir : null}
                           onClick={() => cycleSort('difficulty')}
                         />
                         {showFill && (
                           <SortButton
-                            label="AVAILABILITY"
+                            label="Availability"
                             dir={sortKey === 'availability' ? sortDir : null}
                             onClick={() => cycleSort('availability')}
                           />
@@ -3064,7 +3061,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                       <>
                                         {showAcr && (
                                           <p
-                                            className="max-w-full truncate text-center"
+                                            className="max-w-full text-center [overflow-wrap:anywhere]"
                                             style={{ margin: '16px 0 0 0', fontFamily: "var(--font-brand), sans-serif", fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: 'var(--gv-accent)' }}
                                           >
                                             {acr!.toUpperCase()}
@@ -3128,7 +3125,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                             textDecoration: 'underline', textDecorationColor: 'color-mix(in srgb, var(--gv-main) 35%, transparent)', textUnderlineOffset: 3,
                                           }}
                                         >
-                                          SHOW MORE
+                                          Show more
                                         </button>
                                       )}
                                     </div>
@@ -3182,13 +3179,12 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                       color: 'var(--gv-main)',
                                       border: '1.5px solid color-mix(in srgb, var(--gv-main) 35%, transparent)',
                                       fontFamily: "var(--font-brand), sans-serif",
-                                      letterSpacing: '0.1em',
                                       cursor: 'pointer',
                                     }}
                                     onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'var(--gv-main)'; el.style.color = 'var(--gv-on-main)'; }}
                                     onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.color = 'var(--gv-main)'; }}
                                   >
-                                    VIEW {isCrisis ? 'ROLES' : 'MEMBERS'}
+                                    View {isCrisis ? 'roles' : 'members'}
                                   </button>
                                 </div>
                               </article>
@@ -3224,8 +3220,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                               >
                                 <Plus size={20} strokeWidth={2.2} />
                               </span>
-                              <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '11px', letterSpacing: '0.14em' }}>
-                                ADD COMMITTEE
+                              <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '12px' }}>
+                                Add committee
                               </span>
                             </button>
                           )}
@@ -3360,7 +3356,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                         </span>
                                       )}
                                       <span
-                                        className="flex-1 text-[13px] font-medium truncate"
+                                        className="flex-1 min-w-0 text-[13px] font-medium [overflow-wrap:anywhere]"
                                         style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}
                                       >
                                         {s.country_name}
@@ -3370,20 +3366,21 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                         {Array.from({ length: seatsTakenHere }, (_, ti) => (
                                           <span
                                             key={`taken-${ti}`}
-                                            className="flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full"
-                                            style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}
+                                            className="flex items-center gap-1 text-[11px] font-bold"
+                                            style={{ color: 'var(--gv-main)', fontFamily: "var(--font-brand), sans-serif" }}
                                           >
-                                            <Check size={10} strokeWidth={2.6} />
-                                            TAKEN
+                                            <Check size={12} strokeWidth={2.6} />
+                                            Taken
                                           </span>
                                         ))}
                                         {Array.from({ length: openHere }, (_, oi) => (
                                           <span
                                             key={`open-${oi}`}
-                                            className="text-[9px] font-bold px-2 py-0.5 rounded-full"
-                                            style={{ backgroundColor: 'color-mix(in srgb, var(--gv-main-light) 10%, transparent)', color: 'var(--gv-main-mid)', border: '1px solid color-mix(in srgb, var(--gv-main-light) 25%, transparent)', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}
+                                            className="flex items-center gap-1 text-[11px] font-semibold"
+                                            style={{ color: 'var(--gv-main-mid)', fontFamily: "var(--font-brand), sans-serif" }}
                                           >
-                                            OPEN
+                                            <Circle size={11} strokeWidth={2.2} />
+                                            Open
                                           </span>
                                         ))}
                                       </div>
@@ -3568,8 +3565,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
               />
               {editError && <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", margin: '8px 0 0 0' }}>{editError}</p>}
               <div className="flex gap-3 mt-5">
-                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none gv-lift" style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: "var(--font-brand), sans-serif", cursor: 'pointer' }}>CANCEL</button>
-                <button onClick={handleSaveDescription} disabled={editSaving} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none gv-lift" style={{ backgroundColor: editSaving ? 'var(--gv-border)' : 'var(--gv-main)', color: editSaving ? 'var(--gv-muted)' : 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", border: 'none', cursor: editSaving ? 'default' : 'pointer' }}>{editSaving ? 'SAVING...' : 'SAVE'}</button>
+                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none gv-lift" style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: "var(--font-brand), sans-serif", cursor: 'pointer' }}>Cancel</button>
+                <button onClick={handleSaveDescription} disabled={editSaving} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none gv-lift" style={{ backgroundColor: editSaving ? 'var(--gv-border)' : 'var(--gv-main)', color: editSaving ? 'var(--gv-muted)' : 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", border: 'none', cursor: editSaving ? 'default' : 'pointer' }}>{editSaving ? 'Saving…' : 'Save'}</button>
               </div>
             </div>
           </ModalOverlay>
@@ -3607,8 +3604,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
               </div>
               {editError && <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", margin: '12px 0 0 0' }}>{editError}</p>}
               <div className="flex gap-3 mt-5">
-                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none gv-lift" style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: "var(--font-brand), sans-serif", cursor: 'pointer' }}>CANCEL</button>
-                <button onClick={handleSaveAbout} disabled={editSaving} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none gv-lift" style={{ backgroundColor: editSaving ? 'var(--gv-border)' : 'var(--gv-main)', color: editSaving ? 'var(--gv-muted)' : 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", border: 'none', cursor: editSaving ? 'default' : 'pointer' }}>{editSaving ? 'SAVING...' : 'SAVE'}</button>
+                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none gv-lift" style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: "var(--font-brand), sans-serif", cursor: 'pointer' }}>Cancel</button>
+                <button onClick={handleSaveAbout} disabled={editSaving} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none gv-lift" style={{ backgroundColor: editSaving ? 'var(--gv-border)' : 'var(--gv-main)', color: editSaving ? 'var(--gv-muted)' : 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", border: 'none', cursor: editSaving ? 'default' : 'pointer' }}>{editSaving ? 'Saving…' : 'Save'}</button>
               </div>
             </div>
           </ModalOverlay>

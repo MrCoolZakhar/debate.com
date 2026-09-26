@@ -75,14 +75,14 @@ function fmtTime(iso: string): string {
 
 // Same kind/status colour language as the organizer inbox (communications/page.tsx).
 const KIND_CHIP: Record<string, { label: string; bg: string; color: string }> = {
-  question: { label: 'QUESTION', bg: 'rgba(27,56,40,0.08)', color: '#1B3828' },
-  swap_request: { label: 'SWAP REQUEST', bg: 'rgba(182,135,31,0.16)', color: '#8A6614' },
-  swap_notice: { label: 'SWAP', bg: 'rgba(154,138,120,0.16)', color: '#6B5F52' },
+  question: { label: 'Question', bg: 'rgba(27,56,40,0.08)', color: '#1B3828' },
+  swap_request: { label: 'Swap request', bg: 'rgba(182,135,31,0.16)', color: '#8A6614' },
+  swap_notice: { label: 'Swap', bg: 'rgba(154,138,120,0.16)', color: '#6B5F52' },
 };
 
 const STATUS_CHIP: Record<string, { label: string; bg: string; color: string }> = {
-  open: { label: 'OPEN', bg: 'rgba(61,122,82,0.13)', color: '#2A5A3C' },
-  closed: { label: 'CLOSED', bg: 'rgba(154,138,120,0.16)', color: '#6B5F52' },
+  open: { label: 'Open', bg: 'rgba(61,122,82,0.13)', color: '#2A5A3C' },
+  closed: { label: 'Closed', bg: 'rgba(154,138,120,0.16)', color: '#6B5F52' },
 };
 
 const STATE_OPTIONS = [
@@ -420,7 +420,7 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
         </p>
         {!selectedId && !creating && (
           <NeuButton icon={Plus} onClick={() => setCreating(true)} style={{ padding: '7px 14px', fontSize: 11 }}>
-            NEW REQUEST
+            New request
           </NeuButton>
         )}
       </div>
@@ -431,21 +431,20 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
           <button
             onClick={() => { setSelectedId(null); setMessages([]); }}
             className="flex items-center gap-1.5 mb-4 focus:outline-none"
-            style={{ fontSize: 11, fontWeight: 700, color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.06em', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            style={{ fontSize: 11, fontWeight: 700, color: NEU.muted, fontFamily: OUTFIT, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
           >
-            <ChevronLeft size={13} /> BACK
+            <ChevronLeft size={13} /> Back
           </button>
 
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <span
-              className="rounded-full px-2.5 py-0.5"
-              style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', fontFamily: OUTFIT, backgroundColor: selectedKindChip!.bg, color: selectedKindChip!.color }}
+              style={{ fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, color: selectedKindChip!.color }}
             >
               {selectedKindChip!.label}
             </span>
+            <span aria-hidden style={{ color: NEU.muted, fontSize: 12 }}>·</span>
             <span
-              className="rounded-full px-2.5 py-0.5"
-              style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', fontFamily: OUTFIT, backgroundColor: selectedStatusChip!.bg, color: selectedStatusChip!.color }}
+              style={{ fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, color: selectedStatusChip!.color }}
             >
               {selectedStatusChip!.label}
             </span>
@@ -559,14 +558,14 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
               className="flex-1 rounded-xl py-2.5 text-sm font-bold focus:outline-none"
               style={{ border: 'none', color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontFamily: OUTFIT, cursor: 'pointer' }}
             >
-              CANCEL
+              Cancel
             </button>
             <NeuButton
               onClick={handleCreate}
               disabled={submitting || !newSubject.trim() || !newBody.trim()}
               style={{ flex: 1 }}
             >
-              {submitting ? 'SENDING...' : 'SEND'}
+              {submitting ? 'Sending…' : 'Send'}
             </NeuButton>
           </div>
         </div>
@@ -598,12 +597,12 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
                   disabled={markingAllRead}
                   className="focus:outline-none"
                   style={{
-                    fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
+                    fontFamily: OUTFIT, fontSize: 12, fontWeight: 800,
                     color: markingAllRead ? NEU.muted : NEU.forest,
                     background: 'none', border: 'none', cursor: markingAllRead ? 'default' : 'pointer',
                   }}
                 >
-                  {markingAllRead ? 'MARKING…' : 'MARK ALL READ'}
+                  {markingAllRead ? 'Marking…' : 'Mark all read'}
                 </button>
               )}
               <FilterPopoverShell
@@ -670,7 +669,7 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <p className="text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, fontWeight: attention ? 800 : 600, margin: 0 }}>
+                      <p className="text-sm truncate" title={r.subject} style={{ color: NEU.ink, fontFamily: OUTFIT, fontWeight: attention ? 800 : 600, margin: 0 }}>
                         {r.subject}
                       </p>
                       {attention && (
@@ -683,7 +682,7 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
                       )}
                     </div>
                     {last && (
-                      <p className="text-xs truncate mt-0.5" style={{ color: NEU.muted, fontFamily: OUTFIT, margin: '2px 0 0 0' }}>
+                      <p className="text-xs truncate mt-0.5" title={`${last.is_organizer ? 'Organizing team: ' : ''}${last.body}`} style={{ color: NEU.muted, fontFamily: OUTFIT, margin: '2px 0 0 0' }}>
                         {last.is_organizer ? 'Organizing team: ' : ''}{last.body}
                       </p>
                     )}
@@ -691,14 +690,13 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
                     <div className="flex items-center gap-1">
                       <span
-                        className="rounded-full px-2 py-0.5"
-                        style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', fontFamily: OUTFIT, backgroundColor: kindChip.bg, color: kindChip.color }}
+                        style={{ fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, color: kindChip.color }}
                       >
                         {kindChip.label}
                       </span>
+                      <span aria-hidden style={{ color: NEU.muted, fontSize: 12 }}>·</span>
                       <span
-                        className="rounded-full px-2 py-0.5"
-                        style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', fontFamily: OUTFIT, backgroundColor: statusChip.bg, color: statusChip.color }}
+                        style={{ fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, color: statusChip.color }}
                       >
                         {statusChip.label}
                       </span>

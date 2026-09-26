@@ -46,8 +46,8 @@ export interface DaisChair {
  * is a flex cell that may SHRINK below its nominal width (`flex: 1 1 0`,
  * `min-width: 0`, capped at `itemW`), and each row fills the column, so three
  * chairs share the card's 258px instead of asking for 336px and hanging out
- * of both sides. A name wraps inside its cell and stops at two lines with an
- * ellipsis; the full name is the tooltip.
+ * of both sides. A name wraps inside its cell and is never cut (CLAUDE.md §8,
+ * 25 Sep 2026: no ellipsis on a name); the full name is also the tooltip.
  */
 export function CommitteeDais({
   chairs,
@@ -80,8 +80,7 @@ export function CommitteeDais({
   }
 
   const cellStyle: CSSProperties = { flex: '1 1 0', minWidth: 0, maxWidth: itemW };
-  const clamp2: CSSProperties = {
-    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+  const nameWrap: CSSProperties = {
     overflowWrap: 'anywhere', maxWidth: '100%',
   };
 
@@ -123,13 +122,13 @@ export function CommitteeDais({
                   <span
                     className="font-semibold mt-2 leading-tight"
                     title={ch.name}
-                    style={{ ...clamp2, color: 'var(--gv-on-surface)', fontFamily: FONT, fontSize: nameSize }}
+                    style={{ ...nameWrap, color: 'var(--gv-on-surface)', fontFamily: FONT, fontSize: nameSize }}
                   >
                     {ch.name}
                   </span>
                   {title && (
                     <span
-                      className="mt-0.5 leading-tight truncate"
+                      className="mt-0.5 leading-tight [overflow-wrap:anywhere]"
                       title={title}
                       style={{ maxWidth: '100%', color: 'var(--gv-on-surface)', opacity: 0.7, fontFamily: FONT, fontSize: nameSize - 1.5, fontWeight: 500 }}
                     >

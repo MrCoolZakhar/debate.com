@@ -76,10 +76,10 @@ export default function HonourRoll({ conference, committees, awards }: {
       <main className="flex-1 w-full max-w-3xl mx-auto px-5 md:px-8 pt-8 pb-16">
         <Link
           href={`/conferences/${conference.slug}`}
-          className="inline-flex items-center gap-1.5 mb-6"
-          style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', color: '#6B5F52', textDecoration: 'none' }}
+          className="inline-flex items-center gap-1.5 mb-6 [overflow-wrap:anywhere]"
+          style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: '#6B5F52', textDecoration: 'none' }}
         >
-          <ArrowLeft size={13} /> {name.toUpperCase()}
+          <ArrowLeft size={13} className="flex-shrink-0" /> {name}
         </Link>
 
         {/* Header */}
@@ -90,7 +90,7 @@ export default function HonourRoll({ conference, committees, awards }: {
               HONOUR ROLL
             </p>
             <h1 className="font-black leading-tight flex items-center gap-2 min-w-0" style={{ fontFamily: OUTFIT, fontSize: 26, color: '#1C1410', margin: '4px 0 0 0' }}>
-              <span>{conference.full_name}</span>
+              <span className="min-w-0 [overflow-wrap:anywhere]">{conference.full_name}</span>
               <VerifiedCheck verified={!!conference.is_verified} size={23} title="Verified conference" />
             </h1>
             {dates && (
@@ -114,9 +114,9 @@ export default function HonourRoll({ conference, committees, awards }: {
               <Link
                 href={`/conferences/${conference.slug}`}
                 className="rounded-xl py-2.5 px-5 focus:outline-none"
-                style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 12, letterSpacing: '0.06em', textDecoration: 'none' }}
+                style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, textDecoration: 'none' }}
               >
-                BACK TO THE CONFERENCE
+                Back to the conference
               </Link>
             </div>
           </Card>

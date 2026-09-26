@@ -45,13 +45,17 @@
  * so nothing is listed twice. The avatar (ProfileAvatarMenu) carries the count.
  * Opening the menu stamps informational items (a new allocation) as seen.
  *
- * THE ROWS, TOP TO BOTTOM
- * Header (avatar, name, email); Live now; Needs your attention; then MY
- * PROFILE, MANAGE ACCOUNT (the credit count at its right edge and a + that
- * opens the buy-credits pop-up), PRICING (a Free / Unlimited badge, and on Free
- * an up arrow that opens the Unlimited pop-up); YOUR CONFERENCES (three rows,
- * then "All conferences" or "Create a conference"); ABOUT GAVELLING; SIGN OUT.
- * The MUN CV and calendar rows moved to the account area's own menu.
+ * THE ROWS, TOP TO BOTTOM (redesigned 26 Sep 2026, owner: "no repetitions and
+ * only the most important things are kept")
+ * Header (avatar, name, email, "View profile"; the whole block links to
+ * /account/profile) with the plan beneath as a plain word, Free or Unlimited,
+ * and on Free a gold "Go Unlimited" link to the Unlimited pop-up; Live now;
+ * Needs your attention; Your conferences (three rows, then All conferences;
+ * not shown at all when there are none); Manage account (the credit balance as
+ * a plain number); Sign out. Pricing, About, the buy-credits + and "Create a
+ * conference" are gone: the nav, the footer and the header credit counter
+ * already carry each of them. The MUN CV and calendar rows live in the account
+ * area's own menu.
  */
 
 import Link from 'next/link';
@@ -59,10 +63,10 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { compareStartDate, hasConcluded } from '@/lib/conferenceDates';
-import { User, Settings2, Tag, ArrowUp, LogOut, ArrowRight, Plus, Info } from 'lucide-react';
+import { Settings2, LogOut, ChevronRight } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useCredits } from '@/hooks/useCredits';
-import { openCreditsPopup, openUnlimitedPopup } from '@/lib/purchasePopup';
+import { openUnlimitedPopup } from '@/lib/purchasePopup';
 import LiveNowMenuSection from '@/components/liveRooms/LiveNowMenuSection';
 import ActivityNotices from '@/components/profile/ActivityNotices';
 import { useMyActivity, useOpenSeenState, markActivitySeen, isVisibleActivity } from '@/lib/myActivity';
@@ -104,12 +108,26 @@ interface NavConference {
  *  rather than running the room. */
 const STANDING_ROLES = new Set(['delegate', 'head-delegate', 'faculty-advisor', 'observer']);
 
-/** Type of the plain menu rows (MY PROFILE, MANAGE ACCOUNT, PRICING). */
+const FONT = 'var(--font-brand), sans-serif';
+const INK = '#1C1410';
+const INK_SOFT = '#5A4E46';
+const FOREST = '#1B3828';
+/** Every row is at least this tall, with a 16px icon. */
+const ROW_H = 40;
+const ICON = 16;
+
+/** Type of the plain menu rows: sentence case, no tracking. */
 const ROW_TEXT: React.CSSProperties = {
-  color: '#1C1410',
-  fontFamily: "var(--font-brand), sans-serif",
-  letterSpacing: '0.05em',
-  fontSize: '12px',
+  color: INK,
+  fontFamily: FONT,
+  fontSize: '14px',
+};
+
+/** The role word at the end of a conference row. */
+const ROLE_WORD: Record<NavConference['role'], string> = {
+  DELEGATE: 'Delegate',
+  CHAIR: 'Chair',
+  ORGANIZER: 'Organiser',
 };
 
 /** Attention, most urgent first: money the conference is waiting for, then work
@@ -159,11 +177,8 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
   // Unlimited is read from subscriptions (my_unlimited_status), never the dead
   // profiles.unlimited_status column. null = not known yet.
   const unlimitedStatus = useUnlimitedStatus();
-  // The credit count shown on the MANAGE ACCOUNT row (refreshes itself after a purchase).
+  // The credit count shown on the Manage account row (refreshes itself after a purchase).
   const { balance: creditBalance, loading: creditsLoading } = useCredits();
-  const creditText = creditsLoading || creditBalance === null
-    ? '–'
-    : `${creditBalance} ${creditBalance === 1 ? 'credit' : 'credits'}`;
   // Imported registrations for this account's verified address attach on
   // the first page of a visit (src/lib/importClaim.ts).
   useClaimImportedOnLoad(authLoading ? null : user?.id ?? null);
@@ -191,10 +206,6 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
     () => (activity ?? []).filter((i) => isVisibleActivity(i, openSeen)),
     [activity, openSeen],
   );
-  /** Something of the person's own is in flight (a draft, an imported place),
-   *  so an empty conference list should still point at "All conferences". */
-  const hasOwnPending = attention.some((i) => i.kind === 'draft' || i.kind === 'import_invite');
-
   useEffect(() => {
     function handleMouseDown(e: MouseEvent) {
       const t = e.target as Node;
@@ -471,6 +482,16 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
 
   if (!user) return null;
 
+  /** Hover wash shared by every row (a plain handler pair, no state). */
+  const wash = {
+    onMouseEnter: (e: React.MouseEvent) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; },
+    onMouseLeave: (e: React.MouseEvent) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; },
+  };
+  const close = () => setOpen(false);
+  const showConfs = confsLoading || (myConfs !== null && myConfs.length > 0);
+  const planKnown = unlimitedStatus !== null;
+  const onUnlimited = planKnown && isUnlimited(unlimitedStatus);
+
   return (
     <div
       className="relative"
@@ -480,12 +501,10 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
     >
       {trigger(open, toggle)}
 
-      {/* Dropdown, kokonutui profile-dropdown anatomy in house style. Portaled
-          at fixed coords with z-index 9999 so it always renders over sticky bars
-          / transformed cards, on every page. */}
       {/* Straight to document.body, never through Portal: on a FitToScreen
           page (/create) Portal targets the scaled #fit-root, where these
-          viewport coordinates would land in the wrong place. */}
+          viewport coordinates would land in the wrong place. z-index 9999 so
+          it always renders over sticky bars / transformed cards. */}
       {open && pos && createPortal(
         <div
           ref={panelRef}
@@ -508,207 +527,96 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
         >
           <style>{`@keyframes profileMenuIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }`}</style>
 
-          {/* Header, avatar + name + email */}
-          <div className="flex items-center gap-3 px-4 py-3.5">
-            {profile?.avatar_url ? (
-              <img
-                src={profile.avatar_url}
-                alt="Avatar"
-                className="rounded-full object-cover shrink-0"
-                style={{ width: '40px', height: '40px' }}
-              />
-            ) : (
-              <div
-                className="rounded-full flex items-center justify-center font-black shrink-0"
-                style={{ width: '40px', height: '40px', backgroundColor: '#EED98A', color: '#1B3828', fontSize: '16px', fontFamily: "var(--font-brand), sans-serif" }}
-              >
-                {avatarInitial}
+          {/* Header: the whole identity block opens the profile. The plan sits
+              beneath it as a plain word; on Free a gold link opens the
+              Unlimited pop-up (a <button> cannot live inside the <a>). */}
+          <div className="px-2 pt-2 pb-2.5">
+            <Link
+              href="/account/profile"
+              onClick={close}
+              className="flex items-center gap-3 rounded-xl px-2 py-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-inset"
+              style={{ textDecoration: 'none', fontFamily: FONT }}
+              {...wash}
+            >
+              {profile?.avatar_url ? (
+                <img
+                  src={profile.avatar_url}
+                  alt=""
+                  className="rounded-full object-cover shrink-0"
+                  style={{ width: 44, height: 44 }}
+                />
+              ) : (
+                <div
+                  className="rounded-full flex items-center justify-center font-black shrink-0"
+                  style={{ width: 44, height: 44, backgroundColor: '#EED98A', color: '#1B3828', fontSize: 17 }}
+                  aria-hidden
+                >
+                  {avatarInitial}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="font-bold [overflow-wrap:anywhere]" style={{ color: INK, fontSize: 15, lineHeight: 1.25 }}>
+                  {profile?.display_name ?? user.email?.split('@')[0]}
+                </p>
+                <p className="[overflow-wrap:anywhere] mt-0.5" style={{ color: INK_SOFT, fontSize: 12, lineHeight: 1.3 }}>
+                  {profile?.email ?? user.email}
+                </p>
+                <p className="mt-1 font-semibold" style={{ color: FOREST, fontSize: 12 }}>View profile</p>
+              </div>
+              <ChevronRight size={16} strokeWidth={2.2} style={{ color: INK_SOFT, flexShrink: 0 }} aria-hidden />
+            </Link>
+
+            {/* Plan. Nothing while it is not known yet. */}
+            {planKnown && (
+              <div className="flex items-center gap-2 flex-wrap" style={{ paddingInlineStart: 64, fontFamily: FONT, fontSize: 12 }}>
+                <span style={{ color: onUnlimited ? FOREST : INK_SOFT, fontWeight: onUnlimited ? 700 : 500 }}>
+                  {onUnlimited ? 'Unlimited' : 'Free'}
+                </span>
+                {!onUnlimited && (
+                  <button
+                    type="button"
+                    onClick={() => { close(); openUnlimitedPopup(); }}
+                    className="font-bold underline underline-offset-2 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                    style={{ color: '#8A6614', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontSize: 12, fontFamily: FONT }}
+                  >
+                    Go Unlimited
+                  </button>
+                )}
               </div>
             )}
-            <div className="min-w-0">
-              <p className="text-sm font-bold truncate" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                {profile?.display_name ?? user.email?.split('@')[0]}
-              </p>
-              <p className="text-xs truncate mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-                {profile?.email ?? user.email}
-              </p>
-            </div>
           </div>
-          <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
+          <Divider />
 
           {/* Live now: this account's conference rooms that are live right now
-              (src/components/liveRooms). Nothing while there is none. */}
-          <LiveNowMenuSection onNavigate={() => setOpen(false)} />
+              (src/components/liveRooms). Nothing while there is none; it draws
+              its own divider beneath. */}
+          <LiveNowMenuSection onNavigate={close} />
 
           {/* Needs your attention: every row goes straight to where it is done. */}
           {attention.length > 0 && (
             <>
-              <ActivityNotices items={attention} onNavigate={() => setOpen(false)} />
-              <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
+              <ActivityNotices items={attention} onNavigate={close} />
+              <Divider />
             </>
           )}
 
-          {/* Menu rows. MANAGE ACCOUNT and PRICING each carry a small action
-              button at their right edge (buy credits, go Unlimited) that opens a
-              pop-up instead of navigating. A <button> cannot sit inside an <a>,
-              so those rows are a flex wrapper holding the <Link> and the
-              <button> side by side. The ROW has no hover wash (owner, 25 Sep
-              2026): only the disc lights up and grows on its own hover / focus,
-              so it reads as the thing to press. */}
-          <div className="py-1">
-            {/* MY PROFILE */}
-            <Link
-              href="/account/profile"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2.5 px-4 py-2 font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-inset"
-              style={{ ...ROW_TEXT, textDecoration: 'none' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-            >
-              <User size={15} strokeWidth={2.1} style={{ color: '#9A8A78', flexShrink: 0 }} />
-              <span className="flex-1">MY PROFILE</span>
-            </Link>
-
-            {/* MANAGE ACCOUNT, with the credit count and a + to buy more */}
-            <div className="flex items-center">
-              <Link
-                href="/account/manage/credits"
-                onClick={() => setOpen(false)}
-                className="flex flex-1 min-w-0 items-center gap-2.5 pl-4 pr-1 py-2 font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-inset"
-                style={{ ...ROW_TEXT, textDecoration: 'none' }}
-              >
-                <Settings2 size={15} strokeWidth={2.1} style={{ color: '#9A8A78', flexShrink: 0 }} />
-                <span className="flex-1">MANAGE ACCOUNT</span>
-                <span
-                  className="shrink-0"
-                  style={{ color: '#5A4E46', fontSize: '11px', fontWeight: 600, letterSpacing: '0.02em', fontVariantNumeric: 'tabular-nums' }}
-                >
-                  {creditText}
-                </span>
-              </Link>
-              <button
-                type="button"
-                aria-label="Buy credits"
-                title="Buy credits"
-                onClick={(e) => { e.stopPropagation(); setOpen(false); openCreditsPopup({ context: 'header' }); }}
-                // A 32px pressable box drawing a 22px gold disc that grows to
-                // 26px and brightens on its own hover / focus; keeps the row at
-                // its height while giving the + something to press.
-                className="group flex items-center justify-center shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAF8F3]"
-                style={{ width: 32, height: 32, marginRight: 8, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
-              >
-                <span
-                  aria-hidden
-                  className="flex items-center justify-center rounded-full bg-[#EED98A] transition-[transform,background-color] duration-[140ms] ease-out group-hover:scale-[1.18] group-hover:bg-[#F5E6A8] group-focus-visible:scale-[1.18] group-focus-visible:bg-[#F5E6A8]"
-                  style={{ width: 22, height: 22, color: '#1B3828' }}
-                >
-                  <Plus size={12} strokeWidth={3} />
-                </span>
-              </button>
-            </div>
-
-            {/* PRICING, with the plan badge; on Free, an arrow to go Unlimited */}
-            <div className="flex items-center">
-              <Link
-                href="/pricing/credits"
-                onClick={() => setOpen(false)}
-                className="flex flex-1 min-w-0 items-center gap-2.5 pl-4 py-2 font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-inset"
-                style={{
-                  ...ROW_TEXT,
-                  textDecoration: 'none',
-                  // With no arrow button beside it the badge keeps the row's own inset.
-                  paddingRight: unlimitedStatus !== null && !isUnlimited(unlimitedStatus) ? 4 : 16,
-                }}
-              >
-                <Tag size={15} strokeWidth={2.1} style={{ color: '#9A8A78', flexShrink: 0 }} />
-                <span className="flex-1">PRICING</span>
-                {/* No badge while the status is not known yet. */}
-                {unlimitedStatus !== null && (
-                  isUnlimited(unlimitedStatus) ? (
-                    <span
-                      className="shrink-0 rounded-full"
-                      style={{ backgroundColor: '#EED98A', color: '#1B3828', fontSize: '10px', fontWeight: 800, letterSpacing: '0.04em', padding: '2px 8px' }}
-                    >
-                      Unlimited
-                    </span>
-                  ) : (
-                    <span
-                      className="shrink-0 rounded-full"
-                      style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: '#1C1410', fontSize: '10px', fontWeight: 800, letterSpacing: '0.04em', padding: '2px 8px' }}
-                    >
-                      Free
-                    </span>
-                  )
-                )}
-              </Link>
-              {unlimitedStatus !== null && !isUnlimited(unlimitedStatus) && (
-                <button
-                  type="button"
-                  aria-label="Go Unlimited"
-                  title="Go Unlimited"
-                  onClick={(e) => { e.stopPropagation(); setOpen(false); openUnlimitedPopup(); }}
-                  className="group flex items-center justify-center shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAF8F3]"
-                  style={{ width: 32, height: 32, marginRight: 8, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
-                >
-                  <span
-                    aria-hidden
-                    className="flex items-center justify-center rounded-full bg-[#1B3828] transition-[transform,background-color] duration-[140ms] ease-out group-hover:scale-[1.18] group-hover:bg-[#2A5A3C] group-focus-visible:scale-[1.18] group-focus-visible:bg-[#2A5A3C]"
-                    style={{ width: 22, height: 22, color: '#EED98A' }}
-                  >
-                    <ArrowUp size={12} strokeWidth={3} />
-                  </span>
-                </button>
-              )}
-            </div>
-          </div>
-
           {/* Your conferences, lazily fetched. Invitations and drafts live in
-              Needs your attention above, see the file header. It renders once the fetch
-              has resolved even when the result is EMPTY, because the section header
-              carries the + that starts a conference and somebody with none yet is
-              exactly who needs it. Still hidden while the fetch is unresolved. */}
-          {(confsLoading || myConfs !== null) && (
+              Needs your attention above. Not shown at all when the list is
+              empty (the nav's "List your conference" starts one). */}
+          {showConfs && (
             <>
-              <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
-              <div className="pt-2.5 pb-1">
-                <div className="px-4 pb-1.5 flex items-center gap-2">
-                  <p
-                    className="font-bold flex-1"
-                    style={{ color: '#9A8A78', fontSize: '10px', letterSpacing: '0.08em', fontFamily: "var(--font-brand), sans-serif" }}
-                  >
-                    YOUR CONFERENCES
-                  </p>
-                  {/* Start a conference. Last in the row so the two counts stay
-                      where they were, and the only create affordance in this menu.
-                      The section above it now renders once the list has loaded even
-                      when it is empty, because somebody with no conference yet is
-                      exactly who needs this. */}
-                  <Link
-                    href="/conferences/new"
-                    onClick={() => setOpen(false)}
-                    aria-label="Create a conference"
-                    title="Create a conference"
-                    className="flex-shrink-0 flex items-center justify-center rounded-full focus:outline-none transition-colors"
-                    style={{
-                      width: 18, height: 18,
-                      backgroundColor: 'rgba(27,56,40,0.07)',
-                      color: '#1B3828',
-                      textDecoration: 'none',
-                    }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.16)'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.07)'; }}
-                  >
-                    <Plus size={12} strokeWidth={3} />
-                  </Link>
-                </div>
+              <div className="pt-2.5 pb-1.5">
+                <p className="px-4 pb-1 font-semibold" style={{ color: INK_SOFT, fontSize: 12, fontFamily: FONT }}>
+                  Your conferences
+                </p>
 
                 {confsLoading ? (
                   /* Skeleton rows while the batched fetch is in flight */
-                  <div className="px-4 py-1 flex flex-col gap-2.5" aria-hidden>
+                  <div className="px-4 py-1.5 flex flex-col gap-3" aria-hidden>
                     {[0, 1, 2].map((i) => (
-                      <div key={i} className="flex items-center gap-2.5 animate-pulse">
-                        <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: 'rgba(27,56,40,0.08)', flexShrink: 0 }} />
-                        <div style={{ height: '9px', borderRadius: '4px', backgroundColor: 'rgba(27,56,40,0.08)', width: i === 1 ? '55%' : '70%' }} />
+                      <div key={i} className="flex items-center gap-3 animate-pulse">
+                        <div style={{ width: 28, height: 28, borderRadius: '50%', backgroundColor: 'rgba(27,56,40,0.08)', flexShrink: 0 }} />
+                        <div style={{ height: 10, borderRadius: 4, backgroundColor: 'rgba(27,56,40,0.08)', width: i === 1 ? '55%' : '70%' }} />
                       </div>
                     ))}
                   </div>
@@ -718,153 +626,124 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                       <Link
                         key={conf.id}
                         href={conf.role === 'ORGANIZER' ? `/manage/${conf.slug}` : `/conferences/${conf.slug}`}
-                        onClick={() => setOpen(false)}
-                        className="flex items-center gap-2.5 px-4 py-2 transition-colors"
-                        style={{ textDecoration: 'none' }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                        onClick={close}
+                        className="flex items-center gap-3 px-4 py-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-inset"
+                        style={{ textDecoration: 'none', fontFamily: FONT, minHeight: ROW_H }}
+                        {...wash}
                       >
-                        {/* Small round logo on a near-white disc */}
+                        {/* Round logo on a near-white disc */}
                         <span
-                          style={{
-                            width: '24px',
-                            height: '24px',
-                            borderRadius: '50%',
-                            backgroundColor: '#FFFEFA',
-                            border: '0.5px solid #E7E0CF',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            overflow: 'hidden',
-                            flexShrink: 0,
-                          }}
+                          className="shrink-0 inline-flex items-center justify-center overflow-hidden rounded-full"
+                          style={{ width: 28, height: 28, backgroundColor: '#FFFEFA', border: '0.5px solid #E7E0CF' }}
                         >
                           {conf.logo_url ? (
                             <img
                               src={conf.logo_url}
                               alt=""
-                              style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '2px' }}
+                              style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 2 }}
                               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                             />
                           ) : (
-                            <span style={{ fontSize: '9.5px', fontWeight: 900, color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>
+                            <span style={{ fontSize: 11, fontWeight: 900, color: FOREST }}>
                               {conf.acronym?.[0] ?? '•'}
                             </span>
                           )}
                         </span>
-                        <span
-                          className="flex-1 truncate font-bold"
-                          style={{ color: '#1C1410', fontSize: '12px', letterSpacing: '0.03em', fontFamily: "var(--font-brand), sans-serif" }}
-                        >
+                        <span className="flex-1 min-w-0 font-semibold [overflow-wrap:anywhere]" style={{ color: INK, fontSize: 14, lineHeight: 1.25 }}>
                           {conferenceAcronymLabel({ acronym: conf.acronym, start_date: conf.start_date })}
                         </span>
-                        {/* One quiet gold dot, never a number: what it means
-                            is in its accessible name and its tooltip. The
-                            printed word stays the role, so scanning the menu
-                            still answers "what am I here" first. */}
+                        {/* One quiet gold dot, never a number: what it means is
+                            in its accessible name and its tooltip. */}
                         {conf.attention && (
                           <span
                             role="img"
                             aria-label={conf.attention}
                             title={conf.attention}
                             className="shrink-0"
-                            style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#B6871F' }}
+                            style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#B6871F' }}
                           />
                         )}
                         {conf.standing?.kind === 'allocated' ? (
                           <span
-                            className="inline-flex min-w-0 max-w-[55%] shrink items-center gap-1.5 font-bold"
-                            style={{ color: '#1B3828', fontSize: '11px', fontFamily: "var(--font-brand), sans-serif" }}
+                            className="inline-flex min-w-0 max-w-[48%] shrink items-center gap-1.5 font-semibold"
+                            style={{ color: FOREST, fontSize: 12, lineHeight: 1.2 }}
                             title={`${conf.standing.countryName ?? ''}${conf.standing.committee ? ` · ${conf.standing.committee}` : ''}`}
                           >
                             <CircleFlag code={conf.standing.countryCode} country={conf.standing.countryName} size={18} decorative />
-                            <span className="truncate">{conf.standing.committee || conf.standing.countryName}</span>
+                            <span className="min-w-0 [overflow-wrap:anywhere]">{conf.standing.committee || conf.standing.countryName}</span>
                           </span>
                         ) : (
                           <span
-                            className="font-bold uppercase shrink-0"
+                            className="shrink-0 font-semibold"
                             style={{
-                              color: conf.standing?.kind === 'unpaid' ? '#8B2020' : conf.standing?.kind === 'approved' ? '#2A5A3C' : conf.pending ? '#8A6614' : '#9A8A78',
-                              fontSize: '9px', letterSpacing: '0.06em', fontFamily: "var(--font-brand), sans-serif",
+                              color: conf.standing?.kind === 'unpaid' ? '#8B2020' : conf.standing?.kind === 'approved' ? '#2A5A3C' : conf.pending ? '#8A6614' : INK_SOFT,
+                              fontSize: 12,
                             }}
                           >
-                            {conf.standing?.kind === 'unpaid' ? 'UNPAID'
-                              : conf.standing?.kind === 'approved' ? 'APPROVED'
-                              : conf.pending ? 'APPLIED' : conf.role}
+                            {conf.standing?.kind === 'unpaid' ? 'Unpaid'
+                              : conf.standing?.kind === 'approved' ? 'Approved'
+                              : conf.pending ? 'Applied' : ROLE_WORD[conf.role]}
                           </span>
                         )}
                       </Link>
                     ))}
 
-                    {/* With nothing to list, "All conferences" points at an empty
-                        page. Send them where the + goes instead. */}
-                    {(myConfs ?? []).length === 0 && !hasOwnPending ? (
-                      <Link
-                        href="/conferences/new"
-                        onClick={() => setOpen(false)}
-                        className="flex items-center gap-2.5 px-4 py-2 font-bold transition-colors"
-                        style={{ color: '#1B3828', fontSize: '11px', letterSpacing: '0.05em', fontFamily: "var(--font-brand), sans-serif", textDecoration: 'none' }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                      >
-                        <span className="flex-1">Create a conference</span>
-                        <ArrowRight size={13} strokeWidth={2.2} style={{ color: '#9A8A78' }} />
-                      </Link>
-                    ) : (
-                      <Link
-                        href="/account/conferences"
-                        onClick={() => setOpen(false)}
-                        className="flex items-center gap-2.5 px-4 py-2 font-bold transition-colors"
-                        style={{ color: '#1B3828', fontSize: '11px', letterSpacing: '0.05em', fontFamily: "var(--font-brand), sans-serif", textDecoration: 'none' }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                      >
-                        <span className="flex-1">All conferences</span>
-                        <ArrowRight size={13} strokeWidth={2.2} style={{ color: '#9A8A78' }} />
-                      </Link>
-                    )}
+                    <Link
+                      href="/account/conferences"
+                      onClick={close}
+                      className="flex items-center gap-3 px-4 py-2 font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-inset"
+                      style={{ ...ROW_TEXT, color: FOREST, textDecoration: 'none', minHeight: ROW_H }}
+                      {...wash}
+                    >
+                      <span className="flex-1">All conferences</span>
+                      <ChevronRight size={16} strokeWidth={2.2} style={{ color: INK_SOFT }} aria-hidden />
+                    </Link>
                   </>
                 )}
               </div>
+              <Divider />
             </>
           )}
 
-          <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
+          <div className="py-1.5">
+            {/* Manage account, with the credit balance as a plain number. */}
+            <Link
+              href="/account/manage/credits"
+              onClick={close}
+              className="flex items-center gap-3 px-4 py-2 font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-inset"
+              style={{ ...ROW_TEXT, textDecoration: 'none', minHeight: ROW_H }}
+              {...wash}
+            >
+              <Settings2 size={ICON} strokeWidth={2.1} style={{ color: INK_SOFT, flexShrink: 0 }} aria-hidden />
+              <span className="flex-1">Manage account</span>
+              {!creditsLoading && creditBalance !== null && (
+                <span className="shrink-0" style={{ fontSize: 12, fontWeight: 500, color: INK_SOFT }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: INK, fontVariantNumeric: 'tabular-nums' }}>{creditBalance}</span>
+                  {' '}{creditBalance === 1 ? 'credit' : 'credits'}
+                </span>
+              )}
+            </Link>
 
-          {/* ABOUT GAVELLING, the same row as MY PROFILE, directly above Sign out */}
-          <Link
-            href="/about"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2.5 px-4 py-2 mt-1 font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-inset"
-            style={{ ...ROW_TEXT, textDecoration: 'none' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-          >
-            <Info size={15} strokeWidth={2.1} style={{ color: '#9A8A78', flexShrink: 0 }} />
-            <span className="flex-1">ABOUT GAVELLING</span>
-          </Link>
-
-          {/* Sign out */}
-          <button
-            onClick={handleSignOut}
-            className="flex items-center gap-2.5 w-full text-left px-4 py-2.5 mb-1 font-bold transition-colors focus:outline-none"
-            style={{
-              color: '#8B2020',
-              fontFamily: "var(--font-brand), sans-serif",
-              letterSpacing: '0.05em',
-              fontSize: '12px',
-              backgroundColor: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139, 32, 32, 0.06)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-          >
-            <LogOut size={15} strokeWidth={2.1} style={{ color: '#8B2020', flexShrink: 0 }} />
-            SIGN OUT
-          </button>
+            {/* Sign out */}
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="flex items-center gap-3 w-full text-left px-4 py-2 font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8B2020] focus-visible:ring-inset"
+              style={{ ...ROW_TEXT, color: '#8B2020', backgroundColor: 'transparent', border: 'none', cursor: 'pointer', minHeight: ROW_H }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139, 32, 32, 0.06)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+            >
+              <LogOut size={ICON} strokeWidth={2.1} style={{ color: '#8B2020', flexShrink: 0 }} aria-hidden />
+              Sign out
+            </button>
+          </div>
         </div>
         , document.body)}
     </div>
   );
+}
+
+/** Hairline between groups (never between rows of one group). */
+function Divider() {
+  return <div style={{ height: 1, backgroundColor: '#DDD4C0' }} />;
 }

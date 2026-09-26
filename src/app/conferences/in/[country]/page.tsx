@@ -87,7 +87,7 @@ export default async function CountryHubPage({ params }: { params: Promise<{ cou
           <span>{hub.name}</span>
         </nav>
         <h1 style={{ fontWeight: 900, fontSize: 'clamp(30px, 4.4vw, 52px)', letterSpacing: '-0.02em', lineHeight: 1.05, color: '#1C1410', margin: '14px 0 12px', textWrap: 'balance' }}>
-          Model UN conferences in {hub.name}
+          Model UN Conferences in {hub.name}
         </h1>
         <p style={{ fontSize: 'clamp(15px, 1.1vw, 18px)', lineHeight: 1.6, color: '#4A4238', maxWidth: 640, margin: 0, textWrap: 'pretty' }}>
           {conferences.length} upcoming conferences in {hub.name}

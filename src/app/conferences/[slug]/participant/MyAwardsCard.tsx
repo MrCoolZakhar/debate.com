@@ -150,19 +150,19 @@ export default function MyAwardsCard({ conferenceId, conferenceSlug, myAllocatio
               type="button"
               onClick={() => setShareOpen(true)}
               className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 focus:outline-none transition-colors"
-              style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 12, letterSpacing: '0.06em', border: 'none', cursor: 'pointer' }}
+              style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 12, border: 'none', cursor: 'pointer' }}
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
             >
-              <Share2 size={13} /> SHARE
+              <Share2 size={13} /> Share
             </button>
             <button
               type="button"
               onClick={copyLink}
               className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 focus:outline-none"
-              style={{ backgroundColor: 'transparent', color: '#1C1410', fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, letterSpacing: '0.06em', border: '1px solid #DDD4C0', cursor: 'pointer' }}
+              style={{ backgroundColor: 'transparent', color: '#1C1410', fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, border: '1px solid #DDD4C0', cursor: 'pointer' }}
             >
-              {copied ? <Check size={13} style={{ color: '#3D7A52' }} /> : <Link2 size={13} />} {copied ? 'COPIED' : 'COPY HONOUR ROLL LINK'}
+              {copied ? <Check size={13} style={{ color: '#3D7A52' }} /> : <Link2 size={13} />} {copied ? 'Copied' : 'Copy honour roll link'}
             </button>
           </div>
         </div>

@@ -58,15 +58,15 @@ const CATEGORY_META: Record<string, {
   emoji: string; icon: LucideIcon; gradient: NeuGradient;
 }> = {
   chairs: {
-    label: 'CHAIRS', single: 'CHAIRING',
+    label: 'Chairs', single: 'Chairing',
     emoji: 'Hammer', icon: Gavel, gradient: NEU_GRADIENTS.gold,
   },
   secretariat: {
-    label: 'SECRETARIAT', single: 'SECRETARIAT',
+    label: 'Secretariat', single: 'Secretariat',
     emoji: 'Clipboard', icon: ClipboardList, gradient: NEU_GRADIENTS.sage,
   },
   staff: {
-    label: 'STAFF', single: 'STAFF',
+    label: 'Staff', single: 'Staff',
     emoji: 'Busts in silhouette', icon: Users, gradient: NEU_GRADIENTS.forest,
   },
 };
@@ -79,9 +79,9 @@ const CATEGORY_ORDER = ['chairs', 'secretariat', 'staff'] as const;
 const COMP_META: Record<string, {
   label: string; emoji: string; icon: LucideIcon; gradient: NeuGradient; gold: boolean;
 }> = {
-  'paid':           { label: 'PAID',           emoji: 'Money bag', icon: Banknote,       gradient: NEU_GRADIENTS.gold, gold: true },
-  'travel-covered': { label: 'TRAVEL COVERED', emoji: 'Airplane',  icon: Plane,          gradient: NEU_GRADIENTS.sage, gold: true },
-  'unpaid':         { label: 'VOLUNTEER',      emoji: 'Handshake', icon: HeartHandshake, gradient: NEU_GRADIENTS.amber, gold: false },
+  'paid':           { label: 'Paid',           emoji: 'Money bag', icon: Banknote,       gradient: NEU_GRADIENTS.gold, gold: true },
+  'travel-covered': { label: 'Travel covered', emoji: 'Airplane',  icon: Plane,          gradient: NEU_GRADIENTS.sage, gold: true },
+  'unpaid':         { label: 'Volunteer',      emoji: 'Handshake', icon: HeartHandshake, gradient: NEU_GRADIENTS.amber, gold: false },
 };
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -194,8 +194,7 @@ function GlyphChip({
       <NeuIconDisc gradient={gradient} emoji={emoji} icon={icon} size={22} />
       <span
         style={{
-          fontFamily: OUTFIT, fontSize: 10, fontWeight: 800,
-          letterSpacing: '0.09em', color,
+          fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, color,
         }}
       >
         {label}
@@ -217,7 +216,7 @@ function FilterPill({
       active={active}
       gradient={gradient}
       onClick={onClick}
-      style={{ fontSize: 10, letterSpacing: '0.07em', padding: '6px 13px 6px 8px', flexShrink: 0 }}
+      style={{ fontSize: 12, letterSpacing: 0, padding: '6px 13px 6px 8px', flexShrink: 0 }}
     >
       {emoji && (
         <Emoji3D name={emoji} size={15} fallback={icon} fallbackColor={active ? '#FFFFFF' : FOREST} />
@@ -254,7 +253,7 @@ function PostingCard({
 
   const compKey = normalizeKey(posting.compensation);
   const comp = COMP_META[compKey] ?? {
-    label: (posting.compensation || 'UNSPECIFIED').toUpperCase(),
+    label: posting.compensation || 'Not specified',
     emoji: 'Briefcase', icon: Briefcase, gradient: NEU_GRADIENTS.forest, gold: false,
   };
 
@@ -276,16 +275,16 @@ function PostingCard({
         ? { color: DANGER }
         : { color: FOREST };
     const label =
-      myApp.status === 'accepted' ? 'ACCEPTED' :
-      myApp.status === 'rejected' ? 'REJECTED' :
-      'APPLIED';
+      myApp.status === 'accepted' ? 'Accepted' :
+      myApp.status === 'rejected' ? 'Rejected' :
+      'Applied';
     applyBtn = (
       <NeuInset
         small
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           padding: '11px', borderRadius: 14,
-          fontFamily: OUTFIT, fontWeight: 800, fontSize: 12, letterSpacing: '0.06em', ...tone,
+          fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, ...tone,
         }}
       >
         {myApp.status !== 'rejected' && <Check size={14} strokeWidth={2.6} />}
@@ -300,7 +299,7 @@ function PostingCard({
         textColor={FOREST}
         style={{ width: '100%', padding: '12px 20px' }}
       >
-        SIGN IN TO APPLY
+        Sign in to apply
         <ArrowRight size={14} strokeWidth={2.6} />
       </NeuButton>
     );
@@ -311,7 +310,7 @@ function PostingCard({
         gradient={NEU_GRADIENTS.forest}
         style={{ width: '100%', padding: '12px 20px' }}
       >
-        APPLY
+        Apply
         <ArrowRight size={14} strokeWidth={2.6} />
       </NeuButton>
     );
@@ -353,13 +352,13 @@ function PostingCard({
               >
                 {conferenceAcronymLabel(conf)}
               </Link>
-              <p className="truncate" style={{ color: MUTED, fontFamily: OUTFIT, fontSize: 11.5, margin: 0, marginTop: 1 }}>
+              <p className="[overflow-wrap:anywhere]" style={{ color: MUTED, fontFamily: OUTFIT, fontSize: 11.5, margin: 0, marginTop: 1 }}>
                 {conf.full_name}
               </p>
             </div>
           )}
           {posting.conference_committees?.name && (
-            <p className="truncate" style={{ color: '#8A7D6C', fontFamily: OUTFIT, fontSize: 11, margin: 0, marginTop: 2 }}>
+            <p className="[overflow-wrap:anywhere]" style={{ color: '#8A7D6C', fontFamily: OUTFIT, fontSize: 11, margin: 0, marginTop: 2 }}>
               {posting.conference_committees.name}
             </p>
           )}
@@ -379,7 +378,7 @@ function PostingCard({
             <div className="flex items-center gap-2">
               <MapPin size={13} strokeWidth={2.2} style={{ color: FOREST_MID, flexShrink: 0 }} />
               <span className="flex items-center gap-1.5 min-w-0">
-                <span className="text-[12px] font-bold truncate" style={{ color: '#4A4238', fontFamily: OUTFIT }}>
+                <span className="text-[12px] font-bold [overflow-wrap:anywhere]" style={{ color: '#4A4238', fontFamily: OUTFIT }}>
                   {[conf?.city, conf?.country].filter(Boolean).join(', ')}
                 </span>
                 {countryObj && <FlagImg code={countryObj.code} size={15} />}
@@ -433,12 +432,12 @@ function PostingCard({
           <button
             onClick={() => setExpanded(v => !v)}
             className="mt-3 flex items-center gap-1 focus:outline-none transition-colors"
-            style={{ color: expanded ? FOREST : '#8A7D6C', fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.08em' }}
+            style={{ color: expanded ? FOREST : '#8A7D6C', fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800 }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = FOREST; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = expanded ? FOREST : '#8A7D6C'; }}
             aria-expanded={expanded}
           >
-            ROLE DETAILS
+            Role details
             <ChevronDown
               size={13}
               strokeWidth={2.6}
@@ -507,11 +506,11 @@ function GroupHeader({ catKey, count }: { catKey: string; count: number }) {
     <div className="flex items-center gap-2.5 mb-4">
       <NeuIconDisc gradient={cat.gradient} emoji={cat.emoji} icon={cat.icon} size={32} />
       <h2
-        style={{ color: INK, fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 800, letterSpacing: '0.14em', margin: 0 }}
+        style={{ color: INK, fontFamily: OUTFIT, fontSize: 16, fontWeight: 800, margin: 0 }}
       >
         {cat.label}
       </h2>
-      <NeuPill style={{ padding: '2px 10px', fontSize: 11 }}>{count}</NeuPill>
+      <span style={{ color: FOREST, fontFamily: OUTFIT, fontSize: 16, fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}>{count}</span>
       <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, rgba(27,56,40,0.16), transparent)' }} />
     </div>
   );
@@ -521,18 +520,14 @@ function GroupHeader({ catKey, count }: { catKey: string; count: number }) {
 
 function StatFragment({ value, label, gold = false }: { value: string; label: string; gold?: boolean }) {
   return (
-    <NeuInset
-      small
-      className="inline-flex items-baseline gap-1.5"
-      style={{ padding: '6px 13px', borderRadius: 999 }}
-    >
-      <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 15, color: gold ? GOLD_DEEP : FOREST, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+    <span className="inline-flex items-baseline gap-1.5" style={{ marginRight: 12 }}>
+      <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 22, color: gold ? GOLD_DEEP : FOREST, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
         {value}
       </span>
-      <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 9.5, letterSpacing: '0.1em', color: '#6B5D4B' }}>
+      <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: '#6B5D4B' }}>
         {label}
       </span>
-    </NeuInset>
+    </span>
   );
 }
 
@@ -614,9 +609,9 @@ function ApplyModal({
                 style={{ backgroundColor: 'rgba(238,217,138,0.18)', border: '1px solid rgba(238,217,138,0.34)' }}
               >
                 <p className="text-xs" style={{ color: GOLD_DEEP, fontFamily: OUTFIT }}>
-                  Consider adding entries to your MUN CV to strengthen your application.{' '}
+                  Entries on your MUN CV strengthen your application.{' '}
                   <Link href="/account/cv" className="font-bold underline focus:outline-none" style={{ color: GOLD_DEEP }}>
-                    Add now →
+                    Add entries
                   </Link>
                 </p>
               </div>
@@ -658,7 +653,7 @@ function ApplyModal({
             gradient={NEU_GRADIENTS.forest}
             style={{ width: '100%', marginTop: 18, padding: '13px 22px' }}
           >
-            {applying ? 'SUBMITTING…' : 'SUBMIT APPLICATION'}
+            {applying ? 'Submitting…' : 'Submit application'}
           </NeuButton>
         </NeuCard>
       </div>
@@ -759,8 +754,8 @@ function ComingSoonScreen() {
                 letterSpacing: '-0.01em',
               }}
             >
-              Opportunities are{' '}
-              <span style={{ color: FOREST }}>coming soon</span>
+              Opportunities Are{' '}
+              <span style={{ color: FOREST }}>Coming Soon</span>
             </h1>
 
             {/* Subcopy */}
@@ -768,12 +763,8 @@ function ComingSoonScreen() {
               className="mt-4 mx-auto"
               style={{ fontFamily: OUTFIT, fontSize: 14.5, color: '#6B5D4B', maxWidth: 400, lineHeight: 1.65 }}
             >
-              This is where{' '}
-              <span style={{ color: INK, fontWeight: 700 }}>chairing</span>,{' '}
-              <span style={{ color: INK, fontWeight: 700 }}>secretariat</span>, and{' '}
-              <span style={{ color: INK, fontWeight: 700 }}>staff</span>{' '}
-              opportunities across conferences will live. We&rsquo;re putting the
-              finishing touches on it. Check back soon.
+              Chairing, secretariat and staff roles from every conference will be listed
+              here. Check back soon.
             </p>
 
             {/* Category glyph chips — a quiet preview of what's coming */}
@@ -801,9 +792,9 @@ function ComingSoonScreen() {
 // ── Main component ─────────────────────────────────────────────────────────
 
 const COMP_FILTERS = [
-  { key: 'paid', label: 'PAID' },
-  { key: 'travel-covered', label: 'TRAVEL COVERED' },
-  { key: 'unpaid', label: 'VOLUNTEER' },
+  { key: 'paid', label: 'Paid' },
+  { key: 'travel-covered', label: 'Travel covered' },
+  { key: 'unpaid', label: 'Volunteer' },
 ] as const;
 
 export default function ConferencesRolesClient() {
@@ -930,7 +921,6 @@ export default function ConferencesRolesClient() {
     myApplications.map(a => [a.job_posting_id, a])
   );
 
-  const pad = (n: number) => String(n).padStart(2, '0');
 
   const renderCard = (posting: JobPosting) => (
     <PostingCard
@@ -1012,7 +1002,6 @@ export default function ConferencesRolesClient() {
           >
             Find Your Next{' '}
             <span style={{ color: FOREST }}>Role</span>
-            <span style={{ color: GOLD_DEEP }}>.</span>
           </h1>
           <p
             className="mt-3"
@@ -1024,9 +1013,9 @@ export default function ConferencesRolesClient() {
           {/* Stat fragments */}
           {!loading && (
             <div className="mt-5 flex items-center gap-2.5 flex-wrap">
-              <StatFragment value={pad(totalOpen)} label={`OPEN ROLE${totalOpen === 1 ? '' : 'S'}`} />
-              <StatFragment value={pad(conferencesHiring)} label={`CONFERENCE${conferencesHiring === 1 ? '' : 'S'} HIRING`} />
-              <StatFragment value={pad(fundedRoles)} label="WITH REWARDS" gold />
+              <StatFragment value={String(totalOpen)} label={`open role${totalOpen === 1 ? '' : 's'}`} />
+              <StatFragment value={String(conferencesHiring)} label={`conference${conferencesHiring === 1 ? '' : 's'} hiring`} />
+              <StatFragment value={String(fundedRoles)} label="with rewards" gold />
             </div>
           )}
         </header>
@@ -1085,18 +1074,18 @@ export default function ConferencesRolesClient() {
                   <button
                     onClick={() => { setSearchQuery(''); setCategoryFilter(''); setCompensationFilter(''); }}
                     className="flex items-center gap-1 focus:outline-none transition-colors"
-                    style={{ color: MUTED, fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.1em' }}
+                    style={{ color: MUTED, fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800 }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = DANGER; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = MUTED; }}
                   >
                     <X size={11} strokeWidth={2.5} />
-                    CLEAR
+                    Clear
                   </button>
                 )}
                 <p
-                  style={{ color: '#6B5D4B', fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', margin: 0, fontVariantNumeric: 'tabular-nums' }}
+                  style={{ color: '#6B5D4B', fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, margin: 0, fontVariantNumeric: 'tabular-nums' }}
                 >
-                  {filtered.length} ROLE{filtered.length !== 1 ? 'S' : ''}
+                  {filtered.length} role{filtered.length !== 1 ? 's' : ''}
                 </p>
               </div>
             </div>
@@ -1137,27 +1126,27 @@ export default function ConferencesRolesClient() {
               {postings.length === 0 ? (
                 <>
                   <h2 style={{ color: INK, fontFamily: OUTFIT, fontWeight: 800, fontSize: 19, marginBottom: 8 }}>
-                    No positions open yet
+                    No Positions Open Yet
                   </h2>
                   <p className="text-sm mb-6" style={{ color: MUTED, fontFamily: OUTFIT, maxWidth: 440 }}>
                     Conferences will post open positions here. Check back soon.
                   </p>
                   <NeuButton onClick={() => router.push('/account/conferences')} gradient={NEU_GRADIENTS.forest}>
-                    LIST YOUR CONFERENCE
+                    List your conference
                     <ArrowRight size={14} strokeWidth={2.6} />
                   </NeuButton>
                 </>
               ) : (
                 <>
                   <h2 style={{ color: INK, fontFamily: OUTFIT, fontWeight: 800, fontSize: 19, marginBottom: 12 }}>
-                    No positions match your filters
+                    No Positions Match Your Filters
                   </h2>
                   <button
                     onClick={() => { setSearchQuery(''); setCategoryFilter(''); setCompensationFilter(''); }}
                     className="focus:outline-none"
                     style={{ color: FOREST, fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, textDecoration: 'underline' }}
                   >
-                    CLEAR FILTERS
+                    Clear filters
                   </button>
                 </>
               )}

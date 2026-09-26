@@ -63,17 +63,17 @@ interface DraftPeek {
   conference?: DraftConference;
 }
 
-// Uppercase forest-and-gold pill, the primary link CTA — the same recipe as
+// Forest-and-gold pill, the primary link CTA — the same recipe as
 // NeuButton's rendered (non-hover) state, usable as a <Link>.
 const primaryPillStyle: React.CSSProperties = {
   background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-  color: NEU.gold, textDecoration: 'none', fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.05em',
+  color: NEU.gold, textDecoration: 'none', fontFamily: OUTFIT, fontWeight: 800,
   boxShadow: `0 4px 10px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 30%, transparent), ${NEU.outSm}`,
 };
 
 const secondaryPillStyle: React.CSSProperties = {
   backgroundColor: NEU.surface, color: NEU.forest, textDecoration: 'none',
-  fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.05em', boxShadow: NEU.outSm,
+  fontFamily: OUTFIT, fontWeight: 800, boxShadow: NEU.outSm,
 };
 
 function roleLabel(role: string): string {
@@ -190,13 +190,13 @@ function DraftLandingInner() {
         <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={FileClock} size={52} style={{ marginBottom: 20 }} />
         <Eyebrow>Unfinished application</Eyebrow>
         <h1 className="font-black text-xl mt-2 mb-2" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-          This link is no longer valid
+          This Link Is No Longer Valid
         </h1>
         <p className="text-sm mb-6" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, lineHeight: 1.55 }}>
           The draft this link points to has been submitted, deleted, or never existed. If you are still hoping to apply, you can start again from the conference page.
         </p>
         <Link href="/conferences/explore" className="inline-flex items-center gap-2 rounded-full py-2.5 px-5 font-bold text-sm focus:outline-none" style={primaryPillStyle}>
-          BROWSE CONFERENCES
+          Browse conferences
         </Link>
       </CardShell>
     );
@@ -208,13 +208,13 @@ function DraftLandingInner() {
         <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={FileClock} size={52} style={{ marginBottom: 20 }} />
         <Eyebrow>Unfinished application</Eyebrow>
         <h1 className="font-black text-xl mt-2 mb-2" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-          Draft deleted
+          Draft Deleted
         </h1>
         <p className="text-sm mb-6" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, lineHeight: 1.55 }}>
           Your saved answers are gone and you will not be reminded about them again. You can always start a fresh application from the conference page.
         </p>
         <Link href="/conferences/explore" className="inline-flex items-center gap-2 rounded-full py-2.5 px-5 font-bold text-sm focus:outline-none" style={primaryPillStyle}>
-          BROWSE CONFERENCES
+          Browse conferences
         </Link>
       </CardShell>
     );
@@ -282,7 +282,7 @@ function DraftLandingInner() {
             className="inline-flex items-center justify-center rounded-full py-3 px-5 text-sm focus:outline-none"
             style={primaryPillStyle}
           >
-            FINISH MY APPLICATION
+            Finish my application
           </Link>
 
           {confirming ? (
@@ -292,14 +292,14 @@ function DraftLandingInner() {
               </p>
               <div className="flex flex-wrap gap-2.5">
                 <NeuButton gradient={NEU_GRADIENTS.amber} disabled={discarding} onClick={handleDiscard}>
-                  {discarding ? 'DELETING…' : 'YES, DELETE IT'}
+                  {discarding ? 'Deleting…' : 'Yes, delete it'}
                 </NeuButton>
                 <button
                   onClick={() => setConfirming(false)}
                   className="inline-flex items-center justify-center rounded-full py-2.5 px-5 text-xs focus:outline-none"
                   style={{ ...secondaryPillStyle, border: 'none', cursor: 'pointer', fontSize: 13 }}
                 >
-                  KEEP IT
+                  Keep it
                 </button>
               </div>
             </div>
@@ -309,7 +309,7 @@ function DraftLandingInner() {
               className="inline-flex items-center justify-center rounded-full py-3 px-5 text-sm focus:outline-none"
               style={{ ...secondaryPillStyle, color: DANGER, border: 'none', cursor: 'pointer' }}
             >
-              DELETE THIS DRAFT
+              Delete this draft
             </button>
           )}
 
@@ -326,14 +326,14 @@ function DraftLandingInner() {
             className="inline-flex items-center justify-center rounded-full py-3 px-5 text-sm focus:outline-none"
             style={primaryPillStyle}
           >
-            CREATE MY ACCOUNT
+            Create my account
           </AuthLink>
           <AuthLink
             next={nextPath}
             className="inline-flex items-center justify-center rounded-full py-3 px-5 text-sm focus:outline-none"
             style={secondaryPillStyle}
           >
-            I ALREADY HAVE AN ACCOUNT
+            I already have an account
           </AuthLink>
           <p className="text-xs" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, lineHeight: 1.55 }}>
             Sign in with the address this draft was saved to if you want to finish it or delete it. Turning reminders off never needs an account.

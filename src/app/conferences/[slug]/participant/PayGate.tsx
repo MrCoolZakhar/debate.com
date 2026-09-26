@@ -80,12 +80,12 @@ export function RejectedCard({
             <Link
               href={`/conferences/${conferenceSlug}/apply?role=${role}&edit=1`}
               className="inline-flex items-center gap-2 rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none transition-colors"
-              style={{ backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: OUTFIT, letterSpacing: '0.06em' }}
+              style={{ backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: OUTFIT }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
             >
               <RotateCcw size={15} />
-              EDIT AND RESUBMIT
+              Edit and resubmit
             </Link>
           </>
         ) : (
@@ -126,11 +126,11 @@ export function WithdrawnCard({ conferenceSlug }: { conferenceSlug: string; role
         <Link
           href={`/conferences/${conferenceSlug}`}
           className="inline-flex items-center gap-2 rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none transition-colors"
-          style={{ backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: OUTFIT, letterSpacing: '0.06em' }}
+          style={{ backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: OUTFIT }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
         >
-          VIEW CONFERENCE
+          View conference
         </Link>
       </div>
     </SectionCard>

@@ -298,7 +298,7 @@ function ConfirmationInner({ conference }: { conference: ConfRow }) {
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-on-bg)'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-main)'; }}
               >
-                Explore More Conferences
+                Explore more conferences
               </Link>
             </div>
           </div>
@@ -350,7 +350,7 @@ export default function ConfirmationPage() {
           <SiteNav />
           <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
             <h1 style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 28, color: 'var(--gv-on-bg)' }}>
-              Your application is in
+              Your Application Is In
             </h1>
             <p className="mt-2 text-sm" style={{ fontFamily: OUTFIT, color: 'var(--gv-muted)' }}>
               We could not load this conference right now. Your submission was saved.
@@ -359,12 +359,12 @@ export default function ConfirmationPage() {
               href="/account/conferences"
               className="mt-6 focus:outline-none"
               style={{
-                fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, letterSpacing: '0.06em',
+                fontFamily: OUTFIT, fontWeight: 700, fontSize: 13,
                 backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)',
                 padding: '12px 24px', borderRadius: 12, textDecoration: 'none',
               }}
             >
-              MY CONFERENCES
+              Your conferences
             </Link>
           </div>
         </div>

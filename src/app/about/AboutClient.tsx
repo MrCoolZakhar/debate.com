@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Check } from 'lucide-react';
 
 // Every portrait is a pre-framed 480x480 webp: head (chin to top of hair) about
 // 45% of the height, eyes on the line 40% from the top, face centred. Frame a
@@ -184,7 +185,7 @@ export default function AboutClient() {
       <section className="relative z-10 py-24 px-6" style={{ borderTop: '1px solid rgba(221, 212, 192, 0.8)' }}>
         <div className="text-center mb-16">
           <p className="text-xs font-mono tracking-[0.2em] text-[#9A8A78] mb-3 uppercase">{t('about_representing')}</p>
-          <h2 className="text-4xl font-black text-[#1C1410]">{t('about_ambassadors_title')}</h2>
+          <h2 className="text-4xl font-black text-[#1C1410]">Global Ambassadors</h2>
         </div>
         {/* Seamless 3-row auto-scroll marquee (left → right). Pauses on hover.
             Three identical grid copies; shifting by one copy loops seamlessly. */}
@@ -224,21 +225,21 @@ export default function AboutClient() {
         >
           <p className="font-black text-white mb-4"
             style={{ fontSize: 'clamp(28px, 4vw, 52px)', letterSpacing: '-0.02em' }}>
-            {t('about_cta_title')}
+            Start Gavelling With Us
           </p>
           <p className="text-[#EED98A]/60 text-base max-w-xl mx-auto leading-relaxed">
             {t('about_cta_desc')}
           </p>
           <button
             onClick={() => { setOpen(true); setSubmitted(false); }}
-            className="inline-flex items-center gap-2 mt-8 px-8 py-3 rounded-full font-bold text-sm tracking-wide uppercase transition-all duration-150"
+            className="inline-flex items-center gap-2 mt-8 px-8 py-3 rounded-full font-bold text-sm transition-all duration-150"
             style={{ border: '1.5px solid rgba(238, 217, 138, 0.4)', color: '#EED98A', background: 'transparent', cursor: 'pointer' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(238, 217, 138, 0.12)'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
             onMouseDown={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(238, 217, 138, 0.25)'; (e.currentTarget as HTMLButtonElement).style.color = '#FFFFFF'; }}
             onMouseUp={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(238, 217, 138, 0.12)'; (e.currentTarget as HTMLButtonElement).style.color = '#EED98A'; }}
           >
-            {t('about_apply_btn')}
+            Apply now
           </button>
         </div>
       </section>
@@ -249,7 +250,7 @@ export default function AboutClient() {
           style={{ backgroundColor: '#FAF8F3', border: '1px solid rgba(221, 212, 192, 0.8)', borderRadius: '20px', color: '#1C1410' }}>
           <DialogHeader>
             <DialogTitle className="text-[#1C1410] text-xl font-black">
-              {submitted ? t('about_dialog_title_submitted') : t('about_dialog_title_new')}
+              {submitted ? 'Application Received' : 'Apply to Be an Ambassador'}
             </DialogTitle>
             <DialogDescription style={{ color: '#9A8A78' }}>
               {submitted ? t('about_dialog_desc_submitted') : t('about_dialog_desc_new')}
@@ -260,9 +261,9 @@ export default function AboutClient() {
             <div className="py-8 text-center">
               <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
                 style={{ backgroundColor: 'rgba(27, 56, 40, 0.1)', border: '1px solid rgba(27, 56, 40, 0.3)' }}>
-                <span style={{ fontSize: 28, color: '#1B3828' }}>✓</span>
+                <Check size={30} strokeWidth={2.6} aria-hidden="true" style={{ color: '#1B3828' }} />
               </div>
-              <Button onClick={() => setOpen(false)} className="uppercase" style={{ backgroundColor: '#1B3828', color: '#EED98A', borderRadius: '12px', fontWeight: 700 }}>
+              <Button onClick={() => setOpen(false)} style={{ backgroundColor: '#1B3828', color: '#EED98A', borderRadius: '12px', fontWeight: 700 }}>
                 {t('about_btn_close')}
               </Button>
             </div>
@@ -285,13 +286,13 @@ export default function AboutClient() {
                 <Textarea id="amb-exp" placeholder={t('about_placeholder_experience')} value={form.experience} onChange={(e) => setForm({ ...form, experience: e.target.value })} rows={4} style={{ ...inputStyle, resize: 'none' }} />
               </div>
               <div className="flex gap-3 pt-2">
-                <Button variant="outline" onClick={() => setOpen(false)} className="flex-1 uppercase"
+                <Button variant="outline" onClick={() => setOpen(false)} className="flex-1"
                   style={{ borderColor: 'rgba(28, 20, 16, 0.2)', color: '#9A8A78', backgroundColor: 'transparent', borderRadius: '12px' }}>
                   {t('about_btn_cancel')}
                 </Button>
-                <Button onClick={handleSubmit} disabled={!form.name || !form.email || !form.country} className="flex-1 uppercase"
+                <Button onClick={handleSubmit} disabled={!form.name || !form.email || !form.country} className="flex-1"
                   style={{ backgroundColor: '#1B3828', color: '#EED98A', borderRadius: '12px', fontWeight: 800, opacity: (!form.name || !form.email || !form.country) ? 0.45 : 1 }}>
-                  {t('about_btn_submit')}
+                  Submit application
                 </Button>
               </div>
             </div>

@@ -16,7 +16,7 @@ import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { getCountryByCode } from '@/lib/countries';
-import { FlagImg } from '@/components/FlagImg';
+import { CircleFlag } from '@/components/CircleFlag';
 import ProfileLink from '@/components/ProfileLink';
 import Avatar from '@/components/Avatar';
 import { isPaperLate, signedPositionPaperUrl } from '@/lib/positionPapers';
@@ -140,14 +140,14 @@ function SignInLink({ next }: { next: string }) {
       style={{
         padding: '9px 22px',
         background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-        color: NEU.gold, fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, letterSpacing: '0.06em',
+        color: NEU.gold, fontFamily: OUTFIT, fontWeight: 800, fontSize: 13,
         textDecoration: 'none',
         boxShadow: hovered ? `0 6px 14px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 33%, transparent), ${NEU.outSmHover}` : `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 25%, transparent), ${NEU.outSm}`,
         transform: pressed ? 'scale(0.96)' : hovered ? 'translateY(-2px)' : 'translateY(0)',
         transition: `box-shadow 220ms ${EASE}, transform 140ms ${EASE}`,
       }}
     >
-      SIGN IN
+      Sign in
     </AuthLink>
   );
 }
@@ -220,12 +220,12 @@ function PaperHandoff({ fileName, fileUrl, sizeBytes }: { fileName: string; file
         style={{
           minHeight: 48, borderRadius: 14, textDecoration: 'none',
           background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-          color: NEU.gold, fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, letterSpacing: '0.05em',
+          color: NEU.gold, fontFamily: OUTFIT, fontWeight: 800, fontSize: 14,
           boxShadow: `0 6px 16px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent)`,
         }}
       >
         <ExternalLink size={17} strokeWidth={2.2} />
-        OPEN THE PDF
+        Open the PDF
       </a>
 
       <a
@@ -237,11 +237,11 @@ function PaperHandoff({ fileName, fileUrl, sizeBytes }: { fileName: string; file
         style={{
           minHeight: 44, borderRadius: 14, textDecoration: 'none',
           backgroundColor: NEU.surface, border: '1.5px solid #D8CDB6',
-          color: NEU.forest, fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, letterSpacing: '0.05em',
+          color: NEU.forest, fontFamily: OUTFIT, fontWeight: 700, fontSize: 13,
         }}
       >
         <Download size={16} strokeWidth={2.2} />
-        DOWNLOAD
+        Download
       </a>
 
       <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, margin: 0, lineHeight: 1.5, textAlign: 'center' }}>
@@ -483,9 +483,9 @@ export default function PositionPaperPage() {
             {/* Header */}
             <div className="flex items-start justify-between gap-4 flex-wrap mb-6">
               <div className="flex items-center gap-3">
-                <FlagImg code={paper.country_code} size={30} />
-                <div>
-                  <p style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 20, color: NEU.ink, margin: 0 }}>{cName}</p>
+                <CircleFlag code={paper.country_code} size={34} />
+                <div className="min-w-0">
+                  <p style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 20, color: NEU.ink, margin: 0, overflowWrap: 'anywhere' }}>{cName}</p>
                   <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted, margin: '2px 0 0 0' }}>
                     {committee?.abbreviation ?? committee?.name}
                     {namedSubmitters.length > 0 && ' · '}
@@ -519,9 +519,9 @@ export default function PositionPaperPage() {
                 {late && (
                   <span
                     className="px-3 py-1 rounded-full"
-                    style={{ backgroundColor: 'rgba(184,132,74,0.16)', color: '#8A5A2E', fontSize: 10, fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.08em' }}
+                    style={{ backgroundColor: 'rgba(184,132,74,0.16)', color: '#8A5A2E', fontSize: 11, fontFamily: OUTFIT, fontWeight: 700 }}
                   >
-                    LATE
+                    Late
                   </span>
                 )}
                 <StatusBadge status={paper.status} />
@@ -536,7 +536,7 @@ export default function PositionPaperPage() {
                         color={NEU.gold}
                         boxShadowColor={`color-mix(in srgb, ${NEU_GRADIENTS.green[0]} 33%, transparent)`}
                       >
-                        APPROVE
+                        Approve
                       </ActionButton>
                     )}
                     {paper.status !== 'rejected' && (
@@ -550,7 +550,7 @@ export default function PositionPaperPage() {
                         border="1px solid rgba(139,32,32,0.28)"
                         boxShadowColor="rgba(139,32,32,0.18)"
                       >
-                        REJECT
+                        Reject
                       </ActionButton>
                     )}
                   </>
@@ -643,7 +643,7 @@ export default function PositionPaperPage() {
               {/* PDF, desktop: embedded, the paper is the protagonist */}
               <NeuCard className="hidden lg:flex lg:h-full" style={{ flexDirection: 'column', overflow: 'hidden', padding: 0, minHeight: 0 }}>
                 <div className="flex items-center justify-between gap-3 px-4 py-3" style={{ borderBottom: '1px solid rgba(27,56,40,0.08)' }}>
-                  <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5, color: NEU.ink, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5, color: NEU.ink, margin: 0, minWidth: 0, overflowWrap: 'anywhere' }}>
                     {paper.file_name}
                   </p>
                   <ActionButton
@@ -658,7 +658,7 @@ export default function PositionPaperPage() {
                     boxShadowColor={`color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 33%, transparent)`}
                     style={{ flexShrink: 0 }}
                   >
-                    DOWNLOAD
+                    Download
                   </ActionButton>
                 </div>
                 <iframe src={paper.file_url} title={paper.file_name} className="flex-1 w-full" style={{ border: 'none' }} />
