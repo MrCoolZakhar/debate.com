@@ -616,7 +616,7 @@ function DaisSummary({ seated, pending, headChair }: {
     const text = (
       <span
         className="font-semibold min-w-0 text-right [overflow-wrap:anywhere]"
-        style={{ color: e.pending ? '#7A5A10' : SOFT, fontFamily: OUTFIT, fontSize: 12, lineHeight: `${DAIS_ROW}px` }}
+        style={{ color: e.pending ? '#7A5A10' : SOFT, fontFamily: OUTFIT, fontSize: 12, lineHeight: 1.25 }}
       >
         {e.label}
       </span>
