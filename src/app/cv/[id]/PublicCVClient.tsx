@@ -1,5 +1,6 @@
 'use client';
 
+import { sortCvEntries } from '@/lib/cvOrder';
 import Link from 'next/link';
 import { ArrowRight, ScrollText } from 'lucide-react';
 import { getCountryByName, getFlagUrl } from '@/lib/countries';
@@ -19,7 +20,9 @@ export interface PublicProfile {
 
 // Data is resolved server-side (see page.tsx) and passed in as props, so the
 // CV renders fully on first paint — no client RPC round-trip, no spinner.
-export default function PublicCVClient({ profile, entries }: { profile: PublicProfile | null; entries: CVEntry[] }) {
+export default function PublicCVClient({ profile, entries: rawEntries }: { profile: PublicProfile | null; entries: CVEntry[] }) {
+  // Dated first, then year-in-name, undated at the bottom (src/lib/cvOrder.ts).
+  const entries = sortCvEntries(rawEntries);
   if (!profile) {
     return (
       <div className="flex flex-col items-center justify-center text-center px-6" style={{ minHeight: '70vh' }}>

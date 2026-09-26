@@ -1,5 +1,6 @@
 'use client';
 
+import { sortCvEntries } from '@/lib/cvOrder';
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Share2, Check } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -44,14 +45,9 @@ export default function CVPage() {
       awards: r.awards ?? [],
       photos: r.photos ?? [],
     }));
-    // Timeline order: most recent first. Prefer event_date; fall back to
-    // created_at so undated entries still sort sensibly (near the bottom).
-    rows.sort((a, b) => {
-      const da = new Date(a.event_date ? `${a.event_date}T00:00:00` : a.created_at).getTime();
-      const db = new Date(b.event_date ? `${b.event_date}T00:00:00` : b.created_at).getTime();
-      return db - da;
-    });
-    setEntries(rows);
+    // Timeline order: dated first, then year-in-name, undated at the bottom (src/lib/cvOrder.ts).
+    const ordered = sortCvEntries(rows);
+    setEntries(ordered);
     setLoading(false);
     // Keep profiles.mun_experience_level in sync with the CV count.
     syncExperienceLevel(supabase, user.id, rows.length);

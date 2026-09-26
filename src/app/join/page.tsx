@@ -49,11 +49,11 @@ import { useT, useLanguage } from '@/contexts/LanguageContext';
 import SessionLanguageMenu from '@/components/SessionLanguageMenu';
 import { getCountryDisplayName } from '@/lib/countries';
 import { supabase, supabase as anonSupabase } from '@/lib/supabase';
-import { PRESET_LOGOS, deriveCommitteeAcronym, committeeDisplayName, matchPresetEmblem } from '@/lib/presetNames';
+import { PRESET_LOGOS, deriveCommitteeAcronym, matchPresetEmblem } from '@/lib/presetNames';
 import { CircleFlag } from '@/components/CircleFlag';
 import { DEFAULT_EMBLEM } from '@/components/CommitteeIdentityBadge';
 import {
-  BrandPanel, type BrandRoom, C, Chip, Eyebrow, FieldLabel, GhostAction, JoinCard, MessageRail, OUTFIT,
+  BrandPanel, type BrandRoom, C, Chip, FieldLabel, GhostAction, JoinCard, MessageRail, OUTFIT,
   PageBackdrop, PrimaryAction, RoleTile,
 } from './joinUi';
 import JoinSeatPicker, { type JoinSeatRow } from './JoinSeatPicker';
@@ -886,14 +886,9 @@ function JoinPageInner() {
                 <EmptyStage busy={lookingUp} title={t('join_stage_empty_title')} body={t('join_stage_empty_body')} />
               ) : (
                 <div className="gv-join-steps space-y-4">
-                  <CommitteeCard
-                    committee={foundCommittee}
-                    conferenceCommittee={conferenceCommittee}
-                    delegatesLabel={`${foundCommittee.delegates.length} ${t('join_delegates_registered')}`}
-                    endedLabel={t('join_session_ended')}
-                    adjournedLabel={mode === 'delegate' ? t('join_adjourned') : null}
-                    conferenceLabel={isConferenceSession ? t('join_conf_eyebrow') : null}
-                  />
+                  {/* The committee itself (emblem, name, topic, who is present) is
+                      the side panel's job; repeating it here pushed the steps
+                      off the screen (owner, 26 Sep 2026). */}
 
                   {checkingConference && <BusyBlock />}
 
@@ -1456,56 +1451,6 @@ function BusyBlock() {
   );
 }
 
-/** The committee this code opens: emblem, acronym, the spelled name beneath, topic, roster count. */
-function CommitteeCard({ committee, conferenceCommittee, delegatesLabel, endedLabel, adjournedLabel, conferenceLabel }: {
-  committee: Committee;
-  conferenceCommittee: ConferenceCommittee | null;
-  delegatesLabel: string;
-  endedLabel: string;
-  adjournedLabel: string | null;
-  conferenceLabel: string | null;
-}) {
-  const acronym = conferenceCommittee?.abbreviation || deriveCommitteeAcronym(committee.name) || committee.name;
-  const spelled = committeeDisplayName(committee.name, acronym);
-  const showSpelled = spelled.toLowerCase() !== acronym.toLowerCase();
-  const emblem = conferenceCommittee?.logo_url
-    || conferenceCommittee?.conferences?.logo_url
-    || matchPresetEmblem(committee.name, conferenceCommittee?.abbreviation)
-    || PRESET_LOGOS[committee.name]
-    || null;
-  const [failed, setFailed] = useState<string | null>(null);
-  const src = emblem && failed !== emblem ? emblem : null;
-
-  return (
-    <div
-      className="flex items-center gap-3.5 rounded-2xl p-3.5"
-      style={{ backgroundColor: '#FFFDF8', boxShadow: '0 1px 2px rgba(27,56,40,0.05), 0 8px 22px rgba(27,56,40,0.08), inset 0 0 0 1px rgba(27,56,40,0.07)' }}
-    >
-      <span
-        className="flex flex-shrink-0 items-center justify-center overflow-hidden rounded-full"
-        style={{ width: 56, height: 56, backgroundColor: src ? '#FFFFFF' : C.forest, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)' }}
-      >
-        {src ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={src} alt="" onError={() => setFailed(src)} style={{ width: 38, height: 38, objectFit: 'contain' }} />
-        ) : (
-          <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, color: C.gold, letterSpacing: '0.04em' }}>{acronym.slice(0, 4).toUpperCase()}</span>
-        )}
-      </span>
-      <div className="min-w-0 flex-1">
-        {conferenceLabel && <Eyebrow tone="forest" style={{ marginBottom: 2, fontSize: 9.5 }}>{conferenceLabel}</Eyebrow>}
-        <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 18, fontWeight: 800, color: C.ink, letterSpacing: '-0.015em', lineHeight: 1.2 }}>{acronym}</p>
-        {showSpelled && <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: C.inkSoft }}>{spelled}</p>}
-        {committee.topic && <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12, color: C.muted, fontStyle: 'italic' }}>{committee.topic}</p>}
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          <Chip tone="neutral" icon={<Users size={11} strokeWidth={2.6} />}><span style={{ fontVariantNumeric: 'tabular-nums' }}>{delegatesLabel}</span></Chip>
-          {committee.endedAt && <Chip tone="gold">{endedLabel}</Chip>}
-          {!committee.endedAt && committee.suspendedAt && adjournedLabel && <Chip tone="gold">{adjournedLabel}</Chip>}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function NoticeCard({ tone, icon, title, body, meta, action, foot }: {
   tone: 'forest' | 'danger';
