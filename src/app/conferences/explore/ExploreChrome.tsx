@@ -110,12 +110,15 @@ export function SearchPill({
   continent, continentLabels, onContinent,
   nearCountry, nearCode, nearActive, onToggleNear,
   chosenCountryNames,
-  dateFilter, dateFrom, dateTo, onDate, whenLabel,
+  dateFilter, dateFrom, dateTo, onDate, whenLabel, whenOptions,
   roles, onToggleRole, onClearRoles,
   onSubmit,
 }: {
   /** A name for the chosen dates when the page knows one ("This week"). */
   whenLabel?: string | null;
+  /** The When menu's choices, when the page has its own (This week, ...).
+   *  Without them the plain DATE_OPTIONS buckets are offered. */
+  whenOptions?: DateTab[];
   search: string; onSearch: (v: string) => void;
   continent: string | null; continentLabels: Record<string, string>; onContinent: (k: string | null) => void;
   nearCountry: string | null; nearCode?: string; nearActive: boolean; onToggleNear: () => void;
@@ -304,7 +307,20 @@ export function SearchPill({
                   <p style={{ margin: '0 0 8px', fontSize: 13, color: INK_SOFT }}>Chosen: {whenSummary}</p>
                 )}
                 <div role="radiogroup" aria-label="When">
-                  {DATE_OPTIONS.map(d => {
+                  {whenOptions ? whenOptions.map(t => (
+                    <button
+                      key={t.key}
+                      type="button"
+                      role="radio"
+                      aria-checked={t.active}
+                      onClick={() => { t.onClick(); setOpen(null); }}
+                      className="w-full flex items-center justify-between focus:outline-none"
+                      style={{ padding: '10px 10px', borderRadius: 12, border: 'none', cursor: 'pointer', backgroundColor: t.active ? '#EEF3EC' : 'transparent', fontFamily: FONT, fontSize: 14.5, fontWeight: t.active ? 800 : 500, color: INK }}
+                    >
+                      {t.label}
+                      {t.active && <Check size={16} strokeWidth={2.6} style={{ color: FOREST }} aria-hidden />}
+                    </button>
+                  )) : DATE_OPTIONS.map(d => {
                     const active = dateFilter === d.key && !dateFrom && !dateTo;
                     return (
                       <button
@@ -858,6 +874,78 @@ export function PlaceRail({ items, trailing }: { items: PlaceItem[]; trailing?: 
           </button>
         </span>
       )}
+    </div>
+  );
+}
+
+/** The chip look, for a caller's own chip (the "Another country" chip). */
+export function chipStyle(active: boolean): React.CSSProperties { return chipLook(active); }
+
+/** The compact place strip: the same places as chips (a small round flag or
+ *  glyph disc, the name, the count) that scroll sideways. It sits on the
+ *  filter chips' band; from 1024px it takes the rest of the row and scrolls
+ *  on its own (a fade marks the side with more), below that it is part of
+ *  the band's one sideways scroll. */
+export function PlaceStrip({ items, trailing }: { items: PlaceItem[]; trailing?: React.ReactNode }) {
+  const scroller = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+  const measure = useCallback(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const left = el.scrollLeft > 4;
+    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+    setEdges(prev => (prev.left === left && prev.right === right ? prev : { left, right }));
+  }, []);
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    el.addEventListener('scroll', measure, { passive: true });
+    return () => { ro.disconnect(); el.removeEventListener('scroll', measure); };
+  }, [measure, items.length]);
+  const mask = `linear-gradient(90deg, ${edges.left ? 'transparent 0, #000 36px' : '#000 0'}, ${edges.right ? '#000 calc(100% - 36px), transparent 100%' : '#000 100%'})`;
+  return (
+    <div
+      ref={scroller}
+      role="group"
+      aria-label="Places"
+      className="gv-explore-scroll gv-place-strip flex items-center"
+      style={{ gap: 8, WebkitMaskImage: mask, maskImage: mask }}
+    >
+      {items.map(it => (
+        <button
+          key={it.key}
+          type="button"
+          aria-pressed={it.active}
+          onClick={it.onClick}
+          title={it.kicker ? `${it.kicker}: ${it.label}` : it.label}
+          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2"
+          style={{ ...chipLook(it.active), paddingLeft: 5, gap: 8 }}
+        >
+          <span
+            aria-hidden
+            style={{
+              width: 30, height: 30, borderRadius: 9999, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0, background: 'linear-gradient(180deg, #FFFFFF 0%, #F2EDE2 100%)',
+              boxShadow: 'inset 0 1px 0 #FFFFFF, 0 0 0 1px rgba(27,56,40,0.12)',
+            }}
+          >
+            {it.code ? (
+              <CircleFlag code={it.code} size={28} decorative />
+            ) : it.icon ? (
+              <DuoIcon icon={it.icon} size={16} tone={it.active ? 'green' : 'gold'} />
+            ) : null}
+          </span>
+          {it.kicker && <span style={{ fontSize: 12, fontWeight: 800, color: '#8A6414' }}>{it.kicker}</span>}
+          <span>{it.label}</span>
+          {typeof it.count === 'number' && (
+            <span style={{ fontSize: 13, fontWeight: 600, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>{it.count.toLocaleString()}</span>
+          )}
+        </button>
+      ))}
+      {trailing}
     </div>
   );
 }

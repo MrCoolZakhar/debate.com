@@ -13,15 +13,21 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 
 export const OUTFIT = "var(--font-brand), sans-serif";
 
+/** The participant dashboard's one card shadow: a hairline of forest and a
+ *  soft drop, so a white card lifts off the ivory page. */
+export const CARD_SHADOW = '0 0 0 1px rgba(27,56,40,0.06), 0 1px 2px rgba(27,56,40,0.05), 0 12px 32px -14px rgba(27,56,40,0.22)';
+
 export function SectionCard({ children, className = '', id }: { children: React.ReactNode; className?: string; id?: string }) {
   return (
     <div
       id={id}
-      className={`rounded-[20px] p-6 md:p-7 ${className}`}
+      className={`rounded-[20px] p-5 md:p-6 ${className}`}
       style={{
-        backgroundColor: '#FAF8F3',
-        border: '1px solid #DDD4C0',
-        boxShadow: '0 1px 3px rgba(27,56,40,0.04)',
+        // A white card with a soft forest-tinted shadow on the ivory page
+        // (CLAUDE.md §8 taste board: "white card with a soft shadow"), never a
+        // hairline-bordered ivory slab.
+        backgroundColor: '#FFFFFF',
+        boxShadow: CARD_SHADOW,
       }}
     >
       {children}

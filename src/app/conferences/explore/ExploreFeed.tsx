@@ -4,7 +4,7 @@
 // Presentation only. The page (ConferencesExploreClient) does every read and
 // every filter; this file draws what it hands over:
 //   <SpotlightRow>   the booked Spotlights, as large featured cards
-//   <MonthFeed>      the results grouped by month under sticky month headers,
+//   <MonthFeed>      the results grouped by month under plain month headers,
 //                    as a Luma-style list (date block, cover thumbnail, name,
 //                    flag + city, open roles, price) or as the photo-card grid
 // Names are never cut: the short form large, the full name beneath, wrapping.
@@ -312,8 +312,10 @@ export function MonthHeader({ label, count }: { label: string; count: number }) 
 }
 
 export const FEED_CSS = `
-.gv-month-head { position: sticky; top: 0; z-index: 5; background: rgba(237,231,216,0.92); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
-@media (min-width: 1024px) { .gv-month-head { top: 84px; } }
+/* The month header has NO ground of its own and is not sticky (owner,
+   26 Sep 2026: a tinted square-cornered band over the paper grain reads as a
+   random rectangle). It is plain type on the page. */
+.gv-month-head { background: transparent; }
 .gv-row { display: grid; grid-template-columns: 84px minmax(0, 1fr); column-gap: 14px; align-items: start; padding: 16px 14px; text-decoration: none; color: inherit; transition: background-color 160ms ease; }
 .gv-row + .gv-row { border-top: 1px solid rgba(28,20,16,0.08); }
 .gv-row:hover { background-color: rgba(27,56,40,0.03); }

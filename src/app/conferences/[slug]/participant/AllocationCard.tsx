@@ -28,16 +28,10 @@ const DIFFICULTY_STYLES: Record<string, { color: string }> = {
 
 const ROMAN = ['I', 'II', 'III'];
 
-export default function AllocationCard({ committee, myAllocation, conferenceStartDate }: {
-  committee: ParticipantCommittee | null;
-  myAllocation: ParticipantAllocation | null;
-  conferenceStartDate: string | null;
-}) {
-  const partner = useAllocationPartner(myAllocation);
-  const [copied, setCopied] = useState(false);
-  // The seat's own crest or its group's crest (parliamentary committees),
-  // drawn in place of the flag. One read of this delegate's slot row plus the
-  // committee's groups; see `src/lib/slotGroups.ts`.
+/** The seat's own crest or its group's crest (parliamentary committees),
+ *  drawn in place of the flag. One read of the seat's slot row plus the
+ *  committee's groups; see `src/lib/slotGroups.ts`. Pass null to skip. */
+export function useSeatCrest(myAllocation: ParticipantAllocation | null): string | null {
   // Keyed by the seat it was loaded for, so a stale crest never shows on a
   // different allocation while the next read is in flight.
   const [seatLogoState, setSeatLogoState] = useState<{ key: string; url: string | null } | null>(null);
@@ -60,6 +54,24 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
     })().catch(() => { if (!cancelled) setSeatLogoState({ key, url: null }); });
     return () => { cancelled = true; };
   }, [seatCcId, seatCode]);
+  return seatLogo;
+}
+
+export default function AllocationCard({ committee, myAllocation, conferenceStartDate, showCountry = true, seatLogo: seatLogoProp }: {
+  committee: ParticipantCommittee | null;
+  myAllocation: ParticipantAllocation | null;
+  conferenceStartDate: string | null;
+  /** False on the dashboard's Committee pane, where Overview already shows the country. */
+  showCountry?: boolean;
+  /** A crest the caller already read (useSeatCrest); undefined = read it here. */
+  seatLogo?: string | null;
+}) {
+  // The country half is drawn by the dashboard's Overview now; the committee
+  // pane passes showCountry={false} and skips the partner and crest reads.
+  const partner = useAllocationPartner(showCountry ? myAllocation : null);
+  const [copied, setCopied] = useState(false);
+  const ownCrest = useSeatCrest(showCountry && seatLogoProp === undefined ? myAllocation : null);
+  const seatLogo = seatLogoProp === undefined ? ownCrest : seatLogoProp;
 
   if (!committee || !myAllocation) {
     return (
@@ -141,6 +153,7 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
         )}
 
         {/* Your country, large */}
+        {showCountry && (
         <div className="w-full flex flex-col items-center mt-6 pt-6" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
           <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.16em', color: '#B6871F', margin: '0 0 12px 0' }}>
             YOUR COUNTRY
@@ -159,6 +172,7 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
             </p>
           )}
         </div>
+        )}
 
         {/* Live session gate */}
         {sessionCode && (

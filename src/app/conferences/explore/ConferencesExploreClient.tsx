@@ -5,13 +5,15 @@
 // best event platforms and do it that way. I like the top bar for searching."
 // Built after Luma discover, Eventbrite, Meetup and Resident Advisor, in
 // Gavelling's ivory, white, forest and gold (CLAUDE.md §8, "The Explore page"):
-//   1. a compact hero: the title, the count line and the search pill
-//   2. date tabs (All dates, This week, This month, Next 3 months, Later)
-//   3. a slim bar of filter chips, each a small popover (a sheet on phones)
-//   4. browse by place: Near you, the six regions and the countries, round
-//   5. the Spotlight row: booked spotlights as large featured cards
-//   6. the feed, grouped by month under sticky month headers, as a list
-//      (default) or the photo-card grid
+//   1. a compact hero: the title, the count line and the search pill (its
+//      When is the ONE date control: All dates, This week, This month, ...)
+//   2. one band: the filter chips (a When chip on phones only, where the pill
+//      shows only Where), then the places (Near you, the six regions, the
+//      countries) as small flag chips scrolling sideways
+//   3. the results line (count, sort, view), then booked Spotlights as one
+//      row of normal cards with the gold ring, then the feed grouped by month
+//      under plain month headers, as a list or the photo-card grid
+// Owner, 26 Sep 2026: the gap before the conferences must be "one tab max".
 // Every control drives a filter the page already had, and so its existing
 // URL parameter. Nothing new is read or invented.
 
@@ -33,18 +35,17 @@ import { compareStartDate, hasConcluded } from '@/lib/conferenceDates';
 import { ConferenceCard, ConferenceCardSkeleton } from '../ConferenceCard';
 import { GoldWord } from '@/components/BrandHeading';
 import {
-  ChipLayer, ChoiceRow, DateTabs, FilterChip, PlaceRail, PRIMARY_BUTTON, RIM_DISC, SCROLL_CSS, SearchPill, SortMenu, ToggleChip, ViewToggle,
+  ChipLayer, ChoiceRow, chipStyle, FilterChip, PlaceStrip, PRIMARY_BUTTON, SCROLL_CSS, SearchPill, SortMenu, ToggleChip, ViewToggle,
   type DateTab, type ExploreView, type PlaceItem,
 } from './ExploreChrome';
 import {
-  FEED_CSS, FeedRows, FeedSkeleton, MonthHeader, SpotlightRow, groupByMonth,
+  FEED_CSS, FeedRows, FeedSkeleton, MonthHeader, groupByMonth,
   type ExploreConference, type SpotlightItem,
 } from './ExploreFeed';
 import { isListedConference } from '@/lib/publicConferences';
 import { fetchFeatured, recordSpotlightClick, recordSpotlightView, type FeaturedRow } from '@/lib/spotlight';
 import { fetchCreditSponsoredIds } from '@/lib/creditSponsored';
 import ConferenceSpotlightDialog, { claimSpotlightDialog } from './ConferenceSpotlightDialog';
-import { DatePicker } from '@/components/DatePicker';
 import {
   PRICE_OPTIONS, ROLE_OPTIONS, matchesDateBucket, matchesDateRange, matchesPrice, matchesRoles,
   parseDateOnly, parseFacets, readExploreQuery, writeExploreQuery, toDateOnly,
@@ -869,7 +870,6 @@ export default function ConferencesExploreClient() {
   })();
 
   const facetsLoaded = facets.size > 0;
-  const onSpotOpen = useCallback((spot: FeaturedRow) => recordSpotlightClick(spot.booking_id), []);
 
   const sectionGap = 'clamp(26px, 3vw, 40px)';
 
@@ -893,21 +893,29 @@ export default function ConferencesExploreClient() {
         @media (min-width: 640px) { .gv-explore-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         @media (min-width: 1024px) { .gv-explore-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
         @media (min-width: 1280px) { .gv-explore-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+        .gv-explore-band { display: flex; align-items: center; gap: 10px; overflow-x: auto; scrollbar-width: none; padding: 4px 2px; margin: 0 -2px; }
+        .gv-explore-band button { flex-shrink: 0; }
+        .gv-place-strip { flex-shrink: 0; }
+        .gv-band-rule { flex-shrink: 0; width: 1px; height: 26px; background-color: rgba(28,20,16,0.14); }
+        @media (min-width: 1024px) {
+          .gv-explore-band { overflow: visible; }
+          .gv-place-strip { flex: 1 1 0; min-width: 0; overflow-x: auto; scrollbar-width: none; padding: 4px 2px; }
+        }
       `}</style>
 
       <div className="relative z-10 flex flex-col min-h-screen">
         <SiteNav hideLanguage />
 
         {/* ── 1. Hero: title, count line, the search pill ───────────────── */}
-        <header className="gv-explore-wrap" style={{ paddingTop: 'clamp(20px, 3vw, 44px)', textAlign: 'center' }}>
+        <header className="gv-explore-wrap" style={{ paddingTop: 'clamp(12px, 1.6vw, 24px)', textAlign: 'center' }}>
           <h1
             style={{
-              fontWeight: 800, fontSize: 'clamp(30px, 3.6vw, 48px)', lineHeight: 1.06, letterSpacing: '-0.018em', color: INK, margin: 0,
+              fontWeight: 800, fontSize: 'clamp(26px, 2.8vw, 38px)', lineHeight: 1.06, letterSpacing: '-0.018em', color: INK, margin: 0,
             }}
           >
             Explore Model UN <GoldWord>Conferences</GoldWord>
           </h1>
-          <p style={{ margin: '10px 0 0', fontSize: 15.5, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>
+          <p style={{ margin: '6px 0 0', fontSize: 15, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>
             {headlineCount === null ? (
               'Loading the directory'
             ) : (
@@ -928,7 +936,7 @@ export default function ConferencesExploreClient() {
               </>
             )}
           </p>
-          <div style={{ marginTop: 'clamp(18px, 2.2vw, 28px)' }}>
+          <div style={{ marginTop: 'clamp(12px, 1.4vw, 18px)' }}>
             <SearchPill
               search={searchQuery} onSearch={setSearchQuery}
               continent={continentKey} continentLabels={CONTINENT_LABELS} onContinent={changeContinent}
@@ -937,6 +945,7 @@ export default function ConferencesExploreClient() {
               dateFilter={dateFilter} dateFrom={dateFrom} dateTo={dateTo}
               onDate={pickBucket}
               whenLabel={thisWeek ? 'This week' : null}
+              whenOptions={dateTabs}
               roles={roleFilter} onToggleRole={toggleRole} onClearRoles={() => setRoleFilter(new Set())}
               onSubmit={scrollToResults}
             />
@@ -944,17 +953,25 @@ export default function ConferencesExploreClient() {
         </header>
 
         <main className="flex-1" style={{ paddingBottom: 'clamp(40px, 4vw, 64px)' }}>
-          {/* ── 2 and 3. Date tabs, then the filter chips ─────────────────── */}
-          <div className="gv-explore-wrap" style={{ marginTop: 'clamp(22px, 2.6vw, 34px)' }}>
-            <div style={{ borderBottom: '1px solid rgba(28,20,16,0.12)' }}>
-              <DateTabs tabs={dateTabs} />
-            </div>
-            <div
-              role="toolbar"
-              aria-label="Filters"
-              className="gv-explore-scroll flex items-center"
-              style={{ gap: 10, overflowX: 'auto', scrollbarWidth: 'none', padding: '14px 2px 6px', margin: '0 -2px' }}
-            >
+          {/* ── 2. One band: the filter chips, then the places ─────────────
+               Dates live in ONE place, the search pill's When (on phones,
+               where the pill shows only Where, a When chip stands in). */}
+          <div className="gv-explore-wrap" style={{ marginTop: 'clamp(12px, 1.4vw, 18px)' }}>
+            <div role="toolbar" aria-label="Filters and places" className="gv-explore-scroll gv-explore-band">
+              <span className="contents sm:hidden">
+                <FilterChip
+                  label="When" title="When" icon={CalendarDays}
+                  active={!dateTabs[0].active}
+                  summary={dateTabs.find(t => t.active)?.label ?? rangeSummary}
+                  onClear={() => pickBucket('')}
+                >
+                  <div role="radiogroup" aria-label="When">
+                    {dateTabs.map(t => (
+                      <ChoiceRow key={t.key} label={t.label} active={t.active} onClick={t.onClick} />
+                    ))}
+                  </div>
+                </FilterChip>
+              </span>
               <FilterChip
                 label="Open applications" title="Applications open for" icon={DoorOpen}
                 active={roleFilter.size > 0} summary={roleSummary} onClear={() => setRoleFilter(new Set())}
@@ -977,22 +994,6 @@ export default function ConferencesExploreClient() {
                 </div>
                 <p style={{ margin: '8px 10px 0', fontSize: 12, color: '#6E5F4E' }}>Approximate, converted to USD</p>
                 {facetsFailed && <FacetsNote />}
-              </FilterChip>
-              <FilterChip
-                label="Dates" title="Dates" icon={CalendarDays}
-                active={customRange} summary={rangeSummary} onClear={() => { setDateFrom(''); setDateTo(''); }}
-              >
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div>
-                    <p style={{ margin: '0 0 5px 2px', fontSize: 12.5, fontWeight: 700, color: '#6E5F4E' }}>From</p>
-                    <DatePicker value={thisWeek ? '' : dateFrom} onChange={(iso) => { setDateFrom(iso); setDateFilter(''); if (thisWeek) setDateTo(''); }} min={todayIso} max={dateTo && !thisWeek ? dateTo : undefined} placeholder="Any" />
-                  </div>
-                  <div>
-                    <p style={{ margin: '0 0 5px 2px', fontSize: 12.5, fontWeight: 700, color: '#6E5F4E' }}>To</p>
-                    <DatePicker value={thisWeek ? '' : dateTo} onChange={(iso) => { setDateTo(iso); setDateFilter(''); if (thisWeek) setDateFrom(''); }} min={(!thisWeek && dateFrom) || todayIso} placeholder="Any" />
-                  </div>
-                </div>
-                <p style={{ margin: '10px 2px 0', fontSize: 12, color: '#6E5F4E' }}>By the day a conference starts</p>
               </FilterChip>
               <FilterChip
                 label="Format" title="Format" icon={formatFilter === 'online' ? Monitor : MapPin}
@@ -1026,41 +1027,16 @@ export default function ConferencesExploreClient() {
                   Clear all
                 </button>
               )}
+              <span aria-hidden className="gv-band-rule" />
+              <PlaceStrip
+                items={placeItems}
+                trailing={<AddCountryChip options={searchCountries} chosen={countryIdSet} onAdd={addCountry} />}
+              />
             </div>
           </div>
 
-          {/* ── 4. Browse by place ────────────────────────────────────────── */}
-          <section className="gv-explore-wrap" aria-labelledby="gv-explore-place" style={{ marginTop: 'clamp(18px, 2vw, 26px)' }}>
-            <h2 id="gv-explore-place" style={{ margin: '0 0 10px', fontSize: 'clamp(19px, 1.8vw, 23px)', fontWeight: 800, color: INK }}>
-              Browse by Place
-            </h2>
-            <PlaceRail
-              items={placeItems}
-              trailing={<AddCountryDisc options={searchCountries} chosen={countryIdSet} onAdd={addCountry} />}
-            />
-          </section>
-
-          {/* ── 5. The Spotlight row ──────────────────────────────────────── */}
-          {!loading && spotItems.length > 0 && (
-            <section className="gv-explore-wrap" aria-labelledby="gv-explore-spot" style={{ marginTop: sectionGap }}>
-              <h2 id="gv-explore-spot" style={{ margin: '0 0 16px', fontSize: 'clamp(22px, 2.2vw, 30px)', fontWeight: 800, color: INK, letterSpacing: '-0.012em' }}>
-                In the <GoldWord>Spotlight</GoldWord>
-              </h2>
-              <SpotlightRow
-                items={spotItems}
-                sponsoredIds={sponsoredIds}
-                appliedIds={appliedIds}
-                isMember={isMember}
-                hoveredId={hoveredId}
-                onHover={setHoveredId}
-                onLeave={() => setHoveredId(null)}
-                onOpen={onSpotOpen}
-              />
-            </section>
-          )}
-
           {/* ── 6. The feed ───────────────────────────────────────────────── */}
-          <section ref={resultsRef} className="gv-explore-wrap" aria-label="Conferences" style={{ marginTop: sectionGap }}>
+          <section ref={resultsRef} className="gv-explore-wrap" aria-label="Conferences" style={{ marginTop: 'clamp(12px, 1.4vw, 18px)' }}>
             <div className="flex items-center flex-wrap" style={{ gap: '10px 16px', marginBottom: 6 }}>
               {resultsHeading ? (
                 <p className="inline-flex items-baseline flex-wrap" style={{ margin: 0, gap: 8, color: INK, fontVariantNumeric: 'tabular-nums' }}>
@@ -1079,6 +1055,17 @@ export default function ConferencesExploreClient() {
                 <ViewToggle view={view} onChange={changeView} />
               </div>
             </div>
+
+            {!loading && spotItems.length > 0 && (
+              <section aria-label="In the Spotlight" style={{ marginTop: 8 }}>
+                <p style={{ margin: '0 0 8px', fontSize: 15, fontWeight: 800, color: INK }}>
+                  In the <GoldWord>Spotlight</GoldWord>
+                </p>
+                <div className={GRID} style={GRID_GAP}>
+                  {spotItems.map(({ conf, spot }) => cardFor(conf, spot))}
+                </div>
+              </section>
+            )}
 
             {loading ? (
               view === 'list' ? (
@@ -1178,8 +1165,8 @@ export default function ConferencesExploreClient() {
   );
 }
 
-/** The last disc of the place rail: type to add any country with conferences. */
-function AddCountryDisc({ options, chosen, onAdd }: {
+/** The last chip of the place strip: type to add any country with conferences. */
+function AddCountryChip({ options, chosen, onAdd }: {
   options: CountryFacet[];
   chosen: ReadonlySet<string>;
   onAdd: (id: string) => void;
@@ -1195,13 +1182,11 @@ function AddCountryDisc({ options, chosen, onAdd }: {
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(o => !o)}
-        className="flex flex-col items-center flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded-xl"
-        style={{ width: 84, gap: 6, padding: '2px 0 4px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: FONT }}
+        className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2"
+        style={chipStyle(false)}
       >
-        <span style={{ ...RIM_DISC, width: 64, height: 64 }}>
-          <Plus size={24} strokeWidth={2.2} aria-hidden />
-        </span>
-        <span style={{ fontSize: 13, fontWeight: 600, color: INK, lineHeight: 1.2, textAlign: 'center' }}>Another country</span>
+        <Plus size={16} strokeWidth={2.4} aria-hidden />
+        Another country
       </button>
       <ChipLayer open={open} anchor={btn} onClose={close} title="Add a country">
         <CountrySearch options={options} chosen={chosen} onAdd={(id) => { onAdd(id); close(); }} idPrefix="gv-explore-add" />

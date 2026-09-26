@@ -1867,59 +1867,72 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 </div>
               )}
 
-              {/* The view switcher (26 Sep 2026, owner: the floating glass pill
-                  covered content while scrolling). A bar across the top of the
-                  content column with the page's own SOLID ground and a hairline
-                  under it: it stays in place (under the fixed nav pill from lg,
-                  at the very top on phones) and the page scrolls underneath it,
-                  never under a see-through layer. Same three destinations, same
-                  active state; each is an icon with its word. */}
-              <div
-                className="sticky z-30 mb-7 top-0 lg:top-[76px]"
-                style={{
-                  backgroundColor: 'var(--gv-bg)',
-                  padding: '10px 0',
-                  borderBottom: '1px solid color-mix(in srgb, var(--gv-border) 80%, transparent)',
-                }}
+              {/* The view switcher. 26 Sep 2026, twice: the floating glass pill
+                  covered content while scrolling, then the sticky bar that
+                  replaced it sat on a square-cornered tinted band with a heavy
+                  forest pill ("screwed", CLAUDE.md §8 "No random rectangles").
+                  Now it is the site nav's own idiom on the page ground: text
+                  tabs, each an icon with its word, the active one in ink with
+                  a short forest underline. No band, no pill, not sticky, so
+                  nothing ever scrolls under it. Same three destinations, same
+                  state and URLs. */}
+              <nav
+                aria-label="Conference views"
+                className="flex items-end gap-6 sm:gap-8 mb-7"
+                style={{ borderBottom: '1px solid color-mix(in srgb, var(--gv-main) 10%, transparent)' }}
               >
-                <nav aria-label="Conference views" className="flex items-center gap-1.5">
-                  {/* Real anchors, so the view a visitor is on is still copyable,
-                      middle-clickable and openable in a new tab, but a plain
-                      left click is handled in place by showTab and never
-                      navigates. Modified clicks fall through to the browser. */}
-                  {([
-                    { key: 'overview' as const, label: 'Overview', icon: Landmark },
-                    { key: 'participant' as const, label: 'You', icon: UserRound },
-                    { key: 'reviews' as const, label: 'Reviews', icon: Star },
-                  ]).map(({ key, label, icon: TabIcon }) => {
-                    const on = activeTab === key;
-                    return (
-                      <a
-                        key={key}
-                        href={tabHref(key, key === 'participant' ? activeRole : null)}
-                        onClick={(e) => {
-                          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-                          e.preventDefault();
-                          showTab(key, key === 'participant' ? activeRole : null);
-                        }}
-                        aria-current={on ? 'page' : undefined}
-                        className="inline-flex items-center gap-2 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                {/* Real anchors, so the view a visitor is on is still copyable,
+                    middle-clickable and openable in a new tab, but a plain
+                    left click is handled in place by showTab and never
+                    navigates. Modified clicks fall through to the browser. */}
+                {([
+                  { key: 'overview' as const, label: 'Overview', icon: Landmark },
+                  { key: 'participant' as const, label: 'You', icon: UserRound },
+                  { key: 'reviews' as const, label: 'Reviews', icon: Star },
+                ]).map(({ key, label, icon: TabIcon }) => {
+                  const on = activeTab === key;
+                  return (
+                    <a
+                      key={key}
+                      href={tabHref(key, key === 'participant' ? activeRole : null)}
+                      onClick={(e) => {
+                        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                        e.preventDefault();
+                        showTab(key, key === 'participant' ? activeRole : null);
+                      }}
+                      aria-current={on ? 'page' : undefined}
+                      onMouseEnter={(e) => { if (!on) (e.currentTarget as HTMLElement).style.color = 'var(--gv-on-surface)'; }}
+                      onMouseLeave={(e) => { if (!on) (e.currentTarget as HTMLElement).style.color = '#6B5F52'; }}
+                      className="relative inline-flex items-center gap-2 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#B6871F]"
+                      style={{
+                        minHeight: 48, padding: '0 2px',
+                        color: on ? 'var(--gv-on-surface)' : '#6B5F52',
+                        fontFamily: "var(--font-brand), sans-serif", fontSize: 15, fontWeight: on ? 800 : 600,
+                        textDecoration: 'none',
+                        transition: `color 180ms ${EASE}`,
+                      }}
+                    >
+                      <TabIcon
+                        size={18}
+                        strokeWidth={2.1}
+                        aria-hidden
+                        style={{ color: on ? 'var(--gv-main)' : 'currentColor', fill: on ? 'color-mix(in srgb, var(--gv-on-main) 55%, transparent)' : 'none' }}
+                      />
+                      {label}
+                      {/* The short underline, sitting on the row's hairline. */}
+                      <span
+                        aria-hidden
                         style={{
-                          minHeight: 44, padding: '0 16px',
-                          backgroundColor: on ? 'var(--gv-main)' : 'transparent',
-                          color: on ? 'var(--gv-on-main)' : '#6B5F52',
-                          fontFamily: "var(--font-brand), sans-serif", fontSize: 14.5, fontWeight: 700,
-                          textDecoration: 'none',
-                          transition: `background-color 200ms ${EASE}, color 200ms ${EASE}`,
+                          position: 'absolute', left: '50%', bottom: -1, height: 3, borderRadius: 3,
+                          width: on ? 28 : 0, transform: 'translateX(-50%)',
+                          backgroundColor: 'var(--gv-main)',
+                          transition: `width 220ms ${EASE}`,
                         }}
-                      >
-                        <TabIcon size={19} strokeWidth={2} aria-hidden />
-                        {label}
-                      </a>
-                    );
-                  })}
-                </nav>
-              </div>
+                      />
+                    </a>
+                  );
+                })}
+              </nav>
 
               {/* Tab panes. Only the active one is mounted (as before), but the
                   swap is now a state change rather than a navigation, so the

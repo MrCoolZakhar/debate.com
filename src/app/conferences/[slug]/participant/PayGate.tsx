@@ -23,7 +23,7 @@ export function LockedCard() {
           Unlocks once your registration is paid
         </p>
         <p className="text-[13px] max-w-[340px]" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.7 }}>
-          Settle your fee below and this section opens up right away.
+          Settle your fee under Payment and this section opens up right away.
         </p>
       </div>
     </SectionCard>

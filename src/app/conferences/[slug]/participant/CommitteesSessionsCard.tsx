@@ -11,12 +11,11 @@
 // back, so a committee always renders even when its button can't.
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
-import { MonogramMedallion } from '@/components/CommitteeEditorModal';
-import { SectionCard, OUTFIT, effectiveReleaseTime, formatReleaseDate } from './shared';
+import { OUTFIT, effectiveReleaseTime, formatReleaseDate } from './shared';
+import { DashCard, CardHeading, CommitteeEmblem, TwoRowName, ForestLink, committeeShort, INK, INK_SOFT } from './dashboardKit';
 
 interface SessionCommittee {
   id: string;
@@ -68,59 +67,49 @@ export default function CommitteesSessionsCard({ conferenceId, conferenceStartDa
     return () => { cancelled = true; };
   }, [conferenceId, session?.access_token]);
 
-  if (!committees || committees.length === 0) return null;
+  if (!committees) return null;
 
   const releaseMs = effectiveReleaseTime(releaseAt, conferenceStartDate);
   const released = releaseMs !== null && releaseMs <= Date.now();
 
   return (
-    <SectionCard>
-      <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.16em', color: '#B6871F', margin: '0 0 14px 0' }}>
-        COMMITTEES
-      </p>
+    <DashCard>
+      <CardHeading
+        title="Committees"
+        aside={committees.length > 0 ? (
+          <span style={{ fontFamily: OUTFIT, fontSize: 13, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>
+            <b style={{ color: INK, fontSize: 17 }}>{committees.length}</b> {committees.length === 1 ? 'room' : 'rooms'}
+          </span>
+        ) : undefined}
+      />
 
-      {!released && releaseMs !== null && (
-        <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+      {committees.length === 0 ? (
+        <p className="text-sm" style={{ color: INK_SOFT, fontFamily: OUTFIT, margin: 0 }}>The organisers have not added committees yet.</p>
+      ) : !released && releaseMs !== null ? (
+        <p className="text-sm mb-4" style={{ color: INK, fontFamily: OUTFIT }}>
           Sessions open {formatReleaseDate(releaseMs)}
         </p>
-      )}
+      ) : null}
 
-      <div className="flex flex-col gap-2">
-        {committees.map(c => (
+      <div className="flex flex-col">
+        {committees.map((c, i) => (
           <div
             key={c.id}
-            className="flex items-center gap-3 rounded-xl px-3 py-2.5"
-            style={{ border: '1px solid rgba(221,212,192,0.7)' }}
+            className="flex items-center gap-3 py-3"
+            style={i > 0 ? { borderTop: '1px solid rgba(27,56,40,0.07)' } : undefined}
           >
-            {c.logo_url ? (
-              <img src={c.logo_url} alt="" style={{ width: 32, height: 32, objectFit: 'contain', flexShrink: 0 }} />
-            ) : (
-              <MonogramMedallion text={c.abbreviation || c.name} isCrisis={false} size={32} />
-            )}
+            <CommitteeEmblem logoUrl={c.logo_url} name={c.name} abbreviation={c.abbreviation} size={40} />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                {c.abbreviation || c.name}
-              </p>
-              {c.abbreviation && (
-                <p className="text-xs [overflow-wrap:anywhere]" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{c.name}</p>
-              )}
+              <TwoRowName short={committeeShort(c.name, c.abbreviation)} full={c.name} size={15} />
             </div>
             {released && c.session_code && (
-              <Link
-                href={`/advisor?add=${encodeURIComponent(c.session_code)}`}
-                className="flex-shrink-0 rounded-lg focus:outline-none"
-                style={{
-                  padding: '7px 14px', backgroundColor: '#1B3828', color: '#EED98A',
-                  fontFamily: OUTFIT, fontWeight: 800, fontSize: 12,
-                  textDecoration: 'none',
-                }}
-              >
+              <ForestLink href={`/advisor?add=${encodeURIComponent(c.session_code)}`} className="flex-shrink-0">
                 View session
-              </Link>
+              </ForestLink>
             )}
           </div>
         ))}
       </div>
-    </SectionCard>
+    </DashCard>
   );
 }

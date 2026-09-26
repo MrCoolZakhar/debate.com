@@ -23,14 +23,15 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeftRight, ChevronLeft, ChevronRight, Mail, UserPlus, UserX, X } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowLeftRight, CheckCircle2, ChevronLeft, ChevronRight, Compass, Hourglass, Link2, Mail, UserPlus, UserX, X } from 'lucide-react';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useDelegationImport } from './DelegationImportCard';
 import DelegationImportPopup from './DelegationImportPopup';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { loadSlotArtIndex, artFromIndex, slotArtKey, type SlotArtIndex } from '@/lib/slotGroups';
-import { FlagImg } from '@/components/FlagImg';
+import { CircleFlag } from '@/components/CircleFlag';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { ModalOverlay } from '@/components/CommitteeEditorModal';
 import { NEU, NeuButton } from '@/components/neu';
@@ -43,6 +44,7 @@ import {
   type PoolMember,
 } from '@/app/manage/[slug]/assignment/delegationShared';
 import { SectionCard, OUTFIT, PaymentChipMark, derivePaymentChip, formatReleaseDate } from './shared';
+import { DashCard, CardHeading, BigCount, AppStatusMark, FOREST_GRADIENT } from './dashboardKit';
 
 interface Society {
   id: string;
@@ -76,10 +78,6 @@ const RECENT_SWAP_NOTICE_MS = 3 * 24 * 60 * 60 * 1000;
 function allocationLabel(m: PoolMember): string | null {
   if (!m.assigned_committee_id) return null;
   return `${m.assigned_committee?.abbreviation ?? m.assigned_committee?.name ?? 'Committee'}: ${m.assigned_country_name}`;
-}
-
-function pledgeStatusLabel(m: PoolMember): string {
-  return pledgeSatisfied(m) ? 'covered ✓' : 'pending';
 }
 
 // ── The roster (my_delegation_roster) ───────────────────────────────────────
@@ -120,8 +118,15 @@ const ROLE_WORD: Record<RosterRole, string> = {
 const GOLD_EDGE = '#B6871F';
 
 // ── Member row ───────────────────────────────────────────────────────────────
+// MyMUN's members table in Gavelling's shape (26 Sep 2026): one row per member
+// with three columns from 520px of card width (member, assignment as a round
+// flag with the country and the committee acronym over its full name, the
+// application as icon + word with payment beneath), stacked on phones. No
+// pills, no ellipsis on a name.
 
-function RosterRow({ member, pool, swapMode, swapSelectable, swapSelected, onToggleSwap, covered, seatLogo }: {
+const ROW_GRID = '@[520px]:grid @[520px]:grid-cols-[minmax(0,1.35fr)_minmax(0,1.2fr)_minmax(0,0.85fr)] @[520px]:items-center';
+
+function RosterRow({ member, pool, swapMode, swapSelectable, swapSelected, onToggleSwap, covered, seatLogo, canSeeAllocation }: {
   member: RosterMember;
   /** The leader's own read of this application (swap, CV link, attending). */
   pool?: PoolMember;
@@ -132,81 +137,111 @@ function RosterRow({ member, pool, swapMode, swapSelectable, swapSelected, onTog
   covered?: boolean;
   /** The seat's own or group crest, drawn instead of the flag when set. */
   seatLogo?: string | null;
+  /** The viewer leads, or this is the viewer's own row: an empty allocation
+   *  then means "not assigned yet" rather than "not yours to see". */
+  canSeeAllocation: boolean;
 }) {
   // payment_status and allocation arrive only for the viewer's own row, or
   // for every row when the viewer leads the delegation.
   const chip = member.payment_status
     ? derivePaymentChip(member.payment_status, !!pool?.self_paid, 0)
     : null;
-  const committeeWord = member.allocation ? (member.allocation.committee_abbr || member.allocation.committee) : null;
-  const alloc = committeeWord ? `${committeeWord}: ${member.allocation?.country_name ?? ''}` : null;
+  const a = member.allocation;
+  const committeeShortWord = a ? (a.committee_abbr || a.committee) : null;
   const dimmed = pool?.attending === false;
   const me = member.is_me;
 
   return (
     <div
       onClick={() => { if (swapMode && swapSelectable) onToggleSwap(); }}
-      className="relative flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors"
+      className="relative flex items-start gap-3 px-3 py-3 rounded-xl transition-colors"
       style={{
-        backgroundColor: swapSelected ? 'rgba(61,122,82,0.08)' : me ? 'rgba(238,217,138,0.14)' : '#FAF8F3',
-        border: `1.5px solid ${swapSelected ? '#1B3828' : me ? GOLD_EDGE : '#DDD4C0'}`,
+        backgroundColor: swapSelected ? 'rgba(61,122,82,0.08)' : me ? 'rgba(238,217,138,0.16)' : 'transparent',
+        boxShadow: swapSelected ? 'inset 0 0 0 1.5px #1B3828' : me ? `inset 3px 0 0 ${GOLD_EDGE}` : 'none',
         opacity: dimmed ? 0.55 : swapMode && !swapSelectable ? 0.45 : 1,
         cursor: swapMode && swapSelectable ? 'pointer' : 'default',
       }}
       title={swapMode && !swapSelectable ? 'No allocation yet, not swappable' : undefined}
     >
-      {covered && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src="/gavel-mark.png"
-          alt=""
-          title="Gavelling Credit Covered"
-          style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, objectFit: 'contain' }}
-        />
-      )}
-      <div className="relative flex-shrink-0">
-        <MemberAvatar name={member.name} url={member.avatar_url} size={32} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {/* Never cut a name off (CLAUDE.md §8): it wraps. `nested`, because
-              the row is a clickable div while swapping. */}
-          <p className="text-sm font-semibold [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
-            {pool?.user_id
-              ? <ProfileLink userId={pool.user_id} name={member.name} nested>{member.name}</ProfileLink>
-              : member.name}
-          </p>
-          {me && (
-            <span style={{ fontSize: 10.5, fontWeight: 800, color: GOLD_EDGE, fontFamily: OUTFIT, letterSpacing: '0.04em' }}>You</span>
-          )}
-          {!member.claimed && (
-            <span className="inline-flex items-center gap-1" style={{ fontSize: 10.5, fontWeight: 600, color: '#6B5F52', fontFamily: OUTFIT }}>
-              <Mail size={14} strokeWidth={2.2} aria-hidden />
-              Invited
-            </span>
-          )}
-          {dimmed && (
-            <span className="inline-flex items-center gap-1" style={{ fontSize: 10.5, fontWeight: 600, color: '#6B5F52', fontFamily: OUTFIT }}>
-              <UserX size={14} strokeWidth={2.2} aria-hidden />
-              Not attending
-            </span>
-          )}
-        </div>
-        {alloc ? (
-          <div className="flex items-center gap-1.5 mt-0.5">
-            {member.allocation?.country_code && <FlagImg code={member.allocation.country_code} size={13} logoUrl={seatLogo} label={member.allocation.country_name ?? undefined} />}
-            <p className="text-xs [overflow-wrap:anywhere]" style={{ color: '#6B5F52', fontFamily: OUTFIT, margin: 0 }}>{alloc}</p>
+      <div className={`flex-1 min-w-0 flex flex-col gap-2.5 ${ROW_GRID} @[520px]:gap-4`}>
+        {/* Member */}
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="relative flex-shrink-0">
+            <MemberAvatar name={member.name} url={member.avatar_url} size={38} />
+            {covered && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src="/gavel-mark.png"
+                alt=""
+                title="Gavelling Credit Covered"
+                style={{ position: 'absolute', bottom: -4, right: -6, width: 18, height: 18, objectFit: 'contain' }}
+              />
+            )}
           </div>
-        ) : (
-          <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: 0 }}>{ROLE_WORD[member.role]}</p>
-        )}
+          <div className="min-w-0">
+            {/* Never cut a name off (CLAUDE.md §8): it wraps. `nested`, because
+                the row is a clickable div while swapping. */}
+            <p className="[overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 700, margin: 0, lineHeight: 1.3 }}>
+              {pool?.user_id
+                ? <ProfileLink userId={pool.user_id} name={member.name} nested>{member.name}</ProfileLink>
+                : member.name}
+              {me && <span style={{ fontSize: 12, fontWeight: 800, color: GOLD_EDGE, marginLeft: 6 }}>You</span>}
+            </p>
+            <div className="flex items-center gap-x-2.5 gap-y-0.5 flex-wrap mt-0.5">
+              <span style={{ fontSize: 12, color: '#6B5F52', fontFamily: OUTFIT }}>{ROLE_WORD[member.role]}</span>
+              {!member.claimed && (
+                <span className="inline-flex items-center gap-1" style={{ fontSize: 12, fontWeight: 600, color: '#6B5F52', fontFamily: OUTFIT }}>
+                  <Mail size={13} strokeWidth={2.2} aria-hidden />
+                  Invited
+                </span>
+              )}
+              {dimmed && (
+                <span className="inline-flex items-center gap-1" style={{ fontSize: 12, fontWeight: 600, color: '#6B5F52', fontFamily: OUTFIT }}>
+                  <UserX size={13} strokeWidth={2.2} aria-hidden />
+                  Not attending
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Assignment */}
+        <div className="flex items-center gap-2.5 min-w-0 pl-[50px] @[520px]:pl-0">
+          {a && committeeShortWord ? (
+            <>
+              <CircleFlag code={a.country_code} logoUrl={seatLogo} label={a.country_name ?? undefined} size={30} decorative />
+              <div className="min-w-0">
+                <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: '#1C1410', margin: 0, lineHeight: 1.25 }}>
+                  {a.country_name}
+                </p>
+                <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#2A5A3C', margin: '1px 0 0 0', lineHeight: 1.3 }}>
+                  {committeeShortWord}
+                </p>
+                {a.committee_abbr && a.committee && a.committee !== a.committee_abbr && (
+                  <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 11, color: '#6B5F52', margin: 0, lineHeight: 1.3 }}>
+                    {a.committee}
+                  </p>
+                )}
+              </div>
+            </>
+          ) : canSeeAllocation && member.role !== 'faculty-advisor' ? (
+            <span className="inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#6B5F52' }}>
+              <Compass size={14} strokeWidth={2.2} aria-hidden />
+              Not assigned yet
+            </span>
+          ) : null}
+        </div>
+
+        {/* Application + payment */}
+        <div className="flex items-center gap-x-3 gap-y-1 flex-wrap pl-[50px] @[520px]:pl-0 @[520px]:flex-col @[520px]:items-start">
+          <AppStatusMark status={member.status} size="sm" />
+          {chip && !dimmed && <PaymentChipMark chip={chip} size="sm" />}
+        </div>
       </div>
-      {chip && !dimmed && (
-        <PaymentChipMark chip={chip} size="sm" />
-      )}
+
       {swapMode && (
         <div
-          className="flex items-center justify-center flex-shrink-0"
+          className="flex items-center justify-center flex-shrink-0 mt-2.5"
           style={{
             width: 18, height: 18, borderRadius: '9999px',
             border: `1.5px solid ${swapSelected ? '#1B3828' : '#DDD4C0'}`,
@@ -246,19 +281,22 @@ function RosterGroup({ title, members, pageSize, page, onPage, empty, renderRow 
         disabled={off}
         aria-label={`${dir < 0 ? 'Previous' : 'Next'} ${title.toLowerCase()}`}
         className="inline-flex items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
-        style={{ width: 28, height: 28, border: '1px solid #DDD4C0', background: 'transparent', color: '#1B3828', opacity: off ? 0.35 : 1, cursor: off ? 'default' : 'pointer' }}
+        style={{ width: 32, height: 32, border: 'none', background: '#FFFFFF', boxShadow: '0 0 0 1px rgba(27,56,40,0.12), 0 2px 6px -2px rgba(27,56,40,0.25)', color: '#1B3828', opacity: off ? 0.35 : 1, cursor: off ? 'default' : 'pointer' }}
       >
-        <Icon size={14} aria-hidden />
+        <Icon size={15} aria-hidden />
       </button>
     );
   };
   return (
     <div className="mb-5">
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <p style={{ fontSize: 9, fontWeight: 700, color: '#B6871F', fontFamily: OUTFIT, letterSpacing: '0.12em', margin: 0 }}>{title}</p>
+      <div className="flex items-center justify-between gap-2 mb-1.5 px-3">
+        <p style={{ fontSize: 13, fontWeight: 800, color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
+          {title}{' '}
+          <span style={{ fontWeight: 600, color: '#6B5F52', fontVariantNumeric: 'tabular-nums' }}>{members.length}</span>
+        </p>
         {pages > 1 && (
-          <div className="flex items-center gap-1">
-            <span style={{ fontSize: 11.5, color: '#6B5F52', fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums', marginRight: 4 }}>
+          <div className="flex items-center gap-1.5">
+            <span style={{ fontSize: 12, color: '#6B5F52', fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums', marginRight: 4 }}>
               {from + 1} to {Math.min(from + pageSize, members.length)} of {members.length}
             </span>
             {navBtn(-1)}
@@ -267,10 +305,14 @@ function RosterGroup({ title, members, pageSize, page, onPage, empty, renderRow 
         )}
       </div>
       {members.length === 0 ? (
-        <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: 0 }}>{empty}</p>
+        <p className="text-sm px-3" style={{ color: '#6B5F52', fontFamily: OUTFIT, margin: 0 }}>{empty}</p>
       ) : (
-        <div className="flex flex-col gap-1.5">
-          {shown.map(m => <div key={m.application_id}>{renderRow(m)}</div>)}
+        <div className="flex flex-col" style={{ gap: 2 }}>
+          {shown.map((m, i) => (
+            <div key={m.application_id} style={i > 0 ? { borderTop: '1px solid rgba(27,56,40,0.07)', paddingTop: 2 } : undefined}>
+              {renderRow(m)}
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -322,9 +364,16 @@ export interface DelegationPanelProps {
   conferenceSlug: string;
   societyId: string;
   allocationSwapMode: string;
+  /** Which part of the dashboard is showing (26 Sep 2026). 'overview' draws
+   *  the delegation summary only, 'delegation' the full members table and
+   *  the leader tools, anything else nothing visible. The panel stays
+   *  mounted either way, so its reads and a half-made swap survive a switch. */
+  section?: string;
+  /** Overview's "See all members": the parent switches to Delegation. */
+  onOpenMembers?: () => void;
 }
 
-export default function DelegationPanel({ conferenceId, conferenceSlug, societyId, allocationSwapMode }: DelegationPanelProps) {
+export default function DelegationPanel({ conferenceId, conferenceSlug, societyId, allocationSwapMode, section = 'delegation', onOpenMembers }: DelegationPanelProps) {
   const { user, session } = useAuth();
   const router = useRouter();
   const { confirm, modal: confirmModal } = useConfirmModal();
@@ -568,6 +617,28 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
     ? members.find(m => m.user_id === pendingSwapRequest.user_id)?.profiles?.display_name ?? 'A delegation leader'
     : null;
 
+  // Modals belong to the panel, not to a section: they render in every state.
+  const overlays = (
+    <>
+      {confirmModal}
+      {swapResult && <SwapResultModal info={swapResult} onClose={() => setSwapResult(null)} />}
+      {importOpen && importAvailable && delegationImport.leader && (
+        <DelegationImportPopup
+          societyId={societyId}
+          data={delegationImport.leader}
+          reload={delegationImport.reload}
+          conferenceAcronym={conferenceAcronym || 'this conference'}
+          userEmail={user?.email ?? null}
+          onPledgeMore={() => { setImportOpen(false); router.push(`/conferences/${conferenceSlug}/pay?open=spots`); }}
+          onImported={() => { void loadRoster(); void load(); }}
+          onClose={() => setImportOpen(false)}
+        />
+      )}
+    </>
+  );
+
+  if (section !== 'overview' && section !== 'delegation') return overlays;
+
   if (!roster && rosterError) {
     return (
       <SectionCard>
@@ -598,53 +669,100 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
         onToggleSwap={() => toggleSwapSelect(m.application_id)}
         covered={coveredIds.has(m.application_id)}
         seatLogo={pool ? seatLogoFor(pool) : null}
+        canSeeAllocation={isLeader || m.is_me}
       />
     );
   };
   const pageOf = (k: string) => pages[k] ?? 0;
   const setPageOf = (k: string) => (n: number) => setPages(prev => ({ ...prev, [k]: n }));
 
-  return (
-    <SectionCard>
-      <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
-        <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: 0 }}>
-          DELEGATION
-        </p>
-        {isLeader && (
-          <div className="flex items-center gap-3">
-            {importAvailable && (
+  const societyName = roster.society_name ?? society?.name ?? 'Delegation';
+  const studentCount = headDelegates.length + delegates.length;
+  const allocatedCount = [...headDelegates, ...delegates].filter(m => !!m.allocation?.country_code).length;
+  const invitedCount = rosterMembers.filter(m => !m.claimed).length;
+
+  // The leader's tools, the same on both views: bring delegates in (while the
+  // conference allows it), and the delegation portal (invite link, pledges).
+  const leaderActions = isLeader ? (
+    <>
+      {importAvailable && (
+        <button
+          type="button"
+          onClick={() => setImportOpen(true)}
+          className="inline-flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#B6871F]"
+          style={{ minHeight: 44, padding: '0 16px', borderRadius: 10, border: 'none', background: FOREST_GRADIENT, color: '#FFFFFF', fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 6px 16px -8px rgba(27,56,40,0.55)' }}
+        >
+          <UserPlus size={16} strokeWidth={2.4} aria-hidden />
+          Import delegates
+        </button>
+      )}
+      <Link
+        href={`/delegation/${societyId}`}
+        className="inline-flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
+        style={{ minHeight: 44, padding: '0 16px', borderRadius: 10, border: '1.5px solid rgba(28,20,16,0.55)', background: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, textDecoration: 'none' }}
+      >
+        <Link2 size={16} strokeWidth={2.4} aria-hidden />
+        Invitation link
+      </Link>
+    </>
+  ) : null;
+
+  const counts = (
+    <div className="grid grid-cols-2 @[520px]:grid-cols-3 gap-x-6 gap-y-4">
+      <BigCount n={studentCount} word={studentCount === 1 ? 'delegate' : 'delegates'} />
+      {isLeader && <BigCount n={allocatedCount} of={studentCount} word="assigned" />}
+      {isLeader && <BigCount n={paidCount} of={society?.spots_purchased ?? 0} word="paid spots" />}
+      {!isLeader && advisors.length > 0 && <BigCount n={advisors.length} word={advisors.length === 1 ? 'advisor' : 'advisors'} />}
+    </div>
+  );
+
+  if (section === 'overview') {
+    return (
+      <>
+        <DashCard className="@container">
+          <CardHeading label="Your delegation" title={societyName} aside={leaderActions} />
+          {counts}
+          {isLeader && invitedCount > 0 && (
+            <p className="mt-4 inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 13, color: '#6B5F52', margin: '16px 0 0 0' }}>
+              <Mail size={14} strokeWidth={2.2} aria-hidden />
+              {invitedCount} {invitedCount === 1 ? 'member has' : 'members have'} not claimed their invite yet
+            </p>
+          )}
+          {onOpenMembers && (
+            <div className="mt-5">
               <button
                 type="button"
-                onClick={() => setImportOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
-                style={{ minHeight: 34, padding: '0 12px', border: 'none', background: 'linear-gradient(90deg, #1B3828 0%, #2A5A3C 100%)', color: '#FFFFFF', fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}
+                onClick={onOpenMembers}
+                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] rounded"
+                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: OUTFIT, fontSize: 14, fontWeight: 800, color: '#1B3828', textDecoration: 'underline', textUnderlineOffset: 3 }}
               >
-                <UserPlus size={14} strokeWidth={2.4} aria-hidden />
-                Import delegates
+                See every member
               </button>
-            )}
-            <p className="text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: 0 }}>
-              Paid spots: <span style={{ fontWeight: 700, color: '#1C1410' }}>{paidCount}/{society?.spots_purchased ?? 0}</span>
-            </p>
-          </div>
-        )}
-      </div>
-      <p className="font-bold text-[17px] mb-5 [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-        {roster.society_name ?? society?.name ?? 'Delegation'}
-      </p>
+            </div>
+          )}
+        </DashCard>
+        {overlays}
+      </>
+    );
+  }
+
+  return (
+    <DashCard className="@container">
+      <CardHeading label="Delegation" title={societyName} aside={leaderActions} />
+      <div className="mb-6">{counts}</div>
 
       {pendingSwapRequest && (
-        <div className="flex items-start gap-2.5 rounded-xl px-3.5 py-2.5 mb-4" style={{ backgroundColor: 'rgba(238,217,138,0.16)', border: '1px solid rgba(182,135,31,0.3)' }}>
-          <ArrowLeftRight size={14} style={{ color: '#8A6614', flexShrink: 0, marginTop: 1 }} />
+        <div className="flex items-start gap-2.5 rounded-xl px-3.5 py-2.5 mb-4" style={{ backgroundColor: 'rgba(238,217,138,0.16)' }}>
+          <ArrowLeftRight size={15} style={{ color: '#8A6614', flexShrink: 0, marginTop: 1 }} />
           <div>
             {/* Deliberately NOT CV-linked. The two swapped names come from the
                 request's metadata as bare strings with no user id, so only the
                 requester below could ever link — one linked name among three in
                 the same banner reads as an inconsistency, not an affordance. */}
-            <p className="text-xs" style={{ color: '#6B5F52', fontFamily: OUTFIT }}>
+            <p className="text-[13px]" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
               A swap of {pendingSwapRequest.metadata.member_a ?? 'a delegate'} and {pendingSwapRequest.metadata.member_b ?? 'a delegate'} is awaiting the organizing team.
             </p>
-            <p className="text-[11px] mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+            <p className="text-[12px] mt-0.5" style={{ color: '#6B5F52', fontFamily: OUTFIT, margin: '2px 0 0 0' }}>
               Requested by {pendingRequesterName} on {formatReleaseDate(new Date(pendingSwapRequest.created_at).getTime())}.
             </p>
           </div>
@@ -652,45 +770,57 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
       )}
 
       {recentSwapNotice && (
-        <p className="text-xs mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+        <p className="text-[13px] mb-4" style={{ color: '#6B5F52', fontFamily: OUTFIT }}>
           {recentSwapNotice.metadata.member_a ?? 'A delegate'} and {recentSwapNotice.metadata.member_b ?? 'a delegate'} swapped allocations on {formatReleaseDate(new Date(recentSwapNotice.created_at).getTime())}.
         </p>
       )}
 
-      <RosterGroup title="ADVISORS" members={advisors} pageSize={3} page={pageOf('adv')} onPage={setPageOf('adv')} renderRow={m => rowFor(m, false)} />
+      {/* Column labels, only where the rows are laid out as a table. */}
+      <div
+        className="hidden @[520px]:grid grid-cols-[minmax(0,1.35fr)_minmax(0,1.2fr)_minmax(0,0.85fr)] gap-4 px-3 pb-2 mb-2"
+        style={{ borderBottom: '1px solid rgba(27,56,40,0.08)', paddingRight: swapMode ? 42 : undefined }}
+        aria-hidden
+      >
+        {['Member', 'Assignment', 'Application'].map(h => (
+          <span key={h} style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#6B5F52' }}>{h}</span>
+        ))}
+      </div>
 
-      <RosterGroup title="HEAD DELEGATES" members={headDelegates} pageSize={3} page={pageOf('hd')} onPage={setPageOf('hd')} renderRow={m => rowFor(m, true)} />
+      <RosterGroup title="Advisors" members={advisors} pageSize={3} page={pageOf('adv')} onPage={setPageOf('adv')} renderRow={m => rowFor(m, false)} />
 
-      <RosterGroup title="DELEGATES" members={delegates} pageSize={5} page={pageOf('del')} onPage={setPageOf('del')} empty="No delegates yet." renderRow={m => rowFor(m, true)} />
+      <RosterGroup title="Head delegates" members={headDelegates} pageSize={3} page={pageOf('hd')} onPage={setPageOf('hd')} renderRow={m => rowFor(m, true)} />
+
+      <RosterGroup title="Delegates" members={delegates} pageSize={8} page={pageOf('del')} onPage={setPageOf('del')} empty="No delegates yet." renderRow={m => rowFor(m, true)} />
 
       {isLeader && pledgingMembers.length > 0 && (
-        <div className="mb-5 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
-          <p className="mb-2" style={{ fontSize: 9, fontWeight: 700, color: '#B6871F', fontFamily: OUTFIT, letterSpacing: '0.12em' }}>PLEDGES</p>
+        <div className="mb-5 pt-4 px-3" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
+          <p className="mb-2" style={{ fontSize: 13, fontWeight: 800, color: '#1C1410', fontFamily: OUTFIT }}>Pledges</p>
           <div className="flex flex-col gap-1">
             {pledgingMembers.map(m => (
               <div key={m.id} className="flex items-center justify-between gap-2 py-1">
-                <span className="flex items-center gap-2 min-w-0 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                <span className="flex items-center gap-2 min-w-0 text-[13px]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                   {/* avatar_url rides along on every member row via
-                      POOL_MEMBER_SELECT's `profiles (display_name, avatar_url)`
-                      — the same source MemberRow above reads, and the same
-                      MemberAvatar, so both lists in this panel look alike.
-                      Left unlinked here, exactly as in MemberRow: the name is
-                      the CV link, the picture is decoration. */}
-                  <MemberAvatar name={m.profiles?.display_name ?? 'Unknown'} url={m.profiles?.avatar_url ?? null} size={22} />
+                      POOL_MEMBER_SELECT's `profiles (display_name, avatar_url)`.
+                      Left unlinked: the name is the CV link, the picture is
+                      decoration. */}
+                  <MemberAvatar name={m.profiles?.display_name ?? 'Unknown'} url={m.profiles?.avatar_url ?? null} size={24} />
                   <span className="min-w-0 [overflow-wrap:anywhere]">
                     {/* Pledger's name links to their MUN CV — this row has no
                         clickable ancestor, so no `nested` here. */}
                     <ProfileLink userId={m.user_id} name={m.profiles?.display_name}>
                       {m.profiles?.display_name ?? 'Unknown'}
-                    </ProfileLink> <span style={{ color: '#9A8A78' }}>· {pledgeText(m)}</span>
+                    </ProfileLink> <span style={{ color: '#6B5F52' }}>· {pledgeText(m)}</span>
                   </span>
                 </span>
-                <span
-                  className="flex-shrink-0"
-                  style={{ fontSize: 11, fontWeight: 700, fontFamily: OUTFIT, color: pledgeSatisfied(m) ? '#3D7A52' : '#B8844A' }}
-                >
-                  {pledgeStatusLabel(m)}
-                </span>
+                {pledgeSatisfied(m) ? (
+                  <span className="inline-flex items-center gap-1 flex-shrink-0" style={{ fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, color: '#2A5A3C' }}>
+                    <CheckCircle2 size={14} strokeWidth={2.2} aria-hidden /> Covered
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 flex-shrink-0" style={{ fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, color: '#8A6614' }}>
+                    <Hourglass size={14} strokeWidth={2.2} aria-hidden /> Pending
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -698,71 +828,55 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
       )}
 
       {isLeader && allocationSwapMode !== 'off' && (
-        <div className="pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
+        <div className="pt-4 px-3" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
           {!swapMode ? (
             <button
               onClick={() => { setSwapMode(true); setSwapSelection([]); setSwapError(''); }}
-              className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none transition-colors"
-              style={{ border: '1.5px solid rgba(27,56,40,0.35)', color: '#1B3828', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: 'pointer' }}
-              onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; }}
-              onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.color = '#1B3828'; }}
+              className="inline-flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
+              style={{ minHeight: 44, padding: '0 16px', borderRadius: 10, border: '1.5px solid rgba(28,20,16,0.55)', color: '#1C1410', backgroundColor: '#FFFFFF', fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
             >
-              <ArrowLeftRight size={13} /> Swap allocations
+              <ArrowLeftRight size={16} aria-hidden /> Swap allocations
             </button>
           ) : (
             <div>
               <div className="flex items-center justify-between gap-3 mb-2">
-                <p className="text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                <p className="text-[13px]" style={{ color: '#6B5F52', fontFamily: OUTFIT, margin: 0 }}>
                   Select two allocated members to swap.
                 </p>
                 <button
                   onClick={() => { setSwapMode(false); setSwapSelection([]); setSwapError(''); }}
-                  className="focus:outline-none flex-shrink-0"
-                  style={{ color: '#9A8A78' }}
+                  aria-label="Stop swapping"
+                  className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] flex-shrink-0 inline-flex items-center justify-center rounded-full"
+                  style={{ color: '#6B5F52', width: 36, height: 36, background: 'none', border: 'none', cursor: 'pointer' }}
                 >
-                  <X size={15} />
+                  <X size={16} />
                 </button>
               </div>
               {swapA && swapB && (
-                <div className="rounded-xl px-3.5 py-2.5 mb-3" style={{ backgroundColor: 'rgba(27,56,40,0.05)', border: '1px solid rgba(27,56,40,0.15)' }}>
+                <div className="rounded-xl px-3.5 py-3 mb-3" style={{ backgroundColor: 'rgba(27,56,40,0.05)' }}>
                   {/* Deliberately NOT CV-linked. This is the live confirm step
-                      sitting directly above CONFIRM SWAP — swapSelection is
-                      local state, so navigating away to a CV discards the
-                      selection and the leader has to rebuild it. A link here
-                      costs the decision; it doesn't help it. */}
-                  <p className="text-xs mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }}>
+                      sitting directly above the confirm button — swapSelection
+                      is local state, so navigating away to a CV discards it. */}
+                  <p className="text-[13px] mb-2.5" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }}>
                     {swapA.profiles?.display_name}: {allocationLabel(swapA)} ↔ {swapB.profiles?.display_name}: {allocationLabel(swapB)}
                   </p>
                   <button
                     onClick={handleConfirmSwap}
                     disabled={swapping}
-                    className="rounded-lg px-4 py-2 text-xs font-bold focus:outline-none"
-                    style={{ backgroundColor: swapping ? '#DDD4C0' : '#1B3828', color: swapping ? '#9A8A78' : '#EED98A', border: 'none', fontFamily: OUTFIT, cursor: swapping ? 'default' : 'pointer' }}
+                    className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#B6871F]"
+                    style={{ minHeight: 44, padding: '0 18px', borderRadius: 10, background: swapping ? '#DDD4C0' : FOREST_GRADIENT, color: swapping ? '#6B5F52' : '#FFFFFF', border: 'none', fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, cursor: swapping ? 'default' : 'pointer' }}
                   >
                     {swapping ? 'Processing…' : allocationSwapMode === 'self_serve' ? 'Confirm swap' : 'Confirm request'}
                   </button>
                 </div>
               )}
-              {swapError && <p className="text-xs mb-2" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{swapError}</p>}
+              {swapError && <p className="text-[13px] mb-2" role="alert" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{swapError}</p>}
             </div>
           )}
         </div>
       )}
 
-      {confirmModal}
-      {swapResult && <SwapResultModal info={swapResult} onClose={() => setSwapResult(null)} />}
-      {importOpen && importAvailable && delegationImport.leader && (
-        <DelegationImportPopup
-          societyId={societyId}
-          data={delegationImport.leader}
-          reload={delegationImport.reload}
-          conferenceAcronym={conferenceAcronym || 'this conference'}
-          userEmail={user?.email ?? null}
-          onPledgeMore={() => { setImportOpen(false); router.push(`/conferences/${conferenceSlug}/pay?open=spots`); }}
-          onImported={() => { void loadRoster(); void load(); }}
-          onClose={() => setImportOpen(false)}
-        />
-      )}
-    </SectionCard>
+      {overlays}
+    </DashCard>
   );
 }

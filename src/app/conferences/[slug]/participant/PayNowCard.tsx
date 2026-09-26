@@ -115,9 +115,9 @@ export function PayNowCard({ userId, conferenceId }: { userId: string | null; co
   if (!rows || rows.length === 0) return null;
   return (
     <SectionCard>
-      <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 12px 0' }}>
-        PAYMENT DUE
-      </p>
+      <h3 style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 19, color: '#1C1410', margin: '0 0 14px 0' }}>
+        Due now
+      </h3>
       <div className="flex flex-col gap-4">
         {rows.map(b => <BalanceRow key={`${b.conference_id}:${b.currency}`} b={b} showConference={false} />)}
       </div>
