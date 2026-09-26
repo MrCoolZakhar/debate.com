@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { FileText, Upload, X, Check, LayoutGrid, Settings as SettingsIcon } from 'lucide-react';
+import { FileText, Upload, X, Check, LayoutGrid, Settings as SettingsIcon, CircleCheck, PencilLine } from 'lucide-react';
 import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
@@ -189,7 +189,7 @@ function UploadStudyGuideModal({
             <div style={{ border: '1px solid rgba(61,122,82,0.3)', borderRadius: 12, padding: '12px 16px', backgroundColor: 'rgba(61,122,82,0.04)', display: 'flex', alignItems: 'center', gap: 10 }}>
               <Check size={16} style={{ color: '#3D7A52', flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: 13, color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedFile.name}</p>
+                <p style={{ fontSize: 13, color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={selectedFile.name}>{selectedFile.name}</p>
                 <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: OUTFIT, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{formatFileSize(selectedFile.size)}</p>
               </div>
               <button onClick={() => fileInputRef.current?.click()} className="focus:outline-none" style={{ fontSize: 11, color: '#9A8A78', fontFamily: OUTFIT, textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none', flexShrink: 0 }}>
@@ -204,7 +204,7 @@ function UploadStudyGuideModal({
 
         <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={onClose} className="focus:outline-none gv-lift" style={{ flex: 1, border: '1.5px solid #DDD4C0', borderRadius: 12, padding: '10px 0', fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}>
-            CANCEL
+            Cancel
           </button>
           <button
             onClick={handleUpload}
@@ -212,7 +212,7 @@ function UploadStudyGuideModal({
             className="focus:outline-none gv-lift"
             style={{ flex: 1, border: 'none', borderRadius: 12, padding: '10px 0', fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, backgroundColor: disabled ? '#DDD4C0' : '#1B3828', color: disabled ? '#9A8A78' : '#EED98A', cursor: disabled ? 'default' : 'pointer' }}
           >
-            {uploading ? 'UPLOADING...' : 'UPLOAD'}
+            {uploading ? 'Uploading…' : 'Upload'}
           </button>
         </div>
       </div>
@@ -337,8 +337,15 @@ function CommitteeRail({ committees, selectedId, onSelect }: {
                 <MonogramMedallion text={label} isCrisis={c.committee_type === 'crisis'} size={28} />
               )}
             </span>
-            <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: NEU.ink }}>
-              {label}
+            <span className="min-w-0 flex flex-col" style={{ lineHeight: 1.2 }}>
+              <span className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: NEU.ink }}>
+                {label}
+              </span>
+              {c.abbreviation && c.abbreviation !== c.name && (
+                <span className="hidden md:block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 500, color: NEU.inkSoft, marginTop: 1 }}>
+                  {c.name}
+                </span>
+              )}
             </span>
           </button>
         );
@@ -751,7 +758,7 @@ export default function DocumentsPage() {
             href={`/manage/${conference.slug}/committees`}
             style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: '#EED98A', backgroundColor: '#1B3828', borderRadius: 10, padding: '8px 20px', textDecoration: 'none', display: 'inline-block' }}
           >
-            ADD COMMITTEES →
+            Add committees
           </Link>
         </div>
       )}
@@ -762,11 +769,11 @@ export default function DocumentsPage() {
           <div className="flex items-center gap-2 mb-6 flex-wrap">
             <NeuPill active={activeTab === 'overview'} onClick={() => setActiveTab('overview')}>
               <LayoutGrid size={12} strokeWidth={2.5} />
-              OVERVIEW
+              Overview
             </NeuPill>
             <NeuPill active={activeTab === 'settings'} onClick={() => setActiveTab('settings')}>
               <SettingsIcon size={12} strokeWidth={2.5} />
-              SETTINGS
+              Settings
             </NeuPill>
           </div>
 
@@ -784,7 +791,7 @@ export default function DocumentsPage() {
                       className="focus:outline-none gv-lift"
                       style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: '#EED98A', backgroundColor: '#1B3828', border: 'none', borderRadius: 10, padding: '8px 14px', cursor: 'pointer' }}
                     >
-                      UPLOAD STUDY GUIDE
+                      Upload study guide
                     </button>
                   </div>
 
@@ -814,8 +821,9 @@ export default function DocumentsPage() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                             {guide.is_published ? (
                               <>
-                                <span style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 9999, backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', letterSpacing: '0.08em' }}>
-                                  PUBLISHED
+                                <span className="inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: '#2F6644' }}>
+                                  <CircleCheck size={13} strokeWidth={2.4} aria-hidden />
+                                  Published
                                 </span>
                                 {guide.published_at && (
                                   <span style={{ fontFamily: OUTFIT, fontSize: 11, color: '#9A8A78' }}>
@@ -830,13 +838,14 @@ export default function DocumentsPage() {
                                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                                 >
-                                  UNPUBLISH
+                                  Unpublish
                                 </button>
                               </>
                             ) : released ? (
                               <>
-                                <span style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 9999, backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', letterSpacing: '0.08em' }}>
-                                  RELEASED
+                                <span className="inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: '#2F6644' }}>
+                                  <CircleCheck size={13} strokeWidth={2.4} aria-hidden />
+                                  Released
                                 </span>
                                 <button
                                   onClick={() => selectedCommitteeId && handleUnscheduleGuide(guide.id, selectedCommitteeId)}
@@ -845,13 +854,14 @@ export default function DocumentsPage() {
                                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                                 >
-                                  UNPUBLISH
+                                  Unpublish
                                 </button>
                               </>
                             ) : (
                               <>
-                                <span style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 9999, backgroundColor: 'rgba(238,217,138,0.15)', color: '#B8844A', letterSpacing: '0.08em' }}>
-                                  DRAFT
+                                <span className="inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: '#7A5A10' }}>
+                                  <PencilLine size={13} strokeWidth={2.4} aria-hidden />
+                                  Draft
                                 </span>
                                 {scheduled && (
                                   <span style={{ fontFamily: OUTFIT, fontSize: 11, color: '#9A8A78' }}>
@@ -863,7 +873,7 @@ export default function DocumentsPage() {
                                   className="focus:outline-none gv-lift"
                                   style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 11, color: '#EED98A', backgroundColor: '#1B3828', border: 'none', borderRadius: 8, padding: '6px 10px', cursor: 'pointer' }}
                                 >
-                                  PUBLISH
+                                  Publish
                                 </button>
                               </>
                             )}
@@ -874,7 +884,7 @@ export default function DocumentsPage() {
                               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
                               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
                             >
-                              DELETE
+                              Delete
                             </button>
                           </div>
                         </div>
@@ -895,17 +905,25 @@ export default function DocumentsPage() {
                     </span>
                   </div>
 
-                  {/* Stats */}
-                  <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
-                    <span style={{ fontFamily: OUTFIT, fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#9A8A78' }}>{totalCount} submitted</span>
-                    <span style={{ fontFamily: OUTFIT, fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#3D7A52' }}>{approvedCount} approved</span>
-                    <span style={{ fontFamily: OUTFIT, fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#B8844A' }}>{pendingCount} awaiting review</span>
-                    <span style={{ fontFamily: OUTFIT, fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#8B2020' }}>{rejectedCount} rejected</span>
+                  {/* Stats: a big number with the word beside it. */}
+                  <div style={{ display: 'flex', gap: 18, marginBottom: 16, flexWrap: 'wrap', alignItems: 'baseline' }}>
+                    {([
+                      [totalCount, 'submitted', NEU.ink],
+                      [approvedCount, 'approved', '#2F6644'],
+                      [pendingCount, 'awaiting review', '#7A5A10'],
+                      [rejectedCount, 'rejected', '#8B2020'],
+                    ] as const).map(([n, word, color]) => (
+                      <span key={word} style={{ fontFamily: OUTFIT, display: 'inline-flex', alignItems: 'baseline', gap: 5 }}>
+                        <span style={{ fontSize: 20, fontWeight: 800, color, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{n}</span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: NEU.inkSoft }}>{word}</span>
+                      </span>
+                    ))}
                   </div>
 
                   {/* Filter pills */}
                   <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
                     {['ALL', 'SUBMITTED', 'REVIEWED', 'APPROVED', 'REJECTED'].map(f => {
+                      const filterLabel = f.charAt(0) + f.slice(1).toLowerCase();
                       const isActive = filterStatus === f;
                       return (
                         <button
@@ -913,14 +931,14 @@ export default function DocumentsPage() {
                           onClick={() => setFilterStatus(f)}
                           className="focus:outline-none gv-lift"
                           style={{
-                            fontFamily: OUTFIT, fontSize: 10, fontWeight: 700,
-                            padding: '5px 12px', borderRadius: 9999, cursor: 'pointer', letterSpacing: '0.06em',
+                            fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700,
+                            padding: '5px 12px', borderRadius: 9999, cursor: 'pointer',
                             border: isActive ? '1px solid #1B3828' : '1px solid #DDD4C0',
                             backgroundColor: isActive ? '#1B3828' : 'transparent',
                             color: isActive ? '#EED98A' : '#9A8A78',
                           }}
                         >
-                          {f}
+                          {filterLabel}
                         </button>
                       );
                     })}
@@ -963,9 +981,12 @@ export default function DocumentsPage() {
                   {committees.map(c => (
                     <div key={c.id} className="flex items-center justify-between gap-3 rounded-xl px-4 py-3" style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
                       <div className="min-w-0">
-                        <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: NEU.ink, margin: 0 }}>
+                        <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: NEU.ink, margin: 0 }}>
                           {c.abbreviation || c.name}
                         </p>
+                        {c.abbreviation && c.abbreviation !== c.name && (
+                          <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.inkSoft, margin: '1px 0 0 0' }}>{c.name}</p>
+                        )}
                         <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, margin: '2px 0 0 0' }}>
                           {c.pp_submissions_enabled ? 'Submissions open' : 'Submissions closed'}
                         </p>
@@ -988,7 +1009,7 @@ export default function DocumentsPage() {
                     <div className="flex flex-col gap-2.5">
                       {committees.map(c => (
                         <div key={c.id} className="flex items-center gap-3 flex-wrap rounded-xl px-4 py-3" style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
-                          <span className="truncate" style={{ width: 140, flexShrink: 0, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink }}>
+                          <span className="[overflow-wrap:anywhere]" style={{ width: 140, flexShrink: 0, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink }} title={c.name}>
                             {c.abbreviation || c.name}
                           </span>
                           <div style={{ flex: 1, minWidth: 220 }}>
@@ -1021,7 +1042,7 @@ export default function DocumentsPage() {
                   <div className="flex flex-col gap-2.5">
                     {committees.map(c => (
                       <div key={c.id} className="flex items-center gap-3 flex-wrap rounded-xl px-4 py-3" style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
-                        <span className="truncate" style={{ width: 140, flexShrink: 0, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink }}>
+                        <span className="[overflow-wrap:anywhere]" style={{ width: 140, flexShrink: 0, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink }} title={c.name}>
                           {c.abbreviation || c.name}
                         </span>
                         <div style={{ flex: 1, minWidth: 220 }}>
@@ -1034,7 +1055,7 @@ export default function DocumentsPage() {
                   <DateTimeField value={sgGlobalPublishAt} onSave={saveGlobalSgPublishAt} placeholder="No scheduled release" />
                 )}
                 <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: '#9A8A78', marginTop: 12, lineHeight: 1.6 }}>
-                  A guide becomes visible to delegates once it is manually published, or once its committee&apos;s release time passes, whichever comes first. The PUBLISH button on a guide is still there for an early, manual release. Clear a schedule here if you need to pull an already-released draft back out of sight.
+                  A guide becomes visible to delegates once it is manually published, or once its committee&apos;s release time passes, whichever comes first. The Publish button on a guide is still there for an early, manual release. Clear a schedule here if you need to pull an already-released draft back out of sight.
                 </p>
               </div>
             </div>

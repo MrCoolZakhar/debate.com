@@ -154,7 +154,7 @@ export function DelegateCardModal({
                 : caucusPos >= 0
                   ? `Number ${caucusPos + 1} in the caucus queue`
                   : rollStatus
-                    ? `On the roll · ${rollStatus.replace('-', ' & ')}`
+                    ? `On the roll: ${rollStatus.replace('-', ' & ')}`
                     : 'Not on the live roll'}
           </p>
         </div>

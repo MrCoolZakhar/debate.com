@@ -44,7 +44,6 @@ function NavPill({ href, active, icon: Icon, children }: {
         fontFamily: OUTFIT,
         fontSize: 11,
         fontWeight: 800,
-        letterSpacing: '0.04em',
         backgroundColor: active ? undefined : NEU.surface,
         background: active ? grad(gradient) : undefined,
         color: active ? '#FFFFFF' : hovered ? NEU.forest : NEU.ink,
@@ -109,10 +108,10 @@ function FinancialsSubNav({ slug }: { slug: string }) {
 
   return (
     <div className="flex items-center gap-2 mb-6 flex-wrap">
-      <NavPill href={base} active={isOverview} icon={LayoutGrid}>OVERVIEW</NavPill>
-      <NavPill href={`${base}/history`} active={isHistory} icon={History}>HISTORY</NavPill>
-      <NavPill href={`${base}/invoices`} active={isInvoices} icon={Receipt}>INVOICES</NavPill>
-      <NavPill href={`${base}/settings`} active={isSettings} icon={SettingsIcon}>SETTINGS</NavPill>
+      <NavPill href={base} active={isOverview} icon={LayoutGrid}>Overview</NavPill>
+      <NavPill href={`${base}/history`} active={isHistory} icon={History}>History</NavPill>
+      <NavPill href={`${base}/invoices`} active={isInvoices} icon={Receipt}>Invoices</NavPill>
+      <NavPill href={`${base}/settings`} active={isSettings} icon={SettingsIcon}>Settings</NavPill>
     </div>
   );
 }

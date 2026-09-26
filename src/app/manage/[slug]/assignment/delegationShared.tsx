@@ -560,11 +560,11 @@ function RemoveButton({ onRemove }: { onRemove: () => void }) {
     <button
       onClick={e => { e.stopPropagation(); onRemove(); }}
       className="flex-shrink-0 focus:outline-none"
-      style={{ fontSize: 10, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.04em' }}
+      style={{ fontSize: 10, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, letterSpacing: 0 }}
       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
     >
-      REMOVE
+      Remove
     </button>
   );
 }
@@ -601,9 +601,9 @@ export function DraggableChip({
           Not worth putting an <a> inside a drag source for. */}
       <MemberAvatar name={name} url={avatarUrl} />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{name}</p>
+        <p className="text-sm font-semibold [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{name}</p>
         {subtitle && (
-          <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{subtitle}</p>
+          <p className="text-xs [overflow-wrap:anywhere]" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{subtitle}</p>
         )}
       </div>
       {selected && <Check size={13} style={{ color: '#3D7A52', flexShrink: 0 }} />}
@@ -612,11 +612,11 @@ export function DraggableChip({
           <button
             onClick={e => { e.stopPropagation(); onNotAttending(); }}
             className="focus:outline-none"
-            style={{ fontSize: 10, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.04em' }}
+            style={{ fontSize: 10, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, letterSpacing: 0 }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
           >
-            NOT ATTENDING
+            Not attending
           </button>
         )}
         {onRemove && <RemoveButton onRemove={onRemove} />}
@@ -636,7 +636,7 @@ export function WaivedChip({ member, onRemove }: { member: PoolMember; onRemove?
       {/* Static chip: plain <div>, no onClick and no drag; the only button is a
           sibling REMOVE. So a bare link, no nesting needed. */}
       <MemberAvatar name={name} url={member.profiles?.avatar_url ?? null} userId={member.user_id} />
-      <span className="flex-1 min-w-0 text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{name}</span>
+      <span className="flex-1 min-w-0 text-sm font-semibold [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{name}</span>
       {!member.user_id && <NotRegisteredChip />}
       <span style={{ fontSize: 10, fontWeight: 700, color: '#9A6B2F', fontFamily: MONO, letterSpacing: '0.06em', flexShrink: 0 }}>WAIVED</span>
       {onRemove && <RemoveButton onRemove={onRemove} />}
@@ -654,15 +654,15 @@ export function NotAttendingChip({ member, onUndo, onRemove }: { member: PoolMem
       {/* Static chip: plain <div>, no onClick and no drag; UNDO / REMOVE are
           siblings. So a bare link, no nesting needed. */}
       <MemberAvatar name={name} url={member.profiles?.avatar_url ?? null} userId={member.user_id} />
-      <span className="flex-1 min-w-0 text-sm font-semibold truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{name}</span>
+      <span className="flex-1 min-w-0 text-sm font-semibold [overflow-wrap:anywhere]" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{name}</span>
       {!member.user_id && <NotRegisteredChip />}
       <div className="flex items-center gap-2.5 flex-shrink-0">
         <button
           onClick={onUndo}
           className="focus:outline-none"
-          style={{ fontSize: 10, fontWeight: 700, color: '#1B3828', fontFamily: MONO, letterSpacing: '0.04em' }}
+          style={{ fontSize: 10, fontWeight: 700, color: '#1B3828', fontFamily: MONO, letterSpacing: 0 }}
         >
-          UNDO
+          Undo
         </button>
         {onRemove && <RemoveButton onRemove={onRemove} />}
       </div>
@@ -699,7 +699,7 @@ export function PaidSlotChip({
       <MemberAvatar name={name} url={member.profiles?.avatar_url ?? null} userId={member.user_id} nested />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{name}</p>
+          <p className="text-sm font-semibold [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{name}</p>
           {!member.user_id && <NotRegisteredChip />}
           {hdTag && (
             <span
@@ -711,7 +711,7 @@ export function PaidSlotChip({
           )}
         </div>
         {member.assigned_committee_id && (
-          <p className="text-xs truncate" title={member.assigned_committee?.name ?? undefined} style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+          <p className="text-xs [overflow-wrap:anywhere]" title={member.assigned_committee?.name ?? undefined} style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
             {committeeShortName(member.assigned_committee)}, {member.assigned_country_name}
           </p>
         )}
@@ -720,11 +720,11 @@ export function PaidSlotChip({
         <button
           onClick={e => { e.stopPropagation(); onNotAttending(); }}
           className="focus:outline-none"
-          style={{ fontSize: 10, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.04em' }}
+          style={{ fontSize: 10, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, letterSpacing: 0 }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
         >
-          NOT ATTENDING
+          Not attending
         </button>
         {onRemove && <RemoveButton onRemove={onRemove} />}
       </div>

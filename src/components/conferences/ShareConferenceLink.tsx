@@ -132,7 +132,7 @@ export function ShareLinkRow({ conference }: { conference: ShareConference }) {
         <span className="block truncate" style={{ fontSize: 12, fontWeight: 700, color: NEU.ink }}>
           Share your conference link
         </span>
-        <span className="block truncate" style={{ fontSize: 10.5, color: NEU.inkSoft, marginTop: 1 }}>
+        <span className="block truncate" title={url} style={{ fontSize: 10.5, color: NEU.inkSoft, marginTop: 1 }}>
           {displayUrl(url)}
         </span>
       </span>

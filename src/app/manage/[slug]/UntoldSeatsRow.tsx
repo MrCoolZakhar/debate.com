@@ -62,11 +62,11 @@ export default function UntoldSeatsRow({ conferenceId, slug }: { conferenceId: s
             onClick={(e) => { e.stopPropagation(); open(); }}
             className="focus:outline-none"
             style={{
-              fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.06em',
+              fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800,
               color: NEU.deepGold, background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px',
             }}
           >
-            SEND
+            Send
           </button>
         )}
         dense

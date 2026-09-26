@@ -532,9 +532,9 @@ function QueueOverflow({
  *  Order: the gavel holder (`session.headChair`, matched on the full name or
  *  its first name, since `chair_names` is a free-text join log), then the rest
  *  of the seated dais in `chair_user_ids` order, then pending invitees, quieter
- *  and in gold ink. Every row is ONE line (a name that does not fit is cut with
- *  an ellipsis and carried whole in its `title`), and the block always reserves
- *  two rows, so the identity band never grows with the size of the dais.
+ *  and in gold ink. Every row shows the first name only, which almost always
+ *  fits one line; a name that does not wraps (never an ellipsis, CLAUDE.md §8),
+ *  and the block reserves two rows, so the band rarely grows with the dais.
  *
  *  The "+N" is plain type, no pill (CLAUDE.md §8). Hover or focus opens the
  *  whole dais through `Portal` at fixed coordinates, flipped near the bottom
@@ -615,7 +615,7 @@ function DaisSummary({ seated, pending, headChair }: {
     );
     const text = (
       <span
-        className="font-semibold truncate min-w-0"
+        className="font-semibold min-w-0 text-right [overflow-wrap:anywhere]"
         style={{ color: e.pending ? '#7A5A10' : SOFT, fontFamily: OUTFIT, fontSize: 12, lineHeight: `${DAIS_ROW}px` }}
       >
         {e.label}
@@ -625,7 +625,7 @@ function DaisSummary({ seated, pending, headChair }: {
       <span
         key={e.key}
         className="flex items-center gap-1.5 justify-end"
-        style={{ maxWidth: '100%', height: DAIS_ROW }}
+        style={{ maxWidth: '100%', minHeight: DAIS_ROW }}
         title={e.pending ? `${e.name} has been invited to chair and has not accepted yet` : e.gavel ? `${e.name}, holds the gavel` : e.name}
       >
         {lead}
@@ -979,10 +979,12 @@ function Chip({
   // A zero-count chip is a PRESSED, empty well rather than a faded one.
   // Fading it was measured at 2.59:1 — below AA and unreadable — whereas the
   // inset keeps SOFT at its full 5.4:1 and still says "nothing in here".
+  // Icon + number in plain type, no capsule (CLAUDE.md §8: never a count
+  // pill). A clickable one gets a faint forest tint on hover as its only frame.
   const base: React.CSSProperties = {
-    backgroundColor: muted ? NEU.base : NEU.surface,
-    boxShadow: muted ? NEU.inSm : NEU.outSm,
-    color: SOFT,
+    backgroundColor: 'transparent',
+    // An empty count stays SOFT (5.4:1); a real one reads in ink.
+    color: muted ? SOFT : NEU.ink,
     fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums',
   };
   // `whitespace-nowrap` SURVIVES here and is not a truncation: there is no
@@ -1008,12 +1010,12 @@ function Chip({
       onClick={(e) => { e.stopPropagation(); onClick(e); }}
       style={{
         ...base, border: 'none', cursor: 'pointer',
-        transitionProperty: 'box-shadow, scale',
+        transitionProperty: 'background-color, scale',
         transitionDuration: '200ms',
         transitionTimingFunction: EASE,
       }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
     >
       {children}
     </button>
@@ -1056,9 +1058,12 @@ function NotStartedNudge({ data, now }: { data: LiveCommittee; now: number }) {
   const sent = Number.isFinite(releasedMs) && releasedMs <= now;
   const scheduled = Number.isFinite(releasedMs) && releasedMs > now;
 
+  // Icon + plain word, sentence case (CLAUDE.md §8: no status pills). The
+  // words are the committees page's own, only no longer set in capitals.
   const pill: React.CSSProperties = {
-    fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em',
-    borderRadius: 999, padding: '3px 8px', flexShrink: 0, lineHeight: 1.4,
+    fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700,
+    flexShrink: 0, lineHeight: 1.4,
+    display: 'inline-flex', alignItems: 'center', gap: 4,
   };
 
   return (
@@ -1089,7 +1094,7 @@ function NotStartedNudge({ data, now }: { data: LiveCommittee; now: number }) {
                   in NEU.green (4.30:1), which fails AA as 11px text. Same
                   family, 5.68:1. */}
               <Check size={11} style={{ color: GREEN_INK, flexShrink: 0 }} />
-              <span style={{ ...pill, padding: 0, color: GREEN_INK }}>COPIED</span>
+              <span style={{ ...pill, color: GREEN_INK }}>Copied</span>
             </>
           ) : (
             <>
@@ -1107,26 +1112,26 @@ function NotStartedNudge({ data, now }: { data: LiveCommittee; now: number }) {
           )}
         </button>
       ) : (
-        <span style={{ ...pill, color: AMBER_INK, backgroundColor: 'rgba(184,132,74,0.15)' }}>
-          NO SESSION CODE
+        <span style={{ ...pill, color: AMBER_INK }}>
+          <AlertTriangle size={11} style={{ flexShrink: 0 }} />
+          No session code
         </span>
       )}
 
       {scheduled ? (
-        <span style={{ ...pill, color: AMBER_INK, backgroundColor: 'rgba(184,132,74,0.15)' }}>
-          SCHEDULED
+        <span style={{ ...pill, color: AMBER_INK }}>
+          <Clock3 size={11} style={{ flexShrink: 0 }} />
+          Scheduled
         </span>
       ) : sent ? (
-        <span style={{ ...pill, color: GREEN_INK, backgroundColor: 'rgba(47,102,68,0.12)' }}>
-          SENT TO CHAIRS
+        <span style={{ ...pill, color: GREEN_INK }}>
+          <Check size={11} style={{ flexShrink: 0 }} />
+          Sent to chairs
         </span>
       ) : (
-        <span
-          className="inline-flex items-center gap-1"
-          style={{ ...pill, color: AMBER_INK, backgroundColor: 'rgba(184,132,74,0.15)' }}
-        >
-          <Send size={9} style={{ flexShrink: 0 }} />
-          CHAIRS NOT INVITED
+        <span style={{ ...pill, color: AMBER_INK }}>
+          <Send size={11} style={{ flexShrink: 0 }} />
+          Chairs not invited
         </span>
       )}
     </div>
@@ -1482,14 +1487,14 @@ export function CommitteeCard({
             onClick={(e) => { e.stopPropagation(); onOpenRoster(data); }}
             className="inline-flex items-center gap-1.5 text-[12px] font-bold px-2.5 py-[7px] rounded-full focus:outline-none active:scale-[0.96] flex-shrink-0 whitespace-nowrap"
             style={{
-              backgroundColor: NEU.surface, boxShadow: NEU.outSm, color: SOFT,
+              backgroundColor: 'transparent', color: SOFT,
               fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums',
               border: 'none', cursor: 'pointer',
-              transitionProperty: 'box-shadow, scale', transitionDuration: '200ms',
+              transitionProperty: 'background-color, scale', transitionDuration: '200ms',
               transitionTimingFunction: EASE,
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
             title={`${facts.present} of ${facts.total} delegations present. Open the roll. Observers are excluded from this count, as they are on the dais.`}
           >
             {/* The word "present" lived here and cost ~46px, which is what

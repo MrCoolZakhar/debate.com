@@ -329,14 +329,14 @@ export default function VouchersSection({
                 style={{
                   padding: '8px 12px', borderRadius: 999, border: 'none', cursor: 'pointer',
                   backgroundColor: NEU.surface, boxShadow: NEU.outSm, color: NEU.forest,
-                  fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em',
+                  fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
                   transition: `box-shadow 200ms ${EASE}`,
                 }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
               >
                 <Dices size={13} strokeWidth={2.4} />
-                GENERATE
+                Generate
               </button>
             </div>
           </div>
@@ -346,10 +346,10 @@ export default function VouchersSection({
             <span style={fieldLabelStyle}>Discount type</span>
             <div className="flex items-center gap-2" style={{ paddingTop: 3 }}>
               <NeuPill active={kind === 'percent'} gradient={NEU_GRADIENTS.forest} onClick={() => setKind('percent')}>
-                PERCENT
+                Percent
               </NeuPill>
               <NeuPill active={kind === 'flat'} gradient={NEU_GRADIENTS.forest} onClick={() => setKind('flat')}>
-                FLAT {conference.fee_currency}
+                Flat {conference.fee_currency}
               </NeuPill>
             </div>
           </div>
@@ -412,15 +412,15 @@ export default function VouchersSection({
               <span style={fieldLabelStyle}>Status</span>
               <div className="flex items-center gap-2" style={{ paddingTop: 3 }}>
                 <NeuPill active={active} gradient={NEU_GRADIENTS.green} onClick={() => setActive(true)}>
-                  ACTIVE
+                  Active
                 </NeuPill>
                 <NeuPill active={!active} gradient={NEU_GRADIENTS.amber} onClick={() => setActive(false)}>
-                  INACTIVE
+                  Inactive
                 </NeuPill>
               </div>
             </div>
             <NeuButton icon={Plus} onClick={handleCreate} disabled={!canCreate}>
-              {creating ? 'CREATING…' : 'CREATE VOUCHER'}
+              {creating ? 'Creating…' : 'Create voucher'}
             </NeuButton>
           </div>
         </div>
@@ -504,7 +504,7 @@ export default function VouchersSection({
                       style={{
                         padding: '4px 12px', borderRadius: 999, border: 'none',
                         cursor: rowBusy ? 'default' : 'pointer',
-                        fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em',
+                        fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
                         background: v.active
                           ? `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`
                           : NEU.base,
@@ -513,7 +513,7 @@ export default function VouchersSection({
                         transition: `box-shadow 200ms ${EASE}`,
                       }}
                     >
-                      {v.active ? 'ACTIVE' : 'INACTIVE'}
+                      {v.active ? 'Active' : 'Inactive'}
                     </button>
 
                     {/* Delete, only when never redeemed */}

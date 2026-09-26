@@ -1033,10 +1033,7 @@ function RailHeader({ count }: { count: number }) {
       <p style={{ fontSize: 11, color: NEU.deepGold, fontFamily: MONO, letterSpacing: '0.14em', fontWeight: 800 }}>
         UNASSIGNED
       </p>
-      <span
-        className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full"
-        style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm, color: NEU.forest, fontFamily: MONO, fontWeight: 800, fontSize: 11, fontVariantNumeric: 'tabular-nums' }}
-      >
+      <span style={{ color: NEU.forest, fontFamily: MONO, fontWeight: 900, fontSize: 16, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
         {count}
       </span>
       <span style={{ fontSize: 10, color: NEU.muted, fontFamily: MONO, marginLeft: 'auto', letterSpacing: '0.06em' }}>
@@ -1079,7 +1076,7 @@ function RailSourceToggle({ value, onChange }: { value: 'delegates' | 'delegatio
               fontSize: 10,
               fontFamily: MONO,
               fontWeight: 800,
-              letterSpacing: '0.06em',
+              letterSpacing: 0,
               border: 'none',
               background: active ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : 'transparent',
               boxShadow: active ? `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}` : 'none',
@@ -1089,7 +1086,7 @@ function RailSourceToggle({ value, onChange }: { value: 'delegates' | 'delegatio
             }}
           >
             {v === 'delegates' ? <UserRound size={12} strokeWidth={2.4} /> : <Users size={12} strokeWidth={2.4} />}
-            {v === 'delegates' ? 'DELEGATES' : 'DELEGATIONS'}
+            {v === 'delegates' ? 'Delegates' : 'Delegations'}
           </button>
         );
       })}
@@ -1443,7 +1440,7 @@ function DelegationChip({ app }: { app: AcceptedApp }) {
           multi-person glyph flags it as such at a glance. Independents stay plain. */}
       {!indep && <Users size={11} strokeWidth={2.2} style={{ flexShrink: 0 }} />}
       <span
-        className="truncate"
+        className="[overflow-wrap:anywhere]"
         style={{ fontSize: 10, fontWeight: 700, fontFamily: MONO, letterSpacing: '0.04em' }}
       >
         {label}
@@ -1545,7 +1542,7 @@ function DelegateDetail({
           {nationality ?? 'Nationality not set'}
           {age != null && <span style={{ color: NEU.muted, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}> · {age}</span>}
         </span>
-        <span className="truncate min-w-0" style={{ fontSize: 11, color: '#9A8A78', fontFamily: OUTFIT, marginLeft: 'auto' }}>
+        <span className="[overflow-wrap:anywhere] min-w-0" style={{ fontSize: 11, color: '#9A8A78', fontFamily: OUTFIT, marginLeft: 'auto' }}>
           {app.profiles?.email}
         </span>
       </div>
@@ -1565,10 +1562,10 @@ function DelegateDetail({
               className="focus:outline-none"
               style={{
                 marginTop: 5, fontSize: 10, color: NEU.deepGold, fontFamily: MONO, fontWeight: 700,
-                letterSpacing: '0.06em', background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                letterSpacing: 0, background: 'none', border: 'none', cursor: 'pointer', padding: 0,
               }}
             >
-              {showAllPrefs ? 'HIDE REMAINING PREFERENCES' : `SHOW ALL PREFERENCES (+${rest.length})`}
+              {showAllPrefs ? 'Hide remaining preferences' : `Show all preferences (+${rest.length})`}
             </button>
           )}
         </div>
@@ -1733,9 +1730,9 @@ function DropAllocateModal({ committee, app, needy = false, pushDraftNotice, onC
                   <NeuButton
                     onClick={() => handleAllocate(slot)}
                     disabled={busySlotId !== null}
-                    style={{ padding: '8px 16px', fontSize: 11 }}
+                    style={{ padding: '8px 16px', fontSize: 11, letterSpacing: 0 }}
                   >
-                    {busy ? '...' : 'ALLOCATE'}
+                    {busy ? '…' : 'Allocate'}
                   </NeuButton>
                 </NeuInset>
               );
@@ -1844,9 +1841,9 @@ function SocietyDropAllocateModal({ committee, society, onClose, onAssigned }: S
                   <NeuButton
                     onClick={() => handleAllocate(slot)}
                     disabled={busySlotId !== null}
-                    style={{ padding: '8px 16px', fontSize: 11 }}
+                    style={{ padding: '8px 16px', fontSize: 11, letterSpacing: 0 }}
                   >
-                    {busy ? '...' : 'ALLOCATE'}
+                    {busy ? '…' : 'Allocate'}
                   </NeuButton>
                 </NeuInset>
               );
@@ -1989,7 +1986,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
               {committeeLabels(committee).big}
             </p>
             {committeeLabels(committee).full && (
-              <p className="truncate" style={{ fontSize: 11.5, color: NEU.muted, fontFamily: OUTFIT }}>{committeeLabels(committee).full}</p>
+              <p className="[overflow-wrap:anywhere]" style={{ fontSize: 11.5, color: NEU.muted, fontFamily: OUTFIT }}>{committeeLabels(committee).full}</p>
             )}
           </div>
         </div>
@@ -2130,15 +2127,15 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
         {error && <ModalError msg={error} />}
 
         <div className="flex gap-3">
-          <button onClick={onClose} className="flex-1 rounded-full py-2.5 font-bold text-sm focus:outline-none" style={{ border: 'none', color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontFamily: OUTFIT, letterSpacing: '0.04em' }}>
-            CANCEL
+          <button onClick={onClose} className="flex-1 rounded-full py-2.5 font-bold text-sm focus:outline-none" style={{ border: 'none', color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontFamily: OUTFIT, letterSpacing: 0 }}>
+            Cancel
           </button>
           <NeuButton
             onClick={handleAssign}
             disabled={saving || !selectedApp || !selectedSlot}
-            style={{ flex: 1, padding: '11px 22px' }}
+            style={{ flex: 1, padding: '11px 22px', letterSpacing: 0 }}
           >
-            {saving ? 'ASSIGNING...' : 'ASSIGN'}
+            {saving ? 'Assigning…' : 'Assign'}
           </NeuButton>
         </div>
       </NeuModalCard>
@@ -2322,16 +2319,16 @@ function DelegationConflictModal({
         {error && <ModalError msg={error} />}
 
         <div className="flex flex-col gap-2">
-          <NeuButton onClick={handleRemoveBoth} disabled={busy !== null} style={{ width: '100%' }}>
-            {busy === 'remove' ? 'REMOVING...' : 'REMOVE BOTH AND CONTINUE'}
+          <NeuButton onClick={handleRemoveBoth} disabled={busy !== null} style={{ width: '100%', letterSpacing: 0 }}>
+            {busy === 'remove' ? 'Removing…' : 'Remove both and continue'}
           </NeuButton>
           <button
             onClick={onClose}
             disabled={busy !== null}
             className="w-full rounded-full py-2.5 font-bold text-sm focus:outline-none"
-            style={{ border: 'none', color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontFamily: OUTFIT, letterSpacing: '0.04em' }}
+            style={{ border: 'none', color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontFamily: OUTFIT, letterSpacing: 0 }}
           >
-            PICK A DIFFERENT SEAT
+            Pick a different seat
           </button>
           {canAddIncomingToSibling && (
             <div>
@@ -2339,9 +2336,9 @@ function DelegationConflictModal({
                 onClick={handleAddIncomingToSibling}
                 disabled={busy !== null || !siblingSocId}
                 gradient={NEU_GRADIENTS.gold}
-                style={{ width: '100%' }}
+                style={{ width: '100%', letterSpacing: 0 }}
               >
-                {busy === 'add' ? 'ADDING...' : 'ADD THEM TO THE DELEGATION'}
+                {busy === 'add' ? 'Adding…' : 'Add them to the delegation'}
               </NeuButton>
               <p className="text-xs mt-1.5 text-center" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.4 }}>
                 This moves {appName} into {siblingName} for invoicing and coverage as well.
@@ -2354,9 +2351,9 @@ function DelegationConflictModal({
                 onClick={handleAddSiblingToIncoming}
                 disabled={busy !== null || !incomingSocId}
                 gradient={NEU_GRADIENTS.gold}
-                style={{ width: '100%' }}
+                style={{ width: '100%', letterSpacing: 0 }}
               >
-                {busy === 'add' ? 'ADDING...' : `ADD ${siblingHolderName.toUpperCase()} TO ${incomingDelegationName.toUpperCase()}`}
+                {busy === 'add' ? 'Adding…' : `Add ${siblingHolderName} to ${incomingDelegationName}`}
               </NeuButton>
               <p className="text-xs mt-1.5 text-center" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.4 }}>
                 This moves {siblingHolderName} into {incomingDelegationName} for invoicing and coverage as well.
@@ -2667,11 +2664,11 @@ function CommitteeBoardPanel({
       >
         <LogoDisc bare src={committee.logo_url} size={54} fallbackText={labels.big} alt={committee.name} />
         <div className="min-w-0 flex-1">
-          <p title={committee.name} className="truncate" style={{ fontSize: 22, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em', lineHeight: 1.05 }}>
+          <p title={committee.name} className="[overflow-wrap:anywhere]" style={{ fontSize: 22, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em', lineHeight: 1.05 }}>
             {labels.big}
           </p>
           {labels.full && (
-            <p className="truncate" style={{ fontSize: 11.5, color: NEU.muted, fontFamily: OUTFIT, marginTop: 1 }}>{labels.full}</p>
+            <p className="[overflow-wrap:anywhere]" style={{ fontSize: 11.5, color: NEU.muted, fontFamily: OUTFIT, marginTop: 1 }}>{labels.full}</p>
           )}
         </div>
         <span className="flex items-baseline gap-1.5 flex-shrink-0">
@@ -2838,13 +2835,13 @@ function CommitteeOverviewModal({
             <LogoDisc bare src={committee.logo_url} size={54} fallbackText={labels.big} alt={committee.name} />
             <div className="min-w-0">
               <div className="flex items-center gap-2 min-w-0">
-                <h2 title={committee.name} className="truncate" style={{ fontSize: 24, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em', lineHeight: 1.05 }}>
+                <h2 title={committee.name} className="[overflow-wrap:anywhere]" style={{ fontSize: 24, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em', lineHeight: 1.05 }}>
                   {labels.big}
                 </h2>
                 <CommitteeDifficultyBadge level={committee.difficulty} disc={30} glyph={20} />
               </div>
               {labels.full && (
-                <p className="truncate" style={{ fontSize: 12, color: NEU.muted, fontFamily: OUTFIT, marginTop: 1 }}>{labels.full}</p>
+                <p className="[overflow-wrap:anywhere]" style={{ fontSize: 12, color: NEU.muted, fontFamily: OUTFIT, marginTop: 1 }}>{labels.full}</p>
               )}
             </div>
           </div>
@@ -2910,8 +2907,8 @@ function CommitteeOverviewModal({
                       <p style={{ fontSize: 10.5, color: NEU.muted, fontFamily: MONO, letterSpacing: '0.06em', marginTop: 1 }}>OPEN SEAT{seatLabel(seatNum)}</p>
                     </div>
                     <TierBadge tier={slot.importance} />
-                    <span className="inline-flex items-center gap-1 flex-shrink-0" style={{ fontSize: 10.5, fontWeight: 800, color: NEU.forest, fontFamily: MONO, letterSpacing: '0.04em' }}>
-                      <Plus size={12} strokeWidth={2.6} /> ASSIGN
+                    <span className="inline-flex items-center gap-1 flex-shrink-0" style={{ fontSize: 10.5, fontWeight: 800, color: NEU.forest, fontFamily: MONO, letterSpacing: 0 }}>
+                      <Plus size={12} strokeWidth={2.6} /> Assign
                     </span>
                   </button>
                 );
@@ -3097,7 +3094,7 @@ function InviteChairModal({ conferenceId, committee, onClose, onInvited }: {
               <p style={{ margin: 0, fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', color: NEU.deepGold }}>
                 INVITE CHAIR
               </p>
-              <p title={committee.name} className="font-bold text-[15px] mt-0.5 truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+              <p title={committee.name} className="font-bold text-[15px] mt-0.5 [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
                 {committeeLabels(committee).big}
               </p>
             </div>
@@ -3106,10 +3103,14 @@ function InviteChairModal({ conferenceId, committee, onClose, onInvited }: {
         </div>
 
         <p className="text-xs mb-3" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.45 }}>
-          No Gavelling account needed. They&apos;ll get an email invite and show as pending until they join through the link, where they can sign up. Their name updates to match how they sign up.
+          No Gavelling account needed. They get an email invite and show as pending until they join through the link.
         </p>
         <div className="flex flex-col gap-2">
+          <label htmlFor={`chair-invite-name-${committee.id}`} style={{ fontSize: 11.5, fontWeight: 700, color: NEU.inkSoft, fontFamily: OUTFIT }}>
+            Full name
+          </label>
           <input
+            id={`chair-invite-name-${committee.id}`}
             type="text"
             value={name}
             onChange={e => setName(e.target.value)}
@@ -3122,8 +3123,12 @@ function InviteChairModal({ conferenceId, committee, onClose, onInvited }: {
               fontFamily: OUTFIT,
             }}
           />
+          <label htmlFor={`chair-invite-email-${committee.id}`} style={{ fontSize: 11.5, fontWeight: 700, color: NEU.inkSoft, fontFamily: OUTFIT, marginTop: 2 }}>
+            Email
+          </label>
           <div className="flex gap-2">
             <input
+              id={`chair-invite-email-${committee.id}`}
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
@@ -3135,8 +3140,8 @@ function InviteChairModal({ conferenceId, committee, onClose, onInvited }: {
                 fontFamily: OUTFIT,
               }}
             />
-            <NeuButton onClick={handleInvite} disabled={inviting || !email.trim() || !name.trim()} style={{ padding: '10px 18px', fontSize: 11 }}>
-              {inviting ? 'INVITING…' : 'INVITE'}
+            <NeuButton onClick={handleInvite} disabled={inviting || !email.trim() || !name.trim()} style={{ padding: '10px 18px', fontSize: 11, letterSpacing: 0 }}>
+              {inviting ? 'Inviting…' : 'Invite'}
             </NeuButton>
           </div>
         </div>
@@ -3146,7 +3151,7 @@ function InviteChairModal({ conferenceId, committee, onClose, onInvited }: {
         <ModalOverlay onClose={() => { if (!confirmBusy) setRoleConflict(null); }}>
           <NeuModalCard width={420}>
             <p className="text-base mb-2" style={{ color: NEU.ink, fontWeight: 800, fontFamily: OUTFIT }}>
-              This person already holds a role
+              This Person Already Holds a Role
             </p>
             <p className="text-sm mb-5" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.55 }}>
               {roleConflict.displayName} already has an active {roleConflict.role.replace(/-/g, ' ')} application at this conference. Accepting this chair invite will give them two roles.
@@ -3158,13 +3163,13 @@ function InviteChairModal({ conferenceId, committee, onClose, onInvited }: {
                 className="flex-1 rounded-full py-2.5 font-bold text-sm focus:outline-none"
                 style={{
                   border: 'none', color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm,
-                  fontFamily: OUTFIT, letterSpacing: '0.04em', cursor: confirmBusy ? 'default' : 'pointer',
+                  fontFamily: OUTFIT, letterSpacing: 0, cursor: confirmBusy ? 'default' : 'pointer',
                 }}
               >
-                CANCEL
+                Cancel
               </button>
-              <NeuButton onClick={handleProceedRoleConflict} disabled={confirmBusy} style={{ flex: 1 }}>
-                {confirmBusy ? 'PROCEEDING...' : 'PROCEED'}
+              <NeuButton onClick={handleProceedRoleConflict} disabled={confirmBusy} style={{ flex: 1, letterSpacing: 0 }}>
+                {confirmBusy ? 'Proceeding…' : 'Proceed'}
               </NeuButton>
             </div>
           </NeuModalCard>
@@ -3238,11 +3243,11 @@ function ChairBoardPanel({
       <div className="flex items-center gap-3">
         <LogoDisc bare src={committee.logo_url} size={54} fallbackText={labels.big} alt={committee.name} />
         <div className="min-w-0 flex-1">
-          <p title={committee.name} className="truncate" style={{ fontSize: 22, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em', lineHeight: 1.05 }}>
+          <p title={committee.name} className="[overflow-wrap:anywhere]" style={{ fontSize: 22, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em', lineHeight: 1.05 }}>
             {labels.big}
           </p>
           {labels.full && (
-            <p className="truncate" style={{ fontSize: 11.5, color: NEU.muted, fontFamily: OUTFIT, marginTop: 1 }}>{labels.full}</p>
+            <p className="[overflow-wrap:anywhere]" style={{ fontSize: 11.5, color: NEU.muted, fontFamily: OUTFIT, marginTop: 1 }}>{labels.full}</p>
           )}
         </div>
         <span className="flex items-center gap-1 flex-shrink-0" style={{ fontSize: 13, fontWeight: 900, color: NEU.ink, fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>
@@ -3328,11 +3333,11 @@ function ChairBoardPanel({
       <button
         onClick={e => { e.stopPropagation(); onInvite(); }}
         className="mt-3.5 rounded-full py-2 text-xs font-bold focus:outline-none flex items-center justify-center gap-1.5"
-        style={{ color: NEU.forest, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: 'pointer' }}
+        style={{ color: NEU.forest, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', fontFamily: OUTFIT, letterSpacing: 0, cursor: 'pointer' }}
         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
       >
-        <Plus size={12} strokeWidth={2.6} /> INVITE CHAIR
+        <Plus size={12} strokeWidth={2.6} /> Invite chair
       </button>
     </div>
   );
@@ -4785,7 +4790,7 @@ export default function AssignmentPage() {
                 fontSize: 11,
                 fontFamily: MONO,
                 fontWeight: 800,
-                letterSpacing: '0.06em',
+                letterSpacing: 0,
                 border: 'none',
                 background: active ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : 'transparent',
                 boxShadow: active ? `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}` : 'none',
@@ -4794,7 +4799,7 @@ export default function AssignmentPage() {
                 transition: 'color 200ms, box-shadow 200ms',
               }}
             >
-              {m === 'delegates' ? 'DELEGATES' : m === 'chairs' ? 'CHAIRS' : m === 'delegations' ? 'DELEGATIONS' : 'INDEPENDENTS'}
+              {m === 'delegates' ? 'Delegates' : m === 'chairs' ? 'Chairs' : m === 'delegations' ? 'Delegations' : 'Independents'}
             </button>
           );
         })}
@@ -4902,8 +4907,8 @@ export default function AssignmentPage() {
                             {sug.score}
                           </span>
                         )}
-                        <NeuButton onClick={() => setConfirmSuggestion(sug)} disabled={busy || confirmSuggestion !== null} style={{ padding: '8px 16px', fontSize: 11 }}>
-                          {busy ? '...' : 'ASSIGN'}
+                        <NeuButton onClick={() => setConfirmSuggestion(sug)} disabled={busy || confirmSuggestion !== null} style={{ padding: '8px 16px', fontSize: 11, letterSpacing: 0 }}>
+                          {busy ? '…' : 'Assign'}
                         </NeuButton>
                       </div>
                       {/* Row 2 — committee + reason tags on a single line. The
@@ -4943,7 +4948,7 @@ export default function AssignmentPage() {
           {mode === 'delegates' && selectedApp && (
             <NeuInset className="flex items-center gap-2.5 px-4 py-2.5 mb-5">
               <MousePointerClick size={14} style={{ color: NEU.green, flexShrink: 0 }} />
-              <p className="text-sm min-w-0 truncate" style={{ color: NEU.forest, fontFamily: OUTFIT }}>
+              <p className="text-sm min-w-0 [overflow-wrap:anywhere]" style={{ color: NEU.forest, fontFamily: OUTFIT }}>
                 <span style={{ fontWeight: 700 }}>{selectedApp.profiles?.display_name ?? selectedApp.invited_name}</span> selected. Click a committee panel to pick their country, or drag their card.
               </p>
               <button
@@ -5010,7 +5015,7 @@ export default function AssignmentPage() {
                             <GripVertical size={13} style={{ color: NEU.muted, flexShrink: 0, opacity: 0.5 }} />
                             <DelegationAvatar size={40} />
                             <div className="flex-1 min-w-0">
-                              <p className="truncate" style={{ fontSize: 15, fontWeight: 800, color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.15 }}>
+                              <p className="[overflow-wrap:anywhere]" style={{ fontSize: 15, fontWeight: 800, color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.15 }}>
                                 {soc.name}
                               </p>
                               <p className="flex items-center gap-1 mt-0.5" style={{ fontSize: 10.5, color: NEU.muted, fontFamily: MONO, letterSpacing: '0.04em', fontVariantNumeric: 'tabular-nums' }}>

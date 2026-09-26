@@ -164,7 +164,7 @@ export default function FinancialsHistoryPage() {
 
                 {/* Name */}
                 <span
-                  className="truncate"
+                  className="[overflow-wrap:anywhere]"
                   style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink, flex: '1 1 140px', minWidth: 120 }}
                 >
                   {name}
@@ -172,7 +172,7 @@ export default function FinancialsHistoryPage() {
 
                 {/* What (invoice label/kind + role) */}
                 <span
-                  className="truncate"
+                  className="[overflow-wrap:anywhere]"
                   style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 600, color: NEU.muted, flex: '1 1 140px', minWidth: 120 }}
                 >
                   {inv ? invoiceLabel(inv) : 'Unknown invoice'}

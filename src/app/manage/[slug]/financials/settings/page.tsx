@@ -406,7 +406,7 @@ export default function FinancialsSettingsPage() {
                 </p>
               </div>
               <NeuButton gradient={NEU_GRADIENTS.gold} onClick={() => setWizardStep(1)}>
-                FINANCIAL ONBOARDING
+                Set up payments
               </NeuButton>
             </div>
           )}
@@ -434,7 +434,7 @@ export default function FinancialsSettingsPage() {
               </select>
               <div className="flex justify-end">
                 <NeuButton gradient={NEU_GRADIENTS.forest} disabled={!payoutCountry} onClick={() => setWizardStep(2)}>
-                  NEXT
+                  Next
                 </NeuButton>
               </div>
             </NeuCard>
@@ -515,7 +515,7 @@ export default function FinancialsSettingsPage() {
                   disabled={paymentSaving}
                   onClick={async () => { if (await savePaymentPage()) setWizardStep(4); }}
                 >
-                  {paymentSaving ? 'SAVING…' : 'COMPLETE SETUP'}
+                  {paymentSaving ? 'Saving…' : 'Complete setup'}
                 </NeuButton>
               </div>
             </NeuCard>
@@ -550,7 +550,7 @@ export default function FinancialsSettingsPage() {
                   // === 'complete', not merely payment_method === 'stripe'.
                   onClick={() => { startConnectOnboarding(payoutCountry); setActiveMethod('stripe'); }}
                 >
-                  {connectBusy === 'start' ? 'CONNECTING…' : 'CONNECT WITH STRIPE'}
+                  {connectBusy === 'start' ? 'Connecting…' : 'Connect with Stripe'}
                 </NeuButton>
               </div>
             </NeuCard>
@@ -570,7 +570,7 @@ export default function FinancialsSettingsPage() {
                 onClick={() => router.push(`/manage/${conference.slug}/settings`)}
                 style={{ marginTop: 8 }}
               >
-                SET UP APPLICATIONS
+                Set up applications
               </NeuButton>
               <button type="button" onClick={() => setWizardStep(0)} className="focus:outline-none" style={{ ...backLinkStyle, marginTop: 4 }}>
                 Back to Financial settings
@@ -707,12 +707,12 @@ export default function FinancialsSettingsPage() {
                         style={{
                           border: 'none', background: 'transparent',
                           cursor: connectBusy !== null ? 'default' : 'pointer',
-                          fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
+                          fontFamily: OUTFIT, fontSize: 11, fontWeight: 700,
                           color: NEU.muted,
                           textDecoration: connectBusy !== null ? 'none' : 'underline', textUnderlineOffset: 3,
                         }}
                       >
-                        {connectBusy === 'status' ? 'CHECKING…' : 'CHECK STATUS'}
+                        {connectBusy === 'status' ? 'Checking…' : 'Check status'}
                       </button>
                       <NeuButton
                         icon={CreditCard}
@@ -720,7 +720,7 @@ export default function FinancialsSettingsPage() {
                         disabled={connectBusy !== null || financialsReadOnly}
                         onClick={() => startConnectOnboarding()}
                       >
-                        {connectBusy === 'start' ? 'CONNECTING…' : 'FINISH ONBOARDING'}
+                        {connectBusy === 'start' ? 'Connecting…' : 'Finish onboarding'}
                       </NeuButton>
                     </div>
                   </>
@@ -744,7 +744,7 @@ export default function FinancialsSettingsPage() {
                       disabled={connectBusy !== null || financialsReadOnly}
                       onClick={() => startConnectOnboarding(payoutCountry)}
                     >
-                      {connectBusy === 'start' ? 'CONNECTING…' : 'CONNECT STRIPE'}
+                      {connectBusy === 'start' ? 'Connecting…' : 'Connect Stripe'}
                     </NeuButton>
                   </>
                 )}
@@ -774,7 +774,7 @@ export default function FinancialsSettingsPage() {
                 disabled={paymentSaving}
                 onClick={savePaymentPage}
               >
-                {paymentSaving ? 'SAVING…' : 'SAVE'}
+                {paymentSaving ? 'Saving…' : 'Save'}
               </NeuButton>
             </MethodRow>
           </div>

@@ -217,7 +217,7 @@ export function TrafficSourcesView({ summary, inDialog = false }: { summary: Tra
                 <div role="cell" className="min-w-0">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span aria-hidden style={{ width: 8, height: 8, borderRadius: 999, background: SOURCE_COLOR[r.key], flexShrink: 0 }} />
-                    <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: NEU.ink }}>{TRAFFIC_SOURCE_LABEL[r.key]}</span>
+                    <span className="truncate" title={TRAFFIC_SOURCE_LABEL[r.key]} style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: NEU.ink }}>{TRAFFIC_SOURCE_LABEL[r.key]}</span>
                   </div>
                   {r.key !== 'unknown' && <div aria-hidden style={{ height: 6, marginTop: 4, borderRadius: 999, background: 'color-mix(in srgb, var(--gv-main) 7%, transparent)' }}>
                     <div style={{ height: '100%', width: `${(r.views / model.maxViews) * 100}%`, minWidth: r.views ? 4 : 0, borderRadius: 999, background: SOURCE_COLOR[r.key] }} />

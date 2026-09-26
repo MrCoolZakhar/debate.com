@@ -193,10 +193,10 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
               <span style={fieldLabelStyle}>Charged per</span>
               <div className="flex items-center gap-2" style={{ paddingTop: 3 }}>
                 <NeuPill active={appliesTo === 'per_delegation'} gradient={NEU_GRADIENTS.forest} onClick={() => setAppliesTo('per_delegation')}>
-                  DELEGATION
+                  Delegation
                 </NeuPill>
                 <NeuPill active={appliesTo === 'per_delegate'} gradient={NEU_GRADIENTS.forest} onClick={() => setAppliesTo('per_delegate')}>
-                  DELEGATE
+                  Delegate
                 </NeuPill>
               </div>
             </div>
@@ -229,7 +229,7 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
                 </span>
               </div>
               <NeuButton onClick={handleSave} disabled={saving} gradient={saved ? NEU_GRADIENTS.green : NEU_GRADIENTS.forest}>
-                {saving ? 'SAVING…' : saved ? 'SAVED ✓' : 'SAVE'}
+                {saving ? 'Saving…' : saved ? 'Saved' : 'Save'}
               </NeuButton>
             </div>
           </div>

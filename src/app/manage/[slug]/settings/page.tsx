@@ -171,9 +171,9 @@ interface IncomingPartnerClaim {
 }
 
 const PAYMENT_TIMING_OPTIONS: { value: RoleConfig['payment_timing']; label: string; desc: string }[] = [
-  { value: 'after_application', label: 'AFTER APPLICATION', desc: 'Payment opens as soon as the application is submitted.' },
-  { value: 'after_acceptance', label: 'AFTER ACCEPTANCE', desc: 'Payment opens only once the applicant is accepted.' },
-  { value: 'anytime', label: 'PAY AT ANY TIME', desc: 'Applicants can view everything and pay whenever.' },
+  { value: 'after_application', label: 'After application', desc: 'Payment opens as soon as the application is submitted.' },
+  { value: 'after_acceptance', label: 'After acceptance', desc: 'Payment opens only once the applicant is accepted.' },
+  { value: 'anytime', label: 'Pay at any time', desc: 'Applicants can view everything and pay whenever.' },
 ];
 
 // What a role may express as preferences on the apply form. Persisted per role
@@ -183,17 +183,17 @@ const PAYMENT_TIMING_OPTIONS: { value: RoleConfig['payment_timing']; label: stri
 // committees_only or none (see CHAIR_PREF_MODE_OPTIONS below); every other
 // role is always 'none' and never shows the preference card at all.
 const PREF_MODE_OPTIONS: { value: string; label: string; desc: string }[] = [
-  { value: 'committees_and_countries', label: 'COMMITTEES + COUNTRIES', desc: 'Delegates rank committee-and-country pairings, the fullest picture for allocation.' },
-  { value: 'committees_only', label: 'COMMITTEES', desc: 'Delegates rank committees only; you assign the countries.' },
-  { value: 'countries_only', label: 'COUNTRIES', desc: 'Delegates rank countries only; committees follow from the country.' },
-  { value: 'none', label: 'NONE', desc: 'No preference step. You allocate everyone manually.' },
+  { value: 'committees_and_countries', label: 'Committees + countries', desc: 'Delegates rank committee-and-country pairings, the fullest picture for allocation.' },
+  { value: 'committees_only', label: 'Committees', desc: 'Delegates rank committees only; you assign the countries.' },
+  { value: 'countries_only', label: 'Countries', desc: 'Delegates rank countries only; committees follow from the country.' },
+  { value: 'none', label: 'None', desc: 'No preference step. You allocate everyone manually.' },
 ];
 
 // Chair's cut-down version: a chair picks which committee they would like to
 // chair, never a country, so the country pairing options do not apply.
 const CHAIR_PREF_MODE_OPTIONS: { value: string; label: string; desc: string }[] = [
-  { value: 'committees_only', label: 'CHOOSE A COMMITTEE', desc: 'Chairs rank which committee they would like to chair; you assign from their ranking.' },
-  { value: 'none', label: 'NONE', desc: 'No preference step. You assign every chair to a committee yourself.' },
+  { value: 'committees_only', label: 'Choose a committee', desc: 'Chairs rank which committee they would like to chair; you assign from their ranking.' },
+  { value: 'none', label: 'None', desc: 'No preference step. You assign every chair to a committee yourself.' },
 ];
 
 /** Roles whose preference_mode can be anything other than 'none'. Mirrors the
@@ -504,7 +504,7 @@ function CopyFormMenu({ roles, onPick }: { roles: string[]; onPick: (role: strin
         className="flex items-center gap-1.5 text-xs font-semibold focus:outline-none hover:underline"
         style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}
       >
-        <Copy size={13} /> COPY FORM TO ANOTHER ROLE…
+        <Copy size={13} /> Copy form to another role…
       </button>
       {open && pos && (
         <Portal>
@@ -3273,7 +3273,7 @@ export default function SettingsPage() {
                       style={{
                         padding: '7px 12px',
                         fontFamily: "var(--font-brand), sans-serif", fontSize: '11px', fontWeight: 800,
-                        letterSpacing: '0.06em',
+                        letterSpacing: 0,
                         color: '#1B3828', backgroundColor: 'transparent',
                         border: '1.5px solid #DDD4C0', cursor: 'pointer',
                       }}
@@ -3281,7 +3281,7 @@ export default function SettingsPage() {
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                     >
                       {linkCopied ? <Check size={13} strokeWidth={3} /> : <Copy size={13} strokeWidth={2.4} />}
-                      {linkCopied ? 'COPIED' : 'COPY APPLICATION LINK'}
+                      {linkCopied ? 'Copied' : 'Copy application link'}
                     </button>
                     <a
                       href={`/conferences/${conference.slug}/apply?role=${role}&preview=1`}
@@ -3291,7 +3291,7 @@ export default function SettingsPage() {
                       style={{
                         padding: '7px 12px',
                         fontFamily: "var(--font-brand), sans-serif", fontSize: '11px', fontWeight: 800,
-                        letterSpacing: '0.06em',
+                        letterSpacing: 0,
                         color: '#1B3828', backgroundColor: 'transparent',
                         border: '1.5px solid #DDD4C0', cursor: 'pointer',
                         textDecoration: 'none',
@@ -3300,7 +3300,7 @@ export default function SettingsPage() {
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                     >
                       <Eye size={13} strokeWidth={2.4} />
-                      PREVIEW APPLICATION
+                      Preview application
                     </a>
                     <PillToggle
                       value={enabled}
@@ -3440,8 +3440,8 @@ export default function SettingsPage() {
                           </label>
                           <div className="flex gap-2">
                             {([
-                              { value: true, label: 'AUTO-ACCEPT' },
-                              { value: false, label: 'MANUAL REVIEW' },
+                              { value: true, label: 'Auto-accept' },
+                              { value: false, label: 'Manual review' },
                             ] as const).map(opt => {
                               const active = config.auto_accept === opt.value;
                               return (
@@ -3455,7 +3455,7 @@ export default function SettingsPage() {
                                     color: active ? '#EED98A' : '#1C1410',
                                     border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
                                     fontFamily: "var(--font-brand), sans-serif",
-                                    letterSpacing: '0.06em',
+                                    letterSpacing: 0,
                                   }}
                                 >
                                   {opt.label}
@@ -3487,7 +3487,7 @@ export default function SettingsPage() {
                                     color: active ? '#EED98A' : '#1C1410',
                                     border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
                                     fontFamily: "var(--font-brand), sans-serif",
-                                    letterSpacing: '0.06em',
+                                    letterSpacing: 0,
                                   }}
                                 >
                                   {opt.label}
@@ -3568,7 +3568,7 @@ export default function SettingsPage() {
                                         color: active ? '#EED98A' : '#1C1410',
                                         border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
                                         boxShadow: active ? '0 4px 12px rgba(27,56,40,0.2)' : 'none',
-                                        fontFamily: "var(--font-brand), sans-serif", fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
+                                        fontFamily: "var(--font-brand), sans-serif", fontSize: 12, fontWeight: 800, letterSpacing: 0,
                                         cursor: 'pointer',
                                       }}
                                     >
@@ -3687,10 +3687,10 @@ export default function SettingsPage() {
                                       type="button"
                                       onClick={() => setCopyPhasesOpen(true)}
                                       className="text-[11px] font-bold focus:outline-none hover:underline inline-flex items-center gap-1.5"
-                                      style={{ color: '#7A6E5E', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', background: 'none', border: 'none', cursor: 'pointer' }}
+                                      style={{ color: '#7A6E5E', fontFamily: "var(--font-brand), sans-serif", letterSpacing: 0, background: 'none', border: 'none', cursor: 'pointer' }}
                                     >
                                       <Copy size={12} strokeWidth={2.4} />
-                                      COPY TO ANOTHER ROLE
+                                      Copy to another role
                                     </button>
                                   )}
                                   <button
@@ -3700,9 +3700,9 @@ export default function SettingsPage() {
                                       fee_phases: [...phases, { label: `Phase ${phases.length + 1}`, start_date: '', end_date: '', amount: config.fee_amount }],
                                     }, 'phases'); }}
                                     className="text-[11px] font-bold focus:outline-none hover:underline"
-                                    style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', background: 'none', border: 'none', opacity: hasInvalidPhase ? 0.45 : 1, cursor: hasInvalidPhase ? 'not-allowed' : 'pointer' }}
+                                    style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif", letterSpacing: 0, background: 'none', border: 'none', opacity: hasInvalidPhase ? 0.45 : 1, cursor: hasInvalidPhase ? 'not-allowed' : 'pointer' }}
                                   >
-                                    + ADD PHASE
+                                    + Add phase
                                   </button>
                                 </div>
                               </div>
@@ -3990,11 +3990,11 @@ export default function SettingsPage() {
                     <button
                       onClick={() => router.push(`/manage/${conference.slug}/financials/settings`)}
                       className="rounded-xl px-6 py-3 text-sm font-bold focus:outline-none transition-colors gv-lift"
-                      style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.04em', cursor: 'pointer' }}
+                      style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: "var(--font-brand), sans-serif", letterSpacing: 0, cursor: 'pointer' }}
                       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
                     >
-                      Go to Financial Settings
+                      Go to financial settings
                     </button>
                   </div>
                 </div>
@@ -4033,7 +4033,7 @@ export default function SettingsPage() {
                 style={{
                   padding: '7px 12px',
                   fontFamily: "var(--font-brand), sans-serif", fontSize: '11px', fontWeight: 800,
-                  letterSpacing: '0.06em',
+                  letterSpacing: 0,
                   color: '#1B3828', backgroundColor: 'transparent',
                   border: '1.5px solid #DDD4C0', cursor: 'pointer',
                   textDecoration: 'none',
@@ -4042,7 +4042,7 @@ export default function SettingsPage() {
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
               >
                 <Eye size={13} strokeWidth={2.4} />
-                PREVIEW
+                Preview
               </a>
               <button
                 type="button"
@@ -4051,7 +4051,7 @@ export default function SettingsPage() {
                 style={{
                   padding: '7px 12px',
                   fontFamily: "var(--font-brand), sans-serif", fontSize: '11px', fontWeight: 800,
-                  letterSpacing: '0.06em',
+                  letterSpacing: 0,
                   color: '#1B3828', backgroundColor: 'transparent',
                   border: '1.5px solid #DDD4C0', cursor: 'pointer',
                 }}
@@ -4059,7 +4059,7 @@ export default function SettingsPage() {
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
               >
                 {confLinkCopied ? <Check size={13} strokeWidth={3} /> : <Copy size={13} strokeWidth={2.4} />}
-                {confLinkCopied ? 'COPIED' : 'COPY LINK'}
+                {confLinkCopied ? 'Copied' : 'Copy link'}
               </button>
             </div>
           </div>
@@ -4190,7 +4190,7 @@ export default function SettingsPage() {
                       fontSize: 11, fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, cursor: 'pointer',
                     }}
                   >
-                    {bannerUploading ? 'UPLOADING...' : 'CHANGE'}
+                    {bannerUploading ? 'Uploading…' : 'Change'}
                   </button>
                 </>
               ) : bannerUploading ? (
@@ -4278,11 +4278,11 @@ export default function SettingsPage() {
                 <button
                   onClick={() => { if (!logoUploading) document.getElementById('settings-logo-upload')?.click(); }}
                   className="rounded-xl py-2 px-4 font-bold text-xs tracking-widest transition-colors focus:outline-none gv-lift"
-                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.07em' }}
+                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: 0 }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
                 >
-                  {logoUploading ? 'UPLOADING...' : view.logo_url ? 'REPLACE LOGO' : 'UPLOAD LOGO'}
+                  {logoUploading ? 'Uploading…' : view.logo_url ? 'Replace logo' : 'Upload logo'}
                 </button>
               </div>
               <input
@@ -4360,9 +4360,9 @@ export default function SettingsPage() {
               <label className="block text-xs font-semibold mb-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Student level</label>
               <div className="flex gap-2">
                 {([
-                  { value: 'school', label: 'HIGH SCHOOL' },
-                  { value: 'university', label: 'UNIVERSITY' },
-                  { value: 'both', label: 'BOTH' },
+                  { value: 'school', label: 'High school' },
+                  { value: 'university', label: 'University' },
+                  { value: 'both', label: 'Both' },
                 ] as { value: 'school' | 'university' | 'both'; label: string }[]).map(opt => {
                   const active = studentLevel === opt.value;
                   return (
@@ -4375,7 +4375,7 @@ export default function SettingsPage() {
                         backgroundColor: active ? '#1B3828' : 'transparent',
                         color: active ? '#EED98A' : '#9A8A78',
                         border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                        fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.07em',
+                        fontFamily: "var(--font-brand), sans-serif", letterSpacing: 0,
                       }}
                     >
                       {opt.label}
@@ -4389,9 +4389,9 @@ export default function SettingsPage() {
               <label className="block text-xs font-semibold mb-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Format</label>
               <div className="flex gap-2">
                 {([
-                  { value: 'in-person', label: 'IN-PERSON' },
-                  { value: 'online', label: 'ONLINE' },
-                  { value: 'hybrid', label: 'HYBRID' },
+                  { value: 'in-person', label: 'In-person' },
+                  { value: 'online', label: 'Online' },
+                  { value: 'hybrid', label: 'Hybrid' },
                 ] as { value: 'in-person' | 'online' | 'hybrid'; label: string }[]).map(opt => {
                   const active = format === opt.value;
                   return (
@@ -4404,7 +4404,7 @@ export default function SettingsPage() {
                         backgroundColor: active ? '#1B3828' : 'transparent',
                         color: active ? '#EED98A' : '#9A8A78',
                         border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                        fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.07em',
+                        fontFamily: "var(--font-brand), sans-serif", letterSpacing: 0,
                       }}
                     >
                       {opt.label}
@@ -4644,8 +4644,8 @@ export default function SettingsPage() {
             a logo and a description typed here. */}
         <div className="flex flex-wrap gap-2 mb-5">
           {([
-            { key: 'conference' as const, label: 'CONFERENCE', icon: Building2, hint: 'Link another Gavelling conference' },
-            { key: 'company' as const, label: 'COMPANY', icon: Briefcase, hint: 'Add a sponsor or partner organisation' },
+            { key: 'conference' as const, label: 'Conference', icon: Building2, hint: 'Link another Gavelling conference' },
+            { key: 'company' as const, label: 'Company', icon: Briefcase, hint: 'Add a sponsor or partner organisation' },
           ]).map(({ key, label, icon: KindIcon, hint }) => {
             const active = partnerKind === key;
             return (
@@ -4664,7 +4664,7 @@ export default function SettingsPage() {
                 className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[11px] font-bold focus:outline-none transition-colors gv-lift"
                 style={{
                   fontFamily: "var(--font-brand), sans-serif",
-                  letterSpacing: '0.08em',
+                  letterSpacing: 0,
                   backgroundColor: active ? '#1B3828' : 'transparent',
                   color: active ? '#EED98A' : '#6E5F4E',
                   border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
@@ -4699,7 +4699,7 @@ export default function SettingsPage() {
                     opacity: companyLogoUploading ? 0.6 : 1,
                   }}
                 >
-                  {companyLogoUploading ? 'UPLOADING…' : companyLogoUrl ? 'REPLACE LOGO' : 'UPLOAD LOGO'}
+                  {companyLogoUploading ? 'Uploading…' : companyLogoUrl ? 'Replace logo' : 'Upload logo'}
                   <input
                     type="file"
                     accept="image/*"
@@ -4750,12 +4750,12 @@ export default function SettingsPage() {
                   backgroundColor: companySaving || !companyName.trim() ? '#DDD4C0' : '#1B3828',
                   color: companySaving || !companyName.trim() ? '#9A8A78' : '#EED98A',
                   fontFamily: "var(--font-brand), sans-serif",
-                  letterSpacing: '0.08em',
+                  letterSpacing: 0,
                   border: 'none',
                   cursor: companySaving || !companyName.trim() ? 'default' : 'pointer',
                 }}
               >
-                {companySaving ? 'ADDING…' : 'ADD PARTNER'}
+                {companySaving ? 'Adding…' : 'Add partner'}
               </button>
               <button
                 type="button"
@@ -4767,11 +4767,11 @@ export default function SettingsPage() {
                   color: '#9A8A78',
                   border: 'none',
                   fontFamily: "var(--font-brand), sans-serif",
-                  letterSpacing: '0.08em',
+                  letterSpacing: 0,
                   cursor: companySaving ? 'default' : 'pointer',
                 }}
               >
-                CANCEL
+                Cancel
               </button>
             </div>
           </div>
@@ -4811,10 +4811,10 @@ export default function SettingsPage() {
                 >
                   <PartnerDisc logoUrl={c.logo_url} acronym={c.acronym} size={32} />
                   <span className="min-w-0">
-                    <span className="block font-bold text-sm truncate" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
+                    <span className="block font-bold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                       {conferenceAcronymLabel(c)}
                     </span>
-                    <span className="block text-xs truncate" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                    <span className="block text-xs [overflow-wrap:anywhere]" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                       {[c.city, c.country].filter(Boolean).join(', ') || c.full_name}
                     </span>
                   </span>
@@ -4862,13 +4862,13 @@ export default function SettingsPage() {
                   />
                   <div className="flex-1 min-w-0">
                     <p
-                      className="truncate"
+                      className="[overflow-wrap:anywhere]"
                       style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '14px', fontVariantNumeric: 'tabular-nums' }}
                     >
                       {partnerLabel(link)}{!isCompany && year ? ` ${year}` : ''}
                     </p>
                     {subLine && (
-                      <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                      <p className="text-xs [overflow-wrap:anywhere]" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                         {subLine}
                       </p>
                     )}
@@ -5001,10 +5001,10 @@ export default function SettingsPage() {
                       <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', fontVariantNumeric: 'tabular-nums' }}>
                         {claim.requester_acronym}{year ? ' · ' + year : ''}
                       </p>
-                      <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
+                      <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                         {claim.requester_full_name}
                       </p>
-                      <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                      <p className="text-xs [overflow-wrap:anywhere]" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                         {cityLine ? cityLine + ', ' : ''}wants to list {view.acronym} as a partner conference
                       </p>
                     </div>
@@ -5017,12 +5017,12 @@ export default function SettingsPage() {
                           backgroundColor: busy ? '#DDD4C0' : '#1B3828',
                           color: busy ? '#9A8A78' : '#EED98A',
                           fontFamily: "var(--font-brand), sans-serif",
-                          letterSpacing: '0.06em',
+                          letterSpacing: 0,
                         }}
                         onMouseEnter={(e) => { if (!busy) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                         onMouseLeave={(e) => { if (!busy) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
                       >
-                        APPROVE
+                        Approve
                       </button>
                       <button
                         onClick={() => handlePartnerClaimDecision(claim.link_id, false)}
@@ -5033,12 +5033,12 @@ export default function SettingsPage() {
                           color: '#8B2020',
                           border: '1px solid rgba(139,32,32,0.3)',
                           fontFamily: "var(--font-brand), sans-serif",
-                          letterSpacing: '0.06em',
+                          letterSpacing: 0,
                         }}
                         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                       >
-                        DECLINE
+                        Decline
                       </button>
                     </div>
                   </div>
@@ -5297,11 +5297,10 @@ export default function SettingsPage() {
                 {r.label.toUpperCase()}
               </p>
               <span
-                className="flex items-center justify-center rounded-full"
                 style={{
-                  minWidth: 20, height: 20, padding: '0 6px', fontSize: 10.5, fontWeight: 800,
+                  fontSize: 15, fontWeight: 800, lineHeight: 1,
                   fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums',
-                  backgroundColor: r.accent, color: '#FFFDF9',
+                  color: r.accent,
                 }}
               >
                 {count}
@@ -5648,20 +5647,20 @@ export default function SettingsPage() {
                       </div>
 
                       <p
-                        className="font-semibold mt-2.5 w-full truncate"
+                        className="font-semibold mt-2.5 w-full [overflow-wrap:anywhere]"
                         style={{ color: '#1C1410', fontFamily: OUTFIT, fontSize: invitedTier.name }}
                         title={inv.email}
                       >
                         {inv.email}
                       </p>
                       <p
-                        className="w-full truncate mt-0.5"
+                        className="w-full [overflow-wrap:anywhere] mt-0.5"
                         style={{ color: inv.public_title ? '#8A6614' : NEU.inkSoft, fontFamily: OUTFIT, fontSize: invitedTier.meta, fontWeight: inv.public_title ? 700 : 400 }}
                       >
                         {inv.public_title ?? 'No role set'}
                       </p>
                       <p
-                        className="w-full truncate"
+                        className="w-full [overflow-wrap:anywhere]"
                         style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontSize: invitedTier.meta - 0.5, fontVariantNumeric: 'tabular-nums' }}
                       >
                         {bundleLabel(invBundle)}
@@ -5815,7 +5814,7 @@ export default function SettingsPage() {
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
           >
-            DELETE CONFERENCE
+            Delete conference
           </button>
           {deleteError && (
             <p className="text-sm mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{deleteError}</p>
@@ -5864,7 +5863,7 @@ export default function SettingsPage() {
             style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
           >
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
+              <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                 {predecessorInfo?.full_name ?? 'A private conference'}
               </p>
               <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
@@ -5884,7 +5883,7 @@ export default function SettingsPage() {
               className="text-xs font-semibold focus:outline-none hover:underline flex-shrink-0"
               style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}
             >
-              {withdrawingClaim ? 'WITHDRAWING...' : 'WITHDRAW'}
+              {withdrawingClaim ? 'Withdrawing…' : 'Withdraw'}
             </button>
           </div>
         ) : (
@@ -5919,7 +5918,7 @@ export default function SettingsPage() {
                     <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
                       {claim.acronym}{year ? ' · ' + year : ''}
                     </p>
-                    <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
+                    <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                       {claim.full_name}
                     </p>
                     <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
@@ -5941,12 +5940,12 @@ export default function SettingsPage() {
                           backgroundColor: lineageBusy === claim.id ? '#DDD4C0' : '#1B3828',
                           color: lineageBusy === claim.id ? '#9A8A78' : '#EED98A',
                           fontFamily: "var(--font-brand), sans-serif",
-                          letterSpacing: '0.06em',
+                          letterSpacing: 0,
                         }}
                         onMouseEnter={(e) => { if (lineageBusy !== claim.id) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                         onMouseLeave={(e) => { if (lineageBusy !== claim.id) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
                       >
-                        APPROVE
+                        Approve
                       </button>
                       <button
                         onClick={() => handleClaimDecision(claim.id, false)}
@@ -5957,12 +5956,12 @@ export default function SettingsPage() {
                           color: '#8B2020',
                           border: '1px solid rgba(139,32,32,0.3)',
                           fontFamily: "var(--font-brand), sans-serif",
-                          letterSpacing: '0.06em',
+                          letterSpacing: 0,
                         }}
                         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                       >
-                        REJECT
+                        Reject
                       </button>
                     </div>
                   ) : (
@@ -6054,8 +6053,8 @@ export default function SettingsPage() {
                   onMouseEnter={(e) => { if (!blocked && !active) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
                   onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                 >
-                  <span className="flex items-center gap-1.5" style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.05em', color: '#1C1410' }}>
-                    {b.label.toUpperCase()}
+                  <span className="flex items-center gap-1.5" style={{ fontSize: 12, fontWeight: 800, color: '#1C1410' }}>
+                    {b.label}
                     {active && <Check size={13} strokeWidth={3} style={{ color: '#1B3828' }} />}
                   </span>
                   <span className="block mt-0.5" style={{ fontSize: 11, color: NEU.inkSoft, lineHeight: 1.45, textWrap: 'pretty' }}>
@@ -6215,8 +6214,8 @@ export default function SettingsPage() {
                           onMouseUp={(e) => { (e.currentTarget as HTMLElement).style.scale = '1'; }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.scale = '1'; }}
                         >
-                          <span className="flex items-center gap-2" style={{ fontSize: 12.5, fontWeight: 800, letterSpacing: '0.05em', color: '#1C1410' }}>
-                            {b.label.toUpperCase()}
+                          <span className="flex items-center gap-2" style={{ fontSize: 12.5, fontWeight: 800, color: '#1C1410' }}>
+                            {b.label}
                             {active && <Check size={14} strokeWidth={3} style={{ color: '#1B3828' }} />}
                           </span>
                           <span className="block mt-1" style={{ fontSize: 12.5, color: NEU.inkSoft, lineHeight: 1.5, textWrap: 'pretty' }}>
@@ -6336,7 +6335,7 @@ export default function SettingsPage() {
                     className="rounded-xl focus:outline-none gv-lift"
                     style={{
                       minHeight: 44, padding: '0 20px', fontFamily: OUTFIT, fontSize: 13, fontWeight: 800,
-                      letterSpacing: '0.05em', border: 'none',
+                      letterSpacing: 0, border: 'none',
                       backgroundColor: (inviteStep === 1 && !inviteEmail.trim()) ? '#DDD4C0' : '#1B3828',
                       color: (inviteStep === 1 && !inviteEmail.trim()) ? NEU.inkSoft : '#EED98A',
                       cursor: (inviteStep === 1 && !inviteEmail.trim()) ? 'default' : 'pointer',
@@ -6347,7 +6346,7 @@ export default function SettingsPage() {
                     onMouseUp={(e) => { (e.currentTarget as HTMLElement).style.scale = '1'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.scale = '1'; }}
                   >
-                    NEXT
+                    Next
                   </button>
                 ) : (
                   <button
@@ -6356,7 +6355,7 @@ export default function SettingsPage() {
                     className="rounded-xl focus:outline-none gv-lift"
                     style={{
                       minHeight: 44, padding: '0 20px', fontFamily: OUTFIT, fontSize: 13, fontWeight: 800,
-                      letterSpacing: '0.05em', border: 'none',
+                      letterSpacing: 0, border: 'none',
                       backgroundColor: (inviting || !inviteEmail.trim()) ? '#DDD4C0' : '#1B3828',
                       color: (inviting || !inviteEmail.trim()) ? NEU.inkSoft : '#EED98A',
                       cursor: (inviting || !inviteEmail.trim()) ? 'default' : 'pointer',
@@ -6367,7 +6366,7 @@ export default function SettingsPage() {
                     onMouseUp={(e) => { (e.currentTarget as HTMLElement).style.scale = '1'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.scale = '1'; }}
                   >
-                    {inviting ? 'SENDING…' : 'SEND INVITE'}
+                    {inviting ? 'Sending…' : 'Send invite'}
                   </button>
                 )}
               </div>
@@ -6444,11 +6443,11 @@ export default function SettingsPage() {
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="font-black text-lg truncate" style={{ color: '#1C1410', fontFamily: OUTFIT, textWrap: 'balance' }}>
+                    <p className="font-black text-lg [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT, textWrap: 'balance' }}>
                       {name}
                       {orgIsOwner && <Crown size={15} className="inline-block ml-1.5 -mt-1" style={{ color: '#B6871F' }} aria-label="Owner" />}
                     </p>
-                    <p className="text-xs truncate" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
+                    <p className="text-xs [overflow-wrap:anywhere]" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
                       {org.profiles?.email ?? ''}
                     </p>
                   </div>
@@ -6582,7 +6581,7 @@ export default function SettingsPage() {
                             className="flex items-center gap-1.5 focus:outline-none gv-lift"
                             style={{
                               minHeight: 38, padding: '9px 14px', borderRadius: 999, fontFamily: OUTFIT,
-                              fontSize: 12, fontWeight: 800, letterSpacing: '0.05em',
+                              fontSize: 12, fontWeight: 800, letterSpacing: 0,
                               color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.09)',
                               border: '1.5px solid rgba(27,56,40,0.28)', cursor: 'pointer',
                               transitionProperty: 'background-color, scale, box-shadow, transform',
@@ -6593,7 +6592,7 @@ export default function SettingsPage() {
                             onMouseDown={(ev) => { (ev.currentTarget as HTMLElement).style.scale = '0.96'; }}
                             onMouseUp={(ev) => { (ev.currentTarget as HTMLElement).style.scale = '1'; }}
                           >
-                            {bundleLabel(bundle).toUpperCase()}
+                            {bundleLabel(bundle)}
                             <ChevronDown size={13} strokeWidth={2.6} />
                           </button>
                         ) : (
@@ -6694,7 +6693,7 @@ export default function SettingsPage() {
                       className="flex items-center justify-center gap-2 w-full focus:outline-none gv-lift"
                       style={{
                         minHeight: 44, borderRadius: 14, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800,
-                        letterSpacing: '0.04em', color: '#8B2020', background: 'transparent',
+                        letterSpacing: 0, color: '#8B2020', background: 'transparent',
                         border: '1.5px solid rgba(139,32,32,0.30)', cursor: 'pointer',
                         transitionProperty: 'background-color, scale, box-shadow, transform', transitionDuration: '140ms',
                         transitionTimingFunction: EASE,
@@ -6705,7 +6704,7 @@ export default function SettingsPage() {
                       onMouseUp={(e) => { (e.currentTarget as HTMLElement).style.scale = '1'; }}
                     >
                       <Trash2 size={14} strokeWidth={2.3} />
-                      REMOVE FROM TEAM
+                      Remove from team
                     </button>
                   </div>
                 )}

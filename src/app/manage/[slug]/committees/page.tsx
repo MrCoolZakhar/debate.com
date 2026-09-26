@@ -100,13 +100,12 @@ function SortButton({ label, dir, onClick }: { label: string; dir: 'asc' | 'desc
   return (
     <button
       onClick={onClick}
-      className="gv-lift flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[10.5px] font-bold focus:outline-none"
+      className="gv-lift flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[11.5px] font-bold focus:outline-none"
       style={{
         backgroundColor: active ? '#1B3828' : 'rgba(237,231,216,0.5)',
         color: active ? '#EED98A' : '#6B5F52',
         border: active ? '1px solid #1B3828' : '1px solid rgba(221,212,192,0.9)',
         fontFamily: "var(--font-brand), sans-serif",
-        letterSpacing: '0.09em',
         whiteSpace: 'nowrap',
         cursor: 'pointer',
       }}
@@ -131,8 +130,8 @@ function SortButton({ label, dir, onClick }: { label: string; dir: 'asc' | 'desc
 // the active one lifting on the neu surface (concentric radii, soft shadows).
 function ViewToggle({ value, onChange }: { value: 'cards' | 'list'; onChange: (v: 'cards' | 'list') => void }) {
   const opts: { key: 'cards' | 'list'; label: string; Icon: typeof LayoutGrid }[] = [
-    { key: 'cards', label: 'CARDS', Icon: LayoutGrid },
-    { key: 'list', label: 'LIST', Icon: LayoutList },
+    { key: 'cards', label: 'Cards', Icon: LayoutGrid },
+    { key: 'list', label: 'List', Icon: LayoutList },
   ];
   return (
     <div
@@ -153,9 +152,8 @@ function ViewToggle({ value, onChange }: { value: 'cards' | 'list'; onChange: (v
               border: 'none',
               cursor: 'pointer',
               fontFamily: OUTFIT,
-              fontSize: 10.5,
+              fontSize: 11.5,
               fontWeight: 800,
-              letterSpacing: '0.09em',
               backgroundColor: active ? NEU.surface : 'transparent',
               color: active ? NEU.forest : NEU.muted,
               boxShadow: active ? NEU.outSm : 'none',
@@ -314,10 +312,10 @@ function SessionCodePending({ failed, block = false }: { failed: boolean; block?
         border: `1.5px dashed ${failed ? 'rgba(139,32,32,0.35)' : 'rgba(27,56,40,0.28)'}`,
         color: failed ? '#8B2020' : NEU.muted,
         backgroundColor: 'transparent',
-        fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em',
+        fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
       }}
     >
-      {failed ? 'CODE NOT READY' : 'CREATING CODE…'}
+      {failed ? 'Code not ready' : 'Creating code…'}
     </span>
   );
 }
@@ -337,10 +335,11 @@ function CompactSendButton({ releasedAt, busy, onSend }: {
   if (status === 'scheduled') {
     return (
       <span
-        className="inline-flex items-center flex-shrink-0 px-2.5 py-1 rounded-full"
-        style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.06em', color: NEU.deepGold, backgroundColor: 'rgba(238,217,138,0.28)' }}
+        className="inline-flex items-center gap-1 flex-shrink-0"
+        style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: '#7A5A10' }}
       >
-        SCHEDULED
+        <Clock size={12} strokeWidth={2.4} aria-hidden />
+        Scheduled
       </span>
     );
   }
@@ -349,10 +348,11 @@ function CompactSendButton({ releasedAt, busy, onSend }: {
     return (
       <div className="flex items-center gap-1.5 flex-shrink-0">
         <span
-          className="inline-flex items-center px-2.5 py-1 rounded-full"
-          style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.06em', color: NEU.green, backgroundColor: 'rgba(61,122,82,0.13)' }}
+          className="inline-flex items-center gap-1"
+          style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: '#2F6644' }}
         >
-          SENT
+          <Check size={12} strokeWidth={2.6} aria-hidden />
+          Sent
         </span>
         <button
           onClick={onSend}
@@ -361,11 +361,11 @@ function CompactSendButton({ releasedAt, busy, onSend }: {
           style={{
             padding: '6px 12px', border: 'none',
             color: busy ? NEU.muted : NEU.ink, backgroundColor: NEU.surface, boxShadow: busy ? 'none' : NEU.outSm,
-            fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.06em',
+            fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
             cursor: busy ? 'default' : 'pointer',
           }}
         >
-          {busy ? '...' : 'RESEND'}
+          {busy ? '…' : 'Resend'}
         </button>
       </div>
     );
@@ -380,13 +380,13 @@ function CompactSendButton({ releasedAt, busy, onSend }: {
         padding: '7px 14px', border: 'none',
         background: busy ? 'rgba(27,56,40,0.14)' : `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
         color: busy ? NEU.muted : NEU.gold,
-        fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em',
+        fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800,
         cursor: busy ? 'default' : 'pointer',
         boxShadow: busy ? 'none' : `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}`,
       }}
     >
       <Send size={11} />
-      {busy ? '...' : 'SEND'}
+      {busy ? '…' : 'Send'}
     </button>
   );
 }
@@ -670,10 +670,9 @@ function DaisRow({ members, size, showNames, onAdd, onRemoveChair, onResendInvit
                     marginTop: 4, fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700,
                     lineHeight: '12px', minHeight: m.title ? 12 : 24, width: '100%', textAlign: 'center',
                     color: m.kind === 'invite' ? '#7A5A10' : '#4A3F33',
-                    overflow: 'hidden', display: '-webkit-box',
-                    // A title takes the second of the two lines, so the slot
-                    // height (and the card's one-line budget) is unchanged.
-                    WebkitLineClamp: m.title ? 1 : 2, WebkitBoxOrient: 'vertical',
+                    // Never cut a name (CLAUDE.md §8): it wraps inside its
+                    // slot, breaking mid-word when it must. A long name makes
+                    // this card a line taller rather than losing letters.
                     overflowWrap: 'anywhere',
                   }}
                 >
@@ -681,7 +680,7 @@ function DaisRow({ members, size, showNames, onAdd, onRemoveChair, onResendInvit
                 </span>
               )}
               {showNames && m.title && (
-                <span style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 600, lineHeight: '12px', height: 12, width: '100%', textAlign: 'center', color: '#6B5F52', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <span style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 600, lineHeight: '12px', minHeight: 12, width: '100%', textAlign: 'center', color: '#6B5F52', overflowWrap: 'anywhere' }}>
                   {m.title}
                 </span>
               )}
@@ -749,12 +748,12 @@ function DaisRow({ members, size, showNames, onAdd, onRemoveChair, onResendInvit
           {showNames && (
             <span
               style={{
-                marginTop: 4, fontFamily: OUTFIT, fontSize: 9, fontWeight: 800,
-                letterSpacing: '0.08em', lineHeight: '12px', minHeight: 24,
+                marginTop: 4, fontFamily: OUTFIT, fontSize: 10, fontWeight: 800,
+                lineHeight: '12px', minHeight: 24,
                 width: '100%', textAlign: 'center', color: '#6B5F52',
               }}
             >
-              ADD
+              Add
             </span>
           )}
         </button>
@@ -792,7 +791,7 @@ function DaisRow({ members, size, showNames, onAdd, onRemoveChair, onResendInvit
                 style={{ border: 'none', background: undefined, cursor: 'pointer' }}
               >
                 <DaisAvatar member={m} size={22} />
-                <span className="min-w-0 flex-1 truncate" style={{ fontSize: 12, fontWeight: 700, color: m.kind === 'invite' ? '#7A5A10' : '#1C1410' }}>
+                <span className="min-w-0 flex-1 [overflow-wrap:anywhere]" style={{ fontSize: 12, fontWeight: 700, color: m.kind === 'invite' ? '#7A5A10' : '#1C1410' }}>
                   {m.name}
                   {m.title && <span style={{ fontWeight: 500, color: '#6B5F52' }}> · {m.title}</span>}
                 </span>
@@ -1045,30 +1044,30 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
                       </span>
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-semibold truncate" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>{name}</p>
-                      <p className="text-[11px] truncate" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>{app.profiles?.email ?? ''}</p>
+                      <p className="text-[13px] font-semibold [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>{name}</p>
+                      <p className="text-[11px] [overflow-wrap:anywhere]" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>{app.profiles?.email ?? ''}</p>
                     </div>
                   </ProfileLink>
                   {app.assigned_committee_id && (
                     <span
-                      className="px-2 py-0.5 rounded-full flex-shrink-0"
-                      style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.08em', fontFamily: "var(--font-brand), sans-serif", backgroundColor: 'rgba(238,217,138,0.35)', color: '#8A6614', fontVariantNumeric: 'tabular-nums' }}
+                      className="flex-shrink-0 [overflow-wrap:anywhere]"
+                      style={{ fontSize: '11px', fontWeight: 700, fontFamily: "var(--font-brand), sans-serif", color: '#7A5A10', maxWidth: 110, textAlign: 'right' }}
                     >
-                      {assignedTo ? `ON ${(assignedTo.abbreviation ?? assignedTo.name).toUpperCase()}` : 'ASSIGNED'}
+                      {assignedTo ? `On ${assignedTo.abbreviation ?? assignedTo.name}` : 'Assigned'}
                     </span>
                   )}
                   <button
                     onClick={() => onAssign(app)}
-                    className="gv-lift rounded-lg py-1.5 px-3 font-bold text-[10.5px] focus:outline-none flex-shrink-0"
+                    className="gv-lift rounded-lg py-1.5 px-3 font-bold text-[11.5px] focus:outline-none flex-shrink-0"
                     style={{
                       backgroundColor: '#1B3828',
                       color: '#EED98A',
-                      fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', cursor: 'pointer',
+                      fontFamily: "var(--font-brand), sans-serif", cursor: 'pointer',
                     }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
                   >
-                    ASSIGN
+                    Assign
                   </button>
                 </div>
               );
@@ -1097,15 +1096,15 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
             <button
               onClick={handleInvite}
               disabled={inviting || !email.trim()}
-              className="gv-lift rounded-lg px-4 font-bold text-[11px] focus:outline-none"
+              className="gv-lift rounded-lg px-4 font-bold text-[12px] focus:outline-none"
               style={{
                 backgroundColor: inviting || !email.trim() ? '#DDD4C0' : '#1B3828',
                 color: inviting || !email.trim() ? '#9A8A78' : '#EED98A',
-                fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', cursor: 'pointer',
+                fontFamily: "var(--font-brand), sans-serif", cursor: 'pointer',
                 whiteSpace: 'nowrap',
               }}
             >
-              {inviting ? 'INVITING…' : 'INVITE'}
+              {inviting ? 'Inviting…' : 'Invite'}
             </button>
           </div>
           <p className="text-[11px] mt-3 mb-1.5" style={{ color: '#6B5F52', fontFamily: "var(--font-brand), sans-serif", fontWeight: 600 }}>
@@ -1567,7 +1566,7 @@ export default function CommitteesPage() {
       body: withChairs
         ? 'This notifies every delegate allocated across every committee, and every dais at the same time.'
         : 'This notifies every delegate allocated across every committee.',
-      confirmLabel: 'Send All',
+      confirmLabel: 'Send all',
     });
     if (!confirmed) return;
 
@@ -2122,12 +2121,12 @@ export default function CommitteesPage() {
           <button
             onClick={() => setShowAdd(true)}
             className="gv-lift flex items-center gap-2 rounded-xl py-2.5 px-5 font-bold text-sm focus:outline-none"
-            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.05em' }}
+            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif" }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
           >
             <Plus size={15} />
-            ADD YOUR FIRST COMMITTEE
+            Add your first committee
           </button>
         </div>
       )}
@@ -2138,11 +2137,11 @@ export default function CommitteesPage() {
           <div className="flex items-center gap-2 mb-6 flex-wrap">
             <NeuPill active={activeTab === 'overview'} onClick={() => setActiveTab('overview')}>
               <LayoutGrid size={12} strokeWidth={2.5} />
-              OVERVIEW
+              Overview
             </NeuPill>
             <NeuPill active={activeTab === 'settings'} onClick={() => setActiveTab('settings')}>
               <Settings size={12} strokeWidth={2.5} />
-              SETTINGS
+              Settings
             </NeuPill>
           </div>
 
@@ -2209,7 +2208,7 @@ export default function CommitteesPage() {
                         className="flex items-center gap-3 flex-wrap rounded-xl px-4 py-3"
                         style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}
                       >
-                        <span className="truncate" style={{ width: 150, flexShrink: 0, fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 800, color: NEU.ink }}>
+                        <span className="[overflow-wrap:anywhere]" title={c.name} style={{ width: 150, flexShrink: 0, fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 800, color: NEU.ink }}>
                           {c.abbreviation || c.name}
                         </span>
                         {releaseSameTime ? (
@@ -2265,7 +2264,7 @@ export default function CommitteesPage() {
                   disabled={sendingAllToParticipants}
                   onClick={handleSendAllToParticipants}
                 >
-                  {sendingAllToParticipants ? 'SENDING...' : 'SEND ALL TO PARTICIPANTS'}
+                  {sendingAllToParticipants ? 'Sending…' : 'Send all to participants'}
                 </NeuButton>
               </div>
             </NeuCard>
@@ -2286,9 +2285,9 @@ export default function CommitteesPage() {
                   boxShadow: '0 6px 20px rgba(27,56,40,0.07)',
                 }}
               >
-                <SortButton label="DIFFICULTY" dir={sortKey === 'difficulty' ? sortDir : null} onClick={() => cycleSort('difficulty')} />
-                <SortButton label="NAME" dir={sortKey === 'name' ? sortDir : null} onClick={() => cycleSort('name')} />
-                <SortButton label="GA / CRISIS" dir={sortKey === 'type' ? sortDir : null} onClick={() => cycleSort('type')} />
+                <SortButton label="Difficulty" dir={sortKey === 'difficulty' ? sortDir : null} onClick={() => cycleSort('difficulty')} />
+                <SortButton label="Name" dir={sortKey === 'name' ? sortDir : null} onClick={() => cycleSort('name')} />
+                <SortButton label="GA / Crisis" dir={sortKey === 'type' ? sortDir : null} onClick={() => cycleSort('type')} />
               </div>
             ) : <span />}
             <ViewToggle value={view} onChange={changeView} />
@@ -2343,7 +2342,7 @@ export default function CommitteesPage() {
                           <span style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', color: '#7A5416' }}>CUSTOM</span>
                         )}
                       </div>
-                      <h3 className="truncate font-bold" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 14.5, lineHeight: 1.25, margin: '1px 0 0 0' }}>
+                      <h3 className="font-bold [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 14.5, lineHeight: 1.25, margin: '1px 0 0 0' }}>
                         {c.name}
                       </h3>
                       {/* items-start, not items-center: the difficulty tile is
@@ -2404,7 +2403,7 @@ export default function CommitteesPage() {
                         {copied ? (
                           <>
                             <Check size={12} style={{ color: NEU.green }} />
-                            <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', color: NEU.green }}>COPIED</span>
+                            <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, color: NEU.green }}>Copied</span>
                           </>
                         ) : (
                           <>
@@ -2432,9 +2431,9 @@ export default function CommitteesPage() {
                       <button
                         onClick={() => setEditTarget(c)}
                         className="focus:outline-none"
-                        style={{ padding: '7px 14px', borderRadius: 9999, backgroundColor: NEU.surface, boxShadow: NEU.outSm, color: NEU.forest, fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em', cursor: 'pointer' }}
+                        style={{ padding: '7px 14px', borderRadius: 9999, backgroundColor: NEU.surface, boxShadow: NEU.outSm, color: NEU.forest, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, cursor: 'pointer' }}
                       >
-                        EDIT
+                        Edit
                       </button>
                       <button
                         onClick={() => setDeleteTarget(c)}
@@ -2680,11 +2679,11 @@ export default function CommitteesPage() {
                               {copied ? (
                                 <span className="inline-flex items-center gap-1.5">
                                   <Check size={12} style={{ color: NEU.green }} />
-                                  <span style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em', color: '#2F6644' }}>COPIED</span>
+                                  <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, color: '#2F6644' }}>Copied</span>
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1.5 min-w-0">
-                                  <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, letterSpacing: '0.12em', color: NEU.forest, fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, letterSpacing: '0.12em', color: NEU.forest, fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}>
                                     {c.session_code}
                                   </span>
                                   <Copy size={11} style={{ color: 'rgba(27,56,40,0.55)', flexShrink: 0 }} />
@@ -2722,17 +2721,17 @@ export default function CommitteesPage() {
                   <div className="px-3.5 pb-3.5 pt-3 flex gap-2">
                     <button
                       onClick={() => setEditTarget(c)}
-                      className="gv-lift flex-1 rounded-xl text-[10.5px] font-bold focus:outline-none"
+                      className="gv-lift flex-1 rounded-xl text-[12px] font-bold focus:outline-none"
                       style={{
                         minHeight: 40,
                         backgroundColor: 'transparent', color: '#1B3828',
                         border: '1.5px solid rgba(27,56,40,0.35)',
-                        fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.1em', cursor: 'pointer',
+                        fontFamily: "var(--font-brand), sans-serif", cursor: 'pointer',
                       }}
                       onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; }}
                       onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.color = '#1B3828'; }}
                     >
-                      EDIT
+                      Edit
                     </button>
                     <button
                       onClick={() => setDeleteTarget(c)}
@@ -2795,8 +2794,8 @@ export default function CommitteesPage() {
               This permanently removes the committee and its live session, including all delegates, documents, messages, country slots, and allocations. Applicants are kept but returned to unassigned. This cannot be undone.
             </p>
             <div className="flex gap-3 mt-1">
-              <button onClick={() => setDeleteTarget(null)} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "var(--font-brand), sans-serif" }}>CANCEL</button>
-              <button onClick={() => handleDeleteCommittee(deleteTarget)} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#FFFFFF', fontFamily: "var(--font-brand), sans-serif" }}>DELETE</button>
+              <button onClick={() => setDeleteTarget(null)} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "var(--font-brand), sans-serif" }}>Cancel</button>
+              <button onClick={() => handleDeleteCommittee(deleteTarget)} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#FFFFFF', fontFamily: "var(--font-brand), sans-serif" }}>Delete</button>
             </div>
           </div>
         </ModalOverlay>

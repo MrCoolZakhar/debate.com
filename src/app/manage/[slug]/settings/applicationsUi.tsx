@@ -373,7 +373,7 @@ export function ModalButton({ children, onClick, tone = 'ghost', disabled, icon:
       className="inline-flex items-center gap-2 rounded-xl focus:outline-none"
       style={{
         padding: '10px 18px',
-        fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.07em',
+        fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: 0,
         backgroundColor: forest ? '#1B3828' : 'transparent',
         color: forest ? NEU.gold : NEU.inkSoft,
         border: forest ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
@@ -443,7 +443,7 @@ function CopyToRolesSheet({
       icon="Card index dividers"
       footer={
         <>
-          <ModalButton onClick={onClose}>NOT NOW</ModalButton>
+          <ModalButton onClick={onClose}>Not now</ModalButton>
           <ModalButton
             tone="forest"
             icon={Copy}
@@ -451,10 +451,10 @@ function CopyToRolesSheet({
             onClick={() => onConfirm([...picked])}
           >
             {busy
-              ? 'COPYING…'
+              ? 'Copying…'
               : picked.size === 0
-                ? 'COPY'
-                : `COPY TO ${picked.size} ${picked.size === 1 ? 'ROLE' : 'ROLES'}`}
+                ? 'Copy'
+                : `Copy to ${picked.size} ${picked.size === 1 ? 'role' : 'roles'}`}
           </ModalButton>
         </>
       }
@@ -604,7 +604,7 @@ export function SetupIntro({ role, slides = SETUP_SLIDES, onDone }: {
             type="button"
             onClick={onDone}
             className="ml-auto focus:outline-none"
-            style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, letterSpacing: '0.06em', color: NEU.muted, background: 'none', border: 'none', cursor: 'pointer' }}
+            style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, letterSpacing: 0, color: NEU.muted, background: 'none', border: 'none', cursor: 'pointer' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.ink; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.muted; }}
           >
@@ -612,14 +612,14 @@ export function SetupIntro({ role, slides = SETUP_SLIDES, onDone }: {
           </button>
 
           {i > 0 && (
-            <ModalButton onClick={() => setI(i - 1)} icon={ArrowLeft}>BACK</ModalButton>
+            <ModalButton onClick={() => setI(i - 1)} icon={ArrowLeft}>Back</ModalButton>
           )}
           <ModalButton
             tone="forest"
             icon={last ? Sparkles : ArrowRight}
             onClick={() => (last ? onDone() : setI(i + 1))}
           >
-            {last ? "LET'S SET IT UP" : 'NEXT'}
+            {last ? "Let's set it up" : 'Next'}
           </ModalButton>
         </div>
       </div>
@@ -665,7 +665,7 @@ export function Segmented<T extends string | boolean>({
               color: active ? NEU.gold : NEU.ink,
               border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
               boxShadow: active ? '0 4px 12px rgba(27,56,40,0.2)' : 'none',
-              fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, letterSpacing: '0.05em',
+              fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, letterSpacing: 0,
               opacity: disabled ? 0.55 : 1,
               cursor: disabled ? 'wait' : 'pointer',
               transition: 'background-color 150ms, box-shadow 200ms',

@@ -273,7 +273,7 @@ export default function CustomizationCard({
       const { confirmed } = await confirm({
         title: 'Publish these colours?',
         body: `${warnings.join(' ')} Preview your page before you publish. Published colours are public straight away.`,
-        confirmLabel: 'PUBLISH ANYWAY',
+        confirmLabel: 'Publish anyway',
       });
       if (!confirmed) return;
     }
@@ -449,7 +449,7 @@ export default function CustomizationCard({
           style={{
             padding: '7px 12px',
             fontFamily: OUTFIT, fontSize: '11px', fontWeight: 800,
-            letterSpacing: '0.06em',
+            letterSpacing: 0,
             color: '#1B3828', backgroundColor: 'transparent',
             border: '1.5px solid #DDD4C0', cursor: 'pointer',
             textDecoration: 'none',
@@ -458,7 +458,7 @@ export default function CustomizationCard({
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
         >
           <Eye size={13} strokeWidth={2.4} />
-          PREVIEW
+          Preview
         </a>
 
         <div className="inline-flex items-center gap-1.5">
@@ -469,7 +469,7 @@ export default function CustomizationCard({
             className="inline-flex items-center gap-2 rounded-[10px] font-bold focus:outline-none transition-colors"
             style={{
               padding: '8px 16px',
-              fontFamily: OUTFIT, fontSize: '11px', fontWeight: 800, letterSpacing: '0.06em',
+              fontFamily: OUTFIT, fontSize: '11px', fontWeight: 800, letterSpacing: 0,
               backgroundColor: publishing || isPublished ? '#DDD4C0' : '#1B3828',
               color: publishing || isPublished ? '#9A8A78' : '#EED98A',
               border: 'none',
@@ -480,7 +480,7 @@ export default function CustomizationCard({
               <span className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#9A8A78', borderTopColor: 'transparent' }} />
             )}
             {justPublished && <Check size={13} strokeWidth={3} />}
-            {publishing ? 'PUBLISHING…' : isPublished ? 'PUBLISHED' : 'SAVE AND PUBLISH'}
+            {publishing ? 'Publishing…' : isPublished ? 'Published' : 'Save and publish'}
           </button>
           <InfoHint
             label="About publishing"
@@ -496,7 +496,7 @@ export default function CustomizationCard({
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '0.72'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
         >
-          RESET TO DEFAULT
+          Reset to default
         </button>
       </div>
 

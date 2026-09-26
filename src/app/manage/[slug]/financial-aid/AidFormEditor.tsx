@@ -208,7 +208,7 @@ export default function AidFormEditor({ conferenceId, initialEnabled, initialInt
         </p>
         <PillToggle value={enabled} onChange={toggleSaving ? () => {} : handleToggle} size="md" />
       </div>
-      <p className="text-sm mb-4" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+      <p className="text-sm mb-4" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
         Delegates can request financial aid from the payment panel once accepted. Review each request below and grant a discount, applied automatically at checkout.
       </p>
 
@@ -249,12 +249,11 @@ export default function AidFormEditor({ conferenceId, initialEnabled, initialInt
             <button
               onClick={handleSaveIntro}
               disabled={introSaving || introSaved}
-              className="mt-2 rounded-xl py-2 px-5 font-bold text-xs tracking-widest transition-colors focus:outline-none flex items-center justify-center gap-2"
+              className="mt-2 rounded-xl py-2 px-5 font-bold text-xs transition-colors focus:outline-none flex items-center justify-center gap-2"
               style={{
                 backgroundColor: introSaved ? NEU.green : NEU.forest,
                 color: NEU.gold,
                 fontFamily: OUTFIT,
-                letterSpacing: '0.07em',
                 opacity: introSaving ? 0.75 : 1,
                 cursor: introSaving ? 'wait' : 'pointer',
               }}
@@ -262,7 +261,7 @@ export default function AidFormEditor({ conferenceId, initialEnabled, initialInt
               {introSaving && (
                 <span className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: NEU.gold, borderTopColor: 'transparent' }} />
               )}
-              {introSaving ? 'SAVING…' : introSaved ? 'SAVED ✓' : 'SAVE'}
+              {introSaving ? 'Saving…' : introSaved ? 'Saved' : 'Save'}
             </button>
           </div>
 

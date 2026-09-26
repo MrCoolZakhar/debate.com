@@ -156,8 +156,8 @@ export function OverviewTab({
             <SectionTitle
               icon={ListOrdered}
               aside={accepted && isDelegate ? (
-                <Link href={`/manage/${conferenceSlug}/assignment`} className="inline-flex items-center gap-1 focus:outline-none" style={{ color: C.forest, fontWeight: 800, textDecoration: 'none' }}>
-                  Allocate <ArrowRight size={13} aria-hidden />
+                <Link href={`/manage/${conferenceSlug}/assignment`} className="inline-flex items-center gap-1 focus:outline-none" style={{ color: C.forest, fontWeight: 800, textDecoration: 'underline', textUnderlineOffset: 2 }}>
+                  Allocate
                 </Link>
               ) : 'Not allocated yet'}
             >
@@ -577,7 +577,7 @@ function Linkified({ text }: { text: string }) {
   return (
     <>
       {parts.map((part, i) => (i % 2 === 1 ? (
-        <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5" style={{ color: C.forest, fontWeight: 700, overflowWrap: 'anywhere' }}>
+        <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5" style={{ color: C.forest, fontWeight: 700, overflowWrap: 'anywhere', textDecoration: 'underline', textUnderlineOffset: 2 }}>
           {part.replace(/^https?:\/\//, '')}<ArrowUpRight size={13} aria-hidden />
         </a>
       ) : <span key={i}>{part}</span>))}

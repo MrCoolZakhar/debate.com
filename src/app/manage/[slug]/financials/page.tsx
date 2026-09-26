@@ -11,7 +11,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowRight, BadgePercent, CircleCheck, ClipboardCheck, Clock, HandCoins, Hourglass,
+  BadgePercent, CircleCheck, ClipboardCheck, Clock, HandCoins, Hourglass,
   PiggyBank, Users,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
@@ -194,9 +194,9 @@ export default function FinancialsOverviewPage() {
             <Link
               href={`/manage/${conference.slug}/applications`}
               className="inline-flex items-center gap-1.5 mt-4"
-              style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', color: NEU.forest, textDecoration: 'none' }}
+              style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, color: NEU.forest, textDecoration: 'underline', textUnderlineOffset: 3 }}
             >
-              GO TO APPLICATIONS <ArrowRight size={13} strokeWidth={2.5} />
+              Go to applications
             </Link>
           </NeuInset>
         ) : pipelineRows.length === 0 ? (
@@ -231,7 +231,7 @@ export default function FinancialsOverviewPage() {
                 >
                   {/* Name */}
                   <span
-                    className="truncate"
+                    className="[overflow-wrap:anywhere]"
                     style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink, flex: '1 1 140px', minWidth: 120 }}
                   >
                     {r.profiles?.display_name ?? 'Unknown'}

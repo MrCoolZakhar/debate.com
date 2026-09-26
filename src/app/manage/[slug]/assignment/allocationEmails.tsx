@@ -251,7 +251,7 @@ function SendMenu({
         className="gv-lift inline-flex items-center gap-1.5 focus:outline-none"
         style={{
           padding: '9px 15px', borderRadius: 999, border: 'none',
-          fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.05em',
+          fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: 0,
           background: totalCount === 0
             ? 'rgba(27,56,40,0.12)'
             : emphasise
@@ -262,7 +262,7 @@ function SendMenu({
         }}
       >
         <Send size={13} strokeWidth={2.5} style={{ color: totalCount === 0 ? NEU.muted : emphasise ? NEU.forest : NEU.deepGold }} />
-        {busy ? 'SENDING...' : 'SEND'}
+        {busy ? 'Sending…' : 'Send'}
         <ChevronDown size={12} strokeWidth={2.6} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: `transform 160ms ${EASE}` }} />
       </button>
 
@@ -368,7 +368,7 @@ export function AllocationEmailBar({
               title="How allocation emails go out"
               lines={[
                 ['Automatic (default)', 'Each delegate is emailed their committee and country the moment you seat them. Nothing to remember, nothing to press.'],
-                ['Manual', 'Turn this off to release in waves. Nobody is emailed on assignment; you choose when, and who, from the SEND menu.'],
+                ['Manual', 'Turn this off to release in waves. Nobody is emailed on assignment; you choose when, and who, from the Send menu.'],
                 ['Who has been told', 'Every seated delegate is tracked individually. "All new" covers only those not yet emailed; "Choose individually" shows each delegate\'s status.'],
                 ['The copy itself', 'Edit the Allocation Assigned template under Communications. Until you draft your own, Gavelling sends its default.'],
               ]}
@@ -428,7 +428,7 @@ export function AllocationEmailBar({
               type="button"
               onClick={onTurnOnTemplate}
               disabled={turningOnTemplate}
-              title="Allocation emails are switched off under Communications, so nobody is emailed when you seat them. Turning them on emails the delegates you seat from now on. Anyone already waiting is sent only when you press SEND."
+              title="Allocation emails are switched off under Communications, so nobody is emailed when you seat them. Turning them on emails the delegates you seat from now on. Anyone already waiting is sent only when you press Send."
               className="focus:outline-none"
               style={{
                 fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, whiteSpace: 'nowrap',
@@ -513,7 +513,7 @@ function AllocationPicker({
         <div className="flex items-start justify-between gap-4 mb-1">
           <div>
             <h2 className="font-black text-base" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-              Choose who to email
+              Choose Who to Email
             </h2>
             <p className="text-xs mt-0.5" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
               Each delegate gets their own committee and country. Re-sending is allowed. A delegate can be emailed more than once.
@@ -542,13 +542,13 @@ function AllocationPicker({
             style={{
               padding: '8px 13px', borderRadius: 999, border: 'none',
               backgroundColor: NEU.surface, boxShadow: NEU.outSm,
-              fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
+              fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: 0,
               color: unsentIds.length === 0 ? NEU.muted : NEU.ink,
               cursor: unsentIds.length === 0 ? 'default' : 'pointer',
               opacity: unsentIds.length === 0 ? 0.5 : 1, whiteSpace: 'nowrap',
             }}
           >
-            SELECT {unsentIds.length} NEW
+            Select {unsentIds.length} new
           </button>
           <button
             onClick={() => setPicked(new Set())}
@@ -557,12 +557,12 @@ function AllocationPicker({
             style={{
               padding: '8px 13px', borderRadius: 999, border: 'none',
               backgroundColor: 'transparent',
-              fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
+              fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: 0,
               color: picked.size === 0 ? NEU.muted : NEU.inkSoft,
               cursor: picked.size === 0 ? 'default' : 'pointer', whiteSpace: 'nowrap',
             }}
           >
-            CLEAR
+            Clear
           </button>
         </div>
 
@@ -598,10 +598,10 @@ function AllocationPicker({
                   </span>
                   <FlagChip code={t.countryCode} name={t.countryName} />
                   <span className="min-w-0" style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-                    <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>
+                    <span className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>
                       {t.name}
                     </span>
-                    <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.inkSoft }}>
+                    <span className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.inkSoft }}>
                       {t.countryName} · {t.committee}
                     </span>
                   </span>
@@ -616,18 +616,18 @@ function AllocationPicker({
           <button
             onClick={onClose}
             className="flex-1 rounded-full py-2.5 font-bold text-sm focus:outline-none"
-            style={{ border: 'none', color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontFamily: OUTFIT, letterSpacing: '0.04em', cursor: 'pointer' }}
+            style={{ border: 'none', color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontFamily: OUTFIT, letterSpacing: 0, cursor: 'pointer' }}
           >
-            CANCEL
+            Cancel
           </button>
           <NeuButton
             onClick={() => onSend(Array.from(picked))}
             disabled={busy || picked.size === 0}
             gradient={NEU_GRADIENTS.gold}
             icon={Send}
-            style={{ flex: 1, padding: '11px 22px' }}
+            style={{ flex: 1, padding: '11px 22px', letterSpacing: 0 }}
           >
-            {busy ? 'SENDING...' : `SEND TO ${picked.size}`}
+            {busy ? 'Sending…' : `Send to ${picked.size}`}
           </NeuButton>
         </div>
       </div>

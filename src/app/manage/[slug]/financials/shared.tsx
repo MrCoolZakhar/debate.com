@@ -176,10 +176,10 @@ export function paymentMethod(
 }
 
 export const PIPELINE_FILTERS = [
-  { label: 'ALL', value: 'all' },
-  { label: 'PAID', value: 'paid' },
-  { label: 'UNPAID', value: 'unpaid' },
-  { label: 'WAIVED', value: 'waived' },
+  { label: 'All', value: 'all' },
+  { label: 'Paid', value: 'paid' },
+  { label: 'Unpaid', value: 'unpaid' },
+  { label: 'Waived', value: 'waived' },
 ] as const;
 export type PipelineFilter = (typeof PIPELINE_FILTERS)[number]['value'];
 

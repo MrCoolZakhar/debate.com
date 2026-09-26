@@ -899,8 +899,8 @@ export function RecapModal({
               {ident.title}
             </h2>
             <span
-              className="text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase"
-              style={{ backgroundColor: NEU.surface, color: NEU.forest, boxShadow: NEU.outSm, fontFamily: OUTFIT, letterSpacing: '0.08em' }}
+              className="text-[13px] font-bold"
+              style={{ color: NEU.forest, fontFamily: OUTFIT }}
             >
               {phaseLabel}
             </span>
@@ -985,7 +985,7 @@ export function RecapModal({
                     {entry.label}
                   </span>
                   <CircleFlag code={flagCodeFor(entry.row.country)} label={entry.row.country} size={24} decorative />
-                  <span className="text-sm font-bold flex-1 truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{entry.row.country}</span>
+                  <span className="text-sm font-bold flex-1 min-w-0 [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{entry.row.country}</span>
                   <span className="text-sm font-black" style={{ color: NEU.forest, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
                     {entry.row.total} pts
                   </span>
@@ -999,17 +999,17 @@ export function RecapModal({
           {session && (
             <button
               onClick={joinAsSecretariat}
-              className="w-full inline-flex items-center justify-center gap-2 rounded-full py-3 font-bold text-sm tracking-widest focus:outline-none"
+              className="w-full inline-flex items-center justify-center gap-2 rounded-full py-3 font-bold text-sm focus:outline-none"
               style={{
                 background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-                color: NEU.gold, fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none', cursor: 'pointer',
+                color: NEU.gold, fontFamily: OUTFIT, border: 'none', cursor: 'pointer',
                 boxShadow: `0 4px 10px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 30%, transparent), ${NEU.outSm}`,
                 transition: `box-shadow 220ms ${EASE}, transform 220ms ${EASE}`,
               }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 16px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 40%, transparent), ${NEU.outSmHover}`; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 10px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 30%, transparent), ${NEU.outSm}`; }}
             >
-              JOIN AS SECRETARIAT
+              Join as secretariat
               <ExternalLink size={14} />
             </button>
           )}
@@ -1134,7 +1134,7 @@ function ChairStrip({ chairs, chairNames, pending }: {
                 {p.avatarUrl
                   ? <Avatar url={p.avatarUrl} name={p.name} size={26} rounded />
                   : <ChairAvatar name={p.name} size={26} />}
-                <span className="text-xs font-bold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, maxWidth: 140 }}>{p.name}</span>
+                <span className="text-xs font-bold [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT, maxWidth: 180 }}>{p.name}</span>
               </span>
             </ProfileLink>
           ))
@@ -1151,16 +1151,13 @@ function ChairStrip({ chairs, chairNames, pending }: {
             {p.avatarUrl
               ? <Avatar url={p.avatarUrl} name={p.name} size={26} rounded />
               : <ChairAvatar name={p.name} size={26} />}
-            <span className="text-xs font-bold truncate" style={{ color: '#7A5A10', fontFamily: OUTFIT, maxWidth: 140 }}>{p.name}</span>
+            <span className="text-xs font-bold [overflow-wrap:anywhere]" style={{ color: '#7A5A10', fontFamily: OUTFIT, maxWidth: 180 }}>{p.name}</span>
             <span
-              className="rounded-full flex-shrink-0"
-              style={{
-                fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.06em',
-                padding: '2px 6px', lineHeight: 1.4,
-                backgroundColor: 'rgba(238,217,138,0.4)', color: '#8A6614',
-              }}
+              className="inline-flex items-center gap-1 flex-shrink-0"
+              style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, lineHeight: 1.4, color: '#7A5A10' }}
             >
-              PENDING
+              <Clock size={11} aria-hidden />
+              Pending
             </span>
           </span>
         ))}
@@ -1315,8 +1312,8 @@ function AwardsRecap({ committeeId, config, publishedAt, conferenceEndDate }: {
       <div className="flex items-center gap-3 flex-wrap">
         <Eyebrow>Award slate</Eyebrow>
         <span
-          className="text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase"
-          style={{ backgroundColor: pill.bg, color: pill.fg, fontFamily: OUTFIT, letterSpacing: '0.08em' }}
+          className="text-[11px] font-bold px-2.5 py-1 rounded-full"
+          style={{ backgroundColor: pill.bg, color: pill.fg, fontFamily: OUTFIT }}
         >
           {SLATE_STATE_LABEL[state]}
         </span>

@@ -67,7 +67,7 @@ function DelegationCard({ society, members, hasUnseenSwap, isEmpty, onClick, onD
               style={{ width: 7, height: 7, borderRadius: '9999px', backgroundColor: NEU.deepGold }}
             />
           )}
-          <p className="font-black text-base truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, maxWidth: isEmpty ? '80%' : undefined }}>{society.name}</p>
+          <p className="font-black text-base [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT, maxWidth: isEmpty ? '80%' : undefined }}>{society.name}</p>
         </div>
         {pledgePending && (
           <span
@@ -150,20 +150,20 @@ function AdvisorTransferModal({
                 {/* Static NeuInset row; TRANSFER is a sibling button. Plain link. */}
                 <PersonAvatar name={a.profiles?.display_name ?? a.invited_name ?? 'Unknown'} url={a.profiles?.avatar_url ?? null} size={30} userId={a.user_id} />
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}</p>
-                  <p className="text-xs truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{a.societies?.name ?? 'Independent'}</p>
+                  <p className="text-sm font-semibold [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}</p>
+                  <p className="text-xs [overflow-wrap:anywhere]" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{a.societies?.name ?? 'Independent'}</p>
                 </div>
               </div>
-              <NeuButton onClick={() => onPick(a)} style={{ padding: '7px 14px', fontSize: 10.5 }}>TRANSFER</NeuButton>
+              <NeuButton onClick={() => onPick(a)} style={{ padding: '7px 14px', fontSize: 10.5, letterSpacing: 0 }}>Transfer</NeuButton>
             </NeuInset>
           ))}
         </div>
         <button
           onClick={onClose}
           className="w-full mt-4 rounded-full py-2.5 font-bold text-sm focus:outline-none"
-          style={{ border: 'none', color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontFamily: OUTFIT, letterSpacing: '0.04em' }}
+          style={{ border: 'none', color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontFamily: OUTFIT, letterSpacing: 0 }}
         >
-          CANCEL
+          Cancel
         </button>
       </div>
     </ModalOverlay>
@@ -857,15 +857,15 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
         <button
           onClick={() => { setExpandedId(null); setSelectedMemberId(null); setSearchQuery(''); }}
           className="flex items-center gap-1 rounded-full py-2 px-4 text-xs font-bold focus:outline-none flex-shrink-0"
-          style={{ border: 'none', color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontFamily: OUTFIT, letterSpacing: '0.04em' }}
+          style={{ border: 'none', color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontFamily: OUTFIT, letterSpacing: 0 }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
         >
-          <ChevronLeft size={14} /> BACK
+          <ChevronLeft size={14} /> Back
         </button>
         {/* Multi-person glyph marks this as a delegation. */}
         <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Users} size={34} />
-        <h2 className="font-black text-xl truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{society.name}</h2>
+        <h2 className="font-black text-xl [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{society.name}</h2>
       </div>
 
       {/* Advisors (F18) */}
@@ -913,24 +913,24 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
                       <button
                         onClick={() => setAdvisorTransferPicker(a)}
                         className="focus:outline-none"
-                        style={{ fontSize: 10, fontWeight: 700, color: '#EED98A', fontFamily: MONO, letterSpacing: '0.04em', opacity: 0.85 }}
+                        style={{ fontSize: 10, fontWeight: 700, color: '#EED98A', fontFamily: MONO, letterSpacing: 0, opacity: 0.85 }}
                       >
-                        TRANSFER SPOT
+                        Transfer spot
                       </button>
                     )}
                     <button
                       onClick={() => handleNotAttending(a)}
                       className="focus:outline-none"
-                      style={{ fontSize: 10, fontWeight: 700, color: paid ? '#EED98A' : '#9A8A78', fontFamily: MONO, letterSpacing: '0.04em', opacity: paid ? 0.85 : 1 }}
+                      style={{ fontSize: 10, fontWeight: 700, color: paid ? '#EED98A' : '#9A8A78', fontFamily: MONO, letterSpacing: 0, opacity: paid ? 0.85 : 1 }}
                     >
-                      NOT ATTENDING
+                      Not attending
                     </button>
                     <button
                       onClick={() => handleRemove(a, society.name)}
                       className="focus:outline-none"
-                      style={{ fontSize: 10, fontWeight: 700, color: paid ? '#EED98A' : '#9A8A78', fontFamily: MONO, letterSpacing: '0.04em', opacity: paid ? 0.85 : 1 }}
+                      style={{ fontSize: 10, fontWeight: 700, color: paid ? '#EED98A' : '#9A8A78', fontFamily: MONO, letterSpacing: 0, opacity: paid ? 0.85 : 1 }}
                     >
-                      REMOVE
+                      Remove
                     </button>
                   </div>
                 </div>
@@ -990,7 +990,7 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
                   <div className="flex-1 min-w-0">
                     <div style={{ fontFamily: OUTFIT }}><StackedName name={name} size={14} weight={700} color="#EED98A" restColor="rgba(238,217,138,0.78)" /></div>
                     {m.assigned_committee_id && (
-                      <p className="text-xs truncate" title={m.assigned_committee?.name ?? undefined} style={{ color: 'rgba(238,217,138,0.7)', fontFamily: OUTFIT }}>
+                      <p className="text-xs [overflow-wrap:anywhere]" title={m.assigned_committee?.name ?? undefined} style={{ color: 'rgba(238,217,138,0.7)', fontFamily: OUTFIT }}>
                         {committeeShortName(m.assigned_committee)}, {m.assigned_country_name}
                       </p>
                     )}
@@ -1000,16 +1000,16 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
                     <button
                       onClick={() => handleNotAttending(m)}
                       className="focus:outline-none"
-                      style={{ fontSize: 10, fontWeight: 700, color: '#EED98A', fontFamily: MONO, letterSpacing: '0.04em', opacity: 0.85 }}
+                      style={{ fontSize: 10, fontWeight: 700, color: '#EED98A', fontFamily: MONO, letterSpacing: 0, opacity: 0.85 }}
                     >
-                      NOT ATTENDING
+                      Not attending
                     </button>
                     <button
                       onClick={() => handleRemove(m, society.name)}
                       className="focus:outline-none"
-                      style={{ fontSize: 10, fontWeight: 700, color: '#EED98A', fontFamily: MONO, letterSpacing: '0.04em', opacity: 0.85 }}
+                      style={{ fontSize: 10, fontWeight: 700, color: '#EED98A', fontFamily: MONO, letterSpacing: 0, opacity: 0.85 }}
                     >
-                      REMOVE
+                      Remove
                     </button>
                   </div>
                 </div>
@@ -1029,7 +1029,7 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
                 <div className="flex items-center gap-2.5 min-w-0">
                   {/* Pledge row: plain <div>, MARK RECEIVED is a sibling button. */}
                   <PersonAvatar name={m.profiles?.display_name ?? m.invited_name ?? 'Unknown'} url={m.profiles?.avatar_url ?? null} size={26} userId={m.user_id} />
-                  <p className="text-sm min-w-0 truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+                  <p className="text-sm min-w-0 [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
                     <span style={{ fontWeight: 700 }}>{m.profiles?.display_name ?? m.invited_name ?? 'Unknown'}</span> pledged: {pledgeText(m)}
                   </p>
                 </div>
@@ -1043,9 +1043,9 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
                       onClick={() => handleMarkPledgeReceived(m, society.id)}
                       disabled={paymentsLive}
                       gradient={NEU_GRADIENTS.green}
-                      style={{ padding: '7px 14px', fontSize: 10.5 }}
+                      style={{ padding: '7px 14px', fontSize: 10.5, letterSpacing: 0 }}
                     >
-                      MARK RECEIVED
+                      Mark received
                     </NeuButton>
                   </span>
                 )}
@@ -1079,11 +1079,11 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
                         chip below is — so a plain link is safe here. */}
                     <PersonAvatar name={a.profiles?.display_name ?? a.invited_name ?? 'Unknown'} url={a.profiles?.avatar_url ?? null} size={30} userId={a.user_id} />
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}</p>
-                      <p className="text-xs truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{a.societies?.name ?? 'Independent'}</p>
+                      <p className="text-sm font-semibold [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}</p>
+                      <p className="text-xs [overflow-wrap:anywhere]" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{a.societies?.name ?? 'Independent'}</p>
                     </div>
                   </div>
-                  <NeuButton onClick={() => handleAddToDelegation(a, society)} style={{ padding: '7px 16px', fontSize: 10.5 }}>ADD</NeuButton>
+                  <NeuButton onClick={() => handleAddToDelegation(a, society)} style={{ padding: '7px 16px', fontSize: 10.5, letterSpacing: 0 }}>Add</NeuButton>
                 </NeuInset>
               ))}
             </div>

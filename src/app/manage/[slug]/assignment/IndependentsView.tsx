@@ -77,20 +77,20 @@ function TransferSpotModal({
                 {/* Static NeuInset row; TRANSFER is a sibling button. Plain link. */}
                 <PersonAvatar name={a.profiles?.display_name ?? a.invited_name ?? 'Unknown'} url={a.profiles?.avatar_url ?? null} size={30} userId={a.user_id} />
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}</p>
-                  <p className="text-xs truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{a.societies?.name ?? 'Independent'}</p>
+                  <p className="text-sm font-semibold [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}</p>
+                  <p className="text-xs [overflow-wrap:anywhere]" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{a.societies?.name ?? 'Independent'}</p>
                 </div>
               </div>
-              <NeuButton onClick={() => onPick(a)} style={{ padding: '7px 14px', fontSize: 10.5 }}>TRANSFER</NeuButton>
+              <NeuButton onClick={() => onPick(a)} style={{ padding: '7px 14px', fontSize: 10.5, letterSpacing: 0 }}>Transfer</NeuButton>
             </NeuInset>
           ))}
         </div>
         <button
           onClick={onClose}
           className="w-full mt-4 rounded-full py-2.5 font-bold text-sm focus:outline-none"
-          style={{ border: 'none', color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontFamily: OUTFIT, letterSpacing: '0.04em' }}
+          style={{ border: 'none', color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontFamily: OUTFIT, letterSpacing: 0 }}
         >
-          CANCEL
+          Cancel
         </button>
       </div>
     </ModalOverlay>
@@ -106,7 +106,7 @@ function ActionButton({ label, onClick, danger, busy }: { label: string; onClick
       disabled={busy}
       className="focus:outline-none"
       style={{
-        fontSize: 10, fontWeight: 800, color: danger ? NEU.muted : NEU.forest, fontFamily: MONO, letterSpacing: '0.06em',
+        fontSize: 10, fontWeight: 800, color: danger ? NEU.muted : NEU.forest, fontFamily: MONO, letterSpacing: 0,
         opacity: busy ? 0.5 : 1, cursor: busy ? 'wait' : 'pointer',
       }}
       onMouseEnter={e => { if (!busy) (e.currentTarget as HTMLElement).style.color = danger ? '#8B2020' : NEU.green; }}
@@ -156,7 +156,7 @@ function IndependentCard({
       </div>
 
       {allocationLine && (
-        <p className="text-xs truncate mt-2.5" title={app.assigned_committee?.name ?? undefined} style={{ color: NEU.muted, fontFamily: OUTFIT }}>{allocationLine}</p>
+        <p className="text-xs [overflow-wrap:anywhere] mt-2.5" title={app.assigned_committee?.name ?? undefined} style={{ color: NEU.muted, fontFamily: OUTFIT }}>{allocationLine}</p>
       )}
 
       {openSpot && (
@@ -169,10 +169,10 @@ function IndependentCard({
 
       {!waived && (
         <div className="mt-3.5 flex items-center gap-4">
-          {paid && !notAttending && <ActionButton label="TRANSFER SPOT" onClick={onTransfer} busy={busy} />}
-          {openSpot && <ActionButton label="GIVE SPOT" onClick={onTransfer} busy={busy} />}
-          {!notAttending && <ActionButton label="NOT ATTENDING" onClick={onNotAttending} danger busy={busy} />}
-          {notAttending && <ActionButton label="UNDO" onClick={onUndo} busy={busy} />}
+          {paid && !notAttending && <ActionButton label="Transfer spot" onClick={onTransfer} busy={busy} />}
+          {openSpot && <ActionButton label="Give spot" onClick={onTransfer} busy={busy} />}
+          {!notAttending && <ActionButton label="Not attending" onClick={onNotAttending} danger busy={busy} />}
+          {notAttending && <ActionButton label="Undo" onClick={onUndo} busy={busy} />}
         </div>
       )}
     </NeuCard>

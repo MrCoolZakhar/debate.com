@@ -122,29 +122,29 @@ function PublishModal({
             <div className="flex gap-3">
               <button
                 onClick={onClose}
-                className="flex-1 rounded-xl py-2.5 font-bold text-sm tracking-widest transition-colors focus:outline-none gv-lift"
-                style={{ border: '1.5px solid #DDD4C0', color: NEU.ink, backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em' }}
+                className="flex-1 rounded-xl py-2.5 font-bold text-sm transition-colors focus:outline-none gv-lift"
+                style={{ border: '1.5px solid #DDD4C0', color: NEU.ink, backgroundColor: 'transparent', fontFamily: OUTFIT }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
               >
-                CANCEL
+                Cancel
               </button>
               <Link
                 href={`/manage/${conference.slug}/settings?tab=conference&focus=dates`}
-                className="flex-1 rounded-xl py-2.5 font-bold text-sm tracking-widest transition-colors focus:outline-none gv-lift flex items-center justify-center gap-2"
-                style={{ backgroundColor: '#1B3828', color: NEU.gold, fontFamily: OUTFIT, letterSpacing: '0.06em', textDecoration: 'none' }}
+                className="flex-1 rounded-xl py-2.5 font-bold text-sm transition-colors focus:outline-none gv-lift flex items-center justify-center gap-2"
+                style={{ backgroundColor: '#1B3828', color: NEU.gold, fontFamily: OUTFIT, textDecoration: 'none' }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
               >
                 <CalendarDays size={15} strokeWidth={2.2} />
-                ADD DATES
+                Add dates
               </Link>
             </div>
           </>
         ) : (
           <>
             <h2 className="font-black text-xl mb-2" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-              Publish Conference?
+              Publish Your Conference?
             </h2>
             <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
               Your conference will appear publicly on gavelling.com/conferences/explore and delegates will be able to apply.
@@ -155,27 +155,26 @@ function PublishModal({
             <div className="flex gap-3">
               <button
                 onClick={onClose}
-                className="flex-1 rounded-xl py-2.5 font-bold text-sm tracking-widest transition-colors focus:outline-none gv-lift"
-                style={{ border: '1.5px solid #DDD4C0', color: NEU.ink, backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em' }}
+                className="flex-1 rounded-xl py-2.5 font-bold text-sm transition-colors focus:outline-none gv-lift"
+                style={{ border: '1.5px solid #DDD4C0', color: NEU.ink, backgroundColor: 'transparent', fontFamily: OUTFIT }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
               >
-                CANCEL
+                Cancel
               </button>
               <button
                 onClick={handlePublish}
                 disabled={publishing}
-                className="flex-1 rounded-xl py-2.5 font-bold text-sm tracking-widest transition-colors focus:outline-none gv-lift"
+                className="flex-1 rounded-xl py-2.5 font-bold text-sm transition-colors focus:outline-none gv-lift"
                 style={{
                   backgroundColor: publishing ? '#DDD4C0' : '#1B3828',
                   color: publishing ? NEU.muted : NEU.gold,
                   fontFamily: OUTFIT,
-                  letterSpacing: '0.06em',
                 }}
                 onMouseEnter={(e) => { if (!publishing) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                 onMouseLeave={(e) => { if (!publishing) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
               >
-                {publishing ? 'PUBLISHING...' : 'PUBLISH NOW'}
+                {publishing ? 'Publishing…' : 'Publish now'}
               </button>
             </div>
           </>
@@ -248,22 +247,22 @@ function ShareModal({
         </p>
         <div className="flex items-center gap-2 mb-5">
           <NeuInset className="flex-1 min-w-0" style={{ padding: '9px 12px', borderRadius: 12 }}>
-            <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: NEU.ink }}>
+            <p className="truncate" title={publicUrl} style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: NEU.ink }}>
               {publicUrl}
             </p>
           </NeuInset>
           <button
             onClick={() => copy(publicUrl, setCopiedLink)}
-            className="flex-shrink-0 rounded-xl py-2.5 px-4 font-bold text-xs tracking-widest transition-colors focus:outline-none gv-lift"
+            className="flex-shrink-0 rounded-xl py-2.5 px-4 font-bold text-xs transition-colors focus:outline-none gv-lift"
             style={{
               backgroundColor: copiedLink ? '#3D7A52' : '#1B3828',
-              color: NEU.gold, fontFamily: OUTFIT, letterSpacing: '0.06em',
+              color: NEU.gold, fontFamily: OUTFIT,
               border: 'none', cursor: 'pointer',
             }}
             onMouseEnter={(e) => { if (!copiedLink) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { if (!copiedLink) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
           >
-            {copiedLink ? 'COPIED ✓' : 'COPY'}
+            {copiedLink ? 'Copied' : 'Copy'}
           </button>
         </div>
 
@@ -290,27 +289,27 @@ function ShareModal({
             </p>
             <button
               onClick={() => copy(caption, setCopiedCaption)}
-              className="flex-shrink-0 rounded-xl py-2 px-3.5 font-bold text-xs tracking-widest transition-colors focus:outline-none"
+              className="flex-shrink-0 rounded-xl py-2 px-3.5 font-bold text-xs transition-colors focus:outline-none"
               style={{
                 backgroundColor: 'transparent',
                 color: copiedCaption ? '#3D7A52' : NEU.deepGold,
                 border: `1.5px solid ${copiedCaption ? '#3D7A52' : 'rgba(182,135,31,0.5)'}`,
-                fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: 'pointer',
+                fontFamily: OUTFIT, cursor: 'pointer',
               }}
             >
-              {copiedCaption ? 'CAPTION COPIED ✓' : 'COPY CAPTION'}
+              {copiedCaption ? 'Caption copied' : 'Copy caption'}
             </button>
           </div>
         </div>
 
         <button
           onClick={onClose}
-          className="w-full rounded-xl py-2.5 font-bold text-sm tracking-widest transition-colors focus:outline-none"
-          style={{ border: '1.5px solid #DDD4C0', color: NEU.ink, backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: 'pointer' }}
+          className="w-full rounded-xl py-2.5 font-bold text-sm transition-colors focus:outline-none"
+          style={{ border: '1.5px solid #DDD4C0', color: NEU.ink, backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: 'pointer' }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
         >
-          DONE
+          Done
         </button>
       </div>
     </div></Portal>
@@ -503,10 +502,21 @@ function ActivityLine({ ev, now }: { ev: ActivityEvent; now: number }) {
     : ev.kind === 'rejected'  ? <><b style={{ color: NEU.ink }}>{ev.name}</b> was rejected</>
     : ev.kind === 'decision'  ? <><b style={{ color: NEU.ink }}>{ev.name}</b> was {ev.detail}</>
     :                           <><b style={{ color: NEU.ink }}>{ev.name}</b> allocated{ev.detail ? ` to ${ev.detail}` : ''}</>;
+  // The same sentence as plain text, so a line cut short by the card still
+  // carries its full wording (and the whole name) as a tooltip.
+  const labelText =
+    ev.kind === 'application' ? `${ev.name} applied${ev.detail ? ` as ${ev.detail}` : ''}`
+    : ev.kind === 'payment'   ? `${ev.name} paid${ev.detail ? ` ${ev.detail}` : ''}`
+    : ev.kind === 'checkin'   ? `${ev.name} checked in`
+    : ev.kind === 'resubmit'  ? `${ev.name} edited and resubmitted their application`
+    : ev.kind === 'accepted'  ? `${ev.name} was accepted`
+    : ev.kind === 'rejected'  ? `${ev.name} was rejected`
+    : ev.kind === 'decision'  ? `${ev.name} was ${ev.detail}`
+    :                           `${ev.name} allocated${ev.detail ? ` to ${ev.detail}` : ''}`;
   return (
     <div className="flex items-center gap-2.5 flex-shrink-0">
       <NeuIconDisc gradient={meta.gradient} icon={meta.icon} size={26} />
-      <p className="flex-1 min-w-0 truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>
+      <p className="flex-1 min-w-0 truncate" title={labelText} style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>
         {label}
       </p>
       {/* Who did it. Only rendered for organiser actions on someone ELSE's
@@ -524,7 +534,7 @@ function ActivityLine({ ev, now }: { ev: ActivityEvent; now: number }) {
           className="flex items-center gap-1.5 flex-shrink-0 max-w-[38%]"
         >
           <Avatar url={ev.actor.avatarUrl} name={ev.actor.name} size={18} />
-          <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: NEU.muted }}>
+          <span className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: NEU.muted, lineHeight: 1.2 }}>
             {ev.actor.name}
           </span>
         </ProfileLink>
@@ -620,11 +630,11 @@ export function RecentActivity({ events, now, fill = false }: {
               className="inline-flex items-center gap-1 flex-shrink-0"
               style={{
                 marginInlineStart: 'auto', fontFamily: OUTFIT, fontSize: 10,
-                fontWeight: 800, letterSpacing: '0.1em', color: NEU.deepGold,
+                fontWeight: 800, color: NEU.deepGold,
                 opacity: hovered ? 1 : 0.75, transition: `opacity 220ms ${EASE}`,
               }}
             >
-              {hidden > 0 ? `+${hidden} MORE` : 'SEE ALL'}
+              {hidden > 0 ? `+${hidden} more` : 'See all'}
               <ArrowRight size={11} />
             </span>
           )}
@@ -701,10 +711,10 @@ function ActivityModal({ events, now, onClose }: { events: ActivityEvent[]; now:
             style={{
               marginInlineStart: 'auto', padding: '7px 13px', border: '1.5px solid #DDD4C0',
               backgroundColor: 'transparent', color: NEU.ink, fontFamily: OUTFIT,
-              fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', cursor: 'pointer',
+              fontSize: 11, fontWeight: 800, cursor: 'pointer',
             }}
           >
-            CLOSE
+            Close
           </button>
         </div>
 
@@ -745,7 +755,7 @@ function ActivityModal({ events, now, onClose }: { events: ActivityEvent[]; now:
                         className="inline-flex items-center gap-1.5 min-w-0"
                       >
                         <Avatar url={ev.actor.avatarUrl} name={ev.actor.name} size={16} />
-                        <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: NEU.muted }}>
+                        <span className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: NEU.muted }}>
                           by {ev.actor.name}
                         </span>
                       </ProfileLink>
@@ -826,7 +836,7 @@ function VerificationStrip({ fallbackMinutes }: { fallbackMinutes: number }) {
             ? 'Verified conference'
             : 'Earned automatically once page, committees, chairs, emails, secretariat, payment method and publishing are done.'}
         />
-        <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: verified ? NEU.forest : NEU.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
+        <span className="truncate" title={headline} style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: verified ? NEU.forest : NEU.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
           {headline}
         </span>
       </div>
@@ -1489,11 +1499,11 @@ export default function DashboardPage() {
           onClick={(e) => { e.stopPropagation(); router.push(`/manage/${slug}/jobs`); }}
           className="focus:outline-none"
           style={{
-            fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.06em',
+            fontFamily: OUTFIT, fontSize: 10, fontWeight: 800,
             color: NEU.deepGold, background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px',
           }}
         >
-          RECRUIT
+          Recruit
         </button>
       ),
     },
@@ -1543,13 +1553,13 @@ export default function DashboardPage() {
           title="Marks this stage done so a one-person secretariat can still earn the checkmark. You can invite people any time."
           className="focus:outline-none"
           style={{
-            fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.06em',
+            fontFamily: OUTFIT, fontSize: 10, fontWeight: 800,
             color: NEU.muted, background: 'none', border: 'none',
             cursor: soloSaving ? 'default' : 'pointer', padding: '2px 4px',
             opacity: soloSaving ? 0.5 : 1, whiteSpace: 'nowrap',
           }}
         >
-          {soloSaving ? 'SAVING…' : "I'M ON MY OWN"}
+          {soloSaving ? 'Saving…' : "I'm on my own"}
         </button>
       ),
     },
@@ -1690,7 +1700,7 @@ export default function DashboardPage() {
               {conference.acronym}{confYear ? ` · ${confYear}` : ''} · DASHBOARD
             </p>
             <h1 className="font-black flex items-center gap-1.5 min-w-0" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 18, lineHeight: 1.15, marginTop: 1 }}>
-              <span className="truncate">{conference.full_name}</span>
+              <span className="min-w-0 [overflow-wrap:anywhere]">{conference.full_name}</span>
               <VerifiedCheck verified={conference.is_verified} showUnverified size={18} title={sealTitle} />
             </h1>
           </div>
@@ -1708,7 +1718,7 @@ export default function DashboardPage() {
           </NeuPill>
           {!conference.is_public && (
             <NeuButton gradient={NEU_GRADIENTS.forest} icon={Rocket} onClick={handlePublishClick} style={{ padding: '8px 16px', fontSize: 12 }}>
-              PUBLISH
+              Publish
             </NeuButton>
           )}
         </div>
@@ -1858,11 +1868,11 @@ export default function DashboardPage() {
               href={expectedDelegates > 0 ? `/manage/${slug}/applications` : `/manage/${slug}/settings?tab=conference`}
               className="inline-flex items-center gap-1.5 flex-shrink-0 transition-opacity hover:opacity-70 focus:outline-none"
               style={{
-                fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em',
+                fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
                 color: NEU.deepGold, textDecoration: 'none',
               }}
             >
-              {expectedDelegates > 0 ? 'REVIEW APPLICATIONS' : 'SET AN EXPECTED HEAD COUNT'}
+              {expectedDelegates > 0 ? 'Review applications' : 'Set an expected head count'}
               <ArrowRight size={12} />
             </Link>
           </div>

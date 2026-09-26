@@ -43,11 +43,11 @@ export function CommitteeScoreboardModal({
           <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5, color: SOFT }}>
             Scoreboard
           </p>
-          <h2 className="font-black truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 23, lineHeight: 1.1 }}>
+          <h2 className="font-black [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 23, lineHeight: 1.1 }}>
             {title}
           </h2>
           {subtitle && (
-            <p className="text-xs truncate" style={{ color: SOFT, fontFamily: OUTFIT }}>{subtitle}</p>
+            <p className="text-xs [overflow-wrap:anywhere]" style={{ color: SOFT, fontFamily: OUTFIT }}>{subtitle}</p>
           )}
         </div>
       </div>

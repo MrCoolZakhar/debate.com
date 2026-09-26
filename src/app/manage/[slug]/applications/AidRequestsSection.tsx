@@ -224,7 +224,7 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
     const { confirmed } = await confirm({
       title: 'Deny this aid request?',
       body: 'The applicant will be notified. The standard fee still applies, and their conference application is not affected.',
-      confirmLabel: 'Deny Aid',
+      confirmLabel: 'Deny aid',
       danger: true,
     });
     if (!confirmed) return;
@@ -361,7 +361,7 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
                   <div className="flex items-center gap-2.5 flex-wrap">
                     {isDelegation ? (
                       <>
-                        <p className="font-semibold text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{name}</p>
+                        <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{name}</p>
                         <DelegationChip />
                         {/* The advisor is a person, so they get the picture here —
                             the row's headline is the delegation, not a face.
@@ -374,7 +374,7 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
                           className="flex items-center gap-2.5 min-w-0"
                         >
                           <Avatar url={person?.avatar_url ?? null} name={person?.display_name ?? '?'} size={20} />
-                          <span className="text-xs truncate" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
+                          <span className="text-xs [overflow-wrap:anywhere]" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
                             {person?.display_name ?? 'Unknown advisor'}
                           </span>
                         </ProfileLink>
@@ -388,7 +388,7 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
                           className="flex items-center gap-2.5 min-w-0"
                         >
                           <Avatar url={person?.avatar_url ?? null} name={name} size={26} />
-                          <p className="font-semibold text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{name}</p>
+                          <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{name}</p>
                         </ProfileLink>
                         <span className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{roleLabel(r.applications?.role ?? '')}</span>
                       </>
@@ -432,7 +432,7 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
                     name={reviewing.applications?.profiles?.display_name ?? '?'}
                     size={32}
                   />
-                  <p className="font-black text-lg truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                  <p className="font-black text-lg [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                     {reviewing.applications?.profiles?.display_name ?? 'Unknown applicant'}
                   </p>
                 </ProfileLink>
@@ -521,7 +521,7 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
                     style={{ backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', border: '1px solid rgba(61,122,82,0.3)', fontFamily: OUTFIT, opacity: busyId === reviewing.id ? 0.6 : 1 }}
                   >
                     <Check size={14} />
-                    {busyId === reviewing.id ? 'SAVING…' : 'APPROVE AID'}
+                    {busyId === reviewing.id ? 'Saving…' : 'Approve aid'}
                   </button>
                   <button
                     onClick={() => openDenyConfirm(reviewing)}
@@ -530,7 +530,7 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
                     style={{ backgroundColor: 'rgba(139,32,32,0.1)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: OUTFIT, opacity: busyId === reviewing.id ? 0.6 : 1 }}
                   >
                     <X size={14} />
-                    DENY AID
+                    Deny aid
                   </button>
                 </div>
               </div>
@@ -550,7 +550,7 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
               className="rounded-xl py-2 text-sm font-semibold focus:outline-none"
               style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT }}
             >
-              CLOSE
+              Close
             </button>
           </div>
         </ModalOverlay>

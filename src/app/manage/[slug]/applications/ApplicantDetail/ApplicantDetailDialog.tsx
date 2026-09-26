@@ -215,7 +215,7 @@ export default function ApplicantDetailDialog({
                   className="apdName"
                   style={{
                     fontFamily: OUTFIT, fontSize: 26, fontWeight: 900, lineHeight: 1.1, letterSpacing: '-0.01em', color: '#FFFFFF',
-                    overflowWrap: 'anywhere', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                    overflowWrap: 'anywhere',
                   }}
                 >
                   {name}

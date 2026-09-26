@@ -273,7 +273,7 @@ export default function AddonsSection({ conference }: { conference: Conference }
               </div>
             </div>
             <NeuButton icon={Plus} onClick={handleCreate} disabled={!canCreate}>
-              {creating ? 'CREATING…' : 'ADD'}
+              {creating ? 'Creating…' : 'Add'}
             </NeuButton>
           </div>
         </div>
@@ -298,7 +298,7 @@ export default function AddonsSection({ conference }: { conference: Conference }
                   style={{ ...(i > 0 ? { borderTop: '1px solid rgba(221,212,192,0.55)' } : {}), opacity: busy ? 0.6 : 1 }}
                 >
                   <div className="min-w-0" style={{ flex: '1 1 200px' }}>
-                    <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink }}>
+                    <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink }}>
                       {a.label}
                     </p>
                     <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted }}>

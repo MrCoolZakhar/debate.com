@@ -422,7 +422,7 @@ const AD_HOC_SEEDS: AdHocSeed[] = [
   {
     id: 'session-codes-delegates',
     audienceLabel: 'Delegates',
-    emoji: '🔑',
+    emoji: 'Key',
     title: 'Session codes for delegates',
     blurb: 'Every allocated delegate gets the join code for their committee room.',
     tokens: ['delegate_name', 'committee', 'session_code'],
@@ -436,7 +436,7 @@ const AD_HOC_SEEDS: AdHocSeed[] = [
   {
     id: 'session-codes-chairs',
     audienceLabel: 'Chairs',
-    emoji: '🪑',
+    emoji: 'Chair',
     title: 'Session codes for chairs',
     blurb: 'Chairs get their session details and where to find their chair password.',
     tokens: ['delegate_name', 'committee', 'conference_name'],
@@ -450,7 +450,7 @@ const AD_HOC_SEEDS: AdHocSeed[] = [
   {
     id: 'payment-reminder',
     audienceLabel: 'Anyone still unpaid',
-    emoji: '💳',
+    emoji: 'Credit card',
     title: 'Payment reminder',
     blurb: 'A nudge to everyone whose fee is still outstanding.',
     tokens: ['delegate_name', 'role', 'fee'],
@@ -468,7 +468,7 @@ const AD_HOC_SEEDS: AdHocSeed[] = [
   {
     id: 'welcome-pack',
     audienceLabel: 'Everyone',
-    emoji: '📦',
+    emoji: 'Package',
     title: 'Welcome / logistics pack',
     blurb: 'Arrival, venue and schedule details in one email before the conference.',
     tokens: ['delegate_name', 'conference_name', 'conference_dates'],
@@ -863,16 +863,11 @@ function ColumnHeading({
           </h2>
           {!!count && count > 0 && (
             <span
-              className="inline-flex items-center justify-center flex-shrink-0"
-              style={{
-                minWidth: 22, height: 22, padding: '0 7px', borderRadius: 999,
-                backgroundColor: '#EED98A', color: '#1B3828',
-                fontFamily: OUTFIT, fontSize: 12, fontWeight: 900,
-                fontVariantNumeric: 'tabular-nums',
-                boxShadow: NEU.outSm,
-              }}
+              className="inline-flex items-baseline gap-1 flex-shrink-0"
+              style={{ fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}
             >
-              {count}
+              <span style={{ color: GOLD_INK, fontSize: 22, fontWeight: 900, lineHeight: 1.1 }}>{count}</span>
+              <span style={{ color: SOFT, fontSize: 12, fontWeight: 700 }}>unread</span>
             </span>
           )}
         </div>
@@ -905,7 +900,7 @@ function GhostBtn({
       style={{
         border: danger ? '1px solid rgba(139,32,32,0.3)' : CARD_BORDER,
         color: ink, backgroundColor: 'transparent', fontFamily: OUTFIT,
-        letterSpacing: '0.03em', cursor: disabled ? 'default' : 'pointer', minHeight: 32,
+        cursor: disabled ? 'default' : 'pointer', minHeight: 32,
         transitionProperty: 'background-color, transform', transitionDuration: '180ms', transitionTimingFunction: EASE,
       }}
       onMouseEnter={e => { if (!disabled) (e.currentTarget as HTMLElement).style.backgroundColor = danger ? 'rgba(139,32,32,0.06)' : 'rgba(27,56,40,0.05)'; }}
@@ -933,7 +928,7 @@ function PrimaryBtn({
       style={{
         minHeight: 40,
         background: 'linear-gradient(160deg, #24513A 0%, #1B3828 62%)',
-        color: '#EED98A', fontFamily: OUTFIT, letterSpacing: '0.05em',
+        color: '#EED98A', fontFamily: OUTFIT,
         border: 'none', cursor: disabled ? 'default' : 'pointer',
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.18), 0 4px 12px -2px rgba(27,56,40,0.28)',
         transitionProperty: 'box-shadow, filter, transform', transitionDuration: '180ms', transitionTimingFunction: EASE,
@@ -1004,7 +999,7 @@ function RailCard({
             className="inline-flex items-center gap-1 mt-1.5 text-xs font-bold focus:outline-none active:scale-[0.96]"
             style={{
               color: '#1B3828', background: 'none', border: 'none', padding: '4px 0',
-              fontFamily: OUTFIT, letterSpacing: '0.04em', cursor: 'pointer',
+              fontFamily: OUTFIT, cursor: 'pointer',
               transitionProperty: 'transform', transitionDuration: '150ms', transitionTimingFunction: EASE,
             }}
           >
@@ -1164,7 +1159,7 @@ function NewEmailModal({
                     style={{ ...RAISED_DISC, width: 52, height: 52, fontSize: 27, lineHeight: 1 }}
                     aria-hidden
                   >
-                    {seed.emoji}
+                    <Emoji3D name={seed.emoji} size={30} fallback={FileText} fallbackColor="#1B3828" />
                   </span>
                   <span className="min-w-0 flex-1 block">
                     {/* 27px, exactly double the 13.5 this shipped with. The
@@ -1262,7 +1257,7 @@ function NewEmailModal({
             <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT, textWrap: 'pretty', flex: '1 1 200px' }}>
               Nothing here fits? Start from an empty page.
             </p>
-            <PrimaryBtn icon={PenLine} onClick={onCustom}>WRITE A CUSTOM EMAIL</PrimaryBtn>
+            <PrimaryBtn icon={PenLine} onClick={onCustom}>Write a custom email</PrimaryBtn>
           </div>
         </div>
       </div>
@@ -3151,7 +3146,7 @@ function CommunicationsPageInner() {
         <>
           <TourGreen>Sent</TourGreen> is the full record, emails you wrote yourself AND the
           automatic ones the platform sent for you, with delivered/failed per recipient. Hit{' '}
-          <TourGold>NEW EMAIL</TourGold> to pick a template or start blank, write with a live
+          <TourGold>New email</TourGold> to pick a template or start blank, write with a live
           preview beside you, and choose exactly who gets it, all on one screen. The{' '}
           <strong>Design</strong> controls ride with the editor now, so the look every email
           inherits is set beside the email you are writing.
@@ -3168,7 +3163,7 @@ function CommunicationsPageInner() {
           <TourGold>Inbox</TourGold> is the other direction: questions and allocation swap
           requests from advisors, head delegates and delegates land here as threads. The two
           nobody has answered sit at the front and the rest stack away behind them; open{' '}
-          <TourGold>ALL THREADS</TourGold> to search and filter the pile. Reply in place, and
+          <TourGold>All threads</TourGold> to search and filter the pile. Reply in place, and
           approve or decline a swap without leaving the page.
         </>
       ),
@@ -3195,7 +3190,7 @@ function CommunicationsPageInner() {
         <>
           That is the whole system. Turn a couple of <TourGreen>automatic emails</TourGreen> on
           and your conference starts writing its own. Come back any time. The tour lives under{' '}
-          <strong>Take the tour</strong> in the header 🎉
+          <strong>Take the tour</strong> in the header.
         </>
       ),
     },
@@ -3363,7 +3358,7 @@ function CommunicationsPageInner() {
           : 'Nobody on your team has replied yet, and the reminder digest is switched off.',
         icon: MessageSquare,
         pulse: false,
-        action: { label: 'ANSWER THEM', onClick: jumpToInbox },
+        action: { label: 'Answer them', onClick: jumpToInbox },
         promoted: 'unanswered',
       };
     }
@@ -3377,7 +3372,7 @@ function CommunicationsPageInner() {
         icon: KeyRound,
         pulse: false,
         action: {
-          label: 'SEND JOIN INVITES',
+          label: 'Send join invites',
           onClick: () => {
             const def = EVENT_REGISTRY.find(e => e.key === 'session_join_invite');
             if (def) { setView('automatic'); openBuilderForEvent(def); }
@@ -3400,7 +3395,7 @@ function CommunicationsPageInner() {
         sub: `Chair invites, organiser invites and account invites always send${enabledCount > 0 ? `, and you have ${enabledCount} more switched on` : ''}. They go out the moment an application lands, a place is offered or a fee clears. You do not have to write them.`,
         icon: Bell,
         pulse: false,
-        action: { label: 'SEE WHAT SENDS', onClick: () => setView('automatic') },
+        action: { label: 'See what sends', onClick: () => setView('automatic') },
         promoted: null,
       };
     }
@@ -3456,8 +3451,8 @@ function CommunicationsPageInner() {
         style={PANEL}
       >
         <div className="min-w-0 flex-1" style={{ minWidth: 180 }}>
-          <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{t.name}</p>
-          <p className="text-xs truncate mt-0.5" style={{ color: SOFT, fontFamily: OUTFIT }}>
+          <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{t.name}</p>
+          <p className="text-xs truncate mt-0.5" style={{ color: SOFT, fontFamily: OUTFIT }} title={`${t.subject || '(No subject)'} · Edited ${formatDate(t.updated_at)}`}>
             {t.subject || '(No subject)'} · Edited {formatDate(t.updated_at)}
           </p>
         </div>
@@ -3465,20 +3460,20 @@ function CommunicationsPageInner() {
           <GhostBtn onClick={() => handleDuplicateTemplate(t)} title="Duplicate" disabled={duplicatingIds.has(t.id)}>
             <Copy size={13} />
           </GhostBtn>
-          <GhostBtn onClick={() => openBuilderForAdHoc(t)}>EDIT</GhostBtn>
+          <GhostBtn onClick={() => openBuilderForAdHoc(t)}>Edit</GhostBtn>
           <button
             onClick={() => openBuilderForAdHoc(t)}
             className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none active:scale-[0.96]"
             style={{
               background: 'linear-gradient(160deg, #24513A 0%, #1B3828 62%)', color: '#EED98A', fontFamily: OUTFIT,
-              border: 'none', cursor: 'pointer', minHeight: 32, letterSpacing: '0.04em',
+              border: 'none', cursor: 'pointer', minHeight: 32,
               boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.18), 3px 4px 9px rgba(27,56,40,0.26)',
               transitionProperty: 'filter, transform', transitionDuration: '160ms', transitionTimingFunction: EASE,
             }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.filter = 'brightness(1.07)'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.filter = 'none'; }}
           >
-            SEND
+            Send
           </button>
           <GhostBtn onClick={() => handleDeleteTemplate(t)} title="Delete" danger disabled={deletingIds.has(t.id)}>
             <X size={13} />
@@ -3524,9 +3519,9 @@ function CommunicationsPageInner() {
               )}
               <span className="min-w-0">
                 {name && (
-                  <span className="block text-xs font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{name}</span>
+                  <span className="block text-xs font-semibold [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{name}</span>
                 )}
-                <span className="block truncate" style={{ fontSize: name ? 10.5 : 12, color: name ? SOFT : '#1C1410', fontFamily: OUTFIT }}>
+                <span className="block [overflow-wrap:anywhere]" style={{ fontSize: name ? 10.5 : 12, color: name ? SOFT : '#1C1410', fontFamily: OUTFIT }}>
                   {r.recipient_email ?? '–'}
                 </span>
               </span>
@@ -3538,7 +3533,7 @@ function CommunicationsPageInner() {
             const failure = friendlyDeliveryError(r.error, r.recipient_email);
             return (
               <>
-                <span className="text-xs truncate" style={{ color: RED, fontFamily: OUTFIT, maxWidth: 300 }} title={r.error}>
+                <span className="text-xs truncate" style={{ color: RED, fontFamily: OUTFIT, maxWidth: 300 }} title={failure.text}>
                   {failure.text}
                 </span>
                 {failure.fixable && (
@@ -3547,7 +3542,7 @@ function CommunicationsPageInner() {
                     className="inline-flex items-center gap-1 rounded-lg py-1 px-2.5 text-xs font-bold flex-shrink-0 focus:outline-none"
                     style={{ border: '1px solid rgba(139,32,32,0.35)', color: RED, backgroundColor: 'rgba(139,32,32,0.06)', fontFamily: OUTFIT, textDecoration: 'none', whiteSpace: 'nowrap' }}
                   >
-                    <Wrench size={11} /> FIX IT NOW
+                    <Wrench size={11} /> Fix it now
                   </Link>
                 )}
               </>
@@ -3716,7 +3711,7 @@ function CommunicationsPageInner() {
             >
               {kindChip.label}
             </span>
-            <span className="truncate" style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700 }}>
+            <span className="min-w-0 [overflow-wrap:anywhere]" style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700 }}>
               {name}{role ? ` · ${roleLabel(role)}` : ''}
             </span>
             {fromContactForm && (
@@ -3742,6 +3737,7 @@ function CommunicationsPageInner() {
           {last && (
             <span
               className="block truncate"
+              title={`${last.is_organizer ? 'You: ' : ''}${last.body}`}
               style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 12, lineHeight: 1.4, marginBlockStart: 3 }}
             >
               {last.is_organizer ? 'You: ' : ''}{last.body}
@@ -3961,17 +3957,17 @@ function CommunicationsPageInner() {
               onClick={() => setTourOpen(true)}
               className="flex items-center gap-1.5 rounded-xl px-3 focus:outline-none transition-colors"
               style={{
-                fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
+                fontFamily: OUTFIT, fontSize: 12, fontWeight: 800,
                 color: '#1B3828', backgroundColor: 'transparent', border: `1px solid ${BORDER}`,
                 cursor: 'pointer', minHeight: 40,
               }}
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
             >
-              <Compass size={13} /> <span className="hidden sm:inline">TAKE THE TOUR</span><span className="sm:hidden">TOUR</span>
+              <Compass size={13} /> <span className="hidden sm:inline">Take the tour</span><span className="sm:hidden">Tour</span>
             </button>
             {view === 'landing' && (
-              <PrimaryBtn icon={Plus} onClick={openPicker}>NEW EMAIL</PrimaryBtn>
+              <PrimaryBtn icon={Plus} onClick={openPicker}>New email</PrimaryBtn>
             )}
           </div>
         </div>
@@ -4117,7 +4113,7 @@ function CommunicationsPageInner() {
                             />
                             <span className="min-w-0">
                               <span className="flex items-center gap-1.5 min-w-0">
-                                <span className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                                <span className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                                   {ev.label}
                                 </span>
                                 {ev.recurring && (
@@ -4146,8 +4142,8 @@ function CommunicationsPageInner() {
                                 onChange={togglingStub ? () => {} : () => handleToggleEnabled(ev, template)}
                               />
                             )}
-                            <GhostBtn onClick={() => setPreviewDefaultKey(ev.key)}>PREVIEW DEFAULT</GhostBtn>
-                            <GhostBtn onClick={() => openBuilderForEvent(ev)}>{hasDraft ? 'EDIT' : 'DRAFT'}</GhostBtn>
+                            <GhostBtn onClick={() => setPreviewDefaultKey(ev.key)}>Preview default</GhostBtn>
+                            <GhostBtn onClick={() => openBuilderForEvent(ev)}>{hasDraft ? 'Edit' : 'Draft'}</GhostBtn>
                           </div>
                         </div>
                         {expanded && (
@@ -4343,7 +4339,7 @@ function CommunicationsPageInner() {
               </div>
               {inboxExpanded && !selectedRequest && (
                 <div className="flex-shrink-0" style={{ marginBlockStart: 5 }}>
-                  <GhostBtn onClick={() => setInboxExpanded(false)}>SHOW LESS</GhostBtn>
+                  <GhostBtn onClick={() => setInboxExpanded(false)}>Show less</GhostBtn>
                 </div>
               )}
             </div>
@@ -4393,7 +4389,7 @@ function CommunicationsPageInner() {
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <GhostBtn onClick={() => (selectedRequest.status === 'open' ? setCloseConfirmOpen(true) : handleCloseReopen(false))}>
-                        {selectedRequest.status === 'open' ? 'CLOSE' : 'REOPEN'}
+                        {selectedRequest.status === 'open' ? 'Close' : 'Reopen'}
                       </GhostBtn>
                       <GhostBtn onClick={handleDeleteThread} title="Delete this thread" danger disabled={deletingThread}>
                         <Trash2 size={13} />
@@ -4419,7 +4415,7 @@ function CommunicationsPageInner() {
                       {selectedRequest.kind === 'swap_request' && selectedRequest.status === 'open' && (
                         <div className="flex gap-2 mt-3">
                           <GhostBtn onClick={() => handleSwapDecision(false)} danger disabled={swapActing}>
-                            DECLINE
+                            Decline
                           </GhostBtn>
                           <button
                             onClick={() => handleSwapDecision(true)}
@@ -4428,12 +4424,12 @@ function CommunicationsPageInner() {
                             style={{
                               backgroundColor: swapActing ? '#DDD4C0' : '#1B3828',
                               color: swapActing ? SOFT : '#EED98A',
-                              border: 'none', fontFamily: OUTFIT, letterSpacing: '0.05em',
+                              border: 'none', fontFamily: OUTFIT,
                               cursor: swapActing ? 'default' : 'pointer',
                               transitionProperty: 'transform', transitionDuration: '160ms', transitionTimingFunction: EASE,
                             }}
                           >
-                            {swapActing ? 'PROCESSING...' : 'APPROVE'}
+                            {swapActing ? 'Processing…' : 'Approve'}
                           </button>
                         </div>
                       )}
@@ -4493,12 +4489,12 @@ function CommunicationsPageInner() {
                         style={{
                           backgroundColor: !replyText.trim() ? '#DDD4C0' : '#1B3828',
                           color: !replyText.trim() ? SOFT : '#EED98A',
-                          border: 'none', fontFamily: OUTFIT, letterSpacing: '0.05em',
+                          border: 'none', fontFamily: OUTFIT,
                           cursor: !replyText.trim() ? 'default' : 'pointer', minHeight: 40,
                           transitionProperty: 'transform, background-color', transitionDuration: '160ms', transitionTimingFunction: EASE,
                         }}
                       >
-                        SEND
+                        Send
                       </button>
                     </div>
                   )}
@@ -4510,7 +4506,7 @@ function CommunicationsPageInner() {
                     <ConfirmModal
                       title="Close this thread?"
                       body="The participant will see it as closed. You can reopen it later."
-                      confirmLabel="Close Thread"
+                      confirmLabel="Close thread"
                       danger
                       onConfirm={() => handleCloseReopen(true)}
                       onCancel={() => setCloseConfirmOpen(false)}
@@ -4533,12 +4529,12 @@ function CommunicationsPageInner() {
                         disabled={markingAllRead}
                         className="focus:outline-none"
                         style={{
-                          fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
+                          fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
                           color: markingAllRead ? SOFT : '#1B3828',
                           background: 'none', border: 'none', cursor: markingAllRead ? 'default' : 'pointer', padding: '8px 2px',
                         }}
                       >
-                        {markingAllRead ? 'MARKING…' : 'MARK ALL READ'}
+                        {markingAllRead ? 'Marking…' : 'Mark all read'}
                       </button>
                     )}
                     <FilterPopoverShell
@@ -4635,7 +4631,7 @@ function CommunicationsPageInner() {
                         </span>
                       </p>
                       {inboxRequests.length > 0 && (
-                        <GhostBtn onClick={() => setInboxExpanded(true)}>OPEN THE INBOX</GhostBtn>
+                        <GhostBtn onClick={() => setInboxExpanded(true)}>Open the inbox</GhostBtn>
                       )}
                     </div>
                   ) : (
@@ -4683,7 +4679,7 @@ function CommunicationsPageInner() {
                                 <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: ghostUnread ? 800 : 600, color: '#1C1410' }}>
                                   {r.subject}
                                 </span>
-                                <span className="truncate flex-shrink-0" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: SOFT }}>
+                                <span className="truncate flex-shrink-0" title={ghostName} style={{ maxWidth: '45%', fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: SOFT }}>
                                   {ghostName}
                                 </span>
                               </div>
@@ -4701,14 +4697,14 @@ function CommunicationsPageInner() {
                         style={{
                           marginBlockStart: 10, minHeight: 40, border: CARD_BORDER,
                           backgroundColor: 'transparent', color: '#1C1410', fontFamily: OUTFIT,
-                          letterSpacing: '0.05em', cursor: 'pointer', fontVariantNumeric: 'tabular-nums',
+                          cursor: 'pointer', fontVariantNumeric: 'tabular-nums',
                           transitionProperty: 'background-color, transform', transitionDuration: '180ms', transitionTimingFunction: EASE,
                         }}
                         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
                         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                       >
-                        ALL {inboxRequests.length} THREAD{inboxRequests.length === 1 ? '' : 'S'}
-                        {stackUnread.length > stackLive.length ? ` · ${stackUnread.length - stackLive.length} MORE UNREAD` : ''}
+                        All {inboxRequests.length} thread{inboxRequests.length === 1 ? '' : 's'}
+                        {stackUnread.length > stackLive.length ? `, ${stackUnread.length - stackLive.length} more unread` : ''}
                       </button>
                     </>
                   )}
@@ -4966,7 +4962,7 @@ function CommunicationsPageInner() {
                       orphaned 'ready' ones, which is proof enough that it
                       never tracked anything. These are SAVED emails, some
                       sent and some not, and the word now says so. */}
-                  <span className="text-xs font-bold uppercase" style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11, letterSpacing: '0.07em', fontVariantNumeric: 'tabular-nums' }}>
+                  <span className="text-xs font-bold" style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
                     {adhocTemplates.length} saved
                   </span>
                 </button>
@@ -4999,7 +4995,7 @@ function CommunicationsPageInner() {
                       <div key={`auto-${g.key}`} className="rounded-2xl p-5" style={PANEL}>
                         <div className="flex items-center gap-3">
                           <NeuIconDisc gradient={NEU_GRADIENTS.gold} emoji="Bellhop bell" icon={Bell} size={34} />
-                          <p className="font-semibold text-sm flex-1 truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                          <p className="font-semibold text-sm flex-1 min-w-0 [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                             {g.label}
                           </p>
                           <span
@@ -5023,7 +5019,7 @@ function CommunicationsPageInner() {
                               className="text-xs font-bold focus:outline-none"
                               style={{ color: '#1B3828', backgroundColor: 'transparent', border: 'none', fontFamily: OUTFIT, cursor: 'pointer', padding: '4px 0' }}
                             >
-                              {isOpen ? 'HIDE RECIPIENTS' : 'RECIPIENTS'}
+                              {isOpen ? 'Hide recipients' : 'Recipients'}
                             </button>
                           </div>
                           {isOpen && (
@@ -5047,7 +5043,7 @@ function CommunicationsPageInner() {
                     <div key={email.id} className="rounded-2xl p-5" style={PANEL}>
                       <div className="flex items-center gap-3">
                         <NeuIconDisc gradient={NEU_GRADIENTS.forest} emoji="Outbox tray" icon={Send} size={34} />
-                        <p className="font-semibold text-sm flex-1 truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                        <p className="font-semibold text-sm flex-1 truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }} title={email.subject || '(No subject)'}>
                           {email.subject || '(No subject)'}
                         </p>
                         <span
@@ -5059,7 +5055,7 @@ function CommunicationsPageInner() {
                       </div>
 
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5" style={{ fontSize: 12, color: SOFT, fontFamily: OUTFIT }}>
-                        <span className="truncate" style={{ maxWidth: 340 }}>
+                        <span className="[overflow-wrap:anywhere]" style={{ maxWidth: 420 }}>
                           {filterText}
                           {email.recipient_count > 0 ? ` · ${email.recipient_count} recipient${email.recipient_count === 1 ? '' : 's'}` : ''}
                         </span>
@@ -5079,7 +5075,7 @@ function CommunicationsPageInner() {
                               className="text-xs font-bold focus:outline-none"
                               style={{ color: '#1B3828', backgroundColor: 'transparent', border: 'none', fontFamily: OUTFIT, cursor: 'pointer', padding: '4px 0' }}
                             >
-                              {isExpanded ? 'HIDE' : 'VIEW'}
+                              {isExpanded ? 'Hide' : 'View'}
                             </button>
                           )}
                           <button
@@ -5087,7 +5083,7 @@ function CommunicationsPageInner() {
                             className="text-xs font-bold focus:outline-none"
                             style={{ color: '#1B3828', backgroundColor: 'transparent', border: 'none', fontFamily: OUTFIT, cursor: 'pointer', padding: '4px 0' }}
                           >
-                            {recipientsExpandedId === email.id ? 'HIDE RECIPIENTS' : 'RECIPIENTS'}
+                            {recipientsExpandedId === email.id ? 'Hide recipients' : 'Recipients'}
                           </button>
                         </div>
 
@@ -5260,7 +5256,7 @@ function CommunicationsPageInner() {
                   onMouseEnter={e => { if (!savingTemplate) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                 >
-                  {savingTemplate ? 'SAVING...' : 'SAVE'}
+                  {savingTemplate ? 'Saving…' : 'Save'}
                 </button>
               )}
               name={builderName}

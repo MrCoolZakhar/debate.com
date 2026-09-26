@@ -67,6 +67,8 @@ const AMBER_TEXT = '#B6871F';
 // satisfy job_postings_category_check / job_postings_compensation_check.
 const toDbEnum = (v: string) => v.toLowerCase().replace(/\s+/g, '-');
 const toUiEnum = (v: string) => v.toUpperCase().replace(/-/g, ' ');
+// Display only: 'TRAVEL COVERED' / 'travel-covered' -> 'Travel covered'.
+const sentenceLabel = (v: string) => { const t = v.replace(/-/g, ' ').toLowerCase(); return t.charAt(0).toUpperCase() + t.slice(1); };
 
 // ── Helper: category badge style ───────────────────────────────────────────
 
@@ -243,10 +245,10 @@ function ApplicationsPanel({
 
                 {/* Name + email */}
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm truncate" style={{ color: INK, fontFamily: "var(--font-brand), sans-serif" }}>
+                  <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: INK, fontFamily: "var(--font-brand), sans-serif" }}>
                     {profile?.display_name ?? 'Unknown'}
                   </p>
-                  <p className="text-xs truncate" style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif" }}>
+                  <p className="text-xs [overflow-wrap:anywhere]" style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif" }}>
                     {profile?.email ?? ''}
                   </p>
                 </div>
@@ -255,9 +257,9 @@ function ApplicationsPanel({
               {/* Status badge */}
               <span
                 className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                style={{ ...statusStyle, fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.06em' }}
+                style={{ ...statusStyle, fontFamily: "var(--font-brand), sans-serif" }}
               >
-                {app.status.toUpperCase()}
+                {sentenceLabel(app.status)}
               </span>
 
               {/* Accept / Reject (only if submitted) */}
@@ -270,7 +272,7 @@ function ApplicationsPanel({
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
                   >
-                    ACCEPT
+                    Accept
                   </button>
                   <span style={{ color: BORDER }}>·</span>
                   <button
@@ -280,7 +282,7 @@ function ApplicationsPanel({
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
                   >
-                    REJECT
+                    Reject
                   </button>
                 </div>
               )}
@@ -333,18 +335,18 @@ function PostingCard({
       <div className="flex items-center gap-3">
         <span
           className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-          style={{ ...catStyle, fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.06em', textTransform: 'uppercase' }}
+          style={{ ...catStyle, fontFamily: "var(--font-brand), sans-serif" }}
         >
-          {posting.category}
+          {sentenceLabel(posting.category)}
         </span>
         <p className="font-semibold text-base flex-1 min-w-0" style={{ color: INK, fontFamily: "var(--font-brand), sans-serif" }}>
           {posting.role_name}
         </p>
         <span
           className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-          style={{ ...openStyle, fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.06em' }}
+          style={{ ...openStyle, fontFamily: "var(--font-brand), sans-serif" }}
         >
-          {posting.is_open ? 'OPEN' : 'CLOSED'}
+          {posting.is_open ? 'Open' : 'Closed'}
         </span>
       </div>
 
@@ -360,7 +362,7 @@ function PostingCard({
           <CreditCard size={12} />
           {posting.compensation.toLowerCase() === 'other' && posting.compensation_note
             ? posting.compensation_note
-            : toUiEnum(posting.compensation)}
+            : sentenceLabel(posting.compensation)}
         </span>
         {posting.deadline && (
           <span className="flex items-center gap-1 text-xs" style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif" }}>
@@ -404,16 +406,16 @@ function PostingCard({
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = MUTED; }}
         >
           {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-          VIEW APPLICATIONS ({appCount})
+          View applications ({appCount})
         </button>
 
         <div className="flex-1" />
 
-        <GhostBtn onClick={() => onEdit(posting)}>EDIT</GhostBtn>
+        <GhostBtn onClick={() => onEdit(posting)}>Edit</GhostBtn>
         <GhostBtn onClick={() => onToggleOpen(posting)} disabled={busy}>
-          {posting.is_open ? 'CLOSE' : 'REOPEN'}
+          {posting.is_open ? 'Close' : 'Reopen'}
         </GhostBtn>
-        <GhostBtn onClick={() => onDelete(posting)} danger disabled={busy}>DELETE</GhostBtn>
+        <GhostBtn onClick={() => onDelete(posting)} danger disabled={busy}>Delete</GhostBtn>
       </div>
 
       {/* Inline applications */}
@@ -504,10 +506,9 @@ function PostingModal({
               fontFamily: "var(--font-brand), sans-serif",
               backgroundColor: value === opt ? FOREST : 'transparent',
               color: value === opt ? GOLD : MUTED,
-              letterSpacing: '0.04em',
             }}
           >
-            {opt}
+            {sentenceLabel(opt)}
           </button>
         ))}
       </div>
@@ -669,7 +670,6 @@ function PostingModal({
               backgroundColor: FOREST,
               color: GOLD,
               fontFamily: "var(--font-brand), sans-serif",
-              letterSpacing: '0.05em',
             }}
             onMouseEnter={(e) => {
               if (!saving) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C';
@@ -679,10 +679,10 @@ function PostingModal({
             }}
           >
             {saving
-              ? 'SAVING…'
+              ? 'Saving…'
               : isEdit
-              ? 'SAVE CHANGES'
-              : 'POST POSITION'}
+              ? 'Save changes'
+              : 'Post position'}
           </button>
         </div>
       </div>
@@ -1011,12 +1011,11 @@ export default function JobBoardPage() {
             backgroundColor: FOREST,
             color: GOLD,
             fontFamily: "var(--font-brand), sans-serif",
-            letterSpacing: '0.04em',
           }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = FOREST; }}
         >
-          POST A POSITION
+          Post a position
         </button>
       </div>
 
@@ -1048,16 +1047,15 @@ export default function JobBoardPage() {
           <button
             key={cat}
             onClick={() => setCategoryTab(cat)}
-            className="px-3 py-1.5 rounded-full text-xs font-bold tracking-widest transition-all focus:outline-none"
+            className="px-3 py-1.5 rounded-full text-xs font-bold transition-all focus:outline-none"
             style={{
               backgroundColor: categoryTab === cat ? FOREST : 'transparent',
               color: categoryTab === cat ? GOLD : INK,
               border: categoryTab === cat ? `1.5px solid ${FOREST}` : `1.5px solid ${BORDER}`,
               fontFamily: "var(--font-brand), sans-serif",
-              letterSpacing: '0.07em',
             }}
           >
-            {cat}
+            {cat === 'ALL' ? 'All' : sentenceLabel(cat)}
           </button>
         ))}
       </div>
@@ -1070,7 +1068,7 @@ export default function JobBoardPage() {
           </p>
           <p className="text-sm mb-4" style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif" }}>
             {postings.length === 0
-              ? 'Click "Post a Position" to start recruiting chairs and staff.'
+              ? 'Press "Post a position" to start recruiting chairs and staff.'
               : 'Try selecting a different category above.'}
           </p>
         </div>

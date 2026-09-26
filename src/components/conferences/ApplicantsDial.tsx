@@ -200,7 +200,7 @@ export default function ApplicantsDial({
                   background: `linear-gradient(90deg, ${color} 50%, ${tint(color, 0.58)} 50%)`,
                 }}
               />
-              <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: INK_70, minWidth: 0 }}>
+              <span className="truncate" title={s.label} style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: INK_70, minWidth: 0 }}>
                 {s.label}
               </span>
               <span

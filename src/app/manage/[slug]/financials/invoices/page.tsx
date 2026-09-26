@@ -214,7 +214,7 @@ function RemovePledgeAction({
         className="text-xs font-semibold focus:outline-none hover:underline"
         style={{ color: NEU.muted, fontFamily: OUTFIT, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
       >
-        REMOVE SPOT
+        Remove spot
       </button>
       {open && pos && (
         <Portal>
@@ -241,7 +241,7 @@ function RemovePledgeAction({
                 className="flex-1 rounded-lg py-1.5 text-xs font-bold focus:outline-none"
                 style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: busy ? 'default' : 'pointer' }}
               >
-                CANCEL
+                Cancel
               </button>
               <button
                 onClick={handleConfirm}
@@ -249,7 +249,7 @@ function RemovePledgeAction({
                 className="flex-1 rounded-lg py-1.5 text-xs font-bold focus:outline-none"
                 style={{ border: 'none', color: '#FFFFFF', backgroundColor: busy ? '#C89494' : '#8B2020', fontFamily: OUTFIT, cursor: busy ? 'default' : 'pointer' }}
               >
-                {busy ? '…' : 'REMOVE'}
+                {busy ? '…' : 'Remove'}
               </button>
             </div>
           </div>
@@ -594,14 +594,14 @@ export default function FinancialsInvoicesPage() {
             border: activeView === 'transactions' ? `1.5px solid ${NEU.forest}` : '1px solid rgba(154,138,120,0.35)',
             backgroundColor: activeView === 'transactions' ? 'rgba(27,56,40,0.07)' : 'transparent',
             color: activeView === 'transactions' ? NEU.forest : NEU.muted,
-            fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: 'pointer',
+            fontFamily: OUTFIT, cursor: 'pointer',
           }}
         >
-          TRANSACTIONS
+          Transactions
           {awaitingCount > 0 && (
             <span
-              className="inline-flex items-center justify-center rounded-full"
-              style={{ minWidth: 18, height: 18, padding: '0 5px', backgroundColor: '#B8844A', color: '#FFFFFF', fontSize: 10, fontWeight: 900 }}
+              title={`${awaitingCount} awaiting review`}
+              style={{ color: '#9A6B2F', fontSize: 13, fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}
             >
               {awaitingCount}
             </span>
@@ -615,10 +615,10 @@ export default function FinancialsInvoicesPage() {
             border: activeView === 'ledger' ? `1.5px solid ${NEU.forest}` : '1px solid rgba(154,138,120,0.35)',
             backgroundColor: activeView === 'ledger' ? 'rgba(27,56,40,0.07)' : 'transparent',
             color: activeView === 'ledger' ? NEU.forest : NEU.muted,
-            fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: 'pointer',
+            fontFamily: OUTFIT, cursor: 'pointer',
           }}
         >
-          LEDGER
+          Ledger
         </button>
       </div>
 
@@ -671,7 +671,7 @@ export default function FinancialsInvoicesPage() {
                     >
                       <NeuIconDisc gradient={batch.method === 'stripe' ? NEU_GRADIENTS.forest : NEU_GRADIENTS.amber} icon={User} size={36} />
                       <div className="min-w-0" style={{ flex: '1 1 160px' }}>
-                        <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>
+                        <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>
                           {payerName(batch, payerNames)}
                         </p>
                         <p style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted }}>
@@ -741,12 +741,12 @@ export default function FinancialsInvoicesPage() {
                               style={{
                                 padding: '7px 14px', borderRadius: 999, border: '1px solid rgba(61,122,82,0.35)',
                                 backgroundColor: 'rgba(61,122,82,0.1)', color: '#2A5A3C',
-                                fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.03em',
+                                fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
                                 cursor: busy ? 'default' : 'pointer',
                               }}
                             >
                               <Check size={12} strokeWidth={2.6} />
-                              APPROVE
+                              Approve
                             </button>
                             <button
                               onClick={(e) => { e.stopPropagation(); handleReject(batch); }}
@@ -755,12 +755,12 @@ export default function FinancialsInvoicesPage() {
                               style={{
                                 padding: '7px 14px', borderRadius: 999, border: '1px solid rgba(139,32,32,0.3)',
                                 backgroundColor: 'rgba(139,32,32,0.06)', color: '#8B2020',
-                                fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.03em',
+                                fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
                                 cursor: busy ? 'default' : 'pointer',
                               }}
                             >
                               <X size={12} strokeWidth={2.6} />
-                              REJECT
+                              Reject
                             </button>
                           </div>
                         )}
@@ -836,14 +836,14 @@ export default function FinancialsInvoicesPage() {
                     style={{ ...(i > 0 ? { borderTop: '1px solid rgba(221,212,192,0.55)' } : {}), opacity: busy ? 0.6 : 1 }}
                   >
                     <div className="min-w-0" style={{ flex: '1 1 160px' }}>
-                      <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>{name}</p>
+                      <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>{name}</p>
                       {app?.role && (
                         <p style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted }}>{roleLabel(app.role)}</p>
                       )}
                     </div>
 
                     <div className="min-w-0" style={{ flex: '1 1 160px' }}>
-                      <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>
+                      <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>
                         {invoiceLabel(inv)}
                       </p>
                       <p style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted }}>
@@ -872,13 +872,13 @@ export default function FinancialsInvoicesPage() {
                             style={{
                               padding: '5px 10px', borderRadius: 999, border: '1px solid rgba(61,122,82,0.35)',
                               backgroundColor: 'rgba(61,122,82,0.1)', color: '#2A5A3C',
-                              fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.03em',
+                              fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800,
                               cursor: busy ? 'default' : 'pointer',
                             }}
                             title={`Mark ${centsToFee(due, inv.currency)} as paid manually`}
                           >
                             <Check size={11} strokeWidth={2.6} />
-                            MARK PAID
+                            Mark paid
                           </button>
                         )}
                         {canMarkUnpaid && (
@@ -889,12 +889,12 @@ export default function FinancialsInvoicesPage() {
                             style={{
                               padding: '5px 10px', borderRadius: 999, border: '1px solid rgba(139,32,32,0.3)',
                               backgroundColor: 'rgba(139,32,32,0.06)', color: '#8B2020',
-                              fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.03em',
+                              fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800,
                               cursor: busy ? 'default' : 'pointer',
                             }}
                           >
                             <RotateCcw size={11} strokeWidth={2.6} />
-                            MARK UNPAID
+                            Mark unpaid
                           </button>
                         )}
                       </div>

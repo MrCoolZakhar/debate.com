@@ -225,21 +225,20 @@ export default function ScoreboardPage() {
               }}
             >
               <Download size={13} strokeWidth={2.5} />
-              EXPORT CSV
+              Export CSV
             </button>
           )}
         </div>
       </div>
       <p style={{ fontFamily: OUTFIT, fontSize: 13, color: SOFT, marginBlockEnd: 12, maxWidth: 660 }}>
-        Every delegation across your committees, as scored by the chairs in their live sessions:
-        points, speeches, factor ratings and written comments. Read-only: only chairs can award points.
+        Every delegation across your committees, scored by the chairs in their live sessions. Only chairs can award points.
       </p>
       {/* This page is no longer in the sidebar; say where it came from and how
           to get back, so an organiser who lands here by URL is not stranded. */}
       <p style={{ fontFamily: OUTFIT, fontSize: 12, color: SOFT, marginBlockEnd: 22 }}>
         <Radio size={11} strokeWidth={2.4} style={{ display: 'inline', verticalAlign: -1, marginInlineEnd: 5 }} />
         A single committee&apos;s scoreboard opens straight from its card on{' '}
-        <Link href={`/manage/${conference.slug}/live`} style={{ color: NEU.forest, fontWeight: 700, textDecoration: 'none' }}>
+        <Link href={`/manage/${conference.slug}/live`} style={{ color: NEU.forest, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 2 }}>
           Live Status
         </Link>
         . This page is the cross-committee view and the CSV export.
@@ -274,7 +273,7 @@ export default function ScoreboardPage() {
             href={`/manage/${conference.slug}/committees`}
             style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: NEU.gold, backgroundColor: NEU.forest, borderRadius: 10, padding: '8px 20px', textDecoration: 'none', display: 'inline-block' }}
           >
-            GO TO COMMITTEES →
+            Go to committees
           </Link>
         </NeuCard>
       )}
@@ -294,7 +293,7 @@ export default function ScoreboardPage() {
           {/* Committee filter */}
           <div className="flex items-center gap-2 mb-3 flex-wrap">
             <NeuPill active={committeeFilter === 'ALL'} onClick={() => { setCommitteeFilter('ALL'); setExpanded(null); }}>
-              ALL COMMITTEES
+              All committees
             </NeuPill>
             {committees.map((c) => (
               <NeuPill

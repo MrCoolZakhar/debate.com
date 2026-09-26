@@ -428,21 +428,20 @@ export function VotingBody({ data }: { data: LiveCommittee }) {
         <div className="flex items-center gap-3">
           <NeuIconDisc gradient={NEU_GRADIENTS.gold} emoji="Ballot box with ballot" icon={Gavel} size={40} />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-extrabold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+            <p className="text-sm font-extrabold [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
               {subject ? (subject.docCode || subject.title || 'Draft resolution') : 'Vote in progress'}
             </p>
-            <p className="text-[11px] truncate" style={{ color: SOFT, fontFamily: OUTFIT }}>
+            <p className="text-[11px] [overflow-wrap:anywhere]" style={{ color: SOFT, fontFamily: OUTFIT }}>
               {subject?.docCode && subject.title ? subject.title : subject?.sponsors.length ? `Sponsored by ${subject.sponsors.slice(0, 3).join(', ')}` : 'On the floor'}
             </p>
           </div>
           <span
-            className="text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase flex-shrink-0"
+            className="text-[11px] font-bold px-2.5 py-1 rounded-full flex-shrink-0"
             style={{
               color: verdictColor,
               backgroundColor: NEU.surface,
               boxShadow: `0 0 0 1.5px ${verdictColor}44, ${NEU.outSm}`,
               fontFamily: OUTFIT,
-              letterSpacing: '0.07em',
             }}
           >
             {verdict === 'passed' ? 'Passed' : verdict === 'failed' ? 'Failed' : 'Balloting'}

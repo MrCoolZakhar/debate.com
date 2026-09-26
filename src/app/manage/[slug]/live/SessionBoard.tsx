@@ -307,7 +307,7 @@ export function SessionScoreboardBoard({ committee, feedback, tabs = ['ranking',
                     <td style={{ ...TD, textAlign: 'start', maxWidth: 220 }}>
                       <span className="flex items-center gap-2 min-w-0">
                         <span className="shrink-0 flex"><SeatCircleFlag country={r.country} size={26} decorative /></span>
-                        <span className="truncate" style={{ color: NEU.ink }} title={getCountryDisplayName(r.country, 'en')}>{getCountryDisplayName(r.country, 'en')}</span>
+                        <span className="min-w-0 [overflow-wrap:anywhere]" style={{ color: NEU.ink }}>{getCountryDisplayName(r.country, 'en')}</span>
                       </span>
                     </td>
                     <td style={TD}>{r.gslSpeeches}</td>

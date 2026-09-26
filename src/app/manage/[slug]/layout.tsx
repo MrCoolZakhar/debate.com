@@ -579,7 +579,7 @@ function SidebarContent({
         />
         <div className="min-w-0">
           <span className="flex items-center gap-1.5 min-w-0 text-sm font-extrabold" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.2 }}>
-            <span className="truncate">{conference ? conferenceAcronymLabel({ acronym: conference.acronym, year }) : '…'}</span>
+            <span className="min-w-0 [overflow-wrap:anywhere]">{conference ? conferenceAcronymLabel({ acronym: conference.acronym, year }) : '…'}</span>
             {conference && <VerifiedCheck verified={conference.is_verified} showUnverified size={16} title={sealTitle} />}
           </span>
           {conference && (
@@ -678,7 +678,7 @@ function SidebarContent({
       {conference && (
         <div className="px-4 py-4 flex-shrink-0" style={{ borderTop: '1px solid #DDD4C0' }}>
           <p
-            className="text-xs mb-1.5 truncate"
+            className="text-xs mb-1.5 [overflow-wrap:anywhere]"
             style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}
           >
             {conference.full_name}
@@ -1011,7 +1011,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
             COULD NOT LOAD
           </p>
           <h1 className="text-xl font-bold mb-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-            We could not load this conference
+            We Could Not Load This Conference
           </h1>
           <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
             The connection dropped or your session went stale. Your conference is safe. Try again, and if it keeps happening, sign out and back in.
@@ -1023,7 +1023,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
           >
-            TRY AGAIN
+            Try again
           </button>
         </div>
       </div>
@@ -1038,7 +1038,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
             ACCESS DENIED
           </p>
           <h1 className="text-xl font-bold mb-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-            You don&apos;t have access to manage this conference
+            You Don&apos;t Have Access to Manage This Conference
           </h1>
           <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
             You&apos;re not listed as an organizer of this conference. If you think this is a mistake, contact the conference&apos;s owner.
@@ -1050,7 +1050,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
           >
-            ← BACK TO HOME
+            ← Back to home
           </button>
         </div>
       </div>
@@ -1089,7 +1089,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
             SECTION RESTRICTED
           </p>
           <h1 className="text-xl font-bold mb-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-            You don&apos;t have access to this section
+            You Don&apos;t Have Access to This Section
           </h1>
           <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
             Your organizer role for this conference doesn&apos;t include this section. Ask the conference owner to grant it.
@@ -1101,7 +1101,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
           >
-            ← BACK TO DASHBOARD
+            ← Back to dashboard
           </button>
         </div>
       </div>

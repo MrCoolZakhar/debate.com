@@ -376,13 +376,13 @@ function Segment<T extends string>({
             <NeuIconDisc gradient={o.gradient} icon={o.icon} size={32} />
             <span className="min-w-0">
               <span
-                className="block text-sm font-extrabold truncate"
+                className="block text-sm font-extrabold"
                 style={{ color: active ? NEU.ink : NEU.forest, fontFamily: OUTFIT }}
               >
                 {o.label}
               </span>
               {o.sub && (
-                <span className="block text-[11px] truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                <span className="block text-[11px]" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
                   {o.sub}
                 </span>
               )}
@@ -640,7 +640,7 @@ export function BroadcastComposer({
                           style={{ width: 56, height: 56, borderRadius: 12, objectFit: 'cover', display: 'block', boxShadow: NEU.outSm, flexShrink: 0 }}
                         />
                         <span className="min-w-0 flex-1">
-                          <span className="block text-xs font-bold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+                          <span className="block text-xs font-bold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }} title={imageName || 'Attached image'}>
                             {imageName || 'Attached image'}
                           </span>
                           <span className="block text-[11px]" style={{ color: NEU.green, fontFamily: OUTFIT }}>
@@ -665,7 +665,7 @@ export function BroadcastComposer({
                         style={{
                           padding: '10px 16px', border: 'none', backgroundColor: NEU.surface,
                           boxShadow: NEU.outSm, color: NEU.forest, fontFamily: OUTFIT,
-                          fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
+                          fontSize: 12, fontWeight: 800,
                           cursor: uploading ? 'default' : 'pointer', opacity: uploading ? 0.6 : 1,
                           transition: `box-shadow 200ms ${EASE}`,
                         }}
@@ -676,7 +676,7 @@ export function BroadcastComposer({
                     )}
                     {!imageUrl && (
                       <p className="text-[11px] mt-1.5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-                        JPEG, PNG, WebP or GIF · up to 5MB
+                        JPEG, PNG, WebP or GIF, up to 5 MB
                       </p>
                     )}
                   </div>
@@ -814,18 +814,18 @@ export function BroadcastComposer({
                           </span>
                           <LogoDisc src={t.logoUrl} size={28} fallbackText={t.label.slice(0, 3)} alt={t.label} />
                           <span className="min-w-0 flex-1">
-                            <span className="block text-sm font-bold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+                            <span className="block text-sm font-bold [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
                               {t.label}
                             </span>
                             {t.fullName && (
-                              <span className="block text-[11px] truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                              <span className="block text-[11px] [overflow-wrap:anywhere]" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
                                 {t.fullName}
                               </span>
                             )}
                           </span>
                           <span className="inline-flex items-center gap-1.5 flex-shrink-0">
                             <span className="rounded-full" style={{ width: 7, height: 7, backgroundColor: statusColor(t.status) }} />
-                            <span className="text-[10px] font-bold uppercase" style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
+                            <span className="text-[11px] font-bold" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
                               {STATUS_TEXT[t.status]}
                             </span>
                           </span>
@@ -914,7 +914,7 @@ export function BroadcastComposer({
                       ? 'linear-gradient(135deg, #9A3030, #7A1F1F)'
                       : `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
                   color: !canSend || (ending && confirmEnd && !ack) ? NEU.muted : ending ? '#FFFFFF' : NEU.gold,
-                  fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, letterSpacing: '0.05em',
+                  fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800,
                   cursor: !canSend || (ending && confirmEnd && !ack) ? 'default' : 'pointer',
                   boxShadow: !canSend ? 'none' : NEU.outSm,
                   transition: `box-shadow 220ms ${EASE}`,
@@ -992,8 +992,8 @@ export function RecentBroadcasts({
                   </span>
                   {pending && g.actionAt && (
                     <span
-                      className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full"
-                      style={{ color: NEU.deepGold, backgroundColor: NEU.base, boxShadow: NEU.inSm, fontFamily: OUTFIT, letterSpacing: '0.06em' }}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold"
+                      style={{ color: NEU.ink, fontFamily: OUTFIT }}
                     >
                       <Clock size={10} /> {inTime(g.actionAt, now)}
                     </span>

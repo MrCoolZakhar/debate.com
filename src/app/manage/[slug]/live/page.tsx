@@ -691,7 +691,7 @@ export default function LiveStatusPage() {
     setBroadcastError('');
     const err = await deleteBroadcastGroup(g.ids);
     setBroadcastBusyKey(null);
-    if (err) { setBroadcastError("Couldn't withdraw that broadcast: " + err); return; }
+    if (err) { setBroadcastError(err); return; }
     await loadBroadcasts();
   }
 
@@ -716,10 +716,10 @@ export default function LiveStatusPage() {
             disabled={refreshing}
             onMouseEnter={() => setRefreshHover(true)}
             onMouseLeave={() => setRefreshHover(false)}
-            className="inline-flex items-center gap-2 rounded-full py-2.5 px-4 text-xs font-bold uppercase focus:outline-none"
+            className="inline-flex items-center gap-2 rounded-full py-2.5 px-4 text-xs font-bold focus:outline-none"
             style={{
               border: 'none', color: NEU.forest, backgroundColor: NEU.surface,
-              fontFamily: OUTFIT, letterSpacing: '0.06em',
+              fontFamily: OUTFIT,
               boxShadow: refreshHover && !refreshing ? NEU.outSmHover : NEU.outSm,
               opacity: refreshing ? 0.6 : 1, cursor: refreshing ? 'default' : 'pointer',
               transition: `box-shadow 200ms ${EASE}`,
@@ -734,11 +734,11 @@ export default function LiveStatusPage() {
             onClick={() => setComposerOpen(true)}
             onMouseEnter={() => setBroadcastHover(true)}
             onMouseLeave={() => setBroadcastHover(false)}
-            className="inline-flex items-center gap-2 rounded-full py-2.5 px-4 text-xs font-bold uppercase focus:outline-none"
+            className="inline-flex items-center gap-2 rounded-full py-2.5 px-4 text-xs font-bold focus:outline-none"
             style={{
               border: 'none', color: NEU.gold,
               background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-              fontFamily: OUTFIT, letterSpacing: '0.06em',
+              fontFamily: OUTFIT,
               boxShadow: broadcastHover
                 ? `0 6px 16px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 40%, transparent), ${NEU.outSmHover}`
                 : `0 4px 10px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 30%, transparent), ${NEU.outSm}`,
@@ -804,7 +804,7 @@ export default function LiveStatusPage() {
             {/* The headline now reports the STATUS axis. "Committees are in
                 session" used to be true of any room whose phase had ever left
                 pre-session, including one abandoned three hours earlier. */}
-            <p className="font-black truncate" style={{ color: needsAttention > 0 ? RED : counts.live > 0 ? NEU.forest : NEU.ink, fontFamily: OUTFIT, fontSize: 21, lineHeight: 1.12, marginTop: 2 }}>
+            <p className="font-black" style={{ color: needsAttention > 0 ? RED : counts.live > 0 ? NEU.forest : NEU.ink, fontFamily: OUTFIT, fontSize: 21, lineHeight: 1.12, marginTop: 2 }}>
               {needsAttention > 0
                 ? `${needsAttention} room${needsAttention === 1 ? '' : 's'} need${needsAttention === 1 ? 's' : ''} attention`
                 : counts.live > 0
@@ -869,9 +869,9 @@ export default function LiveStatusPage() {
           <Link
             href={conference ? `/manage/${conference.slug}/committees` : '#'}
             className="text-sm font-bold transition-colors"
-            style={{ color: NEU.forest, fontFamily: OUTFIT, textDecoration: 'none' }}
+            style={{ color: NEU.forest, fontFamily: OUTFIT, textDecoration: 'underline', textUnderlineOffset: 3 }}
           >
-            Create them in Committees →
+            Create them in Committees
           </Link>
         </NeuCard>
       ) : (

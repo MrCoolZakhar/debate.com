@@ -648,7 +648,7 @@ function PaymentMenu({
         className="inline-flex items-center gap-1.5 focus:outline-none"
         style={{
           padding: '7px 13px', borderRadius: 999,
-          fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
+          fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
           // Paid → green filled (no separate PAID badge, #9). Else calm cream.
           color: paid ? '#FFFFFF' : NEU.ink,
           background: paid ? 'linear-gradient(135deg, #3D7A52, #2A5A3C)' : NEU.surface,
@@ -660,7 +660,7 @@ function PaymentMenu({
         {paid
           ? <CircleCheck size={13} strokeWidth={2.7} style={{ color: '#FFFFFF' }} />
           : <Wallet size={13} strokeWidth={2.5} style={{ color: NEU.deepGold }} />}
-        {label.toUpperCase()}
+        {label}
         <ChevronDown size={12} strokeWidth={2.6} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 160ms' }} />
       </button>
       {open && pos && (
@@ -775,7 +775,7 @@ function QuickAllocate({
             // preferences rather than as a full-width bar under them, so the
             // 11px padding alone (38px tall) no longer clears the touch floor.
             minHeight: 44, padding: '11px 18px', borderRadius: 999,
-            fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, letterSpacing: '0.05em',
+            fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900,
             color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.gold[0]}, ${NEU_GRADIENTS.gold[1]})`,
             boxShadow: open ? NEU.inSm : `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.gold[0]} 27%, transparent), ${NEU.outSm}`,
             border: 'none', cursor: 'pointer', transition: `box-shadow 160ms ${EASE_LOCAL}`,
@@ -785,7 +785,7 @@ function QuickAllocate({
           {/* "ALLOCATE" alone in the narrow rail beside the preferences — the
               full phrase stays on title/aria-label, which is what a screen
               reader and a hover both get. */}
-          ALLOCATE
+          Allocate
         </button>
       ) : (
         <button
@@ -826,7 +826,7 @@ function QuickAllocate({
               ) : (
                 <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={BadgeCheck} size={24} />
               )}
-              <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, color: NEU.ink }}>
+              <p className="min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, color: NEU.ink }}>
                 {picked ? committeeFull(picked) : 'Allocate to committee'}
               </p>
             </div>
@@ -872,7 +872,7 @@ function QuickAllocate({
                         >
                           <LogoDisc src={c.logo_url} size={30} fallbackText={committeeAbbr(c)} alt={c.name} />
                           <span className="flex-1 min-w-0">
-                            <span className="block truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>{c.name}</span>
+                            <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>{c.name}</span>
                             <span className="block" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: full ? NEU.muted : NEU.green, fontVariantNumeric: 'tabular-nums' }}>
                               {full ? 'Full' : `${seats} open seat${seats === 1 ? '' : 's'}`}
                             </span>
@@ -901,7 +901,7 @@ function QuickAllocate({
                           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                         >
                           <CountryFlag name={s.country_name} code={s.country_code} size={20} />
-                          <span className="flex-1 min-w-0 truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>{s.country_name}</span>
+                          <span className="flex-1 min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>{s.country_name}</span>
                           <Plus size={13} strokeWidth={2.6} style={{ color: NEU.deepGold, flexShrink: 0 }} />
                         </button>
                       ))}
@@ -1342,9 +1342,9 @@ function FilterGroup({
       <div className="flex items-center justify-between mb-2">
         <FilterHeading icon={icon}>{title}</FilterHeading>
         <div className="flex items-center gap-2">
-          <button onClick={onAll} className="focus:outline-none" style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.06em', color: NEU.forest, background: 'none', border: 'none', cursor: 'pointer' }}>ALL</button>
+          <button onClick={onAll} className="focus:outline-none" style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, color: NEU.forest, background: 'none', border: 'none', cursor: 'pointer' }}>All</button>
           <span style={{ color: NEU.muted, opacity: 0.5 }}>·</span>
-          <button onClick={onNone} className="focus:outline-none" style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.06em', color: NEU.muted, background: 'none', border: 'none', cursor: 'pointer' }}>NONE</button>
+          <button onClick={onNone} className="focus:outline-none" style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, color: NEU.muted, background: 'none', border: 'none', cursor: 'pointer' }}>None</button>
         </div>
       </div>
       <div className="flex flex-wrap gap-1.5">
@@ -1383,7 +1383,7 @@ function FilterPanel({
         style={{
           padding: '9px 16px',
           borderRadius: 999,
-          fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.03em',
+          fontFamily: OUTFIT, fontSize: 12, fontWeight: 800,
           color: show ? '#FFFFFF' : NEU.ink,
           background: show ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : NEU.surface,
           boxShadow: show ? `0 4px 10px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}` : NEU.outSm,
@@ -1392,15 +1392,13 @@ function FilterPanel({
         }}
       >
         <SlidersHorizontal size={14} strokeWidth={2.5} />
-        FILTERS
+        Filters
         {activeCount > 0 && (
           <span
-            className="inline-flex items-center justify-center"
+            aria-label={`${activeCount} active`}
             style={{
-              minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999,
-              fontFamily: OUTFIT, fontSize: 10, fontWeight: 900, fontVariantNumeric: 'tabular-nums',
-              color: show ? NEU.forest : '#FFFFFF',
-              background: show ? NEU.gold : NEU.forest,
+              fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, fontVariantNumeric: 'tabular-nums',
+              color: show ? NEU.gold : NEU.forest,
             }}
           >
             {activeCount}
@@ -1430,9 +1428,9 @@ function FilterPanel({
               <button
                 onClick={() => setFilters({ status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), dateFrom: '', dateTo: '', notAttending: false, committee: '' })}
                 className="focus:outline-none"
-                style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', color: '#8B2020', background: 'none', border: 'none', cursor: 'pointer' }}
+                style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, color: '#8B2020', background: 'none', border: 'none', cursor: 'pointer' }}
               >
-                CLEAR ALL
+                Clear all
               </button>
             )}
           </div>
@@ -1575,9 +1573,9 @@ function CommitteeFilter({
         onMouseLeave={e => { if (!isCurrent) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
       >
         <span className="flex-1 min-w-0">
-          <span className="block truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>{primary}</span>
+          <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>{primary}</span>
           {secondary && (
-            <span className="block truncate" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.muted }}>{secondary}</span>
+            <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.muted }}>{secondary}</span>
           )}
         </span>
         {isCurrent && <Check size={13} strokeWidth={3} style={{ color: NEU.deepGold, flexShrink: 0 }} />}
@@ -1605,7 +1603,7 @@ function CommitteeFilter({
         }}
       >
         <Landmark size={14} strokeWidth={2.5} />
-        <span className="truncate" style={{ maxWidth: 150 }}>{label.toUpperCase()}</span>
+        <span className="text-start [overflow-wrap:anywhere]" style={{ maxWidth: 150 }}>{label}</span>
         <ChevronDown size={12} strokeWidth={2.6} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 160ms' }} />
       </button>
       {open && pos && (
@@ -2726,7 +2724,7 @@ export default function ApplicationsPage() {
             // would push "REJECT" past its own edge. Full-width in the stacked
             // layout, where the label is centred and the padding is invisible.
             minHeight: 44, padding: '13px 10px', borderRadius: 14,
-            fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, letterSpacing: '0.05em',
+            fontFamily: OUTFIT, fontSize: 13, fontWeight: 900,
             color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.09)', border: '1.5px solid rgba(139,32,32,0.3)',
             cursor: 'pointer', transition: `background-color 160ms ${EASE_LOCAL}`, ...busyStyle,
           }}
@@ -2734,7 +2732,7 @@ export default function ApplicationsPage() {
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.09)'; }}
         >
           <X size={16} strokeWidth={2.8} />
-          REJECT
+          Reject
         </button>
       ) : (
         <button
@@ -2744,7 +2742,7 @@ export default function ApplicationsPage() {
           style={{ backgroundColor: 'rgba(139,32,32,0.08)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif", ...busyStyle }}
         >
           <X size={13} />
-          REJECT
+          Reject
         </button>
       );
     }
@@ -2768,7 +2766,7 @@ export default function ApplicationsPage() {
         style={{ backgroundColor: 'rgba(139,32,32,0.1)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif", ...busyStyle }}
       >
         <Check size={13} />
-        CONFIRM
+        Confirm
       </button>
     );
     const cancelBtn = (
@@ -2777,7 +2775,7 @@ export default function ApplicationsPage() {
         className={`gv-lift rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none${big ? ' flex-1' : ''}`}
         style={{ border: '1px solid #DDD4C0', color: '#9A8A78', backgroundColor: 'transparent', fontFamily: "var(--font-brand), sans-serif" }}
       >
-        CANCEL
+        Cancel
       </button>
     );
 
@@ -2845,7 +2843,7 @@ export default function ApplicationsPage() {
           // layout it stretches to MID_BLOCK_H, in the stacked layout 13px
           // padding around a 16px glyph would otherwise land at 42.
           minHeight: 44, padding: '13px 10px', borderRadius: 14,
-          fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, letterSpacing: '0.05em',
+          fontFamily: OUTFIT, fontSize: 13, fontWeight: 900,
           color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
           boxShadow: `0 4px 12px -2px color-mix(in srgb, ${NEU_GRADIENTS.green[0]} 40%, transparent), inset 0 1px 0 rgba(255,255,255,0.22)`, border: 'none',
           cursor: blocked ? 'not-allowed' : 'pointer',
@@ -2854,7 +2852,7 @@ export default function ApplicationsPage() {
         }}
       >
         <Check size={16} strokeWidth={3} />
-        ACCEPT
+        Accept
       </button>
     );
 
@@ -2894,7 +2892,7 @@ export default function ApplicationsPage() {
               // Grey, deliberately quiet against the two decisions — but
               // NEU.inkSoft (6.8:1 on NEU.surface), never NEU.muted, which is
               // decoration-only at 3.15:1.
-              fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em',
+              fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800,
               color: NEU.inkSoft, backgroundColor: NEU.surface, boxShadow: NEU.outSm,
               border: 'none', cursor: 'pointer', transition: `box-shadow 200ms ${EASE_LOCAL}`,
               ...busyStyle,
@@ -2905,7 +2903,7 @@ export default function ApplicationsPage() {
             <Eye size={16} strokeWidth={2.5} />
             {/* Below 640px one fifth of a 375px card is ~65px — too narrow for
                 the word. The glyph carries it there; title/aria-label always do. */}
-            <span className="hidden sm:inline">REVIEW</span>
+            <span className="hidden sm:inline">Review</span>
           </button>
         </div>
       </div>
@@ -3109,7 +3107,7 @@ export default function ApplicationsPage() {
       body: hasAllocation
         ? 'Their committee assignment will be removed. Their delegation spot, if any, stays with the delegation.'
         : 'Their delegation spot, if any, stays with the delegation.',
-      confirmLabel: 'Mark Not Attending',
+      confirmLabel: 'Mark not attending',
       danger: true,
     });
     if (!confirmed) return;
@@ -3327,7 +3325,7 @@ export default function ApplicationsPage() {
     const { confirmed } = await confirm({
       title: 'Mark this application unpaid?',
       body: 'If their payment opened a delegation spot, one spot will be removed.',
-      confirmLabel: 'Mark Unpaid',
+      confirmLabel: 'Mark unpaid',
       danger: true,
     });
     if (!confirmed) return;
@@ -3421,7 +3419,7 @@ export default function ApplicationsPage() {
     const { confirmed } = await confirm({
       title: 'Remove this fee waiver?',
       body: 'They will owe payment again.',
-      confirmLabel: 'Remove Waiver',
+      confirmLabel: 'Remove waiver',
       danger: true,
     });
     if (!confirmed) return;
@@ -4061,12 +4059,12 @@ export default function ApplicationsPage() {
             className="inline-flex items-center gap-2 focus:outline-none"
             style={{
               padding: '9px 16px', borderRadius: 999,
-              fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.03em',
+              fontFamily: OUTFIT, fontSize: 12, fontWeight: 800,
               color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', cursor: 'pointer',
             }}
           >
             <Download size={14} strokeWidth={2.5} />
-            EXPORT CSV
+            Export CSV
           </button>
         </div>
       </div>
@@ -4079,9 +4077,9 @@ export default function ApplicationsPage() {
           <button
             onClick={() => { void loadApplications(); }}
             className="focus:outline-none"
-            style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', color: '#8B2020', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px' }}
+            style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, color: '#8B2020', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px' }}
           >
-            REFRESH
+            Refresh
           </button>
         </div>
       )}
@@ -4461,7 +4459,7 @@ export default function ApplicationsPage() {
                       <div className="flex items-center gap-4 min-w-0" style={{ minHeight: MID_BLOCK_H }}>
                         <LogoDisc src={app.assigned_committee!.logo_url} size={92} fallbackText={committeeAbbr(app.assigned_committee)} alt={app.assigned_committee!.name} />
                         <div className="min-w-0">
-                          <p className="truncate" title={committeeFull(app.assigned_committee)} style={{ fontFamily: OUTFIT, fontSize: 27, fontWeight: 900, color: NEU.ink, letterSpacing: '-0.01em', lineHeight: 1.05 }}>
+                          <p className="[overflow-wrap:anywhere]" title={committeeFull(app.assigned_committee)} style={{ fontFamily: OUTFIT, fontSize: 27, fontWeight: 900, color: NEU.ink, letterSpacing: '-0.01em', lineHeight: 1.05 }}>
                             {disp.primary}
                           </p>
                           {disp.secondary && (
@@ -4510,7 +4508,7 @@ export default function ApplicationsPage() {
                                   style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.ink, backgroundColor: NEU.base, boxShadow: NEU.inSm, borderRadius: 999, padding: '4px 10px', fontVariantNumeric: 'tabular-nums' }}
                                 >
                                   <span style={{ color: NEU.deepGold, fontWeight: 900 }}>{p.preference_order}.</span>
-                                  <span className="truncate">{committeeAbbr(p.conference_committees)}</span>
+                                  <span className="[overflow-wrap:anywhere]">{committeeAbbr(p.conference_committees)}</span>
                                   {app.role !== 'chair' && <CountryFlag name={p.country_name} code={p.country_code} size={15} />}
                                 </span>
                               ))}
@@ -4623,14 +4621,14 @@ export default function ApplicationsPage() {
                           className="gv-lift inline-flex items-center gap-1.5 focus:outline-none transition-colors"
                           style={{
                             padding: '7px 14px', borderRadius: 999,
-                            fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
+                            fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
                             color: '#1C1410', backgroundColor: 'transparent', border: '1px solid #DDD4C0', cursor: 'pointer', ...busyStyle,
                           }}
                           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                         >
                           <RotateCcw size={13} strokeWidth={2.6} />
-                          REINSTATE
+                          Reinstate
                         </button>
                       </div>
                     )}
@@ -4650,7 +4648,7 @@ export default function ApplicationsPage() {
                           className="inline-flex items-center justify-center gap-1.5 focus:outline-none"
                           style={{
                             padding: '8px 14px', borderRadius: 999,
-                            fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
+                            fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
                             color: NEU.ink,
                             backgroundColor: NEU.surface,
                             boxShadow: NEU.outSm,
@@ -4658,7 +4656,7 @@ export default function ApplicationsPage() {
                           }}
                         >
                           <UserRoundCheck size={13} strokeWidth={2.6} style={{ color: NEU.green }} />
-                          CHECK IN
+                          Check in
                         </button>
                       )}
                       {app.status === 'checked-in' && (
@@ -4668,12 +4666,12 @@ export default function ApplicationsPage() {
                           className="inline-flex items-center justify-center gap-1.5 focus:outline-none"
                           style={{
                             padding: '8px 14px', borderRadius: 999,
-                            fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
+                            fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
                             color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', cursor: 'pointer', ...busyStyle, ...notAttendingLock,
                           }}
                         >
                           <Undo2 size={12} strokeWidth={2.5} />
-                          UNDO CHECK-IN
+                          Undo check-in
                         </button>
                       )}
                       <div className="flex items-center gap-1.5 lg:justify-end">
@@ -4819,11 +4817,11 @@ export default function ApplicationsPage() {
                   const remindDisabled =
                     d.reminder_opt_out || cooldownH > 0 || d.reminders_sent >= 10 || remindingId === d.id;
                   const remindLabel =
-                    remindingId === d.id ? 'SENDING…'
-                    : d.reminder_opt_out ? 'REMINDERS OFF'
-                    : d.reminders_sent >= 10 ? 'NO MORE REMINDERS'
-                    : cooldownH > 0 ? `AVAILABLE IN ${cooldownH}H`
-                    : 'REMIND';
+                    remindingId === d.id ? 'Sending…'
+                    : d.reminder_opt_out ? 'Reminders off'
+                    : d.reminders_sent >= 10 ? 'No more reminders'
+                    : cooldownH > 0 ? `Available in ${cooldownH}h`
+                    : 'Remind';
                   return (
                     <div
                       key={d.id}
@@ -5047,7 +5045,7 @@ export default function ApplicationsPage() {
                 <>
                   {bulkAcceptable.length > 0 ? (
                     <button
-                      onClick={() => runBulk(bulkAcceptable, { title: `Accept ${bulkAcceptable.length} application${bulkAcceptable.length === 1 ? '' : 's'}?`, body: 'Each will be accepted and any acceptance emails / auto-cover will run per applicant.', confirmLabel: 'Accept all' }, a => handleAccept(a.id))}
+                      onClick={() => runBulk(bulkAcceptable, { title: `Accept ${bulkAcceptable.length} application${bulkAcceptable.length === 1 ? '' : 's'}?`, body: 'Each one is accepted on its own. Acceptance emails and delegation spot cover run per person.', confirmLabel: 'Accept all' }, a => handleAccept(a.id))}
                       title={blockedCount > 0 ? `${blockedCount} selected application${blockedCount === 1 ? '' : 's'} excluded. ${ACCEPT_BLOCKED_MESSAGE}` : undefined}
                       className="inline-flex items-center gap-1.5 focus:outline-none"
                       style={{
@@ -5248,7 +5246,7 @@ export default function ApplicationsPage() {
         // do. 44px minimum, gradient, sits first in the footer.
         const primaryBtn: React.CSSProperties = {
           minHeight: 44, padding: '0 24px', borderRadius: 999, border: 'none',
-          fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, letterSpacing: '0.05em',
+          fontFamily: OUTFIT, fontSize: 13, fontWeight: 900,
           color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
           boxShadow: `0 4px 12px -2px color-mix(in srgb, ${NEU_GRADIENTS.green[0]} 40%, transparent), inset 0 1px 0 rgba(255,255,255,0.22)`,
           cursor: 'pointer', textDecoration: 'none', whiteSpace: 'nowrap',
@@ -5257,7 +5255,7 @@ export default function ApplicationsPage() {
         // Secondary: reachable, clearly not the headline. Extruded neu pill.
         const secondaryBtn: React.CSSProperties = {
           minHeight: 40, padding: '0 18px', borderRadius: 999, border: 'none',
-          fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
+          fontFamily: OUTFIT, fontSize: 12, fontWeight: 800,
           color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm,
           cursor: 'pointer', whiteSpace: 'nowrap',
           transition: `box-shadow 220ms ${EASE_LOCAL}`,
@@ -5334,7 +5332,7 @@ export default function ApplicationsPage() {
             onMouseLeave={checkInPrimary ? undefined : liftOff}
           >
             <UserRoundCheck size={checkInPrimary ? 16 : 14} strokeWidth={2.6} />
-            CHECK IN
+            Check in
           </button>
         ) : app.status === 'checked-in' ? (
           <button
@@ -5346,7 +5344,7 @@ export default function ApplicationsPage() {
             onMouseLeave={liftOff}
           >
             <Undo2 size={14} strokeWidth={2.4} />
-            UNDO CHECK-IN
+            Undo check-in
           </button>
         ) : null;
 
@@ -5358,7 +5356,7 @@ export default function ApplicationsPage() {
             style={{ ...primaryBtn, ...busyStyle, ...notAttendingLock }}
           >
             <RotateCcw size={16} strokeWidth={2.6} />
-            REINSTATE
+            Reinstate
           </button>
         );
 
@@ -5396,7 +5394,7 @@ export default function ApplicationsPage() {
                           className="inline-flex items-center gap-2 focus:outline-none"
                           style={primaryBtn}
                         >
-                          ASSIGN
+                          Assign
                           <ArrowRight size={16} strokeWidth={2.6} />
                         </Link>
                       </span>
@@ -5591,7 +5589,7 @@ export default function ApplicationsPage() {
                   {recipients.map(a => (
                     <span
                       key={a.id}
-                      className="inline-flex items-center truncate"
+                      className="inline-flex items-center [overflow-wrap:anywhere]"
                       title={a.profiles?.email ?? a.invited_email ?? ''}
                       style={{ maxWidth: '100%', fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, borderRadius: 999, padding: '3px 10px' }}
                     >
@@ -5664,14 +5662,14 @@ export default function ApplicationsPage() {
                   className="inline-flex items-center justify-center gap-2 focus:outline-none"
                   style={{
                     minHeight: 44, padding: '0 24px', borderRadius: 999, border: 'none',
-                    fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, letterSpacing: '0.05em',
+                    fontFamily: OUTFIT, fontSize: 13, fontWeight: 900,
                     color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
                     boxShadow: `0 4px 12px -2px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 40%, transparent), inset 0 1px 0 rgba(255,255,255,0.22)`,
                     cursor: bulkEmailBusy ? 'default' : 'pointer', opacity: bulkEmailBusy ? 0.6 : 1,
                   }}
                 >
                   <Send size={15} strokeWidth={2.7} />
-                  {bulkEmailBusy ? 'SENDING…' : `SEND TO ${sendableCount}`}
+                  {bulkEmailBusy ? 'Sending…' : `Send to ${sendableCount}`}
                 </button>
                 <button
                   onClick={close}
@@ -5679,11 +5677,11 @@ export default function ApplicationsPage() {
                   className="inline-flex items-center focus:outline-none"
                   style={{
                     minHeight: 44, padding: '0 18px', borderRadius: 999, border: 'none',
-                    fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
+                    fontFamily: OUTFIT, fontSize: 12, fontWeight: 800,
                     color: NEU.inkSoft, backgroundColor: NEU.surface, boxShadow: NEU.outSm, cursor: 'pointer',
                   }}
                 >
-                  CANCEL
+                  Cancel
                 </button>
                 {conference && (
                   <Link
@@ -5822,14 +5820,14 @@ export default function ApplicationsPage() {
                   className="inline-flex items-center justify-center gap-2 focus:outline-none"
                   style={{
                     minHeight: 44, padding: '0 22px', borderRadius: 999, border: 'none',
-                    fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, letterSpacing: '0.05em',
+                    fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900,
                     color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
                     boxShadow: `0 4px 12px -2px color-mix(in srgb, ${NEU_GRADIENTS.green[0]} 40%, transparent), inset 0 1px 0 rgba(255,255,255,0.22)`,
                     cursor: secretariatBusy ? 'default' : 'pointer', opacity: secretariatBusy ? 0.75 : 1,
                   }}
                 >
                   <Check size={15} strokeWidth={2.7} />
-                  {secretariatBusy ? 'ADDING…' : 'ACCEPT AND ADD TO TEAM'}
+                  {secretariatBusy ? 'Adding…' : 'Accept and add to team'}
                 </button>
                 <button
                   onClick={close}
@@ -5837,12 +5835,12 @@ export default function ApplicationsPage() {
                   className="inline-flex items-center focus:outline-none"
                   style={{
                     minHeight: 44, padding: '0 18px', borderRadius: 999, border: 'none',
-                    fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
+                    fontFamily: OUTFIT, fontSize: 12, fontWeight: 800,
                     color: NEU.inkSoft, backgroundColor: NEU.surface, boxShadow: NEU.outSm,
                     cursor: secretariatBusy ? 'default' : 'pointer', opacity: secretariatBusy ? 0.6 : 1,
                   }}
                 >
-                  CANCEL
+                  Cancel
                 </button>
               </div>
             </div>

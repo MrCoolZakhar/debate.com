@@ -80,7 +80,7 @@ export function ChairCodeChip({ code, copiedCode, onCopy, layout }: {
         {copied ? (
           <>
             <Check size={12} style={{ color: NEU.green }} />
-            <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', color: NEU.green }}>COPIED</span>
+            <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, color: NEU.green }}>Copied</span>
           </>
         ) : (
           <>
@@ -113,11 +113,11 @@ export function ChairCodeChip({ code, copiedCode, onCopy, layout }: {
       {copied ? (
         <span className="inline-flex items-center gap-1.5">
           <Check size={12} style={{ color: NEU.green }} />
-          <span style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em', color: '#2F6644' }}>COPIED</span>
+          <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, color: '#2F6644' }}>Copied</span>
         </span>
       ) : (
         <span className="inline-flex items-center gap-1.5 min-w-0">
-          <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, letterSpacing: '0.12em', color: NEU.forest, fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, letterSpacing: '0.12em', color: NEU.forest, fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}>
             {code}
           </span>
           <Copy size={11} style={{ color: 'rgba(27,56,40,0.55)', flexShrink: 0 }} />

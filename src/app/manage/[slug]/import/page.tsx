@@ -727,7 +727,7 @@ export default function ImportPage() {
     const { confirmed } = await confirm({
       title: `Send ${unclaimedCount} Gavelling invite${unclaimedCount === 1 ? '' : 's'}?`,
       body: 'Each unclaimed imported applicant gets an email with their personal invitation link. Their registration attaches automatically when they claim it, whichever email address they sign up with.',
-      confirmLabel: 'Send Invites',
+      confirmLabel: 'Send invites',
     });
     if (!confirmed) return;
     setSendingInvites(true);
@@ -790,7 +790,7 @@ export default function ImportPage() {
               style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT }}
             >
               <ArrowLeft size={13} />
-              START OVER
+              Start over
             </button>
           )}
         </div>
@@ -1090,7 +1090,7 @@ export default function ImportPage() {
               style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT }}
             >
               <UploadIcon size={14} />
-              IMPORT ANOTHER FILE
+              Import another file
             </button>
             <button
               onClick={() => setActiveTab('imported')}
@@ -1098,7 +1098,7 @@ export default function ImportPage() {
               style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT }}
             >
               <UserCheck size={14} />
-              VIEW IMPORTED DELEGATES
+              View imported delegates
               <ArrowRight size={13} />
             </button>
           </div>
@@ -1148,7 +1148,6 @@ function ImportTabSwitcher({ active, onChange }: { active: Tab; onChange: (t: Ta
               fontSize: 11,
               fontFamily: OUTFIT,
               fontWeight: 800,
-              letterSpacing: '0.06em',
               border: 'none',
               backgroundColor: isActive ? '#1B3828' : 'transparent',
               boxShadow: isActive ? '0 3px 8px rgba(27,56,40,0.26)' : 'none',
@@ -1157,7 +1156,7 @@ function ImportTabSwitcher({ active, onChange }: { active: Tab; onChange: (t: Ta
               transition: 'color 200ms, box-shadow 200ms',
             }}
           >
-            {t === 'import' ? 'IMPORT' : 'IMPORTED DELEGATES'}
+            {t === 'import' ? 'Import' : 'Imported delegates'}
           </button>
         );
       })}
@@ -1623,7 +1622,7 @@ function ImportedDelegatesTab({ conference, session, confirm, fixApplicationId }
                           }}
                         >
                           {resendingId === r.id ? <Loader2 size={12} className="animate-spin" /> : <Mail size={12} />}
-                          {resent ? 'RESENT' : 'RESEND INVITE'}
+                          {resent ? 'Resent' : 'Resend invite'}
                         </button>
                       )}
                     </td>

@@ -56,7 +56,7 @@ export function AssignConfirmDialog({
 
   const btn: React.CSSProperties = {
     minHeight: 42, padding: '0 16px', borderRadius: 12, fontFamily: OUTFIT, fontSize: 12.5,
-    fontWeight: 800, letterSpacing: '0.03em', cursor: 'pointer',
+    fontWeight: 800, letterSpacing: 0, cursor: 'pointer',
   };
 
   return (
@@ -113,7 +113,7 @@ export function AssignConfirmDialog({
             className="flex-1 focus:outline-none focus-visible:ring-2"
             style={{ ...btn, border: '1.5px solid #DDD4C0', color: NEU.ink, backgroundColor: 'transparent' }}
           >
-            CANCEL
+            Cancel
           </button>
           {emailsOnAssign && (
             <button
@@ -121,7 +121,7 @@ export function AssignConfirmDialog({
               className="flex-1 focus:outline-none"
               style={{ ...btn, border: '1.5px solid #1B3828', color: '#1B3828', backgroundColor: 'transparent' }}
             >
-              ASSIGN, NO EMAIL
+              Assign, no email
             </button>
           )}
           <button
@@ -129,7 +129,7 @@ export function AssignConfirmDialog({
             className="flex-1 focus:outline-none"
             style={{ ...btn, border: 'none', color: '#EED98A', backgroundColor: '#1B3828' }}
           >
-            {emailsOnAssign ? 'ASSIGN AND EMAIL' : 'ASSIGN'}
+            {emailsOnAssign ? 'Assign and email' : 'Assign'}
           </button>
         </div>
       </div>
