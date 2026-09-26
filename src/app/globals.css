@@ -80,7 +80,7 @@
   --gv-on-accent: #1C1410;
 }
 
-/* The one typeface: Albert Sans, loaded by next/font in layout.tsx
+/* The one typeface: Inter, loaded by next/font in layout.tsx
    (the --font-brand variable is set on <html>). */
 :root {
   --font-sans: var(--font-brand), system-ui, sans-serif;
@@ -90,7 +90,7 @@ body {
   font-family: var(--font-brand), system-ui, sans-serif;
 }
 
-/* `font-mono` is Albert Sans too; tabular figures keep running clocks
+/* `font-mono` is Inter too; tabular figures keep running clocks
    and codes from jittering the way a monospace face used to guarantee. */
 .font-mono {
   font-variant-numeric: tabular-nums;
@@ -98,7 +98,7 @@ body {
 
 /* Arabic only: prefer Noto Sans Arabic for clean Arabic glyphs. Scoped to
    :lang(ar) so Latin/English text is completely unaffected (it keeps the
-   Albert Sans stack and never loads/uses the Arabic face). */
+   Inter stack and never loads/uses the Arabic face). */
 :lang(ar) {
   font-family: 'Noto Sans Arabic', var(--font-brand), system-ui, sans-serif;
 }

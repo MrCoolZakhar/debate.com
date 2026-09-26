@@ -13,9 +13,11 @@ import PurchasePopupHost from '@/components/purchase/PurchasePopupHost';
 import SiteViewBeacon from '@/components/SiteViewBeacon';
 import Script from 'next/script';
 import { DOM_TRANSLATION_GUARD } from '@/lib/domTranslationGuard';
-import { Albert_Sans } from 'next/font/google';
+import { Inter } from 'next/font/google';
 
-// THE typeface (owner, 24 Sep 2026): Albert Sans everywhere, exposed as the
+// THE typeface: Inter everywhere (owner, 26 Sep 2026: Albert Sans felt "too
+// weird"; Inter is the closest open face to the SF Pro Macs showed before).
+// It replaced Albert Sans (24 Sep 2026), exposed as the
 // CSS variable --font-brand. (Schibsted Grotesk was tried first the same day
 // and dropped because its capital I carries serifs.) Loaded
 // through next/font, so it is self-hosted from our own origin (no request to
@@ -24,7 +26,7 @@ import { Albert_Sans } from 'next/font/google';
 // back to its own system font (SF Pro, Segoe UI, Roboto) and the site looked
 // different everywhere. Every former "'Outfit', sans-serif" literal now reads
 // var(--font-brand); `latin-ext` covers names like Aytuğ or Łukasz.
-const brandFont = Albert_Sans({
+const brandFont = Inter({
   subsets: ['latin', 'latin-ext'],
   variable: '--font-brand',
   display: 'swap',
@@ -128,7 +130,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         {/* Playfair Display (italic, the gold accent word) and Noto Sans
-            Arabic come from Google Fonts; the main face, Albert Sans,
+            Arabic come from Google Fonts; the main face, Inter,
             is self-hosted through next/font (see `brandFont` above). */}
         <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital@1&display=swap" rel="stylesheet" />
         <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700;800&display=swap" rel="stylesheet" />

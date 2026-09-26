@@ -1,6 +1,6 @@
 // Text overlap checker (npm run check:text-overlaps). Drives headless Chrome
 // over CDP (Node 22 WebSocket, no packages). For each route x viewport it loads
-// the page twice: with the real font (Albert Sans) and with a forced
+// the page twice: with the real font (Inter) and with a forced
 // system-font baseline, and reports
 // issues that exist ONLY with Schibsted: page-level horizontal overflow,
 // clipped text (overflow hidden without an ellipsis), ellipsis truncation,
