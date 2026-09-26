@@ -19,6 +19,7 @@ import { GoldButton, GoldButtonStyles } from '@/components/GoldButton';
 import { useAuth } from '@/components/AuthProvider';
 import { openAuth } from '@/lib/authModal';
 import { openCreditsPopup, openUnlimitedPopup } from '@/lib/purchasePopup';
+import { primeGuideAccess } from '@/lib/useGuideAccess';
 import { notifyUnlimitedChanged, useUnlimitedStatus } from '@/lib/unlimitedStatus';
 import { refreshCreditsEverywhere } from '@/hooks/useCredits';
 import { notifyOk } from '@/lib/appNotify';
@@ -63,7 +64,12 @@ export default function PremiumBody({
     if (authLoading) return;
     if (!userId) { setAccess({ signed_in: false, unlimited: false, unlocked: false, can_read: false }); return; }
     let cancelled = false;
-    void fetchGuideAccess(slug).then(a => { if (!cancelled) setAccess(a); });
+    void fetchGuideAccess(slug).then(a => {
+      if (cancelled) return;
+      setAccess(a);
+      // The cards, the mark and the contents list read the same answer.
+      primeGuideAccess(userId, slug, a);
+    });
     return () => { cancelled = true; };
   }, [slug, userId, authLoading, plan, attempt]);
 
@@ -157,7 +163,7 @@ export default function PremiumBody({
     action = (
       <GoldButton onClick={() => openAuth({ next })}>
         <Lock size={16} strokeWidth={2.5} aria-hidden="true" />
-        Sign in to unlock
+        Sign in to read
       </GoldButton>
     );
   } else if (load.kind === 'error') {

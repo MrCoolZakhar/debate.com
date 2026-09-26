@@ -1,30 +1,23 @@
 'use client';
 
-// A small "Yours" mark on a premium guide card the signed-in reader has
-// unlocked (bought for 1 credit, or on Unlimited). Renders nothing until
-// guide_access says so, so the server-rendered card never shifts for a
-// visitor who is signed out.
+// A small mark on a premium guide the signed-in reader can read: "Yours" when
+// they unlocked it for 1 credit, "Included" when Unlimited covers it. Renders
+// nothing until guide_access says so, so the server-rendered card never
+// shifts for a visitor who is signed out. Pass `access` when the caller
+// already holds it (the cards do), else it reads its own.
 
-import { useEffect, useState } from 'react';
 import { BadgeCheck } from 'lucide-react';
-import { useAuth } from '@/components/AuthProvider';
-import { fetchGuideAccess } from '@/lib/guideAccess';
+import type { GuideAccess } from '@/lib/guideAccess';
+import { useGuideAccess } from '@/lib/useGuideAccess';
 
-export default function GuideOwnedMark({ slug }: { slug: string }) {
-  const { user, loading } = useAuth();
-  const [owned, setOwned] = useState(false);
-  const userId = user?.id ?? null;
-  useEffect(() => {
-    if (loading || !userId) return;
-    let cancelled = false;
-    void fetchGuideAccess(slug).then(a => { if (!cancelled) setOwned(!!a?.can_read); });
-    return () => { cancelled = true; };
-  }, [slug, userId, loading]);
-  // Signed out (or a signed-out moment after a sign-out) shows nothing.
-  if (!owned || !userId) return null;
+export default function GuideOwnedMark({ slug, access }: { slug: string; access?: GuideAccess | null }) {
+  const own = useGuideAccess(slug);
+  const a = access === undefined ? own : access;
+  if (!a?.can_read) return null;
+  const word = a.unlocked ? 'Yours' : 'Included';
   return (
     <span
-      title="You can read the whole guide"
+      title={a.unlocked ? 'You unlocked this guide. It is yours to keep' : 'Included with your Unlimited plan'}
       className="inline-flex items-center gap-1"
       style={{
         fontFamily: 'var(--font-brand), sans-serif', fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
@@ -32,7 +25,7 @@ export default function GuideOwnedMark({ slug }: { slug: string }) {
       }}
     >
       <BadgeCheck size={12} strokeWidth={2.6} aria-hidden />
-      Yours
+      {word}
     </span>
   );
 }

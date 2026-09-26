@@ -9,7 +9,7 @@ import BlogShelfNav from '@/components/blog/BlogShelfNav';
 import { PhotoCreditsList } from '@/components/blog/BlogPhoto';
 import type { PhotoId } from '@/components/blog/photos';
 import { listGuides } from '@/lib/premiumGuides';
-import GuideCard from '../guides/GuideCard';
+import GuideCardGrid from '../guides/GuideCardGrid';
 import '../guides/guides.css';
 
 export const metadata: Metadata = pageMetadata({
@@ -118,11 +118,8 @@ export default function BlogIndexPage() {
               Complete playbooks for delegates, chairs and organisers. The opening sections are free to read; the rest
               is included with Gavelling Unlimited.
             </p>
-            <div className="gvg-cards">
-              {premiumGuides.map((g) => (
-                <GuideCard key={g.slug} guide={g} />
-              ))}
-            </div>
+            {/* Three: one each for delegates, chairs and organisers. */}
+            <GuideCardGrid guides={premiumGuides} picks />
           </section>
 
           {/* The lead guide. One post is the protagonist of this page; the rest

@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { Clock, Lock, LockOpen } from 'lucide-react';
+import { Clock, Lock } from 'lucide-react';
 import BlogChrome from '@/components/blog/BlogChrome';
+import GuideToc from '@/components/premiumGuides/GuideToc';
 import GuideBlocks from '@/components/premiumGuides/GuideBlocks';
 import GuideIcon from '@/components/premiumGuides/GuideIcon';
 import PremiumBody from '@/components/premiumGuides/PremiumBody';
@@ -113,28 +114,7 @@ export default async function GuidePage({ params }: { params: Promise<{ slug: st
 
           <div className="gvg-layout">
             <aside className="gvg-aside" aria-label="In this guide">
-              <nav className="gvg-toc">
-                <p className="gvg-toc-title">In this guide</p>
-                <ol>
-                  {meta.toc.map((t) => (
-                    <li key={t.id}>
-                      {t.free ? (
-                        <LockOpen size={15} strokeWidth={2.2} aria-hidden="true" />
-                      ) : (
-                        <Lock size={15} strokeWidth={2.2} aria-hidden="true" />
-                      )}
-                      {t.free ? (
-                        <a href={`#${t.id}`}>{t.text}</a>
-                      ) : (
-                        <span className="gvg-locked">
-                          {t.text}
-                          <span className="sr-only"> (included with Unlimited)</span>
-                        </span>
-                      )}
-                    </li>
-                  ))}
-                </ol>
-              </nav>
+              <GuideToc slug={slug} toc={meta.toc.map((t) => ({ id: t.id, text: t.text, free: t.free }))} />
             </aside>
 
             <article className="gvg-article">

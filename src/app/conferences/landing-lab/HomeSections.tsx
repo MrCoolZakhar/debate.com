@@ -28,6 +28,8 @@ import { CardPhoto } from '@/components/blog/BlogPhoto';
 import type { PhotoId } from '@/components/blog/photos';
 import { GoldWord } from '@/components/BrandHeading';
 import { CREAM, FOREST, GOLD, PALE_GOLD, SANS } from './shared';
+import { useGuideAccessMap } from '@/lib/useGuideAccess';
+import GuideOwnedMark from '@/components/premiumGuides/GuideOwnedMark';
 
 const INK = '#1C1410';
 const INK_70 = '#4A4238';
@@ -308,6 +310,9 @@ function shortTitle(title: string): string {
 }
 
 export function LearnMunSection({ guides }: { guides: HomeGuide[] }) {
+  // A premium guide the reader can read (Unlimited, or unlocked) is drawn as
+  // an ordinary post card with its "Yours" / "Included" mark (26 Sep 2026).
+  const access = useGuideAccessMap(guides.filter(g => g.premium).map(g => g.slug));
   if (guides.length === 0) return null;
   return (
     <section
@@ -354,7 +359,7 @@ export function LearnMunSection({ guides }: { guides: HomeGuide[] }) {
           className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5"
           style={{ listStyle: 'none', padding: 0, margin: '24px 0 0 0' }}
         >
-          {guides.map(g => g.premium ? (
+          {guides.map(g => g.premium && !access[g.slug]?.can_read ? (
             // A premium guide looks premium (owner, 25 Sep 2026): a cover photo
             // under frosted glass, the lock, and "Unlock with Unlimited". Only
             // the title and description are shown; the guide itself is behind
@@ -404,9 +409,14 @@ export function LearnMunSection({ guides }: { guides: HomeGuide[] }) {
                 href={g.premium ? `/guides/${g.slug}` : `/blog/${g.slug}`}
                 title={g.title}
                 className="hs-guide flex w-full flex-col overflow-hidden focus:outline-none"
-                style={{ borderRadius: 18, backgroundColor: g.premium ? '#FBF6E6' : CARD, textDecoration: 'none', boxShadow: g.premium ? '0 0 0 1.5px rgba(184,148,58,0.45), 0 14px 30px rgba(27,56,40,0.10)' : '0 0 0 1px rgba(27,56,40,0.08), 0 14px 30px rgba(27,56,40,0.10)' }}
+                style={{ borderRadius: 18, backgroundColor: CARD, textDecoration: 'none', boxShadow: '0 0 0 1px rgba(27,56,40,0.08), 0 14px 30px rgba(27,56,40,0.10)' }}
               >
-                {!g.premium && (
+                {g.premium ? (
+                  <div style={{ aspectRatio: '2.3 / 1', backgroundColor: '#E4DCCA' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={g.cover ?? '/landing/organiser-desk.jpg'} alt="" aria-hidden="true" loading="lazy" className="h-full w-full" style={{ objectFit: 'cover', display: 'block' }} />
+                  </div>
+                ) : (
                   <div style={{ aspectRatio: '2.3 / 1', backgroundColor: '#E4DCCA' }}>
                     {g.photo ? (
                       <CardPhoto id={g.photo} />
@@ -417,13 +427,14 @@ export function LearnMunSection({ guides }: { guides: HomeGuide[] }) {
                     )}
                   </div>
                 )}
-                <div className="flex flex-1 flex-col" style={{ padding: g.premium ? '22px 22px 18px' : '16px 18px 16px' }}>
+                <div className="flex flex-1 flex-col" style={{ padding: '16px 18px 16px' }}>
                   {g.premium && (
-                    <span className="inline-flex items-center gap-1.5" style={{ fontFamily: SANS, fontSize: '13px', fontWeight: 800, color: GOLD, marginBottom: '10px' }}>
-                      <Lock size={14} strokeWidth={2.4} aria-hidden="true" /> Premium guide
+                    <span className="inline-flex items-center" style={{ fontFamily: SANS, fontSize: '13px', fontWeight: 800, color: GOLD, marginBottom: '6px' }}>
+                      Premium guide
+                      <GuideOwnedMark slug={g.slug} access={access[g.slug] ?? null} />
                     </span>
                   )}
-                  <h3 style={{ fontFamily: SANS, fontWeight: 800, fontSize: g.premium ? 'clamp(19px, 1.5vw, 24px)' : 'clamp(16px, 1.1vw, 18px)', lineHeight: 1.25, letterSpacing: '-0.01em', color: INK, margin: 0, textWrap: 'balance' }}>
+                  <h3 style={{ fontFamily: SANS, fontWeight: 800, fontSize: 'clamp(16px, 1.1vw, 18px)', lineHeight: 1.25, letterSpacing: '-0.01em', color: INK, margin: 0, textWrap: 'balance' }}>
                     {g.premium ? g.title : shortTitle(g.title)}
                   </h3>
                   <p style={{ fontFamily: SANS, fontSize: '14px', lineHeight: 1.5, color: INK_70, margin: '6px 0 0 0', textWrap: 'pretty' }}>
@@ -431,7 +442,7 @@ export function LearnMunSection({ guides }: { guides: HomeGuide[] }) {
                   </p>
                   <div className="mt-auto flex items-center justify-between" style={{ paddingTop: '12px' }}>
                     <span className="inline-flex items-center gap-1.5" style={{ fontFamily: SANS, fontSize: '13px', fontWeight: 600, color: INK_55, fontVariantNumeric: 'tabular-nums' }}>
-                      {g.premium ? 'With Unlimited' : <><Clock size={13} strokeWidth={2.25} aria-hidden="true" /> {g.readingMinutes} min read</>}
+                      <Clock size={13} strokeWidth={2.25} aria-hidden="true" /> {g.readingMinutes} min read
                     </span>
                     <span className="hs-guide-go" style={{ fontFamily: SANS, fontSize: '14px', fontWeight: 800, color: FOREST, textDecoration: 'underline', textUnderlineOffset: '3px' }}>
                       Read

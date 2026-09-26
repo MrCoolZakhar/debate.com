@@ -8,7 +8,7 @@
 
 import { Suspense, useState } from 'react';
 import Link from 'next/link';
-import { BookOpen, Briefcase, Check, FolderArchive, Infinity as InfinityIcon, Ticket } from 'lucide-react';
+import { ArrowRight, Check, Infinity as InfinityIcon } from 'lucide-react';
 import { Emoji3D, OUTFIT } from '@/components/neu';
 import { GoldWord } from '@/components/BrandHeading';
 import { formatUsd } from '@/lib/creditPricing';
@@ -20,16 +20,20 @@ import FaqList from '@/components/pricing/FaqList';
 import RenewOnceOpener from '@/components/pricing/RenewOnceOpener';
 import { ActionButton, ActionLink, FOCUS_RING, P, PricingStyles, QuestionBox } from '@/components/pricing/pricingKit';
 
-const INCLUDED: { name: string; fallback: typeof Ticket; label: string; href?: string }[] = [
-  // Kept in step with BENEFITS in the Unlimited pop-up (owner, 25 Sep 2026).
-  { name: 'Ticket', fallback: Ticket, label: 'Apply to as many conferences as you like' },
-  { name: 'Books', fallback: BookOpen, label: 'Premium MUN guides', href: '/guides' },
-  { name: 'File cabinet', fallback: FolderArchive, label: 'Your MUN archive' },
-  { name: 'Briefcase', fallback: Briefcase, label: 'Premium job board roles' },
+/** The job board route: no arrow until it exists (it is being built next). */
+const JOBS_ROUTE: string | null = null; // '/jobs' once the route ships
+
+// Kept in step with BENEFITS in the Unlimited pop-up (owner, 25 Sep 2026).
+// Each line carries a small arrow to where it lives (26 Sep 2026); the
+// archive says Soon; the job board shows nothing until its route exists.
+const INCLUDED: { label: string; href?: string | null; soon?: boolean }[] = [
+  { label: 'Apply to as many conferences as you like', href: '/conferences/explore' },
+  { label: 'Premium MUN guides', href: '/guides' },
+  { label: 'Your MUN archive', soon: true },
+  { label: 'Premium job board roles', href: JOBS_ROUTE },
 ];
 
 const FREE_LIST = ['Run and join sessions', 'Find and apply to conferences', 'The job board', 'Your MUN CV'];
-const UNLIMITED_LIST = INCLUDED.map((i) => i.label);
 
 type Period = 'yearly' | 'monthly';
 
@@ -92,6 +96,10 @@ export default function SubscriptionPricingClient() {
         .gv-su-list li{display:grid;grid-template-columns:24px minmax(0,1fr);gap:12px;align-items:start;font-size:16px;line-height:1.4;font-weight:600}
         .gv-su-plan-free .gv-su-list li{color:${P.ink}}
         .gv-su-plan-unl .gv-su-list li{color:#FFFFFF}
+        .gv-su-inc{display:inline-flex;align-items:center;flex-wrap:wrap;gap:4px 8px}
+        .gv-su-go{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:999px;background:rgba(238,217,138,0.22);color:#EED98A;transition:background-color 140ms ease,transform 140ms ease}
+        .gv-su-go:hover{background:rgba(238,217,138,0.36);transform:translateX(2px)}
+        .gv-su-soon{font-size:12px;font-weight:800;color:#EED98A;letter-spacing:0.02em}
         .gv-su-tick{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;margin-top:0}
         .gv-su-plan-free .gv-su-tick{background:rgba(61,122,82,0.16);color:${P.forest}}
         .gv-su-plan-unl .gv-su-tick{background:${P.gold};color:${P.forest}}
@@ -199,10 +207,19 @@ export default function SubscriptionPricingClient() {
             </div>
             <p className="gv-su-price-note">{period === 'yearly' ? '2 months free' : `Or ${yearly} a year`}</p>
             <ul className="gv-su-list">
-              {UNLIMITED_LIST.map((item) => (
-                <li key={item}>
+              {INCLUDED.map((item) => (
+                <li key={item.label}>
                   <span className="gv-su-tick" aria-hidden><Check size={14} strokeWidth={3.2} /></span>
-                  {item}
+                  <span className="gv-su-inc">
+                    {item.label}
+                    {item.href ? (
+                      <Link href={item.href} className={`gv-su-go ${FOCUS_RING}`} aria-label={`${item.label}: go there`} title="Go there">
+                        <ArrowRight size={15} strokeWidth={2.6} aria-hidden />
+                      </Link>
+                    ) : item.soon ? (
+                      <span className="gv-su-soon">Soon</span>
+                    ) : null}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -212,18 +229,6 @@ export default function SubscriptionPricingClient() {
           </article>
         </div>
       </div>
-
-      {/* WHAT UNLIMITED INCLUDES: the strip, no heading */}
-      <section className="gv-p-block gv-p-block-white" aria-label="What Unlimited includes">
-        <div className="gv-su-strip">
-          {INCLUDED.map((i) => (
-            <div key={i.label} className="gv-su-strip-item">
-              <Emoji3D name={i.name} size={44} fallback={i.fallback} fallbackColor={P.forest} />
-              {i.href ? <Link href={i.href} className={`gv-p-link ${FOCUS_RING}`}>{i.label}</Link> : <span>{i.label}</span>}
-            </div>
-          ))}
-        </div>
-      </section>
 
       <p className="gv-su-promo gv-p-open">
         Have a promo code? Redeem it in <Link href="/account/manage/promo" className={`gv-p-link ${FOCUS_RING}`}>Manage account</Link>

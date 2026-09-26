@@ -19,8 +19,8 @@
 //
 // Owner's rules: no "USD 1 a credit" and no "never expires" anywhere here.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Briefcase, Loader2, Minus, Plus, Sparkles, Ticket, Users } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowRight, BookOpen, Loader2, Minus, Plus, Sparkles, Store, Ticket } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { openAuth } from '@/lib/authModal';
 import { useCredits, pollCreditsUntilChanged, refreshCreditsEverywhere } from '@/hooks/useCredits';
@@ -35,16 +35,12 @@ import { notifyOk } from '@/lib/appNotify';
 import { StripeEmbeddedForm } from './StripeEmbedded';
 import { BenefitList, BrandTitle, ErrorLine, Eyebrow, FOREST, GoldButton, INK, PurchaseShell, SwapLine, type Benefit } from './purchaseKit';
 
-const USE_APPLY: Benefit = { emoji: 'Ticket', fallback: Ticket, title: 'Apply to conferences', note: 'One credit per conference, however many times you edit.', live: true };
-const USE_IMPORT: Benefit = { emoji: 'Busts in silhouette', fallback: Users, title: 'Importing your delegates', note: 'Bring a whole delegation in at once.', live: false };
-const USE_IMPORT_LIVE: Benefit = { emoji: 'Busts in silhouette', fallback: Users, title: 'Importing your delegates', note: 'One credit per delegate you import', live: true };
-const USE_JOBS: Benefit = { emoji: 'Briefcase', fallback: Briefcase, title: 'The job board', note: 'Chair and staff roles across conferences.', live: false };
-
-function usesFor(context: CreditsContext): Benefit[] {
-  if (context === 'organizer') return [USE_IMPORT, USE_JOBS];
-  if (context === 'apply' || context === 'pay') return [USE_APPLY, USE_JOBS];
-  return [USE_APPLY, USE_IMPORT, USE_JOBS];
-}
+// What they're for (26 Sep 2026): the same three rows in every context, all live.
+const USES: Benefit[] = [
+  { emoji: 'Ticket', fallback: Ticket, title: 'Applying to conferences', note: 'One credit per conference, however many times you edit.', live: true },
+  { emoji: 'Shopping bags', fallback: Store, title: 'Conference Store', note: 'Spotlights, bulk emails, delegate sponsorship and imports for your conference.', live: true },
+  { emoji: 'Books', fallback: BookOpen, title: 'MUN guides', note: 'Unlock any premium guide, yours forever, for 1 credit.', live: true },
+];
 
 const RIGHT_TITLE: Record<CreditsContext, string> = {
   header: 'Pick a bundle',
@@ -88,7 +84,7 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
   // Only on the "Another amount" path, and only from the table.
   const nudge = custom && table ? nextTierNudge(qty, table) : null;
 
-  const uses = useMemo(() => (forImport ? [USE_IMPORT_LIVE, USE_APPLY] : usesFor(context)), [context, forImport]);
+  const uses = USES;
 
   function pick(n: number) {
     setCustom(false);

@@ -7,7 +7,7 @@
 // page is read from the server's price table.
 
 import Link from 'next/link';
-import { Briefcase, Inbox, Ticket } from 'lucide-react';
+import { BookOpen, Briefcase, Inbox, Store, Ticket } from 'lucide-react';
 import { Emoji3D, OUTFIT } from '@/components/neu';
 import { GoldWord } from '@/components/BrandHeading';
 import { useAuth } from '@/components/AuthProvider';
@@ -18,10 +18,21 @@ import FaqList from '@/components/pricing/FaqList';
 import BundlePicker from '@/components/pricing/BundlePicker';
 import { ActionButton, ActionLink, FOCUS_RING, P, PricingStyles, QuestionBox } from '@/components/pricing/pricingKit';
 
+// What credits do today (26 Sep 2026). A row with a live destination links there.
+const USES: { emoji: string; icon: typeof Ticket; title: string; note: string; live: boolean; href?: string }[] = [
+  { emoji: 'Shopping bags', icon: Store, title: 'Conference Store', note: 'Spotlights, bulk emails, delegate sponsorship and imports.', live: true, href: '/help#organizers' },
+  { emoji: 'Inbox tray', icon: Inbox, title: 'Import Your Delegates', note: 'Delegation leaders bring their delegates in, 1 credit each.', live: true },
+  { emoji: 'Books', icon: BookOpen, title: 'Premium MUN Guides', note: 'Unlock any premium guide, yours forever.', live: true, href: '/guides' },
+  { emoji: 'Briefcase', icon: Briefcase, title: 'The Job Board', note: 'Chair and secretariat roles across conferences.', live: false },
+];
+
 export default function CreditsPricingClient() {
   const { user } = useAuth();
   const { balance } = useCredits();
   const faq = faqForPage('credits');
+  // The Store lives inside each conference's organiser area: a signed-in
+  // reader goes to their conferences, a visitor to the organisers' help.
+  const hrefOf = (u: (typeof USES)[number]) => (u.title === 'Conference Store' ? (user ? '/account/conferences' : '/help#organizers') : u.href);
 
   return (
     <div className="gv-p" style={{ fontFamily: OUTFIT }}>
@@ -45,14 +56,24 @@ export default function CreditsPricingClient() {
         .gv-cr-row h3{margin:0;font-size:19px;font-weight:800;letter-spacing:-0.01em;line-height:1.2;color:${P.ink}}
         .gv-cr-row p{margin:4px 0 0;font-size:15px;line-height:1.45;color:${P.inkSoft}}
         .gv-cr-soon{font-size:14px;font-weight:700;color:${P.goldDeep};white-space:nowrap}
+        .gv-cr-live{font-size:14px;font-weight:700;color:${P.forest};white-space:nowrap}
+        .gv-cr-row h3 a{color:inherit;text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:2px}
         .gv-cr-faq{margin-top:24px}
         @media (min-width:640px){
           .gv-cr-uses{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}
         }
         @media (min-width:900px){
-          .gv-cr-hero{grid-template-columns:minmax(0,1.15fr) minmax(0,0.85fr);gap:36px}
-          /* The gavel film on the right, no box: its edges fade into the page. */
-          .gv-cr-filmwrap{display:block;position:relative;justify-self:end;width:100%;max-width:440px;aspect-ratio:16/10;-webkit-mask-image:radial-gradient(ellipse 72% 78% at 52% 50%,#000 48%,transparent 100%);mask-image:radial-gradient(ellipse 72% 78% at 52% 50%,#000 48%,transparent 100%)}
+          /* The title keeps its own column (never under the film); the film
+             takes everything to its right and runs to the shell's edge. */
+          .gv-cr-hero{grid-template-columns:minmax(0,480px) minmax(0,1fr);gap:24px}
+          /* The gavel film, bigger and hugging the right side, melting into the
+             ivory through a mask (as the devices on the /sessions hero do):
+             its left edge and its foot fade out, nothing is painted over it. */
+          .gv-cr-filmwrap{display:block;position:relative;justify-self:stretch;width:calc(100% + 32px);margin-right:-32px;aspect-ratio:16/10;
+            -webkit-mask-image:linear-gradient(to right,transparent 0%,#000 34%),linear-gradient(to bottom,transparent 0%,#000 12%,#000 72%,transparent 100%);
+            -webkit-mask-composite:source-in;
+            mask-image:linear-gradient(to right,transparent 0%,#000 34%),linear-gradient(to bottom,transparent 0%,#000 12%,#000 72%,transparent 100%);
+            mask-composite:intersect}
           .gv-cr-film{display:block;width:100%;height:100%;object-fit:cover;object-position:60% 50%;filter:saturate(0.9)}
         }
         @media (prefers-reduced-motion:reduce){.gv-cr-filmwrap{display:none}}
@@ -104,22 +125,16 @@ export default function CreditsPricingClient() {
             </div>
           </article>
           <ul className="gv-cr-rows">
-            <li className="gv-cr-row">
-              <Emoji3D name="Inbox tray" size={40} fallback={Inbox} fallbackColor={P.forest} />
-              <div>
-                <h3>Import Your Delegates</h3>
-                <p>A whole delegation from one balance</p>
-              </div>
-              <span className="gv-cr-soon">Soon</span>
-            </li>
-            <li className="gv-cr-row">
-              <Emoji3D name="Briefcase" size={40} fallback={Briefcase} fallbackColor={P.forest} />
-              <div>
-                <h3>The Job Board</h3>
-                <p>Chair and secretariat roles across conferences</p>
-              </div>
-              <span className="gv-cr-soon">Soon</span>
-            </li>
+            {USES.map(u => (
+              <li key={u.title} className="gv-cr-row">
+                <Emoji3D name={u.emoji} size={40} fallback={u.icon} fallbackColor={P.forest} />
+                <div>
+                  <h3>{hrefOf(u) ? <Link href={hrefOf(u)!} className={FOCUS_RING}>{u.title}</Link> : u.title}</h3>
+                  <p>{u.note}</p>
+                </div>
+                {u.live ? <span className="gv-cr-live">Live</span> : <span className="gv-cr-soon">Soon</span>}
+              </li>
+            ))}
           </ul>
         </div>
       </section>

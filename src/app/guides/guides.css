@@ -110,4 +110,13 @@
 .gvg-card-promise { font-size: 14px; line-height: 1.5; color: #3A3128; }
 .gvg-gold { display: inline-flex; align-items: center; justify-content: center; gap: 8px; align-self: flex-start; min-height: 44px; margin-top: 8px; padding: 0 18px; border-radius: 12px; color: #1C1410; font-size: 14px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; background: linear-gradient(135deg, #F4E4A6 0%, #EED98A 38%, #D6B24C 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.65), 0 1px 2px rgba(120,86,14,0.25), 0 8px 20px -6px rgba(182,135,31,0.55); }
 .gvg-card:hover .gvg-gold { background: linear-gradient(135deg, #F8EBB8 0%, #F1DE97 38%, #DDB955 100%); }
-@media (prefers-reduced-motion: reduce) { .gvg-card { transition: none; } .gvg-card:hover { transform: none; } }
+/* A guide the reader can read looks like a normal post (26 Sep 2026): a white
+   card, the photo on top, the text below, no lock and no gold button. */
+.gvg-card-open { display: flex; flex-direction: column; overflow: hidden; border-radius: 20px; text-decoration: none; color: var(--gvg-ink); background: #FFFFFF; box-shadow: 0 0 0 1px rgba(27,56,40,0.08), 0 14px 30px -18px rgba(20,48,31,0.35); transition: transform 180ms ease-out; }
+.gvg-card-open:hover { transform: translateY(-2px); }
+.gvg-card-open:focus { outline: none; }
+.gvg-card-open:focus-visible { box-shadow: 0 0 0 3px var(--gvg-forest); }
+.gvg-card-open-cover { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.gvg-card-open-body { display: flex; flex: 1; flex-direction: column; gap: 6px; padding: 16px 18px 18px; }
+.gvg-card-read { margin-top: auto; padding-top: 8px; font-size: 14px; font-weight: 800; color: var(--gvg-forest); text-decoration: underline; text-underline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .gvg-card, .gvg-card-open { transition: none; } .gvg-card:hover, .gvg-card-open:hover { transform: none; } }

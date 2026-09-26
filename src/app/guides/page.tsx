@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import BlogChrome from '@/components/blog/BlogChrome';
 import { JSONLD_PUBLISHER, SITE_URL, pageMetadata } from '@/lib/seo';
 import { listGuides } from '@/lib/premiumGuides';
-import GuideCard from './GuideCard';
+import GuideCardGrid from './GuideCardGrid';
 
 export const metadata: Metadata = pageMetadata({
   title: 'Premium MUN Guides',
@@ -51,11 +51,7 @@ export default function GuidesIndexPage() {
             that debate well. The opening sections of every guide are free to read. The rest is included with Gavelling
             Unlimited.
           </p>
-          <div className="gvg-cards" style={{ marginTop: 32 }}>
-            {guides.map((g) => (
-              <GuideCard key={g.slug} guide={g} headingLevel={2} />
-            ))}
-          </div>
+          <GuideCardGrid guides={guides} headingLevel={2} />
           <p className="gvg-lead" style={{ fontSize: 16 }}>
             Looking for the free basics? The <Link href="/blog" style={{ color: '#1B3828', textDecoration: 'underline' }}>MUN guides on the blog</Link> cover
             procedure, speeches, position papers and running a committee, and stay free.
