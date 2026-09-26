@@ -55,6 +55,7 @@ import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import AidRequestModal from '../participant/AidRequestModal';
 import DelegationCreditsCard from '../participant/DelegationCreditsCard';
 import PledgeInvoicingCard from '../participant/PledgeInvoicingCard';
+import PayActionPopup from '../participant/PayActionPopup';
 import { safeStorageKey } from '@/lib/storageKey';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -534,7 +535,7 @@ export default function PayPage() {
         ) : (
           <>
             <p style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 22, color: NEU.ink, margin: '0 0 2px 0' }}>
-              Pay &amp; Financial Aid
+              Conference Payments
             </p>
             <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted, margin: '0 0 24px 0' }}>
               {conference.full_name}
@@ -1002,21 +1003,12 @@ function AddonsModal({
   }
 
   return (
-    <ModalOverlay onClose={() => { if (!saving) onClose(); }}>
-      <div
-        className="rounded-2xl p-6 flex flex-col gap-4"
-        style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 460, maxWidth: 'calc(100vw - 32px)', maxHeight: MODAL_PANEL_MAX_HEIGHT, overflowY: 'auto' }}
-      >
-        <div className="flex items-center justify-between gap-3">
-          <p className="font-black text-lg" style={{ color: 'var(--gv-on-surface)', fontFamily: OUTFIT }}>Buy Add-ons</p>
-          <button
-            onClick={() => { if (!saving) onClose(); }}
-            className="flex-shrink-0 focus:outline-none"
-            style={{ color: 'var(--gv-muted)', border: 'none', background: 'none', cursor: saving ? 'default' : 'pointer' }}
-          >
-            <X size={18} />
-          </button>
-        </div>
+    <PayActionPopup
+      title="Buy Add-ons"
+      line="Optional extras this conference offers. They are added to what you pay."
+      onClose={() => { if (!saving) onClose(); }}
+      testId="pay-addons"
+    >
 
         {addons.length === 0 ? (
           <p style={{ fontFamily: OUTFIT, fontSize: 13, color: '#6E5F4E' }}>
@@ -1146,8 +1138,7 @@ function AddonsModal({
             </button>
           )}
         </div>
-      </div>
-    </ModalOverlay>
+    </PayActionPopup>
   );
 }
 
@@ -1303,25 +1294,12 @@ function AdvisorTicketsModal({
   }
 
   return (
-    <ModalOverlay onClose={() => { if (!adding) onClose(); }}>
-      <div
-        className="rounded-2xl p-6 flex flex-col gap-4"
-        /* ModalOverlay is a non-scrolling `fixed inset-0` centred box with the
-           page scroll locked, so a card taller than the phone is clipped at
-           BOTH ends and its buttons cannot be reached. Every dialog here
-           carries its own cap. */
-        style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 400, maxWidth: 'calc(100vw - 32px)', maxHeight: MODAL_PANEL_MAX_HEIGHT, overflowY: 'auto' }}
-      >
-        <div className="flex items-center justify-between gap-3">
-          <p className="font-black text-lg" style={{ color: 'var(--gv-on-surface)', fontFamily: OUTFIT }}>Buy Advisor Tickets</p>
-          <button
-            onClick={() => { if (!adding) onClose(); }}
-            className="flex-shrink-0 focus:outline-none"
-            style={{ color: 'var(--gv-muted)', border: 'none', background: 'none', cursor: adding ? 'default' : 'pointer' }}
-          >
-            <X size={18} />
-          </button>
-        </div>
+    <PayActionPopup
+      title="Buy Advisor Tickets"
+      line="Tickets for the faculty advisors travelling with your delegation."
+      onClose={() => { if (!adding) onClose(); }}
+      testId="pay-advisors"
+    >
 
         <div className="flex items-center gap-3" style={{ padding: '12px 14px', borderRadius: 14, backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
           <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={GraduationCap} size={38} />
@@ -1416,8 +1394,7 @@ function AdvisorTicketsModal({
             {adding ? 'ADDING…' : 'ADD TICKETS'}
           </button>
         </div>
-      </div>
-    </ModalOverlay>
+    </PayActionPopup>
   );
 }
 
@@ -1793,9 +1770,36 @@ function PayInvoiceAndActions({
   const [addonsModalOpen, setAddonsModalOpen] = useState(false);
   const [creditsOpen, setCreditsOpen] = useState(false);
   const [spotsOpen, setSpotsOpen] = useState(false);
-  // Kept so ?open=spots (prompt 67) can scroll to the Add Delegation Spots row.
   const spotsRowRef = useRef<HTMLDivElement | null>(null);
+
   const [advisorModalOpen, setAdvisorModalOpen] = useState(false);
+
+  // ?open=aid|addons|spots|advisors|credits opens that action's pop-up on
+  // load (the delegation card's "Add delegation spots" links to
+  // ?open=spots), then drops the value so a refresh does not reopen it.
+  const openedFromUrlRef = useRef(false);
+  useEffect(() => {
+    if (openedFromUrlRef.current || typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const which = url.searchParams.get('open');
+    if (!which) return;
+    // Opened from a timer (not synchronously in the effect), and the guard is
+    // set inside it, so React's double-run of effects in dev cannot swallow it.
+    const t = setTimeout(() => {
+      if (openedFromUrlRef.current) return;
+      openedFromUrlRef.current = true;
+      if (which === 'aid' && conference.financial_aid_enabled && !aidRequest) setAidModalOpen(true);
+      else if (which === 'addons' && activeAddons.length > 0) setAddonsModalOpen(true);
+      else if (which === 'spots' && canBuyDelegationStuff) setSpotsOpen(true);
+      else if (which === 'advisors' && canBuyDelegationStuff) setAdvisorModalOpen(true);
+      else if (which === 'credits') {
+        if (canBuyDelegationStuff) setCreditsOpen(true); else openCreditsPopup({ context: 'pay' });
+      }
+      url.searchParams.delete('open');
+      window.history.replaceState(window.history.state, '', url.pathname + (url.search || '') + url.hash);
+    }, 0);
+    return () => clearTimeout(t);
+  }, [conference.financial_aid_enabled, aidRequest, activeAddons.length, canBuyDelegationStuff]);
   // Left column: Current Invoices (what's owed or awaiting review) vs
   // Payments (the full payment_batches history, every method). Settled
   // invoices never appear in the invoices list any more — once paid, they
@@ -2354,16 +2358,22 @@ function PayInvoiceAndActions({
           icon={Users2}
           gradient={NEU_GRADIENTS.forest}
           title="Add Delegation Spots"
-          subtitle={canBuyDelegationStuff ? (spotsOpen ? 'Hide' : 'Pledge more spots') : 'Delegation leaders only'}
+          subtitle={canBuyDelegationStuff ? 'Pledge more spots' : 'Delegation leaders only'}
           dimmed={!canBuyDelegationStuff}
           onClick={() => {
             if (!canBuyDelegationStuff) { setStubMessage('Only delegation leaders can add spots or credits.'); return; }
-            setSpotsOpen(v => !v);
+            setSpotsOpen(true);
           }}
         />
         </div>
         {canBuyDelegationStuff && leaderApp && spotsOpen && (
-          <>
+          <PayActionPopup
+            title="Add Delegation Spots"
+            line="Pledge more places for your delegation. Each spot is a delegate place you pay for."
+            onClose={() => setSpotsOpen(false)}
+            width={640}
+            testId="pay-spots"
+          >
             <AddSpotsPanel
               applicationId={leaderApp.id}
               accessToken={session?.access_token}
@@ -2377,7 +2387,7 @@ function PayInvoiceAndActions({
               aidBlocks={aidBlocks}
               aidIntro={conference.aid_intro}
             />
-          </>
+          </PayActionPopup>
         )}
 
         <ActionRow
@@ -2398,8 +2408,8 @@ function PayInvoiceAndActions({
             icon={Coins}
             gradient={NEU_GRADIENTS.gold}
             title="Pay for Your Delegates"
-            subtitle={creditsOpen ? 'Hide' : 'Add credits your delegates apply with'}
-            onClick={() => setCreditsOpen(v => !v)}
+            subtitle="Add credits your delegates apply with"
+            onClick={() => setCreditsOpen(true)}
           />
         ) : (
           // Everyone else buys credits for themselves, straight in the pop-up.
@@ -2411,7 +2421,16 @@ function PayInvoiceAndActions({
             onClick={() => openCreditsPopup({ context: 'pay' })}
           />
         )}
-        {canBuyDelegationStuff && leaderApp && creditsOpen && <DelegationCreditsCard societyId={leaderApp.society_id as string} />}
+        {canBuyDelegationStuff && leaderApp && creditsOpen && (
+          <PayActionPopup
+            title="Pay for Your Delegates"
+            line="Add credits to your delegation so your delegates can apply without using their own."
+            onClose={() => setCreditsOpen(false)}
+            testId="pay-credits"
+          >
+            <DelegationCreditsCard societyId={leaderApp.society_id as string} />
+          </PayActionPopup>
+        )}
 
       </div>
 

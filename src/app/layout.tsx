@@ -11,6 +11,7 @@ import LiveRoomsGate from '@/components/liveRooms/LiveRoomsGate';
 import AuthModalHost from '@/components/auth/AuthModal';
 import PurchasePopupHost from '@/components/purchase/PurchasePopupHost';
 import SiteViewBeacon from '@/components/SiteViewBeacon';
+import Script from 'next/script';
 import { DOM_TRANSLATION_GUARD } from '@/lib/domTranslationGuard';
 import { Albert_Sans } from 'next/font/google';
 
@@ -124,7 +125,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`h-full ${brandFont.variable}`}>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: DOM_TRANSLATION_GUARD }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         {/* Playfair Display (italic, the gold accent word) and Noto Sans
@@ -141,6 +141,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preload" as="image" href="/gavelling-logo.png" type="image/png" fetchPriority="high" />
       </head>
       <body className="min-h-full bg-[#EDE7D8] text-[#1C1410] antialiased">
+        {/* The translation guard (src/lib/domTranslationGuard.ts) must run
+            before React hydrates. next/script's beforeInteractive puts it in
+            the server HTML ahead of Next's own scripts, without the "script
+            tag while rendering a React component" warning a raw <script> in
+            <head> gave (25 Sep 2026). */}
+        <Script id="gv-dom-guard" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: DOM_TRANSLATION_GUARD }} />
         <AuthProvider>
           <LanguageProvider>
             {children}
