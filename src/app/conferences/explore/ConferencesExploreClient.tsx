@@ -26,7 +26,7 @@ import { LogoDisc } from '@/components/LogoDisc';
 import { isListedConference } from '@/lib/publicConferences';
 import { fetchFeatured, recordSpotlightClick, recordSpotlightView, type FeaturedRow } from '@/lib/spotlight';
 import { fetchCreditSponsoredIds } from '@/lib/creditSponsored';
-import { CreditSponsoredMark } from '@/components/conferences/SpotlightTag';
+import { CreditSponsoredMark, SpotlightTag, SPOTLIGHT_GLOW, SPOTLIGHT_GLOW_HOVER } from '@/components/conferences/SpotlightTag';
 import ConferenceSpotlightDialog, { claimSpotlightDialog } from './ConferenceSpotlightDialog';
 import { DatePicker } from '@/components/DatePicker';
 import {
@@ -303,10 +303,13 @@ function RowChip({ label, icon: Icon }: { label: string; icon?: RowIcon }) {
 }
 
 function ConferenceListRow({
-  conf, applied, member, hovered, onHover, onLeave, creditSponsored = false,
+  conf, applied, member, hovered, onHover, onLeave, creditSponsored = false, spotlight = false, onSpotlightClick,
 }: {
   conf: Conference;
   creditSponsored?: boolean;
+  /** A booked Gavelling Spotlight: the small tag and the gold edge and glow the grid card wears. */
+  spotlight?: boolean;
+  onSpotlightClick?: () => void;
   applied: boolean;
   /** Viewer is already part of this conference (organizer / chair / delegate), takes precedence over `applied`. */
   member: boolean;
@@ -339,8 +342,19 @@ function ConferenceListRow({
       href={href}
       onMouseEnter={onHover}
       onMouseLeave={onLeave}
+      onClick={spotlight ? onSpotlightClick : undefined}
       className="flex items-center gap-4 md:gap-6 px-2 md:px-4"
-      style={{
+      style={spotlight ? {
+        // The grid card's spotlight treatment: a gold edge and a soft gold glow.
+        paddingTop: '20px',
+        paddingBottom: '20px',
+        margin: '10px 0',
+        borderRadius: '18px',
+        backgroundColor: hovered ? '#FFFDF6' : '#FFFFFF',
+        boxShadow: hovered ? SPOTLIGHT_GLOW_HOVER : SPOTLIGHT_GLOW,
+        textDecoration: 'none',
+        transition: 'background-color 160ms ease, box-shadow 200ms ease',
+      } : {
         paddingTop: '22px',
         paddingBottom: '22px',
         backgroundColor: hovered ? 'rgba(27,56,40,0.035)' : 'transparent',
@@ -377,6 +391,7 @@ function ConferenceListRow({
         >
           <span style={{ overflowWrap: 'anywhere' }}>{conferenceAcronymLabel(conf) || conf.full_name}</span>
           <VerifiedCheck verified={!!conf.is_verified} size={18} title="Verified conference" />
+          {spotlight && <SpotlightTag size="sm" style={{ marginInlineStart: 4 }} />}
         </div>
         {conferenceAcronymLabel(conf) && conf.full_name && conf.full_name !== conferenceAcronymLabel(conf) && (
           <div style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, fontSize: '13px', color: '#6B5F52', marginTop: '2px', lineHeight: 1.3, overflowWrap: 'anywhere' }}>
@@ -1683,6 +1698,8 @@ export default function ConferencesExploreClient() {
                 <ConferenceListRow
                   key={conf.id}
                   conf={conf}
+                  spotlight={spotlightById.has(conf.id)}
+                  onSpotlightClick={() => { const spot = spotlightById.get(conf.id); if (spot) recordSpotlightClick(spot.booking_id); }}
                   creditSponsored={sponsoredIds.has(conf.id)}
                   applied={appliedIds.has(conf.id)}
                   member={isMember(conf)}

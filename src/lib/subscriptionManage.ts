@@ -18,98 +18,20 @@
 // webhook is what syncs cancel_at_period_end, so a cancel made in the Stripe
 // portal shows up the same way.
 
-import { useCallback, useEffect, useState } from 'react';
-import { useAuth } from '@/components/AuthProvider';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError, UserFacingError } from '@/lib/friendlyError';
 import { extractFunctionErrorMessage } from '@/lib/payments';
-import { notifyUnlimitedChanged } from '@/lib/unlimitedStatus';
+import { fetchUnlimitedDetail, notifyUnlimitedChanged, useUnlimitedDetail, type UnlimitedDetail } from '@/lib/unlimitedStatus';
 
-export interface UnlimitedDetail {
-  status: 'none' | 'trial' | 'monthly' | 'annual';
-  plan: string | null;
-  current_period_end: string | null;
-  on_stripe: boolean;
-  renews: boolean;
-  cancel_at_period_end: boolean;
-  can_cancel: boolean;
-  can_resume: boolean;
-  lapsed_plan: string | null;
-  lapsed_at: string | null;
-}
-
-const NONE: UnlimitedDetail = {
-  status: 'none', plan: null, current_period_end: null, on_stripe: false, renews: false,
-  cancel_at_period_end: false, can_cancel: false, can_resume: false, lapsed_plan: null, lapsed_at: null,
-};
-
-function parse(data: unknown): UnlimitedDetail {
-  const a = (data ?? {}) as Record<string, unknown>;
-  const s = a.status;
-  return {
-    status: s === 'trial' || s === 'monthly' || s === 'annual' ? s : 'none',
-    plan: typeof a.plan === 'string' ? a.plan : null,
-    current_period_end: typeof a.current_period_end === 'string' ? a.current_period_end : null,
-    on_stripe: a.on_stripe === true,
-    renews: a.renews === true,
-    cancel_at_period_end: a.cancel_at_period_end === true,
-    can_cancel: a.can_cancel === true,
-    can_resume: a.can_resume === true,
-    lapsed_plan: typeof a.lapsed_plan === 'string' ? a.lapsed_plan : null,
-    lapsed_at: typeof a.lapsed_at === 'string' ? a.lapsed_at : null,
-  };
-}
-
-export async function readUnlimitedDetail(): Promise<UnlimitedDetail> {
-  const client = await getFreshAuthedClient();
-  if (!client) return NONE;
-  const { data, error } = await client.rpc('my_unlimited_status');
-  if (error) throw error;
-  return parse(data);
-}
-
-/** The whole status object; null while loading or signed out. */
-export function useUnlimitedDetail(): { detail: UnlimitedDetail | null; loading: boolean; reload: () => Promise<void> } {
-  const { user } = useAuth();
-  const userId = user?.id ?? null;
-  const [detail, setDetail] = useState<UnlimitedDetail | null>(null);
-  const [tick, setTick] = useState(0);
-
-  useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    void readUnlimitedDetail().then(d => { if (!cancelled) setDetail(d); }, () => { if (!cancelled) setDetail(NONE); });
-    return () => { cancelled = true; };
-  }, [userId, tick]);
-
-  // A purchase, a promo code or a cancel elsewhere: re-read.
-  useEffect(() => {
-    // notifyUnlimitedChanged has no subscribe API of its own for detail readers;
-    // useUnlimitedStatus's listeners drive it. We piggyback through a small
-    // module listener set below.
-    const l = () => setTick(t => t + 1);
-    detailListeners.add(l);
-    return () => { detailListeners.delete(l); };
-  }, []);
-
-  const reload = useCallback(async () => {
-    try {
-      const d = await readUnlimitedDetail();
-      setDetail(d);
-    } catch {
-      setTick(t => t + 1);
-    }
-  }, []);
-
-  return { detail: userId ? detail : null, loading: !!userId && detail === null, reload };
-}
-
-const detailListeners = new Set<() => void>();
+// The plan object and its hook live in unlimitedStatus.ts, ONE store for every
+// reader (26 Sep 2026); re-exported here for the callers that import them from
+// this file.
+export { useUnlimitedDetail, type UnlimitedDetail };
+export const readUnlimitedDetail = fetchUnlimitedDetail;
 
 /** Tell every plan reader (yes/no and detail) that the plan changed. */
 export function notifyPlanChanged(userId?: string) {
   notifyUnlimitedChanged(userId);
-  detailListeners.forEach(l => l());
 }
 
 // ── Cancel reasons (the chips, the same wording in /admin) ────────────────

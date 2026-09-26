@@ -49,7 +49,7 @@ const BUNDLE_PHOTOS: Record<string, { src: string; position: string }> = {
 const PLACEMENT_HINT: Record<Placement, string> = {
   homepage: 'Your conference in the featured row on the gavelling.com homepage, the first page every visitor sees. For reaching people who have not started looking yet.',
   explore: 'Your conference at the top of Explore and in the Conference Spotlight visitors see when they land there. For reaching people at the moment they choose a conference.',
-  region: 'First in your continent on the map and in Explore’s continent filter. For delegates who already know where they want to go.',
+  region: 'First when Explore is filtered to your region. For delegates who already know where they want to go.',
   country: 'First in Explore’s filter for your country. For the delegates most likely to come.',
 };
 

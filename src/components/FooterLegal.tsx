@@ -81,8 +81,14 @@ export default function FooterLegal({
           All conferences
         </Link>
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
+        {/* One Blog link and one Guides link (26 Sep 2026): the free posts,
+            then the premium guides. */}
         <Link href="/blog" className={hubLink}>
-          MUN Guides
+          Blog
+        </Link>
+        <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
+        <Link href="/guides" className={hubLink}>
+          Guides
         </Link>
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
         {/* "List your conference" goes straight into the creation wizard (owner,

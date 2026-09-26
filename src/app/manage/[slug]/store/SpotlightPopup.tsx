@@ -78,7 +78,7 @@ function sell(p: Placement, conf: SpotlightConference, continent: string | null)
     case 'region':
       return {
         tag: `First in ${region}`,
-        where: `First in ${region} on the map and at the top of Explore's ${region} filter.`,
+        where: `First when Explore is filtered to ${region}.`,
         who: `Delegates who already know they want a conference in ${region}.`,
       };
     default:

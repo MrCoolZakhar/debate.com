@@ -15,7 +15,8 @@ import { useAuth } from '@/components/AuthProvider';
 import { usePurchasePopup } from '@/lib/purchasePopup';
 import { notifyOk } from '@/lib/appNotify';
 import { pollCreditsUntilChanged, readCreditBalance, refreshCreditsEverywhere } from '@/hooks/useCredits';
-import { notifyUnlimitedChanged } from '@/lib/unlimitedStatus';
+import { waitForUnlimited } from '@/lib/unlimitedStatus';
+import PurchaseActivationNotice from './PurchaseActivationNotice';
 import NotificationStack from '@/components/notifications/NotificationStack';
 import { useNotifications } from '@/lib/sessionNotifications';
 import CreditsPopup from './CreditsPopup';
@@ -33,6 +34,7 @@ export default function PurchasePopupHost() {
     <>
       <Suspense fallback={null}><PurchaseReturnHandler /></Suspense>
       {!ownStack && <LazyStack />}
+      <PurchaseActivationNotice />
       {st.open ? <style>{PURCHASE_CSS}</style> : null}
       {st.open && st.kind === 'credits' ? <CreditsPopup key={st.nonce} request={st.request} /> : null}
       {st.open && st.kind === 'unlimited' ? <UnlimitedPopup key={st.nonce} request={st.request} /> : null}
@@ -66,14 +68,16 @@ function PurchaseReturnHandler() {
       notifyOk('Payment received. Your credits are being added.', 'purchase');
       void readCreditBalance().then((prev) => {
         refreshCreditsEverywhere();
-        return pollCreditsUntilChanged(prev, { attempts: 8 });
+        return pollCreditsUntilChanged(prev);
       }).then((now) => {
         if (now !== null) notifyOk(`Credits added. You now have ${now}.`, 'purchase');
       });
     }
     if (unlimited === 'success') {
       notifyOk('Welcome to Gavelling Unlimited.', 'purchase');
-      notifyUnlimitedChanged(user.id);
+      // The webhook writes the plan a few seconds later: poll until it lands,
+      // then every reader updates at once.
+      void waitForUnlimited(user.id);
       refreshCreditsEverywhere();
     }
   }, [credits, unlimited, user, loading]);

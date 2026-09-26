@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { fetchGuideAccess, type GuideAccess } from '@/lib/guideAccess';
+import { onPlanChanged } from '@/lib/unlimitedStatus';
 
 const cache = new Map<string, Promise<GuideAccess | null>>();
 const EVENT = 'gavelling-guide-access';
@@ -49,7 +50,9 @@ export function useGuideAccessMap(slugs: readonly string[]): Record<string, Guid
   useEffect(() => {
     const on = () => setTick(t => t + 1);
     window.addEventListener(EVENT, on);
-    return () => window.removeEventListener(EVENT, on);
+    // A plan change (Unlimited landing or ending) changes what can be read.
+    const off = onPlanChanged(() => { cache.clear(); on(); });
+    return () => { window.removeEventListener(EVENT, on); off(); };
   }, []);
 
   useEffect(() => {

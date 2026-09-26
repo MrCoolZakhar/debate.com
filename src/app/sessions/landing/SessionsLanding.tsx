@@ -41,10 +41,14 @@ const HEADLINE_SIZE: Record<Lang, { lg: string; sm: string }> = {
   // "MUN done right." is longer than the old headline and stays on ONE line
   // (nowrap), so the size is what fits the left column at 1280 (about 500px):
   // 4.6vw = 59px there, 78px on a wide screen.
-  en: { lg: 'clamp(44px, 4.6vw, 78px)', sm: 'clamp(36px, 10vw, 68px)' },
-  es: { lg: 'clamp(42px, 4.4vw, 74px)', sm: 'clamp(34px, 9.4vw, 64px)' },
-  fr: { lg: 'clamp(40px, 4.1vw, 70px)', sm: 'clamp(32px, 8.8vw, 60px)' },
-  ar: { lg: 'clamp(42px, 4.4vw, 74px)', sm: 'clamp(34px, 9.4vw, 64px)' },
+  // 26 Sep 2026 (owner: "still feels small"): about 20% bigger from 1024px,
+  // capped so the one-line headline stays inside its column at 1920 (the
+  // laptop starts where the column ends). Measured: "MUN done right." is
+  // about 7.1 font-sizes wide, "MUN como se debe." about 8.5.
+  en: { lg: 'clamp(48px, 5.6vw, 88px)', sm: 'clamp(36px, 10vw, 68px)' },
+  es: { lg: 'clamp(44px, 4.7vw, 74px)', sm: 'clamp(30px, 8.4vw, 60px)' },
+  fr: { lg: 'clamp(44px, 4.9vw, 80px)', sm: 'clamp(32px, 8.8vw, 60px)' },
+  ar: { lg: 'clamp(46px, 5.2vw, 84px)', sm: 'clamp(34px, 9.4vw, 64px)' },
 };
 
 export default function SessionsLanding() {
@@ -205,19 +209,19 @@ const CSS = `
 .sl-h1 { grid-area: h; align-self: end; padding-top: clamp(12px, 2.4vw, 44px); position: relative; z-index: 3; margin: 0; font-weight: 800; line-height: 0.98; letter-spacing: -0.04em; white-space: nowrap; color: ${INK}; font-size: var(--h1-lg); }
 .sl-copy { grid-area: copy; padding-top: clamp(14px, 1.4vw, 22px); }
 /* Two lines by the text itself ("Roll Call, Motions, Voting, Scoring." / "All in one Session."), never wrapped under the devices. */
-.sl-lede { font-size: clamp(20px, 1.7vw, 27px); font-weight: 500; line-height: 1.35; margin: 0; max-width: 24em; letter-spacing: -0.005em; white-space: pre-line; }
-.sl-start { display: inline-flex; align-items: center; justify-content: center; margin-top: 32px; min-height: 66px; padding: 0 42px;
-  border: 0; border-radius: 14px; background: ${CTA_GRADIENT}; color: ${WHITE}; font: 700 clamp(18px, 1.35vw, 21px)/1 ${BRAND}; cursor: pointer;
+.sl-lede { font-size: clamp(22px, 1.95vw, 31px); font-weight: 500; line-height: 1.35; margin: 0; max-width: 24em; letter-spacing: -0.005em; white-space: pre-line; }
+.sl-start { display: inline-flex; align-items: center; justify-content: center; margin-top: 34px; min-height: 76px; padding: 0 52px;
+  border: 0; border-radius: 16px; background: ${CTA_GRADIENT}; color: ${WHITE}; font: 700 clamp(20px, 1.55vw, 25px)/1 ${BRAND}; cursor: pointer;
   box-shadow: 0 10px 24px -14px rgba(27,56,40,.8);
   transition: transform 160ms cubic-bezier(.22,1,.36,1), filter 200ms ease; }
 .sl-start:hover { filter: brightness(1.08); }
 .sl-start:active { transform: scale(.97); }
 .sl-start:focus-visible { outline: 2px solid ${GOLD}; outline-offset: 3px; }
-.sl-join { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
-.sl-join-box { display: inline-flex; align-items: center; height: 62px; padding: 0 6px 0 20px; border-radius: 14px; background: rgba(255,255,255,.85); box-shadow: inset 0 0 0 1.5px ${HAIR}; }
-.sl-join-box input { width: 168px; height: 50px; border: 0; background: transparent; outline: none; font: 700 18px/1 ${BRAND}; letter-spacing: .1em; text-transform: uppercase; color: ${INK}; }
+.sl-join { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
+.sl-join-box { display: inline-flex; align-items: center; height: 70px; padding: 0 7px 0 22px; border-radius: 16px; background: rgba(255,255,255,.85); box-shadow: inset 0 0 0 1.5px ${HAIR}; }
+.sl-join-box input { width: 196px; height: 56px; border: 0; background: transparent; outline: none; font: 700 20px/1 ${BRAND}; letter-spacing: .1em; text-transform: uppercase; color: ${INK}; }
 .sl-join-box input::placeholder { letter-spacing: 0; text-transform: none; font-weight: 500; color: ${INK_SOFT}; }
-.sl-join-box button { min-height: 50px; padding: 0 24px; border: 0; border-radius: 10px; background: ${CTA_GRADIENT}; color: ${WHITE}; font: 700 17px/1 ${BRAND}; cursor: pointer; transition: filter 200ms ease; }
+.sl-join-box button { min-height: 56px; padding: 0 28px; border: 0; border-radius: 12px; background: ${CTA_GRADIENT}; color: ${WHITE}; font: 700 19px/1 ${BRAND}; cursor: pointer; transition: filter 200ms ease; }
 .sl-join-box button:hover:not(:disabled) { filter: brightness(1.08); }
 .sl-join-box button:disabled { background: ${IVORY}; color: ${INK_SOFT}; cursor: default; }
 .sl-join-box button:focus-visible { outline: 2px solid ${GOLD}; outline-offset: 2px; }

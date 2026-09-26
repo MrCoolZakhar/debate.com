@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
-import { useUnlimitedStatus } from '@/lib/unlimitedStatus';
+import { onPlanChanged, useUnlimitedStatus } from '@/lib/unlimitedStatus';
 
 export interface SubscriptionRow {
   plan: string;
@@ -77,6 +77,8 @@ export function useMySubscription(): MySubscription {
   const [tick, setTick] = useState(0);
 
   const reload = useCallback(() => setTick((t) => t + 1), []);
+  // Any plan change (a purchase landing, a cancel, a promo) re-reads the rows.
+  useEffect(() => onPlanChanged(() => setTick((t) => t + 1)), []);
 
   useEffect(() => {
     if (!userId) { setRows(null); return; }

@@ -270,8 +270,9 @@ export default function CreditsPage() {
 }
 
 function Figure({ value, label }: { value: number; label: string }) {
+  // Each figure is centred in its third of the band (26 Sep 2026).
   return (
-    <div className="min-w-0">
+    <div className="min-w-0 text-center">
       <p
         style={{
           margin: 0, fontFamily: OUTFIT, fontWeight: W.title, fontSize: 'clamp(36px, 7vw, 48px)',

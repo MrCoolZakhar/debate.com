@@ -27,6 +27,7 @@ import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { Emoji3D } from '@/components/neu';
 import { GoldWord } from '@/components/BrandHeading';
 import CancelUnlimitedSheet from '@/components/purchase/CancelUnlimitedSheet';
+import CancelledPopup from '@/components/purchase/CancelledPopup';
 import { OUTFIT, T, W } from '../../accountUi';
 import {
   PageHead, HelpLine, PrimaryButton, SecondaryButton, ButtonStyles, WhiteCard, ForestCard, Eyebrow, TextLink,
@@ -48,11 +49,14 @@ export const SAD_GAVIN_SRC = '/Otter.Tutorial.Intro.png';
 
 export default function SubscriptionPage() {
   const sub = useMySubscription();
-  const { detail, loading: detailLoading, reload } = useUnlimitedDetail();
+  const { detail, loading: detailLoading } = useUnlimitedDetail();
   const { user } = useAuth();
   const [portalBusy, setPortalBusy] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [resumeBusy, setResumeBusy] = useState(false);
+  // "We hate to see you go...", opened when a cancel lands.
+  const [byeOpen, setByeOpen] = useState(false);
+  const [byeErr, setByeErr] = useState('');
 
   async function handlePortal() {
     if (portalBusy) return;
@@ -66,17 +70,19 @@ export default function SubscriptionPage() {
     }
   }
 
-  async function handleResume() {
+  async function handleResume(fromBye = false) {
     if (resumeBusy) return;
     setResumeBusy(true);
+    setByeErr('');
     try {
       await manageSubscription({ action: 'resume' });
       notifyOk('Welcome back. Unlimited renews as before.', 'purchase');
-      await reload();
+      setByeOpen(false);
+      // One refresh updates every plan reader on the page and in the chrome.
       notifyPlanChanged(user?.id);
-      sub.reload();
     } catch (err) {
-      notifyErr(manageErrorText(err, 'resume'));
+      if (fromBye) setByeErr(manageErrorText(err, 'resume'));
+      else notifyErr(manageErrorText(err, 'resume'));
     } finally {
       setResumeBusy(false);
     }
@@ -147,9 +153,21 @@ export default function SubscriptionPage() {
           onClose={() => setCancelOpen(false)}
           onCancelled={() => {
             setCancelOpen(false);
-            notifyOk('Cancelled. Unlimited stays on until the end of your period.', 'purchase');
-            void reload().then(() => { notifyPlanChanged(user?.id); sub.reload(); });
+            setByeErr('');
+            setByeOpen(true);
+            notifyPlanChanged(user?.id);
           }}
+        />
+      )}
+
+      {byeOpen && (
+        <CancelledPopup
+          untilDate={formatLongDate(detail?.current_period_end)}
+          gavinSrc={SAD_GAVIN_SRC}
+          busy={resumeBusy}
+          err={byeErr}
+          onResume={() => { void handleResume(true); }}
+          onClose={() => setByeOpen(false)}
         />
       )}
     </div>
@@ -276,8 +294,9 @@ function PlanBlock({ sub, detail, portalBusy, resumeBusy, onPortal, onCancel, on
     body = (
       <>
         {title('Free')}
+        {line('Free is the basic plan: apply to conferences with credits, run sessions and keep your MUN CV. Upgrade to Unlimited whenever you like, and cancel any time.')}
         <div className="mt-5">
-          <PrimaryButton onClick={() => openUnlimitedPopup()}>Get Unlimited</PrimaryButton>
+          <PrimaryButton onClick={() => openUnlimitedPopup()} style={{ textTransform: 'none', letterSpacing: '0.01em' }}>Get Unlimited</PrimaryButton>
         </div>
       </>
     );

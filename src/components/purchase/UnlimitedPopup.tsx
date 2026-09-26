@@ -16,7 +16,7 @@
 // current one ends. Someone on a PAID plan is told they already have it.
 // renewOnce ignores both.
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { GoldWord } from '@/components/BrandHeading';
 import { formatLongDate, manageErrorText, manageSubscription, notifyPlanChanged, useUnlimitedDetail } from '@/lib/subscriptionManage';
 import Link from 'next/link';
@@ -28,7 +28,7 @@ import { unlimitedPricing } from '@/lib/payments';
 import { formatUsd } from '@/lib/creditPricing';
 import { closePurchasePopup, swapToCredits, type UnlimitedPopupRequest } from '@/lib/purchasePopup';
 import { EMBEDDED_CHECKOUT_AVAILABLE, checkoutErrorText, startUnlimitedCheckout, type UnlimitedPlan } from '@/lib/purchaseCheckout';
-import { notifyUnlimitedChanged } from '@/lib/unlimitedStatus';
+import { waitForUnlimited } from '@/lib/unlimitedStatus';
 import { formatPlanDate, useMySubscription } from '@/lib/mySubscription';
 import { refreshCreditsEverywhere } from '@/hooks/useCredits';
 import { notifyOk } from '@/lib/appNotify';
@@ -71,6 +71,9 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
   // here, wherever the pop-up was opened from, with no checkout and no plan
   // picker. "Come Back to Unlimited" is the normal buy flow after a lapse.
   const { detail } = useUnlimitedDetail();
+  // The plan as it was before paying: the poll waits for it to change.
+  const planBeforeRef = useRef(detail?.status ?? null);
+  if (detail && planBeforeRef.current === null) planBeforeRef.current = detail.status;
   const resumeMode = !renewOnce && !!detail?.can_resume;
   const comeBack = !renewOnce && !!detail && detail.status === 'none' && !!detail.lapsed_plan;
   const [resumeBusy, setResumeBusy] = useState(false);
@@ -120,7 +123,10 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
   const onComplete = useCallback(() => {
     closePurchasePopup();
     notifyOk('Welcome to Gavelling Unlimited.', 'purchase');
-    notifyUnlimitedChanged(user?.id);
+    // The webhook writes the plan a few seconds after the payment: poll until
+    // it lands, then every reader (this page, the rail, the menu, guides)
+    // updates at once. `before` is the plan the popup opened with.
+    void waitForUnlimited(user?.id, planBeforeRef.current);
     refreshCreditsEverywhere();
     request.onComplete?.();
   }, [request, user?.id]);
@@ -168,7 +174,9 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
         </div>
       </div>
 
-      <div className="gv-buy-right">
+      {/* Resume mode: the title, the line and the button sit in the middle of
+          the panel, not stuck to its top (26 Sep 2026). */}
+      <div className="gv-buy-right" style={resumeMode ? { justifyContent: 'center' } : undefined}>
         {resumeMode ? (
           <>
             <h3 className="gv-buy-rtitle">Pick Up Where You Left Off</h3>

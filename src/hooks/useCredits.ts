@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
+import { pollWithSchedule } from '@/lib/purchaseActivation';
 
 // ── One balance, many readers ────────────────────────────────────────────────
 // The header counter, the profile menu row, the pop-up's "Your credits" and
@@ -27,23 +28,19 @@ export async function readCreditBalance(): Promise<number | null> {
 
 /**
  * After a payment: the webhook that grants the credits lands a few seconds
- * later, so poll until the balance moves off `previous` (every 2 s, ~20 s),
- * then refresh every reader. Gives up quietly: the credits still arrive, the
- * next read simply shows them. Resolves with the new balance, or null.
+ * later, so poll until the balance moves off `previous` (every 1.5 s for 30 s,
+ * then every 10 s for 2 more minutes, the same schedule as Unlimited; a notice
+ * says so while it waits), refreshing every reader the moment it moves.
+ * Resolves with the new balance, or null if it never moved.
  */
-export async function pollCreditsUntilChanged(previous: number | null, opts: { attempts?: number; intervalMs?: number } = {}): Promise<number | null> {
-  const attempts = opts.attempts ?? 10;
-  const intervalMs = opts.intervalMs ?? 2000;
-  for (let i = 0; i < attempts; i++) {
-    const now = await readCreditBalance();
-    if (now !== null && now !== previous) {
-      refreshCreditsEverywhere();
-      return now;
-    }
-    await new Promise((r) => setTimeout(r, intervalMs));
-  }
+export async function pollCreditsUntilChanged(previous: number | null): Promise<number | null> {
+  let now: number | null = null;
+  const landed = await pollWithSchedule('credits', async () => {
+    now = await readCreditBalance();
+    return now !== null && now !== previous;
+  });
   refreshCreditsEverywhere();
-  return null;
+  return landed ? now : null;
 }
 
 export function useCredits() {

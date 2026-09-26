@@ -1726,8 +1726,8 @@ export const translations = {
     hero_subtitle: 'La forma más sencilla de dirigir tu comité de MUN.',
     hero_start_committee: 'CREAR MI COMITÉ →',
     // --- Sessions landing (sl_*), 24 Sep 2026; reworked 25 Sep 2026 ---
-    sl_h1_lead: "MUN, bien",
-    sl_h1_accent: "hecho.",
+    sl_h1_lead: "MUN",
+    sl_h1_accent: "como se debe.",
     sl_lede: "Pase de lista, mociones, votación, puntuación.\nTodo en una sola sesión.",
     sl_start: "Crear comité",
     sl_code_placeholder: "Código de sesión",
