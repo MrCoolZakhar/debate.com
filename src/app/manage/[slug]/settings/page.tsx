@@ -239,7 +239,11 @@ function roleStatus(config: RoleConfig | undefined, now: number): RoleStatus {
  *  the step has nothing unresolved, the label, its subtitle, and a chevron.
  *  Module scope on purpose: a component declared inside the page would be a new
  *  type every render, remounting QuestionBuilder and losing its editing state. */
-function StepHeader({ n, label, sub, complete, open, onClick, status = 'idle', hint }: {
+// The disc always shows the section's NUMBER (owner, 25 Sep 2026): the green
+// checkmark used to appear on sections nobody had edited. `complete` is still
+// accepted so callers are unchanged, but nothing draws it here; the dashboard
+// checklist reads conference_setup_status(), never this flag.
+function StepHeader({ n, label, sub, open, onClick, status = 'idle', hint }: {
   n: number; label: string; sub: string; complete: boolean; open: boolean; onClick: () => void;
   status?: 'idle' | 'saving' | 'saved';
   /** One paragraph explaining what this step decides, on a hover "i". */
@@ -253,7 +257,7 @@ function StepHeader({ n, label, sub, complete, open, onClick, status = 'idle', h
       className="w-full flex items-center gap-3 text-left focus:outline-none"
       style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
     >
-      <StepDisc n={n} complete={complete} />
+      <StepDisc n={n} complete={false} />
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5 font-semibold text-base" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
           {label}
@@ -584,11 +588,13 @@ export default function SettingsPage() {
   // Applications splits in two: the per-role setup (bookmarks + three steps)
   // At most one step open. 0 means all collapsed, which is where auto-advance
   // leaves you after the last step.
-  const [openStep, setOpenStep] = useState<number>(1);
+  // Every section starts CLOSED when a tab opens (owner, 25 Sep 2026); a deep
+  // link (?focus=…) opens the card it targets.
+  const [openStep, setOpenStep] = useState<number>(0);
   const [linkCopied, setLinkCopied] = useState(false);
   // Conference tab: a separate "one open at a time" cursor, independent of
   // the applications tab's openStep, so the two folds cannot fight.
-  const [openConfSection, setOpenConfSection] = useState<number>(1);
+  const [openConfSection, setOpenConfSection] = useState<number>(0);
   const [confLinkCopied, setConfLinkCopied] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -719,6 +725,8 @@ export default function SettingsPage() {
   const intentFocusedRef = useRef(false);
   useEffect(() => {
     if (focusParam !== 'intent' || activeTab !== 'conference' || intentFocusedRef.current) return;
+    // The card lives in section 5, which starts closed: open it first.
+    if (openConfSection !== 5) { setOpenConfSection(5); return; }
     const el = document.getElementById('intent-card');
     if (!el) return;
     intentFocusedRef.current = true;
@@ -726,7 +734,7 @@ export default function SettingsPage() {
     setIntentPulse(true);
     const t = setTimeout(() => setIntentPulse(false), 2600);
     return () => clearTimeout(t);
-  }, [focusParam, activeTab, conference]);
+  }, [focusParam, activeTab, conference, openConfSection]);
   // ── Dates deep link, from the dashboard's publish gate and setup checklist ─
   // ?tab=conference&focus=dates scrolls the date fields into view and rings
   // them once, same shape as the intent deep link above. Reuses focusParam,
@@ -735,6 +743,8 @@ export default function SettingsPage() {
   const datesFocusedRef = useRef(false);
   useEffect(() => {
     if (focusParam !== 'dates' || activeTab !== 'conference' || datesFocusedRef.current) return;
+    // The date fields live in section 3 (Conference Details), closed by default.
+    if (openConfSection !== 3) { setOpenConfSection(3); return; }
     const el = document.getElementById('dates-card');
     if (!el) return;
     datesFocusedRef.current = true;
@@ -742,7 +752,7 @@ export default function SettingsPage() {
     setDatesPulse(true);
     const t = setTimeout(() => setDatesPulse(false), 2600);
     return () => clearTimeout(t);
-  }, [focusParam, activeTab, conference]);
+  }, [focusParam, activeTab, conference, openConfSection]);
   // The form builder edits whichever role the tab is on.
   const selectedRole = activeRole;
   const [inviteEmail, setInviteEmail] = useState('');

@@ -5,26 +5,31 @@
 // self-contained panel so it can move whole into a Delegations manage tab once
 // that is split out of Assignment.
 //
-//   1. Delegation allocation swaps (moved here from the Conference tab; the
+//   1. Delegation Allocation Swaps (moved here from the Conference tab; the
 //      page still owns swapMode / saveSwapMode, unchanged, and passes them in)
 //   2. Let delegation leaders import their delegates
 //      (conferences.allow_delegation_import, off by default). The write is the
 //      same verified pattern as saveSwapMode: an update with .select('id'),
 //      exactly one row back counts as saved, no optimistic flip.
+//
+// Hints (25 Sep 2026): ONE tooltip per "i", opened on hover or focus, drawn
+// through a Portal ABOVE the icon so it never covers the options, closed on
+// leave, on tapping elsewhere and on Escape. No native `title`, so no second
+// tooltip. Each swap option has its own short "i".
 
-import { useState } from 'react';
-import { UserPlus, Users2 } from 'lucide-react';
-import { Emoji3D } from '@/components/neu';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Info, UserPlus, Users2 } from 'lucide-react';
+import Portal from '@/components/Portal';
+import { Emoji3D, NEU } from '@/components/neu';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError } from '@/lib/friendlyError';
-import { InfoHint, Segmented } from './applicationsUi';
 
 const FONT = 'var(--font-brand), sans-serif';
 
-export const SWAP_MODE_OPTIONS: { value: string; label: string; desc: string }[] = [
-  { value: 'off', label: 'OFF', desc: 'Only organizers manage allocations.' },
-  { value: 'request', label: 'REQUEST', desc: 'Advisors and head delegates can request swaps; you approve them.' },
-  { value: 'self_serve', label: 'SELF-SERVE', desc: "Advisors and head delegates can swap within their delegation; you're notified." },
+export const SWAP_MODE_OPTIONS: { value: string; label: string; hint: string }[] = [
+  { value: 'off', label: 'Off', hint: 'Only your team can move delegates between seats.' },
+  { value: 'request', label: 'Request', hint: 'Leaders ask for a swap and nothing changes until you approve it.' },
+  { value: 'self_serve', label: 'Self-serve', hint: 'Leaders swap seats within their own delegation and you are notified. They can never take another delegation’s seat.' },
 ];
 
 const CARD: React.CSSProperties = {
@@ -43,6 +48,79 @@ function Spinner() {
       style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }}
       aria-hidden
     />
+  );
+}
+
+/** One small "i": a single hover / focus tooltip through a Portal, above the
+ *  icon (below only when there is no room above), never a native title. */
+function Hint({ label, text, size = 16 }: { label: string; text: string; size?: number }) {
+  const ref = useRef<HTMLSpanElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number; above: boolean } | null>(null);
+
+  const place = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const width = Math.min(300, window.innerWidth - 20);
+    const left = Math.max(10, Math.min(r.left + r.width / 2 - width / 2, window.innerWidth - width - 10));
+    // Above by default so the options underneath stay visible.
+    const above = r.top > 120;
+    const top = above ? r.top - 8 : r.bottom + 8;
+    setPos({ top, left, width, above });
+  }, []);
+
+  useEffect(() => {
+    if (!pos) return;
+    const close = () => setPos(null);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    const onDown = (e: PointerEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) close(); };
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('pointerdown', onDown, true);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('pointerdown', onDown, true);
+    };
+  }, [pos]);
+
+  return (
+    <>
+      <span
+        ref={ref}
+        tabIndex={0}
+        role="img"
+        aria-label={`${label}: ${text}`}
+        onMouseEnter={place}
+        onMouseLeave={() => setPos(null)}
+        onFocus={place}
+        onBlur={() => setPos(null)}
+        onClick={(e) => { e.stopPropagation(); e.preventDefault(); if (pos) setPos(null); else place(); }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); } }}
+        className="inline-flex items-center justify-center rounded-full flex-shrink-0 align-middle"
+        style={{ width: size, height: size, backgroundColor: NEU.surface, boxShadow: NEU.inSm, color: NEU.inkSoft, cursor: 'help' }}
+      >
+        <Info size={size * 0.62} strokeWidth={2.8} aria-hidden />
+      </span>
+      {pos && (
+        <Portal>
+          <div
+            role="tooltip"
+            style={{
+              position: 'fixed', left: pos.left, top: pos.top, width: pos.width, zIndex: 9000,
+              transform: pos.above ? 'translateY(-100%)' : undefined,
+              backgroundColor: '#1C1410', color: '#FAF8F3', borderRadius: 12, padding: '10px 12px',
+              fontFamily: FONT, fontSize: 12.5, lineHeight: 1.5, boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
+              pointerEvents: 'none',
+            }}
+          >
+            {text}
+          </div>
+        </Portal>
+      )}
+    </>
   );
 }
 
@@ -139,28 +217,47 @@ export function DelegationsSettings({
         <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: FONT }}>
           <Emoji3D name="Counterclockwise arrows button" size={20} fallback={Users2} fallbackColor="#1B3828" />
           Delegation Allocation Swaps
-          <InfoHint
+          <Hint
             label="About allocation swaps"
-            text="Once you have allocated a delegation its seats, its head delegate and faculty advisor may want to move their own people between them, putting a stronger delegate onto a harder country, say. Off keeps every move with your team. Request lets them ask and you approve. Self-serve lets them rearrange inside their own delegation freely and notifies you; they can never take a seat from another delegation."
+            text="Lets a delegation's head delegate and faculty advisor move their own delegates between the seats you allocated to that delegation."
           />
         </p>
         <p className="text-sm mb-4" style={{ color: '#5A5046', fontFamily: FONT }}>
           Whether delegation leaders can trade allocations within their own delegation
         </p>
-        <div className="flex items-center" style={{ gap: 8 }}>
-          <div className="flex-1">
-            <Segmented
-              options={SWAP_MODE_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
-              value={swapMode}
-              disabled={swapModeSaving}
-              onChange={(v) => onSwapModeChange(v)}
-            />
+        <div className="flex items-start" style={{ gap: 8 }}>
+          <div className="flex-1 grid gap-2" role="radiogroup" aria-label="Delegation allocation swaps" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+            {SWAP_MODE_OPTIONS.map(opt => {
+              const active = swapMode === opt.value;
+              return (
+                <div key={opt.value} className="flex items-center gap-2 min-w-0">
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    disabled={swapModeSaving}
+                    onClick={() => onSwapModeChange(opt.value)}
+                    className="flex-1 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2"
+                    style={{
+                      padding: '10px 12px',
+                      backgroundColor: active ? '#1B3828' : 'transparent',
+                      color: active ? NEU.gold : NEU.ink,
+                      border: active ? '1.5px solid #1B3828' : '1.5px solid rgba(27,56,40,0.28)',
+                      fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
+                      cursor: swapModeSaving ? 'not-allowed' : 'pointer',
+                      opacity: swapModeSaving ? 0.7 : 1,
+                      transition: 'background-color 140ms ease, color 140ms ease, border-color 140ms ease',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                  <Hint label={`About ${opt.label}`} text={opt.hint} size={15} />
+                </div>
+              );
+            })}
           </div>
-          {swapModeSaving && <Spinner />}
+          {swapModeSaving && <div className="pt-3"><Spinner /></div>}
         </div>
-        <p className="text-xs mt-2" style={{ color: '#9A8A78', fontFamily: FONT }}>
-          {SWAP_MODE_OPTIONS.find(o => o.value === swapMode)?.desc}
-        </p>
         {swapModeError && (
           <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: FONT }}>{swapModeError}</p>
         )}
@@ -173,7 +270,7 @@ export function DelegationsSettings({
             <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: FONT }}>
               <Emoji3D name="Busts in silhouette" size={20} fallback={UserPlus} fallbackColor="#1B3828" />
               Let delegation leaders import their delegates
-              <InfoHint
+              <Hint
                 label="About delegation imports"
                 text="Faculty advisors and head delegates can add their delegates by name and email, up to the spots they pledged. Each import uses one of the leader's credits, which comes back to them if the delegate is rejected or withdraws, and every imported delegate still waits for your acceptance."
               />

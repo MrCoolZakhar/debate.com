@@ -114,10 +114,12 @@ export function SessionsSection() {
           .hs-sess-join-box { flex: 1; }
           .hs-sess-join-box input { flex: 1; min-width: 0; width: auto; }
         }
-        /* Desktop: the phone hangs a little over the hero's bottom edge (owner,
-           25 Sep 2026: "the phone hanging over ever so slightly"). */
+        /* Desktop: laptop | copy | phone in one row. The phone used to hang
+           over the hero's bottom edge, which put its top inside the homepage's
+           first screen under the conference cards; since 25 Sep 2026 it sits
+           fully inside this section, so the first screen is the hero and its
+           three cards only. */
         @media (min-width: 1024px) {
-          .hs-sess { z-index: 2; }
           .hs-sess-stage {
             display: grid; align-items: center; gap: 0;
             grid-template-columns: minmax(0, 1.45fr) minmax(380px, 480px) minmax(0, 0.62fr); max-width: 1440px; margin: 0 auto; padding: 0 clamp(16px, 3vw, 48px);
@@ -130,7 +132,7 @@ export function SessionsSection() {
           .hs-sess-copy { grid-column: 2; grid-row: 1; padding: 0 12px; max-width: none; }
           .hs-sess-phone {
             grid-column: 3; grid-row: 1; position: relative; right: auto; bottom: auto;
-            width: min(92%, 330px); margin: clamp(-110px, -6vw, -60px) 0 0 clamp(0px, 3vw - 24px, 32px); transform: rotate(6deg); align-self: start;
+            width: min(92%, 330px); margin: 0 0 0 clamp(0px, 3vw - 24px, 32px); transform: rotate(6deg); align-self: center;
           }
         }
       `}</style>

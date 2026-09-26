@@ -1349,6 +1349,20 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   // conference there is something real to draw immediately, and the viewer's
   // own applications/allocation arrive under `participantDataLoading` without
   // holding the page back.
+  // "Credit sponsored": the conference's Store pays applicants' Gavelling
+  // credit (conference_credit_sponsored). Shown under the price medallion.
+  // Declared ABOVE the early returns below: a hook after them ran on the
+  // second render only and React threw "Rendered more hooks than during the
+  // previous render" on every conference page (25 Sep 2026).
+  const sponsoredConfId = conference?.id ?? null;
+  const [creditSponsored, setCreditSponsored] = useState(false);
+  useEffect(() => {
+    if (!sponsoredConfId) return;
+    let cancelled = false;
+    void fetchConferenceCreditSponsored(sponsoredConfId).then(v => { if (!cancelled) setCreditSponsored(v); });
+    return () => { cancelled = true; };
+  }, [sponsoredConfId]);
+
   if ((authLoading && !conference) || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ ...themeVars, backgroundColor: 'var(--gv-bg)' }}>
@@ -1399,15 +1413,6 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   // Pricing details (and the role picker's prices) only once delegate
   // applications are set up (enabled), open now or opening later.
   const pricingVisible = heroPrice !== null && heroPrice.kind !== 'tbd' && enabledRoles.length > 0;
-  // "Credit sponsored": the conference's Store pays applicants' Gavelling
-  // credit (conference_credit_sponsored). Shown under the price medallion.
-  const [creditSponsored, setCreditSponsored] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    void fetchConferenceCreditSponsored(conference.id).then(v => { if (!cancelled) setCreditSponsored(v); });
-    return () => { cancelled = true; };
-  }, [conference.id]);
-
   function getRoleWindowStatus(r: RoleConfig): 'open' | 'closed' | 'opens-soon' | 'open-always' {
     if (!r.applications_open_at && !r.applications_close_at) return 'open-always';
     const openAt = r.applications_open_at ? new Date(r.applications_open_at) : null;

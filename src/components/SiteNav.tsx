@@ -452,21 +452,28 @@ export default function SiteNav(props: SiteNavProps = {}) {
             /* The avatar alone (picture, else initials) opens the shared menu. */
             <ProfileAvatarMenu size={60} />
           ) : (
-            /* Signed-out: SIGN IN only */
+            /* Signed-out: SIGN IN as a text link, the way the site draws links
+               (owner, 25 Sep 2026: the gradient pill was hard to see over the
+               dark hero). Light over the overlay, forest ink on light pages. */
             <AuthLink
-              className="inline-flex items-center justify-center transition-[filter] hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A] focus-visible:ring-offset-2"
+              className="inline-flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A] focus-visible:ring-offset-2 rounded"
               style={{
-                color: '#FFFFFF',
-                background: 'linear-gradient(90deg, #1B3828 0%, #2A5A3C 55%, #1E4A31 100%)',
+                color: overlay ? '#FAF8F3' : '#1B3828',
                 height: 42,
-                padding: '0 20px',
-                borderRadius: 10,
-                fontSize: '15px',
-                fontWeight: 700,
+                padding: '0 6px',
+                fontSize: '13px',
+                fontWeight: 800,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
                 fontFamily: "var(--font-brand), sans-serif",
-                textDecoration: 'none',
-                boxShadow: overlay ? '0 6px 18px rgba(0,0,0,0.28)' : '0 6px 16px rgba(27,56,40,0.18)',
+                textDecoration: 'underline',
+                textUnderlineOffset: '4px',
+                textDecorationThickness: '1.5px',
+                textShadow: overlay ? '0 1px 8px rgba(0,0,0,0.35)' : undefined,
+                transition: 'color 150ms ease',
               }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = overlay ? '#EED98A' : '#B6871F'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = overlay ? '#FAF8F3' : '#1B3828'; }}
             >
               Sign in
             </AuthLink>
@@ -685,14 +692,17 @@ export default function SiteNav(props: SiteNavProps = {}) {
               style={{
                 display: 'block',
                 padding: '13px 16px',
-                fontSize: '15px',
-                fontWeight: 700,
-                color: '#FFFFFF',
-                background: 'linear-gradient(90deg, #1B3828 0%, #2A5A3C 55%, #1E4A31 100%)',
+                fontSize: '14px',
+                fontWeight: 800,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                color: '#1B3828',
+                background: 'transparent',
                 border: 'none',
-                borderRadius: '10px',
                 textAlign: 'center',
-                textDecoration: 'none',
+                textDecoration: 'underline',
+                textUnderlineOffset: '4px',
+                textDecorationThickness: '1.5px',
                 fontFamily: "var(--font-brand), sans-serif",
               }}
             >
