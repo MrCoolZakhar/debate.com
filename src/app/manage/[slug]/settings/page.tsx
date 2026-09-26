@@ -239,11 +239,13 @@ function roleStatus(config: RoleConfig | undefined, now: number): RoleStatus {
  *  the step has nothing unresolved, the label, its subtitle, and a chevron.
  *  Module scope on purpose: a component declared inside the page would be a new
  *  type every render, remounting QuestionBuilder and losing its editing state. */
-// The disc always shows the section's NUMBER (owner, 25 Sep 2026): the green
-// checkmark used to appear on sections nobody had edited. `complete` is still
-// accepted so callers are unchanged, but nothing draws it here; the dashboard
-// checklist reads conference_setup_status(), never this flag.
-function StepHeader({ n, label, sub, open, onClick, status = 'idle', hint }: {
+// The disc shows the section's NUMBER until the section has really been
+// filled out and SAVED, then the checkmark (owner, 25 Sep 2026). `complete` is
+// always a rule over saved data (the conference row after
+// refreshConferenceQuiet, the role configs after a verified write), never a
+// hard-coded true and never local unsaved input. Opening a section earns
+// nothing. The dashboard checklist reads conference_setup_status(), not this.
+function StepHeader({ n, label, sub, complete, open, onClick, status = 'idle', hint }: {
   n: number; label: string; sub: string; complete: boolean; open: boolean; onClick: () => void;
   status?: 'idle' | 'saving' | 'saved';
   /** One paragraph explaining what this step decides, on a hover "i". */
@@ -257,7 +259,7 @@ function StepHeader({ n, label, sub, open, onClick, status = 'idle', hint }: {
       className="w-full flex items-center gap-3 text-left focus:outline-none"
       style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
     >
-      <StepDisc n={n} complete={false} />
+      <StepDisc n={n} complete={complete} />
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5 font-semibold text-base" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
           {label}
@@ -2325,11 +2327,15 @@ export default function SettingsPage() {
   const step1Complete = !!(activeRoleConfig?.applications_open_at && activeRoleConfig?.applications_close_at) && !windowBackwards;
   const step2Complete = !!activeRoleConfig?.fee_currency
     && !(activeRoleConfig?.fee_phases ?? []).some(p => !p.start_date || !p.end_date);
+  // Form (3) and After submitting (4) are optional, so they are "complete"
+  // only once this role has SAVED content: at least one custom question, a
+  // submission message. An optional section a conference does not use keeps
+  // its number, which is fine (owner, 25 Sep 2026).
+  const step3Complete = normalizeBlocks(activeRoleConfig?.custom_questions ?? []).length > 0;
+  const step4Complete = !!activeRoleConfig?.submission_message?.trim();
   const stepComplete = useMemo(
-    // Form is always complete: custom questions are optional by design.
-    // After submitting (4) is always complete too: the message is optional.
-    () => ({ 1: step1Complete, 2: step2Complete, 3: true, 4: true } as Record<number, boolean>),
-    [step1Complete, step2Complete],
+    () => ({ 1: step1Complete, 2: step2Complete, 3: step3Complete, 4: step4Complete } as Record<number, boolean>),
+    [step1Complete, step2Complete, step3Complete, step4Complete],
   );
 
   // ── After-submitting message (step 4) ───────────────────────────────────
@@ -2411,7 +2417,11 @@ export default function SettingsPage() {
     }
     const was = wasCompleteRef.current[key];
     wasCompleteRef.current[key] = complete;
-    if (was || !complete) return;
+    // Only General Info and Fees advance. Form and After submitting became
+    // real rules on 25 Sep 2026 (a saved question, a saved message), and a
+    // first saved question must not move the panel out from under the person
+    // writing it.
+    if (was || !complete || openStep > 2) return;
     // A save can settle while focus is still inside the panel (blur one field,
     // land on the next). Moving the panel out from under that is hostile.
     if (stepPanelRef.current && stepPanelRef.current.contains(document.activeElement)) return;
@@ -4060,7 +4070,7 @@ export default function SettingsPage() {
           <div style={cardStyle}>
             <StepHeader
               n={1} label="Customizability" sub="Your colours and what visitors can see."
-              complete={true} open={openConfSection === 1} status={visibilityStatus}
+              complete={Object.keys(conference.theme ?? {}).length > 0} open={openConfSection === 1} status={visibilityStatus}
               onClick={() => setOpenConfSection(openConfSection === 1 ? 0 : 1)}
             />
             {openConfSection === 1 && (
@@ -4300,7 +4310,7 @@ export default function SettingsPage() {
           <div style={cardStyle}>
             <StepHeader
               n={3} label="Conference Details" sub="Name, dates, location, description and age range."
-              complete={true} open={openConfSection === 3}
+              complete={!!(view.full_name?.trim() && view.city?.trim() && view.country?.trim() && view.description?.trim() && !view.dates_tbd && view.start_date && view.end_date)} open={openConfSection === 3}
               status={detailsSaving ? 'saving' : detailsSaved ? 'saved' : 'idle'}
               onClick={() => setOpenConfSection(openConfSection === 3 ? 0 : 3)}
             />
@@ -4616,7 +4626,7 @@ export default function SettingsPage() {
           <div style={cardStyle}>
             <StepHeader
               n={4} label="Partners and Sponsors" sub="Other conferences and companies shown on your page."
-              complete={true} open={openConfSection === 4}
+              complete={partners.length > 0} open={openConfSection === 4}
               onClick={() => setOpenConfSection(openConfSection === 4 ? 0 : 4)}
             />
             {openConfSection === 4 && (
@@ -5053,7 +5063,7 @@ export default function SettingsPage() {
           <div style={cardStyle}>
             <StepHeader
               n={5} label="Social Media and Communication" sub="How applicants find you and reach you."
-              complete={true} open={openConfSection === 5}
+              complete={!!(view.instagram_url?.trim() || view.facebook_url?.trim() || view.tiktok_url?.trim() || view.whatsapp_url?.trim() || view.website_url?.trim() || view.contact_email?.trim())} open={openConfSection === 5}
               status={visualSaving ? 'saving' : visualSaved ? 'saved' : 'idle'}
               onClick={() => setOpenConfSection(openConfSection === 5 ? 0 : 5)}
             />
