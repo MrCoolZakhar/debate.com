@@ -300,8 +300,8 @@ export default function VariantStagefront({
             aria-hidden="true"
             style={{
               overflow: 'hidden',
-              WebkitMaskImage: 'linear-gradient(to bottom, #000 0%, #000 84%, rgba(0,0,0,0.55) 93%, transparent 100%)',
-              maskImage: 'linear-gradient(to bottom, #000 0%, #000 84%, rgba(0,0,0,0.55) 93%, transparent 100%)',
+              WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0.985) 60%, rgba(0,0,0,0.94) 65%, rgba(0,0,0,0.86) 70%, rgba(0,0,0,0.75) 75%, rgba(0,0,0,0.61) 80%, rgba(0,0,0,0.45) 85%, rgba(0,0,0,0.31) 89%, rgba(0,0,0,0.17) 93%, rgba(0,0,0,0.07) 96%, rgba(0,0,0,0.02) 98%, rgba(0,0,0,0) 100%)',
+              maskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0.985) 60%, rgba(0,0,0,0.94) 65%, rgba(0,0,0,0.86) 70%, rgba(0,0,0,0.75) 75%, rgba(0,0,0,0.61) 80%, rgba(0,0,0,0.45) 85%, rgba(0,0,0,0.31) 89%, rgba(0,0,0,0.17) 93%, rgba(0,0,0,0.07) 96%, rgba(0,0,0,0.02) 98%, rgba(0,0,0,0) 100%)',
             }}
           >
             <Image
@@ -317,7 +317,7 @@ export default function VariantStagefront({
               className="absolute inset-0"
               style={{
                 background:
-                  'linear-gradient(to bottom, rgba(8,18,13,0.52) 0%, rgba(8,18,13,0.4) 30%, rgba(8,18,13,0.62) 62%, rgba(10,22,16,0.82) 100%)',
+                  'linear-gradient(to bottom, rgba(8,18,13,0.52) 0%, rgba(8,18,13,0.4) 30%, rgba(8,18,13,0.6) 55%, rgba(8,18,13,0.55) 100%)',
               }}
             />
             <div
