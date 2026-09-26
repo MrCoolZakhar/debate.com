@@ -23,11 +23,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, Briefcase, Loader2, Minus, Plus, Sparkles, Ticket, Users } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { openAuth } from '@/lib/authModal';
-import { useCredits, pollCreditsUntilChanged } from '@/hooks/useCredits';
+import { useCredits, pollCreditsUntilChanged, refreshCreditsEverywhere } from '@/hooks/useCredits';
 import {
   CREDIT_BUNDLES, DEFAULT_BUNDLE, clampQty, discountPctFor, formatUsd, listCentsFor, nextTierNudge, priceCentsFor, useCreditPriceTable,
   type CreditsContext,
 } from '@/lib/creditPricing';
+import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { closePurchasePopup, swapToUnlimited, type CreditsPopupRequest } from '@/lib/purchasePopup';
 import { EMBEDDED_CHECKOUT_AVAILABLE, checkoutErrorText, startCreditsCheckout } from '@/lib/purchaseCheckout';
 import { notifyOk } from '@/lib/appNotify';
@@ -57,7 +58,11 @@ const RIGHT_TITLE: Record<CreditsContext, string> = {
 const plural = (n: number) => (n === 1 ? 'credit' : 'credits');
 
 export default function CreditsPopup({ request }: { request: CreditsPopupRequest }) {
-  const { context, conferenceName, preselect, purpose, delegationName } = request;
+  const { context, conferenceName, preselect, purpose, delegationName, destination } = request;
+  const [dest, setDest] = useState<'conference' | 'account'>(destination?.initial ?? 'account');
+  // The move into the conference runs once per purchase, however often the
+  // completion fires.
+  const movedRef = useRef(false);
   const forImport = purpose === 'import';
   const { user, loading: authLoading } = useAuth();
   const { table, error: tableError, retry } = useCreditPriceTable();
@@ -135,11 +140,26 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
     const prev = balanceRef.current;
     closePurchasePopup();
     notifyOk(`Payment received. Adding ${q} ${plural(q)} to your account.`, 'purchase');
-    void pollCreditsUntilChanged(prev).then((now) => {
-      if (now !== null) notifyOk(`${q} ${plural(q)} added. You now have ${now}.`, 'purchase');
+    void pollCreditsUntilChanged(prev).then(async (now) => {
+      if (destination && dest === 'conference' && !movedRef.current) {
+        movedRef.current = true;
+        const client = await getFreshAuthedClient();
+        const moved = client
+          ? await client.rpc('store_transfer_in', { p_conf: destination.conferenceId, p_qty: q })
+          : null;
+        const answer = (moved?.data ?? null) as { ok?: boolean; message?: string } | null;
+        if (moved && !moved.error && answer?.ok === true) {
+          notifyOk(`${q} ${plural(q)} added to this conference.`, 'purchase');
+        } else {
+          notifyOk(`${q} ${plural(q)} are in your account. Move them into the conference with Transfer.`, 'purchase');
+        }
+        refreshCreditsEverywhere();
+      } else if (now !== null) {
+        notifyOk(`${q} ${plural(q)} added. You now have ${now}.`, 'purchase');
+      }
       request.onComplete?.();
     });
-  }, [checkout, qty, request]);
+  }, [checkout, qty, request, destination, dest]);
 
   // The table can only fail on a network hiccup; try once more by itself.
   useEffect(() => {
@@ -208,6 +228,19 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
         ) : (
           <>
             <h3 className="gv-buy-rtitle">{RIGHT_TITLE[context]}</h3>
+
+            {destination && (
+              <div className="gv-buy-plans" role="radiogroup" aria-label="Where the credits go" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                <button type="button" role="radio" aria-checked={dest === 'conference'} className="gv-buy-plan" style={{ minHeight: 0, padding: '12px 14px' }} onClick={() => setDest('conference')}>
+                  <span className="gv-buy-plan-name">Add to this conference</span>
+                  <span className="gv-buy-plan-per">Conference credits, still yours to move back</span>
+                </button>
+                <button type="button" role="radio" aria-checked={dest === 'account'} className="gv-buy-plan" style={{ minHeight: 0, padding: '12px 14px' }} onClick={() => setDest('account')}>
+                  <span className="gv-buy-plan-name">Add to my account</span>
+                  <span className="gv-buy-plan-per">Your own credits</span>
+                </button>
+              </div>
+            )}
 
             <div className="gv-buy-grid" role="radiogroup" aria-label="How many credits">
               {bundles.map((n) => {

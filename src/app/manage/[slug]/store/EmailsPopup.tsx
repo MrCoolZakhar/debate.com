@@ -31,16 +31,25 @@ export default function EmailsPopup({ conferenceId, email, yourCredits, initial 
   conferenceId: string; email: EmailAllowance | null; yourCredits: number; initial?: Pack;
   onClose: () => void; onDone: (a: StoreAnswer) => void;
 }) {
-  const [pack, setPack] = useState<Pack>(email?.unlimited ? '500' : initial);
+  const [pack, setPack] = useState<Pack | 'custom'>(email?.unlimited ? '500' : initial);
+  // Another amount, in groups of 100, 100 to 5,000 (1 credit per 100).
+  const [customQty, setCustomQty] = useState(300);
+  const [customText, setCustomText] = useState('300');
+  const clampHundreds = (n: number) => Math.min(5000, Math.max(100, Math.round((Number.isFinite(n) ? n : 300) / 100) * 100));
+  const setCustom = (n: number) => { const c = clampHundreds(n); setCustomQty(c); setCustomText(String(c)); };
   const [err, setErr] = useState('');
   const { busy, run, ownOffer, acceptOwn } = useStoreBuy(yourCredits);
-  const chosen = PACKS.find(p => p.id === pack)!;
+  const chosen = pack === 'custom'
+    ? { id: String(customQty), qty: customQty.toLocaleString('en-US'), unit: 'more emails', price: customQty / 100 }
+    : PACKS.find(p => p.id === pack)!;
+  // What buy_email_pack receives: 'unlimited' or a multiple of 100 as text.
+  const packValue = pack === 'custom' ? String(customQty) : pack;
 
   const buy = () => {
     setErr('');
-    run(rpcCall('buy_email_pack', { p_conf: conferenceId, p_pack: pack }), {
+    run(rpcCall('buy_email_pack', { p_conf: conferenceId, p_pack: packValue }), {
       onDone: (a) => {
-        notifyOk(pack === 'unlimited' ? 'Unlimited emails are on for this conference.' : `${pack} more emails added.`, 'store');
+        notifyOk(pack === 'unlimited' ? 'Unlimited emails are on for this conference.' : `${Number(packValue).toLocaleString('en-US')} more emails added.`, 'store');
         onDone(a);
         onClose();
       },
@@ -81,6 +90,36 @@ export default function EmailsPopup({ conferenceId, email, yourCredits, initial 
               </button>
             );
           })}
+          <div
+            role="radio"
+            aria-checked={pack === 'custom'}
+            tabIndex={0}
+            className="gv-buy-chip gv-sp-chip-light"
+            style={{ minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}
+            onClick={() => { setPack('custom'); setErr(''); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPack('custom'); } }}
+          >
+            <span className="gv-buy-chip-unit" style={{ fontSize: 14, minWidth: 110 }}>Another amount</span>
+            <span className="flex items-center gap-1.5" onClick={(e) => { e.stopPropagation(); setPack('custom'); }}>
+              <button type="button" className="gv-em-step" aria-label="100 fewer" disabled={customQty <= 100} onClick={() => setCustom(customQty - 100)}>−</button>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={100}
+                max={5000}
+                step={100}
+                value={customText}
+                aria-label="How many emails, in groups of 100"
+                className="gv-em-in"
+                onFocus={() => setPack('custom')}
+                onChange={(e) => setCustomText(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
+                onBlur={() => setCustom(parseInt(customText, 10))}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setCustom(parseInt(customText, 10)); } }}
+              />
+              <button type="button" className="gv-em-step" aria-label="100 more" disabled={customQty >= 5000} onClick={() => setCustom(customQty + 100)}>+</button>
+            </span>
+            <span className="gv-buy-chip-price" style={{ marginTop: 0, paddingTop: 0, marginLeft: 'auto' }}>{creditsWord(customQty / 100)}</span>
+          </div>
         </div>
         {err ? <ErrorLine>{err}</ErrorLine> : null}
         {ownOffer !== null && (
@@ -90,7 +129,13 @@ export default function EmailsPopup({ conferenceId, email, yourCredits, initial 
           {pack === 'unlimited' ? `Go Unlimited for ${chosen.price} credits` : `Buy ${chosen.qty} more for ${creditsWord(chosen.price)}`}
         </GoldButton>
       </div>
-      <style>{LIGHT_CHIP_CSS}</style>
+      <style>{LIGHT_CHIP_CSS}{`
+.gv-em-step{width:34px;height:34px;border-radius:999px;border:1.5px solid rgba(27,56,40,0.28);background:#FFFFFF;color:#1C1410;font-size:18px;font-weight:700;line-height:1;cursor:pointer}
+.gv-em-step:disabled{opacity:0.4;cursor:default}
+.gv-em-in{width:84px;height:36px;border-radius:10px;border:1.5px solid rgba(27,56,40,0.28);background:#FFFFFF;text-align:center;font-family:inherit;font-size:16px;font-weight:700;color:#1C1410;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
+.gv-em-in::-webkit-outer-spin-button,.gv-em-in::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.gv-em-in:focus{outline:none;border-color:#1B3828}
+`}</style>
     </PurchaseShell>
   );
 }

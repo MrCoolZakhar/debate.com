@@ -535,8 +535,11 @@ const SPOT_CSS = `
 .gv-sp-price-big{font-size:46px;font-weight:800;letter-spacing:-0.03em;line-height:1;font-variant-numeric:tabular-nums;color:${FOREST}}
 .gv-sp-price-unit{font-size:14px;font-weight:600;color:${INK_SOFT}}
 /* Bookmarks OUTSIDE the panel, on its left edge (desktop); a row inside on phones */
-.gv-sp-tabs{display:flex;flex-direction:column;gap:6px;align-self:center;margin-right:-1px;z-index:1}
-.gv-sp-tab{display:flex;align-items:center;gap:8px;width:56px;height:56px;padding:0 0 0 10px;border:none;border-radius:16px 0 0 16px;background:${IVORY};color:${FOREST};cursor:pointer;box-shadow:-6px 0 18px -12px rgba(0,0,0,0.5);font-family:${OUTFIT};font-size:12.5px;font-weight:800;letter-spacing:0.02em;transition:width 200ms cubic-bezier(0.2,0.8,0.2,1),background-color 140ms ease;overflow:hidden;white-space:nowrap}
+/* Bookmarks ATTACHED to the panel's left edge (25 Sep 2026): the column is
+   a fixed 132px wide and right-aligned, so every tab's right edge touches the
+   panel; the selected tab grows LEFTWARD to show its name, never over it. */
+.gv-sp-tabs{display:flex;flex-direction:column;align-items:flex-end;gap:6px;align-self:center;width:132px;flex:0 0 132px;margin-right:-1px;z-index:1}
+.gv-sp-tab{display:flex;align-items:center;justify-content:flex-start;gap:8px;width:56px;height:56px;padding:0 17px 0 12px;border:none;border-radius:16px 0 0 16px;background:${IVORY};color:${FOREST};cursor:pointer;box-shadow:-6px 0 18px -12px rgba(0,0,0,0.5);font-family:${OUTFIT};font-size:12.5px;font-weight:800;letter-spacing:0.02em;transition:width 200ms cubic-bezier(0.2,0.8,0.2,1),background-color 140ms ease;overflow:hidden;white-space:nowrap;flex-direction:row-reverse}
 .gv-sp-tab:hover{background:#FFFFFF}
 .gv-sp-tab[data-active]{width:132px;background:#FFFFFF;color:${INK}}
 .gv-sp-tab-icon{display:inline-flex;flex-shrink:0}

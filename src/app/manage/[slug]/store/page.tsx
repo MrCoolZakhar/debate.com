@@ -28,6 +28,8 @@ import SpotlightPopup from './SpotlightPopup';
 import SponsorshipPopup from './SponsorshipPopup';
 import EmailsPopup from './EmailsPopup';
 import YourSpotlights from './YourSpotlights';
+import EmailPacks from './EmailPacks';
+import { openCreditsPopup } from '@/lib/purchasePopup';
 
 // Pictures from the site's own library for now; public/store/<placement>.jpg
 // would be the owner's replacements (see the report).
@@ -69,11 +71,14 @@ export default function StorePage() {
   const [backBusy, setBackBusy] = useState(false);
   const [backErr, setBackErr] = useState('');
   const [backOpen, setBackOpen] = useState(false);
+  // Bumped after any purchase, so the email packs list re-reads.
+  const [packsKey, setPacksKey] = useState(0);
 
   const afterBuy = useCallback((a?: StoreAnswer) => {
     const s = a ? readStoreState(a) : null;
     if (s) setState(s);
     refreshCreditsEverywhere();
+    setPacksKey(k => k + 1);
     void reload().then(() => setState(null));
   }, [reload]);
 
@@ -107,7 +112,7 @@ export default function StorePage() {
   const emailPct = email && emailCap ? Math.min(100, Math.round((email.used / emailCap) * 100)) : 0;
 
   return (
-    <div className="gv-st px-6 md:px-10 py-8" style={{ maxWidth: 1180 }}>
+    <div className="gv-st px-6 md:px-10 py-8">
       <style>{STORE_CSS}</style>
       {popup ? <style>{PURCHASE_CSS}</style> : null}
 
@@ -123,7 +128,17 @@ export default function StorePage() {
             </h1>
           </div>
         </div>
-        {shown && shown.can_use && <Balances state={shown} onTransfer={() => setPopup({ kind: 'transfer' })} />}
+        {shown && shown.can_use && (
+          <Balances
+            state={shown}
+            onTransfer={() => setPopup({ kind: 'transfer' })}
+            onAdd={(where) => openCreditsPopup({
+              context: 'organizer',
+              destination: { conferenceId: conference.id, initial: where },
+              onComplete: () => afterBuy(),
+            })}
+          />
+        )}
       </div>
 
       {loading && !shown ? (
@@ -205,6 +220,7 @@ export default function StorePage() {
                   <div className="gv-st-meter mb-4" role="meter" aria-valuemin={0} aria-valuemax={emailCap ?? undefined} aria-valuenow={email.used} aria-label="Emails used">
                     <span style={{ width: email.unlimited ? '100%' : `${emailPct}%`, opacity: email.unlimited ? 0.35 : 1 }} />
                   </div>
+                  <EmailPacks conferenceId={conference.id} refreshKey={packsKey} onChanged={(a) => afterBuy(a)} />
                 </>
               ) : (
                 <p className="gv-st-quiet mb-4">Your email count could not be read</p>
@@ -212,7 +228,6 @@ export default function StorePage() {
               <div className="flex flex-wrap gap-2">
                 <Link href={`/manage/${conference.slug}/communications`} className="gv-st-btn gv-st-outline">Explore email builder</Link>
                 <button type="button" className="gv-st-btn gv-st-forest" onClick={() => setPopup({ kind: 'emails', initial: '500' })}>Buy more</button>
-                {!email?.unlimited && <button type="button" className="gv-st-btn gv-st-outline" onClick={() => setPopup({ kind: 'emails', initial: 'unlimited' })}>Go Unlimited</button>}
               </div>
             </StoreCard>
 

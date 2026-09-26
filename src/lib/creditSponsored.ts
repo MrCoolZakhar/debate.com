@@ -30,5 +30,5 @@ export async function fetchConferenceCreditSponsored(conferenceId: string): Prom
 
 /** The one sentence shown on the conference page and the apply overview. */
 export function creditSponsoredLine(acronym: string): string {
-  return `${acronym} pays your Gavelling credit. Applying costs you nothing`;
+  return `${acronym} pays your Gavelling credit. Applying costs you nothing.`;
 }

@@ -6,7 +6,7 @@
 // p_top_up); short on credits goes through useStoreBuy.
 
 import { useState } from 'react';
-import { ArrowRight, Heart, Search, Undo2, Users } from 'lucide-react';
+import { ArrowRight, Heart, Undo2, Users } from 'lucide-react';
 import { notifyOk } from '@/lib/appNotify';
 import { OUTFIT } from '@/components/neu';
 import { PurchaseShell, BrandTitle, Eyebrow, BenefitList, ErrorLine, GoldButton, FOREST, INK, INK_SOFT, type Benefit } from '@/components/purchase/purchaseKit';
@@ -18,7 +18,6 @@ const MAX = 1000;
 const POINTS: Benefit[] = [
   { emoji: 'Ticket', fallback: Users, title: 'Applying is free for them', note: 'Delegates, head delegates, faculty advisors and observers pay no credit to apply.', live: true },
   { emoji: 'Red heart', fallback: Heart, title: 'The Credit sponsored mark', note: 'A heart on your conference page and on your card.', live: true },
-  { emoji: 'Magnifying glass tilted left', fallback: Search, title: 'Found by the filter', note: 'Listed under Credit sponsored in Explore.', live: true },
   { emoji: 'Counterclockwise arrows button', fallback: Undo2, title: 'Nothing wasted', note: 'A rejected or withdrawn applicant’s credit comes back to the pool.', live: true },
 ];
 
@@ -51,7 +50,7 @@ export default function SponsorshipPopup({ conferenceId, available, used, confer
   };
 
   return (
-    <PurchaseShell tone="light" label="Sponsor your delegates' credits" onClose={onClose} testId="store-sponsorship" panelClass="gv-st-pop">
+    <PurchaseShell tone="light" label="Sponsor your delegates' credits" onClose={onClose} testId="store-sponsorship" panelClass="gv-st-pop gv-sp-fit">
       <div className="gv-buy-left">
         <BrandTitle word="Sponsorship" tone="light" sub={<>Your conference pays the credit, so applying costs your delegates nothing</>} />
         <div>
@@ -112,6 +111,22 @@ export default function SponsorshipPopup({ conferenceId, available, used, confer
 /** The kit's bundle chips are drawn for forest; these sit on cream. */
 export const LIGHT_CHIP_CSS = `
 .gv-buy-panel.gv-st-pop .gv-buy-gold{text-transform:none;letter-spacing:0.01em}
+/* Sponsorship fits one screen at 1280x800 (25 Sep 2026): tighter rhythm. */
+.gv-buy-panel.gv-sp-fit{min-height:0}
+.gv-buy-panel.gv-sp-fit .gv-buy-left{gap:14px;padding-top:26px;padding-bottom:22px}
+.gv-buy-panel.gv-sp-fit .gv-buy-right{gap:10px;padding-top:26px;padding-bottom:22px}
+.gv-buy-panel.gv-sp-fit .gv-buy-title{font-size:30px}
+.gv-buy-panel.gv-sp-fit .gv-buy-sub{font-size:14px;margin-top:6px}
+.gv-buy-panel.gv-sp-fit .gv-buy-benefits{gap:10px}
+.gv-buy-panel.gv-sp-fit .gv-buy-benefit-disc{width:40px;height:40px;border-radius:12px}
+.gv-buy-panel.gv-sp-fit .gv-buy-benefit-disc img,.gv-buy-panel.gv-sp-fit .gv-buy-benefit-disc svg{width:22px;height:22px}
+.gv-buy-panel.gv-sp-fit .gv-buy-benefit-text{font-size:15px!important}
+.gv-buy-panel.gv-sp-fit .gv-buy-benefit-note{font-size:12.5px!important}
+.gv-buy-panel.gv-sp-fit .gv-buy-balance{padding-top:12px}
+.gv-buy-panel.gv-sp-fit .gv-buy-balance-big{font-size:36px}
+.gv-buy-panel.gv-sp-fit .gv-buy-chip{min-height:74px;padding:10px 12px}
+.gv-buy-panel.gv-sp-fit .gv-buy-chip-qty{font-size:22px}
+.gv-buy-panel.gv-sp-fit .gv-buy-eyebrow{margin-bottom:8px}
 .gv-buy-chip.gv-sp-chip-light{border-color:rgba(27,56,40,0.28);color:${INK}}
 .gv-buy-chip.gv-sp-chip-light:hover{border-color:${FOREST}}
 .gv-buy-chip.gv-sp-chip-light[aria-checked="true"]{border-color:${FOREST};box-shadow:inset 0 0 0 1.5px ${FOREST};background:rgba(27,56,40,0.06)}

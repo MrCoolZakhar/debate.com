@@ -36,6 +36,12 @@ export interface CreditsPopupRequest {
   purpose?: 'import' | 'store';
   /** With purpose 'import': the delegation the delegates are imported into. */
   delegationName?: string;
+  /** The Store's balances (25 Sep 2026): offer "Add to this conference" or
+   *  "Add to my account". Credits are always bought into the buyer's own
+   *  account; with "Add to this conference" exactly that amount is then moved
+   *  into the conference with store_transfer_in, once, when the purchase
+   *  completes, and stays the buyer's contribution. */
+  destination?: { conferenceId: string; initial: 'conference' | 'account' };
 }
 
 export interface UnlimitedPopupRequest {

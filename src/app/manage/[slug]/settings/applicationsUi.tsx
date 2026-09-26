@@ -85,7 +85,7 @@ export const STATUS_STYLE: Record<RoleStatus, { fg: string; bg: string; dot: str
  */
 export function InfoHint({ label, text, size = 16 }: { label: string; text: string; size?: number }) {
   const ref = useRef<HTMLSpanElement | null>(null);
-  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number; above: boolean } | null>(null);
 
   const place = useCallback(() => {
     const el = ref.current;
@@ -93,10 +93,10 @@ export function InfoHint({ label, text, size = 16 }: { label: string; text: stri
     const r = el.getBoundingClientRect();
     const width = Math.min(300, window.innerWidth - 20);
     const left = Math.max(10, Math.min(r.left + r.width / 2 - width / 2, window.innerWidth - width - 10));
-    // Rough height for a three-line paragraph; flip above when tight below.
-    const below = window.innerHeight - r.bottom;
-    const top = below < 150 ? Math.max(10, r.top - 142) : r.bottom + 8;
-    setPos({ top, left, width });
+    // ABOVE the icon by default, so it never covers the buttons and options
+    // under it (25 Sep 2026); below only when there is no room above.
+    const above = r.top > 160;
+    setPos({ top: above ? r.top - 8 : r.bottom + 8, left, width, above });
   }, []);
 
   useEffect(() => {
@@ -116,8 +116,9 @@ export function InfoHint({ label, text, size = 16 }: { label: string; text: stri
         ref={ref}
         tabIndex={0}
         role="img"
-        aria-label={label}
-        title={text}
+        // One tooltip only: no native `title`, which drew the same text a
+        // second time. Screen readers get the text through the label.
+        aria-label={`${label}: ${text}`}
         onMouseEnter={() => place()}
         onMouseLeave={() => setPos(null)}
         onFocus={() => place()}
@@ -137,9 +138,11 @@ export function InfoHint({ label, text, size = 16 }: { label: string; text: stri
         <Portal>
           <div
             role="tooltip"
-            className="fixed z-50"
+            className="fixed"
             style={{
+              zIndex: 9500,
               top: pos.top, left: pos.left, width: pos.width,
+              transform: pos.above ? 'translateY(-100%)' : undefined,
               padding: '12px 14px', borderRadius: 14,
               backgroundColor: NEU.surface, boxShadow: NEU.out,
               fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 500, lineHeight: 1.55,

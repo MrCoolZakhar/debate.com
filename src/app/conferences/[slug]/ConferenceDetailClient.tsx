@@ -1704,6 +1704,19 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       </span>
                     </>
                   ) : null}
+                  {/* Credit sponsored, beside the dates, so it is seen the
+                      moment the page opens (the line under the price
+                      medallion stays too). */}
+                  {creditSponsored && (
+                    <>
+                      <span aria-hidden style={{ color: 'rgba(238,217,138,0.5)', fontSize: '10px' }}>◆</span>
+                      <span
+                        style={{ display: 'inline-flex', alignItems: 'center', backgroundColor: 'rgba(250,248,243,0.94)', borderRadius: 9999, padding: '2px 9px' }}
+                      >
+                        <CreditSponsoredMark size="sm" />
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

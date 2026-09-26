@@ -54,8 +54,13 @@ export const STORE_CSS = `
 /* Balances, top right: two chips like the header's credit counter */
 .gv-st-bal{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
 .gv-st-bal-cell{display:flex;flex-direction:column;align-items:center;gap:5px}
-.gv-st-bal-chip{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 16px 0 12px;border-radius:999px;background:${FOREST};color:#FFFFFF;font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
-.gv-st-bal-cap{font-size:11.5px;font-weight:600;color:${INK_SOFT}}
+.gv-st-bal-chip{display:inline-flex;align-items:center;gap:8px;min-height:42px;padding:0 16px 0 12px;border-radius:999px;border:none;background:${FOREST};color:#FFFFFF;font-family:${OUTFIT};font-size:16px;font-weight:800;font-variant-numeric:tabular-nums;cursor:pointer;transition:background-color 140ms ease,transform 120ms ease;box-shadow:0 6px 16px -10px rgba(27,56,40,0.6)}
+.gv-st-bal-chip:hover{background:#2A5A3C}
+.gv-st-bal-chip:active{transform:scale(0.97)}
+.gv-st-bal-chip:focus{outline:none}
+.gv-st-bal-chip:focus-visible{outline:2px solid ${DEEP_GOLD};outline-offset:2px}
+.gv-st-bal-cap{font-size:11.5px;font-weight:600;line-height:1.25;text-align:center;color:${INK_SOFT}}
+.gv-st-bal-transfer{min-height:40px;padding:0 14px;align-self:flex-start;margin-top:1px}
 .gv-st-bal-link{align-self:center;margin-top:6px}
 
 /* Product cards: a picture, the name UPPERCASE and bold, the price */
@@ -138,17 +143,28 @@ export function Big({ n, cap }: { n: number | string; cap: string }) {
   );
 }
 
-export function Balances({ state, onTransfer }: { state: StoreState; onTransfer: () => void }) {
+/** The two balances, top right (25 Sep 2026): each coin pill opens the
+ *  organizer credits pop-up (Conference preselects "Add to this conference",
+ *  Your Credits "Add to my account"); Transfer between them is a real button. */
+export function Balances({ state, onTransfer, onAdd }: {
+  state: StoreState;
+  onTransfer: () => void;
+  onAdd: (where: 'conference' | 'account') => void;
+}) {
   return (
     <div className="gv-st-bal" aria-label="Credit balances">
       <div className="gv-st-bal-cell">
-        <span className="gv-st-bal-chip"><CreditCoin size={18} />{state.conference_credits}</span>
-        <span className="gv-st-bal-cap">Conference</span>
+        <button type="button" className="gv-st-bal-chip" onClick={() => onAdd('conference')} aria-label={`Conference credits: ${state.conference_credits}. Add credits to this conference`}>
+          <CreditCoin size={18} />{state.conference_credits}
+        </button>
+        <span className="gv-st-bal-cap">Conference<br />Credits</span>
       </div>
-      <button type="button" className="gv-st-link gv-st-bal-link" onClick={onTransfer}>Transfer</button>
+      <button type="button" className="gv-st-btn gv-st-outline gv-st-bal-transfer" onClick={onTransfer}>Transfer</button>
       <div className="gv-st-bal-cell">
-        <span className="gv-st-bal-chip"><CreditCoin size={18} />{state.your_credits}</span>
-        <span className="gv-st-bal-cap">Your credits</span>
+        <button type="button" className="gv-st-bal-chip" onClick={() => onAdd('account')} aria-label={`Your credits: ${state.your_credits}. Add credits to your account`}>
+          <CreditCoin size={18} />{state.your_credits}
+        </button>
+        <span className="gv-st-bal-cap">Your<br />Credits</span>
       </div>
     </div>
   );

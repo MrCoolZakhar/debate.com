@@ -729,7 +729,7 @@ function FilterRail({
         <RailHeading>Credits</RailHeading>
         <RailOption label="Credit sponsored" active={sponsoredFilter} onClick={() => onSponsored(!sponsoredFilter)} icon={Heart} />
         <p style={{ margin: '6px 10px 0', fontSize: '11px', lineHeight: 1.4, color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif" }}>
-          The conference pays your Gavelling credit
+          The conference pays your Gavelling credit.
         </p>
       </div>
 
