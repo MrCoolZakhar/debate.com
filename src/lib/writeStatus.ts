@@ -148,6 +148,24 @@ export function dropParkedWrites(committeeId: string): void {
   emit();
 }
 
+// ── Speaker-write trouble (for the speech logger) ──
+// A current_speaker write that has failed at least one attempt and not ended yet (backing
+// off, or parked) means the persisted anchor may not hold what the Moderator pressed, so
+// `logFloorSpeech` must not trust a read-back of it (it could read a Start that lands a
+// minute later and log the whole slot). Tracked per committee, by write id.
+const stalledSpeakerWrites = new Map<number, string>();   // writeId -> committeeId
+const speakerFailureCount = new Map<string, number>();   // committeeId -> failed attempts
+
+/** For floorSpeech.ts: is a current_speaker write of this committee stalled right now, and
+ *  a counter of failed current_speaker attempts (compare two readings to see whether one
+ *  failed in between). Always `{ stalledNow: false, mark: 0 }` with the switch off. */
+export function speakerWriteTrouble(committeeId: string): { stalledNow: boolean; mark: number } {
+  if (!OFFLINE_RESILIENCE) return { stalledNow: false, mark: 0 };
+  let stalledNow = false;
+  stalledSpeakerWrites.forEach((c) => { if (c === committeeId) stalledNow = true; });
+  return { stalledNow, mark: speakerFailureCount.get(committeeId) ?? 0 };
+}
+
 function snapshot(): WriteStatusState {
   return {
     retrying: Array.from(retryingWrites).some((id) => !offlineBackoff.has(id)),
@@ -292,6 +310,11 @@ export async function runWrite(
     && committees.some((c) => (dropSeqByCommittee.get(c) ?? 0) >= issuedAt);
   const rerunnable = opts.rerunnable ?? opts.retry;
   const releasePending = beginPendingWrite(list);
+  // The committee whose current_speaker this write touches (key `${id}:speaker...`), or null.
+  const speakerCommittee = OFFLINE_RESILIENCE
+    ? (list.map((k) => { const c = committeeOfKey(k); return c && (k === `${c}:speaker` || k.startsWith(`${c}:speaker:`)) ? c : null; })
+        .find((c): c is string => !!c) ?? null)
+    : null;
 
   try {
     // A new write for a key clears an older failure for the same key: it carries newer truth.
@@ -303,7 +326,7 @@ export async function runWrite(
     }
     if (touched) emit();
 
-    const runAttempt = async (): Promise<AttemptResult> => {
+    const attemptOnce = async (): Promise<AttemptResult> => {
       try {
         return await attempt();
       } catch (err) {
@@ -311,6 +334,14 @@ export async function runWrite(
         console.error(`Write threw (${primary}):`, err);
         return 'failed';
       }
+    };
+    const runAttempt = async (): Promise<AttemptResult> => {
+      const raw = await attemptOnce();
+      if (speakerCommittee && (raw === 'failed' || raw === 'failed-network')) {
+        stalledSpeakerWrites.set(writeId, speakerCommittee);
+        speakerFailureCount.set(speakerCommittee, (speakerFailureCount.get(speakerCommittee) ?? 0) + 1);
+      }
+      return raw;
     };
 
     const delays = opts.retry ? BACKOFF_MS : [0];
@@ -405,6 +436,7 @@ export async function runWrite(
     if (changed) emit();
     return result;
   } finally {
+    stalledSpeakerWrites.delete(writeId);
     releasePending();
   }
 }

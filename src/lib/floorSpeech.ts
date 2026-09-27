@@ -47,6 +47,7 @@ import { speakerRemainingNow, readSpokenSeconds, insertLogRows } from '@/lib/com
 import { sessionClient } from '@/lib/sessionClient';
 import { serverNow } from '@/lib/serverClock';
 import { OFFLINE_RESILIENCE } from '@/lib/offlineResilience';
+import { speakerWriteTrouble } from '@/lib/writeStatus';
 
 /** The chair page's live speaker clock. When omitted the helper reads the committee row's
  *  own anchor (`speakerTimeRemaining` + `speakerStartedAt`) and assumes no extra time. */
@@ -164,14 +165,23 @@ export async function logTimedSpeech(
  * to true when a row was written (or already existed), false when there was nothing to
  * log or the insert failed.
  */
-export async function logFloorSpeech(committee: Committee, clock?: FloorClock): Promise<boolean> {
+export async function logFloorSpeech(committee: Committee, clock?: FloorClock, pressedAt?: number): Promise<boolean> {
   const speaker = committee.currentSpeaker;
   if (!speaker?.country) return false;
   if (isRoomOrderSpeaker(committee)) return false;
+  // Offline resilience: was (or becomes, while the read waits) a current_speaker write of this
+  // room stalled? Then the persisted anchor may not hold what the Moderator pressed: a Start
+  // parked offline lands a minute later and a read-back behind it would log the whole slot.
+  // The press-time seconds (local accounting from the clock the caller passed, taken NOW)
+  // are used instead. Nothing stalled (every healthy online path): the read-back, unchanged.
+  const troubleAtCall = OFFLINE_RESILIENCE ? speakerWriteTrouble(committee.id) : null;
   // Joins the current_speaker chain NOW: after any pause the caller already issued, before
   // any Next or clear it issues next.
   const persisted = readSpokenSeconds(committee.id).catch(() => null);
-  const fallbackSeconds = floorSpeechSeconds(committee, clock);
+  // `pressedAt` (database-clock ms): when the caller awaited something between the chair's
+  // press and this call (Suspend / End Yes awaits the motion delete, up to the write timeout
+  // offline), the local seconds are counted up to the press, not up to now.
+  const fallbackSeconds = floorSpeechSeconds(committee, clock, pressedAt ?? serverNow());
 
   const anchor = clock
     ? { base: clock.base, startedAt: clock.startedAt, seatedAt: committee.speakerSeatedAt ?? null }
@@ -182,7 +192,9 @@ export async function logFloorSpeech(committee: Committee, clock?: FloorClock): 
   loggedTurnKeys.add(turnKey);   // claimed before the await: a second trigger stops here
 
   const anchorRead = await persisted;
-  const seconds = anchorRead && anchorRead.country === speaker.country ? anchorRead.seconds : fallbackSeconds;
+  const troubled = !!troubleAtCall
+    && (troubleAtCall.stalledNow || speakerWriteTrouble(committee.id).mark !== troubleAtCall.mark);
+  const seconds = !troubled && anchorRead && anchorRead.country === speaker.country ? anchorRead.seconds : fallbackSeconds;
   if (seconds <= 0) { loggedTurnKeys.delete(turnKey); return false; }
 
   const inCaucus = committee.phase === 'moderated-caucus' && !!committee.caucus;

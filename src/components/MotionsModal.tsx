@@ -1525,6 +1525,10 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
             onClick={async () => {
               const motionId = specialVoteMotion!.id;
               if (isTempMotionId(motionId) || specialDeleting) return;
+              // The floor speech is counted up to THIS press, not up to when the motion delete
+              // below returns (offline that await can take the whole write timeout).
+              const pressedAt = serverNow();
+              const pressedClock = floorClock?.();
               setSpecialDeleting(true);
               try {
                 await removePendingMotionInDB(motionId, committee.code, committee.dbChairJoinSuffix ?? undefined);
@@ -1542,7 +1546,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               if (!isSuspend) void creditRoomOrderTour(committee);
               const floor = committee.currentSpeaker;
               if (floor) {
-                void logFloorSpeech(committee, floorClock?.());
+                void logFloorSpeech(committee, pressedClock, pressedAt);
                 update((c) => ({ ...c, currentSpeaker: null }));
                 clearCurrentSpeakerIfUnchanged(committee.id, floor.delegateId, floor.country, committee.code, committee.dbChairJoinSuffix ?? undefined);
               }
