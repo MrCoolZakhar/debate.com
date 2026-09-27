@@ -30,6 +30,7 @@ import {
   caucusQueueCapacity,
 } from '@/lib/committeeService';
 import { logMotionRaised, logMotionPassed, logMotionFailed, logMotionEdited } from '@/lib/motionLog';
+import { OFFLINE_RESILIENCE } from '@/lib/offlineResilience';
 import { serverNow, serverNowIso } from '@/lib/serverClock';
 import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 
@@ -1219,6 +1220,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   const floorFull = pending.length >= MAX_FLOOR_MOTIONS;
   const [view, setView] = useState<ModalView>(pending.length === 0 && !isViewOnly ? 'raise' : 'vote');
   const [specialVoteMotion, setSpecialVoteMotion] = useState<PendingMotion | null>(null);
+  // Suspend / End "Yes" awaits the motion delete before the break (ordering rule). On bad
+  // Wi-Fi that can take up to the write timeout, so both buttons show a busy state meanwhile.
+  const [specialDeleting, setSpecialDeleting] = useState(false);
   // M-2: temp ids live in a module-level store keyed by committee, not modal state, so
   // closing the modal mid-insert no longer forgets which motions are still saving.
   const pendingIds = useTempMotionIds(committee.id);
@@ -1516,15 +1520,24 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         })()}
         <div className="flex gap-8">
           <button
-            disabled={specialBlocked}
+            disabled={specialBlocked || specialDeleting}
+            aria-busy={specialDeleting || undefined}
             onClick={async () => {
               const motionId = specialVoteMotion!.id;
-              if (isTempMotionId(motionId)) return;
-              await removePendingMotionInDB(motionId, committee.code, committee.dbChairJoinSuffix ?? undefined);
+              if (isTempMotionId(motionId) || specialDeleting) return;
+              setSpecialDeleting(true);
+              try {
+                await removePendingMotionInDB(motionId, committee.code, committee.dbChairJoinSuffix ?? undefined);
+              } finally {
+                setSpecialDeleting(false);
+              }
               update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motionId) }));
               // M-1: the other floor motions fall. G-1: whoever held the floor has their speech
               // logged, then leaves it, so a resumed session cannot log the same turn again.
-              fellOtherFloorMotions({ committee, passedId: motionId, passedType: specialVoteMotion!.type, update, motionOrder, rank: rankMotion });
+              // D3 (offline resilience): the 'fell' and 'motion-passed' ledger rows of a break are
+              // written only once the break has LANDED, so a Suspend / End that fails and is
+              // rolled back leaves no History line for a break that never happened.
+              const logFell = fellOtherFloorMotions({ committee, passedId: motionId, passedType: specialVoteMotion!.type, update, motionOrder, rank: rankMotion, deferFellLogs: OFFLINE_RESILIENCE });
               // End Debate ends a Room Order Tour de Table for good (Suspend only pauses it).
               if (!isSuspend) void creditRoomOrderTour(committee);
               const floor = committee.currentSpeaker;
@@ -1533,7 +1546,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                 update((c) => ({ ...c, currentSpeaker: null }));
                 clearCurrentSpeakerIfUnchanged(committee.id, floor.delegateId, floor.country, committee.code, committee.dbChairJoinSuffix ?? undefined);
               }
-              logMotionPassed(committee, specialVoteMotion!);
+              const passedMotion = specialVoteMotion!;
+              const logBreak = () => { logMotionPassed(committee, passedMotion); logFell?.(); };
+              if (!OFFLINE_RESILIENCE) logBreak();
               // R-5: optimistic first (RULE 5), but remembered. Both writes are retried inside
               // runWrite and a real failure raises the chair page's "Not saved" toast; when they
               // resolve false the lifecycle fields are put back, so this laptop does not sit on
@@ -1544,7 +1559,10 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                 phase: committee.phase, suspendedAt: committee.suspendedAt ?? null,
                 endedAt: committee.endedAt ?? null, expiresAt: committee.expiresAt ?? null,
               };
-              const rollback = (ok: boolean) => { if (!ok) onCommitteeUpdate?.((c) => ({ ...c, ...before })); };
+              const rollback = (ok: boolean) => {
+                if (!ok) { onCommitteeUpdate?.((c) => ({ ...c, ...before })); return; }
+                if (OFFLINE_RESILIENCE) logBreak();
+              };
               if (isSuspend) {
                 // S4: a caucus kept through the break keeps its queue, never its floor holder.
                 onCommitteeUpdate?.((c) => ({
@@ -1565,10 +1583,13 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
             className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none gv-lift disabled:opacity-40 disabled:cursor-not-allowed" style={{ backgroundColor: '#1B3828', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.05em' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
+            {specialDeleting && (
+              <span aria-hidden="true" className="inline-block w-5 h-5 mr-3 rounded-full border-[3px] border-white/40 border-t-white animate-spin motion-reduce:animate-none align-[-2px]" />
+            )}
             {t('motions_yes')}
           </button>
           <button
-            disabled={specialBlocked}
+            disabled={specialBlocked || specialDeleting}
             onClick={() => {
               const motionId = specialVoteMotion.id;
               if (isTempMotionId(motionId)) return;

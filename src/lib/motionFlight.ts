@@ -188,7 +188,11 @@ export function fellOtherFloorMotions(opts: {
   rank: (m: PendingMotion) => number;
   /** The type of the motion that passed, when the caller knows it (Suspend / End). */
   passedType?: PendingMotion['type'];
-}) {
+  /** Do not write the 'fell' ledger rows now: return a function that writes them. Suspend /
+   *  End pass true and call it only once the break has LANDED, so a break that fails (and is
+   *  rolled back) leaves no History line saying these motions fell (offline resilience, D3). */
+  deferFellLogs?: boolean;
+}): (() => void) | void {
   const { committee, passedId, update, motionOrder, rank } = opts;
   const passed = (committee.pendingMotions ?? []).find((m) => m.id === passedId);
   // V4: when Suspend or End Debate passed, the fallen motions are gone with the debate. Undo
@@ -200,15 +204,18 @@ export function fellOtherFloorMotions(opts: {
       && (m.type as string) !== 'join-request' && (m.type as string) !== 'gsl-request' && m.type !== 'custom',
   );
   if (fallen.length === 0) return;
+  const toLog = fallen.filter((m) => !isTempMotionId(m.id));
+  const logFell = () => { for (const m of toLog) logMotionFailed(committee, m, 'fell'); };
   for (const m of fallen) {
     // The History line of a fallen motion says so. A temp one was never logged as raised.
-    if (!isTempMotionId(m.id)) logMotionFailed(committee, m, 'fell');
+    if (!opts.deferFellLogs && !isTempMotionId(m.id)) logMotionFailed(committee, m, 'fell');
     removeMotionEverywhere(committee, m.id, update);
   }
   if (lifecyclePassed) {
     showMotionNotice(committee.id, { kind: 'fell', count: fallen.length, restore: null });
-    return;
+    return opts.deferFellLogs ? logFell : undefined;
   }
+  if (opts.deferFellLogs) logFell();   // only lifecycle motions defer (a caucus accept never fails like a break)
   const restore = () => {
     dismissMotionNotice(committee.id);
     // The room was suspended or ended after the notice appeared: nothing to raise into.

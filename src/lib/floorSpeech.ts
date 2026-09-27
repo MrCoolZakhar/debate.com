@@ -43,9 +43,10 @@
  * keyed per tour instance (`caucus.tourStartedAt`) + country.
  */
 import type { Committee } from '@/lib/types';
-import { speakerRemainingNow, readSpokenSeconds } from '@/lib/committeeService';
+import { speakerRemainingNow, readSpokenSeconds, insertLogRows } from '@/lib/committeeService';
 import { sessionClient } from '@/lib/sessionClient';
 import { serverNow } from '@/lib/serverClock';
+import { OFFLINE_RESILIENCE } from '@/lib/offlineResilience';
 
 /** The chair page's live speaker clock. When omitted the helper reads the committee row's
  *  own anchor (`speakerTimeRemaining` + `speakerStartedAt`) and assumes no extra time. */
@@ -123,9 +124,17 @@ async function insertSpeech(
     turnKey: e.turnKey,
     timestamp: new Date(e.at).toISOString(),
   });
+  const row = { committee_id: committee.id, sender: '__system__', content: `__log__:${payload}`, is_private: true, recipient: '__log__' };
+  if (OFFLINE_RESILIENCE) {
+    // A client-id insert, retried and parked while offline (insertLogRows). The turn key stays
+    // claimed while it waits, so a second trigger cannot log the turn twice meanwhile.
+    const ok = await insertLogRows(committee.id, [row], committee.code, committee.dbChairJoinSuffix ?? undefined, 'logging speech');
+    if (!ok) loggedTurnKeys.delete(e.turnKey);   // let a retry through
+    return ok;
+  }
   const { error } = await sessionClient(committee.code, committee.dbChairJoinSuffix ?? undefined)
     .from('messages')
-    .insert({ committee_id: committee.id, sender: '__system__', content: `__log__:${payload}`, is_private: true, recipient: '__log__' });
+    .insert(row);
   if (error) {
     console.error('Error logging speech:', error);
     loggedTurnKeys.delete(e.turnKey);   // let a retry through
@@ -240,6 +249,12 @@ export async function creditRoomOrderTour(committee: Committee | null | undefine
       topic, turnKey: e.turnKey, timestamp: at,
     })}`,
   }));
+  if (OFFLINE_RESILIENCE) {
+    // One statement with client ids: all rows land or none (insertLogRows).
+    const ok = await insertLogRows(committee.id, rows, committee.code, committee.dbChairJoinSuffix ?? undefined, 'crediting Room Order tour');
+    if (!ok) todo.forEach((e) => loggedTurnKeys.delete(e.turnKey));
+    return ok;
+  }
   const { error } = await sessionClient(committee.code, committee.dbChairJoinSuffix ?? undefined)
     .from('messages').insert(rows);
   if (error) {

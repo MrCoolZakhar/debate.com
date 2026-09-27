@@ -567,7 +567,7 @@ for f in "src/app/chair/[code]/page.tsx" "src/app/delegate/[code]/page.tsx" \
 ### 2026-09-14 — "Not saved" toast and clock skew hint (`feature/conferences-auth`) — +5 keys
 
 **Added, 5 keys × 4 locales**, directly after `session_resume_lost` in every locale. Count the file before quoting a total: other changes landed the same day.
-- `src/components/notifications/SaveStatusToast.tsx` (chair page): `session_save_retrying` ("Not saved. Retrying…"), `session_save_failed` ("Not saved. Check your connection."), `session_save_retry`, `session_save_dismiss` (also the close label of the skew hint).
+- `src/components/notifications/SaveStatusToast.tsx` (chair page): `session_save_retrying` ("Not saved. Retrying…"), `session_save_failed` ("Not saved. Check your connection."), `session_save_offline` ("Offline. Your changes will save when you're back.", shown while writes are parked by offline resilience, src/lib/offlineResilience.ts), `session_save_retry`, `session_save_dismiss` (also the close label of the skew hint).
 - `src/components/ClockSkewHint.tsx` (chair page): `session_clock_skew`, takes `{n}` (whole seconds). ES *desfase*, FR *décalée*, AR *منحرفة*; "Timers are corrected" is a statement, not an instruction.
 
 ### 2026-09-14 — persisted votes, voting mode, live settings sync (`feature/conferences-auth`) — +31 keys

@@ -7,7 +7,14 @@ import { supabase } from './supabase';
 import { sessionClient } from './sessionClient';
 import { parseIntroState } from './documentFlow';
 import { serverNow, serverNowIso } from './serverClock';
-import { runWrite, rowsOf, cancelPendingRetries, type WriteResult } from './writeStatus';
+import { runWrite, rowsOf, cancelPendingRetries, cancelWritesIssuedBefore, issueMark, failedFrom, issueChainTicket, runWithChainTicket, type WriteResult, type AttemptResult } from './writeStatus';
+import { OFFLINE_RESILIENCE, beginPendingWrite, newRowId } from './offlineResilience';
+import { sessionReadClient } from './sessionClient';
+
+/** Session slice reads and the read-backs inside session writes: the timeout client while
+ *  OFFLINE_RESILIENCE is on (a hung read becomes a failed read), else the shared anon client.
+ *  The initial load, the message history, the join lookup and realtime stay on `supabase`. */
+const readDb = () => (OFFLINE_RESILIENCE ? sessionReadClient() : supabase);
 import { noteFlushedSettings } from './settingsEcho';
 import {
   Committee,
@@ -266,7 +273,7 @@ export async function createCommittee(
   const createPromise = async (): Promise<{ code: string; chairJoinSuffix: string } | null> => {
     const code = generateCode();
     const chairJoinSuffix = Math.floor(1000 + Math.random() * 9000).toString();
-    const client = sessionClient(code, chairJoinSuffix);
+    const client = sessionClient(code, chairJoinSuffix, { timeout: false });   // D6: creation + whole roster, never timed out
 
     const { data: committeeRow, error: committeeError } = await client
       .from('committees')
@@ -487,10 +494,14 @@ async function loadCommitteeByCode(code: string, strict: boolean): Promise<Commi
 export async function patchCommitteeSettings(committeeId: string, patch: Record<string, unknown>, code: string, chairSuffix?: string): Promise<boolean> {
   // V3: remembered so this device's own realtime echo is not mistaken for another chair's change.
   noteFlushedSettings(committeeId, patch);
-  const { data, error } = await sessionClient(code, chairSuffix)
-    .rpc('patch_committee_settings', { p_committee: committeeId, p_patch: patch });
-  if (error) { console.error('Error patching committee settings:', error); return false; }
-  return data === true;
+  // In flight = pending on the row slice (offline resilience: no sync fetch lands over it).
+  const releasePending = beginPendingWrite([`${committeeId}:settings`]);
+  try {
+    const { data, error } = await sessionClient(code, chairSuffix)
+      .rpc('patch_committee_settings', { p_committee: committeeId, p_patch: patch });
+    if (error) { console.error('Error patching committee settings:', error); return false; }
+    return data === true;
+  } finally { releasePending(); }
 }
 
 export async function saveCommitteeSettings(committeeId: string, settings: object, code: string, chairSuffix?: string): Promise<boolean> {
@@ -520,10 +531,11 @@ const CLOCKLESS_PHASES: SessionPhase[] = ['pre-session', 'adjourned', 'voting'];
 
 /** Zero rows from a write guarded on `ended_at is null and suspended_at is null`: was it the
  *  guard (the room is on a break now: a correct no-op) or a refusal (RLS)? SELECT is public. */
-async function lifecycleGuardOutcome(committeeId: string): Promise<WriteResult> {
-  const { data: row, error } = await supabase.from('committees')
+async function lifecycleGuardOutcome(committeeId: string): Promise<AttemptResult> {
+  const { data: row, error } = await readDb().from('committees')
     .select('suspended_at, ended_at').eq('id', committeeId).maybeSingle();
-  if (error || !row) return 'failed';
+  if (error) return failedFrom(error);
+  if (!row) return 'failed';
   return row.ended_at || row.suspended_at ? 'skipped' : 'failed';
 }
 
@@ -536,7 +548,7 @@ export async function setPhase(committeeId: string, phase: SessionPhase, code: s
   const r = await runWrite(phaseKey(committeeId), async () => {
     const { data, error } = await sessionClient(code, chairSuffix).from('committees')
       .update({ phase }).eq('id', committeeId).is('ended_at', null).is('suspended_at', null).select('id');
-    if (error) { console.error('Error setting phase:', error); return 'failed'; }
+    if (error) { return failedFrom(error, 'Error setting phase:'); }
     return rowsOf(data) > 0 ? 'ok' : lifecycleGuardOutcome(committeeId);
   }, { retry: true });
   if (r === 'ok' && CLOCKLESS_PHASES.includes(phase)) void pauseSpeakerClockLive(committeeId, code, chairSuffix);
@@ -554,7 +566,7 @@ export async function setPhaseAndCaucus(
   const r = await runWrite([phaseKey(committeeId), caucusKey(committeeId)], async () => {
     const { data, error } = await sessionClient(code, chairSuffix).from('committees')
       .update({ phase, caucus }).eq('id', committeeId).is('ended_at', null).is('suspended_at', null).select('id');
-    if (error) { console.error('Error setting phase and caucus:', error); return 'failed'; }
+    if (error) { return failedFrom(error, 'Error setting phase and caucus:'); }
     return rowsOf(data) > 0 ? 'ok' : lifecycleGuardOutcome(committeeId);
   }, { retry: true });
   if (r === 'ok' && CLOCKLESS_PHASES.includes(phase)) void pauseSpeakerClockLive(committeeId, code, chairSuffix);
@@ -580,12 +592,12 @@ export async function endModeratedCaucusIfAnchorUnchanged(
       .eq('phase', 'moderated-caucus')
       .eq('caucus->>totalStartedAt', expectedTotalStartedAt)
       .select('id');
-    if (error) { console.error('Error ending caucus (conditional):', error); return 'failed'; }
+    if (error) { return failedFrom(error, 'Error ending caucus (conditional):'); }
     if (rowsOf(data) > 0) return 'ok';
     // Zero rows: moved on (skip) or refused (fail)? SELECT is public, so look.
-    const { data: row, error: readErr } = await supabase.from('committees')
+    const { data: row, error: readErr } = await readDb().from('committees')
       .select('phase, caucus').eq('id', committeeId).maybeSingle();
-    if (readErr) return 'failed';
+    if (readErr) return failedFrom(readErr);
     const stillMatches = row?.phase === 'moderated-caucus'
       && (row.caucus as CaucusState | null)?.totalStartedAt === expectedTotalStartedAt;
     return stillMatches ? 'failed' : 'skipped';
@@ -604,9 +616,10 @@ export async function beginSessionAfterRollCall(
 ): Promise<SessionPhase | null> {
   let landed: SessionPhase | null = null;
   const r = await runWrite([phaseKey(committeeId), caucusKey(committeeId)], async () => {
-    const { data: row, error: readErr } = await supabase.from('committees')
+    const { data: row, error: readErr } = await readDb().from('committees')
       .select('phase, caucus').eq('id', committeeId).maybeSingle();
-    if (readErr || !row) { console.error('Error reading committee before begin:', readErr); return 'failed'; }
+    if (readErr) return failedFrom(readErr, 'Error reading committee before begin');
+    if (!row) { console.error('Error reading committee before begin: no row'); return 'failed'; }
     if (row.phase !== 'pre-session') { landed = row.phase as SessionPhase; return 'skipped'; }
     let caucus = (row.caucus as CaucusState | null) ?? null;
     // A caucus suspended before suspend paused its clock (or left behind by an old
@@ -617,7 +630,7 @@ export async function beginSessionAfterRollCall(
     const phase: SessionPhase = caucus ? phaseForCaucus(caucus) : 'speakers-list';
     const { data, error } = await sessionClient(code, chairSuffix).from('committees')
       .update({ phase, caucus }).eq('id', committeeId).eq('phase', 'pre-session').select('id');
-    if (error) { console.error('Error beginning session:', error); return 'failed'; }
+    if (error) { return failedFrom(error, 'Error beginning session:'); }
     if (rowsOf(data) === 0) return 'failed';
     landed = phase;
     return 'ok';
@@ -643,7 +656,7 @@ export async function setDelegateStatus(delegateId: string, status: DelegateStat
   const r = await chained(delegateWriteChain(delegateId), () => runWrite(`delegate:${delegateId}:status`, async () => {
     const { data, error } = await sessionClient(code, chairSuffix).from('delegates')
       .update({ status }).eq('id', delegateId).select('id');
-    if (error) { console.error('Error setting delegate status:', error); return 'failed'; }
+    if (error) { return failedFrom(error, 'Error setting delegate status:'); }
     return rowsOf(data) > 0 ? 'ok' : 'failed';
   }, { retry: false }), 'failed' as WriteResult);
   return r !== 'failed';
@@ -663,7 +676,7 @@ export async function setDelegateObserver(delegateId: string, isObserver: boolea
   const r = await chained(delegateWriteChain(delegateId), () => runWrite(`delegate:${delegateId}:observer`, async () => {
     const { data, error } = await sessionClient(code, chairSuffix).from('delegates')
       .update({ is_observer: isObserver }).eq('id', delegateId).select('id');
-    if (error) { console.error('Error setting delegate observer:', error); return 'failed'; }
+    if (error) { return failedFrom(error, 'Error setting delegate observer:'); }
     return rowsOf(data) > 0 ? 'ok' : 'failed';
   }, { retry: false }), 'failed' as WriteResult);
   return r !== 'failed';
@@ -700,15 +713,23 @@ export type SpeakerListType = 'gsl' | 'caucus';
 // land after the Next that followed it). The chain swallows and logs errors, so a
 // fire-and-forget caller never sees an unhandled rejection and one failed write never
 // blocks the next.
+//
+// Offline resilience (phase 1): a write QUEUED here counts as pending for its slice from the
+// moment it is queued (the chair page will not land a sync fetch over it), and it takes a
+// ticket, so a write still waiting behind a parked one is cancelled by a break (S2) or
+// dropped on a gavel loss exactly like the parked one, even though its runWrite has not
+// started. With OFFLINE_RESILIENCE off both are no-ops.
 const writeChains = new Map<string, Promise<unknown>>();
 async function chained<T = void>(key: string, fn: () => Promise<T>, onError?: T): Promise<T> {
   const prev = writeChains.get(key) ?? Promise.resolve();
-  const run: Promise<T> = prev.catch(() => undefined).then(fn).catch((err) => {
+  const ticket = issueChainTicket();
+  const releasePending = beginPendingWrite([key]);
+  const run: Promise<T> = prev.catch(() => undefined).then(() => runWithChainTicket(ticket, fn)).catch((err) => {
     console.error(`Queued write failed (${key}):`, err);
     return onError as T;
   });
   writeChains.set(key, run);
-  try { return await run; } finally { if (writeChains.get(key) === run) writeChains.delete(key); }
+  try { return await run; } finally { releasePending(); if (writeChains.get(key) === run) writeChains.delete(key); }
 }
 
 /** A DELETE that removed nothing is ambiguous: the row may already be gone (another chair,
@@ -717,11 +738,11 @@ async function chained<T = void>(key: string, fn: () => Promise<T>, onError?: T)
 async function deleteOutcome(
   deleted: unknown, error: { message?: string } | null, label: string,
   stillThere: () => PromiseLike<{ data: unknown; error: unknown }>,
-): Promise<WriteResult> {
-  if (error) { console.error(`Error ${label}:`, error); return 'failed'; }
+): Promise<AttemptResult> {
+  if (error) { return failedFrom(error, `Error ${label}:`); }
   if (rowsOf(deleted) > 0) return 'ok';
   const { data, error: readErr } = await stillThere();
-  if (readErr) return 'failed';
+  if (readErr) return failedFrom(readErr);
   return rowsOf(data) > 0 ? 'failed' : 'skipped';
 }
 const listChainKey = (committeeId: string, listType: SpeakerListType) => `${committeeId}:list:${listType}`;
@@ -746,7 +767,7 @@ async function addToQueue(
 async function addToQueueNow(
   committeeId: string, delegateId: string, country: string, listType: SpeakerListType,
   at: 'start' | 'end', code: string, chairSuffix?: string,
-): Promise<WriteResult> {
+): Promise<AttemptResult> {
   const client = sessionClient(code, chairSuffix);
   const { error } = await client.rpc('speakers_list_add', {
     p_committee: committeeId, p_delegate: delegateId, p_country: country,
@@ -761,11 +782,10 @@ async function addToQueueNow(
       committee_id: committeeId, delegate_id: delegateId, country,
       position: at === 'start' ? -Date.now() : Date.now(), list_type: listType,
     });
-    if (insErr && insErr.code !== '23505') { console.error(`Error adding to ${listType} list:`, insErr); return 'failed'; }
+    if (insErr && insErr.code !== '23505') { return failedFrom(insErr, `Error adding to ${listType} list:`); }
     return 'ok';
   }
-  console.error(`Error adding to ${listType} list:`, error);
-  return 'failed';
+  return failedFrom(error, `Error adding to ${listType} list`);
 }
 
 /** Append to the GSL (`at: 'end'`, the default) or put a delegate first (`'start'`). */
@@ -783,7 +803,7 @@ async function removeFromQueue(committeeId: string, delegateId: string, listType
     async () => {
       const { data, error } = await sessionClient(code, chairSuffix).from('speakers_list').delete()
         .eq('committee_id', committeeId).eq('delegate_id', delegateId).eq('list_type', listType).select('id');
-      return deleteOutcome(data, error, `removing from ${listType} list`, () => supabase.from('speakers_list').select('id')
+      return deleteOutcome(data, error, `removing from ${listType} list`, () => readDb().from('speakers_list').select('id')
         .eq('committee_id', committeeId).eq('delegate_id', delegateId).eq('list_type', listType).limit(1));
     },
     { retry: false },
@@ -820,7 +840,7 @@ export async function batchAddToCaucusList(
     position: i + 1,
     list_type: 'caucus',
   }));
-  const { error } = await sessionClient(code, chairSuffix).from('speakers_list').insert(rows);
+  const { error } = await sessionClient(code, chairSuffix, { timeout: false }).from('speakers_list').insert(rows);
   if (error) console.error('Error batch adding to caucus list:', error);
 }
 
@@ -835,7 +855,7 @@ export async function clearCaucusList(committeeId: string, code: string, chairSu
     async () => {
       const { data, error } = await sessionClient(code, chairSuffix).from('speakers_list').delete()
         .eq('committee_id', committeeId).eq('list_type', 'caucus').select('id');
-      return deleteOutcome(data, error, 'clearing caucus list', () => supabase.from('speakers_list').select('id')
+      return deleteOutcome(data, error, 'clearing caucus list', () => readDb().from('speakers_list').select('id')
         .eq('committee_id', committeeId).eq('list_type', 'caucus').limit(1));
     },
     // Never re-run from the toast (S3): minutes later it would wipe a NEW caucus queue.
@@ -878,7 +898,7 @@ export async function reorderSpeakersList(
         p_committee: committeeId, p_delegate_ids: ids, p_list_type: listType,
       });
       if (!error) {
-        const { data: rows, error: readErr } = await supabase.from('speakers_list')
+        const { data: rows, error: readErr } = await readDb().from('speakers_list')
           .select('delegate_id').eq('committee_id', committeeId).eq('list_type', listType)
           .order('position', { ascending: true });
         if (readErr || !rows) return 'ok';   // cannot verify: do not invent a failure
@@ -895,12 +915,11 @@ export async function reorderSpeakersList(
         for (let i = 0; i < ids.length; i++) {
           const { error: upErr } = await client.from('speakers_list').update({ position: i + 1 })
             .eq('committee_id', committeeId).eq('delegate_id', ids[i]).eq('list_type', listType);
-          if (upErr) return 'failed';
+          if (upErr) return failedFrom(upErr);
         }
         return 'ok';
       }
-      console.error('Error reordering speakers list:', error);
-      return 'failed';
+      return failedFrom(error, 'Error reordering speakers list');
     },
     { retry: true },
   ), 'failed' as WriteResult);
@@ -957,6 +976,9 @@ export async function nextSpeaker(
   // sync, the stop-at-zero, the anchor read for speech logging) rides ONE chain, so a write
   // issued before this Next is drained before we seat anyone and can never land after it.
   // (This used to be a separate in-flight promise for the clear alone; the chain subsumes it.)
+  // Offline resilience: this write also deletes a GSL row, so the lists slice counts it as
+  // pending too (no sync fetch lands the called speaker back into the list meanwhile).
+  const releaseList = removeDelegateId ? beginPendingWrite([listChainKey(committeeId, 'gsl')]) : null;
   const r = await chained(currentSpeakerChainKey(committeeId), async () => {
     // Retried as a unit: seating a speaker with a fixed clock and deleting a GSL row are
     // both idempotent. `time_granted` starts at the slot (audit T-3).
@@ -971,9 +993,9 @@ export async function nextSpeaker(
               .eq('list_type', 'gsl')
               .select('id')
               .then(({ data, error }) => deleteOutcome(data, error, 'removing the called speaker from the GSL',
-                () => supabase.from('speakers_list').select('id').eq('committee_id', committeeId)
+                () => readDb().from('speakers_list').select('id').eq('committee_id', committeeId)
                   .eq('delegate_id', removeDelegateId).eq('list_type', 'gsl').limit(1)))
-          : Promise.resolve<WriteResult>('skipped'),
+          : Promise.resolve<AttemptResult>('skipped'),
         client.from('current_speaker')
           .update({
             delegate_id: nextDelegateId,
@@ -985,14 +1007,18 @@ export async function nextSpeaker(
           })
           .eq('committee_id', committeeId)
           .select('committee_id')
-          .then(({ data, error }): WriteResult => {
-            if (error) { console.error('Error seating next speaker:', error); return 'failed'; }
+          .then(({ data, error }): AttemptResult => {
+            if (error) { return failedFrom(error, 'Error seating next speaker:'); }
             return rowsOf(data) > 0 ? 'ok' : 'failed';
           }),
       ]);
-      return removed === 'failed' || seated === 'failed' ? 'failed' : 'ok';
+      // A refusal wins over a network failure (report it); either one fails the attempt.
+      if (removed === 'failed' || seated === 'failed') return 'failed';
+      if (removed === 'failed-network' || seated === 'failed-network') return 'failed-network';
+      return 'ok';
     }, { retry: true });
   }, 'failed' as WriteResult);
+  releaseList?.();
   return r !== 'failed';
 }
 
@@ -1004,7 +1030,7 @@ function speakerClockWrite(
   return chained(currentSpeakerChainKey(committeeId), () => runWrite(speakerKey(committeeId), async () => {
     const { data, error } = await sessionClient(code, chairSuffix).from('current_speaker')
       .update(patch).eq('committee_id', committeeId).select('committee_id');
-    if (error) { console.error(`Error ${label}:`, error); return 'failed'; }
+    if (error) { return failedFrom(error, `Error ${label}:`); }
     return rowsOf(data) > 0 ? 'ok' : 'failed';
   }, { retry: true }), 'failed' as WriteResult).then((r) => r !== 'failed');
 }
@@ -1035,21 +1061,21 @@ export async function pauseSpeakerTimer(committeeId: string, timeRemaining: numb
  *  never overwrite a clock that was restarted meanwhile. On the current_speaker chain. */
 export async function pauseSpeakerClockLive(committeeId: string, code: string, chairSuffix?: string): Promise<boolean> {
   const r = await chained(currentSpeakerChainKey(committeeId), () => runWrite(`${speakerKey(committeeId)}:live-pause`, async () => {
-    const { data: row, error: readErr } = await supabase.from('current_speaker')
+    const { data: row, error: readErr } = await readDb().from('current_speaker')
       .select('time_remaining, started_at').eq('committee_id', committeeId).maybeSingle();
-    if (readErr) return 'failed';
+    if (readErr) return failedFrom(readErr);
     if (!row?.started_at) return 'skipped';
     const live = speakerRemainingNow(row.time_remaining as number, row.started_at as string);
     const { data, error } = await sessionClient(code, chairSuffix).from('current_speaker')
       .update({ started_at: null, time_remaining: live })
       .eq('committee_id', committeeId).eq('started_at', row.started_at as string)
       .select('committee_id');
-    if (error) { console.error('Error pausing speaker clock:', error); return 'failed'; }
+    if (error) { return failedFrom(error, 'Error pausing speaker clock:'); }
     if (rowsOf(data) > 0) return 'ok';
     // Zero rows: restarted or paused meanwhile (skip), or refused while unchanged (fail).
-    const { data: again, error: againErr } = await supabase.from('current_speaker')
+    const { data: again, error: againErr } = await readDb().from('current_speaker')
       .select('started_at').eq('committee_id', committeeId).maybeSingle();
-    if (againErr) return 'failed';
+    if (againErr) return failedFrom(againErr);
     const same = !!again?.started_at && new Date(again.started_at as string).getTime() === new Date(row.started_at as string).getTime();
     return same ? 'failed' : 'skipped';
   // Automatic and context-bound: never re-run from the toast (S3), and part of a break.
@@ -1067,14 +1093,14 @@ export async function grantSpeakerTime(
 ): Promise<boolean> {
   const add = Math.max(0, Math.round(seconds));
   const r = await chained(currentSpeakerChainKey(committeeId), () => runWrite(speakerKey(committeeId), async () => {
-    const { data: row, error: readErr } = await supabase.from('current_speaker')
+    const { data: row, error: readErr } = await readDb().from('current_speaker')
       .select('time_granted').eq('committee_id', committeeId).maybeSingle();
-    if (readErr) return 'failed';
+    if (readErr) return failedFrom(readErr);
     const granted = typeof row?.time_granted === 'number' ? (row.time_granted as number) + add : null;
     const { data, error } = await sessionClient(code, chairSuffix).from('current_speaker')
       .update({ started_at: startedAt, time_remaining: Math.max(0, Math.round(timeRemaining)), time_granted: granted })
       .eq('committee_id', committeeId).select('committee_id');
-    if (error) { console.error('Error granting speaker time:', error); return 'failed'; }
+    if (error) { return failedFrom(error, 'Error granting speaker time:'); }
     return rowsOf(data) > 0 ? 'ok' : 'failed';
   }, { retry: false }), 'failed' as WriteResult);
   // Not auto-retried: re-reading the grant and adding again would double it.
@@ -1091,7 +1117,7 @@ export async function readSpokenSeconds(committeeId: string): Promise<{
   delegateId: string | null; country: string; seconds: number;
 } | null> {
   return chained(currentSpeakerChainKey(committeeId), async () => {
-    const { data: row, error } = await supabase.from('current_speaker')
+    const { data: row, error } = await readDb().from('current_speaker')
       .select('delegate_id, country, time_remaining, started_at, time_granted')
       .eq('committee_id', committeeId).maybeSingle();
     if (error || !row?.country) return null;
@@ -1119,7 +1145,7 @@ export async function stopSpeakerAtZeroIfUnchanged(
     else if (expectedCountry) q = q.eq('country', expectedCountry);
     else return 'skipped';
     const { data, error } = await q.select('committee_id');
-    if (error) { console.error('Error stopping speaker at zero:', error); return 'failed'; }
+    if (error) { return failedFrom(error, 'Error stopping speaker at zero:'); }
     if (rowsOf(data) > 0) return 'ok';
     return speakerStillMatches(committeeId, expectedDelegateId, expectedCountry);
   }, { retry: true }), 'failed' as WriteResult);
@@ -1164,10 +1190,10 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  *  or a clear landed first ('skipped', a correct silent no-op). SELECT is public. */
 async function speakerStillMatches(
   committeeId: string, expectedDelegateId: string | null, expectedCountry: string | null,
-): Promise<WriteResult> {
-  const { data: row, error } = await supabase.from('current_speaker')
+): Promise<AttemptResult> {
+  const { data: row, error } = await readDb().from('current_speaker')
     .select('delegate_id, country').eq('committee_id', committeeId).maybeSingle();
-  if (error) return 'failed';
+  if (error) return failedFrom(error);
   if (!row) return 'skipped';
   const matches = expectedDelegateId && UUID_RE.test(expectedDelegateId)
     ? row.delegate_id === expectedDelegateId
@@ -1215,7 +1241,7 @@ export async function clearCurrentSpeakerIfUnchanged(
     else if (expectedCountry) q = q.eq('country', expectedCountry);
     else return 'skipped';
     const { data, error } = await q.select('committee_id');
-    if (error) { console.error('Error clearing current speaker:', error); return 'failed'; }
+    if (error) { return failedFrom(error, 'Error clearing current speaker:'); }
     if (rowsOf(data) > 0) return 'ok';
     return speakerStillMatches(committeeId, expectedDelegateId, expectedCountry);
   // Part of a break (Suspend / End clear the floor), so a Suspend never cancels its retries.
@@ -1229,7 +1255,7 @@ export async function getCurrentSpeakerRow(committeeId: string): Promise<{
   currentSpeaker: SpeakerEntry | null; speakerTimeRemaining: number; speakerStartedAt: string | null;
   speakerSeatedAt: string | null;
 } | null> {
-  const { data, error } = await supabase.from('current_speaker')
+  const { data, error } = await readDb().from('current_speaker')
     .select('delegate_id, country, time_remaining, started_at, seated_at')
     .eq('committee_id', committeeId).maybeSingle();
   if (error) { console.error('Error fetching current speaker:', error); return null; }
@@ -1258,7 +1284,7 @@ export async function getCurrentSpeakerRow(committeeId: string): Promise<{
 // one used to empty the roster on phones, show the waiting room, and stamp false GSL
 // denials. Callers skip applying a null and keep what they already have.
 export async function getDelegatesList(committeeId: string): Promise<Delegate[] | null> {
-  const { data, error } = await supabase.from('delegates')
+  const { data, error } = await readDb().from('delegates')
     .select('id, country, status, is_observer, logo_url')
     .eq('committee_id', committeeId).order('country', { ascending: true });
   if (error) { console.error('Error fetching delegates:', error); return null; }
@@ -1271,7 +1297,7 @@ export async function getDelegatesList(committeeId: string): Promise<Delegate[] 
 
 // Both GSL and caucus queues in one round-trip (getCommitteeByCode uses two).
 export async function getSpeakersLists(committeeId: string): Promise<{ speakersList: SpeakerEntry[]; caucusQueue: SpeakerEntry[] } | null> {
-  const { data, error } = await supabase.from('speakers_list')
+  const { data, error } = await readDb().from('speakers_list')
     .select('delegate_id, country, list_type, position')
     .eq('committee_id', committeeId)
     // Same three-key order as getCommitteeByCode, so delegates and chairs never disagree on ties.
@@ -1298,7 +1324,7 @@ export async function getMessagesList(committeeId: string): Promise<Committee['m
 }
 
 export async function getDocumentsList(committeeId: string): Promise<CommitteeDocument[] | null> {
-  const { data, error } = await supabase.from('documents')
+  const { data, error } = await readDb().from('documents')
     .select('*').eq('committee_id', committeeId).order('created_at', { ascending: true });
   if (error) { console.error('Error fetching documents:', error); return null; }
   return (data ?? []).map((d: DbRow) => ({
@@ -1318,7 +1344,7 @@ export async function getDocumentsList(committeeId: string): Promise<CommitteeDo
 export async function getPendingMotionsList(committeeId: string): Promise<PendingMotion[] | null> {
   // Include gsl-request / join-request pseudo-motions — the delegate view reads them from here
   // to show "awaiting approval". The main feed filters them out at the display layer.
-  const { data, error } = await supabase.from('motions')
+  const { data, error } = await readDb().from('motions')
     .select('*').eq('committee_id', committeeId).eq('status', 'pending')
     .order('disruptiveness', { ascending: false });
   if (error) { console.error('Error fetching motions:', error); return null; }
@@ -1344,7 +1370,7 @@ export async function getPendingMotionsList(committeeId: string): Promise<Pendin
  * result (ROW_FIELDS in src/lib/sessionSync.ts) and never its empty slices. Null on error.
  */
 export async function getCommitteeRowById(committeeId: string): Promise<Committee | null> {
-  const { data, error } = await supabase.from('committees').select('*').eq('id', committeeId).maybeSingle();
+  const { data, error } = await readDb().from('committees').select('*').eq('id', committeeId).maybeSingle();
   if (error) { console.error('Error fetching committee row:', error); return null; }
   if (!data) return null;
   return rowToCommittee(data as DbRow);
@@ -1425,7 +1451,7 @@ export async function removePendingMotion(motionId: string, code: string, chairS
   if (!UUID_RE.test(motionId)) return false;
   const r = await runWrite(`motion:${motionId}:remove`, async () => {
     const { data, error } = await sessionClient(code, chairSuffix).from('motions').delete().eq('id', motionId).select('id');
-    return deleteOutcome(data, error, 'removing motion', () => supabase.from('motions').select('id').eq('id', motionId).limit(1));
+    return deleteOutcome(data, error, 'removing motion', () => readDb().from('motions').select('id').eq('id', motionId).limit(1));
   }, { retry: false });
   return r !== 'failed';
 }
@@ -1446,7 +1472,7 @@ export async function updateCaucus(committeeId: string, caucus: CaucusState | nu
   const r = await runWrite(caucusKey(committeeId), async () => {
     const { data, error } = await sessionClient(code, chairSuffix).from('committees')
       .update({ caucus }).eq('id', committeeId).is('ended_at', null).is('suspended_at', null).select('id');
-    if (error) { console.error('Error updating caucus:', error); return 'failed'; }
+    if (error) { return failedFrom(error, 'Error updating caucus:'); }
     return rowsOf(data) > 0 ? 'ok' : lifecycleGuardOutcome(committeeId);
   }, { retry: true });
   return r !== 'failed';
@@ -1472,11 +1498,12 @@ export async function updateCaucusIfUnchanged(
       ? q.is('caucus->>currentSpeaker', null)
       : q.eq('caucus->>currentSpeaker', expected.currentSpeaker);
     const { data, error } = await q.select('id');
-    if (error) { console.error('Error updating caucus (conditional):', error); return 'failed'; }
+    if (error) { return failedFrom(error, 'Error updating caucus (conditional):'); }
     if (rowsOf(data) > 0) return 'ok';
-    const { data: row, error: readErr } = await supabase.from('committees')
+    const { data: row, error: readErr } = await readDb().from('committees')
       .select('caucus, suspended_at, ended_at').eq('id', committeeId).maybeSingle();
-    if (readErr || !row) return 'failed';
+    if (readErr) return failedFrom(readErr);
+    if (!row) return 'failed';
     const stored = (row.caucus as CaucusState | null) ?? null;
     const stillMatches = !row.ended_at && !row.suspended_at
       && stored?.totalStartedAt === expected.totalStartedAt
@@ -1724,11 +1751,41 @@ export async function logEvent(committeeId: string, e: {
   tourOrder?: string; outcome?: string; prevMotionId?: string;
 }, code: string, chairSuffix?: string): Promise<void> {
   const payload = JSON.stringify({ ...e, timestamp: serverNowIso() });   // database clock (T-1)
-  const { error } = await sessionClient(code, chairSuffix).from('messages').insert({
+  const row = {
     committee_id: committeeId, sender: '__system__',
     content: `__log__:${payload}`, is_private: true, recipient: '__log__',
-  });
-  if (error) console.error('Error logging event:', error);
+  };
+  if (!OFFLINE_RESILIENCE) {
+    const { error } = await sessionClient(code, chairSuffix).from('messages').insert(row);
+    if (error) console.error('Error logging event:', error);
+    return;
+  }
+  await insertLogRows(committeeId, [row], code, chairSuffix, 'logging event');
+}
+
+/**
+ * Offline resilience (phase 1): insert `__log__` ledger rows (speeches, motions, rights of
+ * reply, manual points) so a bad connection cannot lose them. Each row gets a CLIENT-chosen
+ * primary key, so the insert is idempotent: it runs through runWrite as a retried write
+ * (parked while offline, like any idempotent write), and a 23505 on `messages_pkey` (the
+ * only unique index on public.messages) means an earlier attempt already landed, which is
+ * success. Several rows go in ONE statement, so either all of them landed or none did.
+ * Exempt from dropParkedWrites: a log row records what already happened. Resolves whether
+ * the rows are stored. Only called with OFFLINE_RESILIENCE on.
+ */
+export async function insertLogRows(
+  committeeId: string, rows: Record<string, unknown>[],
+  code: string, chairSuffix: string | undefined, label: string,
+): Promise<boolean> {
+  if (rows.length === 0) return true;
+  const withIds = rows.map((r) => ({ ...r, id: newRowId() }));
+  const r = await runWrite(`${committeeId}:log:${withIds[0].id}`, async () => {
+    const { error } = await sessionClient(code, chairSuffix).from('messages').insert(withIds);
+    if (!error) return 'ok';
+    if (error.code === '23505') return 'ok';   // our own id: an earlier attempt landed
+    return failedFrom(error, `Error ${label}`);
+  }, { retry: true, keepOnRoleLoss: true });
+  return r === 'ok';
 }
 
 // Speeches are NOT logged here: `logFloorSpeech` / `logTimedSpeech` in src/lib/floorSpeech.ts
@@ -1976,8 +2033,8 @@ type LiveClocks = { phase: SessionPhase; caucus: CaucusState | null; suspendedAt
  *  leftover from an old two-write caucus end) is cleared. */
 async function readFrozenCaucus(committeeId: string): Promise<LiveClocks & { frozenCaucus: CaucusState | null } | null> {
   const [{ data: row, error }, { data: spk }] = await Promise.all([
-    supabase.from('committees').select('phase, caucus, suspended_at, ended_at').eq('id', committeeId).maybeSingle(),
-    supabase.from('current_speaker').select('time_remaining, started_at').eq('committee_id', committeeId).maybeSingle(),
+    readDb().from('committees').select('phase, caucus, suspended_at, ended_at').eq('id', committeeId).maybeSingle(),
+    readDb().from('current_speaker').select('time_remaining, started_at').eq('committee_id', committeeId).maybeSingle(),
   ]);
   if (error || !row) { console.error('Error reading committee clocks:', error); return null; }
   const phase = row.phase as SessionPhase;
@@ -2009,7 +2066,16 @@ export async function suspendDebate(committeeId: string, code: string, chairSuff
   let suspended = false;
   // S2: a phase, caucus or seat write still backing off from before the break must not land
   // after it. (The floor clear and the live pause are part of the break and exempt.)
-  cancelPendingRetries([phaseKey(committeeId), caucusKey(committeeId), speakerKey(committeeId)]);
+  // Offline resilience (D1, D1b): with the switch on NOTHING is cancelled before the break.
+  // Writes still backing off or parked are cancelled only once the break has LANDED, below,
+  // so a Suspend that fails offline (and is rolled back) loses none of the Moderator's work.
+  // Safe because every phase / caucus write is conditional (ended_at / suspended_at null, or
+  // a phase the break replaces), so one that lands meanwhile is a no-op after the break, and
+  // every speaker write rides the current_speaker chain, so the break's own live pause and
+  // floor clear are ordered after it.
+  const breakKeys = [phaseKey(committeeId), caucusKey(committeeId), speakerKey(committeeId)];
+  const breakMark = issueMark();
+  if (!OFFLINE_RESILIENCE) cancelPendingRetries(breakKeys);
   const r = await runWrite(lifecycleKey(committeeId), async () => {
     const live = await readFrozenCaucus(committeeId);
     if (!live) return 'failed';
@@ -2022,7 +2088,7 @@ export async function suspendDebate(committeeId: string, code: string, chairSuff
       .is('suspended_at', null)
       .eq('phase', live.phase)
       .select('id');
-    if (error) { console.error('Error suspending debate:', error); return 'failed'; }
+    if (error) { return failedFrom(error, 'Error suspending debate:'); }
     // Zero rows: something changed between the read and the write (or RLS refused it).
     // Retrying re-reads, and reports "already suspended/ended" correctly.
     if (rowsOf(data) === 0) return 'failed';
@@ -2030,6 +2096,7 @@ export async function suspendDebate(committeeId: string, code: string, chairSuff
     return 'ok';
   // Never re-run from the toast (S3): the caller has already rolled the suspension back.
   }, { retry: true, rerunnable: false });
+  if (suspended) cancelWritesIssuedBefore(breakKeys, breakMark);   // D1b: only after it landed
   if (suspended) void pauseSpeakerClockLive(committeeId, code, chairSuffix);
   return r !== 'failed' && suspended;
 }
@@ -2045,7 +2112,9 @@ export async function suspendDebate(committeeId: string, code: string, chairSuff
  */
 export async function endDebate(committeeId: string, code: string, chairSuffix?: string): Promise<boolean> {
   let ended = false;
-  cancelPendingRetries([phaseKey(committeeId), caucusKey(committeeId), speakerKey(committeeId)]);   // S2
+  const breakKeys = [phaseKey(committeeId), caucusKey(committeeId), speakerKey(committeeId)];
+  const breakMark = issueMark();
+  if (!OFFLINE_RESILIENCE) cancelPendingRetries(breakKeys);   // S2; switch on: after landing (D1b)
   const r = await runWrite(lifecycleKey(committeeId), async () => {
     const live = await readFrozenCaucus(committeeId);
     if (!live) return 'failed';
@@ -2063,11 +2132,12 @@ export async function endDebate(committeeId: string, code: string, chairSuffix?:
       .eq('id', committeeId)
       .is('ended_at', null)
       .select('id');
-    if (error) { console.error('Error ending debate:', error); return 'failed'; }
+    if (error) { return failedFrom(error, 'Error ending debate:'); }
     if (rowsOf(data) === 0) return 'failed';   // retry re-reads: ended elsewhere → skipped
     ended = true;
     return 'ok';
   }, { retry: true, rerunnable: false });   // S3: never re-run from the toast
+  if (ended) cancelWritesIssuedBefore(breakKeys, breakMark);   // D1b: only after it landed
   if (ended) void pauseSpeakerClockLive(committeeId, code, chairSuffix);
   return r !== 'failed' && ended;
 }
@@ -2183,7 +2253,7 @@ export async function updateCommitteeTopicInDB(committeeId: string, topic: strin
   const r = await runWrite(`${committeeId}:topic`, async () => {
     const { data, error } = await sessionClient(code, chairSuffix).from('committees')
       .update({ topic: next }).eq('id', committeeId).is('ended_at', null).select('id');
-    if (error) { console.error('Error updating topic:', error); return 'failed'; }
+    if (error) { return failedFrom(error, 'Error updating topic:'); }
     return rowsOf(data) > 0 ? 'ok' : 'failed';
   }, { retry: false, rerunnable: false });
   return r !== 'failed';
@@ -2216,7 +2286,7 @@ export async function updateSpeakerTimeLimit(committeeId: string, limitSeconds: 
   const r = await runWrite(`${committeeId}:speaker-limit`, async () => {
     const { data, error } = await sessionClient(code, chairSuffix).from('committees')
       .update({ speaker_time_limit: limitSeconds }).eq('id', committeeId).select('id');
-    if (error) { console.error('Error updating speaker time limit:', error); return 'failed'; }
+    if (error) { return failedFrom(error, 'Error updating speaker time limit:'); }
     return rowsOf(data) > 0 ? 'ok' : 'failed';
   }, { retry: true });
   return r !== 'failed';

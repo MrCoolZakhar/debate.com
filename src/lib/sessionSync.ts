@@ -39,6 +39,8 @@ import {
   type CommitteeChangePayload,
   type RealtimeStatus,
 } from './committeeService';
+import { OFFLINE_RESILIENCE } from './offlineResilience';
+import { nudgeParkedWrites } from './writeStatus';
 
 export type SyncSlice = 'row' | 'delegates' | 'lists' | 'currentSpeaker' | 'motions' | 'documents' | 'messages';
 
@@ -131,6 +133,10 @@ export interface SessionSync {
    *  use it when the caller KNOWS its state went stale after the last catch-up started (a
    *  conditional write that did not land, a resync whose snapshot predates a local write). */
   catchUp: (only?: SyncSlice[], opts?: { force?: boolean }) => void;
+  /** Offline resilience: fetch ONE slice again now, flagged as a catch-up read (so the
+   *  Moderator's current_speaker rule accepts it), without starting or settling a catch-up.
+   *  Used when a write this device was holding a slice back for has landed. */
+  refetch: (slice: SyncSlice) => void;
   /**
    * R-6: may an AUTOMATIC write (caucus expiry, stop-at-zero) trust local state right now?
    * False while a catch-up is outstanding, and false (starting one) when this page has
@@ -256,6 +262,9 @@ export function startSessionSync(opts: SessionSyncOptions): SessionSync {
 
   const catchUp = (only?: SyncSlice[], copts?: { force?: boolean }) => {
     if (stopped) return;
+    // Offline resilience: every reason to catch up (reconnect, wake, online, visible) is also
+    // a reason to try the parked writes again. Harmless when nothing is parked.
+    if (OFFLINE_RESILIENCE) nudgeParkedWrites();
     const now = Date.now();
     if (!copts?.force && now - lastCatchUpAt < CATCH_UP_THROTTLE_MS) return;
     lastCatchUpAt = now;
@@ -356,9 +365,17 @@ export function startSessionSync(opts: SessionSyncOptions): SessionSync {
     return true;
   };
 
+  const refetch = (slice: SyncSlice) => {
+    if (stopped || !enabled.has(slice)) return;
+    nullRetries.delete(slice);
+    catchUpFlag.add(slice);
+    mark(slice, 0);
+  };
+
   return {
     mark,
     catchUp,
+    refetch,
     isFresh,
     stop: () => {
       stopped = true;

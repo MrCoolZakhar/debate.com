@@ -23,13 +23,33 @@
 // callers that must roll back (End Debate, Suspend) and is handled asynchronously.
 // ============================================================
 
+import { OFFLINE_RESILIENCE, isNetworkClassError, beginPendingWrite } from './offlineResilience';
+
 export type WriteResult = 'ok' | 'skipped' | 'failed';
+
+/** What ONE attempt may answer. 'failed-network' = no answer came back at all (offline, a
+ *  timeout, a gateway: see isNetworkClassError); runWrite reports it to callers as 'failed',
+ *  but with OFFLINE_RESILIENCE on an idempotent write that fails this way is PARKED and
+ *  retried when the connection is back instead of being given up. */
+export type AttemptResult = WriteResult | 'failed-network';
+
+/** 'failed-network' when the error says the request never got an answer, else 'failed'.
+ *  Always 'failed' with the kill switch off. With a `label` the error is logged, except a
+ *  network-class one while the switch is on: runWrite logs those ONCE (when the write parks
+ *  or gives up), never per attempt (D7). */
+export function failedFrom(error: unknown, label?: string): AttemptResult {
+  const network = OFFLINE_RESILIENCE && isNetworkClassError(error);
+  if (label && !network) console.error(label.endsWith(':') ? label : `${label}:`, error);
+  return network ? 'failed-network' : 'failed';
+}
 
 export type WriteStatusState = {
   /** At least one write is between a failed attempt and its next retry. */
   retrying: boolean;
   /** Writes that exhausted their attempts, newest last. */
   failed: { key: string; retryable: boolean }[];
+  /** Offline resilience: at least one write is parked until the connection is back. */
+  parked: boolean;
 };
 
 type FailedEntry = { retryable: boolean; rerun: (() => Promise<unknown>) | null };
@@ -45,10 +65,94 @@ const cancelledUpTo = new Map<string, number>();
 const failedWrites = new Map<string, FailedEntry>();
 const listeners = new Set<(s: WriteStatusState) => void>();
 
+// ── Offline resilience (phase 1): parking ────────────────────────────────────────────
+// Writes (by per-call id) parked until the connection is back.
+const parkedWrites = new Set<number>();
+/** Parkable writes whose last attempt failed network-class and that are still in their
+ *  backoff: shown as "Offline" at once instead of "Retrying..." (D7). */
+const offlineBackoff = new Set<number>();
+/** One counter for "when was this write issued": a runWrite call, or a write-chain ticket
+ *  taken when the write was QUEUED (committeeService `chained`), so a write that waited on a
+ *  chain behind a parked one still counts as issued before a break or a role loss. */
+let issueSeq = 0;
+/** Per key: writes issued at or before this seq, in their backoff OR parked, are cancelled.
+ *  Set only once a break (Suspend / End) has LANDED (cancelWritesIssuedBefore), never before
+ *  it: a break that fails offline must not throw away the Moderator's work (D1, D1b). */
+const cancelSeqByKey = new Map<string, number>();
+/** Per committee: writes issued at or before this seq were dropped because this device
+ *  stopped being the Moderator (dropParkedWrites). */
+const dropSeqByCommittee = new Map<string, number>();
+
+/** A write-chain ticket (see committeeService `chained`). */
+export interface ChainTicket { seq: number }
+let activeTicket: ChainTicket | null = null;
+
+/** Take a ticket when a write is QUEUED on a chain (null with the switch off). */
+export function issueChainTicket(): ChainTicket | null {
+  return OFFLINE_RESILIENCE ? { seq: ++issueSeq } : null;
+}
+
+/** Run `fn` with `ticket` visible to the runWrite it calls SYNCHRONOUSLY (runWrite reads it
+ *  before its first await). */
+export function runWithChainTicket<T>(ticket: ChainTicket | null, fn: () => T): T {
+  if (!ticket) return fn();
+  const prev = activeTicket;
+  activeTicket = ticket;
+  try { return fn(); } finally { activeTicket = prev; }
+}
+
+const PARK_POLL_MS = 5000;
+const PARK_MIN_GAP_MS = 1000;
+const parkWaiters = new Set<() => void>();
+let parkTriggersInstalled = false;
+
+/** Wake every parked write now (the connection may be back): `online`, tab visible, and the
+ *  session sync's catch-ups call this. Harmless when nothing is parked. */
+export function nudgeParkedWrites(): void {
+  if (parkWaiters.size === 0) return;
+  Array.from(parkWaiters).forEach((fn) => fn());
+}
+
+function installParkTriggers() {
+  if (parkTriggersInstalled || typeof window === 'undefined') return;
+  parkTriggersInstalled = true;
+  window.addEventListener('online', nudgeParkedWrites);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') nudgeParkedWrites();
+  });
+}
+
+function waitForParkWake(): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => { clearTimeout(timer); parkWaiters.delete(done); resolve(); };
+    const timer = setTimeout(done, PARK_POLL_MS);
+    parkWaiters.add(done);
+  });
+}
+
+/**
+ * This device stopped being the Moderator (the gavel moved, or it was kicked): every write
+ * of this committee it issued so far, parked, backing off or still queued on a chain, gives
+ * up without landing ('skipped'), and stale "Not saved" entries of the committee are
+ * forgotten (a Retry would now act for a chair who no longer runs the room). Speech / ledger
+ * log inserts (`keepOnRoleLoss`) are exempt: they record what already happened. No-op with
+ * the switch off.
+ */
+export function dropParkedWrites(committeeId: string): void {
+  if (!OFFLINE_RESILIENCE || !committeeId) return;
+  dropSeqByCommittee.set(committeeId, issueSeq);
+  for (const fk of Array.from(failedWrites.keys())) {
+    if (fk.split('+').some((p) => committeeOfKey(p) === committeeId)) failedWrites.delete(fk);
+  }
+  nudgeParkedWrites();
+  emit();
+}
+
 function snapshot(): WriteStatusState {
   return {
-    retrying: retryingWrites.size > 0,
+    retrying: Array.from(retryingWrites).some((id) => !offlineBackoff.has(id)),
     failed: Array.from(failedWrites.entries()).map(([key, f]) => ({ key, retryable: f.retryable })),
+    parked: parkedWrites.size > 0 || offlineBackoff.size > 0,
   };
 }
 
@@ -92,6 +196,35 @@ export function cancelPendingRetries(keys: string[]): void {
   if (touched) emit();
 }
 
+/** The current issue counter: take it BEFORE starting a break, pass it to
+ *  cancelWritesIssuedBefore once the break has landed. */
+export function issueMark(): number {
+  return issueSeq;
+}
+
+/**
+ * Offline resilience, S2 once the break has LANDED (D1, D1b). With OFFLINE_RESILIENCE on,
+ * Suspend / End no longer call cancelPendingRetries before the break: they take issueMark()
+ * and, only when the break resolved true, call this. Every write on these keys issued at or
+ * before `upTo`, whether still in its retry backoff or parked, ends 'skipped' at its next
+ * check and never lands; a later network failure of one will not park. Their stale "Not
+ * saved" entries are forgotten (what cancelPendingRetries did, now after landing). A write
+ * still queued on a chain runs its first attempt as it always did (D4). `survivesLifecycle`
+ * writes are exempt. A break that fails cancels nothing.
+ */
+export function cancelWritesIssuedBefore(keys: string[], upTo: number): void {
+  if (!OFFLINE_RESILIENCE) return;
+  let touched = false;
+  for (const k of keys) {
+    cancelSeqByKey.set(k, Math.max(cancelSeqByKey.get(k) ?? 0, upTo));
+    for (const fk of Array.from(failedWrites.keys())) {
+      if (fk === k || fk.split('+').includes(k)) { failedWrites.delete(fk); touched = true; }
+    }
+  }
+  nudgeParkedWrites();
+  if (touched) emit();
+}
+
 /** Forget failed writes that cannot be retried (the toast's close control). */
 export function dismissFailedWrites(): void {
   failedWrites.clear();
@@ -118,6 +251,8 @@ export interface RunWriteOptions {
   rerunnable?: boolean;
   /** Exempt from cancelPendingRetries (a write that belongs to the break itself). */
   survivesLifecycle?: boolean;
+  /** Exempt from dropParkedWrites (append-only log rows: they record what already happened). */
+  keepOnRoleLoss?: boolean;
 }
 
 /** `${committeeId}:...` keys belong to a committee; other keys (delegate:, motion:) do not. */
@@ -130,72 +265,148 @@ const committeeOfKey = (k: string): string | null => {
 
 export async function runWrite(
   keys: string | string[],
-  attempt: () => Promise<WriteResult>,
+  attempt: () => Promise<AttemptResult>,
   opts: RunWriteOptions,
 ): Promise<WriteResult> {
+  // Read FIRST, before any await: set only while a write chain calls us synchronously.
+  const ticket = activeTicket;
   const list = Array.isArray(keys) ? keys : [keys];
   const primary = list.join('+');
   const writeId = ++writeIdSeq;
+  const issuedAt = OFFLINE_RESILIENCE ? (ticket?.seq ?? ++issueSeq) : 0;
   const mine = list.map((k) => {
     const g = (generations.get(k) ?? 0) + 1;
     generations.set(k, g);
     return g;
   });
   const superseded = () => list.some((k, i) => generations.get(k) !== mine[i]);
-  const cancelled = () => !opts.survivesLifecycle && list.some((k, i) => (cancelledUpTo.get(k) ?? 0) >= mine[i]);
+  // A LANDED break (cancelWritesIssuedBefore) cancels a write in backoff or parked (D1, D1b).
+  const parkCancelled = () => OFFLINE_RESILIENCE && !opts.survivesLifecycle
+    && list.some((k) => (cancelSeqByKey.get(k) ?? 0) >= issuedAt);
+  // Retries in backoff: the old S2 rule (cancelPendingRetries; with the switch on no break
+  // calls it any more) plus a landed break.
+  const cancelled = () => !opts.survivesLifecycle && (
+    list.some((k, i) => (cancelledUpTo.get(k) ?? 0) >= mine[i]) || parkCancelled());
+  const committees = list.map(committeeOfKey).filter((c): c is string => !!c);
+  const dropped = () => OFFLINE_RESILIENCE && !opts.keepOnRoleLoss
+    && committees.some((c) => (dropSeqByCommittee.get(c) ?? 0) >= issuedAt);
   const rerunnable = opts.rerunnable ?? opts.retry;
+  const releasePending = beginPendingWrite(list);
 
-  // A new write for a key clears an older failure for the same key: it carries newer truth.
-  let touched = false;
-  for (const k of list) {
-    for (const fk of Array.from(failedWrites.keys())) {
-      if (fk === k || fk.split('+').includes(k)) { failedWrites.delete(fk); touched = true; }
+  try {
+    // A new write for a key clears an older failure for the same key: it carries newer truth.
+    let touched = false;
+    for (const k of list) {
+      for (const fk of Array.from(failedWrites.keys())) {
+        if (fk === k || fk.split('+').includes(k)) { failedWrites.delete(fk); touched = true; }
+      }
     }
-  }
-  if (touched) emit();
+    if (touched) emit();
 
-  const delays = opts.retry ? BACKOFF_MS : [0];
-  let result: WriteResult = 'failed';
-  for (let i = 0; i < delays.length; i++) {
-    if (i > 0) {
-      await sleep(delays[i]);
-      if (superseded() || cancelled()) { result = 'skipped'; break; }
+    const runAttempt = async (): Promise<AttemptResult> => {
+      try {
+        return await attempt();
+      } catch (err) {
+        if (OFFLINE_RESILIENCE && isNetworkClassError(err)) return 'failed-network';
+        console.error(`Write threw (${primary}):`, err);
+        return 'failed';
+      }
+    };
+
+    const delays = opts.retry ? BACKOFF_MS : [0];
+    let result: WriteResult = 'failed';
+    let lastNetwork = false;
+    // Offline resilience: a write that waited on a chain and was issued before this device
+    // lost the gavel never starts. (A break does NOT stop a queued write: D4, as before.)
+    const startsDead = OFFLINE_RESILIENCE && !!ticket && dropped();
+    if (startsDead) result = 'skipped';
+    for (let i = 0; !startsDead && i < delays.length; i++) {
+      if (i > 0) {
+        await sleep(delays[i]);
+        if (superseded() || cancelled() || dropped()) { result = 'skipped'; break; }
+      }
+      const raw = await runAttempt();
+      lastNetwork = raw === 'failed-network';
+      result = lastNetwork ? 'failed' : (raw as WriteResult);
+      if (result !== 'failed') break;
+      // D7: a parkable write that failed network-class reads "Offline" from the first
+      // failure, not "Retrying..." for three seconds first.
+      const offlineNow = OFFLINE_RESILIENCE && lastNetwork && opts.retry && rerunnable;
+      if (offlineNow !== offlineBackoff.has(writeId)) {
+        if (offlineNow) offlineBackoff.add(writeId); else offlineBackoff.delete(writeId);
+        if (retryingWrites.has(writeId)) emit();
+      }
+      if (opts.retry && i < delays.length - 1 && !retryingWrites.has(writeId)) {
+        retryingWrites.add(writeId);
+        emit();
+      }
     }
-    try {
-      result = await attempt();
-    } catch (err) {
-      console.error(`Write threw (${primary}):`, err);
-      result = 'failed';
-    }
-    if (result !== 'failed') break;
-    if (opts.retry && i < delays.length - 1 && !retryingWrites.has(writeId)) {
-      retryingWrites.add(writeId);
+
+    let changed = retryingWrites.delete(writeId);
+
+    // ── Offline resilience: park instead of giving up ──
+    // Only an idempotent write that may safely run again later (retry, and not marked
+    // rerunnable: false), and only when the LAST failure was network-class. A refusal (RLS,
+    // a zero-row "still matches", a 4xx) keeps the "Not saved" path below. The promise stays
+    // pending while parked, so a write chain keeps its order behind it.
+    if (OFFLINE_RESILIENCE && opts.retry && rerunnable && result === 'failed' && lastNetwork
+      && !superseded() && !cancelled() && !parkCancelled() && !dropped()) {
+      installParkTriggers();
+      parkedWrites.add(writeId);
+      offlineBackoff.delete(writeId);
+      // D7: logged once when it parks and once when it ends, never per attempt.
+      console.warn(`Write parked until the connection is back (${primary}).`);
       emit();
+      let lastTry = Date.now();
+      // NOT `cancelled()` here: a cancelPendingRetries (switch-off path) must not kill parked
+      // work (D1); only a landed break does, through cancelWritesIssuedBefore.
+      const dead = () => superseded() || parkCancelled() || dropped();
+      for (;;) {
+        await waitForParkWake();
+        if (dead()) { result = 'skipped'; break; }
+        const gap = PARK_MIN_GAP_MS - (Date.now() - lastTry);
+        if (gap > 0) {
+          await sleep(gap);
+          if (dead()) { result = 'skipped'; break; }
+        }
+        lastTry = Date.now();
+        const raw = await runAttempt();
+        if (raw === 'failed-network') continue;
+        result = raw;   // landed, a correct no-op, or now a real refusal (reported below)
+        break;
+      }
+      parkedWrites.delete(writeId);
+      console.warn(`Parked write ended (${primary}): ${result === 'ok' ? 'saved' : result}.`);
+      changed = true;
+    } else if (OFFLINE_RESILIENCE && result === 'failed' && lastNetwork) {
+      console.error(`Write failed: no connection (${primary}).`);
     }
-  }
+    if (offlineBackoff.delete(writeId)) changed = true;
 
-  let changed = retryingWrites.delete(writeId);
-  if (result === 'failed' && !superseded() && !cancelled()) {
-    failedWrites.set(primary, {
-      retryable: rerunnable,
-      rerun: rerunnable ? () => runWrite(list, attempt, opts) : null,
-    });
-    changed = true;
-  } else if (result === 'ok') {
-    // S3: a landed write clears stale failures of the same kind. A landed PHASE write clears
-    // every stale failure of that committee: the room has moved on, and a Retry of an older
-    // write would now act out of context.
-    const phaseLanded = list.some((k) => k.endsWith(':phase'));
-    const committees = new Set(list.map(committeeOfKey).filter((c): c is string => !!c));
-    for (const fk of Array.from(failedWrites.keys())) {
-      const parts = fk.split('+');
-      const sameKind = parts.some((p) => list.includes(p));
-      const sameCommittee = phaseLanded && parts.some((p) => { const c = committeeOfKey(p); return !!c && committees.has(c); });
-      if (sameKind || sameCommittee) { failedWrites.delete(fk); changed = true; }
+    if (result === 'failed' && !superseded() && !cancelled() && !parkCancelled() && !dropped()) {
+      failedWrites.set(primary, {
+        retryable: rerunnable,
+        rerun: rerunnable ? () => runWrite(list, attempt, opts) : null,
+      });
+      changed = true;
+    } else if (result === 'ok') {
+      // S3: a landed write clears stale failures of the same kind. A landed PHASE write clears
+      // every stale failure of that committee: the room has moved on, and a Retry of an older
+      // write would now act out of context.
+      const phaseLanded = list.some((k) => k.endsWith(':phase'));
+      const committeeSet = new Set(committees);
+      for (const fk of Array.from(failedWrites.keys())) {
+        const parts = fk.split('+');
+        const sameKind = parts.some((p) => list.includes(p));
+        const sameCommittee = phaseLanded && parts.some((p) => { const c = committeeOfKey(p); return !!c && committeeSet.has(c); });
+        if (sameKind || sameCommittee) { failedWrites.delete(fk); changed = true; }
+      }
     }
+    if (changed) emit();
+    return result;
+  } finally {
+    releasePending();
   }
-  if (changed) emit();
-  return result;
 }
 
 /** Row-count helper: an UPDATE/DELETE that asked for `.select('id')`. */

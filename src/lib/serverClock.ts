@@ -21,8 +21,38 @@
 // ============================================================
 
 import { supabase } from './supabase';
+import { OFFLINE_RESILIENCE } from './offlineResilience';
 
-let offsetMs = 0;
+// Offline resilience (phase 1): the last measured offset is kept in localStorage (this
+// origin) and used from the first render of the next load, until a fresh measurement
+// succeeds, so a reload with no connection keeps every timer right. It is NOT counted as
+// `measured`: only a real measurement is. Ignored when older than a week or implausible.
+const OFFSET_STORAGE_KEY = 'gavelling-server-clock-offset';
+const OFFSET_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+function readStoredOffset(): number {
+  if (!OFFLINE_RESILIENCE || typeof window === 'undefined') return 0;
+  try {
+    const raw = window.localStorage.getItem(OFFSET_STORAGE_KEY);
+    if (!raw) return 0;
+    const v = JSON.parse(raw) as { o?: unknown; at?: unknown };
+    const o = typeof v.o === 'number' ? v.o : NaN;
+    const at = typeof v.at === 'number' ? v.at : NaN;
+    if (!Number.isFinite(o) || !Number.isFinite(at)) return 0;
+    if (Math.abs(Date.now() - at) > OFFSET_MAX_AGE_MS) return 0;
+    if (Math.abs(o) > 2 * 24 * 60 * 60 * 1000) return 0;
+    return Math.round(o);
+  } catch {
+    return 0;
+  }
+}
+
+function storeOffset(o: number) {
+  if (!OFFLINE_RESILIENCE || typeof window === 'undefined') return;
+  try { window.localStorage.setItem(OFFSET_STORAGE_KEY, JSON.stringify({ o, at: Date.now() })); } catch { /* storage blocked */ }
+}
+
+let offsetMs = readStoredOffset();
 let measured = false;
 let inFlight: Promise<void> | null = null;
 let installed = false;
@@ -88,6 +118,7 @@ export function syncServerClock(): Promise<void> {
         const changed = !measured || Math.abs(next - offsetMs) >= 250;
         offsetMs = next;
         measured = true;
+        storeOffset(next);
         if (changed) listeners.forEach((fn) => { try { fn(offsetMs); } catch { /* listener bug must not break the clock */ } });
       }
     } catch {

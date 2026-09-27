@@ -199,7 +199,7 @@ export async function sessionCommitteeClient(
   }
   // `settings` and `topic` ride along because the organiser re-sync needs the
   // chair's agenda choice from them. Read-only; never write settings back.
-  return { client: sessionClient(data.code as string, suffix), settings, topic: (data.topic as string | null) ?? null };
+  return { client: sessionClient(data.code as string, suffix, { timeout: false }), settings, topic: (data.topic as string | null) ?? null };
 }
 
 // One seat handed to the minter. `name` is what `delegates.country` stores, the
@@ -267,7 +267,7 @@ export async function mintConferenceSession(
     }
     // SESSION-HEADER CLIENT from here on — the two writes below are gated on
     // is_session_chair / has_session_code, not on the organiser's token.
-    const sessDb = sessionClient(code, chairJoinSuffix);
+    const sessDb = sessionClient(code, chairJoinSuffix, { timeout: false });
     const { error: csErr } = await sessDb.from('current_speaker').insert({
       committee_id: sessionRow.id,
       delegate_id: null,

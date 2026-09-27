@@ -53,6 +53,8 @@ import SidebarFlagRail from '@/components/SidebarFlagRail';
 import FloorBarExtent from '@/components/FloorBarExtent';
 import { loadSidebarWidth, saveSidebarWidth, loadSidebarCollapsed, saveSidebarCollapsed } from '@/lib/sidebarWidth';
 import { startSessionSync, rowFields, withCurrentSpeaker, withLists, ALL_SYNC_SLICES, COALESCE_MS, type ConnectionState, type SessionSync, type FetchMeta } from '@/lib/sessionSync';
+import { OFFLINE_RESILIENCE, createPendingSliceGuard, PENDING_RECHECK_MS } from '@/lib/offlineResilience';
+import { dropParkedWrites } from '@/lib/writeStatus';
 import { endModeratedCaucusIfAnchorUnchanged } from '@/lib/caucusExpiryWrite';
 import ConnectionPill from '@/components/ConnectionPill';
 import TutorialOverlay from '@/components/TutorialOverlay';
@@ -2044,6 +2046,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         // R-3: what the window swallows is fetched once more when the window closes.
         const afterWindow = () => Math.max(250, debounceLeft() + 50);
         const STALE_RETRY_MS = 250;
+        // Offline resilience (phase 1): while THIS Moderator device has a write for a slice in
+        // flight, queued or parked, a fetched copy of that slice predates it: treat it like the
+        // debounce window, and fetch it once more (as a catch-up read) when the write lands.
+        // Commenters are never held. Null with the kill switch off.
+        const pendingGuard = OFFLINE_RESILIENCE ? createPendingSliceGuard(cid, (slice) => sync.refetch(slice)) : null;
+        const heldFor = (slice: 'row' | 'lists' | 'currentSpeaker') => pendingGuard?.holds(slice, isViewOnlyRef.current) ?? false;
+        const heldRetry = () => Math.max(afterWindow(), PENDING_RECHECK_MS);
 
         const sync = startSessionSync({
           committeeId: cid,
@@ -2104,7 +2113,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   if (updated.endedAt) { setSessionEnded(true); setSessionSuspended(false); }
                   return STALE_RETRY_MS;
                 }
-                if (inWindow) {
+                const rowHeld = heldFor('row');
+                if (inWindow || rowHeld) {
                   setCommittee((prev) => {
                     if (!prev) return prev;
                     // The gavel arrives as exactly ONE `committees` event and is never
@@ -2127,7 +2137,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   else if (updated.suspendedAt) { setSessionSuspended(true); }
                   else { setSessionSuspended(false); }
                   // phase / caucus / topic / settings: once more when the window closes (R-3).
-                  return afterWindow();
+                  return rowHeld ? heldRetry() : afterWindow();
                 }
                 if (updated.endedAt) {
                   setSessionEnded(true);
@@ -2154,6 +2164,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               case 'lists': {
                 // RULE 4: within the window the chair's optimistic queue is truth.
                 if (stale || inWindow) return afterWindow();
+                if (heldFor('lists')) return heldRetry();
                 setCommittee((prev) => prev ? withLists(prev, data as Parameters<typeof withLists>[1]) : prev);
                 return;
               }
@@ -2172,6 +2183,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 // (wake / reconnect), never over its own window or a running clock.
                 if (!meta.catchUp) return;
                 if (stale || inWindow) return afterWindow();
+                if (heldFor('currentSpeaker')) return heldRetry();
                 if (timerRunningRef.current) return;
                 setCommittee((prev) => prev ? withCurrentSpeaker(prev, cs, { includeRemaining: true }) : prev);
                 seatSpeakerClock(cs.speakerTimeRemaining, cs.speakerStartedAt);
@@ -2209,7 +2221,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           },
         });
         syncRef.current = sync;
-        unsubscribe = () => { sync.stop(); if (syncRef.current === sync) syncRef.current = null; };
+        unsubscribe = () => { pendingGuard?.stop(); sync.stop(); if (syncRef.current === sync) syncRef.current = null; };
       }
     }
     load();
@@ -2383,6 +2395,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   useEffect(() => {
     if (!roleFlip) return;
     const lost = roleFlip.lost;
+    // Offline resilience: whatever this device still had parked, backing off or queued for
+    // the room is no longer its to write (the gavel moved, or it was kicked). Log rows exempt.
+    if (lost && OFFLINE_RESILIENCE && committee?.id) dropParkedWrites(committee.id);
 
     // Stop owning the clock, and close anything that only makes sense while acting.
     setTimerRunning(false);
